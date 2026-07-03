@@ -56,12 +56,23 @@ interface MiddlewareCallbackBase {
 export class ProliferateClientError extends Error {
   status: number;
   code: string | null;
+  /**
+   * The structured error body's extra fields beyond `code`/`message` (e.g. a
+   * 409's `harnesses` list). Empty for string/opaque error bodies.
+   */
+  details: Record<string, unknown>;
 
-  constructor(message: string, status: number, code: string | null = null) {
+  constructor(
+    message: string,
+    status: number,
+    code: string | null = null,
+    details: Record<string, unknown> = {},
+  ) {
     super(message);
     this.name = "ProliferateClientError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -70,7 +81,11 @@ export function createProliferateErrorMiddleware(): Middleware {
     async onResponse({ response }) {
       if (!response.ok) {
         let payload:
-          | { detail?: { code?: string; message?: string } | string }
+          | {
+              detail?:
+                | ({ code?: string; message?: string } & Record<string, unknown>)
+                | string;
+            }
           | undefined;
         try {
           payload = await response.clone().json() as typeof payload;
@@ -79,10 +94,12 @@ export function createProliferateErrorMiddleware(): Middleware {
         }
         const detail = payload?.detail;
         if (detail && typeof detail === "object") {
+          const { code, message, ...rest } = detail;
           throw new ProliferateClientError(
-            detail.message ?? response.statusText ?? "Request failed",
+            message ?? response.statusText ?? "Request failed",
             response.status,
-            detail.code ?? null,
+            code ?? null,
+            rest,
           );
         }
         if (typeof detail === "string") {

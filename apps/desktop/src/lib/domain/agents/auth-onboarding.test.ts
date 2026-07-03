@@ -62,7 +62,7 @@ describe("resolveAgentAuthDisplay", () => {
 });
 
 describe("planFirstRunAuthAdoption", () => {
-  it("adopts native local selections for each harness with detected auth", () => {
+  it("writes nothing when native creds are detected (native is implicit)", () => {
     const actions = planFirstRunAuthAdoption({
       agents: [
         agent({ kind: "claude" }),
@@ -73,15 +73,12 @@ describe("planFirstRunAuthAdoption", () => {
       gatewayEnabled: true,
     });
 
-    expect(actions).toEqual([
-      { harnessKind: "claude", surface: "local", route: "native" },
-      { harnessKind: "codex", surface: "local", route: "native" },
-    ]);
+    expect(actions).toEqual([]);
   });
 
-  it("is a no-op when any route selection already exists", () => {
+  it("is a no-op when any selection already exists", () => {
     const actions = planFirstRunAuthAdoption({
-      agents: [agent({ kind: "claude" })],
+      agents: [agent({ kind: "claude", credentialState: "login_required" })],
       selectionCount: 1,
       gatewayEnabled: true,
     });
@@ -105,7 +102,7 @@ describe("planFirstRunAuthAdoption", () => {
     });
 
     expect(actions).toEqual([
-      { harnessKind: "claude", surface: "local", route: "gateway" },
+      { harnessKind: "claude", surface: "local" },
     ]);
   });
 

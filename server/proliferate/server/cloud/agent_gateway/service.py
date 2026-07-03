@@ -1,14 +1,17 @@
-"""Agent gateway auth services: key pool, route selections, capabilities.
+"""Agent gateway auth services: key vault, auth selections, capabilities.
 
-Store legality errors surface as typed :class:`CloudApiError` values so the
-API layer maps them uniformly. Key create/revoke and selection changes emit
-structured audit log events (the Bifrost-era audit table was dropped; the
-cloud event log is the post-teardown audit surface).
+The P1 auth model (contract ``codex/p1-auth-contract.md`` §5): a titled,
+provider-less key vault plus per-(user, harness, surface) selection sources
+written as full desired state. Store legality errors surface as typed
+:class:`CloudApiError` values so the API layer maps them uniformly. Key and
+selection mutations emit structured audit log events (the cloud event log is
+the post-Bifrost audit surface).
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -17,16 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
-    AGENT_API_KEY_PROVIDERS,
-    AGENT_AUTH_ROUTES,
-    AGENT_AUTH_SLOT_PRIMARY,
+    AGENT_AUTH_SOURCE_KINDS,
     AGENT_AUTH_SURFACE_CLOUD,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
-    AgentAuthRouteSelectionRecord,
+    AgentAuthSelectionRecord,
     AgentGatewayEnrollmentRecord,
+    DesiredAuthSource,
     OrgMemberRouteSelectionRecord,
 )
 from proliferate.db.store.billing import list_entitlements
@@ -37,6 +39,10 @@ from proliferate.server.billing.domain.plans import (
 )
 from proliferate.server.billing.snapshots import billing_plan_rule_config
 from proliferate.server.billing.subjects import ensure_organization_billing_subject_state
+from proliferate.server.cloud.agent_gateway.selection_rules import (
+    SelectionRuleError,
+    validate_auth_selection_set,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 from proliferate.server.cloud.materialization import service as materialization_service
@@ -46,12 +52,12 @@ from proliferate.server.cloud.materialization.materialize.agent_auth import (
 from proliferate.utils.time import utcnow
 
 _ENROLLMENT_STATUS_NONE = "none"
-_MAX_DISPLAY_NAME_LENGTH = 255
+_MAX_TITLE_LENGTH = 255
 _MAX_SECRET_LENGTH = 4096
-# Route selections persist an arbitrary harness_kind bounded only by the
-# String(64) column (no allow-list). The policy allow-list must validate
-# against that SAME source, otherwise a member can select a harness the admin
-# can never allow-list — a permanent, unresolvable violation.
+# Selections persist an arbitrary harness_kind bounded only by the String(64)
+# column. The policy allow-list validates against that SAME source, otherwise a
+# member could select a harness the admin can never allow-list — a permanent,
+# unresolvable violation.
 _MAX_HARNESS_KIND_LENGTH = 64
 
 _POLICY_MIN_PLAN_FREE = "free"
@@ -69,50 +75,54 @@ class OrgAgentPolicySnapshot:
     updated_at: datetime | None
 
 
+# --------------------------------------------------------------------------- #
+# Key vault
+# --------------------------------------------------------------------------- #
+
+
 async def list_api_keys(db: AsyncSession, *, user_id: UUID) -> list[AgentApiKeyRecord]:
     return await agent_gateway_store.list_agent_api_keys(db, user_id=user_id)
+
+
+async def key_titles(db: AsyncSession, *, user_id: UUID) -> dict[UUID, str]:
+    """``api_key_id`` → title for every key (incl. revoked), for selection joins."""
+    records = await agent_gateway_store.list_agent_api_keys(
+        db, user_id=user_id, include_revoked=True
+    )
+    return {record.id: record.title for record in records}
 
 
 async def create_api_key(
     db: AsyncSession,
     *,
     user_id: UUID,
-    provider: str,
-    display_name: str,
-    secret: str,
+    title: str,
+    value: str,
 ) -> AgentApiKeyRecord:
-    if provider not in AGENT_API_KEY_PROVIDERS:
+    title = title.strip()
+    if not title or len(title) > _MAX_TITLE_LENGTH:
         raise CloudApiError(
-            "invalid_agent_api_key_provider",
-            f"Provider must be one of: {', '.join(AGENT_API_KEY_PROVIDERS)}.",
+            "invalid_agent_api_key_title",
+            f"Title must be 1-{_MAX_TITLE_LENGTH} characters.",
             status_code=400,
         )
-    display_name = display_name.strip()
-    if not display_name or len(display_name) > _MAX_DISPLAY_NAME_LENGTH:
+    value = value.strip()
+    if not value or len(value) > _MAX_SECRET_LENGTH:
         raise CloudApiError(
-            "invalid_agent_api_key_display_name",
-            f"Display name must be 1-{_MAX_DISPLAY_NAME_LENGTH} characters.",
-            status_code=400,
-        )
-    secret = secret.strip()
-    if not secret or len(secret) > _MAX_SECRET_LENGTH:
-        raise CloudApiError(
-            "invalid_agent_api_key_secret",
-            "The key secret must be a non-empty string.",
+            "invalid_agent_api_key_value",
+            "The key value must be a non-empty string.",
             status_code=400,
         )
     record = await agent_gateway_store.create_agent_api_key(
         db,
         user_id=user_id,
-        provider=provider,
-        display_name=display_name,
-        payload=secret,
+        title=title,
+        value=value,
     )
     log_cloud_event(
         "agent_api_key_created",
         user_id=str(user_id),
         api_key_id=str(record.id),
-        provider=record.provider,
     )
     return record
 
@@ -123,6 +133,20 @@ async def revoke_api_key(
     user_id: UUID,
     api_key_id: UUID,
 ) -> AgentApiKeyRecord:
+    # A key wired into any ENABLED selection cannot be revoked out from under a
+    # live launch: reject with the referencing harnesses so the caller disables
+    # those rows first (contract §5).
+    referencing = await agent_gateway_store.list_enabled_selections_referencing_key(
+        db, user_id=user_id, api_key_id=api_key_id
+    )
+    if referencing:
+        harnesses = sorted({record.harness_kind for record in referencing})
+        raise CloudApiError(
+            "agent_api_key_referenced",
+            "This key is used by an enabled selection; disable those first.",
+            status_code=409,
+            extra_detail={"harnesses": harnesses},
+        )
     record = await agent_gateway_store.revoke_agent_api_key(
         db,
         user_id=user_id,
@@ -138,114 +162,100 @@ async def revoke_api_key(
         "agent_api_key_revoked",
         user_id=str(user_id),
         api_key_id=str(record.id),
-        provider=record.provider,
     )
-    # A revoked key may back a cloud api_key selection; the next pass strips it.
-    await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
     return record
 
 
-async def list_route_selections(
+# --------------------------------------------------------------------------- #
+# Auth selections
+# --------------------------------------------------------------------------- #
+
+
+async def list_auth_selections(
     db: AsyncSession,
     *,
     user_id: UUID,
-) -> list[AgentAuthRouteSelectionRecord]:
-    return await agent_gateway_store.list_route_selections(db, user_id=user_id)
+    surface: str | None = None,
+) -> list[AgentAuthSelectionRecord]:
+    return await agent_gateway_store.list_auth_selections(db, user_id=user_id, surface=surface)
 
 
-async def upsert_route_selection(
+async def put_auth_selections(
     db: AsyncSession,
     *,
     user_id: UUID,
     harness_kind: str,
     surface: str,
-    route: str,
-    api_key_id: UUID | None,
-    slot: str = AGENT_AUTH_SLOT_PRIMARY,
-) -> AgentAuthRouteSelectionRecord:
+    sources: Sequence[DesiredAuthSource],
+) -> list[AgentAuthSelectionRecord]:
+    """Replace a scope's selection sources with the full desired list.
+
+    Runs the per-harness legality validator (contract §2), then the store diff
+    (structural coherence + key ownership), bumps the surface revision implicitly
+    via row updated_at, and schedules cloud materialization.
+    """
     try:
-        agent_gateway_store.validate_route_selection(
-            harness_kind=harness_kind,
-            surface=surface,
-            route=route,
-            api_key_id=api_key_id,
-            slot=slot,
-        )
-    except ValueError as error:
+        validate_auth_selection_set(harness_kind=harness_kind, sources=sources)
+    except SelectionRuleError as error:
         raise CloudApiError(
-            "invalid_agent_route_selection",
+            "invalid_agent_auth_selection",
             str(error),
             status_code=400,
         ) from error
+
     try:
-        record = await agent_gateway_store.upsert_route_selection(
+        rows = await agent_gateway_store.put_auth_selections(
             db,
             user_id=user_id,
             harness_kind=harness_kind,
             surface=surface,
-            route=route,
-            api_key_id=api_key_id,
-            slot=slot,
+            sources=sources,
         )
     except agent_gateway_store.AgentApiKeyNotUsableError as error:
         raise CloudApiError(
             "agent_api_key_not_found",
-            "api_key_id must reference an active key owned by the caller.",
+            "apiKeyId must reference an active key owned by the caller.",
             status_code=404,
         ) from error
     except ValueError as error:
-        # Pure legality already passed; the remaining failure mode is an
-        # opencode provider slot fed a key of another provider.
+        # Unknown harness/surface or a malformed/duplicate source shape.
         raise CloudApiError(
-            "invalid_agent_route_selection",
+            "invalid_agent_auth_selection",
             str(error),
             status_code=400,
         ) from error
+
     log_cloud_event(
-        "agent_route_selection_upserted",
+        "agent_auth_selections_put",
         user_id=str(user_id),
         harness_kind=harness_kind,
         surface=surface,
-        slot=slot,
-        route=route,
-        api_key_id=str(api_key_id) if api_key_id is not None else None,
-        revision=record.revision,
+        source_count=len(rows),
+        enabled_count=sum(1 for row in rows if row.enabled),
     )
     if surface == AGENT_AUTH_SURFACE_CLOUD:
         await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
-    return record
+    return rows
 
 
-async def clear_route_selection(
+async def get_auth_state(
     db: AsyncSession,
     *,
     user_id: UUID,
-    harness_kind: str,
     surface: str,
-    slot: str = AGENT_AUTH_SLOT_PRIMARY,
-) -> None:
-    deleted = await agent_gateway_store.delete_route_selection(
-        db,
-        user_id=user_id,
-        harness_kind=harness_kind,
-        surface=surface,
-        slot=slot,
-    )
-    if not deleted:
-        raise CloudApiError(
-            "agent_route_selection_not_found",
-            "No route selection exists for this harness, surface, and slot.",
-            status_code=404,
-        )
-    log_cloud_event(
-        "agent_route_selection_cleared",
-        user_id=str(user_id),
-        harness_kind=harness_kind,
-        surface=surface,
-        slot=slot,
-    )
-    if surface == AGENT_AUTH_SURFACE_CLOUD:
-        await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
+) -> dict[str, object]:
+    """Render the user's state.json v2 document for one surface.
+
+    Same render path as the cloud materializer. A surface with no resolvable
+    enabled sources renders as a v2 doc with an empty ``harnesses`` list.
+    """
+    state, _ = await build_agent_auth_state(db, user_id, surface=surface)
+    return state
+
+
+# --------------------------------------------------------------------------- #
+# Capabilities + enrollment
+# --------------------------------------------------------------------------- #
 
 
 async def get_capabilities(
@@ -262,21 +272,6 @@ async def get_capabilities(
     )
 
 
-async def get_auth_state(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    surface: str,
-) -> dict[str, object] | None:
-    """Render the user's state.json document for one surface.
-
-    Same render path as the cloud materializer; ``None`` means the user has no
-    selections for the surface at all (legacy/native fall-through).
-    """
-    state, _ = await build_agent_auth_state(db, user_id, surface=surface)
-    return state
-
-
 async def get_enrollment(
     db: AsyncSession,
     *,
@@ -290,6 +285,11 @@ async def get_enrollment(
             status_code=404,
         )
     return enrollment
+
+
+# --------------------------------------------------------------------------- #
+# Org policy (flag-only)
+# --------------------------------------------------------------------------- #
 
 
 def _decode_policy_list(raw: str | None) -> tuple[str, ...] | None:
@@ -319,12 +319,12 @@ def _validate_policy_values(
 
 
 def _validate_policy_harnesses(values: list[str] | None) -> tuple[str, ...] | None:
-    """Validate policy harnesses against the SAME source route selections use.
+    """Validate policy harnesses against the SAME source selections use.
 
-    Route selections accept any harness_kind bounded only by the String(64)
-    column, so the policy allow-list applies the same bound (non-empty, <=64)
-    rather than an allow-list of SUPPORTED_CLOUD_AGENTS — every selection a
-    member can persist must be allow-listable.
+    Selections accept any harness_kind bounded only by the String(64) column, so
+    the policy allow-list applies the same bound (non-empty, <=64) rather than an
+    allow-list of supported kinds — every selection a member can persist must be
+    allow-listable.
     """
     if values is None:
         return None
@@ -342,11 +342,9 @@ def _validate_policy_harnesses(values: list[str] | None) -> tuple[str, ...] | No
 async def org_policy_editing_allowed(db: AsyncSession, *, organization_id: UUID) -> bool:
     """Plan gate for edits (spec §8: editing gated by org plan).
 
-    Choice documented: gate on ``agent_gateway_policy_min_plan``. "free"
-    disables the gate; "pro" (default) requires the org billing subject to
-    hold a healthy paid cloud subscription or an active unlimited-cloud
-    entitlement — the same primitives the billing snapshot uses to call an
-    org paid, without computing a full snapshot.
+    Gate on ``agent_gateway_policy_min_plan``. "free" disables the gate; "pro"
+    (default) requires the org billing subject to hold a healthy paid cloud
+    subscription or an active unlimited-cloud entitlement.
     """
     if settings.agent_gateway_policy_min_plan == _POLICY_MIN_PLAN_FREE:
         return True
@@ -397,9 +395,11 @@ async def update_org_policy(
     allowed_routes: list[str] | None,
     allowed_harnesses: list[str] | None,
 ) -> OrgAgentPolicySnapshot:
+    # "routes" are the selection source kinds (gateway/api_key); native is the
+    # empty state and carries no row, so it is never an allow-list value.
     routes = _validate_policy_values(
         allowed_routes,
-        allowed=AGENT_AUTH_ROUTES,
+        allowed=AGENT_AUTH_SOURCE_KINDS,
         field="routes",
     )
     harnesses = _validate_policy_harnesses(allowed_harnesses)
@@ -440,7 +440,7 @@ def selection_violates_policy(
     allowed_harnesses: tuple[str, ...] | None,
 ) -> bool:
     """Flag-only conflict check; nothing is ever blocked."""
-    if allowed_routes is not None and selection.route not in allowed_routes:
+    if allowed_routes is not None and selection.source_kind not in allowed_routes:
         return True
     return allowed_harnesses is not None and selection.harness_kind not in allowed_harnesses
 
@@ -450,7 +450,7 @@ async def list_org_policy_violations(
     *,
     organization_id: UUID,
 ) -> list[OrgMemberRouteSelectionRecord]:
-    """Members whose active selections conflict with the policy, computed live."""
+    """Members whose enabled selections conflict with the policy, computed live."""
     policy = await get_org_policy(db, organization_id=organization_id)
     if policy.allowed_routes is None and policy.allowed_harnesses is None:
         return []

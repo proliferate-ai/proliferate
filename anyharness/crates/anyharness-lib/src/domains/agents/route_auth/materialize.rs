@@ -1,168 +1,155 @@
-//! Switch-time filesystem materialization for gateway routes that need
-//! isolated harness state (codex CODEX_HOME, grok HOME).
+//! Switch-time filesystem materialization for gateway routes that need isolated
+//! harness state (claude CLAUDE_CONFIG_DIR, codex CODEX_HOME, opencode config,
+//! grok HOME).
 //!
-//! Bookkeeping is filesystem-only (spec §4): the applied revision is carried in
-//! the directory name (`codex-home-<rev>`, `grok-home-<rev>`, ...), so no new
+//! This is the APPLY half of the two-phase render (contract §4): [`render`]
+//! produces pure [`FileSpec`]s (which family, which revision, what bytes) and
+//! the launcher hands each here to be written. Path computation is shared with
+//! the render layer via the pure [`revision_dir_path`] / [`claude_config_dir_path`]
+//! helpers, so the env vars render sets and the dirs applied here always agree.
+//!
+//! [`render`]: super::render
+//!
+//! Bookkeeping is filesystem-only: the applied revision is carried in the
+//! directory name (`codex-home-<rev>`, `grok-home-<rev>`, ...), so no new
 //! SQLite table is introduced. Each materialization garbage-collects sibling
 //! dirs for *stale* revisions, then writes the current revision's dir
-//! idempotently. This keeps "next process launch after a revision change picks
-//! up new state" working with zero schema churn.
+//! idempotently.
 //!
 //! Cleanup is deliberately conservative: the current revision's dir AND the
 //! immediately-previous revision's dir are always kept, so in-flight processes
-//! launched under the prior revision keep reading valid isolated state (spec §0
-//! decision: "In-flight agent processes finish on old creds; the next process
-//! launch picks up new state"). Only revisions strictly older than the
-//! immediately-previous one are removed.
+//! launched under the prior revision keep reading valid isolated state.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde_json::json;
-
-use super::profile::GatewayProfile;
 use super::RouteAuthError;
 
 const ROUTE_AUTH_DIR: &str = "agent-auth";
 
 /// Directory family prefixes; the applied revision is appended (`-<rev>`).
-const CODEX_HOME_PREFIX: &str = "codex-home";
-const GROK_HOME_PREFIX: &str = "grok-home";
-const OPENCODE_CONFIG_PREFIX: &str = "opencode-config";
+pub(super) const CODEX_HOME_PREFIX: &str = "codex-home";
+pub(super) const GROK_HOME_PREFIX: &str = "grok-home";
+pub(super) const OPENCODE_CONFIG_PREFIX: &str = "opencode-config";
 
 /// Isolated CLAUDE_CONFIG_DIR family. Claude Code reads `~/.claude` (settings,
 /// cached credentials) unless CLAUDE_CONFIG_DIR points elsewhere; an ambient
 /// `~/.claude` can otherwise defeat the env sanitization the claude adapter
-/// performs (spec §13.3 / HARNESS-MATRIX claude recipe: `CLAUDE_CONFIG_DIR=<iso>`).
-/// This dir is stable (not revision-keyed) — it holds no revision-specific
-/// content; the launch env vars are authoritative each launch.
+/// performs. This dir is stable (not revision-keyed) — it holds no
+/// revision-specific content; the launch env vars are authoritative each launch.
 const CLAUDE_CONFIG_DIR_NAME: &str = "claude-config";
 
-/// Default model written into the codex gateway config.toml. Codex refuses to
-/// launch without a `model` and otherwise falls back to a codex-native default
-/// id the gateway does not serve (HARNESS-MATRIX codex recipe: `model = "<default>"`).
-/// A gateway-served versioned Anthropic id is used.
-const CODEX_DEFAULT_MODEL: &str = "claude-sonnet-4-5-20250929";
-
-fn route_auth_root(runtime_home: &Path) -> PathBuf {
-    runtime_home.join(ROUTE_AUTH_DIR)
-}
-
-/// Materialize `CODEX_HOME` for the gateway route. Writes config.toml with the
-/// proliferate provider (wire_api="responses", env_key=PROLIFERATE_GATEWAY_KEY,
-/// base_url=<base_url>/v1). Returns the isolated home dir.
-pub(super) fn materialize_codex_home(
-    runtime_home: &Path,
-    profile: &GatewayProfile,
-) -> Result<PathBuf, RouteAuthError> {
-    let home = prepare_revision_dir(runtime_home, CODEX_HOME_PREFIX, profile.revision)?;
-    let base_url = format!("{}/v1", trim_trailing_slash(&profile.base_url));
-    // TOML written by hand (small, deterministic) so the snapshot test can
-    // assert exact content without pulling a toml serializer.
-    let config = format!(
-        "model_provider = \"proliferate\"\n\
-         model = \"{CODEX_DEFAULT_MODEL}\"\n\
-         \n\
-         [model_providers.proliferate]\n\
-         name = \"Proliferate Gateway\"\n\
-         base_url = \"{base_url}\"\n\
-         env_key = \"PROLIFERATE_GATEWAY_KEY\"\n\
-         wire_api = \"responses\"\n"
-    );
-    write_private_file(&home.join("config.toml"), config.as_bytes())?;
-    Ok(home)
-}
-
-/// Materialize (idempotently) an isolated CLAUDE_CONFIG_DIR so Claude Code does
-/// not read an ambient `~/.claude` (which could carry stale provider/auth
-/// settings that defeat env sanitization). Used by BOTH the gateway and
-/// api_key claude routes. Not revision-keyed: it holds no revision-specific
-/// content (the launch env is authoritative), and keeping it stable lets the
-/// CLI reuse its own local state across revisions.
-pub(super) fn materialize_claude_config_dir(
-    runtime_home: &Path,
-) -> Result<PathBuf, RouteAuthError> {
-    let root = route_auth_root(runtime_home);
-    let dir = root.join(CLAUDE_CONFIG_DIR_NAME);
-    fs::create_dir_all(&dir).map_err(|error| RouteAuthError::Materialize {
-        detail: format!("failed to create {}: {error}", dir.display()),
-    })?;
-    Ok(dir)
-}
-
-/// Materialize the OpenCode config file (opencode.json) for the gateway route
-/// and return its path (pointed at by OPENCODE_CONFIG). Provider `proliferate`
-/// via `@ai-sdk/openai-compatible`, explicit models map (required).
-pub(super) fn materialize_opencode_config(
-    runtime_home: &Path,
-    profile: &GatewayProfile,
-    models: &[String],
-) -> Result<PathBuf, RouteAuthError> {
-    let dir = prepare_revision_dir(runtime_home, OPENCODE_CONFIG_PREFIX, profile.revision)?;
-    let base_url = format!("{}/v1", trim_trailing_slash(&profile.base_url));
-    let models_map: serde_json::Map<String, serde_json::Value> = models
-        .iter()
-        .map(|model| (model.clone(), json!({})))
-        .collect();
-    let config = json!({
-        "provider": {
-            "proliferate": {
-                "npm": "@ai-sdk/openai-compatible",
-                "options": {
-                    "baseURL": base_url,
-                    "apiKey": "{env:PROLIFERATE_GATEWAY_KEY}"
-                },
-                "models": models_map
-            }
-        }
-    });
-    let config_path = dir.join("opencode.json");
-    let serialized =
-        serde_json::to_vec_pretty(&config).map_err(|error| RouteAuthError::Materialize {
-            detail: format!("failed to serialize opencode config: {error}"),
-        })?;
-    write_private_file(&config_path, &serialized)?;
-    // Isolate XDG so opencode cannot reach the user's global config/auth
-    // (HARNESS-MATRIX opencode recipe: XDG_CONFIG_HOME/XDG_DATA_HOME isolated).
-    for sub in [OPENCODE_XDG_CONFIG_SUBDIR, OPENCODE_XDG_DATA_SUBDIR] {
-        let xdg_dir = dir.join(sub);
-        fs::create_dir_all(&xdg_dir).map_err(|error| RouteAuthError::Materialize {
-            detail: format!("failed to create {}: {error}", xdg_dir.display()),
-        })?;
-    }
-    Ok(config_path)
-}
+/// Config file names written inside the isolated home dirs.
+const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
+pub(super) const OPENCODE_CONFIG_FILE_NAME: &str = "opencode.json";
 
 /// Isolated XDG subdir names materialized beside the opencode config; the
 /// render layer points XDG_CONFIG_HOME/XDG_DATA_HOME at these.
 pub(super) const OPENCODE_XDG_CONFIG_SUBDIR: &str = "xdg-config";
 pub(super) const OPENCODE_XDG_DATA_SUBDIR: &str = "xdg-data";
 
-/// Materialize an isolated HOME for the grok CLI (it keys config off HOME).
-pub(super) fn materialize_grok_home(
+/// Which isolated-state family a [`FileSpec`] materializes. The render layer
+/// tags the spec; apply runs the matching recipe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathFamily {
+    /// Stable (not revision-keyed) CLAUDE_CONFIG_DIR; no content file.
+    ClaudeConfig,
+    /// Revision-keyed CODEX_HOME with a `config.toml`.
+    CodexHome,
+    /// Revision-keyed OpenCode dir with `opencode.json` + XDG subdirs.
+    OpencodeConfig,
+    /// Revision-keyed grok HOME; no content file.
+    GrokHome,
+}
+
+/// A file/dir the launcher must materialize after a pure render (contract §4).
+/// `contents` is `Some` for families with a config file (codex/opencode) and
+/// `None` for dir-only families (claude/grok).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileSpec {
+    pub path_family: PathFamily,
+    pub revision: i64,
+    pub contents: Option<Vec<u8>>,
+}
+
+fn route_auth_root(runtime_home: &Path) -> PathBuf {
+    runtime_home.join(ROUTE_AUTH_DIR)
+}
+
+/// Pure: the revision-keyed dir path for a family (no I/O). Shared by the render
+/// layer (to set env vars) and apply (to create + write). Must match the path
+/// [`prepare_revision_dir`] creates.
+pub(super) fn revision_dir_path(runtime_home: &Path, prefix: &str, revision: i64) -> PathBuf {
+    route_auth_root(runtime_home).join(format!("{prefix}-{revision}"))
+}
+
+/// Pure: the stable CLAUDE_CONFIG_DIR path (no I/O).
+pub(super) fn claude_config_dir_path(runtime_home: &Path) -> PathBuf {
+    route_auth_root(runtime_home).join(CLAUDE_CONFIG_DIR_NAME)
+}
+
+/// Apply one [`FileSpec`]: create the isolated dir (revision-keyed families GC
+/// stale siblings first) and write its config file 0600 where the family has
+/// one. Idempotent per revision.
+pub(super) fn apply_file_spec(
     runtime_home: &Path,
-    profile: &GatewayProfile,
-) -> Result<PathBuf, RouteAuthError> {
-    prepare_revision_dir(runtime_home, GROK_HOME_PREFIX, profile.revision)
+    spec: &FileSpec,
+) -> Result<(), RouteAuthError> {
+    match spec.path_family {
+        PathFamily::ClaudeConfig => {
+            let dir = claude_config_dir_path(runtime_home);
+            create_dir(&dir)?;
+        }
+        PathFamily::CodexHome => {
+            let dir = prepare_revision_dir(runtime_home, CODEX_HOME_PREFIX, spec.revision)?;
+            write_private_file(&dir.join(CODEX_CONFIG_FILE_NAME), spec_contents(spec)?)?;
+        }
+        PathFamily::OpencodeConfig => {
+            let dir = prepare_revision_dir(runtime_home, OPENCODE_CONFIG_PREFIX, spec.revision)?;
+            write_private_file(
+                &dir.join(OPENCODE_CONFIG_FILE_NAME),
+                spec_contents(spec)?,
+            )?;
+            for sub in [OPENCODE_XDG_CONFIG_SUBDIR, OPENCODE_XDG_DATA_SUBDIR] {
+                create_dir(&dir.join(sub))?;
+            }
+        }
+        PathFamily::GrokHome => {
+            prepare_revision_dir(runtime_home, GROK_HOME_PREFIX, spec.revision)?;
+        }
+    }
+    Ok(())
+}
+
+fn spec_contents(spec: &FileSpec) -> Result<&[u8], RouteAuthError> {
+    spec.contents
+        .as_deref()
+        .ok_or_else(|| RouteAuthError::Materialize {
+            detail: format!(
+                "file spec for {:?} is missing its contents",
+                spec.path_family
+            ),
+        })
+}
+
+fn create_dir(dir: &Path) -> Result<(), RouteAuthError> {
+    fs::create_dir_all(dir).map_err(|error| RouteAuthError::Materialize {
+        detail: format!("failed to create {}: {error}", dir.display()),
+    })
 }
 
 /// Create (idempotently) the revision-keyed directory for a family, removing
-/// any sibling dirs of the same family carrying a different revision.
+/// any sibling dirs of the same family carrying a stale revision.
 fn prepare_revision_dir(
     runtime_home: &Path,
     prefix: &str,
     revision: i64,
 ) -> Result<PathBuf, RouteAuthError> {
     let root = route_auth_root(runtime_home);
-    fs::create_dir_all(&root).map_err(|error| RouteAuthError::Materialize {
-        detail: format!("failed to create {}: {error}", root.display()),
-    })?;
-    let target_name = format!("{prefix}-{revision}");
+    create_dir(&root)?;
     gc_old_revision_dirs(&root, prefix, revision)?;
-    let dir = root.join(&target_name);
-    fs::create_dir_all(&dir).map_err(|error| RouteAuthError::Materialize {
-        detail: format!("failed to create {}: {error}", dir.display()),
-    })?;
+    let dir = revision_dir_path(runtime_home, prefix, revision);
+    create_dir(&dir)?;
     Ok(dir)
 }
 
@@ -173,9 +160,9 @@ fn prepare_revision_dir(
 /// Why keep the immediately-previous dir: a session launched under revision N-1
 /// may still be running when revision N is materialized. Its isolated home
 /// (`codex-home-<N-1>`, `grok-home-<N-1>`, ...) must remain intact so the
-/// in-flight process finishes on the old state (spec §0). Dirs we cannot parse
-/// a revision from, and any revision >= current (shouldn't normally occur), are
-/// left untouched as well.
+/// in-flight process finishes on the old state. Dirs we cannot parse a revision
+/// from, and any revision >= current (shouldn't normally occur), are left
+/// untouched as well.
 fn gc_old_revision_dirs(
     root: &Path,
     prefix: &str,
@@ -218,10 +205,6 @@ fn gc_old_revision_dirs(
         }
     }
     Ok(())
-}
-
-fn trim_trailing_slash(url: &str) -> &str {
-    url.trim_end_matches('/')
 }
 
 pub(super) fn write_private_file(path: &Path, contents: &[u8]) -> Result<(), RouteAuthError> {

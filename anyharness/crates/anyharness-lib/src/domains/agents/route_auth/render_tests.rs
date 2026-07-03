@@ -1,28 +1,42 @@
-//! Adapter render snapshots + fail-closed + missing/malformed-file behavior.
-//! Exercises the full loader→profile→render→spawn-env path against a real
-//! filesystem (this is the PR 6 live-gate at unit level, per the brief).
+//! Adapter render snapshots + native/malformed-file behavior + two-phase
+//! purity. Exercises the full loader→profile→render→apply path against a real
+//! filesystem (the unit-level live gate for the render plane).
 
-use serde_json::json;
+use serde_json::{json, Value};
 
 use super::render::render_profile;
-use super::state::{state_file_path, AgentAuthState, AuthRoute};
+use super::state::state_file_path;
 use super::test_support::TempHome;
-use super::{resolve_launch_route_auth, resolve_profile, RouteAuthError};
+use super::{load_state_file, resolve_launch_route_auth, resolve_profile};
 
 const GATEWAY_BASE_URL: &str = "https://llm.proliferate.ai";
 const VK: &str = "sk-virtual-1234";
 
-fn gateway_state(harness: &str, catalog: Option<Vec<&str>>) -> serde_json::Value {
-    let mut selection = json!({
-        "harness": harness,
-        "route": "gateway",
-        "base_url": GATEWAY_BASE_URL,
-        "key": VK,
-    });
-    if let Some(models) = catalog {
-        selection["model_catalog"] = json!(models);
-    }
-    json!({ "revision": 42, "user_id": "user-1", "selections": [selection] })
+fn v2_state(revision: i64, harnesses: Vec<Value>) -> Value {
+    json!({
+        "version": 2,
+        "revision": revision,
+        "user_id": "user-1",
+        "harnesses": harnesses,
+    })
+}
+
+fn harness(kind: &str, sources: Vec<Value>) -> Value {
+    json!({ "harness_kind": kind, "sources": sources })
+}
+
+fn gateway_source() -> Value {
+    json!({ "kind": "gateway", "base_url": GATEWAY_BASE_URL, "key": VK })
+}
+
+fn api_key_source(env_var_name: &str, value: &str) -> Value {
+    json!({ "kind": "api_key", "env_var_name": env_var_name, "value": value })
+}
+
+/// A single-gateway state for `harness` at revision 42 (keeps the
+/// `*-home-42` dir-name assertions stable).
+fn gateway_state(kind: &str) -> Value {
+    v2_state(42, vec![harness(kind, vec![gateway_source()])])
 }
 
 // --- claude ----------------------------------------------------------------
@@ -30,7 +44,7 @@ fn gateway_state(harness: &str, catalog: Option<Vec<&str>>) -> serde_json::Value
 #[test]
 fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
     let home = TempHome::new("claude-gw");
-    home.write_state_json(&gateway_state("claude", None));
+    home.write_state_json(&gateway_state("claude"));
 
     let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
 
@@ -50,7 +64,7 @@ fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
         .expect("CLAUDE_CONFIG_DIR");
     assert!(config_dir.contains("claude-config"));
     assert!(std::path::Path::new(config_dir).is_dir());
-    // Ambient Bedrock/Vertex + stale api key removed (spec §13.3).
+    // Ambient Bedrock/Vertex + stale api key removed.
     for key in [
         "CLAUDE_CODE_USE_BEDROCK",
         "CLAUDE_CODE_USE_VERTEX",
@@ -71,37 +85,37 @@ fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
 }
 
 #[test]
-fn claude_api_key_sets_key_and_removes_reroute_flags_only() {
+fn claude_api_key_sets_exactly_its_var() {
+    // An api_key source is fully generic: it sets EXACTLY the requested env var
+    // and nothing else — no config-dir, no ambient sanitization (contract §4).
     let home = TempHome::new("claude-key");
-    home.write_state_json(&json!({
-        "revision": 1,
-        "selections": [ { "harness": "claude", "route": "api_key", "provider": "anthropic", "key": "sk-raw" } ]
-    }));
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness(
+            "claude",
+            vec![api_key_source("ANTHROPIC_API_KEY", "sk-raw")],
+        )],
+    ));
 
     let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
     assert_eq!(rendered.set.get("ANTHROPIC_API_KEY").unwrap(), "sk-raw");
-    // Isolated CLAUDE_CONFIG_DIR on the api_key route too.
-    assert!(rendered
-        .set
-        .get("CLAUDE_CONFIG_DIR")
-        .expect("CLAUDE_CONFIG_DIR")
-        .contains("claude-config"));
-    // Bedrock/Vertex reroute flags still removed, but NOT the key we just set.
-    assert!(rendered
+    assert_eq!(rendered.set.len(), 1);
+    assert!(rendered.remove.is_empty());
+    assert!(rendered.files.is_empty());
+}
+
+#[test]
+fn claude_gateway_sanitize_only_strips_vars_it_did_not_set() {
+    // The sanitize keys off which vars this render set: base-url + auth-token are
+    // set → kept; ANTHROPIC_API_KEY is not set → removed.
+    let home = TempHome::new("claude-sanitize");
+    home.write_state_json(&gateway_state("claude"));
+    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    assert!(rendered.remove.contains(&"ANTHROPIC_API_KEY".to_string()));
+    assert!(!rendered.remove.contains(&"ANTHROPIC_BASE_URL".to_string()));
+    assert!(!rendered
         .remove
-        .contains(&"CLAUDE_CODE_USE_BEDROCK".to_string()));
-    assert!(!rendered.remove.contains(&"ANTHROPIC_API_KEY".to_string()));
-    // Ambient gateway-style creds must be removed so they cannot shadow the key.
-    assert!(
-        rendered
-            .remove
-            .contains(&"ANTHROPIC_AUTH_TOKEN".to_string()),
-        "api_key route must strip ambient ANTHROPIC_AUTH_TOKEN"
-    );
-    assert!(
-        rendered.remove.contains(&"ANTHROPIC_BASE_URL".to_string()),
-        "api_key route must strip ambient ANTHROPIC_BASE_URL"
-    );
+        .contains(&"ANTHROPIC_AUTH_TOKEN".to_string()));
 }
 
 // --- codex -----------------------------------------------------------------
@@ -109,7 +123,7 @@ fn claude_api_key_sets_key_and_removes_reroute_flags_only() {
 #[test]
 fn codex_gateway_materializes_config_toml_and_sets_env() {
     let home = TempHome::new("codex-gw");
-    home.write_state_json(&gateway_state("codex", None));
+    home.write_state_json(&gateway_state("codex"));
 
     let rendered = resolve_launch_route_auth(home.path(), "codex").expect("render");
 
@@ -134,41 +148,26 @@ fn codex_gateway_materializes_config_toml_and_sets_env() {
 }
 
 #[test]
-fn codex_api_key_openai_sets_only_openai_key() {
+fn codex_api_key_sets_exactly_its_var() {
     let home = TempHome::new("codex-key");
-    home.write_state_json(&json!({
-        "revision": 1,
-        "selections": [ { "harness": "codex", "route": "api_key", "provider": "openai", "key": "sk-openai" } ]
-    }));
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness("codex", vec![api_key_source("OPENAI_API_KEY", "sk-openai")])],
+    ));
 
     let rendered = resolve_launch_route_auth(home.path(), "codex").expect("render");
     assert_eq!(rendered.set.get("OPENAI_API_KEY").unwrap(), "sk-openai");
     assert!(!rendered.set.contains_key("CODEX_HOME"));
     assert!(rendered.remove.is_empty());
-}
-
-#[test]
-fn codex_api_key_anthropic_is_rejected_out_of_scope() {
-    let home = TempHome::new("codex-key-anthropic");
-    home.write_state_json(&json!({
-        "revision": 1,
-        "selections": [ { "harness": "codex", "route": "api_key", "provider": "anthropic", "key": "sk-a" } ]
-    }));
-
-    let error = resolve_launch_route_auth(home.path(), "codex").expect_err("rejected");
-    assert!(matches!(error, RouteAuthError::UnsupportedRoute { .. }));
-    assert_eq!(error.code(), "AGENT_ROUTE_UNSUPPORTED");
+    assert!(rendered.files.is_empty());
 }
 
 // --- opencode --------------------------------------------------------------
 
 #[test]
-fn opencode_gateway_writes_config_with_explicit_models() {
+fn opencode_gateway_writes_config_with_static_models() {
     let home = TempHome::new("opencode-gw");
-    home.write_state_json(&gateway_state(
-        "opencode",
-        Some(vec!["claude-haiku-4-5-20251001"]),
-    ));
+    home.write_state_json(&gateway_state("opencode"));
 
     let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
     let config_path = rendered
@@ -189,10 +188,17 @@ fn opencode_gateway_writes_config_with_explicit_models() {
         provider["options"]["apiKey"],
         "{env:PROLIFERATE_GATEWAY_KEY}"
     );
-    assert!(provider["models"]
-        .as_object()
-        .unwrap()
-        .contains_key("claude-haiku-4-5-20251001"));
+    // P1 always uses the static fallback model list (catalog lands in P3).
+    let models = provider["models"].as_object().unwrap();
+    assert!(!models.is_empty());
+    assert!(models.contains_key("claude-haiku-4-5-20251001"));
+
+    // The injected config must contain ONLY our provider so opencode's
+    // config-layer merge ADDS it to the user's own local providers.
+    let top_level: Vec<&String> = config.as_object().unwrap().keys().collect();
+    assert_eq!(top_level, vec!["provider"]);
+    let providers: Vec<&String> = config["provider"].as_object().unwrap().keys().collect();
+    assert_eq!(providers, vec!["proliferate"]);
 
     // XDG isolation: opencode must not reach the user's global config/auth.
     let xdg_config = rendered
@@ -202,73 +208,54 @@ fn opencode_gateway_writes_config_with_explicit_models() {
     let xdg_data = rendered.set.get("XDG_DATA_HOME").expect("XDG_DATA_HOME");
     assert!(std::path::Path::new(xdg_config).is_dir());
     assert!(std::path::Path::new(xdg_data).is_dir());
-    // They live beside the materialized config, inside the isolated route-auth root.
     assert!(xdg_config.contains("opencode-config"));
     assert!(xdg_data.contains("opencode-config"));
 }
 
 #[test]
-fn opencode_gateway_falls_back_to_static_models_without_catalog() {
-    let home = TempHome::new("opencode-fallback");
-    home.write_state_json(&gateway_state("opencode", None));
-
-    let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
-    let config_path = rendered
-        .set
-        .get("OPENCODE_CONFIG")
-        .expect("OPENCODE_CONFIG");
-    let config: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(config_path).expect("read config")).expect("json");
-    let models = config["provider"]["proliferate"]["models"]
-        .as_object()
-        .unwrap();
-    assert!(
-        !models.is_empty(),
-        "fallback models must be non-empty (PR 7 catalog dependency)"
-    );
-    assert!(models.contains_key("claude-haiku-4-5-20251001"));
-}
-
-#[test]
-fn opencode_api_key_passthrough_provider_env() {
+fn opencode_api_key_sets_exactly_its_var() {
     let home = TempHome::new("opencode-key");
-    home.write_state_json(&json!({
-        "revision": 1,
-        "selections": [ { "harness": "opencode", "route": "api_key", "provider": "anthropic", "key": "sk-a" } ]
-    }));
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness(
+            "opencode",
+            vec![api_key_source("ANTHROPIC_API_KEY", "sk-a")],
+        )],
+    ));
     let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
     assert_eq!(rendered.set.get("ANTHROPIC_API_KEY").unwrap(), "sk-a");
+    assert_eq!(rendered.set.len(), 1);
+    assert!(!rendered.set.contains_key("OPENCODE_CONFIG"));
+    assert!(rendered.files.is_empty());
 }
 
 #[test]
-fn opencode_multi_slot_state_merges_into_one_additive_delta() {
-    // Gateway slot + two direct provider slots (spec §3.3): one injected
-    // config for the gateway plus plain env keys for the direct providers,
-    // all in a single launch delta.
-    let home = TempHome::new("opencode-multi-slot");
-    home.write_state_json(&json!({
-        "revision": 11,
-        "user_id": "user-1",
-        "selections": [
-            { "harness": "opencode", "route": "gateway", "slot": "gateway",
-              "base_url": GATEWAY_BASE_URL, "key": VK,
-              "model_catalog": ["claude-haiku-4-5-20251001"] },
-            { "harness": "opencode", "route": "api_key", "slot": "anthropic",
-              "provider": "anthropic", "key": "sk-ant-direct" },
-            { "harness": "opencode", "route": "api_key", "slot": "xai",
-              "provider": "xai", "key": "xai-direct" }
-        ]
-    }));
+fn opencode_gateway_plus_api_keys_merge_into_one_additive_delta() {
+    // Gateway + two direct api_key rows (opencode composes them): one injected
+    // config for the gateway plus plain env keys for the direct providers, all
+    // in a single launch delta with no removals.
+    let home = TempHome::new("opencode-multi");
+    home.write_state_json(&v2_state(
+        11,
+        vec![harness(
+            "opencode",
+            vec![
+                gateway_source(),
+                api_key_source("ANTHROPIC_API_KEY", "sk-ant-direct"),
+                api_key_source("XAI_API_KEY", "xai-direct"),
+            ],
+        )],
+    ));
 
     let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
 
-    // Gateway slot: injected config + virtual key env.
+    // Gateway source: injected config + virtual key env.
     let config_path = rendered
         .set
         .get("OPENCODE_CONFIG")
         .expect("OPENCODE_CONFIG");
     assert_eq!(rendered.set.get("PROLIFERATE_GATEWAY_KEY").unwrap(), VK);
-    // Direct provider slots: additive plain env keys, no removals.
+    // Direct api_key sources: additive plain env keys, no removals.
     assert_eq!(
         rendered.set.get("ANTHROPIC_API_KEY").unwrap(),
         "sk-ant-direct"
@@ -276,28 +263,22 @@ fn opencode_multi_slot_state_merges_into_one_additive_delta() {
     assert_eq!(rendered.set.get("XAI_API_KEY").unwrap(), "xai-direct");
     assert!(rendered.remove.is_empty());
 
-    // The injected config must contain ONLY our provider — no top-level
-    // model/default keys and no other providers — so opencode's config-layer
-    // merge ADDS it to the user's own local providers instead of replacing
-    // them (verified against opencode 1.16.2).
     let config: serde_json::Value =
         serde_json::from_slice(&std::fs::read(config_path).expect("read config")).expect("json");
-    let top_level: Vec<&String> = config.as_object().unwrap().keys().collect();
-    assert_eq!(top_level, vec!["provider"]);
     let providers: Vec<&String> = config["provider"].as_object().unwrap().keys().collect();
     assert_eq!(providers, vec!["proliferate"]);
 }
 
 #[test]
-fn opencode_provider_slots_without_gateway_render_env_only() {
+fn opencode_api_keys_without_gateway_render_env_only() {
     let home = TempHome::new("opencode-direct-only");
-    home.write_state_json(&json!({
-        "revision": 2,
-        "selections": [
-            { "harness": "opencode", "route": "api_key", "slot": "openai",
-              "provider": "openai", "key": "sk-openai-direct" }
-        ]
-    }));
+    home.write_state_json(&v2_state(
+        2,
+        vec![harness(
+            "opencode",
+            vec![api_key_source("OPENAI_API_KEY", "sk-openai-direct")],
+        )],
+    ));
     let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
     assert_eq!(
         rendered.set.get("OPENAI_API_KEY").unwrap(),
@@ -307,29 +288,12 @@ fn opencode_provider_slots_without_gateway_render_env_only() {
     assert!(!rendered.set.contains_key("PROLIFERATE_GATEWAY_KEY"));
 }
 
-#[test]
-fn single_source_harness_with_multiple_entries_errors_end_to_end() {
-    let home = TempHome::new("claude-multi-entry");
-    home.write_state_json(&json!({
-        "revision": 5,
-        "selections": [
-            { "harness": "claude", "route": "gateway", "slot": "primary",
-              "base_url": GATEWAY_BASE_URL, "key": VK },
-            { "harness": "claude", "route": "api_key", "slot": "anthropic",
-              "provider": "anthropic", "key": "sk-raw" }
-        ]
-    }));
-    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("conflict");
-    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_CONFLICT");
-    assert!(matches!(error, RouteAuthError::SelectionConflict { .. }));
-}
-
 // --- grok ------------------------------------------------------------------
 
 #[test]
 fn grok_gateway_sets_models_base_url_and_isolated_home() {
     let home = TempHome::new("grok-gw");
-    home.write_state_json(&gateway_state("grok", None));
+    home.write_state_json(&gateway_state("grok"));
 
     let rendered = resolve_launch_route_auth(home.path(), "grok").expect("render");
     assert_eq!(
@@ -341,35 +305,44 @@ fn grok_gateway_sets_models_base_url_and_isolated_home() {
 }
 
 #[test]
-fn grok_api_key_sets_only_xai_key() {
+fn grok_api_key_sets_exactly_its_var() {
     let home = TempHome::new("grok-key");
-    home.write_state_json(&json!({
-        "revision": 1,
-        "selections": [ { "harness": "grok", "route": "api_key", "key": "xai-raw" } ]
-    }));
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness("grok", vec![api_key_source("XAI_API_KEY", "xai-raw")])],
+    ));
     let rendered = resolve_launch_route_auth(home.path(), "grok").expect("render");
     assert_eq!(rendered.set.get("XAI_API_KEY").unwrap(), "xai-raw");
     assert!(!rendered.set.contains_key("HOME"));
 }
 
-// --- fail-closed / missing / malformed / native ----------------------------
+// --- native / missing / malformed ------------------------------------------
 
 #[test]
-fn scoped_state_without_selection_renders_native_delta() {
-    // A scoped state (codex configured, revision bumped) must NOT block claude,
-    // which the user never configured — claude renders an empty (native) delta
-    // and launches on its own login.
-    let home = TempHome::new("missing-native");
-    home.write_state_json(&gateway_state("codex", None)); // no claude selection
+fn absent_harness_renders_native_delta() {
+    // codex configured (revision bumped) must NOT block claude, which the user
+    // never configured — claude renders an empty (native) delta.
+    let home = TempHome::new("absent-native");
+    home.write_state_json(&gateway_state("codex")); // no claude entry
 
+    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    assert!(rendered.set.is_empty());
+    assert!(rendered.remove.is_empty());
+    assert!(rendered.files.is_empty());
+}
+
+#[test]
+fn empty_sources_render_native_delta() {
+    let home = TempHome::new("empty-sources");
+    home.write_state_json(&v2_state(4, vec![harness("claude", vec![])]));
     let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
     assert!(rendered.set.is_empty());
     assert!(rendered.remove.is_empty());
 }
 
 #[test]
-fn missing_state_file_is_legacy_empty_delta() {
-    let home = TempHome::new("legacy");
+fn missing_state_file_is_native_empty_delta() {
+    let home = TempHome::new("missing");
     let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
     assert!(rendered.set.is_empty());
     assert!(rendered.remove.is_empty());
@@ -384,15 +357,66 @@ fn malformed_state_file_is_typed_error() {
 }
 
 #[test]
-fn native_selection_renders_empty_delta() {
-    let home = TempHome::new("native");
-    home.write_state_json(&json!({
-        "revision": 3,
-        "selections": [ { "harness": "claude", "route": "native" } ]
-    }));
-    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
-    assert!(rendered.set.is_empty());
-    assert!(rendered.remove.is_empty());
+fn v1_state_file_is_rejected_as_malformed() {
+    let home = TempHome::new("v1");
+    home.write_state_raw(
+        br#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
+    );
+    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("v1 malformed");
+    assert_eq!(error.code(), "AGENT_ROUTE_STATE_MALFORMED");
+}
+
+#[test]
+fn unknown_source_kind_is_typed_error() {
+    let home = TempHome::new("unknown-kind");
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness("claude", vec![json!({ "kind": "bogus" })])],
+    ));
+    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("unknown kind");
+    assert_eq!(error.code(), "AGENT_ROUTE_UNSUPPORTED");
+}
+
+// --- two-phase purity ------------------------------------------------------
+
+#[test]
+fn render_is_pure_and_apply_writes_0600_files() {
+    // render_profile must touch NO disk: it emits FileSpecs carrying the exact
+    // bytes, and the revision-keyed dir does not exist until the launcher
+    // applies them.
+    let home = TempHome::new("two-phase");
+    home.write_state_json(&gateway_state("codex"));
+    let state = load_state_file(home.path()).expect("load").expect("state");
+    let profile = resolve_profile(Some(&state), "codex").expect("resolve");
+    let rendered = render_profile(&profile, home.path()).expect("render");
+
+    // The FileSpec carries the config.toml bytes; render wrote nothing.
+    assert_eq!(rendered.files.len(), 1);
+    let contents = rendered.files[0].contents.as_ref().expect("contents");
+    let config = std::str::from_utf8(contents).unwrap();
+    assert!(config.contains("model_provider = \"proliferate\""));
+    let codex_home = rendered.set.get("CODEX_HOME").expect("CODEX_HOME");
+    assert!(
+        !std::path::Path::new(codex_home).exists(),
+        "render must be pure — the isolated dir must not exist before apply"
+    );
+
+    // The launcher entry point applies the specs, writing the config file 0600
+    // with the exact bytes the render produced.
+    let applied = resolve_launch_route_auth(home.path(), "codex").expect("apply");
+    let config_file = std::path::Path::new(applied.set.get("CODEX_HOME").unwrap())
+        .join("config.toml");
+    assert!(config_file.is_file());
+    assert_eq!(std::fs::read(&config_file).unwrap(), *contents);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&config_file)
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
 }
 
 // --- revision-keyed materialization + cleanup ------------------------------
@@ -402,10 +426,10 @@ fn codex_home_keeps_immediately_previous_and_gcs_older_revision_dirs() {
     let home = TempHome::new("codex-rev");
 
     let render_rev = |rev: i64| {
-        home.write_state_json(&json!({
-            "revision": rev,
-            "selections": [ { "harness": "codex", "route": "gateway", "base_url": GATEWAY_BASE_URL, "key": VK } ]
-        }));
+        home.write_state_json(&v2_state(
+            rev,
+            vec![harness("codex", vec![gateway_source()])],
+        ));
         std::path::PathBuf::from(
             resolve_launch_route_auth(home.path(), "codex")
                 .expect("render")
@@ -419,7 +443,7 @@ fn codex_home_keeps_immediately_previous_and_gcs_older_revision_dirs() {
     assert!(dir1.exists());
 
     // Revision 2 — the immediately-previous dir (rev 1) MUST be kept, because a
-    // session launched under rev 1 may still be running on it (spec §0).
+    // session launched under rev 1 may still be running on it.
     let dir2 = render_rev(2);
     assert!(dir2.exists());
     assert_ne!(dir1, dir2);
@@ -446,22 +470,16 @@ fn codex_home_keeps_immediately_previous_and_gcs_older_revision_dirs() {
 
 #[test]
 fn unknown_harness_in_state_is_typed_error() {
-    // A profile carrying a harness kind that AgentKind cannot parse.
-    let state = AgentAuthState {
-        revision: 1,
-        user_id: None,
-        selections: vec![super::state::AuthSelection {
-            harness: "bogus".into(),
-            route: AuthRoute::Gateway,
-            slot: "primary".into(),
-            provider: None,
-            base_url: Some(GATEWAY_BASE_URL.into()),
-            key: Some(VK.into()),
-            model_catalog: None,
-        }],
-    };
+    // A gateway source under a harness kind AgentKind cannot parse — the gateway
+    // recipe needs a known harness, so render rejects it.
+    let home = TempHome::new("unknown-harness");
+    home.write_state_json(&v2_state(
+        1,
+        vec![harness("bogus", vec![gateway_source()])],
+    ));
+    let state = load_state_file(home.path()).expect("load").expect("state");
     let profile = resolve_profile(Some(&state), "bogus").expect("resolve");
-    let error = render_profile(&profile, std::path::Path::new("/tmp")).expect_err("unknown");
+    let error = render_profile(&profile, home.path()).expect_err("unknown");
     assert_eq!(error.code(), "AGENT_ROUTE_UNKNOWN_HARNESS");
 }
 
