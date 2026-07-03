@@ -4,6 +4,7 @@
 
 use serde_json::{json, Value};
 
+use super::plan::{GatewayModelPlan, GatewayModelResolve};
 use super::render::render_profile;
 use super::state::state_file_path;
 use super::test_support::TempHome;
@@ -11,6 +12,52 @@ use super::{load_state_file, resolve_launch_route_auth, resolve_profile};
 
 const GATEWAY_BASE_URL: &str = "https://llm.proliferate.ai";
 const VK: &str = "sk-virtual-1234";
+
+/// opencode's catalog `gatewayPolicy.seedModels` — the pre-probe fallback list
+/// the resolver returns when no live probe row exists (mirrors the values now
+/// living in `catalogs/agents/catalog.json`, not a Rust const).
+const OPENCODE_SEED_MODELS: &[&str] = &[
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-5-20250929",
+    "claude-haiku-4-5",
+    "claude-haiku-4-5-20251001",
+];
+
+/// Stub resolver mirroring the catalog's gateway curation for the harnesses the
+/// render snapshots exercise: claude's small-fast pin, codex's default model,
+/// opencode's seed model list. Keeps the byte-snapshot literals flowing through
+/// a [`GatewayModelPlan`] exactly as the real catalog resolver would.
+struct HarnessPlanResolver;
+
+impl GatewayModelResolve for HarnessPlanResolver {
+    fn resolve_gateway_models(&self, harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+        match harness_kind {
+            "claude" => GatewayModelPlan {
+                small_fast_model: Some("claude-haiku-4-5-20251001".to_string()),
+                ..Default::default()
+            },
+            "codex" => GatewayModelPlan {
+                default_model: Some("claude-sonnet-4-5-20250929".to_string()),
+                ..Default::default()
+            },
+            "opencode" => GatewayModelPlan {
+                models: OPENCODE_SEED_MODELS.iter().map(|m| m.to_string()).collect(),
+                ..Default::default()
+            },
+            _ => GatewayModelPlan::default(),
+        }
+    }
+}
+
+/// A resolver that returns a fixed plan for any harness — for tests that pin an
+/// exact plan (e.g. a specific gateway model list or an empty plan).
+struct FixedResolver(GatewayModelPlan);
+
+impl GatewayModelResolve for FixedResolver {
+    fn resolve_gateway_models(&self, _harness_kind: &str, _revision: i64) -> GatewayModelPlan {
+        self.0.clone()
+    }
+}
 
 fn v2_state(revision: i64, harnesses: Vec<Value>) -> Value {
     json!({
@@ -46,7 +93,7 @@ fn claude_gateway_sets_base_url_token_and_sanitizes_ambient() {
     let home = TempHome::new("claude-gw");
     home.write_state_json(&gateway_state("claude"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
 
     assert_eq!(
         rendered.set.get("ANTHROPIC_BASE_URL").unwrap(),
@@ -97,7 +144,7 @@ fn claude_api_key_sets_exactly_its_var() {
         )],
     ));
 
-    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("ANTHROPIC_API_KEY").unwrap(), "sk-raw");
     assert_eq!(rendered.set.len(), 1);
     assert!(rendered.remove.is_empty());
@@ -110,7 +157,7 @@ fn claude_gateway_sanitize_only_strips_vars_it_did_not_set() {
     // set → kept; ANTHROPIC_API_KEY is not set → removed.
     let home = TempHome::new("claude-sanitize");
     home.write_state_json(&gateway_state("claude"));
-    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert!(rendered.remove.contains(&"ANTHROPIC_API_KEY".to_string()));
     assert!(!rendered.remove.contains(&"ANTHROPIC_BASE_URL".to_string()));
     assert!(!rendered
@@ -125,7 +172,7 @@ fn codex_gateway_materializes_config_toml_and_sets_env() {
     let home = TempHome::new("codex-gw");
     home.write_state_json(&gateway_state("codex"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "codex").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
 
     let codex_home = rendered.set.get("CODEX_HOME").expect("CODEX_HOME");
     assert!(codex_home.contains("codex-home-42"));
@@ -155,7 +202,7 @@ fn codex_api_key_sets_exactly_its_var() {
         vec![harness("codex", vec![api_key_source("OPENAI_API_KEY", "sk-openai")])],
     ));
 
-    let rendered = resolve_launch_route_auth(home.path(), "codex").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("OPENAI_API_KEY").unwrap(), "sk-openai");
     assert!(!rendered.set.contains_key("CODEX_HOME"));
     assert!(rendered.remove.is_empty());
@@ -169,7 +216,7 @@ fn opencode_gateway_writes_config_with_static_models() {
     let home = TempHome::new("opencode-gw");
     home.write_state_json(&gateway_state("opencode"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
     let config_path = rendered
         .set
         .get("OPENCODE_CONFIG")
@@ -222,7 +269,7 @@ fn opencode_api_key_sets_exactly_its_var() {
             vec![api_key_source("ANTHROPIC_API_KEY", "sk-a")],
         )],
     ));
-    let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("ANTHROPIC_API_KEY").unwrap(), "sk-a");
     assert_eq!(rendered.set.len(), 1);
     assert!(!rendered.set.contains_key("OPENCODE_CONFIG"));
@@ -247,7 +294,7 @@ fn opencode_gateway_plus_api_keys_merge_into_one_additive_delta() {
         )],
     ));
 
-    let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
 
     // Gateway source: injected config + virtual key env.
     let config_path = rendered
@@ -279,13 +326,62 @@ fn opencode_api_keys_without_gateway_render_env_only() {
             vec![api_key_source("OPENAI_API_KEY", "sk-openai-direct")],
         )],
     ));
-    let rendered = resolve_launch_route_auth(home.path(), "opencode").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "opencode", &HarnessPlanResolver).expect("render");
     assert_eq!(
         rendered.set.get("OPENAI_API_KEY").unwrap(),
         "sk-openai-direct"
     );
     assert!(!rendered.set.contains_key("OPENCODE_CONFIG"));
     assert!(!rendered.set.contains_key("PROLIFERATE_GATEWAY_KEY"));
+}
+
+#[test]
+fn opencode_gateway_uses_plan_models_not_state() {
+    // The models map comes from the resolved plan (spec §3), not the state
+    // source: pin an exact single-model plan and assert it lands in-config.
+    let home = TempHome::new("opencode-plan-models");
+    home.write_state_json(&gateway_state("opencode"));
+    let resolver = FixedResolver(GatewayModelPlan {
+        models: vec!["claude-haiku-4-5-20251001".to_string()],
+        ..Default::default()
+    });
+    let rendered =
+        resolve_launch_route_auth(home.path(), "opencode", &resolver).expect("render");
+    let config_path = rendered
+        .set
+        .get("OPENCODE_CONFIG")
+        .expect("OPENCODE_CONFIG");
+    let config: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(config_path).expect("read config")).expect("json");
+    let models = config["provider"]["proliferate"]["models"]
+        .as_object()
+        .unwrap();
+    assert_eq!(models.len(), 1);
+    assert!(models.contains_key("claude-haiku-4-5-20251001"));
+}
+
+#[test]
+fn opencode_gateway_errors_when_plan_has_no_models() {
+    // An empty plan (no seed, no probe) is a launch-blocking error (spec §3):
+    // opencode cannot render a config with an empty provider models map.
+    let home = TempHome::new("opencode-empty-plan");
+    home.write_state_json(&gateway_state("opencode"));
+    let resolver = FixedResolver(GatewayModelPlan::default());
+    let error =
+        resolve_launch_route_auth(home.path(), "opencode", &resolver).expect_err("empty models");
+    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_INCOMPLETE");
+}
+
+#[test]
+fn codex_gateway_errors_when_plan_has_no_default_model() {
+    // Codex refuses to launch without a model; an empty plan must fail the
+    // launch rather than write a config codex rejects (spec §3).
+    let home = TempHome::new("codex-empty-plan");
+    home.write_state_json(&gateway_state("codex"));
+    let resolver = FixedResolver(GatewayModelPlan::default());
+    let error =
+        resolve_launch_route_auth(home.path(), "codex", &resolver).expect_err("no default model");
+    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_INCOMPLETE");
 }
 
 // --- grok ------------------------------------------------------------------
@@ -295,7 +391,7 @@ fn grok_gateway_sets_models_base_url_and_isolated_home() {
     let home = TempHome::new("grok-gw");
     home.write_state_json(&gateway_state("grok"));
 
-    let rendered = resolve_launch_route_auth(home.path(), "grok").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "grok", &HarnessPlanResolver).expect("render");
     assert_eq!(
         rendered.set.get("GROK_MODELS_BASE_URL").unwrap(),
         "https://llm.proliferate.ai/v1"
@@ -311,7 +407,7 @@ fn grok_api_key_sets_exactly_its_var() {
         1,
         vec![harness("grok", vec![api_key_source("XAI_API_KEY", "xai-raw")])],
     ));
-    let rendered = resolve_launch_route_auth(home.path(), "grok").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "grok", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("XAI_API_KEY").unwrap(), "xai-raw");
     assert!(!rendered.set.contains_key("HOME"));
 }
@@ -325,7 +421,7 @@ fn absent_harness_renders_native_delta() {
     let home = TempHome::new("absent-native");
     home.write_state_json(&gateway_state("codex")); // no claude entry
 
-    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert!(rendered.set.is_empty());
     assert!(rendered.remove.is_empty());
     assert!(rendered.files.is_empty());
@@ -335,7 +431,7 @@ fn absent_harness_renders_native_delta() {
 fn empty_sources_render_native_delta() {
     let home = TempHome::new("empty-sources");
     home.write_state_json(&v2_state(4, vec![harness("claude", vec![])]));
-    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert!(rendered.set.is_empty());
     assert!(rendered.remove.is_empty());
 }
@@ -343,7 +439,7 @@ fn empty_sources_render_native_delta() {
 #[test]
 fn missing_state_file_is_native_empty_delta() {
     let home = TempHome::new("missing");
-    let rendered = resolve_launch_route_auth(home.path(), "claude").expect("render");
+    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
     assert!(rendered.set.is_empty());
     assert!(rendered.remove.is_empty());
 }
@@ -352,7 +448,7 @@ fn missing_state_file_is_native_empty_delta() {
 fn malformed_state_file_is_typed_error() {
     let home = TempHome::new("broken");
     home.write_state_raw(b"{{{ not json");
-    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("malformed");
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("malformed");
     assert_eq!(error.code(), "AGENT_ROUTE_STATE_MALFORMED");
 }
 
@@ -362,7 +458,7 @@ fn v1_state_file_is_rejected_as_malformed() {
     home.write_state_raw(
         br#"{ "revision": 3, "selections": [ { "harness": "claude", "route": "native" } ] }"#,
     );
-    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("v1 malformed");
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("v1 malformed");
     assert_eq!(error.code(), "AGENT_ROUTE_STATE_MALFORMED");
 }
 
@@ -373,7 +469,7 @@ fn unknown_source_kind_is_typed_error() {
         1,
         vec![harness("claude", vec![json!({ "kind": "bogus" })])],
     ));
-    let error = resolve_launch_route_auth(home.path(), "claude").expect_err("unknown kind");
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("unknown kind");
     assert_eq!(error.code(), "AGENT_ROUTE_UNSUPPORTED");
 }
 
@@ -388,7 +484,9 @@ fn render_is_pure_and_apply_writes_0600_files() {
     home.write_state_json(&gateway_state("codex"));
     let state = load_state_file(home.path()).expect("load").expect("state");
     let profile = resolve_profile(Some(&state), "codex").expect("resolve");
-    let rendered = render_profile(&profile, home.path()).expect("render");
+    // Pass the codex plan (default model) directly — render consumes only the plan.
+    let plan = HarnessPlanResolver.resolve_gateway_models("codex", 0);
+    let rendered = render_profile(&profile, &plan, home.path()).expect("render");
 
     // The FileSpec carries the config.toml bytes; render wrote nothing.
     assert_eq!(rendered.files.len(), 1);
@@ -403,7 +501,7 @@ fn render_is_pure_and_apply_writes_0600_files() {
 
     // The launcher entry point applies the specs, writing the config file 0600
     // with the exact bytes the render produced.
-    let applied = resolve_launch_route_auth(home.path(), "codex").expect("apply");
+    let applied = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("apply");
     let config_file = std::path::Path::new(applied.set.get("CODEX_HOME").unwrap())
         .join("config.toml");
     assert!(config_file.is_file());
@@ -431,7 +529,7 @@ fn codex_home_keeps_immediately_previous_and_gcs_older_revision_dirs() {
             vec![harness("codex", vec![gateway_source()])],
         ));
         std::path::PathBuf::from(
-            resolve_launch_route_auth(home.path(), "codex")
+            resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver)
                 .expect("render")
                 .set
                 .get("CODEX_HOME")
@@ -479,7 +577,8 @@ fn unknown_harness_in_state_is_typed_error() {
     ));
     let state = load_state_file(home.path()).expect("load").expect("state");
     let profile = resolve_profile(Some(&state), "bogus").expect("resolve");
-    let error = render_profile(&profile, home.path()).expect_err("unknown");
+    let error = render_profile(&profile, &GatewayModelPlan::default(), home.path())
+        .expect_err("unknown");
     assert_eq!(error.code(), "AGENT_ROUTE_UNKNOWN_HARNESS");
 }
 

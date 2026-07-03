@@ -1,6 +1,7 @@
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
+import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
 
 import type { WorkspaceInventoryGroupView } from "@proliferate/product-domain/workspaces/inventory";
 
@@ -69,7 +70,7 @@ export function WorkspaceInventory({
 
   return (
     <div
-      className={twMerge("w-full min-w-0 overflow-hidden pb-10", className)}
+      className={twMerge("w-full min-w-0 overflow-hidden pb-10 animate-content-fade-in", className)}
       role="region"
       aria-label={ariaLabel}
     >
@@ -95,24 +96,15 @@ function WorkspaceInventoryLoadingState({ className }: { className?: string }) {
       aria-label="Loading workspaces"
     >
       <div className="flex flex-col gap-1">
-        <SkeletonBlock className="h-9 w-full bg-foreground/5" />
-        <SkeletonBlock className="h-9 w-[92%] bg-foreground/5" />
-        <SkeletonBlock className="h-9 w-[76%] bg-foreground/5" />
+        <SkeletonBlock className="h-9 w-full bg-foreground/5" style={shimmerDelay(0)} />
+        <SkeletonBlock className="h-9 w-[92%] bg-foreground/5" style={shimmerDelay(1)} />
+        <SkeletonBlock className="h-9 w-[76%] bg-foreground/5" style={shimmerDelay(2)} />
       </div>
       <div className="mt-5 flex flex-col gap-1">
-        <SkeletonBlock className="h-9 w-full bg-foreground/5" />
-        <SkeletonBlock className="h-9 w-[84%] bg-foreground/5" />
+        <SkeletonBlock className="h-9 w-full bg-foreground/5" style={shimmerDelay(3)} />
+        <SkeletonBlock className="h-9 w-[84%] bg-foreground/5" style={shimmerDelay(4)} />
       </div>
       <span className="sr-only">Loading workspaces</span>
     </div>
-  );
-}
-
-function SkeletonBlock({ className }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={twMerge("block rounded-md bg-muted/60 motion-safe:animate-pulse", className)}
-    />
   );
 }

@@ -36,7 +36,7 @@ export function CloudChatUserMessage({
           >
             <div
               ref={textRef}
-              className={`break-words select-text text-chat leading-[var(--text-chat--line-height)]${
+              className={`break-words select-text text-[length:var(--text-message)] leading-[var(--text-message--line-height)]${
                 !expanded ? " line-clamp-5" : ""
               }`}
             >

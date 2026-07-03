@@ -143,6 +143,10 @@
       "types": "./dist/chat/transcript/AssistantMessage.d.ts",
       "import": "./dist/chat/transcript/AssistantMessage.js"
     },
+    "./chat/transcript/CloudChatTranscriptRowItems": {
+      "types": "./dist/chat/transcript/CloudChatTranscriptRowItems.d.ts",
+      "import": "./dist/chat/transcript/CloudChatTranscriptRowItems.js"
+    },
     "./chat/transcript/MarkdownBody": {
       "types": "./dist/chat/transcript/MarkdownBody.d.ts",
       "import": "./dist/chat/transcript/MarkdownBody.js"

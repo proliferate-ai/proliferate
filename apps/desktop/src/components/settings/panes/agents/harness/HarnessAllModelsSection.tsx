@@ -6,6 +6,10 @@ import {
   useAuthSelections,
   useUpsertCatalogOverride,
 } from "@proliferate/cloud-sdk-react";
+import {
+  useAgentGatewayModelsQuery,
+  useRefreshAgentGatewayModelsMutation,
+} from "@anyharness/sdk-react";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ModelConfigGrid, type ModelConfigGridItem } from "@proliferate/product-ui/settings/ModelConfigGrid";
@@ -17,6 +21,7 @@ import {
   buildEnabledOverridePatchJson,
   catalogRouteForSurface,
   normalizeCatalogModels,
+  normalizeGatewayModels,
 } from "@/lib/domain/settings/harness-catalog";
 
 interface HarnessAllModelsSectionProps {
@@ -39,23 +44,41 @@ export function HarnessAllModelsSection({
     surface,
     selectionsQuery.data ?? [],
   );
-  const catalogQuery = useAgentCatalog({ harnessKind, surface, route }, cloudActive);
+  // Local surface + gateway route: the RUNTIME has already resolved what its
+  // harness + auth can actually reach (contract §5) — read that directly
+  // instead of the cloud catalog snapshot, which never sees the runtime's own
+  // gateway probes.
+  const isRuntimeGateway = surface === "local" && route === "gateway";
+
+  const catalogQuery = useAgentCatalog(
+    { harnessKind, surface, route },
+    cloudActive && !isRuntimeGateway,
+  );
   const refreshCatalog = useRefreshAgentCatalog();
   const upsertOverride = useUpsertCatalogOverride();
 
+  const gatewayModelsQuery = useAgentGatewayModelsQuery(harnessKind, {
+    enabled: isRuntimeGateway,
+  });
+  const refreshGatewayModels = useRefreshAgentGatewayModelsMutation();
+
   const models = useMemo(
-    () => normalizeCatalogModels(catalogQuery.data?.models ?? []),
-    [catalogQuery.data?.models],
+    () =>
+      isRuntimeGateway
+        ? normalizeGatewayModels(gatewayModelsQuery.data?.models ?? [])
+        : normalizeCatalogModels(catalogQuery.data?.models ?? []),
+    [isRuntimeGateway, gatewayModelsQuery.data?.models, catalogQuery.data?.models],
   );
   // Model entries carry their own provider id; fall back to the harness name
-  // when a catalog row omits one.
+  // when a catalog row omits one. Runtime-resolved gateway models have no
+  // override endpoint yet, so their toggle is read-only.
   const gridItems: ModelConfigGridItem[] = models.map((model) => ({
     id: model.id,
     name: model.displayName,
     provider: model.provider ?? displayName,
     version: model.description ?? undefined,
     enabled: model.enabled,
-    disabled: upsertOverride.isPending,
+    disabled: isRuntimeGateway || upsertOverride.isPending,
   }));
 
   if (!cloudActive) {
@@ -69,6 +92,14 @@ export function HarnessAllModelsSection({
   }
 
   function handleRefresh() {
+    if (isRuntimeGateway) {
+      refreshGatewayModels.mutate(harnessKind, {
+        onError: (error) => {
+          showToast(error.message || HARNESS_PANE_COPY.catalogRefreshError(displayName));
+        },
+      });
+      return;
+    }
     refreshCatalog.mutate(
       { harnessKind, body: { surface, route } },
       {
@@ -80,6 +111,9 @@ export function HarnessAllModelsSection({
   }
 
   function handleToggle(modelId: string, enabled: boolean) {
+    if (isRuntimeGateway) {
+      return;
+    }
     upsertOverride.mutate(
       {
         harnessKind,
@@ -93,37 +127,45 @@ export function HarnessAllModelsSection({
     );
   }
 
-  const probedAt = catalogQuery.data?.probedAt ?? null;
+  const isLoading = isRuntimeGateway ? gatewayModelsQuery.isLoading : catalogQuery.isLoading;
+  const isRefreshing = isRuntimeGateway ? refreshGatewayModels.isPending : refreshCatalog.isPending;
+  const freshnessLine = isRuntimeGateway
+    ? gatewayModelsQuery.data
+      ? gatewayModelsQuery.data.source === "probe" && gatewayModelsQuery.data.probedAt
+        ? HARNESS_PANE_COPY.allModelsFreshnessProbed(
+          new Date(gatewayModelsQuery.data.probedAt).toLocaleString(),
+        )
+        : HARNESS_PANE_COPY.allModelsFreshnessSeed
+      : ""
+    : catalogQuery.data?.probedAt
+      ? `Last refreshed ${new Date(catalogQuery.data.probedAt).toLocaleString()}`
+      : catalogQuery.data?.source
+        ? `Source: ${catalogQuery.data.source}`
+        : "";
 
   return (
     <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
       <div className="space-y-3 py-3">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            {probedAt
-              ? `Last refreshed ${new Date(probedAt).toLocaleString()}`
-              : catalogQuery.data?.source
-                ? `Source: ${catalogQuery.data.source}`
-                : ""}
-          </p>
+          <p className="text-xs text-muted-foreground">{freshnessLine}</p>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="gap-2"
-            disabled={refreshCatalog.isPending}
+            disabled={isRefreshing}
             onClick={handleRefresh}
           >
             <RefreshCw
-              className={`size-3.5 ${refreshCatalog.isPending ? "animate-spin" : ""}`}
+              className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`}
             />
-            {refreshCatalog.isPending
+            {isRefreshing
               ? HARNESS_PANE_COPY.allModelsRefreshing
               : HARNESS_PANE_COPY.allModelsRefresh}
           </Button>
         </div>
 
-        {catalogQuery.isLoading ? (
+        {isLoading ? (
           <p className="text-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsLoading}
           </p>

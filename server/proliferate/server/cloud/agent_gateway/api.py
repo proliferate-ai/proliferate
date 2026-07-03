@@ -22,6 +22,7 @@ from proliferate.server.cloud.agent_gateway.models import (
     AgentAuthStateResponse,
     AgentAuthSurface,
     AgentGatewayCapabilitiesResponse,
+    AgentGatewayCatalogMirrorRequest,
     AgentGatewayCatalogOverrideResponse,
     AgentGatewayCatalogOverrideUpsertRequest,
     AgentGatewayCatalogRefreshRequest,
@@ -222,6 +223,42 @@ async def refresh_agent_catalog_endpoint(
             surface=body.surface,
             route=body.route,
             models_json=body.models_json,
+        )
+    except CloudApiError as error:
+        raise_cloud_error(error)
+    return catalog_payload(
+        harness_kind=harness_kind,
+        surface=body.surface,
+        route=body.route,
+        models=models,
+        snapshot=snapshot,
+        override=override,
+    )
+
+
+@router.post("/catalog/{harness_kind}/mirror", response_model=AgentGatewayCatalogResponse)
+async def mirror_agent_catalog_endpoint(
+    harness_kind: str,
+    body: AgentGatewayCatalogMirrorRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AgentGatewayCatalogResponse:
+    """Store the caller's own runtime-probed catalog as a read-model snapshot.
+
+    Distinct from ``.../refresh``: the runtime already did the probing (a
+    harness/gateway reachability check, possibly server-side via LiteLLM) and
+    is pushing the result here fire-and-forget, so this endpoint never talks
+    to an upstream itself.
+    """
+    try:
+        snapshot, override, models = await catalog_service.mirror_catalog(
+            db,
+            user_id=user.id,
+            harness_kind=harness_kind,
+            surface=body.surface,
+            route=body.route,
+            models_json=body.models_json,
+            probed_at=body.probed_at,
         )
     except CloudApiError as error:
         raise_cloud_error(error)

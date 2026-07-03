@@ -21,6 +21,10 @@ export const HARNESS_PANE_COPY = {
   allModelsRefreshing: "Refreshing...",
   allModelsEmpty: "No models in the catalog for this surface yet.",
   allModelsLoading: "Loading model catalog...",
+  // Runtime-resolved gateway models (contract §5): freshness reads "seed" (the
+  // catalog's fallback list, no probe yet) or "probed <time>" (a live probe).
+  allModelsFreshnessSeed: "seed",
+  allModelsFreshnessProbed: (time: string) => `probed ${time}`,
   getApiKey: "Get an API key",
   recommendedBadge: "Recommended",
   // Native == the implicit empty state (contract §7): zero enabled sources.
