@@ -1,5 +1,5 @@
 import type { RepoRoot } from "@anyharness/sdk";
-import type { RepoConfigResponse, StartWorkspaceMoveRequest } from "@proliferate/cloud-sdk";
+import type { RepoConfigResponse, StartWorkspaceMoveRequest, WorkspaceMoveResponse } from "@proliferate/cloud-sdk";
 import { cloudRepositoryKey } from "@/lib/domain/settings/repositories";
 import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 
@@ -126,4 +126,40 @@ export function buildCloudToLocalMoveStartRequest(input: {
     },
     idempotencyKey: input.idempotencyKey,
   };
+}
+
+function refString(ref: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = ref?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * Reconstructs the original `StartWorkspaceMoveRequest` for a resume from the move's own
+ * persisted source/destination refs. A resume from the transient "started" phase needs
+ * the *original* idempotencyKey to replay safely (see run-workspace-move-workflow), so
+ * the request is rebuilt from the known move rather than guessed. Direction is derived
+ * from `move.sourceKind`, so it can never disagree with the move actually being resumed.
+ */
+export function buildResumeStartRequest(
+  move: WorkspaceMoveResponse,
+  fallbackAnyharnessWorkspaceId: string,
+): StartWorkspaceMoveRequest {
+  return move.sourceKind === "cloud"
+    ? buildCloudToLocalMoveStartRequest({
+      repoConfigId: move.repoConfigId,
+      branch: move.branch,
+      baseCommitSha: move.baseCommitSha,
+      cloudWorkspaceId: refString(move.sourceRef, "cloudWorkspaceId") ?? "",
+      desktopInstallId: refString(move.destinationRef, "desktopInstallId") ?? "",
+      localAnyharnessWorkspaceId: refString(move.destinationRef, "anyharnessWorkspaceId"),
+      idempotencyKey: move.idempotencyKey,
+    })
+    : buildLocalToCloudMoveStartRequest({
+      repoConfigId: move.repoConfigId,
+      branch: move.branch,
+      baseCommitSha: move.baseCommitSha,
+      desktopInstallId: refString(move.sourceRef, "desktopInstallId") ?? "",
+      anyharnessWorkspaceId: refString(move.sourceRef, "anyharnessWorkspaceId") ?? fallbackAnyharnessWorkspaceId,
+      idempotencyKey: move.idempotencyKey,
+    });
 }

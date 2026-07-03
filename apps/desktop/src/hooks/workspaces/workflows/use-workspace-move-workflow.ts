@@ -1,4 +1,4 @@
-import type { GitStatusSnapshot, RepoRoot, WorkspaceKind, WorkspaceMobilityArchive } from "@anyharness/sdk";
+import type { GitStatusSnapshot, RepoRoot, WorkspaceKind } from "@anyharness/sdk";
 import { useGitStatusQuery } from "@anyharness/sdk-react";
 import type { StartWorkspaceMoveRequest, WorkspaceMoveResponse } from "@proliferate/cloud-sdk";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
@@ -13,31 +13,14 @@ import { useWorkspaceMobilityPreflightQuery } from "@/hooks/access/anyharness/mo
 import { useCloudWorkspaceActions } from "@/hooks/cloud/workflows/use-cloud-workspace-actions";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
+import { useMoveDestinationPlan } from "@/hooks/workspaces/workflows/use-move-destination-plan";
+import { useMoveSagaDeps } from "@/hooks/workspaces/workflows/use-move-saga-deps";
 import { usePostMoveNavigation } from "@/hooks/workspaces/workflows/use-post-move-navigation";
 import { useWorkspacePublishWorkflow } from "@/hooks/workspaces/workflows/use-workspace-publish-workflow";
 import { getDesktopInstallId } from "@/lib/access/tauri/desktop-install-id";
-import {
-  destroyWorkspaceMobilitySource,
-  exportWorkspaceMobilityArchive,
-  freezeWorkspaceForHandoff,
-  installWorkspaceMobilityArchive,
-  markWorkspaceRemoteOwned,
-  prepareWorkspaceMobilityDestination,
-  unfreezeWorkspace,
-} from "@/lib/access/anyharness/mobility";
-import {
-  resolveLocalAnyHarnessConnection,
-  resolveWorkspaceConnection,
-} from "@/lib/access/anyharness/resolve-workspace-connection";
-import { cloudWorkspaceGroupKey, repoRootGroupKey } from "@/lib/domain/workspaces/cloud/collections";
+import { unfreezeWorkspace } from "@/lib/access/anyharness/mobility";
+import { resolveWorkspaceConnection } from "@/lib/access/anyharness/resolve-workspace-connection";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
-import {
-  findLocalMoveDestinationCandidateWorkspace,
-  resolveLocalMoveDestinationPlan,
-  resolveLocalMoveDestinationState,
-  type LocalMoveDestinationCandidate,
-  type LocalMoveDestinationPlan,
-} from "@/lib/domain/workspaces/move/move-destination";
 import {
   isMovePostCutover,
   isNonTerminalMovePhase,
@@ -47,18 +30,16 @@ import {
   type MovePhase,
   type MoveReadiness,
 } from "@/lib/domain/workspaces/move/move-model";
-import { resolveMoveReadiness, type MoveDestinationState } from "@/lib/domain/workspaces/move/move-readiness";
+import { resolveMoveReadiness } from "@/lib/domain/workspaces/move/move-readiness";
 import {
   buildCloudToLocalMoveStartRequest,
   buildLocalToCloudMoveStartRequest,
+  buildResumeStartRequest,
   findCollidingCloudWorkspace,
   resolveRepoConfigIdForGitIdentity,
   resolveRepoConfigIdForRepoRoot,
 } from "@/lib/domain/workspaces/move/move-start";
-import {
-  runWorkspaceMoveWorkflow,
-  type WorkspaceMoveWorkflowDeps,
-} from "@/lib/workflows/workspaces/run-workspace-move-workflow";
+import { runWorkspaceMoveWorkflow } from "@/lib/workflows/workspaces/run-workspace-move-workflow";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { rememberActiveWorkspaceMoveId, useWorkspaceMoveStore } from "@/stores/workspaces/workspace-move-store";
 
@@ -92,11 +73,6 @@ interface CollisionState {
   gitOwner: string;
   gitRepoName: string;
   branch: string;
-}
-
-function refString(ref: Record<string, unknown> | null | undefined, key: string): string | null {
-  const value = ref?.[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 // React wiring for both workspace_move sagas (spec section 2.3/5.4): composes the
@@ -155,67 +131,14 @@ export function useWorkspaceMoveWorkflow({
   const [collision, setCollision] = useState<CollisionState | null>(null);
   const [done, setDone] = useState(false);
 
-  // --- cloud->local mirror: local destination (re-adopt-or-prepare, spec section 2.3
-  // mirror step 3) -- derived purely from already-fetched collections + one extra
-  // preflight call on the re-adopt candidate, if any. No-ops (all null) for
-  // local_to_cloud.
-
-  const cloudWorkspaceEntry = useMemo(() => {
-    if (direction !== "cloud_to_local" || !workspaceId) return null;
-    const cloudWorkspaceId = parseCloudWorkspaceSyntheticId(workspaceId);
-    if (!cloudWorkspaceId) return null;
-    return workspaceCollections?.cloudWorkspaces.find((entry) => entry.id === cloudWorkspaceId) ?? null;
-  }, [direction, workspaceId, workspaceCollections?.cloudWorkspaces]);
-
-  const localRepoRoot = useMemo(() => {
-    if (!cloudWorkspaceEntry) return null;
-    return workspaceCollections?.repoRoots.find(
-      (candidate) => repoRootGroupKey(candidate) === cloudWorkspaceGroupKey(cloudWorkspaceEntry),
-    ) ?? null;
-  }, [cloudWorkspaceEntry, workspaceCollections?.repoRoots]);
-
-  const mirrorBranch = gitStatusQuery.data?.currentBranch ?? cloudWorkspaceEntry?.repo.branch ?? null;
-
-  const destinationCandidate = useMemo(
-    () => findLocalMoveDestinationCandidateWorkspace(
-      (workspaceCollections?.localWorkspaces ?? []).map((workspace) => ({
-        workspaceId: workspace.id,
-        repoRootId: workspace.repoRootId,
-        currentBranch: workspace.currentBranch ?? null,
-      })),
-      localRepoRoot?.id ?? null,
-      mirrorBranch,
-    ),
-    [workspaceCollections?.localWorkspaces, localRepoRoot?.id, mirrorBranch],
-  );
-
-  const destinationCandidatePreflightQuery = useWorkspaceMobilityPreflightQuery(
-    destinationCandidate?.workspaceId ?? null,
-    { enabled: enabled && direction === "cloud_to_local" && destinationCandidate !== null },
-  );
-
-  const destinationCandidateWithMode: LocalMoveDestinationCandidate | null = useMemo(() => {
-    if (!destinationCandidate) return null;
-    return {
-      workspaceId: destinationCandidate.workspaceId,
-      runtimeStateMode: destinationCandidatePreflightQuery.data?.runtimeState.mode ?? null,
-    };
-  }, [destinationCandidate, destinationCandidatePreflightQuery.data]);
-
-  const destinationPlan: LocalMoveDestinationPlan | null = useMemo(() => {
-    if (direction !== "cloud_to_local") return null;
-    if (destinationCandidate && destinationCandidatePreflightQuery.isLoading) return null;
-    return resolveLocalMoveDestinationPlan(destinationCandidateWithMode);
-  }, [direction, destinationCandidate, destinationCandidatePreflightQuery.isLoading, destinationCandidateWithMode]);
-
-  const destinationState: MoveDestinationState | null = useMemo(() => {
-    if (direction !== "cloud_to_local") return null;
-    return resolveLocalMoveDestinationState({
-      candidate: destinationCandidateWithMode,
-      candidatePreflightLoading: destinationCandidatePreflightQuery.isLoading,
-      hasLocalRepoRoot: localRepoRoot !== null,
-    });
-  }, [direction, destinationCandidateWithMode, destinationCandidatePreflightQuery.isLoading, localRepoRoot]);
+  // cloud->local local-destination plan (re-adopt-or-prepare); no-ops for local_to_cloud.
+  const { cloudWorkspaceEntry, localRepoRoot, destinationPlan, destinationState } = useMoveDestinationPlan({
+    direction,
+    workspaceId,
+    workspaceCollections,
+    currentBranch: gitStatusQuery.data?.currentBranch ?? null,
+    enabled,
+  });
 
   const repoConfigId = useMemo(() => {
     if (direction === "cloud_to_local") {
@@ -273,92 +196,16 @@ export function useWorkspaceMoveWorkflow({
     workspaceId,
   ]);
 
-  const buildDeps = useCallback((status: GitStatusSnapshot): WorkspaceMoveWorkflowDeps => ({
-    startMove: async (request) => {
-      const move = await startMoveMutation.mutateAsync(request);
-      if (workspaceId) rememberActiveWorkspaceMoveId(workspaceId, move.id);
-      return move;
-    },
-    freezeSource: async (moveId) => {
-      const connection = await resolveWorkspaceConnection(runtimeUrl, workspaceId!);
-      await freezeWorkspaceForHandoff(connection, connection.anyharnessWorkspaceId, moveId);
-    },
-    exportSourceArchive: async (moveId) => {
-      if (direction === "cloud_to_local") {
-        const response = await phaseMutations.export.mutateAsync(moveId);
-        // The server's archive field is an opaque JSON blob (spec section 5.2's
-        // `dict[str, object]`) -- its concrete shape is defined by the AnyHarness
-        // engine that produced it, not by the server, so the cloud SDK types it
-        // generically. Cast to the concrete type the local install step below (and
-        // `runWorkspaceMoveWorkflow`) expects.
-        return response.archive as unknown as WorkspaceMobilityArchive;
-      }
-      const connection = await resolveWorkspaceConnection(runtimeUrl, workspaceId!);
-      return exportWorkspaceMobilityArchive(connection, connection.anyharnessWorkspaceId, {
-        requireCleanGitState: true,
-        expectedHandoffOpId: moveId,
-        expectedBaseCommitSha: status.headOid,
-        expectedBranchName: status.currentBranch ?? null,
-      });
-    },
-    installArchive: async (moveId, archive) => {
-      if (direction === "cloud_to_local") {
-        const localConnection = resolveLocalAnyHarnessConnection(runtimeUrl);
-        let targetWorkspaceId: string;
-        if (destinationPlan?.mode === "re_adopt") {
-          targetWorkspaceId = destinationPlan.workspaceId;
-        } else {
-          if (!localRepoRoot) {
-            throw new Error("No local repository found to install this workspace into.");
-          }
-          const prepared = await prepareWorkspaceMobilityDestination(localConnection, localRepoRoot.id, {
-            requestedBranch: status.currentBranch ?? "",
-            requestedBaseSha: status.headOid,
-          });
-          targetWorkspaceId = prepared.workspace.id;
-        }
-        await installWorkspaceMobilityArchive(localConnection, targetWorkspaceId, {
-          archive,
-          operationId: moveId,
-          installMode: "preserve_native_sessions",
-        });
-        if (destinationPlan?.mode === "re_adopt") {
-          // The re-adopted workspace was left `remote_owned` by the earlier
-          // local->cloud move (source-fate decision) -- flip it back to normal now
-          // that it's live again (spec section 2.3 mirror step 3).
-          await unfreezeWorkspace(localConnection, targetWorkspaceId);
-        }
-        // cloud->local's install call carries no archive -- the server can't reach
-        // this local install, so it's just the durable "installed" acknowledgement
-        // (spec section 5.2's `install_workspace_move_archive`, cloud->local branch).
-        return phaseMutations.install.mutateAsync({ moveId, body: {} });
-      }
-      return phaseMutations.install.mutateAsync({ moveId, body: { archive } });
-    },
-    cutover: (moveId) => phaseMutations.cutover.mutateAsync(moveId),
-    destroySource: async () => {
-      const connection = await resolveWorkspaceConnection(runtimeUrl, workspaceId!);
-      await destroyWorkspaceMobilitySource(connection, connection.anyharnessWorkspaceId);
-    },
-    markSourceRemoteOwned: async () => {
-      const connection = await resolveWorkspaceConnection(runtimeUrl, workspaceId!);
-      await markWorkspaceRemoteOwned(connection, connection.anyharnessWorkspaceId);
-    },
-    unfreezeSource: async (moveId) => {
-      if (!moveId) return;
-      // Generic by construction: `workspaceId` is whichever side is this move's own
-      // source, and `resolveWorkspaceConnection` already routes a cloud synthetic id
-      // through the gateway (spec section 5.4) -- so this reaches the cloud source
-      // directly for `cloud_to_local` with no extra plumbing.
-      const connection = await resolveWorkspaceConnection(runtimeUrl, workspaceId!);
-      await unfreezeWorkspace(connection, connection.anyharnessWorkspaceId);
-    },
-    completeMove: (moveId) => phaseMutations.complete.mutateAsync(moveId),
-    failMove: async (moveId, failureCode, failureDetail) => {
-      await phaseMutations.fail.mutateAsync({ moveId, body: { failureCode, failureDetail } });
-    },
-    onPhaseChange: (phase) => setRunningPhase(phase),
-  }), [direction, destinationPlan, localRepoRoot, phaseMutations, runtimeUrl, startMoveMutation, workspaceId]);
+  const buildDeps = useMoveSagaDeps({
+    direction,
+    workspaceId,
+    runtimeUrl,
+    destinationPlan,
+    localRepoRoot,
+    startMoveMutation,
+    phaseMutations,
+    setRunningPhase,
+  });
 
   const navigateAfterMove = usePostMoveNavigation(workspaceId);
 
@@ -473,28 +320,10 @@ export function useWorkspaceMoveWorkflow({
 
   const resumeMove = useCallback(async () => {
     if (!activeMove || !gitStatusQuery.data || !workspaceId) return;
-    const start = activeMove.sourceKind === "cloud"
-      ? buildCloudToLocalMoveStartRequest({
-        repoConfigId: activeMove.repoConfigId,
-        branch: activeMove.branch,
-        baseCommitSha: activeMove.baseCommitSha,
-        cloudWorkspaceId: refString(activeMove.sourceRef, "cloudWorkspaceId") ?? "",
-        desktopInstallId: refString(activeMove.destinationRef, "desktopInstallId") ?? "",
-        localAnyharnessWorkspaceId: refString(activeMove.destinationRef, "anyharnessWorkspaceId"),
-        idempotencyKey: activeMove.idempotencyKey,
-      })
-      : buildLocalToCloudMoveStartRequest({
-        repoConfigId: activeMove.repoConfigId,
-        branch: activeMove.branch,
-        baseCommitSha: activeMove.baseCommitSha,
-        desktopInstallId: refString(activeMove.sourceRef, "desktopInstallId") ?? "",
-        anyharnessWorkspaceId: refString(activeMove.sourceRef, "anyharnessWorkspaceId") ?? workspaceId,
-        idempotencyKey: activeMove.idempotencyKey,
-      });
     await runAndSettle({
       status: gitStatusQuery.data,
       resume: { moveId: activeMove.id, phase: activeMove.phase },
-      start,
+      start: buildResumeStartRequest(activeMove, workspaceId),
     });
   }, [activeMove, gitStatusQuery.data, workspaceId, runAndSettle]);
 
