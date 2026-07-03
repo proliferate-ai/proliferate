@@ -2467,6 +2467,8 @@ export interface components {
             policyEnabled?: boolean | null;
             /** Effectiveenabled */
             effectiveEnabled: boolean;
+            /** Authdetection */
+            authDetection?: ("detected" | "none" | "unreachable" | "forced") | null;
         };
         /** AgentApiKeyCreateRequest */
         AgentApiKeyCreateRequest: {
@@ -3738,6 +3740,12 @@ export interface components {
             namespace: string;
             /** Mcpurl */
             mcpUrl: string;
+            /**
+             * Authkind
+             * @default auto
+             * @enum {string}
+             */
+            authKind: "auto" | "none" | "oauth2";
         };
         /** CreateCloudWorkspaceRequest */
         CreateCloudWorkspaceRequest: {

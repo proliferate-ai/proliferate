@@ -15,8 +15,10 @@ import {
 } from "@/hooks/access/cloud/integrations/use-admin-integration-definitions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import {
+  adminIntegrationAuthKindLabel,
   adminIntegrationEnabledView,
   adminIntegrationSourceLabel,
+  customIntegrationCreatedMessage,
   type CustomIntegrationFormInput,
 } from "@/lib/domain/settings/org-integrations-presentation";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -58,7 +60,7 @@ export function OrganizationIntegrationsPane() {
     // Errors propagate to the dialog, which surfaces them inline.
     const created = await createDefinition(input);
     setAddDialogOpen(false);
-    showToast(`${created.displayName} added.`, "info");
+    showToast(customIntegrationCreatedMessage(created), "info");
   }
 
   const definitions = definitionsQuery.data ?? [];
@@ -113,7 +115,7 @@ export function OrganizationIntegrationsPane() {
             return (
               <div
                 key={definition.definitionId}
-                className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 border-b border-border py-3 last:border-b-0"
+                className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,0.6fr)_minmax(0,10rem)_auto] items-center gap-3 border-b border-border py-3 last:border-b-0"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <IntegrationIcon namespace={definition.namespace} className="size-8" />
@@ -130,6 +132,9 @@ export function OrganizationIntegrationsPane() {
                   <Badge tone="neutral">
                     {adminIntegrationSourceLabel(definition.source)}
                   </Badge>
+                </div>
+                <div className="min-w-0 truncate text-sm text-muted-foreground">
+                  {adminIntegrationAuthKindLabel(definition.authKind)}
                 </div>
                 <div className="min-w-0 truncate text-right text-xs text-muted-foreground">
                   {enabledView.provenance}
