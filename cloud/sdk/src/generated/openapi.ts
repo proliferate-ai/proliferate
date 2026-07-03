@@ -1729,6 +1729,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workflows/{workflow_id}/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Triggers Endpoint */
+        get: operations["list_triggers_endpoint_v1_cloud_workflows__workflow_id__triggers_get"];
+        put?: never;
+        /** Create Trigger Endpoint */
+        post: operations["create_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Trigger Endpoint */
+        get: operations["get_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Trigger Endpoint */
+        delete: operations["delete_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Trigger Endpoint */
+        patch: operations["update_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__patch"];
+        trace?: never;
+    };
     "/v1/cloud/workers/desktop/enrollment": {
         parameters: {
             query?: never;
@@ -5142,6 +5179,25 @@ export interface components {
             /** Avatar Url */
             avatar_url?: string | null;
         };
+        /**
+         * TriggerScheduleRequest
+         * @description The RRULE + IANA timezone a schedule trigger fires on (house RRULE rules).
+         */
+        TriggerScheduleRequest: {
+            /** Rrule */
+            rrule: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** TriggerScheduleResponse */
+        TriggerScheduleResponse: {
+            /** Rrule */
+            rrule: string;
+            /** Timezone */
+            timezone: string;
+            /** Summary */
+            summary: string | null;
+        };
         /** UpdateCloudWorkspaceDisplayNameRequest */
         UpdateCloudWorkspaceDisplayNameRequest: {
             /** Displayname */
@@ -5300,6 +5356,10 @@ export interface components {
             workflowVersionId: string;
             /** Triggerkind */
             triggerKind: string;
+            /** Triggerid */
+            triggerId: string | null;
+            /** Scheduledfor */
+            scheduledFor: string | null;
             /** Executoruserid */
             executorUserId: string;
             /** Args */
@@ -5342,6 +5402,96 @@ export interface components {
             startedAt: string | null;
             /** Finishedat */
             finishedAt: string | null;
+        };
+        /** WorkflowTriggerCreateRequest */
+        WorkflowTriggerCreateRequest: {
+            /**
+             * Kind
+             * @default schedule
+             * @constant
+             */
+            kind: "schedule";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Concurrencypolicy
+             * @enum {string}
+             */
+            concurrencyPolicy: "skip" | "queue";
+            /**
+             * Targetmode
+             * @enum {string}
+             */
+            targetMode: "local" | "personal_cloud";
+            /** Targetworkspaceid */
+            targetWorkspaceId?: string | null;
+            schedule: components["schemas"]["TriggerScheduleRequest"];
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowTriggerListResponse */
+        WorkflowTriggerListResponse: {
+            /** Triggers */
+            triggers: components["schemas"]["WorkflowTriggerResponse"][];
+        };
+        /** WorkflowTriggerResponse */
+        WorkflowTriggerResponse: {
+            /** Id */
+            id: string;
+            /** Workflowid */
+            workflowId: string;
+            /** Kind */
+            kind: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Concurrencypolicy */
+            concurrencyPolicy: string;
+            /** Targetmode */
+            targetMode: string;
+            /** Targetworkspaceid */
+            targetWorkspaceId: string | null;
+            schedule: components["schemas"]["TriggerScheduleResponse"] | null;
+            /** Nextrunat */
+            nextRunAt: string | null;
+            /** Lastscheduledat */
+            lastScheduledAt: string | null;
+            /** Lastskippedat */
+            lastSkippedAt: string | null;
+            /** Lastskipreason */
+            lastSkipReason: string | null;
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /**
+         * WorkflowTriggerUpdateRequest
+         * @description Partial update: only supplied fields change, then the whole trigger is
+         *     re-validated as a unit (schedule ⋈ target ⋈ args are interdependent).
+         */
+        WorkflowTriggerUpdateRequest: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Concurrencypolicy */
+            concurrencyPolicy?: ("skip" | "queue") | null;
+            /** Targetmode */
+            targetMode?: ("local" | "personal_cloud") | null;
+            /** Targetworkspaceid */
+            targetWorkspaceId?: string | null;
+            schedule?: components["schemas"]["TriggerScheduleRequest"] | null;
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** WorkflowUpdateRequest */
         WorkflowUpdateRequest: {
@@ -9302,6 +9452,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_triggers_endpoint_v1_cloud_workflows__workflow_id__triggers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowTriggerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowTriggerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerResponse"];
                 };
             };
             /** @description Validation Error */
