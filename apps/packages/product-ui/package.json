@@ -299,6 +299,30 @@
       "types": "./dist/environments/ScriptBlock.d.ts",
       "import": "./dist/environments/ScriptBlock.js"
     },
+    "./workflows/WorkflowStatusPill": {
+      "types": "./dist/workflows/WorkflowStatusPill.d.ts",
+      "import": "./dist/workflows/WorkflowStatusPill.js"
+    },
+    "./workflows/WorkflowStepKindBadge": {
+      "types": "./dist/workflows/WorkflowStepKindBadge.d.ts",
+      "import": "./dist/workflows/WorkflowStepKindBadge.js"
+    },
+    "./workflows/WorkflowStepRunDot": {
+      "types": "./dist/workflows/WorkflowStepRunDot.d.ts",
+      "import": "./dist/workflows/WorkflowStepRunDot.js"
+    },
+    "./workflows/WorkflowStepGlyphStrip": {
+      "types": "./dist/workflows/WorkflowStepGlyphStrip.d.ts",
+      "import": "./dist/workflows/WorkflowStepGlyphStrip.js"
+    },
+    "./workflows/WorkflowStepCard": {
+      "types": "./dist/workflows/WorkflowStepCard.d.ts",
+      "import": "./dist/workflows/WorkflowStepCard.js"
+    },
+    "./workflows/WorkflowRunTimelineRow": {
+      "types": "./dist/workflows/WorkflowRunTimelineRow.d.ts",
+      "import": "./dist/workflows/WorkflowRunTimelineRow.js"
+    },
     "./workspaces/WorkspaceRow": {
       "types": "./dist/workspaces/WorkspaceRow.d.ts",
       "import": "./dist/workspaces/WorkspaceRow.js"
