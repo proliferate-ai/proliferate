@@ -4,8 +4,8 @@ use std::path::{Component, Path, PathBuf};
 use anyhow::Context;
 
 use super::{
-    file_mode, find_codex_rollout_path, read_file_relative_to_home,
-    resolve_home_relative_artifact_path, write_artifact_file, AgentArtifactFileData,
+    file_mode, find_codex_rollout_path, resolve_home_relative_artifact_path, write_artifact_file,
+    AgentArtifactFileData,
 };
 use crate::domains::sessions::model::SessionRecord;
 
@@ -159,15 +159,22 @@ fn codex_artifact_roots(home_dir: &Path, runtime_home: Option<&Path>) -> Vec<Cod
     roots
 }
 
+/// Read a rollout into a portable artifact whose `relative_path` is ALWAYS the
+/// canonical `.codex/<subpath>` form, re-rooted from whichever `CODEX_HOME` it
+/// was found under (ambient `~/.codex` OR the runtime-local
+/// `<runtime_home>/agent-auth/codex-local`). This canonical form is what
+/// [`install_codex_artifacts_under_home`] and `validate_session_agent_artifacts`
+/// expect. We must NOT shortcut through `read_file_relative_to_home` when the
+/// path merely lives under `home_dir`: the runtime-local codex home sits under
+/// `<runtime_home>` (itself under `home_dir` in a cloud sandbox), so stripping
+/// `home_dir` would yield `.proliferate/anyharness/agent-auth/codex-local/…`
+/// instead of `.codex/…`, and install would reject it as escaping
+/// `.codex/sessions`.
 fn read_codex_file(
     root: &CodexArtifactRoot,
-    home_dir: &Path,
+    _home_dir: &Path,
     path: &Path,
 ) -> anyhow::Result<AgentArtifactFileData> {
-    if path.starts_with(home_dir) {
-        return read_file_relative_to_home(home_dir, path);
-    }
-
     let content = fs::read(path).with_context(|| format!("reading {}", path.display()))?;
     let relative_to_codex_home = path
         .strip_prefix(&root.codex_home)
