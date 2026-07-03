@@ -310,8 +310,12 @@ async def test_refresh_syncs_running_snapshot(
                 "sessionIds": ["sess-1"],
                 "workspaceId": "sandbox-ws-1",
                 "steps": [
-                    {"stepIndex": 0, "kind": "agent.prompt", "status": "completed",
-                     "output": {"session_id": "sess-1"}}
+                    {
+                        "stepIndex": 0,
+                        "kind": "agent.prompt",
+                        "status": "completed",
+                        "output": {"session_id": "sess-1"},
+                    }
                 ],
             },
         ),
@@ -445,9 +449,7 @@ async def test_start_run_cloud_rejects_unowned_workspace(db_session: AsyncSessio
 async def test_start_run_cloud_rejects_unmaterialized_workspace(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
-    workspace = await _make_ready_cloud_workspace(
-        db_session, user, anyharness_workspace_id=None
-    )
+    workspace = await _make_ready_cloud_workspace(db_session, user, anyharness_workspace_id=None)
     with pytest.raises(CloudApiError) as exc:
         await service.start_run(
             db_session,
