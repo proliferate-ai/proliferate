@@ -160,6 +160,41 @@ class TestRuntimeWorkerEnrollment:
         )
         assert fresh.status_code == 200
 
+    @pytest.mark.asyncio
+    async def test_cross_user_enrollment_revokes_prior_users_worker(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        user_a = await _authed_user(client, db_session, prefix="worker-cross-a")
+        user_b = await _authed_user(client, db_session, prefix="worker-cross-b")
+
+        token_a = await _desktop_enrollment_token(client, user_a, install_id="install-cross")
+        first = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token_a})
+        assert first.status_code == 200, first.text
+        first_token = first.json()["workerToken"]
+
+        # A different user enrolling on the same install retires the
+        # predecessor: only one physical worker process exists per machine, so
+        # user A's worker token must not stay live once B takes over.
+        token_b = await _desktop_enrollment_token(client, user_b, install_id="install-cross")
+        second = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token_b})
+        assert second.status_code == 200, second.text
+        second_token = second.json()["workerToken"]
+
+        stale = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {first_token}"},
+            json={},
+        )
+        assert stale.status_code == 401
+        fresh = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {second_token}"},
+            json={},
+        )
+        assert fresh.status_code == 200
+
 
 async def _enroll_worker(client: AsyncClient, auth, *, install_id: str) -> dict:
     token = await _desktop_enrollment_token(client, auth, install_id=install_id)

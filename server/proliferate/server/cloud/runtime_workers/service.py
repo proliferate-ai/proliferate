@@ -141,13 +141,23 @@ async def enroll_worker(
             status_code=401,
         )
 
-    # Single active worker per identity: retire any prior worker + gateway token.
-    await store.revoke_active_workers_for_identity(
-        db,
-        cloud_sandbox_id=enrollment.cloud_sandbox_id,
-        owner_user_id=enrollment.owner_user_id,
-        desktop_install_id=enrollment.desktop_install_id,
-    )
+    # Single active worker per identity: retire any prior worker + gateway
+    # token. Desktop installs run exactly one physical worker process, so a
+    # desktop enrollment retires predecessors regardless of owner — otherwise
+    # a user switch on the same machine would leave the previous user's worker
+    # row "online" and its gateway token active indefinitely.
+    if enrollment.runtime_kind == "desktop" and enrollment.desktop_install_id is not None:
+        await store.revoke_active_workers_for_desktop_install(
+            db,
+            desktop_install_id=enrollment.desktop_install_id,
+        )
+    else:
+        await store.revoke_active_workers_for_identity(
+            db,
+            cloud_sandbox_id=enrollment.cloud_sandbox_id,
+            owner_user_id=enrollment.owner_user_id,
+            desktop_install_id=enrollment.desktop_install_id,
+        )
 
     worker_token = secrets.token_urlsafe(_TOKEN_BYTES)
     worker = await store.create_worker(
