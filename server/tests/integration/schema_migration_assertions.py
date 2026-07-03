@@ -48,6 +48,7 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "usage_segment",
         "user",
         "webhook_event_receipt",
+        "workspace_move",
     }
     assert {
         "cloud_repo_config",
