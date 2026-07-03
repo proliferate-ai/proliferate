@@ -44,6 +44,15 @@ export const GOAL_ACTIVE_LONG = goalFixture({
   timeUsedSeconds: 312,
 });
 
+/** Literal newlines, exercised by the multi-line editor's edit-mode fixture. */
+export const GOAL_ACTIVE_MULTILINE = goalFixture({
+  objective:
+    "Ship the goal lifecycle transcript rows:\n"
+    + "1. Interleave goal_updated/goal_met/goal_cleared as quiet system rows\n"
+    + "2. Dedupe accounting-only ticks so the transcript doesn't spam\n"
+    + "3. Add a playground fixture covering set -> edited -> met",
+});
+
 export const GOAL_PAUSED = goalFixture({
   status: "paused",
   nativeStatus: "paused",

@@ -6,9 +6,9 @@ import {
   type GoalCapabilities,
   type GoalWire,
 } from "@proliferate/product-domain/activity/goal";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { GoalBarIconAction } from "./GoalBarIconAction";
 import { GoalBarObjectiveEditor } from "./GoalBarObjectiveEditor";
 
 const PAUSE_UNSUPPORTED_TOOLTIP = "Not supported by this agent";
@@ -67,6 +67,11 @@ export function GoalBar({
   if (!capabilities.supported) {
     return null;
   }
+
+  // Editing/composing swaps the fixed single-row layout for a tall,
+  // auto-growing textarea (Conductor reference): the glyph aligns with the
+  // textarea's first line instead of a fixed-height row.
+  const isEditingLayout = state.kind === "hidden" || (state.kind === "live" && editing);
 
   let content: ReactNode;
   if (state.kind === "hidden") {
@@ -160,30 +165,40 @@ export function GoalBar({
       aria-label="Session goal"
       className="relative overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
     >
-      <div className="flex h-9 min-w-0 items-center gap-2 pl-3 pr-1.5">
-        <GoalBarGlyph state={state} />
+      <div
+        className={twMerge(
+          "flex min-w-0 gap-2 pl-3 pr-1.5",
+          isEditingLayout ? "items-start py-1.5" : "h-9 items-center",
+        )}
+      >
+        <GoalBarGlyph state={state} raised={isEditingLayout} />
         {content}
       </div>
     </div>
   );
 }
 
-function GoalBarGlyph({ state }: { state: ReturnType<typeof deriveGoalBarState> }) {
+function GoalBarGlyph({
+  state,
+  raised = false,
+}: {
+  state: ReturnType<typeof deriveGoalBarState>;
+  /** Nudged down to align with a multi-line editor's first line of text. */
+  raised?: boolean;
+}) {
+  const className = twMerge("size-3.5 shrink-0", raised && "mt-1");
   if (state.kind === "result") {
     if (state.outcome === "met") {
-      return <CircleCheck className="size-3.5 shrink-0 text-success" aria-hidden />;
+      return <CircleCheck className={twMerge(className, "text-success")} aria-hidden />;
     }
     return (
       <CircleAlert
-        className={twMerge(
-          "size-3.5 shrink-0",
-          state.outcome === "blocked" ? "text-warning" : "text-destructive",
-        )}
+        className={twMerge(className, state.outcome === "blocked" ? "text-warning" : "text-destructive")}
         aria-hidden
       />
     );
   }
-  return <Target className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />;
+  return <Target className={twMerge(className, "text-muted-foreground")} aria-hidden />;
 }
 
 function GoalBarPauseAction({
@@ -212,43 +227,5 @@ function GoalBarPauseAction({
     <Tooltip content={PAUSE_UNSUPPORTED_TOOLTIP}>
       <GoalBarIconAction label={`${label} — ${PAUSE_UNSUPPORTED_TOOLTIP}`} icon={icon} inert />
     </Tooltip>
-  );
-}
-
-function GoalBarIconAction({
-  label,
-  icon,
-  onClick,
-  inert = false,
-  destructive = false,
-}: {
-  label: string;
-  icon: ReactNode;
-  onClick?: () => void;
-  /**
-   * Render disabled-looking but still focusable (aria-disabled, click blocked)
-   * rather than natively `disabled` — a native-disabled button leaves the tab
-   * order, which would hide a wrapping tooltip from keyboard/AT users.
-   */
-  inert?: boolean;
-  destructive?: boolean;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      aria-disabled={inert || undefined}
-      onClick={inert ? undefined : onClick}
-      aria-label={label}
-      title={inert ? undefined : label}
-      className={twMerge(
-        "h-6 w-6 text-muted-foreground hover:text-foreground",
-        destructive && "hover:text-destructive",
-        inert && "cursor-default opacity-50 hover:text-muted-foreground",
-      )}
-    >
-      {icon}
-    </Button>
   );
 }
