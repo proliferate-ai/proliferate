@@ -111,8 +111,10 @@ class CloudIntegrationPolicy(Base):
         index=True,
     )
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Attribution, not ownership: NO ACTION so deleting the acting admin can
+    # never cascade away (and silently re-enable) the org's policy.
     updated_by_user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"),
+        ForeignKey("user.id"),
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

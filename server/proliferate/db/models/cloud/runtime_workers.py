@@ -123,8 +123,9 @@ class CloudRuntimeWorkerEnrollment(Base):
     desktop_install_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="pending")
+    # Attribution, not ownership: NO ACTION (only owner_user_id cascades).
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"),
+        ForeignKey("user.id"),
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -153,8 +154,11 @@ class CloudIntegrationGatewayToken(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Pure derivative of its worker (hash-only row, revoked alongside it):
+    # cascade so a hard delete reaching the worker (e.g. via its sandbox)
+    # never trips over a token, which carries no sandbox FK of its own.
     runtime_worker_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cloud_runtime_worker.id"),
+        ForeignKey("cloud_runtime_worker.id", ondelete="CASCADE"),
         index=True,
     )
     owner_user_id: Mapped[uuid.UUID] = mapped_column(
