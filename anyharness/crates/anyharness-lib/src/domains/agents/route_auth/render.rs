@@ -78,6 +78,22 @@ fn render_sources(
             ResolvedSource::ApiKey(profile) => {
                 // Fully generic: set exactly the requested var (contract §4).
                 rendered.set(&profile.env_var_name, &profile.value);
+                // Codex authenticates from CODEX_HOME/auth.json, NOT the bare env
+                // var, on the ACP session/load (resume) path — a route-authed
+                // sandbox resume of a MIGRATED codex session otherwise fails
+                // "Authentication required". The api_key route does not repoint
+                // CODEX_HOME (it stays the session-layer codex-local home, where
+                // portability::codex::install_codex_artifacts also lands the
+                // migrated rollout), so describe an auth.json write into that
+                // home. Pure: the bytes are built here; the launcher applies the
+                // FileSpec (mod.rs after render_profile).
+                if matches!(parse_harness(&sources.harness_kind), Ok(AgentKind::Codex)) {
+                    rendered.files.push(FileSpec {
+                        path_family: PathFamily::CodexLocalAuth,
+                        revision: sources.revision,
+                        contents: Some(codex_api_key_auth_json(&profile.value)),
+                    });
+                }
             }
             ResolvedSource::Gateway(profile) => render_gateway(
                 &sources.harness_kind,
@@ -237,6 +253,24 @@ fn render_codex_gateway(
 /// so the snapshot test can assert exact content without a toml serializer. The
 /// `default_model` is the catalog-resolved gateway default (spec §3), never a
 /// Rust constant.
+/// The codex api-key `auth.json` bytes: `{ "OPENAI_API_KEY": "<key>" }`, the
+/// shape `codex login --with-api-key` writes and credential-discovery
+/// `has_codex_api_key` reads. serde_json handles string escaping so an arbitrary
+/// key value is safe.
+fn codex_api_key_auth_json(api_key: &str) -> Vec<u8> {
+    let auth = serde_json::json!({ "OPENAI_API_KEY": api_key });
+    // to_vec_pretty on a fixed one-key object is infallible; fall back to a
+    // hand-built object rather than panicking if that ever changes.
+    serde_json::to_vec_pretty(&auth).unwrap_or_else(|_| {
+        format!("{{\n  \"OPENAI_API_KEY\": {}\n}}\n", json_string(api_key)).into_bytes()
+    })
+}
+
+/// Minimal JSON string escaper for the infallible-fallback path above.
+fn json_string(value: &str) -> String {
+    serde_json::Value::String(value.to_string()).to_string()
+}
+
 fn codex_config_toml(base_url: &str, default_model: &str) -> String {
     let base_url = format!("{}/v1", trim_trailing_slash(base_url));
     format!(

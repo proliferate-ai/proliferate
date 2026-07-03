@@ -56,6 +56,11 @@ pub enum PathFamily {
     ClaudeConfig,
     /// Revision-keyed CODEX_HOME with a `config.toml`.
     CodexHome,
+    /// Stable (not revision-keyed) codex-local `CODEX_HOME` with an `auth.json`.
+    /// The api_key codex route writes its credential file here (the launch
+    /// resolves `CODEX_HOME` to this dir; the bare env var is not honored on the
+    /// ACP resume path).
+    CodexLocalAuth,
     /// Revision-keyed OpenCode dir with `opencode.json` + XDG subdirs.
     OpencodeConfig,
     /// Revision-keyed grok HOME; no content file.
@@ -88,6 +93,24 @@ pub(super) fn claude_config_dir_path(runtime_home: &Path) -> PathBuf {
     route_auth_root(runtime_home).join(CLAUDE_CONFIG_DIR_NAME)
 }
 
+/// The session-layer `CODEX_HOME` directory name a codex launch resolves to
+/// (`sessions::runtime::launch_env::prepare_local_codex_home`). The codex
+/// api_key route overlays its `auth.json` here rather than repointing
+/// `CODEX_HOME`; keep in sync with that module (mirrors the duplicated literal
+/// in `agents::portability::codex::codex_artifact_roots`).
+const CODEX_LOCAL_HOME_DIR: &str = "codex-local";
+/// The credential file codex reads from `CODEX_HOME` on both `session/new` and
+/// `session/load`.
+const CODEX_AUTH_FILE_NAME: &str = "auth.json";
+
+/// Pure: the stable codex-local `CODEX_HOME` path (no I/O). This is the home a
+/// native/api_key codex launch resolves to
+/// (`sessions::runtime::launch_env::prepare_local_codex_home`); unlike the
+/// gateway route it is NOT revision-keyed.
+pub(super) fn codex_local_home_path(runtime_home: &Path) -> PathBuf {
+    route_auth_root(runtime_home).join(CODEX_LOCAL_HOME_DIR)
+}
+
 /// Apply one [`FileSpec`]: create the isolated dir (revision-keyed families GC
 /// stale siblings first) and write its config file 0600 where the family has
 /// one. Idempotent per revision.
@@ -103,6 +126,11 @@ pub(super) fn apply_file_spec(
         PathFamily::CodexHome => {
             let dir = prepare_revision_dir(runtime_home, CODEX_HOME_PREFIX, spec.revision)?;
             write_private_file(&dir.join(CODEX_CONFIG_FILE_NAME), spec_contents(spec)?)?;
+        }
+        PathFamily::CodexLocalAuth => {
+            let dir = codex_local_home_path(runtime_home);
+            create_dir(&dir)?;
+            write_private_file(&dir.join(CODEX_AUTH_FILE_NAME), spec_contents(spec)?)?;
         }
         PathFamily::OpencodeConfig => {
             let dir = prepare_revision_dir(runtime_home, OPENCODE_CONFIG_PREFIX, spec.revision)?;
