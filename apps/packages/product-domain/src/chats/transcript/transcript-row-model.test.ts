@@ -373,6 +373,136 @@ describe("buildTranscriptRowModel", () => {
 
       expect(rows.every((row) => row.kind !== "goal_event")).toBe(true);
     });
+
+    // Regression coverage for the screenshot bug: a user message arms a goal,
+    // the assistant turn pursues it, and the native goal_updated confirmation
+    // lands (seq-wise) *after* assistant content has already started. The old
+    // bucketing always anchored goal rows at the END of their host turn, so
+    // "Goal set" rendered below the entire assistant turn instead of right
+    // after the user's message.
+    it("anchors a mid-turn 'set' event right after the turn's user-message row, before assistant content — and never below a later turn", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-turn-1-user", "Arm a goal and keep going", 1);
+      addAssistantItems(transcript, "turn-1", 3, 2); // seq 2, 3, 4
+      addTurn(transcript, "turn-2", true);
+      addUserItem(transcript, "turn-2", "item-turn-2-user", "Keep going", 20);
+      addAssistantItems(transcript, "turn-2", 2, 21); // seq 21, 22
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-2",
+        latestTurnHasAssistantRenderableContent: true,
+        // Native confirmation lands at seq 3 — after the user message (seq 1)
+        // and the first assistant chunk (seq 2), but before the rest of
+        // turn-1's content (seq 4) — reproducing "goal_updated's seq is
+        // assigned at native-confirmation time, after assistant chunks began".
+        goalEvents: [goalEvent(3, "set")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:item-turn-1-user",
+        "goal-event:3",
+        "turn:turn-1:block:content",
+        "turn:turn-2:block:content",
+      ]);
+    });
+
+    it("keeps an end-anchored 'met' event at the turn's end even when it lands mid-turn (no split)", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-turn-1-user", "Ship it", 1);
+      addAssistantItems(transcript, "turn-1", 3, 2); // seq 2, 3, 4
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(3, "met")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content",
+        "goal-event:3",
+      ]);
+    });
+
+    it("anchors an idle-armed 'set' event between the turns (no split) when no turn is running", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-turn-1-user", "First", 1);
+      addAssistantItems(transcript, "turn-1", 2, 2); // seq 2, 3 — turn-1 fully idle by seq 3
+      addTurn(transcript, "turn-2", true);
+      addUserItem(transcript, "turn-2", "item-turn-2-user", "Second", 10);
+      addAssistantItems(transcript, "turn-2", 2, 11); // seq 11, 12
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-2",
+        latestTurnHasAssistantRenderableContent: true,
+        // Armed while idle, between turn-1 finishing (seq 3) and turn-2
+        // starting (seq 10) — no turn was running when this landed.
+        goalEvents: [goalEvent(6, "set")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content",
+        "goal-event:6",
+        "turn:turn-2:block:content",
+      ]);
+    });
+
+    it("independently anchors a start event and an end event within the same turn", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-turn-1-user", "Do it", 1);
+      addAssistantItems(transcript, "turn-1", 4, 2); // seq 2, 3, 4, 5
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        // "set" lands mid-turn (seq 2, before the turn's last item at seq 5);
+        // "met" lands at the very end of the same turn.
+        goalEvents: [goalEvent(2, "set"), goalEvent(5, "met")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:item-turn-1-user",
+        "goal-event:2",
+        "turn:turn-1:block:content",
+        "goal-event:5",
+      ]);
+    });
+
+    it("leads a turn's row entirely when a start-anchored event lands mid-turn but the turn has no leading user-message block", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      // No user_message item at all — e.g. an autonomous continuation turn.
+      addAssistantItems(transcript, "turn-1", 3, 1); // seq 1, 2, 3
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(1, "set")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "goal-event:1",
+        "turn:turn-1:block:content",
+      ]);
+    });
   });
 });
 
@@ -528,6 +658,7 @@ function addUserItem(
   turnId: string,
   itemId: string,
   text: string,
+  startedSeq = 1,
 ) {
   const turn = transcript.turnsById[turnId];
   if (!turn) {
@@ -540,7 +671,7 @@ function addUserItem(
     turnId,
     text,
     isStreaming: false,
-    startedSeq: 1,
+    startedSeq,
   } as TranscriptState["itemsById"][string];
 }
 

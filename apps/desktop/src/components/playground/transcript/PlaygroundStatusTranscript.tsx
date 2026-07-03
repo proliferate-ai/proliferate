@@ -4,6 +4,7 @@ import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/g
 import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
 import { GoalTranscriptEventRow } from "@/components/workspace/chat/transcript/GoalTranscriptEventRow";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
+import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { PendingInteractionMarkerView } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
 import type { ScenarioKey } from "@/config/playground";
 import {
@@ -129,16 +130,32 @@ export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNo
       );
     // Goal lifecycle rows are client-side composition (deriveGoalTranscriptEvents)
     // interleaved into the real transcript by seq; this preview hardcodes the
-    // set -> edited -> met sequence around static assistant turns instead of
-    // driving the full row model, matching this file's other static previews.
+    // sequence around static turns instead of driving the full row model,
+    // matching this file's other static previews. The ordering below is the
+    // CORRECT anchoring (see `bucketGoalEventRows` in transcript-row-model.ts):
+    // "set"/"edited" render right after their turn's user message, before any
+    // assistant content, even though the native confirmation that produces the
+    // row only lands after the assistant has already started responding.
+    // "met" renders at the end of the turn it occurred in. Turn 2 below is the
+    // regression case from the bug screenshot — a follow-up turn after the
+    // goal was armed — proving its content renders entirely below (never
+    // above) the turn-1 "Goal set" row.
     case "goal-transcript-lifecycle":
       return (
         <TranscriptPreviewShell>
+          <UserMessage
+            sessionId={null}
+            content={'Make sure DONE.txt exists in the repo root and contains exactly "done".'}
+          />
           <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_SET} />
           <AssistantMessage content={'Setting a goal so I can track this end-to-end: DONE.txt exists in the repo root and contains exactly "done".'} />
-          <AssistantMessage content="First pass didn't quite match the acceptance check — narrowing the objective to the exact contents." />
+          <AssistantMessage content="First pass didn't quite match the acceptance check — writing the file now." />
+          <UserMessage
+            sessionId={null}
+            content="Looks like the contents were off by a trailing newline — tighten the objective and try again."
+          />
           <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_EDITED} />
-          <AssistantMessage content="DONE.txt now exists with the exact contents the goal expects." />
+          <AssistantMessage content="Narrowed the objective to the exact contents (no trailing newline) and rewrote the file." />
           <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_MET} />
         </TranscriptPreviewShell>
       );
@@ -147,19 +164,27 @@ export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNo
   }
 }
 
+// seq 2: the native goal_updated confirmation for turn-1's arming message
+// (seq 1) — it lands after the assistant has already started responding
+// within turn-1, but still anchors to that turn's START (see the anchoring
+// model in transcript-row-model.ts).
 const GOAL_TRANSCRIPT_EVENT_SET: GoalTranscriptEvent = {
   id: "1",
-  seq: 1,
-  turnId: null,
+  seq: 2,
+  turnId: "turn-1",
   kind: "set",
   objective: "DONE.txt exists in the repo root and contains exactly \"done\"",
   detail: null,
 };
 
+// seq 8: turn-2's own native confirmation — anchors to turn-2's START, right
+// after turn-2's user message and before turn-2's own assistant content, not
+// to turn-1 (proving a later turn's goal-lifecycle row never renders above
+// an earlier turn's, and vice versa).
 const GOAL_TRANSCRIPT_EVENT_EDITED: GoalTranscriptEvent = {
   id: "2",
   seq: 8,
-  turnId: "turn-1",
+  turnId: "turn-2",
   kind: "edited",
   objective: "DONE.txt exists in the repo root and contains exactly \"done\" (trailing newline optional)",
   detail: null,
