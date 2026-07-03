@@ -5,7 +5,8 @@ import type { GoalWire } from "@proliferate/product-domain/activity/goal";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
 import { goalResultDismissKey, useGoalBarStore } from "@/stores/activity/goal-bar-store";
-import { getSessionRecord, patchSessionRecord } from "@/stores/sessions/session-records";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 export interface SessionGoalActions {
   editGoal: (objective: string) => void;
@@ -24,8 +25,10 @@ export interface SessionGoalActions {
  * harness state: every write goes through the runtime goal surface
  * (PUT/DELETE /v1/sessions/{id}/goal → `_anyharness/goal/set|clear`), which
  * responds only after the native notification round-trips. The slot mirror
- * transitions from the stream's goal_* events (and the confirmed response is
- * applied as the same round-tripped state) — never optimistically.
+ * transitions solely from the stream's goal_* events (the single authoritative
+ * writer) — never optimistically and never from the mutation response, so two
+ * unordered writers can't clobber each other. The resolved promise is used
+ * only for compose/pending/error handling.
  *
  * Dismissal and compose-mode are client-only UI state.
  */
@@ -33,6 +36,7 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
   const activeSessionId = useActiveSessionId();
   const setGoalMutation = useSetSessionGoalMutation();
   const clearGoalMutation = useClearSessionGoalMutation();
+  const showToast = useToastStore((state) => state.show);
   const beginComposingInStore = useGoalBarStore((state) => state.beginComposing);
   const endComposingInStore = useGoalBarStore((state) => state.endComposing);
   const dismissResultInStore = useGoalBarStore((state) => state.dismissResult);
@@ -77,17 +81,17 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
         workspaceId: target.workspaceId,
         request: { objective: trimmed },
       })
-      .then((response) => {
-        patchSessionRecord(target.clientSessionId, { activeGoal: response.goal });
+      .then(() => {
+        // The confirmed goal reaches the slot mirror via the goal_updated
+        // stream event; the response is used only to close the editor.
         endComposingInStore(target.clientSessionId);
       })
       .catch((error) => {
-        logLatency("session.goal.set.failed", {
-          sessionId: target.sessionId,
-          message: error instanceof Error ? error.message : String(error),
-        });
+        const message = error instanceof Error ? error.message : String(error);
+        logLatency("session.goal.set.failed", { sessionId: target.sessionId, message });
+        showToast(`Failed to set goal: ${message}`);
       });
-  }, [endComposing, endComposingInStore, resolveGoalTarget, setGoalMutation]);
+  }, [endComposing, endComposingInStore, resolveGoalTarget, setGoalMutation, showToast]);
 
   const setArmState = useCallback((status: GoalArmState) => {
     const target = resolveGoalTarget();
@@ -100,17 +104,12 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
         workspaceId: target.workspaceId,
         request: { status },
       })
-      .then((response) => {
-        patchSessionRecord(target.clientSessionId, { activeGoal: response.goal });
-      })
       .catch((error) => {
-        logLatency("session.goal.arm.failed", {
-          sessionId: target.sessionId,
-          status,
-          message: error instanceof Error ? error.message : String(error),
-        });
+        const message = error instanceof Error ? error.message : String(error);
+        logLatency("session.goal.arm.failed", { sessionId: target.sessionId, status, message });
+        showToast(`Failed to ${status === "paused" ? "pause" : "resume"} goal: ${message}`);
       });
-  }, [resolveGoalTarget, setGoalMutation]);
+  }, [resolveGoalTarget, setGoalMutation, showToast]);
 
   const pauseGoal = useCallback(() => {
     setArmState("paused");
@@ -130,16 +129,12 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
         sessionId: target.sessionId,
         workspaceId: target.workspaceId,
       })
-      .then(() => {
-        patchSessionRecord(target.clientSessionId, { activeGoal: null });
-      })
       .catch((error) => {
-        logLatency("session.goal.clear.failed", {
-          sessionId: target.sessionId,
-          message: error instanceof Error ? error.message : String(error),
-        });
+        const message = error instanceof Error ? error.message : String(error);
+        logLatency("session.goal.clear.failed", { sessionId: target.sessionId, message });
+        showToast(`Failed to clear goal: ${message}`);
       });
-  }, [clearGoalMutation, resolveGoalTarget]);
+  }, [clearGoalMutation, resolveGoalTarget, showToast]);
 
   const dismissResult = useCallback(() => {
     if (!goal || !activeSessionId) {
