@@ -34,6 +34,7 @@ class CloudTestConfig:
     github_base_branch: str
     github_token: str | None
     anthropic_api_key: str | None
+    openai_api_key: str | None
     google_api_key: str | None
     e2b_api_key: str | None
     e2b_template_name: str | None

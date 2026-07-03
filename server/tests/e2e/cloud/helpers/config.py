@@ -131,6 +131,7 @@ def load_cloud_test_config() -> CloudTestConfig:
         ),
         github_token=discover_github_token(),
         anthropic_api_key=discover_secret("ANTHROPIC_API_KEY"),
+        openai_api_key=discover_secret("OPENAI_API_KEY"),
         google_api_key=discover_secret("GOOGLE_API_KEY"),
         e2b_api_key=discover_secret("E2B_API_KEY"),
         e2b_template_name=discover_secret("E2B_TEMPLATE_NAME"),

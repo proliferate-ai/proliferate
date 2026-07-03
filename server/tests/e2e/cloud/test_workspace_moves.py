@@ -4,29 +4,37 @@ One scenario, acting as the Desktop executor over HTTP, exercises the whole
 local<->cloud<->local handoff on real infrastructure (a spawned local macOS
 AnyHarness runtime + a real E2B sandbox driven through the real server API):
 
-  1. Local: real Claude session on a plain-dir workspace learns a codeword.
+  1. Local: real Claude AND Codex sessions on one plain-dir workspace each
+     learn a distinct codeword (both native, both harness-authed locally).
   2. Move local->cloud via the server API (server provisions the sandbox
      worktree; the test freezes+exports the local runtime and hands the archive
-     to ``/install``, then ``/cutover`` + ``/complete``).
-  3. "Use it there": the migrated session keeps its native session id and its
-     imported events in the sandbox, and recalls the codeword when prompted.
+     to ``/install``, then ``/cutover`` + ``/complete``). One move carries both
+     sessions.
+  3. "Use it there": each migrated session keeps its native session id and its
+     imported events in the sandbox, and recalls its own codeword when prompted
+     -- proving BOTH the Claude transcript (CLAUDE_CONFIG_DIR mirror) and the
+     Codex rollout (codex-local mirror) survived the isolated route-auth homes.
   4. Move cloud->local back (server exports from the sandbox; the test
      re-adopts the original local workspace with
-     ``installMode=preserve_native_sessions``); the session recalls the
+     ``installMode=preserve_native_sessions``); each session recalls its
      codeword locally again.
   5. Both ``workspace_move`` rows end ``completed`` with
      ``canonical_side=destination``.
 
 Skips cleanly without ``RUN_CLOUD_E2E=1`` (via the ``cloud_client`` fixture's
 ``require_live_cloud`` gate) and without an ``ANTHROPIC_API_KEY`` for the
-sandbox's Claude. Runs under ``make test-cloud-e2b``. Follows the real-E2B
-harness conventions in ``test_provisioning.py`` / ``helpers/``.
+sandbox's Claude. The Codex leg additionally requires an ``OPENAI_API_KEY`` (to
+seed the sandbox codex api_key route) and a warm local codex-acp launcher +
+``~/.codex/auth.json``; when either is absent the round-trip runs Claude-only
+(``include_codex`` gate). Runs under ``make test-cloud-e2b``. Follows the
+real-E2B harness conventions in ``test_provisioning.py`` / ``helpers/``.
 """
 
 from __future__ import annotations
 
 import contextlib
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -56,8 +64,10 @@ from tests.e2e.cloud.helpers.github import (
 )
 from tests.e2e.cloud.helpers.local_runtime import (
     cleanup_claude_project_slugs,
+    cleanup_codex_rollouts,
     clone_repo_on_new_branch,
     delete_remote_branch,
+    local_codex_agent_available,
     spawn_local_runtime,
 )
 from tests.e2e.cloud.helpers.mobility_runtime import (
@@ -80,6 +90,21 @@ _LONG_OP_TIMEOUT_SECONDS = 900.0
 _PROMPT_TIMEOUT_SECONDS = 180.0
 
 
+@dataclass
+class HarnessLeg:
+    """One agent session carried through the round-trip on the shared workspace.
+
+    Both a Claude and a Codex session live on the *same* local workspace, so a
+    single move carries both; we recall each session's own distinct codeword to
+    prove per-harness native resume survives the local<->cloud<->local handoff.
+    """
+
+    kind: str
+    codeword: str
+    session_id: str
+    native_session_id: str
+
+
 @pytest.mark.asyncio
 @pytest.mark.cloud_e2e
 @pytest.mark.e2b
@@ -100,7 +125,16 @@ async def test_workspace_move_round_trip_local_cloud_local(
 
     run_id = uuid.uuid4().hex[:10]
     branch = f"mig-e2e-{run_id}"
-    codeword = f"PLUM-{run_id.upper()}"
+    # Distinct codewords per harness so recall proves the *right* native session
+    # survived (a resumed session leaking the other's word would be a false pass).
+    codeword_claude = f"PLUM-{run_id.upper()}"
+    codeword_codex = f"KIWI-{run_id.upper()}"
+    # The Codex leg rides the same round-trip, but only when its prerequisites are
+    # present: an OpenAI key to seed the sandbox codex api_key route (the Codex
+    # twin of the Claude api_key seed) AND a warm local codex-acp launcher +
+    # ~/.codex/auth.json for the local turns. Absent either, the round-trip still
+    # proves the Claude leg; the live proof run has both.
+    include_codex = bool(cloud_test_config.openai_api_key) and local_codex_agent_available()
     owner = cloud_test_config.github_owner
     repo = cloud_test_config.github_repo
     token = cloud_test_config.github_token
@@ -118,6 +152,9 @@ async def test_workspace_move_round_trip_local_cloud_local(
     destination_workspace_id: str | None = None
     provider_sandbox_id: str | None = None
     slug_markers = [run_id, scratch_root.name, clone_path.name]
+    # Codex rollouts the local re-adopt mirrors into the ambient ~/.codex/sessions
+    # (unlike Claude's isolated CLAUDE_CONFIG_DIR) -- cleaned by native id in teardown.
+    codex_native_session_ids: list[str] = []
 
     try:
         # --- Prereqs: linked GitHub, sandbox Claude auth, repo config + cloud env ---
@@ -126,6 +163,11 @@ async def test_workspace_move_round_trip_local_cloud_local(
             db_session, user_id=auth.user_id, access_token=token, git_owner=owner
         )
         await _seed_sandbox_claude_api_key(cloud_client, auth, cloud_test_config.anthropic_api_key)
+        if include_codex:
+            assert cloud_test_config.openai_api_key is not None
+            await _seed_sandbox_codex_api_key(
+                cloud_client, auth, cloud_test_config.openai_api_key
+            )
         # Configuring the cloud repo environment is what creates the repo_config
         # row on this branch (the standalone ``/repos/.../config`` endpoint the
         # earlier provisioning idiom used was removed by the Stack-1 cutover);
@@ -177,21 +219,52 @@ async def test_workspace_move_round_trip_local_cloud_local(
             local_url, local_token, path=str(clone_path)
         )
         local_ws_id = str(resolved["workspace"]["id"])
-        session = await runtime_create_session(local_url, local_token, workspace_id=local_ws_id)
-        session_id = str(session["id"])
 
-        teach = await runtime_prompt_and_collect(
-            local_url,
-            local_token,
-            session_id,
-            f"Remember this codeword for later: {codeword}. Do not edit any files. "
-            "Reply with exactly: STORED",
-            timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
-        )
-        assert turn_contains_text(teach, "STORED"), "Local Claude did not store the codeword."
-        local_session = await runtime_get_session(local_url, local_token, session_id)
-        native_session_id = str(local_session["nativeSessionId"])
-        assert native_session_id
+        # Both harness sessions live on the SAME workspace, so one move carries
+        # both. Each learns its own codeword; recall in the sandbox (after move 1)
+        # and locally (after move 2) proves each harness's native session resumed.
+        harness_specs = [("claude", codeword_claude)]
+        if include_codex:
+            harness_specs.append(("codex", codeword_codex))
+
+        legs: list[HarnessLeg] = []
+        for kind, codeword in harness_specs:
+            created = await runtime_create_session(
+                local_url, local_token, workspace_id=local_ws_id, agent_kind=kind
+            )
+            leg_session_id = str(created["id"])
+            teach = await runtime_prompt_and_collect(
+                local_url,
+                local_token,
+                leg_session_id,
+                f"Remember this codeword for later: {codeword}. Do not edit any files. "
+                "Reply with exactly: STORED",
+                timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
+            )
+            assert turn_contains_text(teach, "STORED"), (
+                f"Local {kind} did not store the codeword."
+            )
+            leg_native = str(
+                (await runtime_get_session(local_url, local_token, leg_session_id))[
+                    "nativeSessionId"
+                ]
+            )
+            assert leg_native
+            if kind == "codex":
+                codex_native_session_ids.append(leg_native)
+            legs.append(
+                HarnessLeg(
+                    kind=kind,
+                    codeword=codeword,
+                    session_id=leg_session_id,
+                    native_session_id=leg_native,
+                )
+            )
+            print(
+                f"[E2E-DIAG] taught {kind} leg session={leg_session_id} native={leg_native}",
+                flush=True,
+            )
+        assert any(leg.kind == "claude" for leg in legs)
 
         # --- Move 1: local -> cloud ------------------------------------------
         move1 = await _start_move(
@@ -247,30 +320,45 @@ async def test_workspace_move_round_trip_local_cloud_local(
         ]
         print(f"[E2E-DIAG] archive1 session native ids: {_archive_native_ids}", flush=True)
         sandbox_url, sandbox_token = await _sandbox_runtime_access(db_session, user_uuid)
-        sandbox_session = await runtime_get_session(sandbox_url, sandbox_token, session_id)
-        print(
-            f"[E2E-DIAG] sandbox session keys={sorted(sandbox_session.keys())} "
-            f"nativeSessionId={sandbox_session.get('nativeSessionId')!r} "
-            f"expected={native_session_id!r}",
-            flush=True,
-        )
-        assert sandbox_session.get("nativeSessionId") == native_session_id
-        assert len(await runtime_list_events(sandbox_url, sandbox_token, session_id)) > 0
+        await _dump_sandbox_agent_auth_diag(provider_kind, provider_sandbox_id, "pre-recall")
+        for leg in legs:
+            sandbox_session = await runtime_get_session(
+                sandbox_url, sandbox_token, leg.session_id
+            )
+            print(
+                f"[E2E-DIAG] sandbox {leg.kind} session keys={sorted(sandbox_session.keys())} "
+                f"nativeSessionId={sandbox_session.get('nativeSessionId')!r} "
+                f"expected={leg.native_session_id!r}",
+                flush=True,
+            )
+            assert sandbox_session.get("nativeSessionId") == leg.native_session_id, (
+                f"{leg.kind} session lost its native id crossing into the sandbox."
+            )
+            assert (
+                len(await runtime_list_events(sandbox_url, sandbox_token, leg.session_id)) > 0
+            )
 
-        recall_cloud = await runtime_prompt_and_collect(
-            sandbox_url, sandbox_token, session_id,
-            "What is the codeword I asked you to remember? Do not edit any files. "
-            "Reply with exactly that word and nothing else.",
-            timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
-        )
-        assert turn_contains_text(recall_cloud, codeword), (
-            "Migrated session did not recall the codeword in the sandbox."
-        )
-        print(
-            f"[E2E-EVIDENCE] sandbox recall (native_session_id={native_session_id}): "
-            f"{turn_transcript_text(recall_cloud)!r}",
-            flush=True,
-        )
+            try:
+                recall_cloud = await runtime_prompt_and_collect(
+                    sandbox_url, sandbox_token, leg.session_id,
+                    "What is the codeword I asked you to remember? Do not edit any files. "
+                    "Reply with exactly that word and nothing else.",
+                    timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
+                )
+            except Exception:
+                await _dump_sandbox_agent_auth_diag(
+                    provider_kind, provider_sandbox_id, f"recall-fail-{leg.kind}"
+                )
+                raise
+            assert turn_contains_text(recall_cloud, leg.codeword), (
+                f"Migrated {leg.kind} session did not recall the codeword in the sandbox."
+            )
+            print(
+                f"[E2E-EVIDENCE] sandbox {leg.kind} recall "
+                f"(native_session_id={leg.native_session_id}): "
+                f"{turn_transcript_text(recall_cloud)!r}",
+                flush=True,
+            )
 
         # --- Move 2: cloud -> local (round trip home via re-adopt) -----------
         move2 = await _start_move(
@@ -301,7 +389,10 @@ async def test_workspace_move_round_trip_local_cloud_local(
             operation_id=move2_id,
             install_mode="preserve_native_sessions",
         )
-        assert session_id in readopt.imported_session_ids
+        for leg in legs:
+            assert leg.session_id in readopt.imported_session_ids, (
+                f"{leg.kind} session was not re-imported into the local workspace."
+            )
 
         install2 = await _move_phase(cloud_client, auth, move2_id, "install", body={})
         assert install2["phase"] == "installed"
@@ -317,24 +408,29 @@ async def test_workspace_move_round_trip_local_cloud_local(
         sessions_local = await runtime_list_sessions(
             local_url, local_token, workspace_id=local_ws_id
         )
-        assert any(str(item.get("id")) == session_id for item in sessions_local)
-        home_session = await runtime_get_session(local_url, local_token, session_id)
-        assert str(home_session["nativeSessionId"]) == native_session_id
-
-        recall_local = await runtime_prompt_and_collect(
-            local_url, local_token, session_id,
-            "One more time: what is the codeword? Do not edit any files. "
-            "Reply with exactly that word and nothing else.",
-            timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
-        )
-        assert turn_contains_text(recall_local, codeword), (
-            "Re-adopted session did not recall the codeword locally."
-        )
-        print(
-            f"[E2E-EVIDENCE] local recall after round-trip: "
-            f"{turn_transcript_text(recall_local)!r}",
-            flush=True,
-        )
+        local_session_ids = {str(item.get("id")) for item in sessions_local}
+        for leg in legs:
+            assert leg.session_id in local_session_ids, (
+                f"{leg.kind} session is missing from the re-adopted workspace."
+            )
+            home_session = await runtime_get_session(local_url, local_token, leg.session_id)
+            assert str(home_session["nativeSessionId"]) == leg.native_session_id, (
+                f"{leg.kind} session lost its native id coming home."
+            )
+            recall_local = await runtime_prompt_and_collect(
+                local_url, local_token, leg.session_id,
+                "One more time: what is the codeword? Do not edit any files. "
+                "Reply with exactly that word and nothing else.",
+                timeout_seconds=_PROMPT_TIMEOUT_SECONDS,
+            )
+            assert turn_contains_text(recall_local, leg.codeword), (
+                f"Re-adopted {leg.kind} session did not recall the codeword locally."
+            )
+            print(
+                f"[E2E-EVIDENCE] local {leg.kind} recall after round-trip: "
+                f"{turn_transcript_text(recall_local)!r}",
+                flush=True,
+            )
 
         # --- Ledger + cloud-source cleanup assertions ------------------------
         for label, move_id in (("local->cloud", move1_id), ("cloud->local", move2_id)):
@@ -363,6 +459,7 @@ async def test_workspace_move_round_trip_local_cloud_local(
             provider_kind=provider_kind,
             local_runtime=local_runtime,
             slug_markers=slug_markers,
+            codex_native_session_ids=codex_native_session_ids,
             provider_sandbox_id=provider_sandbox_id,
             workspace_ids=[warmup_workspace_id, destination_workspace_id],
             owner=owner,
@@ -505,6 +602,37 @@ async def _seed_sandbox_claude_api_key(
     )
 
 
+async def _seed_sandbox_codex_api_key(
+    client: httpx.AsyncClient, auth: AuthSession, openai_api_key: str
+) -> None:
+    """Codex twin of :func:`_seed_sandbox_claude_api_key`.
+
+    The migrated Codex rollout is only visible to ``resume`` when the sandbox
+    launch scans the runtime-local ``codex-local`` CODEX_HOME (where the install
+    mirror lands). The api_key route is exactly the route that keeps that home:
+    it sets ``OPENAI_API_KEY`` and does NOT override ``CODEX_HOME`` (the gateway
+    route would repoint CODEX_HOME at a revision dir the install can't pre-seed).
+    So route Codex through api_key/openai, mirroring the Claude api_key seed.
+    Local Codex turns use the machine's native ~/.codex login and need nothing
+    here."""
+    key = await _server_json(
+        client,
+        auth,
+        "POST",
+        "/v1/cloud/agent-gateway/api-keys",
+        body={"provider": "openai", "displayName": "mig-e2e-codex", "secret": openai_api_key},
+        timeout=60.0,
+    )
+    await _server_json(
+        client,
+        auth,
+        "PUT",
+        "/v1/cloud/agent-gateway/route-selections/codex/cloud",
+        body={"route": "api_key", "apiKeyId": key["id"], "slot": "primary"},
+        timeout=60.0,
+    )
+
+
 async def _assert_export_guard_rejects_mismatch(
     runtime_url: str, access_token: str, workspace_id: str, base_sha: str, branch: str
 ) -> None:
@@ -550,6 +678,52 @@ async def _sandbox_provider_id(db: AsyncSession, user_id: uuid.UUID) -> str | No
     return row.provider_sandbox_id if row is not None else None
 
 
+async def _dump_sandbox_agent_auth_diag(
+    provider_kind: str, provider_sandbox_id: str | None, label: str
+) -> None:
+    """TEMP DIAG: dump state.json (keys redacted), agent-auth tree, runtime log."""
+    if not provider_sandbox_id:
+        print(f"[E2E-DIAG:{label}] no provider_sandbox_id", flush=True)
+        return
+    try:
+        provider = get_sandbox_provider(provider_kind)
+        handle = await provider.connect_running_sandbox(provider_sandbox_id)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[E2E-DIAG:{label}] connect failed: {exc!r}", flush=True)
+        return
+    redact = (
+        "python3 -c \"import json,sys;"
+        "d=json.load(sys.stdin);"
+        "print('revision',d.get('revision'));"
+        "print(json.dumps([{k:(v if k!='key' else '<'+str(len(v))+'-chars>') "
+        "for k,v in s.items()} for s in d.get('selections',[])],indent=2))\""
+    )
+    cmds = {
+        "state.json": (
+            "cat /home/user/.proliferate/anyharness/agent-auth/state.json 2>/dev/null "
+            f"| {redact} 2>&1 || echo '<no state.json>'; true"
+        ),
+        "agent-auth tree": (
+            "ls -laR /home/user/.proliferate/anyharness/agent-auth 2>&1 | head -60; true"
+        ),
+        "anyharness.log": (
+            "tail -400 /home/user/anyharness.log 2>&1 | grep -iE "
+            "'route_auth|route-auth|Authentication|load_session|ACP|api_key|"
+            "SelectionMissing|CLAUDE_CONFIG|ANTHROPIC|resolve_launch|native' "
+            "| tail -60; true"
+        ),
+    }
+    for name, cmd in cmds.items():
+        try:
+            res = await provider.run_command(handle, cmd, timeout_seconds=30)
+            stdout = getattr(res, "stdout", None)
+            if stdout is None:
+                stdout = str(res)
+        except Exception as exc:  # noqa: BLE001
+            stdout = f"<run_command failed: {exc!r}>"
+        print(f"[E2E-DIAG:{label}] === {name} ===\n{stdout}", flush=True)
+
+
 async def _sandbox_runtime_access(db: AsyncSession, user_id: uuid.UUID) -> tuple[str, str]:
     sandbox = await cloud_sandbox_store.load_personal_cloud_sandbox(db, user_id)
     if sandbox is None:
@@ -568,6 +742,7 @@ async def _teardown(
     provider_kind: str,
     local_runtime: Any,
     slug_markers: list[str],
+    codex_native_session_ids: list[str],
     provider_sandbox_id: str | None,
     workspace_ids: list[str | None],
     owner: str,
@@ -579,6 +754,7 @@ async def _teardown(
     if local_runtime is not None:
         _safely(local_runtime.close)
     _safely(lambda: cleanup_claude_project_slugs(slug_markers))
+    _safely(lambda: cleanup_codex_rollouts(codex_native_session_ids))
 
     for workspace_id in workspace_ids:
         if workspace_id:

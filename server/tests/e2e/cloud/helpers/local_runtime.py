@@ -38,10 +38,24 @@ _LOCAL_ANYHARNESS_BINARY: Path | None = None
 _AGENT_CACHE = Path.home() / ".proliferate-local" / "anyharness" / "agents"
 _NODE_CACHE = Path.home() / ".proliferate" / "anyharness" / "node"
 _CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
+# The machine's ambient Codex home. A native/api_key-routed Codex launch reads
+# rollouts from the runtime-local ``codex-local`` CODEX_HOME, but the mobility
+# install ALSO mirrors migrated rollouts into ``~/.codex/sessions`` (the ambient
+# root in ``codex_artifact_roots``). The local cloud->local re-adopt therefore
+# writes this run's rollout under the real ``~/.codex`` -- cleaned up by
+# ``cleanup_codex_rollouts`` keyed on the session's native id.
+_CODEX_SESSIONS_DIR = Path.home() / ".codex" / "sessions"
 # The machine's already-built + already-authed Claude agent launcher. Pointing
 # the runtime at it (the black-box "override" agent source) is the reliable way
 # to run Claude locally -- see _claude_override_agent_env.
 _CLAUDE_CACHE_LAUNCHER = _AGENT_CACHE / "claude" / "agent_process" / "claude-launcher"
+# The Codex twin of ``_CLAUDE_CACHE_LAUNCHER``: the machine's cached codex-acp
+# launcher (puts the native ``codex`` sidecar on PATH). Pointing
+# ``ANYHARNESS_CODEX_AGENT_PROGRAM`` at it lets a local Codex session spawn
+# without the per-spawn managed npm-from-git reinstall -- see
+# _codex_override_agent_env. Local Codex auth still comes from ``~/.codex/auth.json``
+# (the session layer's ``sync_local_codex_auth`` copies it into codex-local).
+_CODEX_CACHE_LAUNCHER = _AGENT_CACHE / "codex" / "agent_process" / "codex-launcher"
 
 _BUILD_TIMEOUT_SECONDS = 1800
 _INSTALL_AGENTS_TIMEOUT_SECONDS = 900
@@ -176,6 +190,42 @@ def _claude_override_agent_env() -> dict[str, str] | None:
     }
 
 
+def _codex_override_agent_env() -> dict[str, str] | None:
+    """Reliable local Codex via the black-box "override" agent source.
+
+    The Codex twin of :func:`_claude_override_agent_env`: point
+    ``ANYHARNESS_CODEX_AGENT_PROGRAM`` at the machine's cached ``codex-launcher``
+    (the override prefix is ``ANYHARNESS_<KIND>`` -> ``ANYHARNESS_CODEX``, see
+    anyharness ``domains/agents/readiness/overrides.rs``). The launcher puts the
+    native ``codex`` sidecar on PATH and execs ``codex-acp``, so the session
+    spawn resolves this override and skips the per-spawn managed reinstall that
+    flakes for Claude. The runtime still sets ``CODEX_HOME`` to the runtime-local
+    ``codex-local`` dir (``launch_env::prepare_local_codex_home``), which is where
+    ``sync_local_codex_auth`` copies ``~/.codex/auth.json`` -- so a local Codex
+    turn authenticates from the machine's own Codex login. Returns ``None`` when
+    the launcher cache is absent, so a run without a warm Codex cache simply
+    can't drive the Codex leg (the test skips it) rather than spawning nothing.
+    """
+    if not _CODEX_CACHE_LAUNCHER.is_file():
+        return None
+    return {
+        "ANYHARNESS_CODEX_AGENT_PROGRAM": str(_CODEX_CACHE_LAUNCHER),
+        "ANYHARNESS_CODEX_AGENT_ARGS_JSON": "[]",
+        "ANYHARNESS_CODEX_AGENT_CWD": str(_CODEX_CACHE_LAUNCHER.parent),
+    }
+
+
+def local_codex_agent_available() -> bool:
+    """True when the local runtime can spawn a Codex session via the override.
+
+    The move round-trip's Codex leg needs both the cached codex-acp launcher
+    (agent bytes) AND a local ``~/.codex/auth.json`` (native auth the session
+    layer copies into codex-local). When either is missing the test skips the
+    Codex leg instead of failing on an un-spawnable / un-authed agent.
+    """
+    return _CODEX_CACHE_LAUNCHER.is_file() and (Path.home() / ".codex" / "auth.json").is_file()
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -217,10 +267,19 @@ def _spawn_local_runtime_once(
     worktrees_root = Path(
         _mkdir(scratch_root / f"wt-{label}-{uuid4().hex[:8]}")
     )
-    override_env = _claude_override_agent_env()
-    if override_env is None:
-        # No prebuilt launcher cache -> fall back to seeding + managed install.
+    override_env: dict[str, str] = {}
+    claude_override = _claude_override_agent_env()
+    if claude_override is None:
+        # No prebuilt Claude launcher cache -> fall back to seeding + managed install.
         _seed_runtime_home(binary, runtime_home)
+    else:
+        override_env.update(claude_override)
+    # Codex is additive: its override just makes a Codex session spawnable
+    # alongside Claude. Absent cache -> no override (the move test skips the
+    # Codex leg via ``local_codex_agent_available``).
+    codex_override = _codex_override_agent_env()
+    if codex_override is not None:
+        override_env.update(codex_override)
 
     access_token = uuid4().hex
     port = _free_port()
@@ -371,6 +430,28 @@ def cleanup_claude_project_slugs(markers: list[str]) -> None:
     for entry in _CLAUDE_PROJECTS_DIR.iterdir():
         if entry.is_dir() and any(marker in entry.name for marker in markers):
             shutil.rmtree(entry, ignore_errors=True)
+
+
+def cleanup_codex_rollouts(native_session_ids: list[str]) -> None:
+    """Remove Codex rollout files this run left under the real ``~/.codex``.
+
+    Unlike Claude (isolated per CLAUDE_CONFIG_DIR), the mobility install mirrors
+    a migrated Codex rollout into every ``codex_artifact_roots`` entry, which
+    includes the ambient ``~/.codex/sessions`` root. The local cloud->local
+    re-adopt therefore drops this session's rollout under the machine's own
+    ``~/.codex`` (the runtime-local codex-local copy is cleaned with the runtime
+    home; the ambient copy is not). Rollout filenames end with
+    ``-<native_session_id>.jsonl`` (anyharness ``find_codex_rollout_path``), so
+    any such file belongs to us. No-op for ids we never minted.
+    """
+    ids = [session_id for session_id in native_session_ids if session_id]
+    if not ids or not _CODEX_SESSIONS_DIR.is_dir():
+        return
+    suffixes = tuple(f"-{session_id}.jsonl" for session_id in ids)
+    for path in _CODEX_SESSIONS_DIR.rglob("*.jsonl"):
+        if path.is_file() and path.name.endswith(suffixes):
+            with _suppress():
+                path.unlink()
 
 
 def _mkdir(path: Path) -> Path:
