@@ -62,7 +62,11 @@ const state = vi.hoisted(() => ({
   }>,
   gatewayModels: {
     data: undefined as
-      | { models: string[]; source: "seed" | "probe"; probedAt?: string }
+      | {
+        models: Array<Record<string, unknown>>;
+        source: "seed" | "probe";
+        probedAt?: string;
+      }
       | undefined,
     isLoading: false,
   },
@@ -574,12 +578,15 @@ function enableLocalGatewaySelection() {
 describe("HarnessPane all models (local + gateway runtime)", () => {
   it("reads the runtime's resolved gateway models instead of the cloud catalog", () => {
     enableLocalGatewaySelection();
-    state.gatewayModels.data = { models: ["claude-sonnet-4-5"], source: "seed" };
+    state.gatewayModels.data = {
+      models: [{ id: "claude-sonnet-4-5", displayName: "Sonnet 4.6", provider: "anthropic" }],
+      source: "seed",
+    };
     renderPane("claude");
 
     fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
 
-    expect(screen.queryByText("claude-sonnet-4-5")).not.toBeNull();
+    expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     expect(screen.queryByText("seed")).not.toBeNull();
     // No override capability for runtime-resolved models: the switch is
     // present (all resolved models are "on") but disabled.
@@ -591,7 +598,7 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
   it("shows a localized probed time when the runtime has a live probe", () => {
     enableLocalGatewaySelection();
     state.gatewayModels.data = {
-      models: ["claude-sonnet-4-5"],
+      models: [{ id: "claude-sonnet-4-5" }],
       source: "probe",
       probedAt: "2026-07-02T20:00:00Z",
     };

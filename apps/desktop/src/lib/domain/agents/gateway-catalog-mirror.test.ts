@@ -7,7 +7,7 @@ import {
 describe("planGatewayCatalogMirrorPushes", () => {
   it("pushes a harness with a fresh, never-mirrored probe", () => {
     const snapshot: GatewayModelsSnapshot = {
-      models: ["claude-sonnet-4-5"],
+      models: [{ id: "claude-sonnet-4-5" }],
       source: "probe",
       probedAt: "2026-07-02T00:00:00Z",
     };
@@ -17,13 +17,13 @@ describe("planGatewayCatalogMirrorPushes", () => {
       lastMirroredProbedAt: new Map(),
     });
     expect(pushes).toEqual([
-      { harnessKind: "claude", models: ["claude-sonnet-4-5"], probedAt: "2026-07-02T00:00:00Z" },
+      { harnessKind: "claude", models: [{ id: "claude-sonnet-4-5" }], probedAt: "2026-07-02T00:00:00Z" },
     ]);
   });
 
   it("skips a harness still on the seed (no live probe yet)", () => {
     const snapshot: GatewayModelsSnapshot = {
-      models: ["claude-sonnet-4-5"],
+      models: [{ id: "claude-sonnet-4-5" }],
       source: "seed",
     };
     const pushes = planGatewayCatalogMirrorPushes({
@@ -36,7 +36,7 @@ describe("planGatewayCatalogMirrorPushes", () => {
 
   it("skips a probe already mirrored at the same probedAt", () => {
     const snapshot: GatewayModelsSnapshot = {
-      models: ["claude-sonnet-4-5"],
+      models: [{ id: "claude-sonnet-4-5" }],
       source: "probe",
       probedAt: "2026-07-02T00:00:00Z",
     };
@@ -50,7 +50,7 @@ describe("planGatewayCatalogMirrorPushes", () => {
 
   it("re-pushes when a later probe supersedes the last-mirrored one", () => {
     const snapshot: GatewayModelsSnapshot = {
-      models: ["claude-sonnet-4-5", "claude-haiku-4-5"],
+      models: [{ id: "claude-sonnet-4-5" }, { id: "claude-haiku-4-5" }],
       source: "probe",
       probedAt: "2026-07-02T01:00:00Z",
     };
@@ -62,7 +62,7 @@ describe("planGatewayCatalogMirrorPushes", () => {
     expect(pushes).toEqual([
       {
         harnessKind: "claude",
-        models: ["claude-sonnet-4-5", "claude-haiku-4-5"],
+        models: [{ id: "claude-sonnet-4-5" }, { id: "claude-haiku-4-5" }],
         probedAt: "2026-07-02T01:00:00Z",
       },
     ]);
@@ -79,7 +79,7 @@ describe("planGatewayCatalogMirrorPushes", () => {
 
   it("evaluates multiple harness kinds independently by index", () => {
     const claudeSnapshot: GatewayModelsSnapshot = {
-      models: ["claude-sonnet-4-5"],
+      models: [{ id: "claude-sonnet-4-5" }],
       source: "probe",
       probedAt: "2026-07-02T00:00:00Z",
     };

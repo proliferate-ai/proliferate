@@ -80,6 +80,17 @@ pub enum ModelCatalogStatus {
     Hidden,
 }
 
+/// The thinking/effort control surfaced per model: the values the model
+/// supports and the observed default (the runtime joins these from the
+/// bundled catalog's `controls.effort.{values, observedValue}`).
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelEffort {
+    pub values: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentLaunchModelOption {
@@ -90,6 +101,19 @@ pub struct AgentLaunchModelOption {
     pub is_default: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_opt_in: Option<bool>,
+    // --- Enriched catalog fields (joined from the bundled catalog-v2 entry
+    // with the same id, so cloud snapshots stored from this payload carry the
+    // same richness as the gateway-models endpoint). All optional. ---
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<ModelCatalogStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effort: Option<ModelEffort>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fast_mode: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

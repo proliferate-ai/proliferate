@@ -12,8 +12,10 @@ use super::SessionService;
 use crate::domains::agents::auth::context::{classify, ActiveAuthContexts};
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
 use crate::domains::agents::model::ResolvedAgentStatus;
+use crate::domains::agents::catalog::gateway_resolver;
 use crate::domains::agents::readiness::launch_options::{
-    ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedWorkspaceLaunchOptions,
+    ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedModelEffort,
+    ResolvedWorkspaceLaunchOptions,
 };
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
@@ -97,6 +99,17 @@ impl SessionService {
                         aliases: model.aliases.clone(),
                         is_default: default_model_id.as_deref() == Some(model.id.as_str()),
                         default_opt_in: None,
+                        description: model.description.clone(),
+                        provider: gateway_resolver::provider_for_model(&model.id)
+                            .map(str::to_string),
+                        status: Some(model.status),
+                        effort: model.controls.get("effort").map(|control| {
+                            ResolvedModelEffort {
+                                values: control.values.clone(),
+                                default: control.observed_value.clone(),
+                            }
+                        }),
+                        fast_mode: model.controls.contains_key("fast_mode"),
                     })
                     .collect(),
             });

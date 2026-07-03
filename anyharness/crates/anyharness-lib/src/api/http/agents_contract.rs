@@ -5,7 +5,8 @@ use anyharness_contract::v1::{
     AgentCredentialState, AgentInstallState, AgentLaunchModelOption, AgentLaunchOption,
     AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
     AgentReadinessState, AgentReconcileSummary, AgentSummary, ArtifactStatus, InstallAgentRequest,
-    ReconcileAgentResult, ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
+    ModelCatalogStatus, ModelEffort, ReconcileAgentResult, ReconcileAgentsResponse,
+    ReconcileJobStatus, ReconcileOutcome,
 };
 
 use crate::domains::agents::auth::login_terminal::{
@@ -265,6 +266,19 @@ pub(super) fn to_installed_artifact_status(artifact: &InstalledArtifactResult) -
     }
 }
 
+/// Map the runtime-owned model lifecycle status to the wire enum.
+fn model_catalog_status_to_contract(
+    status: crate::domains::agents::model::ModelCatalogStatus,
+) -> ModelCatalogStatus {
+    use crate::domains::agents::model::ModelCatalogStatus as Domain;
+    match status {
+        Domain::Candidate => ModelCatalogStatus::Candidate,
+        Domain::Active => ModelCatalogStatus::Active,
+        Domain::Deprecated => ModelCatalogStatus::Deprecated,
+        Domain::Hidden => ModelCatalogStatus::Hidden,
+    }
+}
+
 pub(super) fn launch_options_response(
     workspace_id: Option<String>,
     options: crate::domains::agents::readiness::launch_options::ResolvedWorkspaceLaunchOptions,
@@ -287,6 +301,14 @@ pub(super) fn launch_options_response(
                         aliases: model.aliases,
                         is_default: model.is_default,
                         default_opt_in: model.default_opt_in,
+                        description: model.description,
+                        provider: model.provider,
+                        status: model.status.map(model_catalog_status_to_contract),
+                        effort: model.effort.map(|effort| ModelEffort {
+                            values: effort.values,
+                            default: effort.default,
+                        }),
+                        fast_mode: Some(model.fast_mode),
                     })
                     .collect(),
             })

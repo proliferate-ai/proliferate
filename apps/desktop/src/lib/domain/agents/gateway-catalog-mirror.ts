@@ -10,15 +10,20 @@
  * `probedAt` hasn't already been mirrored for that harness kind.
  */
 
+import type { GatewayModelEntry } from "@anyharness/sdk";
+
 export interface GatewayModelsSnapshot {
-  models: readonly string[];
+  // Enriched rows (contract §1): the runtime joins each resolved id onto the
+  // bundled catalog, so the mirror push forwards the SAME rich rows to the
+  // cloud snapshot (probe-only ids stay sparse `{ id, provider? }`).
+  models: readonly GatewayModelEntry[];
   source: "seed" | "probe";
   probedAt?: string;
 }
 
 export interface GatewayMirrorPush {
   harnessKind: string;
-  models: readonly string[];
+  models: readonly GatewayModelEntry[];
   probedAt: string;
 }
 

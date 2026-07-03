@@ -1794,9 +1794,14 @@ export interface components {
         AgentLaunchModelOption: {
             aliases?: string[];
             defaultOptIn?: boolean | null;
+            description?: string | null;
             displayName: string;
+            effort?: null | components["schemas"]["ModelEffort"];
+            fastMode?: boolean | null;
             id: string;
             isDefault: boolean;
+            provider?: string | null;
+            status?: null | components["schemas"]["ModelCatalogStatus"];
         };
         AgentLaunchOption: {
             defaultModelId?: string | null;
@@ -2383,10 +2388,35 @@ export interface components {
         };
         /** @enum {string} */
         ForkSessionTargetType: "before_user_message";
+        /**
+         * @description One enriched gateway model row (spec §1). Catalog-known ids carry the joined
+         *     display metadata; probe-only ids (the proxy serves it but the bundled
+         *     catalog doesn't know it) emit just `{ id, provider? }`.
+         */
+        GatewayModelEntry: {
+            /** @description Catalog description; absent when the catalog omits one or for probe-only ids. */
+            description?: string | null;
+            /** @description Catalog display name; absent for probe-only ids. */
+            displayName?: string | null;
+            effort?: null | components["schemas"]["ModelEffort"];
+            /** @description Whether the model carries a `fast_mode` control; absent for probe-only ids. */
+            fastMode?: boolean | null;
+            /** @description The gateway model id (always present — the render plane keys on this). */
+            id: string;
+            /**
+             * @description Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent
+             *     when no family matches.
+             */
+            provider?: string | null;
+            status?: null | components["schemas"]["ModelCatalogStatus"];
+        };
         /** @description Resolved gateway model plan for the local surface. */
         GatewayModelsResponse: {
-            /** @description The resolved, provider-filtered model ids (probe rows or catalog seed). */
-            models: string[];
+            /**
+             * @description The resolved, provider-filtered models — each id enriched with the
+             *     bundled catalog row (or bare `{ id, provider? }` for probe-only ids).
+             */
+            models: components["schemas"]["GatewayModelEntry"][];
             /** @description When a probe supplied the list (RFC3339); absent for seed. */
             probedAt?: string | null;
             /** @description `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list). */
@@ -2873,6 +2903,15 @@ export interface components {
         };
         /** @enum {string} */
         ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
+        /**
+         * @description The thinking/effort control surfaced per model: the values the model
+         *     supports and the observed default (the runtime joins these from the
+         *     bundled catalog's `controls.effort.{values, observedValue}`).
+         */
+        ModelEffort: {
+            default?: string | null;
+            values: string[];
+        };
         /**
          * @description A product-normalized live session control derived from raw ACP config options.
          *
