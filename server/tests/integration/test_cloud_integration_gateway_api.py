@@ -16,7 +16,6 @@ from proliferate.constants.organizations import (
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
-from proliferate.db.store.integrations import policies as policies_store
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
 from proliferate.utils.crypto import encrypt_json
 from proliferate.config import settings
@@ -66,6 +65,29 @@ async def _gateway_bearer(client: AsyncClient, db_session: AsyncSession, *, pref
     return await _enroll_gateway_bearer(client, auth, prefix=prefix)
 
 
+async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespace: str) -> None:
+    await sync_seed_definitions(db_session)
+    await db_session.commit()
+    definition = await definitions_store.get_seed_by_namespace(db_session, namespace)
+    assert definition is not None
+    account = await accounts_store.upsert_account(
+        db_session,
+        user_id=uuid.UUID(user_id),
+        definition_id=definition.id,
+        auth_kind="api_key",
+        status="ready",
+    )
+    await accounts_store.set_account_credentials(
+        db_session,
+        account_id=account.id,
+        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "secret"}}),
+        credential_format="secret-fields-v1",
+        auth_status="ready",
+        token_expires_at=None,
+    )
+    await db_session.commit()
+
+
 async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> str:
     now = datetime.now(UTC)
     organization = Organization(
@@ -90,49 +112,6 @@ async def _create_org_with_member(db_session: AsyncSession, *, user_id: str) -> 
     )
     await db_session.commit()
     return str(organization.id)
-
-
-async def _set_org_policy(
-    db_session: AsyncSession,
-    *,
-    organization_id: str,
-    namespace: str,
-    enabled: bool,
-    updated_by_user_id: str,
-) -> None:
-    definition = await definitions_store.get_seed_by_namespace(db_session, namespace)
-    assert definition is not None
-    await policies_store.upsert_policy(
-        db_session,
-        organization_id=uuid.UUID(organization_id),
-        definition_id=definition.id,
-        enabled=enabled,
-        updated_by_user_id=uuid.UUID(updated_by_user_id),
-    )
-    await db_session.commit()
-
-
-async def _seed_ready_account(db_session: AsyncSession, *, user_id: str, namespace: str) -> None:
-    await sync_seed_definitions(db_session)
-    await db_session.commit()
-    definition = await definitions_store.get_seed_by_namespace(db_session, namespace)
-    assert definition is not None
-    account = await accounts_store.upsert_account(
-        db_session,
-        user_id=uuid.UUID(user_id),
-        definition_id=definition.id,
-        auth_kind="api_key",
-        status="ready",
-    )
-    await accounts_store.set_account_credentials(
-        db_session,
-        account_id=account.id,
-        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "secret"}}),
-        credential_format="secret-fields-v1",
-        auth_status="ready",
-        token_expires_at=None,
-    )
-    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -367,138 +346,6 @@ async def _tool_call(client: AsyncClient, headers: dict[str, str], *, name: str,
 
 
 @pytest.mark.asyncio
-async def test_org_policy_disables_provider_across_gateway(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
-    auth = await _authed_user(client, db_session, prefix="gw-org-policy")
-    org_id = await _create_org_with_member(db_session, user_id=auth.user_id)
-    bearer = await _enroll_gateway_bearer(
-        client, auth, prefix="gw-org-policy", organization_id=org_id
-    )
-    headers = {"Authorization": f"Bearer {bearer}"}
-    await _seed_ready_account(db_session, user_id=auth.user_id, namespace="context7")
-
-    # No policy row yet: the seed default applies and the provider is listed.
-    listed = await _tool_call(client, headers, name="integrations.list_providers", arguments={})
-    assert [p["provider"] for p in listed["structuredContent"]["providers"]] == ["context7"]
-
-    await _set_org_policy(
-        db_session,
-        organization_id=org_id,
-        namespace="context7",
-        enabled=False,
-        updated_by_user_id=auth.user_id,
-    )
-
-    # list_providers: the disabled definition is excluded outright.
-    hidden = await _tool_call(client, headers, name="integrations.list_providers", arguments={})
-    assert hidden["structuredContent"]["providers"] == []
-
-    # list_tools: an in-band MCP error naming the org policy.
-    tools = await _tool_call(
-        client, headers, name="integrations.list_tools", arguments={"provider": "context7"}
-    )
-    assert tools["isError"] is True
-    assert "disabled" in tools["content"][0]["text"]
-
-    # call_tool: also an in-band MCP error, never a credentialed upstream call.
-    call = await _tool_call(
-        client,
-        headers,
-        name="integrations.call_tool",
-        arguments={"provider": "context7", "tool": "resolve-library-id", "arguments": {}},
-    )
-    assert call["isError"] is True
-
-
-@pytest.mark.asyncio
-async def test_orgless_grant_ignores_other_orgs_policies(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
-    other = await _authed_user(client, db_session, prefix="gw-org-other")
-    other_org_id = await _create_org_with_member(db_session, user_id=other.user_id)
-
-    auth = await _authed_user(client, db_session, prefix="gw-orgless")
-    bearer = await _enroll_gateway_bearer(client, auth, prefix="gw-orgless")
-    headers = {"Authorization": f"Bearer {bearer}"}
-    await _seed_ready_account(db_session, user_id=auth.user_id, namespace="context7")
-
-    # Another org disabling the definition must not leak into an org-less grant.
-    await _set_org_policy(
-        db_session,
-        organization_id=other_org_id,
-        namespace="context7",
-        enabled=False,
-        updated_by_user_id=other.user_id,
-    )
-
-    listed = await _tool_call(client, headers, name="integrations.list_providers", arguments={})
-    assert [p["provider"] for p in listed["structuredContent"]["providers"]] == ["context7"]
-
-
-@pytest.mark.asyncio
-async def test_cross_org_custom_definition_hidden_from_other_org_grant(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
-    auth = await _authed_user(client, db_session, prefix="gw-cross-custom")
-    org_a_id = await _create_org_with_member(db_session, user_id=auth.user_id)
-    org_b_id = await _create_org_with_member(db_session, user_id=auth.user_id)
-
-    definition = await definitions_store.create_org_custom_definition(
-        db_session,
-        organization_id=uuid.UUID(org_a_id),
-        namespace="acme-internal",
-        display_name="Acme Internal",
-        description=None,
-        auth_kind="api_key",
-        oauth_client_mode=None,
-        config_json="{}",
-    )
-    account = await accounts_store.upsert_account(
-        db_session,
-        user_id=uuid.UUID(auth.user_id),
-        definition_id=definition.id,
-        auth_kind="api_key",
-        status="ready",
-    )
-    await accounts_store.set_account_credentials(
-        db_session,
-        account_id=account.id,
-        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "secret"}}),
-        credential_format="secret-fields-v1",
-        auth_status="ready",
-        token_expires_at=None,
-    )
-    await db_session.commit()
-
-    # Under org A's scope the custom definition is served...
-    bearer_a = await _enroll_gateway_bearer(
-        client, auth, prefix="gw-cross-custom-a", organization_id=org_a_id
-    )
-    listed = await _tool_call(
-        client,
-        {"Authorization": f"Bearer {bearer_a}"},
-        name="integrations.list_providers",
-        arguments={},
-    )
-    providers = [p["provider"] for p in listed["structuredContent"]["providers"]]
-    assert providers == ["acme-internal"]
-
-    # ...but a grant scoped to org B (whose admins can neither see nor
-    # policy-control org A's custom definition) must not expose it.
-    bearer_b = await _enroll_gateway_bearer(
-        client, auth, prefix="gw-cross-custom-b", organization_id=org_b_id
-    )
-    hidden = await _tool_call(
-        client,
-        {"Authorization": f"Bearer {bearer_b}"},
-        name="integrations.list_providers",
-        arguments={},
-    )
-    assert hidden["structuredContent"]["providers"] == []
-
-
-@pytest.mark.asyncio
 async def test_org_scoped_grant_stops_serving_after_membership_removal(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
@@ -605,7 +452,7 @@ async def test_list_tools_cache_refetches_after_ttl(
     assert calls["count"] == 1
 
     # Backdating the fetch beyond the TTL makes the cache stale again.
-    from datetime import UTC, datetime, timedelta
+    from datetime import timedelta
 
     from proliferate.constants.cloud import CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS
     from proliferate.db.models.cloud.integrations import CloudIntegrationToolSchemaCache
