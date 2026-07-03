@@ -96,6 +96,15 @@
               "claude-oauth-account",
               "aws-credential-chain"
             ]
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },
@@ -196,6 +205,15 @@
               "codex-auth-json-oauth",
               "codex-keychain"
             ]
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },
@@ -392,6 +410,15 @@
             "discoveryKinds": [
               "opencode-auth-json/opencode"
             ]
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },
@@ -462,6 +489,15 @@
               "reusesUserState": true,
               "message": null
             }
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },

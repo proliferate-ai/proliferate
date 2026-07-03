@@ -167,6 +167,20 @@ class AgentGatewayCatalogRefreshRequest(AgentGatewayBaseModel):
     models_json: str | None = Field(default=None, alias="modelsJson")
 
 
+class AgentGatewayCatalogMirrorRequest(AgentGatewayBaseModel):
+    """A runtime's push of its own resolved probe result (contract §4).
+
+    Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
+    AnyHarness today), not the product UI, and ``probed_at`` reflects when the
+    runtime actually probed rather than when this request landed.
+    """
+
+    surface: AgentAuthSurface
+    route: AgentAuthRoute
+    models_json: str = Field(alias="modelsJson")
+    probed_at: str = Field(alias="probedAt")
+
+
 class AgentGatewayCatalogOverrideUpsertRequest(AgentGatewayBaseModel):
     patch_json: str = Field(alias="patchJson")
 

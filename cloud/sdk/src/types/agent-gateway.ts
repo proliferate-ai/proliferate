@@ -19,6 +19,8 @@ export type AgentGatewayCatalog = Schema<"AgentGatewayCatalogResponse">;
 export type AgentAuthRoute = AgentGatewayCatalog["route"];
 export type RefreshAgentGatewayCatalogRequest =
   Schema<"AgentGatewayCatalogRefreshRequest">;
+export type MirrorAgentGatewayCatalogRequest =
+  Schema<"AgentGatewayCatalogMirrorRequest">;
 export type AgentGatewayCatalogOverride =
   Schema<"AgentGatewayCatalogOverrideResponse">;
 export type UpsertAgentGatewayCatalogOverrideRequest =

@@ -1405,6 +1405,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}/mirror": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mirror Agent Catalog Endpoint
+         * @description Store the caller's own runtime-probed catalog as a read-model snapshot.
+         *
+         *     Distinct from ``.../refresh``: the runtime already did the probing (a
+         *     harness/gateway reachability check, possibly server-side via LiteLLM) and
+         *     is pushing the result here fire-and-forget, so this endpoint never talks
+         *     to an upstream itself.
+         */
+        post: operations["mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-gateway/catalog/{harness_kind}/override": {
         parameters: {
             query?: never;
@@ -2821,6 +2846,30 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
+        };
+        /**
+         * AgentGatewayCatalogMirrorRequest
+         * @description A runtime's push of its own resolved probe result (contract §4).
+         *
+         *     Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
+         *     AnyHarness today), not the product UI, and ``probed_at`` reflects when the
+         *     runtime actually probed rather than when this request landed.
+         */
+        AgentGatewayCatalogMirrorRequest: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Modelsjson */
+            modelsJson: string;
+            /** Probedat */
+            probedAt: string;
         };
         /** AgentGatewayCatalogOverrideResponse */
         AgentGatewayCatalogOverrideResponse: {
@@ -8101,6 +8150,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgentGatewayCatalogRefreshRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentGatewayCatalogMirrorRequest"];
             };
         };
         responses: {

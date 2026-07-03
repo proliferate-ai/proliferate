@@ -10,6 +10,7 @@ import {
   listAgentApiKeys,
   listAuthSelections,
   listOrgAgentPolicyViolations,
+  mirrorAgentCatalog,
   putAuthSelections,
   refreshAgentCatalog,
   revokeAgentApiKey,
@@ -25,6 +26,7 @@ import {
   type AgentGatewayCatalogOverride,
   type AgentGatewayEnrollment,
   type CreateAgentApiKeyRequest,
+  type MirrorAgentGatewayCatalogRequest,
   type OrgAgentPolicy,
   type OrgAgentPolicyViolationListResponse,
   type PutAuthSelectionsRequest,
@@ -62,6 +64,11 @@ export interface AgentCatalogScope {
 export interface RefreshAgentCatalogInput {
   harnessKind: string;
   body: RefreshAgentGatewayCatalogRequest;
+}
+
+export interface MirrorAgentCatalogInput {
+  harnessKind: string;
+  body: MirrorAgentGatewayCatalogRequest;
 }
 
 export interface UpsertCatalogOverrideInput {
@@ -163,6 +170,28 @@ export function useRefreshAgentCatalog() {
   const queryClient = useQueryClient();
   return useMutation<AgentGatewayCatalog, Error, RefreshAgentCatalogInput>({
     mutationFn: ({ harnessKind, body }) => refreshAgentCatalog(harnessKind, body, client),
+    onSuccess: (data, { harnessKind, body }) => {
+      queryClient.setQueryData(
+        agentGatewayCatalogKey(harnessKind, body.surface, body.route),
+        data,
+      );
+    },
+  });
+}
+
+/**
+ * Push a runtime-resolved gateway-probe result to the cloud mirror (contract
+ * §4). The runtime itself holds no cloud session, so the desktop — the only
+ * process here with an authenticated cloud client — calls this on the
+ * runtime's behalf whenever it observes a fresh probe (see the desktop's
+ * `useGatewayCatalogMirrorSync`). Not signed in => the caller simply never
+ * invokes this; there is nothing to gate here.
+ */
+export function useMirrorAgentCatalog() {
+  const client = useCloudClient();
+  const queryClient = useQueryClient();
+  return useMutation<AgentGatewayCatalog, Error, MirrorAgentCatalogInput>({
+    mutationFn: ({ harnessKind, body }) => mirrorAgentCatalog(harnessKind, body, client),
     onSuccess: (data, { harnessKind, body }) => {
       queryClient.setQueryData(
         agentGatewayCatalogKey(harnessKind, body.surface, body.route),

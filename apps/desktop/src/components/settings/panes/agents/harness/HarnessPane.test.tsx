@@ -60,11 +60,18 @@ const state = vi.hoisted(() => ({
     errorMessage: string | null;
     isStarting: boolean;
   }>,
+  gatewayModels: {
+    data: undefined as
+      | { models: string[]; source: "seed" | "probe"; probedAt?: string }
+      | undefined,
+    isLoading: false,
+  },
 }));
 const putMutate = vi.hoisted(() => vi.fn());
 const createKeyMutate = vi.hoisted(() => vi.fn());
 const refreshMutate = vi.hoisted(() => vi.fn());
 const overrideMutate = vi.hoisted(() => vi.fn());
+const refreshGatewayModelsMutate = vi.hoisted(() => vi.fn());
 const openAuthTerminal = vi.hoisted(() => vi.fn());
 const closeAuthTerminal = vi.hoisted(() => vi.fn());
 const handleTerminalExit = vi.hoisted(() => vi.fn());
@@ -79,6 +86,17 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
   useRefreshAgentCatalog: () => ({ mutate: refreshMutate, isPending: false }),
   useUpsertCatalogOverride: () => ({ mutate: overrideMutate, isPending: false }),
+}));
+
+// Local surface + gateway route reads the RUNTIME's resolved gateway models
+// (contract §5) instead of the cloud catalog — mock the anyharness SDK hooks
+// standing in for that runtime call.
+vi.mock("@anyharness/sdk-react", () => ({
+  useAgentGatewayModelsQuery: () => state.gatewayModels,
+  useRefreshAgentGatewayModelsMutation: () => ({
+    mutate: refreshGatewayModelsMutate,
+    isPending: false,
+  }),
 }));
 
 // ModalShell (Radix Dialog) has no jsdom polyfills here — stub the picker to a
@@ -157,6 +175,8 @@ afterEach(() => {
   state.catalog.isLoading = false;
   state.agentsByKind = new Map();
   state.loginSessions = {};
+  state.gatewayModels.data = undefined;
+  state.gatewayModels.isLoading = false;
 });
 
 describe("HarnessPane authentication", () => {
@@ -458,5 +478,69 @@ describe("HarnessPane all models", () => {
       },
       expect.anything(),
     );
+  });
+});
+
+// Contract §5: local surface + gateway route reads the runtime's resolved
+// gateway model plan instead of the cloud catalog.
+function enableLocalGatewaySelection() {
+  state.selections.data = [{
+    id: "sel-gw",
+    harnessKind: "claude",
+    surface: "local",
+    sourceKind: "gateway",
+    apiKeyId: null,
+    keyTitle: null,
+    envVarName: null,
+    providerHint: null,
+    enabled: true,
+    createdAt: "2026-07-01T00:00:00Z",
+    updatedAt: "2026-07-01T00:00:00Z",
+  }];
+}
+
+describe("HarnessPane all models (local + gateway runtime)", () => {
+  it("reads the runtime's resolved gateway models instead of the cloud catalog", () => {
+    enableLocalGatewaySelection();
+    state.gatewayModels.data = { models: ["claude-sonnet-4-5"], source: "seed" };
+    renderPane("claude");
+
+    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
+    expect(screen.queryByText("claude-sonnet-4-5")).not.toBeNull();
+    expect(screen.queryByText("seed")).not.toBeNull();
+    // No override capability for runtime-resolved models: the switch is
+    // present (all resolved models are "on") but disabled.
+    const [modelSwitch] = screen.getAllByRole("switch") as HTMLButtonElement[];
+    expect(modelSwitch.getAttribute("aria-checked")).toBe("true");
+    expect(modelSwitch.disabled).toBe(true);
+  });
+
+  it("shows a localized probed time when the runtime has a live probe", () => {
+    enableLocalGatewaySelection();
+    state.gatewayModels.data = {
+      models: ["claude-sonnet-4-5"],
+      source: "probe",
+      probedAt: "2026-07-02T20:00:00Z",
+    };
+    renderPane("claude");
+
+    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
+    expect(
+      screen.queryByText(`probed ${new Date("2026-07-02T20:00:00Z").toLocaleString()}`),
+    ).not.toBeNull();
+  });
+
+  it("hits the runtime refresh endpoint for local+gateway instead of the cloud refresh", () => {
+    enableLocalGatewaySelection();
+    state.gatewayModels.data = { models: [], source: "seed" };
+    renderPane("claude");
+
+    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+    fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
+
+    expect(refreshGatewayModelsMutate).toHaveBeenCalledWith("claude", expect.anything());
+    expect(refreshMutate).not.toHaveBeenCalled();
   });
 });

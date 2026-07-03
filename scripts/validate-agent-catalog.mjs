@@ -14,6 +14,10 @@ const REGISTRY_PATH = path.resolve("catalogs/agents/registry.json");
 const VALID_AGENT_KINDS = new Set(["claude", "codex", "cursor", "opencode", "grok"]);
 const VALID_STATUSES = new Set(["candidate", "active", "deprecated", "hidden"]);
 const BASELINE_CONTEXT_ID = "baseline";
+// The gateway auth context is route-engaged (its models/default are resolved by
+// the runtime gateway probe, not authored as catalog model rows), so its default
+// legitimately names a gateway-served model that is not a `session.models` entry.
+const GATEWAY_CONTEXT_ID = "gateway";
 
 const errors = [];
 const fail = (message) => errors.push(message);
@@ -93,8 +97,44 @@ function validateCatalog(catalog) {
       if (!contextIds.has(contextId)) {
         fail(`${kind}: defaults references unknown auth context '${contextId}'`);
       }
-      if (!modelIds.has(modelId)) {
+      // Gateway defaults resolve against probe-supplied gateway models, so they
+      // are not required to be authored `session.models` rows.
+      if (contextId !== GATEWAY_CONTEXT_ID && !modelIds.has(modelId)) {
         fail(`${kind}: defaults['${contextId}'] references unknown model '${modelId}'`);
+      }
+    }
+
+    validateGatewayPolicy(kind, agent.session?.gatewayPolicy);
+  }
+}
+
+// The per-harness gateway curation block (schemaVersion 2): providers is the
+// compat group (empty/omitted = all providers), roles pins model-role ids
+// (e.g. small_fast) that used to live in Rust consts, seedModels is the
+// pre-probe fallback model list. All optional; validated structurally only.
+function validateGatewayPolicy(kind, gatewayPolicy) {
+  if (gatewayPolicy === undefined) return;
+  if (typeof gatewayPolicy !== "object" || gatewayPolicy === null || Array.isArray(gatewayPolicy)) {
+    fail(`${kind}: gatewayPolicy must be an object`);
+    return;
+  }
+  const stringArray = (value, field) => {
+    if (value === undefined) return;
+    if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string" || !entry.trim())) {
+      fail(`${kind}: gatewayPolicy.${field} must be an array of non-empty strings`);
+    }
+  };
+  stringArray(gatewayPolicy.providers, "providers");
+  stringArray(gatewayPolicy.seedModels, "seedModels");
+  if (gatewayPolicy.roles !== undefined) {
+    const roles = gatewayPolicy.roles;
+    if (typeof roles !== "object" || roles === null || Array.isArray(roles)) {
+      fail(`${kind}: gatewayPolicy.roles must be an object`);
+    } else {
+      for (const [role, modelId] of Object.entries(roles)) {
+        if (typeof modelId !== "string" || !modelId.trim()) {
+          fail(`${kind}: gatewayPolicy.roles['${role}'] must be a non-empty string`);
+        }
       }
     }
   }
