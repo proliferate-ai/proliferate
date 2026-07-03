@@ -72,6 +72,30 @@ export function resolveHandoffMoveId(
   return runtimeState.handoffOpId ?? null;
 }
 
+/** Where the shell should point once a local->cloud move settles successfully. Only
+ *  redirects when the moved workspace is the one currently on screen -- a move kicked
+ *  off for a different workspace (e.g. from the sidebar) must never yank the user away
+ *  from what they're looking at. When the moved workspace *was* on screen the source may
+ *  have just been destroyed (worktree source fate, sourceFateForWorkspaceKind), so we
+ *  hand off to the freshly created cloud workspace, falling back to home only when its
+ *  id is somehow unknown (e.g. resuming an already-completed move). */
+export type PostMoveNavigation =
+  | { kind: "select_cloud"; cloudWorkspaceId: string }
+  | { kind: "home" }
+  | { kind: "none" };
+
+export function resolvePostMoveNavigation(input: {
+  movedWorkspaceId: string;
+  selectedWorkspaceId: string | null;
+  destinationCloudWorkspaceId: string | null;
+}): PostMoveNavigation {
+  if (input.selectedWorkspaceId !== input.movedWorkspaceId) return { kind: "none" };
+  if (input.destinationCloudWorkspaceId) {
+    return { kind: "select_cloud", cloudWorkspaceId: input.destinationCloudWorkspaceId };
+  }
+  return { kind: "home" };
+}
+
 // ---- Readiness (see move-readiness.ts for the resolver) ----
 
 export type MoveReadinessKind = "safe" | "push_required" | "prepare_required" | "blocked";

@@ -70,6 +70,14 @@ export function MoveWorkspaceDialog({
     primaryLabel = "Resume move";
     onPrimary = () => void workflow.resumeMove();
     secondaryAction = { label: "Abandon move", onClick: () => void workflow.abandonMove() };
+  } else if (stage.kind === "resume" && stage.postCutover) {
+    // Cutover already committed the move -- only cleanup remains, so retry is the sole
+    // option (abandon is refused post-cutover). Freshly-rediscovered stuck moves land
+    // here with no `error`, so this branch (not MoveProgress's error-gated banner) must
+    // carry the retry affordance.
+    title = "Finishing the move to cloud";
+    primaryLabel = "Retry cleanup";
+    onPrimary = () => void workflow.resumeMove();
   } else if (stage.kind === "collision") {
     title = "A cloud workspace already exists";
   } else if (stage.kind === "not_configured") {
@@ -231,7 +239,7 @@ function MoveCollisionPanel({
           type="button"
           variant="outline"
           size="sm"
-          disabled={!collidingWorkspaceId}
+          disabled={!collidingWorkspaceId || isSubmitting}
           onClick={() => collidingWorkspaceId && onOpen(collidingWorkspaceId)}
         >
           Open the cloud workspace

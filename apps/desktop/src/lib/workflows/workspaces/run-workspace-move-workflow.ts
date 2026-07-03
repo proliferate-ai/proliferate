@@ -47,7 +47,7 @@ export interface RunWorkspaceMoveWorkflowInput {
 }
 
 export type WorkspaceMoveWorkflowResult =
-  | { outcome: "completed"; moveId: string }
+  | { outcome: "completed"; moveId: string; destinationCloudWorkspaceId: string | null }
   | { outcome: "failed"; moveId: string | null; failureCode: string; failureDetail: string | null };
 
 export async function runWorkspaceMoveWorkflow(
@@ -56,9 +56,13 @@ export async function runWorkspaceMoveWorkflow(
 ): Promise<WorkspaceMoveWorkflowResult> {
   let moveId = input.resume?.moveId ?? null;
   let phase: MovePhase | "not_started" = input.resume?.phase ?? "not_started";
+  // Threaded back to the caller so a completed move can redirect the shell onto the new
+  // cloud workspace (the source worktree may have just been destroyed). Populated from
+  // the server's move rows, which carry it from the "destination_ready" transition on.
+  let destinationCloudWorkspaceId: string | null = null;
 
   if (phase === "completed") {
-    return { outcome: "completed", moveId: moveId! };
+    return { outcome: "completed", moveId: moveId!, destinationCloudWorkspaceId };
   }
   if (phase === "failed") {
     throw new Error("Cannot resume a failed move -- start a new move instead.");
@@ -73,6 +77,7 @@ export async function runWorkspaceMoveWorkflow(
       const move = await deps.startMove(input.start);
       moveId = move.id;
       phase = move.phase;
+      destinationCloudWorkspaceId = destinationCloudWorkspaceIdFromMove(move) ?? destinationCloudWorkspaceId;
       deps.onPhaseChange?.(phase);
     }
 
@@ -81,12 +86,14 @@ export async function runWorkspaceMoveWorkflow(
       const archive = await deps.exportSourceArchive(moveId!);
       const move = await deps.installArchive(moveId!, archive);
       phase = move.phase;
+      destinationCloudWorkspaceId = destinationCloudWorkspaceIdFromMove(move) ?? destinationCloudWorkspaceId;
       deps.onPhaseChange?.(phase);
     }
 
     if (phase === "installed") {
       const move = await deps.cutover(moveId!);
       phase = move.phase;
+      destinationCloudWorkspaceId = destinationCloudWorkspaceIdFromMove(move) ?? destinationCloudWorkspaceId;
       deps.onPhaseChange?.(phase);
     }
   } catch (error) {
@@ -110,13 +117,24 @@ export async function runWorkspaceMoveWorkflow(
     }
     const move = await deps.completeMove(moveId!);
     phase = move.phase;
+    destinationCloudWorkspaceId = destinationCloudWorkspaceIdFromMove(move) ?? destinationCloudWorkspaceId;
     deps.onPhaseChange?.(phase);
   }
 
   if (phase !== "completed") {
     throw new Error(`Unexpected terminal phase after cutover: ${phase}`);
   }
-  return { outcome: "completed", moveId: moveId! };
+  return { outcome: "completed", moveId: moveId!, destinationCloudWorkspaceId };
+}
+
+/** The destination cloud workspace id the server recorded on a local->cloud move.
+ *  Populated on the move row's `destinationRef` from the "destination_ready" transition
+ *  onward (see workspace_moves/service.py); null before then or for non-cloud
+ *  destinations. */
+function destinationCloudWorkspaceIdFromMove(move: WorkspaceMoveResponse): string | null {
+  if (move.destinationKind !== "cloud") return null;
+  const id = (move.destinationRef as { cloudWorkspaceId?: unknown }).cloudWorkspaceId;
+  return typeof id === "string" && id.length > 0 ? id : null;
 }
 
 async function safely(fn: () => Promise<void>): Promise<void> {

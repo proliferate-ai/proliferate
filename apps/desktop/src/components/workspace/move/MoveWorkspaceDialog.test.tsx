@@ -111,6 +111,42 @@ describe("MoveWorkspaceDialog", () => {
     expect(mocks.workflow!.replaceCollidingWorkspace).toHaveBeenCalledWith("cloud-ws-1");
   });
 
+  it("disables 'Open the cloud workspace' while a replace is in flight so it can't bypass it", () => {
+    mocks.workflow = buildWorkflow({
+      stage: {
+        kind: "collision",
+        gitOwner: "acme",
+        gitRepoName: "widgets",
+        branch: "feature/move",
+        collidingWorkspaceId: "cloud-ws-1",
+      },
+      isSubmitting: true,
+    });
+
+    render(<MoveWorkspaceDialog open workspaceId="ws-1" workspaceKind="worktree" repoRoot={null} onClose={vi.fn()} />);
+
+    const openButton = screen.getByText("Open the cloud workspace").closest("button") as HTMLButtonElement;
+    expect(openButton.disabled).toBe(true);
+    fireEvent.click(openButton);
+    expect(mocks.selectWorkspaceFromSurface).not.toHaveBeenCalled();
+  });
+
+  it("offers a retry affordance when a post-cutover move is rediscovered stuck", () => {
+    mocks.workflow = buildWorkflow({
+      stage: {
+        kind: "resume",
+        move: { id: "move-1", phase: "cutover" } as never,
+        postCutover: true,
+      },
+    });
+
+    render(<MoveWorkspaceDialog open workspaceId="ws-1" workspaceKind="worktree" repoRoot={null} onClose={vi.fn()} />);
+
+    fireEvent.click(screen.getByText("Retry cleanup"));
+    expect(mocks.workflow!.resumeMove).toHaveBeenCalledTimes(1);
+    expect(mocks.workflow!.abandonMove).not.toHaveBeenCalled();
+  });
+
   it("renders the four-step progress list while the saga is running", () => {
     mocks.workflow = buildWorkflow({
       stage: { kind: "progress", phase: "destination_ready" },
@@ -152,6 +188,7 @@ function buildPublish(overrides: PublishViewStateOverrides = {}) {
 function buildWorkflow(overrides: {
   stage: unknown;
   publish?: ReturnType<typeof buildPublish>;
+  isSubmitting?: boolean;
 }) {
   return {
     stage: overrides.stage,
@@ -159,7 +196,7 @@ function buildWorkflow(overrides: {
     publish: overrides.publish ?? buildPublish(),
     error: null,
     isLoading: false,
-    isSubmitting: false,
+    isSubmitting: overrides.isSubmitting ?? false,
     startMove: vi.fn(),
     resumeMove: vi.fn(),
     abandonMove: vi.fn(),

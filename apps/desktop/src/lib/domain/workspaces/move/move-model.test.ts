@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveHandoffMoveId, sourceFateForWorkspaceKind } from "./move-model";
+import {
+  resolveHandoffMoveId,
+  resolvePostMoveNavigation,
+  sourceFateForWorkspaceKind,
+} from "./move-model";
 
 describe("resolveHandoffMoveId", () => {
   it("returns null when there is no runtime state", () => {
@@ -23,6 +27,40 @@ describe("resolveHandoffMoveId", () => {
 
   it("returns null if frozen but the engine never recorded a handoff id", () => {
     expect(resolveHandoffMoveId({ mode: "frozen_for_handoff", handoffOpId: null })).toBeNull();
+  });
+});
+
+describe("resolvePostMoveNavigation", () => {
+  it("does nothing when the moved workspace is not the one on screen", () => {
+    expect(resolvePostMoveNavigation({
+      movedWorkspaceId: "ws-1",
+      selectedWorkspaceId: "ws-2",
+      destinationCloudWorkspaceId: "cloud-ws-1",
+    })).toEqual({ kind: "none" });
+  });
+
+  it("does nothing when nothing is selected", () => {
+    expect(resolvePostMoveNavigation({
+      movedWorkspaceId: "ws-1",
+      selectedWorkspaceId: null,
+      destinationCloudWorkspaceId: "cloud-ws-1",
+    })).toEqual({ kind: "none" });
+  });
+
+  it("hands off to the new cloud workspace when the moved workspace was on screen", () => {
+    expect(resolvePostMoveNavigation({
+      movedWorkspaceId: "ws-1",
+      selectedWorkspaceId: "ws-1",
+      destinationCloudWorkspaceId: "cloud-ws-1",
+    })).toEqual({ kind: "select_cloud", cloudWorkspaceId: "cloud-ws-1" });
+  });
+
+  it("falls back to home when the on-screen source moved but its destination id is unknown", () => {
+    expect(resolvePostMoveNavigation({
+      movedWorkspaceId: "ws-1",
+      selectedWorkspaceId: "ws-1",
+      destinationCloudWorkspaceId: null,
+    })).toEqual({ kind: "home" });
   });
 });
 

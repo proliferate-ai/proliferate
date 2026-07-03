@@ -29,7 +29,7 @@ describe("runWorkspaceMoveWorkflow", () => {
       deps,
     );
 
-    expect(result).toEqual({ outcome: "completed", moveId: "move-1" });
+    expect(result).toEqual({ outcome: "completed", moveId: "move-1", destinationCloudWorkspaceId: null });
     expect(calls).toEqual([
       "startMove",
       "freezeSource",
@@ -81,7 +81,7 @@ describe("runWorkspaceMoveWorkflow", () => {
       deps,
     );
 
-    expect(result).toEqual({ outcome: "completed", moveId: "move-1" });
+    expect(result).toEqual({ outcome: "completed", moveId: "move-1", destinationCloudWorkspaceId: null });
     expect(calls).toEqual([
       "freezeSource",
       "exportSourceArchive",
@@ -125,7 +125,7 @@ describe("runWorkspaceMoveWorkflow", () => {
       deps,
     );
 
-    expect(result).toEqual({ outcome: "completed", moveId: "move-1" });
+    expect(result).toEqual({ outcome: "completed", moveId: "move-1", destinationCloudWorkspaceId: null });
     expect(calls).toEqual(["destroySource", "completeMove"]);
     expect(deps.cutover).not.toHaveBeenCalled();
   });
@@ -143,8 +143,26 @@ describe("runWorkspaceMoveWorkflow", () => {
       deps,
     );
 
-    expect(result).toEqual({ outcome: "completed", moveId: "move-1" });
+    expect(result).toEqual({ outcome: "completed", moveId: "move-1", destinationCloudWorkspaceId: null });
     expect(calls).toEqual([]);
+  });
+
+  it("threads the destination cloud workspace id from the server's move rows", async () => {
+    const deps = depsMock();
+    deps.startMove.mockResolvedValueOnce(
+      moveAt("destination_ready", { cloudWorkspaceId: "cloud-ws-9" }),
+    );
+
+    const result = await runWorkspaceMoveWorkflow(
+      { start: START_REQUEST, sourceWorkspaceKind: "worktree" },
+      deps,
+    );
+
+    expect(result).toEqual({
+      outcome: "completed",
+      moveId: "move-1",
+      destinationCloudWorkspaceId: "cloud-ws-9",
+    });
   });
 
   it("refuses to resume a failed move", async () => {
@@ -267,15 +285,18 @@ describe("runWorkspaceMoveWorkflow", () => {
   });
 });
 
-function depsMock(calls: string[] = []) {
-  const moveAt = (phase: WorkspaceMovePhase): WorkspaceMoveResponse => ({
+function moveAt(
+  phase: WorkspaceMovePhase,
+  destinationRef: Record<string, unknown> = {},
+): WorkspaceMoveResponse {
+  return {
     id: "move-1",
     repoConfigId: "repo-1",
     branch: "feature/move",
     sourceKind: "local",
     destinationKind: "cloud",
     sourceRef: {},
-    destinationRef: {},
+    destinationRef,
     baseCommitSha: "abc123",
     phase,
     canonicalSide: phase === "cutover" || phase === "completed" ? "destination" : "source",
@@ -286,8 +307,10 @@ function depsMock(calls: string[] = []) {
     updatedAt: "2026-07-02T00:00:00Z",
     cutoverAt: null,
     completedAt: null,
-  });
+  };
+}
 
+function depsMock(calls: string[] = []) {
   return {
     startMove: vi.fn(async () => {
       calls.push("startMove");
