@@ -195,7 +195,7 @@ fn codex_gateway_materializes_config_toml_and_sets_env() {
 }
 
 #[test]
-fn codex_api_key_sets_exactly_its_var() {
+fn codex_api_key_sets_var_and_writes_codex_local_auth() {
     let home = TempHome::new("codex-key");
     home.write_state_json(&v2_state(
         1,
@@ -204,9 +204,24 @@ fn codex_api_key_sets_exactly_its_var() {
 
     let rendered = resolve_launch_route_auth(home.path(), "codex", &HarnessPlanResolver).expect("render");
     assert_eq!(rendered.set.get("OPENAI_API_KEY").unwrap(), "sk-openai");
+    // The api_key route does NOT repoint CODEX_HOME (it stays the session-layer
+    // codex-local home) and removes nothing.
     assert!(!rendered.set.contains_key("CODEX_HOME"));
     assert!(rendered.remove.is_empty());
-    assert!(rendered.files.is_empty());
+    // But it MUST also write codex-local/auth.json so a route-authed resume
+    // (session/load) can authenticate — the bare OPENAI_API_KEY env is ignored
+    // on that path. This is the credential half of migrated-codex-session
+    // portability.
+    assert_eq!(rendered.files.len(), 1);
+    let auth_path = home
+        .path()
+        .join("agent-auth")
+        .join("codex-local")
+        .join("auth.json");
+    let written: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&auth_path).expect("read codex auth.json"))
+            .expect("codex auth.json is valid json");
+    assert_eq!(written["OPENAI_API_KEY"], "sk-openai");
 }
 
 // --- opencode --------------------------------------------------------------

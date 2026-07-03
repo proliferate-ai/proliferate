@@ -88,8 +88,9 @@ pub(super) fn revision_dir_path(runtime_home: &Path, prefix: &str, revision: i64
     route_auth_root(runtime_home).join(format!("{prefix}-{revision}"))
 }
 
-/// Pure: the stable CLAUDE_CONFIG_DIR path (no I/O).
-pub(super) fn claude_config_dir_path(runtime_home: &Path) -> PathBuf {
+/// Pure: the stable CLAUDE_CONFIG_DIR path (no I/O). `pub(crate)` so mobility
+/// install (a sibling domain) can mirror resumed Claude transcripts into it.
+pub(crate) fn claude_config_dir_path(runtime_home: &Path) -> PathBuf {
     route_auth_root(runtime_home).join(CLAUDE_CONFIG_DIR_NAME)
 }
 
