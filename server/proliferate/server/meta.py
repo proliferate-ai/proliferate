@@ -14,12 +14,13 @@ the desktop version but can never ship an unofficial build.
 
 from __future__ import annotations
 
-import os
-
 from fastapi import APIRouter, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from proliferate.integrations.desktop_downloads import (
+    downloads_base_url as _downloads_base_url,
+)
 from proliferate.integrations.desktop_downloads import (
     versioned_manifest_exists as _versioned_manifest_exists,
 )
@@ -28,26 +29,18 @@ from proliferate.server.version import (
     min_desktop_version,
     runtime_version,
     server_version,
+    worker_version,
 )
 
 router = APIRouter()
-
-# Official CDN root that serves signed desktop updater manifests. Overridable
-# via env for parity with the release pipeline's DESKTOP_DOWNLOADS_BASE_URL.
-_DEFAULT_DESKTOP_DOWNLOADS_BASE_URL = "https://downloads.proliferate.com"
 
 
 class MetaResponse(BaseModel):
     serverVersion: str
     desktopVersion: str
     runtimeVersion: str
+    workerVersion: str
     minDesktopVersion: str
-
-
-def _desktop_downloads_base_url() -> str:
-    value = os.getenv("DESKTOP_DOWNLOADS_BASE_URL")
-    base = value.strip() if value and value.strip() else _DEFAULT_DESKTOP_DOWNLOADS_BASE_URL
-    return base.rstrip("/")
 
 
 @router.get("/meta", response_model=MetaResponse)
@@ -56,13 +49,14 @@ async def meta() -> MetaResponse:
         serverVersion=server_version(),
         desktopVersion=desktop_version(),
         runtimeVersion=runtime_version(),
+        workerVersion=worker_version(),
         minDesktopVersion=min_desktop_version(),
     )
 
 
 @router.get("/desktop/updater/latest.json")
 async def desktop_updater_latest() -> RedirectResponse:
-    base = _desktop_downloads_base_url()
+    base = _downloads_base_url()
     target = f"{base}/desktop/stable/{desktop_version()}/latest.json"
     if not await _versioned_manifest_exists(target):
         target = f"{base}/desktop/stable/latest.json"

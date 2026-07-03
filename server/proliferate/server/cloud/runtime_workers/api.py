@@ -9,7 +9,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
@@ -31,6 +32,7 @@ from proliferate.server.cloud.runtime_workers.service import (
     create_desktop_enrollment,
     enroll_worker,
     record_heartbeat,
+    worker_artifact_redirect_url,
 )
 
 worker_router = APIRouter(tags=["cloud-runtime-worker"])
@@ -51,8 +53,24 @@ async def worker_heartbeat_endpoint(
     auth: WorkerAuthContext = Depends(authenticate_worker),
     db: AsyncSession = Depends(get_async_session),
 ) -> WorkerHeartbeatResponse:
-    del body
-    return await record_heartbeat(db, worker_id=auth.worker_id)
+    return await record_heartbeat(
+        db,
+        worker_id=auth.worker_id,
+        worker_version=body.worker_version,
+        anyharness_version=body.anyharness_version,
+    )
+
+
+@worker_router.get("/worker/download/{target}/{asset}")
+async def worker_artifact_download_endpoint(target: str, asset: str) -> RedirectResponse:
+    """302 to the pinned worker binary (or its ``.sha256``) on the downloads CDN.
+
+    Unauthenticated by design, like the desktop updater redirect: install
+    scripts fetch the binary before any worker identity exists, and the CDN
+    artifacts are public.
+    """
+    url = await worker_artifact_redirect_url(target=target, asset=asset)
+    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post(

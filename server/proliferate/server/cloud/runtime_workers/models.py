@@ -36,12 +36,23 @@ class WorkerEnrollResponse(_CamelModel):
 
 class WorkerHeartbeatRequest(_CamelModel):
     status: str | None = None
+    # Self-reported after a binary swap so the row tracks what actually runs.
+    worker_version: str | None = None
+    anyharness_version: str | None = None
+
+
+class WorkerDesiredVersions(_CamelModel):
+    """The component versions this server pins; workers converge onto these."""
+
+    worker: str
+    anyharness: str
 
 
 class WorkerHeartbeatResponse(_CamelModel):
     worker_id: str
     server_time: datetime
     heartbeat_interval_seconds: int
+    desired_versions: WorkerDesiredVersions
 
 
 class DesktopWorkerEnrollmentRequest(_CamelModel):

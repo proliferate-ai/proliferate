@@ -3,8 +3,9 @@
 Every version the API reports is downstream of what the operator's server image
 was stamped with at build time. Release CI injects the concrete pins via env
 (``SERVER_VERSION``, ``DESKTOP_VERSION``, ``RUNTIME_VERSION``,
-``MIN_DESKTOP_VERSION``), wired from the root ``VERSION`` file and the desktop /
-runtime package manifests through Docker build args.
+``WORKER_VERSION``, ``MIN_DESKTOP_VERSION``), wired from the root ``VERSION``
+file and the desktop / runtime / worker package manifests through Docker build
+args.
 
 For local development (running from a source checkout, not the released image)
 the server version falls back to reading the repo ``VERSION`` file, then to a
@@ -59,6 +60,15 @@ def desktop_version() -> str:
 def runtime_version() -> str:
     """The runtime version this server pins; falls back to the server version."""
     return _env("RUNTIME_VERSION") or server_version()
+
+
+def worker_version() -> str:
+    """The worker version this server pins; falls back to the server version.
+
+    Release CI stamps ``WORKER_VERSION`` from the ``proliferate-worker`` crate
+    manifest the same way the desktop / runtime pins are stamped from theirs.
+    """
+    return _env("WORKER_VERSION") or server_version()
 
 
 def min_desktop_version() -> str:
