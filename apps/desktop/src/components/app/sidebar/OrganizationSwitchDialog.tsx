@@ -1,6 +1,7 @@
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { useOrganizationSwitchAction } from "@/hooks/organizations/workflows/use-organization-switch-action";
 import type { OrganizationRecord } from "@/lib/domain/organizations/organization-records";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 /**
  * Confirmation for the semi-destructive org->org switch: the desktop worker's
@@ -18,6 +19,7 @@ export function OrganizationSwitchDialog({
   onClose: () => void;
 }) {
   const { switchOrganization, switchingOrganization } = useOrganizationSwitchAction();
+  const showToast = useToastStore((state) => state.show);
 
   return (
     <ConfirmationDialog
@@ -32,7 +34,17 @@ export function OrganizationSwitchDialog({
         if (!target) {
           return;
         }
-        void switchOrganization(target.id).then(onClose);
+        // switchOrganization resets its own loading flag in a finally, but a
+        // failed switch (e.g. worker teardown or the selection write throwing)
+        // must not be swallowed: surface it and keep the dialog open so the
+        // user can retry, instead of silently leaving the old org active.
+        void switchOrganization(target.id).then(onClose, (error) => {
+          showToast(
+            error instanceof Error
+              ? error.message
+              : `Could not switch to ${target.name}.`,
+          );
+        });
       }}
     />
   );
