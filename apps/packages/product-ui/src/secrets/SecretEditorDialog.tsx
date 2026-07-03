@@ -6,7 +6,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
-import { Select } from "@proliferate/ui/primitives/Select";
+import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
+import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 
 export type SecretEditorKind = "env" | "file";
@@ -205,20 +206,23 @@ export function SecretEditorDialog({
     >
       <form id="secret-editor-form" className="space-y-4" onSubmit={submit}>
         {editing ? null : (
-          <Label className="block space-y-1.5 text-sm font-medium text-foreground">
-            <span className="block">Type</span>
-            <Select
-              value={kind}
-              onChange={(event) =>
-                handleKindChange(event.currentTarget.value as SecretEditorKind)}
-            >
-              {SECRET_KIND_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {SECRET_KIND_LABELS[option]}
-                </option>
-              ))}
-            </Select>
-          </Label>
+          <div className="space-y-1.5">
+            <div className={fieldLabelClass}>Type</div>
+            <SettingsMenu
+              label={SECRET_KIND_LABELS[kind]}
+              className="w-60"
+              menuClassName="w-60"
+              groups={[{
+                id: "kind",
+                options: SECRET_KIND_OPTIONS.map((option) => ({
+                  id: option,
+                  label: SECRET_KIND_LABELS[option],
+                  selected: kind === option,
+                  onSelect: () => handleKindChange(option),
+                })),
+              }]}
+            />
+          </div>
         )}
 
         <div className="space-y-1.5">
@@ -305,22 +309,18 @@ export function SecretEditorDialog({
           </div>
         ) : (
           <>
-            <Label className="block space-y-1.5 text-sm font-medium text-foreground">
-              <span className="block">Content source</span>
-              <Select
+            <div className="space-y-1.5">
+              <div className={fieldLabelClass}>Content source</div>
+              <SegmentedControl
+                ariaLabel="File content source"
+                items={FILE_CONTENT_SOURCE_OPTIONS.map((option) => ({
+                  id: option,
+                  label: FILE_CONTENT_SOURCE_LABELS[option],
+                }))}
                 value={fileContentSource}
-                onChange={(event) =>
-                  handleFileContentSourceChange(
-                    event.currentTarget.value as SecretFileContentSource,
-                  )}
-              >
-                {FILE_CONTENT_SOURCE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {FILE_CONTENT_SOURCE_LABELS[option]}
-                  </option>
-                ))}
-              </Select>
-            </Label>
+                onChange={handleFileContentSourceChange}
+              />
+            </div>
             {fileContentSource === "text" ? (
               <Label className="block space-y-1.5 text-sm font-medium text-foreground">
                 <span className="block">File content</span>

@@ -150,8 +150,11 @@ export function SecretManagementPanel({
         </div>
       </SettingsRow>
 
-      <SettingsRow label="Environment variables" className="sm:items-start">
-        <div className="w-full max-w-xl">
+      <SettingsRow
+        label="Environment variables"
+        className="sm:flex-col sm:items-stretch sm:justify-start"
+      >
+        <div className="w-full">
           <SecretList
             emptyLabel="No environment variables yet."
             emptyDescription="Add your first key to inject it into every cloud sandbox in this scope."
@@ -165,8 +168,11 @@ export function SecretManagementPanel({
         </div>
       </SettingsRow>
 
-      <SettingsRow label="Files" className="sm:items-start">
-        <div className="w-full max-w-xl">
+      <SettingsRow
+        label="Files"
+        className="sm:flex-col sm:items-stretch sm:justify-start"
+      >
+        <div className="w-full">
           <SecretList
             emptyLabel="No file secrets yet."
             emptyDescription="Write a config or credential file straight into the sandbox filesystem."
