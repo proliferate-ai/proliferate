@@ -487,6 +487,115 @@ mod tests {
         }
     }
 
+    fn claude_session(native_session_id: &str) -> SessionRecord {
+        SessionRecord {
+            id: "session-1".to_string(),
+            workspace_id: "workspace-1".to_string(),
+            agent_kind: "claude".to_string(),
+            native_session_id: Some(native_session_id.to_string()),
+            agent_auth_contexts: None,
+            requested_model_id: None,
+            current_model_id: None,
+            requested_mode_id: None,
+            current_mode_id: None,
+            title: None,
+            thinking_level_id: None,
+            thinking_budget_tokens: None,
+            status: "ended".to_string(),
+            created_at: "2026-05-30T00:00:00Z".to_string(),
+            updated_at: "2026-05-30T00:00:00Z".to_string(),
+            last_prompt_at: None,
+            closed_at: None,
+            dismissed_at: None,
+            mcp_bindings_ciphertext: None,
+            mcp_binding_summaries_json: None,
+            mcp_binding_policy: SessionMcpBindingPolicy::InheritWorkspace,
+            system_prompt_append: None,
+            subagents_enabled: false,
+            action_capabilities_json: None,
+            origin: None,
+        }
+    }
+
+    #[test]
+    fn claude_artifacts_round_trip_across_workspace_slug_rewrite() {
+        // Only Codex's collect path is covered above; Claude re-slugs every
+        // artifact path onto the destination workspace (collect :135-160,
+        // install :162-187 / rewrite_claude_relative_path :309-333) and had
+        // no round-trip test.
+        let home = TempDirGuard::new("claude-slug-roundtrip");
+        let native_session_id = "native-claude-abc";
+        let source_workspace_path = Path::new("/tmp/mobility-source-workspace-one");
+        let source_slug = sanitize_claude_path(&source_workspace_path.to_string_lossy());
+
+        let source_project_dir = home
+            .path()
+            .join(".claude")
+            .join("projects")
+            .join(&source_slug);
+        fs::create_dir_all(&source_project_dir).expect("create source project dir");
+        let transcript_path = source_project_dir.join(format!("{native_session_id}.jsonl"));
+        fs::write(&transcript_path, b"{\"line\":1}\n").expect("write transcript");
+        let session_subdir = source_project_dir.join(native_session_id);
+        fs::create_dir_all(&session_subdir).expect("create session subdir");
+        fs::write(session_subdir.join("extra.json"), b"{\"nested\":true}\n")
+            .expect("write nested artifact");
+
+        let session = claude_session(native_session_id);
+
+        let collected = collect_claude_artifacts(home.path(), &session, source_workspace_path)
+            .expect("collect claude artifacts from the source slug");
+        assert_eq!(collected.len(), 2);
+        let expected_prefix = format!(".claude/projects/{source_slug}/");
+        assert!(
+            collected
+                .iter()
+                .all(|file| file.relative_path.starts_with(&expected_prefix)),
+            "collected artifacts must be rooted under the source slug: {collected:?}"
+        );
+
+        let destination_workspace_path = Path::new("/tmp/mobility-destination-workspace-two");
+        let destination_slug = sanitize_claude_path(&destination_workspace_path.to_string_lossy());
+        assert_ne!(
+            source_slug, destination_slug,
+            "the test must exercise an actual slug rewrite"
+        );
+
+        install_claude_artifacts(home.path(), destination_workspace_path, &collected)
+            .expect("install claude artifacts under the destination slug");
+
+        let destination_project_dir = home
+            .path()
+            .join(".claude")
+            .join("projects")
+            .join(&destination_slug);
+        let destination_transcript =
+            destination_project_dir.join(format!("{native_session_id}.jsonl"));
+        assert!(
+            destination_transcript.exists(),
+            "main transcript must land under the destination slug"
+        );
+        assert_eq!(
+            fs::read(&destination_transcript).expect("read destination transcript"),
+            b"{\"line\":1}\n"
+        );
+        let destination_nested = destination_project_dir
+            .join(native_session_id)
+            .join("extra.json");
+        assert!(
+            destination_nested.exists(),
+            "nested session artifacts must land under the destination slug"
+        );
+        assert_eq!(
+            fs::read(&destination_nested).expect("read nested destination artifact"),
+            b"{\"nested\":true}\n"
+        );
+
+        // Install only copies into the new slug; it must not touch the
+        // source slug's own files.
+        assert!(transcript_path.exists());
+    }
+
     #[test]
     fn collect_codex_artifacts_skips_missing_rollout_file() {
         let home = TempDirGuard::new("missing-codex-rollout");

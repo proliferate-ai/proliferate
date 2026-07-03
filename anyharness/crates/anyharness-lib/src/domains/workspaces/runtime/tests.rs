@@ -7,7 +7,9 @@ use super::test_support::{
 use crate::adapters::git::GitService;
 use crate::domains::repo_roots::store::RepoRootStore;
 use crate::domains::sessions::store::SessionStore;
-use crate::domains::workspaces::managed_root::managed_worktrees_root;
+use crate::domains::workspaces::managed_root::{
+    canonical_managed_worktrees_root, managed_worktrees_root,
+};
 use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::store::WorkspaceStore;
 use crate::persistence::Db;
@@ -205,6 +207,55 @@ fn create_mobility_destination_rejects_dirty_existing_destination_path() {
     assert!(error
         .to_string()
         .contains("destination path already exists with uncommitted changes"));
+}
+
+#[test]
+fn create_mobility_destination_is_purgeable_by_retire_worktree_materialization() {
+    // Regression for the engine defect fixed in mobility install v2: rooting
+    // destinations under `<runtime_home>/mobility/destinations/...` put them
+    // outside `managed_worktrees_root()`, so
+    // `retire_worktree_materialization` refused with "refusing to remove
+    // worktree outside managed worktrees root" (observed live as
+    // `cleanupState: failed`). Destinations now live under
+    // `managed_worktrees_root()/mobility-destinations/...`, so purge works.
+    let source = TempDirGuard::new("runtime-mobility-purge-source");
+    let runtime_home = TempDirGuard::new("runtime-mobility-purge-home");
+    init_repo(source.path());
+
+    let db = Db::open_in_memory().expect("open db");
+    let runtime = make_runtime(&db, runtime_home.path());
+    let source_workspace = runtime
+        .create_workspace(&source.path().display().to_string())
+        .expect("create source workspace");
+    let base_sha = git_stdout(source.path(), ["rev-parse", "HEAD"]);
+
+    let prepared = runtime
+        .create_mobility_destination(
+            &source_workspace.repo_root.id,
+            "feature/mobility-purge",
+            &base_sha,
+            Some("destination-1"),
+            None,
+        )
+        .expect("create mobility destination");
+
+    let destination_path = Path::new(&prepared.workspace.path).to_path_buf();
+    assert!(destination_path.exists());
+    let canonical_managed_root = canonical_managed_worktrees_root(runtime_home.path())
+        .expect("canonicalize managed worktrees root");
+    assert!(
+        destination_path.starts_with(&canonical_managed_root),
+        "mobility destinations must be rooted under the managed worktrees root"
+    );
+
+    runtime
+        .retire_worktree_materialization(&prepared.workspace)
+        .expect("retire a mobility destination inside the managed worktrees root");
+
+    assert!(
+        !destination_path.exists(),
+        "retire must actually remove the destination worktree"
+    );
 }
 
 #[test]
