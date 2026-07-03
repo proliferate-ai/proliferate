@@ -87,31 +87,6 @@ export function ProliferateIconLoading({ className }: { className?: string }) {
 }
 
 /**
- * Proliferate icon — one-shot resolve animation.
- *
- * Orbit nodes fade in first, clockwise from top, and the center node
- * lands last as the punctuation. Each node holds lit once shown
- * (forwards fill mode on the keyframe). Used by auth surfaces when the
- * loading mark resolves into the brand.
- */
-export function ProliferateIconResolve({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox={PROLIFERATE_VIEW_BOX}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      shapeRendering="crispEdges"
-    >
-      {PROLIFERATE_ORBIT_NODES.map((node, i) =>
-        renderProliferateNode(node, `resolve-o${i}`, `animate-resolve-${i}`)
-      )}
-      {renderProliferateNode(PROLIFERATE_CENTER_NODE, "resolve-c", "animate-resolve-8")}
-    </svg>
-  );
-}
-
-/**
  * Snake — one orbit node fades in per time step, stays lit for a few steps,
  * then fades out. ~3 nodes visible at any moment, sliding around the orbit.
  * Center stays at a steady low opacity as an anchor.

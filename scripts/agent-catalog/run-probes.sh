@@ -89,13 +89,6 @@ if need_env OPENCODE_API_KEY; then
   probe opencode opencode-zen --model-switch-timeout-secs 6
 else skip opencode opencode-zen "OPENCODE_API_KEY not set (opencode zen subscription)"; fi
 
-if need_env GEMINI_API_KEY; then
-  probe gemini gemini-api --model-switch-timeout-secs 3
-else skip gemini gemini-api "GEMINI_API_KEY not set"; fi
-if [ -f "${PROBE_GEMINI_OAUTH_CREDS:-$HOME/.gemini/oauth_creds.json}" ]; then
-  probe gemini google-oauth --model-switch-timeout-secs 3
-else skip gemini google-oauth "no gemini oauth creds (run \`gemini\` and log in)"; fi
-
 # cursor: machine login (keychain); probe fails cleanly if not logged in
 probe cursor cursor-login --model-switch-timeout-secs 5
 

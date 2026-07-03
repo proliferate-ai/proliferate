@@ -9,17 +9,19 @@
 //!
 //! ```text
 //! state.json (<home>/agent-auth/state.json, 0600)
-//!   → load_state_file            (state.rs: tolerant read+parse)
-//!   → resolve_profile(harness)   (profile.rs: pure route decision, fail-closed)
-//!   → render_profile             (render.rs + materialize.rs: env delta + FS)
+//!   → load_state_file            (state.rs: tolerant read+parse, v2)
+//!   → resolve_profile(harness)   (profile.rs: pure source resolution)
+//!   → render_profile             (render.rs: PURE env delta + FileSpecs)
+//!   → apply file specs           (materialize.rs: launcher-side FS writes)
 //!   → RenderedRouteAuth { set, remove } merged into the launch env
 //! ```
 //!
-//! No watch/refresh: the file is read fresh per launch (spec §1). Absent file
-//! = legacy/native behavior; present-and-scoped file with no selection for the
-//! requested harness = fail-closed error.
+//! No watch/refresh: the file is read fresh per launch. Absent file, absent
+//! harness, or empty sources = native behavior (empty delta) — the harness's
+//! own login owns auth.
 
 mod materialize;
+pub mod plan;
 pub mod profile;
 pub mod render;
 pub mod state;
@@ -31,17 +33,12 @@ pub(crate) mod test_support;
 
 use std::path::{Path, PathBuf};
 
-pub use profile::{resolve_profile, AgentRuntimeAuthProfile, OpenCodeCompositeProfile};
+pub use plan::{GatewayModelPlan, GatewayModelResolve};
+pub use profile::{resolve_profile, AgentRuntimeAuthProfile};
 pub use render::{render_profile, RenderedRouteAuth};
-pub use state::{
-    apply_state_file, load_state_file, state_file_path, AgentAuthState, AuthRoute, AuthSelection,
-};
+pub use state::{apply_state_file, load_state_file, state_file_path, AgentAuthState};
 
-use state::AuthRoute as RouteKind;
-
-/// Errors from the route-auth render plane. `SelectionMissing` is the
-/// fail-closed error (spec §3): a scoped state file with no selection for the
-/// requested harness must error rather than fall through to ambient creds.
+/// Errors from the route-auth render plane.
 #[derive(Debug, thiserror::Error)]
 pub enum RouteAuthError {
     #[error("agent-auth state file is malformed ({path}): {detail}")]
@@ -58,12 +55,8 @@ pub enum RouteAuthError {
          {count} entries where one is allowed"
     )]
     SelectionConflict { harness_kind: String, count: usize },
-    #[error("agent-auth route selection for '{harness_kind}' is incomplete: {detail}")]
-    SelectionIncomplete {
-        harness_kind: String,
-        route: RouteKind,
-        detail: String,
-    },
+    #[error("agent-auth source for '{harness_kind}' is incomplete: {detail}")]
+    SelectionIncomplete { harness_kind: String, detail: String },
     #[error("agent-auth route for '{harness_kind}' is unsupported: {detail}")]
     UnsupportedRoute {
         harness_kind: String,
@@ -93,14 +86,27 @@ impl RouteAuthError {
 }
 
 /// End-to-end at launch: load the state file, resolve the profile for
-/// `harness_kind`, and render its env delta (materializing isolated homes as a
-/// side effect). Absent file → an empty (native) delta. This is the single
+/// `harness_kind`, resolve the catalog-driven [`GatewayModelPlan`], render its
+/// env delta (PURE), then apply the rendered file specs to disk (materializing
+/// isolated homes). Absent file → an empty (native) delta. This is the single
 /// entry point the session runtime calls.
+///
+/// Render consumes ONLY the plan for model values (spec §3): no constants, no
+/// lookups. Two-phase (contract §4): [`render_profile`] performs no I/O; the
+/// launcher (here) writes the [`RenderedRouteAuth::files`] via the materialize
+/// helpers.
 pub fn resolve_launch_route_auth(
     runtime_home: &Path,
     harness_kind: &str,
+    resolver: &dyn GatewayModelResolve,
 ) -> Result<RenderedRouteAuth, RouteAuthError> {
     let state = load_state_file(runtime_home)?;
+    let revision = state.as_ref().map(|state| state.revision).unwrap_or(0);
     let profile = resolve_profile(state.as_ref(), harness_kind)?;
-    render_profile(&profile, runtime_home)
+    let plan = resolver.resolve_gateway_models(harness_kind, revision);
+    let rendered = render_profile(&profile, &plan, runtime_home)?;
+    for spec in &rendered.files {
+        materialize::apply_file_spec(runtime_home, spec)?;
+    }
+    Ok(rendered)
 }

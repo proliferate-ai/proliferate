@@ -103,10 +103,6 @@ describe("user preference migration", () => {
     )).toBe("claude-opus-4-8-thinking-high");
     expect(normalizeDefaultChatModelId("opencode", "opencode/ring-2.6-1t-free"))
       .toBe("opencode/ring-2.6-1t-free");
-    expect(normalizeDefaultChatModelId("gemini", "auto-gemini-2.5"))
-      .toBe("auto-gemini-2.5");
-    expect(normalizeDefaultChatModelId("gemini", "gemini-3-flash-preview"))
-      .toBe("gemini-3-flash");
   });
 
   it("moves misstored Codex plan defaults into live collaboration controls", () => {

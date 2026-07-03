@@ -43,7 +43,8 @@ export type {
 } from "./types/replay.js";
 
 export type {
-  AgentAuthStateSelection,
+  AgentAuthStateSource,
+  AgentAuthStateHarness,
   AgentAuthStateDocument,
   ApplyAgentAuthStateResponse,
 } from "./types/agent-auth.js";
@@ -68,6 +69,12 @@ export type {
   ReconcileAgentResult,
   ReconcileAgentsResponse,
 } from "./types/agents.js";
+
+export type {
+  GatewayModelSource,
+  GatewayModelsResponse,
+  RefreshGatewayModelsResponse,
+} from "./types/agent-gateway-catalog.js";
 
 export type {
   RepoRootKind,

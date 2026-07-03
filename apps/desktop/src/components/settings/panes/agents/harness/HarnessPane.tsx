@@ -11,9 +11,8 @@ import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
-import { HarnessAuthenticationSection } from "./HarnessAuthenticationSection";
+import { HarnessAuthSection } from "./HarnessAuthSection";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
-import { OpenCodeHarnessAuthSection } from "./OpenCodeHarnessAuthSection";
 
 const SURFACE_ITEMS: readonly SegmentedControlItem<AgentAuthSurface>[] = [
   { id: "cloud", label: HARNESS_PANE_COPY.surfaceCloud, icon: <CloudIcon /> },
@@ -61,15 +60,11 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
 
       {subtab === "authentication" ? (
         <>
-          {harnessKind === "opencode" ? (
-            <OpenCodeHarnessAuthSection displayName={displayName} surface={surface} />
-          ) : (
-            <HarnessAuthenticationSection
-              harnessKind={harnessKind}
-              displayName={displayName}
-              surface={surface}
-            />
-          )}
+          <HarnessAuthSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface={surface}
+          />
           <HarnessSettingsSection harnessKind={harnessKind} />
         </>
       ) : (

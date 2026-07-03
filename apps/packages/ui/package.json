@@ -227,6 +227,10 @@
       "types": "./dist/primitives/Switch.d.ts",
       "import": "./dist/primitives/Switch.js"
     },
+    "./primitives/ThinkingText": {
+      "types": "./dist/primitives/ThinkingText.d.ts",
+      "import": "./dist/primitives/ThinkingText.js"
+    },
     "./primitives/Tabs": {
       "types": "./dist/primitives/Tabs.d.ts",
       "import": "./dist/primitives/Tabs.js"
@@ -302,10 +306,6 @@
     "./kit/Separator": {
       "types": "./dist/kit/Separator.d.ts",
       "import": "./dist/kit/Separator.js"
-    },
-    "./kit/Skeleton": {
-      "types": "./dist/kit/Skeleton.d.ts",
-      "import": "./dist/kit/Skeleton.js"
     },
     "./kit/Sonner": {
       "types": "./dist/kit/Sonner.d.ts",

@@ -4,7 +4,6 @@ use std::path::PathBuf;
 pub enum ProviderId {
     Claude,
     Codex,
-    Gemini,
     Xai,
 }
 

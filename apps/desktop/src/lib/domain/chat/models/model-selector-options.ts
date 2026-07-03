@@ -234,7 +234,7 @@ function resolveModelSelectionActionKindForModel(
   // Same harness, different model -> the session is kept, always
   // (decision 10). The runtime live-switches when the harness has a
   // mechanism and relaunches the agent process under the same session when
-  // it does not (gemini exposes no config options at all).
+  // it does not.
   return modelSelectionMatchesModel(activeSelection, agent, agentKind, model.id)
     ? "select"
     : "update_current_chat";

@@ -1,10 +1,8 @@
 import { getProliferateClient, type ProliferateCloudClient } from "./core.js";
 import type {
   AgentApiKey,
-  AgentApiKeyListResponse,
   AgentAuthRoute,
-  AgentAuthRouteSelection,
-  AgentAuthRouteSelectionListResponse,
+  AgentAuthSelection,
   AgentAuthState,
   AgentAuthSurface,
   AgentGatewayCapabilities,
@@ -12,16 +10,17 @@ import type {
   AgentGatewayCatalogOverride,
   AgentGatewayEnrollment,
   CreateAgentApiKeyRequest,
+  MirrorAgentGatewayCatalogRequest,
   OrgAgentPolicy,
   OrgAgentPolicyViolationListResponse,
+  PutAuthSelectionsRequest,
   RefreshAgentGatewayCatalogRequest,
   UpdateOrgAgentPolicyRequest,
-  UpsertAgentAuthRouteSelectionRequest,
   UpsertAgentGatewayCatalogOverrideRequest,
 } from "../types/index.js";
 
-function routeSelectionPath(harnessKind: string, surface: string): string {
-  return `/v1/cloud/agent-gateway/route-selections/${encodeURIComponent(harnessKind)}/${encodeURIComponent(surface)}`;
+function selectionsPath(harnessKind: string): string {
+  return `/v1/cloud/agent-gateway/selections/${encodeURIComponent(harnessKind)}`;
 }
 
 function catalogPath(harnessKind: string): string {
@@ -32,12 +31,14 @@ function orgAgentPolicyPath(organizationId: string): string {
   return `/v1/cloud/organizations/${encodeURIComponent(organizationId)}/agent-gateway/policy`;
 }
 
+// --- Key vault -------------------------------------------------------------
+
 export async function listAgentApiKeys(
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentApiKeyListResponse> {
-  return client.requestJson<AgentApiKeyListResponse>({
+): Promise<AgentApiKey[]> {
+  return client.requestJson<AgentApiKey[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/api-keys",
+    path: "/v1/cloud/agent-gateway/keys",
   });
 }
 
@@ -47,7 +48,7 @@ export async function createAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "POST",
-    path: "/v1/cloud/agent-gateway/api-keys",
+    path: "/v1/cloud/agent-gateway/keys",
     body: input,
   });
 }
@@ -58,42 +59,34 @@ export async function revokeAgentApiKey(
 ): Promise<AgentApiKey> {
   return client.requestJson<AgentApiKey>({
     method: "DELETE",
-    path: `/v1/cloud/agent-gateway/api-keys/${encodeURIComponent(keyId)}`,
+    path: `/v1/cloud/agent-gateway/keys/${encodeURIComponent(keyId)}`,
   });
 }
 
-export async function listAgentRouteSelections(
+// --- Auth selections -------------------------------------------------------
+
+export async function listAuthSelections(
+  surface?: AgentAuthSurface,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentAuthRouteSelectionListResponse> {
-  return client.requestJson<AgentAuthRouteSelectionListResponse>({
+): Promise<AgentAuthSelection[]> {
+  return client.requestJson<AgentAuthSelection[]>({
     method: "GET",
-    path: "/v1/cloud/agent-gateway/route-selections",
+    path: "/v1/cloud/agent-gateway/selections",
+    query: surface ? { surface } : undefined,
   });
 }
 
-export async function upsertAgentRouteSelection(
+export async function putAuthSelections(
   harnessKind: string,
-  surface: string,
-  input: UpsertAgentAuthRouteSelectionRequest,
+  surface: AgentAuthSurface,
+  input: PutAuthSelectionsRequest,
   client: ProliferateCloudClient = getProliferateClient(),
-): Promise<AgentAuthRouteSelection> {
-  return client.requestJson<AgentAuthRouteSelection>({
+): Promise<AgentAuthSelection[]> {
+  return client.requestJson<AgentAuthSelection[]>({
     method: "PUT",
-    path: routeSelectionPath(harnessKind, surface),
+    path: selectionsPath(harnessKind),
+    query: { surface },
     body: input,
-  });
-}
-
-export async function clearAgentRouteSelection(
-  harnessKind: string,
-  surface: string,
-  slot: string = "primary",
-  client: ProliferateCloudClient = getProliferateClient(),
-): Promise<void> {
-  await client.requestJson<void>({
-    method: "DELETE",
-    path: routeSelectionPath(harnessKind, surface),
-    query: { slot },
   });
 }
 
@@ -107,6 +100,8 @@ export async function getAgentAuthState(
     query: { surface },
   });
 }
+
+// --- Catalog ---------------------------------------------------------------
 
 export async function getAgentCatalog(
   harnessKind: string,
@@ -133,6 +128,18 @@ export async function refreshAgentCatalog(
   });
 }
 
+export async function mirrorAgentCatalog(
+  harnessKind: string,
+  input: MirrorAgentGatewayCatalogRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AgentGatewayCatalog> {
+  return client.requestJson<AgentGatewayCatalog>({
+    method: "POST",
+    path: `${catalogPath(harnessKind)}/mirror`,
+    body: input,
+  });
+}
+
 export async function upsertAgentCatalogOverride(
   harnessKind: string,
   input: UpsertAgentGatewayCatalogOverrideRequest,
@@ -155,6 +162,8 @@ export async function deleteAgentCatalogOverride(
   });
 }
 
+// --- Capabilities + enrollment --------------------------------------------
+
 export async function getAgentGatewayCapabilities(
   client: ProliferateCloudClient = getProliferateClient(),
 ): Promise<AgentGatewayCapabilities> {
@@ -172,6 +181,8 @@ export async function getAgentGatewayEnrollment(
     path: "/v1/cloud/agent-gateway/enrollment",
   });
 }
+
+// --- Org policy ------------------------------------------------------------
 
 export async function getOrgAgentPolicy(
   organizationId: string,

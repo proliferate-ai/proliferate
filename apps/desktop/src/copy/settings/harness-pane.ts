@@ -6,12 +6,13 @@ export const HARNESS_PANE_COPY = {
   authenticationTitle: "Authentication",
   signInTitle: "Authentication",
   gatewayLabel: "Proliferate gateway",
-  apiKeyLabel: "API key",
-  apiKeyDescription: "Use one of your own provider keys from the key pool.",
-  nativeLabel: "Native",
+  apiKeysTitle: "API keys",
+  envVarPlaceholder: "ENV_VAR_NAME",
+  addVariable: "Add variable",
+  addProvider: "Add provider",
+  removeVariable: "Remove variable",
   runLogin: "Run login",
   runLoginOpening: "Opening...",
-  resetToDefault: "Reset to default",
   harnessSettingsTitle: "Harness settings",
   harnessSettingsPlaceholderLabel: "Harness-specific settings",
   harnessSettingsPlaceholderDescription:
@@ -20,20 +21,23 @@ export const HARNESS_PANE_COPY = {
   allModelsRefreshing: "Refreshing...",
   allModelsEmpty: "No models in the catalog for this surface yet.",
   allModelsLoading: "Loading model catalog...",
+  // Runtime-resolved gateway models (contract §5): freshness reads "seed" (the
+  // catalog's fallback list, no probe yet) or "probed <time>" (a live probe).
+  allModelsFreshnessSeed: "seed",
+  allModelsFreshnessProbed: (time: string) => `probed ${time}`,
   getApiKey: "Get an API key",
   recommendedBadge: "Recommended",
+  // Native == the implicit empty state (contract §7): zero enabled sources.
+  nativeStateLocal: "No auth configured — the CLI's own login is used.",
+  nativeStateCloud: "No auth configured — cloud runs stay disabled for this harness.",
+  cursorNativeDescription: (displayName: string) =>
+    `${displayName} authenticates with its own sign-in. There is nothing to configure here.`,
   signInDescription: (displayName: string) =>
     `Sign in to Proliferate Cloud to manage how ${displayName} authenticates to models.`,
   authenticationDescription: (displayName: string) =>
     `How ${displayName} authenticates to models on this surface.`,
-  nativeDescription: (displayName: string) =>
-    `Use ${displayName}'s own sign-in on this machine.`,
-  openCodeDescription: (displayName: string) =>
-    `${displayName} combines sources: the gateway and your own provider keys can be enabled together.`,
-  routeUpdateError: (displayName: string) =>
-    `Could not update the ${displayName} route.`,
-  sourcesUpdateError: (displayName: string) =>
-    `Could not update the ${displayName} sources.`,
+  selectionUpdateError: (displayName: string) =>
+    `Could not update ${displayName} authentication.`,
   catalogRefreshError: (displayName: string) =>
     `Could not refresh the ${displayName} model catalog.`,
   catalogOverrideError: (displayName: string) =>

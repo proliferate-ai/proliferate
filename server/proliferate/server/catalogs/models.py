@@ -147,7 +147,7 @@ class AgentCatalogAgentProvenance(BaseModel):
 
 
 class AgentCatalogAgent(BaseModel):
-    kind: Literal["claude", "codex", "gemini", "cursor", "opencode", "grok"]
+    kind: Literal["claude", "codex", "cursor", "opencode", "grok"]
     displayName: str
     harness: AgentCatalogHarnessPins
     authContexts: list[AgentCatalogAuthContext] = []

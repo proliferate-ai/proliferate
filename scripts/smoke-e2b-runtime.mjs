@@ -58,7 +58,6 @@ const API_KEYS = {
     process.env.ANTHROPIC_API_KEY || envFile.ANTHROPIC_API_KEY || "",
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || envFile.OPENAI_API_KEY || "",
   GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || envFile.GOOGLE_API_KEY || "",
-  GEMINI_API_KEY: process.env.GEMINI_API_KEY || envFile.GEMINI_API_KEY || "",
   CURSOR_API_KEY: process.env.CURSOR_API_KEY || envFile.CURSOR_API_KEY || "",
 };
 
@@ -74,12 +73,6 @@ const PROVIDERS = [
     kind: "codex",
     displayName: "Codex",
     envVars: ["OPENAI_API_KEY"],
-    modelId: null,
-  },
-  {
-    kind: "gemini",
-    displayName: "Gemini",
-    envVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
     modelId: null,
   },
   {

@@ -10,7 +10,7 @@
 //! This module never reads credential material from the process env: the
 //! caller hands in env presence (`env_keys`) and flag values (`flag_values`)
 //! from the composed launch env. Non-credential *path override* env vars
-//! (`CODEX_HOME`, `GEMINI_CLI_HOME`, `XDG_DATA_HOME`,
+//! (`CODEX_HOME`, `XDG_DATA_HOME`,
 //! `AWS_SHARED_CREDENTIALS_FILE`) are honored only when `home_dir` matches
 //! the process home, mirroring the existing `LocalAuthState` detectors.
 //!
@@ -26,20 +26,14 @@
 //! | `codex-auth-json-api-key` | `OPENAI_API_KEY` in `~/.codex/auth.json` |
 //! | `codex-auth-json-oauth` | `tokens.access_token` in `~/.codex/auth.json` |
 //! | `codex-keychain` | macOS keychain `Codex Auth` entry with usable auth |
-//! | `gemini-oauth-creds` | tokens in `~/.gemini/oauth_creds.json` |
-//! | `gemini-keychain` | macOS keychain `gemini-cli-oauth` entry |
 //! | `aws-credential-chain` | env pair, shared-credentials profile, or SSO cache (passive sources only — decisions ledger 12) |
 //! | `opencode-auth-json/<provider>` | usable provider entry in opencode's `auth.json` |
 //! | `cursor-keychain` | macOS keychain `Cursor Safe Storage` entry |
-//!
-//! Not emitted: `gemini-settings-api-key` — the existing gemini parser never
-//! reads API keys from `settings.json`, so the kind is not distinguishable
-//! from current detection and is deferred until a parser exists.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use crate::{aws, claude, codex, cursor, gemini, grok, opencode, DiscoveryError};
+use crate::{aws, claude, codex, cursor, grok, opencode, DiscoveryError};
 
 /// The exact discovery-kind strings detectors emit. Open vocabulary: new
 /// detectors add new constants; consumers match on strings, never on a
@@ -52,8 +46,6 @@ pub mod fact_kinds {
     pub const CODEX_AUTH_JSON_API_KEY: &str = "codex-auth-json-api-key";
     pub const CODEX_AUTH_JSON_OAUTH: &str = "codex-auth-json-oauth";
     pub const CODEX_KEYCHAIN: &str = "codex-keychain";
-    pub const GEMINI_OAUTH_CREDS: &str = "gemini-oauth-creds";
-    pub const GEMINI_KEYCHAIN: &str = "gemini-keychain";
     pub const AWS_CREDENTIAL_CHAIN: &str = "aws-credential-chain";
     /// Per-provider facts are `opencode-auth-json/<provider>`.
     pub const OPENCODE_AUTH_JSON_PREFIX: &str = "opencode-auth-json/";
@@ -116,7 +108,6 @@ fn discovery_fact_kinds(home_dir: &Path, env_keys: &BTreeSet<String>) -> Vec<Str
     let mut kinds: Vec<String> = Vec::new();
     extend_tolerating(&mut kinds, "claude", claude::discovery_fact_kinds(home_dir));
     extend_tolerating(&mut kinds, "codex", codex::discovery_fact_kinds(home_dir));
-    extend_tolerating(&mut kinds, "gemini", gemini::discovery_fact_kinds(home_dir));
     extend_tolerating(&mut kinds, "grok", grok::discovery_fact_kinds(home_dir));
     kinds.extend(
         aws::discovery_fact_kinds(home_dir, env_keys)

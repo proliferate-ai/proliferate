@@ -96,6 +96,15 @@
               "claude-oauth-account",
               "aws-credential-chain"
             ]
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },
@@ -196,92 +205,19 @@
               "codex-auth-json-oauth",
               "codex-keychain"
             ]
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },
       "docsUrl": "https://github.com/proliferate-ai/codex-acp"
-    },
-    {
-      "kind": "gemini",
-      "displayName": "Gemini",
-      "description": "Gemini CLI through its ACP surface.",
-      "native": null,
-      "agentProcess": {
-        "install": {
-          "kind": "registry_backed",
-          "registryId": "gemini",
-          "fallback": {
-            "kind": "binary_hint",
-            "candidateBinaries": [
-              "gemini"
-            ],
-            "args": [
-              "--experimental-acp"
-            ]
-          }
-        }
-      },
-      "launch": {
-        "executableName": "gemini",
-        "defaultArgs": []
-      },
-      "auth": {
-        "readinessPolicy": "any_required_slot",
-        "slots": [
-          {
-            "id": "gemini",
-            "label": "Gemini",
-            "credentialProviderIds": [
-              "gemini"
-            ],
-            "requiredForReadiness": true,
-            "envVars": [
-              "GEMINI_API_KEY",
-              "GOOGLE_API_KEY"
-            ],
-            "discovery": "gemini",
-            "materialization": {
-              "gatewayEnv": {
-                "protocolFacade": "genai",
-                "protectedEnvKeys": [
-                  "GEMINI_API_KEY",
-                  "GOOGLE_GEMINI_BASE_URL"
-                ],
-                "supportEnvKeys": []
-              },
-              "syncedFiles": {
-                "protectedEnvKeys": [
-                  "GEMINI_API_KEY",
-                  "GOOGLE_API_KEY",
-                  "GOOGLE_GENAI_USE_VERTEXAI"
-                ],
-                "allowedFilePaths": [
-                  ".gemini/oauth_creds.json",
-                  ".gemini/settings.json"
-                ],
-                "cleanupFilePaths": [
-                  ".gemini/oauth_creds.json",
-                  ".gemini/settings.json"
-                ]
-              }
-            },
-            "login": {
-              "label": "Log in with Gemini",
-              "command": {
-                "program": "gemini",
-                "args": []
-              },
-              "reusesUserState": true,
-              "message": "When Gemini opens, choose Sign in with Google. If it opens into chat, type `/auth`."
-            },
-            "discoveryKinds": [
-              "gemini-oauth-creds",
-              "gemini-keychain"
-            ]
-          }
-        ]
-      },
-      "docsUrl": "https://github.com/google-gemini/gemini-cli"
     },
     {
       "kind": "cursor",
@@ -474,6 +410,15 @@
             "discoveryKinds": [
               "opencode-auth-json/opencode"
             ]
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },
@@ -544,6 +489,15 @@
               "reusesUserState": true,
               "message": null
             }
+          },
+          {
+            "id": "gateway",
+            "label": "Proliferate Gateway",
+            "credentialProviderIds": [],
+            "requiredForReadiness": false,
+            "envVars": [],
+            "discovery": "none",
+            "materialization": {}
           }
         ]
       },
