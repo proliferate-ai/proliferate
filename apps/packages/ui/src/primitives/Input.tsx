@@ -8,8 +8,11 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 const variantClasses: Record<InputVariant, string> = {
+  // Quiet field: a near-background translucent fill + the same hairline our
+  // cards use, so inputs sit calmly on any dark surface instead of reading as
+  // a raised gray box. Focus is a single clean ring.
   default:
-    "w-full h-9 px-3 rounded-md border border-input bg-surface-control text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60",
+    "w-full h-9 px-3 rounded-md border border-border bg-surface-elevated-secondary text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-border-heavy focus:outline-none focus:border-border-heavy focus:ring-1 focus:ring-ring disabled:opacity-60",
   unstyled: "",
 };
 
