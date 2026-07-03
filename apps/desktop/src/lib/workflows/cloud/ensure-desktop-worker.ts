@@ -11,9 +11,9 @@ import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 // Serialize them on a shared chain so a still-in-flight teardown from a quick
 // sign-out cannot kill the worker a subsequent sign-in just ensured (and vice
 // versa). Tasks swallow their own errors, so the chain never rejects.
-let workerLifecycleChain: Promise<void> = Promise.resolve();
+let workerLifecycleChain: Promise<unknown> = Promise.resolve();
 
-function enqueueWorkerLifecycleTask(task: () => Promise<void>): Promise<void> {
+function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
   const run = workerLifecycleChain.then(task, task);
   workerLifecycleChain = run;
   return run;
@@ -21,7 +21,9 @@ function enqueueWorkerLifecycleTask(task: () => Promise<void>): Promise<void> {
 
 // Ensures a runtime dispatch worker is enrolled for this desktop install.
 // Runs opportunistically on login; never blocks or throws on failure.
-export function ensureDesktopWorker(): Promise<void> {
+// Resolves true when the worker was ensured and false when it failed (the
+// enrollment guard uses this to avoid latching a silent failure forever).
+export function ensureDesktopWorker(): Promise<boolean> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
       const desktopInstallId = await getDesktopInstallId();
@@ -30,6 +32,7 @@ export function ensureDesktopWorker(): Promise<void> {
         targetId: desktopInstallId,
         enrollmentToken,
       });
+      return true;
     } catch (error) {
       captureTelemetryException(error, {
         tags: {
@@ -37,6 +40,7 @@ export function ensureDesktopWorker(): Promise<void> {
           domain: "cloud",
         },
       });
+      return false;
     }
   });
 }

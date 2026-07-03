@@ -34,7 +34,21 @@ export function useDesktopWorkerEnrollment(): void {
     // Fresh login or a different user in the same app process: enrolling hands
     // the Tauri command a new ticket, which rotates the worker identity and
     // (server-side) revokes the predecessor worker + gateway token.
-    enrolledUserId = authUserId;
-    void ensureDesktopWorker();
+    //
+    // Claim the guard synchronously so concurrent renders don't double-enroll,
+    // but ensureDesktopWorker swallows its own errors — if it fails silently we
+    // must clear the guard, otherwise a single transient failure wedges this
+    // user out of a worker until sign-out/in. Reset only when the guard still
+    // holds the id we set: a newer sign-out or user switch may have already
+    // claimed it, and clobbering that would strand the newer identity. This is
+    // not a retry loop — one reset per failed attempt; the next effect run
+    // (re-bootstrap, status change, or user switch) retries.
+    const enrollingUserId = authUserId;
+    enrolledUserId = enrollingUserId;
+    void ensureDesktopWorker().then((ok) => {
+      if (!ok && enrolledUserId === enrollingUserId) {
+        enrolledUserId = null;
+      }
+    });
   }, [authStatus, authUserId]);
 }
