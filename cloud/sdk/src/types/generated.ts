@@ -728,6 +728,26 @@ export type FailCloudMobilityCleanupItemRequest =
   Schema<"FailMobilityCleanupItemRequest">;
 export type RepairCloudWorkspaceMobilityHandoffRequest =
   Schema<"RepairWorkspaceMobilityHandoffRequest">;
+
+// workspace_move (v2 local<->cloud round-trip) -- see
+// specs/tbd/workspace-migration-v2.md section 2.2/5.3. Distinct from -- and the
+// eventual replacement for -- the CloudMobility* handoff types above.
+export type WorkspaceMoveRuntimeKind = "local" | "cloud" | "ssh";
+export type WorkspaceMovePhase =
+  | "started"
+  | "destination_ready"
+  | "installed"
+  | "cutover"
+  | "completed"
+  | "failed";
+export type WorkspaceMoveCanonicalSide = "source" | "destination";
+export type WorkspaceMoveEndpointRef = Schema<"WorkspaceMoveEndpointRef">;
+export type StartWorkspaceMoveRequest = Schema<"StartWorkspaceMoveRequest">;
+export type InstallWorkspaceMoveRequest = Schema<"InstallWorkspaceMoveRequest">;
+export type FailWorkspaceMoveRequest = Schema<"FailWorkspaceMoveRequest">;
+export type WorkspaceMoveResponse = Schema<"WorkspaceMoveResponse">;
+export type ExportWorkspaceMoveResponse = Schema<"ExportWorkspaceMoveResponse">;
+
 export type CloudAgentCatalogResponse = Schema<"AgentCatalogResponse">;
 export type CloudAgentCatalogAgent = Schema<"AgentCatalogAgent">;
 export type CloudAgentCatalogSession = Schema<"AgentCatalogSession">;

@@ -1255,6 +1255,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workspace-moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Workspace Move Endpoint */
+        post: operations["start_workspace_move_endpoint_v1_cloud_workspace_moves_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspace-moves/{move_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workspace Move Endpoint */
+        get: operations["get_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspace-moves/{move_id}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Install Workspace Move Endpoint */
+        post: operations["install_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspace-moves/{move_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Export Workspace Move Endpoint */
+        post: operations["export_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspace-moves/{move_id}/cutover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cutover Workspace Move Endpoint */
+        post: operations["cutover_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__cutover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspace-moves/{move_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Workspace Move Endpoint */
+        post: operations["complete_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workspace-moves/{move_id}/fail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fail Workspace Move Endpoint */
+        post: operations["fail_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__fail_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worktree-retention-policy": {
         parameters: {
             query?: never;
@@ -3797,6 +3916,25 @@ export interface components {
              */
             received: boolean;
         };
+        /**
+         * ExportWorkspaceMoveResponse
+         * @description Response for POST .../export (cloud->local direction only).
+         */
+        ExportWorkspaceMoveResponse: {
+            /** Moveid */
+            moveId: string;
+            /** Archive */
+            archive: {
+                [key: string]: unknown;
+            };
+        };
+        /** FailWorkspaceMoveRequest */
+        FailWorkspaceMoveRequest: {
+            /** Failurecode */
+            failureCode: string;
+            /** Failuredetail */
+            failureDetail?: string | null;
+        };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
             /** Prompttext */
@@ -3903,6 +4041,23 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+        };
+        /**
+         * InstallWorkspaceMoveRequest
+         * @description Body for POST .../install.
+         *
+         *     ``archive`` is the opaque ``WorkspaceMobilityArchive`` produced by the source
+         *     runtime's export call (local->cloud direction: the server forwards it to the
+         *     destination sandbox's AnyHarness install endpoint). It is unused -- and may be
+         *     omitted -- for the cloud->local direction, where install runs entirely on
+         *     Desktop's own local AnyHarness and this call is just the durable "installed"
+         *     acknowledgement.
+         */
+        InstallWorkspaceMoveRequest: {
+            /** Archive */
+            archive?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** IntegrationAccountResponse */
         IntegrationAccountResponse: {
@@ -4885,6 +5040,22 @@ export interface components {
             /** Organizationid */
             organizationId?: string | null;
         };
+        /** StartWorkspaceMoveRequest */
+        StartWorkspaceMoveRequest: {
+            /**
+             * Repoconfigid
+             * Format: uuid
+             */
+            repoConfigId: string;
+            /** Branch */
+            branch: string;
+            /** Basecommitsha */
+            baseCommitSha: string;
+            source: components["schemas"]["WorkspaceMoveEndpointRef"];
+            destination: components["schemas"]["WorkspaceMoveEndpointRef"];
+            /** Idempotencykey */
+            idempotencyKey: string;
+        };
         /** StripeWebhookAck */
         StripeWebhookAck: {
             /**
@@ -5216,6 +5387,83 @@ export interface components {
             label?: string | null;
             /** Online */
             online?: boolean | null;
+        };
+        /**
+         * WorkspaceMoveEndpointRef
+         * @description One side (source or destination) of a move, as the caller sees it.
+         *
+         *     Only the fields relevant to ``kind`` are meaningful; the rest are ignored.
+         *     Stored verbatim (camelCase keys) into ``workspace_move.source_ref`` /
+         *     ``destination_ref`` -- see the JSONB shape documented in
+         *     ``db/models/cloud/workspace_moves.py``.
+         */
+        WorkspaceMoveEndpointRef: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "local" | "cloud" | "ssh";
+            /** Desktopinstallid */
+            desktopInstallId?: string | null;
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Targetid */
+            targetId?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+        };
+        /** WorkspaceMoveResponse */
+        WorkspaceMoveResponse: {
+            /** Id */
+            id: string;
+            /** Repoconfigid */
+            repoConfigId: string;
+            /** Branch */
+            branch: string;
+            /**
+             * Sourcekind
+             * @enum {string}
+             */
+            sourceKind: "local" | "cloud" | "ssh";
+            /**
+             * Destinationkind
+             * @enum {string}
+             */
+            destinationKind: "local" | "cloud" | "ssh";
+            /** Sourceref */
+            sourceRef: {
+                [key: string]: unknown;
+            };
+            /** Destinationref */
+            destinationRef: {
+                [key: string]: unknown;
+            };
+            /** Basecommitsha */
+            baseCommitSha: string;
+            /**
+             * Phase
+             * @enum {string}
+             */
+            phase: "started" | "destination_ready" | "installed" | "cutover" | "completed" | "failed";
+            /**
+             * Canonicalside
+             * @enum {string}
+             */
+            canonicalSide: "source" | "destination";
+            /** Failurecode */
+            failureCode?: string | null;
+            /** Failuredetail */
+            failureDetail?: string | null;
+            /** Idempotencykey */
+            idempotencyKey: string;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Cutoverat */
+            cutoverAt?: string | null;
+            /** Completedat */
+            completedAt?: string | null;
         };
         /** WorkspaceRuntimeAuthState */
         WorkspaceRuntimeAuthState: {
@@ -7855,6 +8103,233 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_workspace_move_endpoint_v1_cloud_workspace_moves_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartWorkspaceMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMoveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                move_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMoveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                move_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallWorkspaceMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMoveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__export_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                move_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportWorkspaceMoveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cutover_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__cutover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                move_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMoveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                move_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMoveResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fail_workspace_move_endpoint_v1_cloud_workspace_moves__move_id__fail_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                move_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FailWorkspaceMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMoveResponse"];
                 };
             };
             /** @description Validation Error */

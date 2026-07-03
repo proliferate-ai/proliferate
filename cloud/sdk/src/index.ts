@@ -20,6 +20,7 @@ export * from "./client/repos.js";
 export * from "./client/support.js";
 export * from "./client/timing.js";
 export * from "./client/workspaces.js";
+export * from "./client/workspace-moves.js";
 export * from "./client/worktree-policy.js";
 export * from "./streams/sse.js";
 export * from "./types/index.js";

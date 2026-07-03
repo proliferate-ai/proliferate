@@ -442,3 +442,11 @@ export function cloudTargetKey(targetId: string | null) {
 export function cloudWorkspaceKey(workspaceId: string | null) {
   return [...cloudRootKey(), "workspaces", workspaceId] as const;
 }
+
+export function workspaceMovesRootKey() {
+  return [...cloudRootKey(), "workspace-moves"] as const;
+}
+
+export function workspaceMoveKey(moveId: string | null) {
+  return [...workspaceMovesRootKey(), moveId] as const;
+}
