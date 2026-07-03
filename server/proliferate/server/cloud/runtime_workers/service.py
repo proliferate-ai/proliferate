@@ -94,6 +94,14 @@ async def create_desktop_enrollment(
     supplied here is membership-validated and stamped on the enrollment, so the
     worker (and its gateway grant) is scoped to that org for its whole life.
     Org-less users enroll with ``organization_id=None``.
+
+    Accepted v1 tradeoff: the org scope is client-declared. Personal, org-less
+    desktop use must keep working (the desktop also enrolls org-less on cold
+    start before the active org resolves), so the server does not derive or
+    require an org here — which means an org member can obtain an org-less
+    grant (no policy overlay, seeds-only definitions) by omitting the org id.
+    Org policy on the gateway is therefore governance for org-scoped workers,
+    not a hard security boundary against the org's own members.
     """
     if organization_id is not None:
         # A worker must not be scoped to an org the caller does not belong to;

@@ -35,7 +35,11 @@ def _org_allows(grant: IntegrationGatewayGrant, row: ReadyAccountRow) -> bool:
 
     Org-scoped grants get the org overlay: an explicit policy row wins,
     otherwise the definition's default. Org-less grants (``organization_id``
-    NULL) see seeds-with-defaults behavior — no overlay at all.
+    NULL) see seeds-with-defaults behavior — no overlay at all. That org-less
+    escape hatch is a documented v1 tradeoff (see
+    ``create_desktop_enrollment``): enrollment never forces an org, so the
+    overlay governs org-scoped workers rather than hard-blocking members who
+    enroll org-less.
     """
     if grant.organization_id is None:
         return True
