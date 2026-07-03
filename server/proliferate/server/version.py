@@ -63,12 +63,26 @@ def runtime_version() -> str:
 
 
 def worker_version() -> str:
-    """The worker version this server pins; falls back to the server version.
+    """The worker version this server *displays*; falls back to the server version.
 
     Release CI stamps ``WORKER_VERSION`` from the ``proliferate-worker`` crate
     manifest the same way the desktop / runtime pins are stamped from theirs.
+    Display only — the heartbeat pin uses :func:`worker_version_pin`.
     """
     return _env("WORKER_VERSION") or server_version()
+
+
+def worker_version_pin() -> str | None:
+    """The worker version this server pins for self-updates, or ``None``.
+
+    Unlike the display fallbacks above, this pin actively drives binary
+    swaps: sandbox workers download and exec whatever it names on every
+    heartbeat. When ``WORKER_VERSION`` was not stamped (local dev, a plain
+    ``docker build``, self-hosted images) the server-version fallback could
+    never match any worker artifact, so it would drive perpetual update
+    attempts — an unstamped deployment therefore pins nothing.
+    """
+    return _env("WORKER_VERSION")
 
 
 def min_desktop_version() -> str:

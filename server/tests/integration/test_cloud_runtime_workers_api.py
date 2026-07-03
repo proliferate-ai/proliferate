@@ -225,6 +225,59 @@ class TestRuntimeWorkerVersionConvergence:
         assert heartbeat.json()["desiredVersions"] == {"worker": "9.9.9", "anyharness": "8.8.8"}
 
     @pytest.mark.asyncio
+    async def test_heartbeat_omits_worker_pin_when_unstamped(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # No WORKER_VERSION stamp (local dev / plain docker build): pinning
+        # the server-version fallback would drive self-updating workers into
+        # perpetual swap attempts, so the pin must be absent instead.
+        monkeypatch.delenv("WORKER_VERSION", raising=False)
+        auth = await _authed_user(client, db_session, prefix="worker-nopin")
+        token = await _desktop_enrollment_token(client, auth, install_id="install-nopin")
+        enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+        worker_token = enroll.json()["workerToken"]
+
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={},
+        )
+        assert heartbeat.status_code == 200, heartbeat.text
+        assert heartbeat.json()["desiredVersions"]["worker"] is None
+
+    @pytest.mark.asyncio
+    async def test_enroll_and_heartbeat_reject_overlong_metadata(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        # Values wider than the DB columns must 422 at the edge instead of
+        # blowing up as a StringDataRightTruncation 500 mid-transaction.
+        auth = await _authed_user(client, db_session, prefix="worker-long")
+        token = await _desktop_enrollment_token(client, auth, install_id="install-long")
+
+        enroll = await client.post(
+            "/v1/cloud/worker/enroll",
+            json={"enrollmentToken": token, "workerVersion": "v" * 65},
+        )
+        assert enroll.status_code == 422, enroll.text
+
+        # The token survives the rejected request and still enrolls.
+        enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+        assert enroll.status_code == 200, enroll.text
+        worker_token = enroll.json()["workerToken"]
+
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={"anyharnessVersion": "v" * 65},
+        )
+        assert heartbeat.status_code == 422, heartbeat.text
+
+    @pytest.mark.asyncio
     async def test_heartbeat_reports_update_worker_versions(
         self,
         client: AsyncClient,
@@ -309,6 +362,22 @@ class TestWorkerArtifactDownload:
         assert probed == [
             "https://downloads.proliferate.com/worker/stable/1.2.3/macos-aarch64/proliferate-worker"
         ]
+
+    @pytest.mark.asyncio
+    async def test_download_skips_probe_when_pin_unstamped(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("WORKER_VERSION", raising=False)
+        probed = self._stub_probe(monkeypatch, exists=True)
+        response = await client.get("/v1/cloud/worker/download/linux-aarch64/proliferate-worker")
+        assert response.status_code == 302
+        assert response.headers["location"] == (
+            "https://downloads.proliferate.com/worker/stable/linux-aarch64/proliferate-worker"
+        )
+        # No pin, nothing to probe: never build a ".../None/..." URL.
+        assert probed == []
 
     @pytest.mark.asyncio
     async def test_download_rejects_unknown_target_or_asset(

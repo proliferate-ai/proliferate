@@ -5049,7 +5049,7 @@ export interface components {
          */
         WorkerDesiredVersions: {
             /** Worker */
-            worker: string;
+            worker?: string | null;
             /** Anyharness */
             anyharness: string;
         };

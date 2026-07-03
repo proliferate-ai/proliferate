@@ -35,7 +35,7 @@ from proliferate.server.cloud.runtime_workers.models import (
     WorkerHeartbeatResponse,
 )
 from proliferate.server.version import runtime_version as pinned_runtime_version
-from proliferate.server.version import worker_version as pinned_worker_version
+from proliferate.server.version import worker_version_pin as pinned_worker_version
 from proliferate.utils.time import utcnow
 
 _TOKEN_BYTES = 48
@@ -212,7 +212,9 @@ async def worker_artifact_redirect_url(*, target: str, asset: str) -> str:
             status_code=404,
         )
     base = downloads_base_url()
-    pinned = f"{base}/worker/stable/{pinned_worker_version()}/{target}/{asset}"
-    if await versioned_manifest_exists(pinned):
-        return pinned
+    pin = pinned_worker_version()
+    if pin is not None:
+        pinned = f"{base}/worker/stable/{pin}/{target}/{asset}"
+        if await versioned_manifest_exists(pinned):
+            return pinned
     return f"{base}/worker/stable/{target}/{asset}"
