@@ -9096,6 +9096,7 @@
         "required": [
           "objective",
           "status",
+          "sourceKind",
           "native",
           "revision",
           "createdAt",
@@ -9105,6 +9106,13 @@
           "createdAt": {
             "type": "string"
           },
+          "failedReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Typed reason a goal transitioned to `failed`. Cap breaches set\n`max_turns_exhausted` | `max_wall_secs_exhausted`; native failures leave\nthis absent (detail rides `native_status`)."
+          },
           "iterations": {
             "type": [
               "integer",
@@ -9112,6 +9120,24 @@
             ],
             "format": "int64",
             "description": "Claude only."
+          },
+          "maxTurns": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Runtime-enforced cap: max turns the active goal may run before the\nanyharness goal-cap guard fails it. NEVER forwarded to the sidecar.",
+            "minimum": 0
+          },
+          "maxWallSecs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Runtime-enforced cap: max wall-clock seconds the active goal may run.\nNEVER forwarded to the sidecar.",
+            "minimum": 0
           },
           "metReason": {
             "type": [
@@ -9137,6 +9163,17 @@
             "type": "integer",
             "format": "int64",
             "description": "Bumped on every mirrored edit."
+          },
+          "sourceKind": {
+            "$ref": "#/components/schemas/GoalSourceKind",
+            "description": "Provenance: who armed this goal (defaults to `user`)."
+          },
+          "sourceRunId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The workflow run that armed the goal, when `source_kind = workflow`."
           },
           "status": {
             "$ref": "#/components/schemas/GoalStatus"
@@ -9196,6 +9233,15 @@
             "$ref": "#/components/schemas/Goal"
           }
         }
+      },
+      "GoalSourceKind": {
+        "type": "string",
+        "description": "Provenance of a goal — who armed it. Defaults to `user`. `workflow` goals\ncarry the arming run in `Goal::source_run_id`; `agent` marks a goal the\nharness set for itself.",
+        "enum": [
+          "user",
+          "workflow",
+          "agent"
+        ]
       },
       "GoalStatus": {
         "type": "string",
@@ -15018,12 +15064,48 @@
       "SetSessionGoalRequest": {
         "type": "object",
         "properties": {
+          "maxTurns": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Runtime-enforced cap (never forwarded to the sidecar).",
+            "minimum": 0
+          },
+          "maxWallSecs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Runtime-enforced cap (never forwarded to the sidecar).",
+            "minimum": 0
+          },
           "objective": {
             "type": [
               "string",
               "null"
             ],
             "description": "Omitted = status/budget-only patch (codex semantics)."
+          },
+          "sourceKind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GoalSourceKind",
+                "description": "Provenance to stamp on the goal; omitted preserves the existing value\n(a fresh goal defaults to `user`)."
+              }
+            ]
+          },
+          "sourceRunId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The workflow run arming the goal; stamped alongside `source_kind`."
           },
           "status": {
             "oneOf": [

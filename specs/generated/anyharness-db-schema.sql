@@ -73,7 +73,7 @@ CREATE TABLE goals (
     native_state_json TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
-);
+, source_kind TEXT NOT NULL DEFAULT 'user', source_run_id TEXT, max_turns INTEGER, max_wall_secs INTEGER, failed_reason TEXT, guard_turns_used INTEGER NOT NULL DEFAULT 0, guard_started_at TEXT);
 
 -- table: mobility_archive_installs
 CREATE TABLE mobility_archive_installs (

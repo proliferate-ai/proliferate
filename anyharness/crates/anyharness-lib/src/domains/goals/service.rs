@@ -1,9 +1,9 @@
 use anyharness_contract::v1::{
-    Goal, GoalClearedPayload, GoalMetPayload, GoalStatus, GoalUpdatedPayload, SessionEvent,
-    SessionEventEnvelope,
+    Goal, GoalClearedPayload, GoalMetPayload, GoalSourceKind, GoalStatus, GoalUpdatedPayload,
+    SessionEvent, SessionEventEnvelope,
 };
 
-use super::model::{GoalPendingOp, GoalRecord};
+use super::model::{GoalFailReason, GoalGuardDecision, GoalPendingOp, GoalRecord};
 use super::store::GoalStore;
 use super::wire::GoalWire;
 use crate::domains::sessions::model::SessionEventRecord;
@@ -195,6 +195,14 @@ impl GoalService {
                 GoalTransition::Drop => return Ok(GoalEventBatch::unchanged(None)),
                 GoalTransition::Update => {
                     let existing = latest.expect("update transition implies a head row");
+                    // Caps, provenance and the cap-guard counters are
+                    // anyharness-side augmentation the wire never carries, so
+                    // they ride through `..existing`. The one exception: an
+                    // objective change reopens the cap window (turns and
+                    // wall-clock reset), matching Claude-native goal semantics
+                    // where a bare edit keeps the count but a new objective
+                    // starts fresh.
+                    let objective_changed = existing.objective != wire.objective;
                     let next = GoalRecord {
                         objective: wire.objective.clone(),
                         status,
@@ -208,6 +216,16 @@ impl GoalService {
                         pending_op: None,
                         revision: existing.revision,
                         native_state_json,
+                        guard_turns_used: if objective_changed {
+                            0
+                        } else {
+                            existing.guard_turns_used
+                        },
+                        guard_started_at: if objective_changed {
+                            Some(now.clone())
+                        } else {
+                            existing.guard_started_at.clone()
+                        },
                         updated_at: now,
                         ..existing.clone()
                     };
@@ -222,6 +240,10 @@ impl GoalService {
                     next
                 }
                 GoalTransition::Insert => {
+                    // A fresh goal lifetime. Caps and provenance are stamped
+                    // separately by the arming request (they never ride the
+                    // native wire); the record starts with the defaults and the
+                    // cap window opens now.
                     let goal = GoalRecord {
                         id: uuid::Uuid::new_v4().to_string(),
                         workspace_id: context.workspace_id.clone(),
@@ -230,14 +252,21 @@ impl GoalService {
                         status,
                         native_status: wire.native_status.clone(),
                         token_budget: wire.token_budget,
+                        max_turns: None,
+                        max_wall_secs: None,
                         tokens_used: wire.tokens_used,
                         time_used_seconds: wire.time_used_seconds,
                         met_reason: wire.met_reason.clone(),
+                        failed_reason: None,
                         iterations: wire.iterations,
+                        source_kind: GoalSourceKind::User,
+                        source_run_id: None,
                         native: wire.native,
                         pending_op: None,
                         revision: 1,
                         native_state_json,
+                        guard_turns_used: 0,
+                        guard_started_at: Some(now.clone()),
                         created_at: now.clone(),
                         updated_at: now,
                     };
@@ -268,7 +297,14 @@ impl GoalService {
             let Some(existing) = GoalStore::find_current_tx(tx, &context.session_id)? else {
                 return Ok(GoalEventBatch::unchanged(None));
             };
-            if existing.status == GoalStatus::Cleared {
+            // A clear against a mirror that already `failed` leaves the sticky
+            // failure intact: the fleet view shows the outcome + reason, not
+            // "cleared". This is also what keeps a cap-guard `failed` from being
+            // clobbered by the native `goal_cleared` echo of the guard's own
+            // stop-the-loop clear. (A `met` head still transitions to cleared —
+            // the completed goal was dismissed; `cleared` is defensive since
+            // `find_current` never surfaces a cleared head.)
+            if matches!(existing.status, GoalStatus::Failed | GoalStatus::Cleared) {
                 return Ok(GoalEventBatch::unchanged(Some(existing)));
             }
             let goal = GoalRecord {
@@ -293,6 +329,154 @@ impl GoalService {
             })
         })
     }
+
+    /// Stamps anyharness-side arming metadata (caps + provenance) onto the
+    /// session's current goal row after the native set round-trips. The native
+    /// harness has no concept of these fields, so they are written locally and
+    /// preserved across subsequent native updates. Only the fields the request
+    /// carried are overwritten (an omitted field on an edit keeps its prior
+    /// value); nothing else moves — no revision bump, no event.
+    pub fn stamp_arming(
+        &self,
+        session_id: &str,
+        arming: GoalArming,
+    ) -> anyhow::Result<Option<GoalRecord>> {
+        if arming.is_empty() {
+            return self.store.find_current(session_id);
+        }
+        self.store.with_tx_anyhow(|tx| {
+            let Some(mut goal) = GoalStore::find_current_tx(tx, session_id)? else {
+                return Ok(None);
+            };
+            if let Some(source_kind) = arming.source_kind {
+                goal.source_kind = source_kind;
+            }
+            if arming.source_run_id.is_some() {
+                goal.source_run_id = arming.source_run_id.clone();
+            }
+            if arming.max_turns.is_some() {
+                goal.max_turns = arming.max_turns;
+            }
+            if arming.max_wall_secs.is_some() {
+                goal.max_wall_secs = arming.max_wall_secs;
+            }
+            goal.updated_at = chrono::Utc::now().to_rfc3339();
+            GoalStore::update_goal(tx, &goal)?;
+            Ok(Some(goal))
+        })
+    }
+
+    /// Counts one finished turn against the session's active goal and returns
+    /// the cap-guard verdict. Sessions with no active goal, a terminal goal, or
+    /// no caps do zero writes and return `None`. Only when a cap is present is
+    /// the turn counter bumped (internal bookkeeping — never a revision bump).
+    pub fn record_turn(&self, session_id: &str) -> anyhow::Result<Option<GoalGuardDecision>> {
+        self.store.with_tx_anyhow(|tx| {
+            let Some(goal) = GoalStore::find_current_tx(tx, session_id)? else {
+                return Ok(None);
+            };
+            if goal.status.is_terminal() {
+                return Ok(None);
+            }
+            if goal.max_turns.is_none() && goal.max_wall_secs.is_none() {
+                return Ok(None);
+            }
+            let turns_used = goal.guard_turns_used + 1;
+            GoalStore::update_guard_turns(tx, &goal.id, turns_used)?;
+
+            if let Some(max_turns) = goal.max_turns {
+                if turns_used >= i64::from(max_turns) {
+                    return Ok(Some(GoalGuardDecision::Breached(
+                        GoalFailReason::MaxTurnsExhausted,
+                    )));
+                }
+            }
+            if let Some(max_wall_secs) = goal.max_wall_secs {
+                if let Some(elapsed) = goal
+                    .guard_started_at
+                    .as_deref()
+                    .and_then(elapsed_secs_since)
+                {
+                    if elapsed >= max_wall_secs {
+                        return Ok(Some(GoalGuardDecision::Breached(
+                            GoalFailReason::MaxWallSecsExhausted,
+                        )));
+                    }
+                }
+            }
+            Ok(None)
+        })
+    }
+
+    /// Fails the session's current goal for a breached runtime cap: transitions
+    /// the mirror to `failed` with the typed `failed_reason`, bumps revision and
+    /// emits a `goal_updated` event. A no-op (no envelope) when there is no
+    /// current goal or it is already terminal.
+    pub fn fail_current_goal(
+        &self,
+        context: GoalEventContext,
+        reason: GoalFailReason,
+    ) -> anyhow::Result<GoalEventBatch> {
+        self.store.with_tx_anyhow(|tx| {
+            let Some(existing) = GoalStore::find_current_tx(tx, &context.session_id)? else {
+                return Ok(GoalEventBatch::unchanged(None));
+            };
+            if existing.status.is_terminal() {
+                return Ok(GoalEventBatch::unchanged(Some(existing)));
+            }
+            let goal = GoalRecord {
+                status: GoalStatus::Failed,
+                failed_reason: Some(reason.as_str().to_string()),
+                pending_op: None,
+                revision: existing.revision + 1,
+                updated_at: chrono::Utc::now().to_rfc3339(),
+                ..existing
+            };
+            GoalStore::update_goal(tx, &goal)?;
+            let envelope = envelope(
+                &context,
+                context.next_seq,
+                SessionEvent::GoalUpdated(GoalUpdatedPayload {
+                    goal: goal.to_contract(),
+                }),
+            );
+            GoalStore::insert_event(tx, &event_record(&envelope)?)?;
+            Ok(GoalEventBatch {
+                goal: Some(goal),
+                envelopes: vec![envelope],
+            })
+        })
+    }
+}
+
+/// The anyharness-side arming metadata a set-goal request carries beyond the
+/// native fields. Caps are runtime-enforced and provenance records who armed
+/// the goal; neither is ever forwarded to the sidecar.
+#[derive(Debug, Clone, Default)]
+pub struct GoalArming {
+    pub source_kind: Option<GoalSourceKind>,
+    pub source_run_id: Option<String>,
+    pub max_turns: Option<u32>,
+    pub max_wall_secs: Option<u64>,
+}
+
+impl GoalArming {
+    fn is_empty(&self) -> bool {
+        self.source_kind.is_none()
+            && self.source_run_id.is_none()
+            && self.max_turns.is_none()
+            && self.max_wall_secs.is_none()
+    }
+}
+
+/// Whole seconds elapsed since an RFC3339 instant, clamped at 0. `None` if the
+/// timestamp does not parse (a malformed anchor never fires a cap).
+fn elapsed_secs_since(started_at: &str) -> Option<u64> {
+    let started = chrono::DateTime::parse_from_rfc3339(started_at).ok()?;
+    let elapsed = chrono::Utc::now()
+        .signed_duration_since(started.with_timezone(&chrono::Utc))
+        .num_seconds();
+    Some(elapsed.max(0) as u64)
 }
 
 /// Decides how an incoming native goal payload transitions the mirror,

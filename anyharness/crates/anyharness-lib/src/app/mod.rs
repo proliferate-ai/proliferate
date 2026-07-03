@@ -21,7 +21,7 @@ use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
-use crate::domains::goals::hooks::GoalSessionHooks;
+use crate::domains::goals::hooks::{GoalGuardExtension, GoalSessionHooks};
 use crate::domains::goals::runtime::GoalRuntime;
 use crate::domains::goals::service::GoalService;
 use crate::domains::goals::store::GoalStore;
@@ -301,6 +301,7 @@ impl AppState {
             workspace_access_gate.clone(),
         ));
         let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
+        let goal_guard_extension = Arc::new(GoalGuardExtension::new(goal_runtime.clone()));
         let session_extensions: Vec<
             Arc<dyn crate::domains::sessions::extensions::SessionExtension>,
         > = vec![
@@ -309,6 +310,7 @@ impl AppState {
             review_session_hooks.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
+            goal_guard_extension,
         ];
         let session_runtime = Arc::new(SessionRuntime::new(
             session_service.clone(),

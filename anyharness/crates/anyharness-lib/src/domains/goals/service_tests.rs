@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use anyharness_contract::v1::{GoalStatus, SessionEvent};
+use anyharness_contract::v1::{GoalSourceKind, GoalStatus, SessionEvent};
 use serde_json::json;
 
-use super::model::GoalPendingOp;
-use super::service::{GoalEventContext, GoalNativeEventKind, GoalService};
+use super::model::{GoalFailReason, GoalGuardDecision, GoalPendingOp};
+use super::service::{GoalArming, GoalEventContext, GoalNativeEventKind, GoalService};
 use super::session_observer::GoalSessionObserver;
 use super::store::GoalStore;
 use super::wire::{GoalWire, GoalWireStatus};
@@ -482,6 +482,312 @@ fn missing_wire_payload_on_update_is_an_error() {
         .ingest_native_event(context(1), GoalNativeEventKind::Updated, None)
         .expect_err("update without goal payload must fail");
     assert!(error.to_string().contains("missing its goal"));
+}
+
+// ---------------------------------------------------------------------------
+// Caps + provenance + the cap guard
+// ---------------------------------------------------------------------------
+
+fn armed_active_goal(service: &GoalService, arming: GoalArming) {
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal");
+    service
+        .stamp_arming("session-1", arming)
+        .expect("stamp arming");
+}
+
+#[test]
+fn caps_and_provenance_round_trip_through_the_store() {
+    let service = test_service();
+    armed_active_goal(
+        &service,
+        GoalArming {
+            source_kind: Some(GoalSourceKind::Workflow),
+            source_run_id: Some("run-7".to_string()),
+            max_turns: Some(12),
+            max_wall_secs: Some(600),
+        },
+    );
+
+    let goal = service
+        .current_goal("session-1")
+        .expect("load current")
+        .expect("current goal");
+    assert_eq!(goal.source_kind, GoalSourceKind::Workflow);
+    assert_eq!(goal.source_run_id.as_deref(), Some("run-7"));
+    assert_eq!(goal.max_turns, Some(12));
+    assert_eq!(goal.max_wall_secs, Some(600));
+    // Stamping caps/provenance is bookkeeping, never a mirror-state edit.
+    assert_eq!(goal.revision, 1);
+    // The contract projection carries the same values.
+    let contract = goal.to_contract();
+    assert_eq!(contract.max_turns, Some(12));
+    assert_eq!(contract.max_wall_secs, Some(600));
+    assert_eq!(contract.source_kind, GoalSourceKind::Workflow);
+    assert_eq!(contract.source_run_id.as_deref(), Some("run-7"));
+}
+
+#[test]
+fn fresh_goal_defaults_to_user_provenance_and_no_caps() {
+    let service = test_service();
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal");
+
+    let goal = service
+        .current_goal("session-1")
+        .expect("load current")
+        .expect("current goal");
+    assert_eq!(goal.source_kind, GoalSourceKind::User);
+    assert_eq!(goal.source_run_id, None);
+    assert_eq!(goal.max_turns, None);
+    assert_eq!(goal.max_wall_secs, None);
+}
+
+#[test]
+fn stamp_arming_preserves_omitted_fields_across_edits() {
+    let service = test_service();
+    armed_active_goal(
+        &service,
+        GoalArming {
+            source_kind: Some(GoalSourceKind::Workflow),
+            source_run_id: Some("run-7".to_string()),
+            max_turns: Some(12),
+            max_wall_secs: None,
+        },
+    );
+
+    // A later stamp that only lowers max_turns must keep the provenance intact.
+    service
+        .stamp_arming(
+            "session-1",
+            GoalArming {
+                max_turns: Some(3),
+                ..GoalArming::default()
+            },
+        )
+        .expect("re-stamp");
+    let goal = service
+        .current_goal("session-1")
+        .expect("load current")
+        .expect("current goal");
+    assert_eq!(goal.max_turns, Some(3));
+    assert_eq!(goal.source_kind, GoalSourceKind::Workflow);
+    assert_eq!(goal.source_run_id.as_deref(), Some("run-7"));
+}
+
+#[test]
+fn record_turn_is_a_noop_without_caps() {
+    let service = test_service();
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal");
+
+    // No caps: the guard neither counts nor fires (existing behavior unchanged).
+    for _ in 0..5 {
+        assert_eq!(service.record_turn("session-1").expect("record turn"), None);
+    }
+    let goal = service
+        .current_goal("session-1")
+        .expect("load current")
+        .expect("current goal");
+    assert_eq!(goal.guard_turns_used, 0);
+    assert_eq!(goal.status, GoalStatus::Active);
+    assert_eq!(goal.revision, 1);
+}
+
+#[test]
+fn record_turn_breaches_on_max_turns() {
+    let service = test_service();
+    armed_active_goal(
+        &service,
+        GoalArming {
+            max_turns: Some(2),
+            ..GoalArming::default()
+        },
+    );
+
+    // Turn 1: counted, under the cap.
+    assert_eq!(service.record_turn("session-1").expect("turn 1"), None);
+    assert_eq!(
+        service
+            .current_goal("session-1")
+            .expect("load")
+            .expect("goal")
+            .guard_turns_used,
+        1
+    );
+    // Turn 2: hits the cap.
+    assert_eq!(
+        service.record_turn("session-1").expect("turn 2"),
+        Some(GoalGuardDecision::Breached(
+            GoalFailReason::MaxTurnsExhausted
+        ))
+    );
+}
+
+#[test]
+fn record_turn_breaches_on_wall_clock() {
+    let service = test_service();
+    armed_active_goal(
+        &service,
+        GoalArming {
+            max_wall_secs: Some(60),
+            ..GoalArming::default()
+        },
+    );
+    // Backdate the cap window so a single turn crosses the wall-clock cap.
+    let past = (chrono::Utc::now() - chrono::Duration::seconds(120)).to_rfc3339();
+    service
+        .store()
+        .with_tx_anyhow(|tx| {
+            tx.execute(
+                "UPDATE goals SET guard_started_at = ?2 WHERE session_id = ?1",
+                rusqlite::params!["session-1", past],
+            )?;
+            Ok(())
+        })
+        .expect("backdate guard window");
+
+    assert_eq!(
+        service.record_turn("session-1").expect("record turn"),
+        Some(GoalGuardDecision::Breached(
+            GoalFailReason::MaxWallSecsExhausted
+        ))
+    );
+}
+
+#[test]
+fn objective_change_resets_the_turn_counter() {
+    let service = test_service();
+    armed_active_goal(
+        &service,
+        GoalArming {
+            max_turns: Some(5),
+            ..GoalArming::default()
+        },
+    );
+    service.record_turn("session-1").expect("turn 1");
+    assert_eq!(
+        service
+            .current_goal("session-1")
+            .expect("load")
+            .expect("goal")
+            .guard_turns_used,
+        1
+    );
+
+    // Editing the objective reopens the cap window: counter back to zero, caps
+    // preserved. A bare status/accounting edit would keep the count.
+    service
+        .ingest_native_event(
+            context(2),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green and fast", GoalWireStatus::Active)),
+        )
+        .expect("ingest objective edit");
+    let goal = service
+        .current_goal("session-1")
+        .expect("load")
+        .expect("goal");
+    assert_eq!(goal.guard_turns_used, 0);
+    assert_eq!(goal.max_turns, Some(5));
+}
+
+#[test]
+fn bare_edit_keeps_the_turn_counter() {
+    let service = test_service();
+    armed_active_goal(
+        &service,
+        GoalArming {
+            max_turns: Some(5),
+            ..GoalArming::default()
+        },
+    );
+    service.record_turn("session-1").expect("turn 1");
+
+    // Same objective, only accounting moves: the counter must survive.
+    let mut edited = wire("make CI green", GoalWireStatus::Active);
+    edited.tokens_used = Some(42);
+    service
+        .ingest_native_event(context(2), GoalNativeEventKind::Updated, Some(edited))
+        .expect("ingest accounting edit");
+    assert_eq!(
+        service
+            .current_goal("session-1")
+            .expect("load")
+            .expect("goal")
+            .guard_turns_used,
+        1
+    );
+}
+
+#[test]
+fn fail_current_goal_transitions_failed_with_reason_and_emits_goal_updated() {
+    let service = test_service();
+    armed_active_goal(
+        &service,
+        GoalArming {
+            max_turns: Some(1),
+            ..GoalArming::default()
+        },
+    );
+
+    let batch = service
+        .fail_current_goal(context(2), GoalFailReason::MaxTurnsExhausted)
+        .expect("fail goal");
+    let goal = batch.goal.expect("goal record");
+    assert_eq!(goal.status, GoalStatus::Failed);
+    assert_eq!(goal.failed_reason.as_deref(), Some("max_turns_exhausted"));
+    assert_eq!(goal.revision, 2);
+    assert_eq!(batch.envelopes.len(), 1);
+    assert_eq!(batch.envelopes[0].event.event_type(), "goal_updated");
+    let SessionEvent::GoalUpdated(payload) = &batch.envelopes[0].event else {
+        panic!("expected goal_updated event carrying the failure");
+    };
+    assert_eq!(payload.goal.status, GoalStatus::Failed);
+    assert_eq!(
+        payload.goal.failed_reason.as_deref(),
+        Some("max_turns_exhausted")
+    );
+
+    // The failed result is sticky: the guard's own native clear echo (a
+    // goal_cleared notification) must not clobber it back to cleared.
+    let echo = service
+        .ingest_native_event(context(3), GoalNativeEventKind::Cleared, None)
+        .expect("ingest guard clear echo");
+    assert!(echo.envelopes.is_empty());
+    assert_eq!(
+        service
+            .current_goal("session-1")
+            .expect("load current")
+            .expect("current goal")
+            .status,
+        GoalStatus::Failed
+    );
+}
+
+#[test]
+fn fail_current_goal_is_a_noop_without_a_goal() {
+    let service = test_service();
+    let batch = service
+        .fail_current_goal(context(1), GoalFailReason::MaxWallSecsExhausted)
+        .expect("fail with no goal");
+    assert!(batch.envelopes.is_empty());
+    assert!(batch.goal.is_none());
 }
 
 // ---------------------------------------------------------------------------

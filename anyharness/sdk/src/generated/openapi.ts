@@ -2510,10 +2510,28 @@ export interface components {
         Goal: {
             createdAt: string;
             /**
+             * @description Typed reason a goal transitioned to `failed`. Cap breaches set
+             *     `max_turns_exhausted` | `max_wall_secs_exhausted`; native failures leave
+             *     this absent (detail rides `native_status`).
+             */
+            failedReason?: string | null;
+            /**
              * Format: int64
              * @description Claude only.
              */
             iterations?: number | null;
+            /**
+             * Format: int32
+             * @description Runtime-enforced cap: max turns the active goal may run before the
+             *     anyharness goal-cap guard fails it. NEVER forwarded to the sidecar.
+             */
+            maxTurns?: number | null;
+            /**
+             * Format: int64
+             * @description Runtime-enforced cap: max wall-clock seconds the active goal may run.
+             *     NEVER forwarded to the sidecar.
+             */
+            maxWallSecs?: number | null;
             /**
              * @description Claude evaluator reason; always absent for codex (terminal detail is
              *     in `native_status`).
@@ -2528,6 +2546,10 @@ export interface components {
              * @description Bumped on every mirrored edit.
              */
             revision: number;
+            /** @description Provenance: who armed this goal (defaults to `user`). */
+            sourceKind: components["schemas"]["GoalSourceKind"];
+            /** @description The workflow run that armed the goal, when `source_kind = workflow`. */
+            sourceRunId?: string | null;
             status: components["schemas"]["GoalStatus"];
             /** Format: int64 */
             timeUsedSeconds?: number | null;
@@ -2549,6 +2571,13 @@ export interface components {
         GoalMetPayload: {
             goal: components["schemas"]["Goal"];
         };
+        /**
+         * @description Provenance of a goal — who armed it. Defaults to `user`. `workflow` goals
+         *     carry the arming run in `Goal::source_run_id`; `agent` marks a goal the
+         *     harness set for itself.
+         * @enum {string}
+         */
+        GoalSourceKind: "user" | "workflow" | "agent";
         /**
          * @description Normalized goal status across harnesses (GoalPort wire contract v1).
          *     Non-terminal: `active | paused | blocked`; terminal: `met | failed |
@@ -3879,8 +3908,21 @@ export interface components {
             session: components["schemas"]["Session"];
         };
         SetSessionGoalRequest: {
+            /**
+             * Format: int32
+             * @description Runtime-enforced cap (never forwarded to the sidecar).
+             */
+            maxTurns?: number | null;
+            /**
+             * Format: int64
+             * @description Runtime-enforced cap (never forwarded to the sidecar).
+             */
+            maxWallSecs?: number | null;
             /** @description Omitted = status/budget-only patch (codex semantics). */
             objective?: string | null;
+            sourceKind?: null | components["schemas"]["GoalSourceKind"];
+            /** @description The workflow run arming the goal; stamped alongside `source_kind`. */
+            sourceRunId?: string | null;
             status?: null | components["schemas"]["GoalArmState"];
             /** Format: int64 */
             tokenBudget?: number | null;
