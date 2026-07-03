@@ -4,7 +4,9 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPage";
 import { MainPage } from "@/pages/MainPage";
 import { SettingsPage } from "@/pages/SettingsPage";
-import { WorkflowsPage } from "@/pages/WorkflowsPage";
+import { WorkflowsHomePage } from "@/pages/WorkflowsHomePage";
+import { WorkflowEditorPage } from "@/pages/WorkflowEditorPage";
+import { WorkflowRunPage } from "@/pages/WorkflowRunPage";
 import { WorkspacesPage } from "@/pages/WorkspacesPage";
 import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment";
 import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
@@ -58,8 +60,10 @@ export function AuthenticatedAppHost({
       ) : isHomeRoute ? null : (
         <Routes>
           <Route path="setup" element={<Navigate to={APP_ROUTES.home} replace />} />
-          <Route path="workflows" element={<WorkflowsPage />} />
-          <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
+          <Route path="workflows" element={<WorkflowsHomePage />} />
+          <Route path="workflows/:workflowId" element={<WorkflowEditorPage />} />
+          <Route path="workflows/:workflowId/edit" element={<WorkflowEditorPage />} />
+          <Route path="workflows/:workflowId/runs/:runId" element={<WorkflowRunPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
           <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} extractLastSegment />} />
           <Route path="workspaces" element={<WorkspacesPage />} />
