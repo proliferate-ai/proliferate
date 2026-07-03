@@ -6,7 +6,6 @@ import { MainPage } from "@/pages/MainPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { WorkflowsPage } from "@/pages/WorkflowsPage";
 import { WorkspacesPage } from "@/pages/WorkspacesPage";
-import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment";
 import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
@@ -22,7 +21,6 @@ export function AuthenticatedAppHost({
   SettingsComponent = SettingsPage,
 }: AuthenticatedAppHostProps = {}) {
   useOrganizationSelectionLifecycle();
-  useDesktopWorkerEnrollment();
   const location = useLocation();
   const isSettingsRoute = location.pathname === APP_ROUTES.settings;
   const lastNonSettingsHrefRef = useRef<string>(APP_ROUTES.home);
