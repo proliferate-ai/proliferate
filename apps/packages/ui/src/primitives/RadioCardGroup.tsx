@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 import { Check } from "../icons/core";
 
 export interface RadioCardOption<Value extends string = string> {
@@ -60,11 +60,11 @@ export function RadioCardGroup<Value extends string>({
               </span>
             ) : null}
             <span className="min-w-0">
-              <span className="block text-[13px] font-medium leading-[1.3] text-foreground">
+              <span className="block text-ui font-medium text-foreground">
                 {option.label}
               </span>
               {option.description ? (
-                <span className="mt-[3px] block text-[12px] leading-[1.45] text-muted-foreground">
+                <span className="mt-[3px] block text-ui-sm text-muted-foreground">
                   {option.description}
                 </span>
               ) : null}
