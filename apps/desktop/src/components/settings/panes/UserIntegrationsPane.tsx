@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
@@ -19,7 +20,11 @@ import {
   isTerminalIntegrationOauthFlowStatus,
 } from "@/lib/domain/cloud/integrations";
 import { buildSettingsHref, type SettingsFocus } from "@/lib/domain/settings/navigation";
-import { integrationOauthReturnToast } from "@/lib/domain/settings/integrations-presentation";
+import {
+  filterIntegrationsByQuery,
+  integrationOauthReturnToast,
+  integrationSearchState,
+} from "@/lib/domain/settings/integrations-presentation";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 interface UserIntegrationsPaneProps {
@@ -56,6 +61,15 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
     definitionId: string;
     flowId: string;
   } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  // Derive the bar's visibility and the effective query together: if the list
+  // shrinks below the threshold the input hides and filtering resets to empty
+  // in the same render, so a phantom "No integrations found" can never show.
+  const { showSearch, activeQuery } = integrationSearchState(integrations.length, searchQuery);
+  const filteredIntegrations = useMemo(
+    () => filterIntegrationsByQuery(integrations, activeQuery),
+    [integrations, activeQuery],
+  );
 
   // Poll the in-flight OAuth flow while the browser handoff is pending.
   const oauthFlowQuery = useCloudIntegrationOauthFlow(pendingOauth?.flowId ?? null);
@@ -203,22 +217,35 @@ export function UserIntegrationsPane({ focus = {} }: UserIntegrationsPaneProps) 
         <SettingsEmptyState size="compact" title="No integrations are available yet." />
       ) : (
         <SettingsSection title="Available integrations">
-          {integrations.map((integration) => (
-            <IntegrationRow
-              key={integration.definitionId}
-              integration={integration}
-              oauthPending={pendingOauth?.definitionId === integration.definitionId}
-              connecting={
-                connectingDefinitionId === integration.definitionId && authenticating
-              }
-              cancellingOauth={cancellingOauthFlow}
-              onConnect={handleConnect}
-              onCancelOauth={() => {
-                void handleCancelOauth();
-              }}
-              onRequestDisconnect={setDisconnectTarget}
+          {showSearch ? (
+            <Input
+              aria-label="Search integrations"
+              className="mb-2 h-8 px-2"
+              placeholder="Search integrations"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
             />
-          ))}
+          ) : null}
+          {filteredIntegrations.length === 0 ? (
+            <p className="px-1 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
+          ) : (
+            filteredIntegrations.map((integration) => (
+              <IntegrationRow
+                key={integration.definitionId}
+                integration={integration}
+                oauthPending={pendingOauth?.definitionId === integration.definitionId}
+                connecting={
+                  connectingDefinitionId === integration.definitionId && authenticating
+                }
+                cancellingOauth={cancellingOauthFlow}
+                onConnect={handleConnect}
+                onCancelOauth={() => {
+                  void handleCancelOauth();
+                }}
+                onRequestDisconnect={setDisconnectTarget}
+              />
+            ))
+          )}
         </SettingsSection>
       )}
 

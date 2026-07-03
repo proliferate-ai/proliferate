@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
@@ -14,6 +15,10 @@ import {
   useAdminIntegrationDefinitions,
 } from "@/hooks/access/cloud/integrations/use-admin-integration-definitions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import {
+  filterIntegrationsByQuery,
+  integrationSearchState,
+} from "@/lib/domain/settings/integrations-presentation";
 import {
   adminIntegrationAuthKindLabel,
   adminIntegrationEnabledView,
@@ -44,6 +49,7 @@ export function OrganizationIntegrationsPane() {
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [togglingDefinitionId, setTogglingDefinitionId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   async function handleToggle(definition: AdminIntegrationDefinition, enabled: boolean) {
     setTogglingDefinitionId(definition.definitionId);
@@ -64,6 +70,14 @@ export function OrganizationIntegrationsPane() {
   }
 
   const definitions = definitionsQuery.data ?? [];
+  // Derive the bar's visibility and the effective query together: if the list
+  // shrinks below the threshold the input hides and filtering resets to empty
+  // in the same render, so a phantom "No integrations found" can never show.
+  const { showSearch, activeQuery } = integrationSearchState(definitions.length, searchQuery);
+  const filteredDefinitions = useMemo(
+    () => filterIntegrationsByQuery(definitions, activeQuery),
+    [definitions, activeQuery],
+  );
 
   return (
     <section className="space-y-6">
@@ -110,7 +124,19 @@ export function OrganizationIntegrationsPane() {
         <SettingsEmptyState size="compact" title="No integrations are available yet." />
       ) : (
         <SettingsSection title="Available integrations">
-          {definitions.map((definition) => {
+          {showSearch ? (
+            <Input
+              aria-label="Search integrations"
+              className="mb-2 h-8 px-2"
+              placeholder="Search integrations"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          ) : null}
+          {filteredDefinitions.length === 0 ? (
+            <p className="px-1 py-3 text-ui-sm text-muted-foreground">No integrations found</p>
+          ) : null}
+          {filteredDefinitions.map((definition) => {
             const enabledView = adminIntegrationEnabledView(definition);
             return (
               <div
