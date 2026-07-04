@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
 from typing import Protocol
@@ -10,10 +11,13 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.integrations.sandbox import get_sandbox_provider
 from proliferate.server.cloud.cloud_sandboxes.service import (
     ensure_cloud_sandbox_ready,
     load_cloud_sandbox_runtime_access,
 )
+
+logger = logging.getLogger("proliferate.cloud.gateway")
 
 
 class _UserWithId(Protocol):
@@ -67,6 +71,11 @@ def _remember_gateway_access(
     return access
 
 
+def invalidate_gateway_access_for_user(user_id: UUID) -> None:
+    """Remove cached gateway access so the next request re-resolves (and re-wakes)."""
+    _gateway_access_cache.pop(user_id, None)
+
+
 def _reset_cloud_sandbox_gateway_access_cache_for_tests() -> None:
     _gateway_access_cache.clear()
     _gateway_access_locks.clear()
@@ -95,6 +104,25 @@ async def _resolve_cloud_sandbox_gateway_access(
 ) -> CloudSandboxGatewayAccess:
     sandbox = await ensure_cloud_sandbox_ready(db, user)
     upstream_base_url, upstream_token, _data_key = await load_cloud_sandbox_runtime_access(sandbox)
+
+    # Ensure the sandbox VM is awake before proxying traffic to it.
+    # E2B sandboxes may be paused after inactivity; resume_sandbox reconnects
+    # (and auto-resumes) the VM so the gateway proxy does not hit a cold host.
+    provider_sandbox_id = sandbox.e2b_sandbox_id
+    template_ref = sandbox.e2b_template_ref
+    if provider_sandbox_id is not None and template_ref is not None:
+        try:
+            provider = get_sandbox_provider(template_ref)
+            await provider.resume_sandbox(provider_sandbox_id)
+        except Exception:
+            logger.warning(
+                "gateway wake: resume_sandbox failed for sandbox_id=%s user=%s, "
+                "proxy will attempt connection anyway",
+                provider_sandbox_id,
+                user.id,
+                exc_info=True,
+            )
+
     return CloudSandboxGatewayAccess(
         upstream_base_url=upstream_base_url,
         upstream_token=upstream_token,

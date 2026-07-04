@@ -7,6 +7,7 @@ import pytest
 from fastapi import Request, WebSocket
 from starlette.datastructures import QueryParams
 
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway import proxy
 
 
@@ -163,6 +164,75 @@ async def test_http_proxy_returns_499_when_client_disconnects_before_forwarding(
     )
 
     assert response.status_code == 499
+
+
+@pytest.mark.asyncio
+async def test_http_proxy_raises_503_cloud_sandbox_resuming_on_connect_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FailingAsyncClient:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def build_request(self, *_args: object, **_kwargs: object) -> httpx.Request:
+            return httpx.Request("POST", "https://sandbox.example.test/v1/sessions")
+
+        async def send(self, *_args: object, **_kwargs: object) -> object:
+            raise httpx.ConnectError("Connection refused")
+
+        async def aclose(self) -> None:
+            pass
+
+    monkeypatch.setattr(proxy.httpx, "AsyncClient", _FailingAsyncClient)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await proxy.proxy_http_to_anyharness(
+            _request(),
+            upstream_base_url="https://sandbox.example.test",
+            upstream_token="sandbox-token",
+            path="v1/sessions/ws/encoded",
+        )
+
+    assert exc_info.value.code == "cloud_sandbox_resuming"
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.headers["Retry-After"] == "5"
+
+
+@pytest.mark.asyncio
+async def test_websocket_proxy_raises_cloud_api_error_on_connect_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeWebSocket:
+        scope = {
+            "raw_path": b"/v1/gateway/cloud-sandbox/anyharness/v1/terminals/ws",
+        }
+        query_params = QueryParams("access_token=product-token")
+        headers = {"x-client-header": "kept"}
+
+    async def _failing_connect(*_args: object, **_kwargs: object) -> object:
+        raise OSError("Connection refused")
+
+    # websockets.connect is a context manager; patch it at the module level
+    import contextlib
+
+    @contextlib.asynccontextmanager
+    async def _mock_connect(*_args: object, **_kwargs: object):  # type: ignore[no-untyped-def]
+        raise OSError("Connection refused")
+        yield  # unreachable, but needed for async generator syntax  # noqa: RUF027
+
+    monkeypatch.setattr(proxy.websockets, "connect", _mock_connect)
+
+    with pytest.raises(CloudApiError) as exc_info:
+        await proxy.proxy_websocket_to_anyharness(
+            cast(WebSocket, _FakeWebSocket()),
+            upstream_base_url="https://sandbox.example.test",
+            upstream_token="sandbox-token",
+            path="v1/terminals/ws",
+            accept_subprotocol=None,
+        )
+
+    assert exc_info.value.code == "cloud_sandbox_resuming"
+    assert exc_info.value.status_code == 503
 
 
 def test_websocket_upstream_url_rewrites_access_token_and_preserves_after_seq() -> None:

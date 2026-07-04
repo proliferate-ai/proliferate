@@ -19,7 +19,7 @@ from websockets.exceptions import ConnectionClosed
 from proliferate.server.cloud.errors import CloudApiError
 
 _ANYHARNESS_MARKER = "/cloud-sandbox/anyharness"
-_HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=30.0, pool=10.0)
+_HTTP_TIMEOUT = httpx.Timeout(connect=60.0, read=None, write=30.0, pool=10.0)
 _STRIP_REQUEST_HEADERS = {
     "authorization",
     "cookie",
@@ -143,9 +143,10 @@ async def proxy_http_to_anyharness(
     except httpx.RequestError as exc:
         await client.aclose()
         raise CloudApiError(
-            "cloud_sandbox_gateway_unreachable",
-            "Cloud sandbox runtime could not be reached.",
-            status_code=502,
+            "cloud_sandbox_resuming",
+            "Cloud sandbox is waking up. Please retry shortly.",
+            status_code=503,
+            headers={"Retry-After": "5"},
         ) from exc
 
     return StreamingResponse(
@@ -251,6 +252,9 @@ async def proxy_websocket_to_anyharness(
     except Exception as exc:
         if isinstance(exc, ConnectionClosed):
             return
-        with suppress(RuntimeError):
-            await websocket.close(code=1011)
-        return
+        raise CloudApiError(
+            "cloud_sandbox_resuming",
+            "Cloud sandbox is waking up. Please retry shortly.",
+            status_code=503,
+            headers={"Retry-After": "5"},
+        ) from exc

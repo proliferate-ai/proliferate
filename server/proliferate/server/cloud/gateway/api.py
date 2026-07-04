@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from fastapi import APIRouter, Depends, Request, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway.access import (
     GatewayWebSocketAuthError,
     accepted_gateway_websocket_subprotocol,
@@ -18,7 +21,10 @@ from proliferate.server.cloud.gateway.proxy import (
     proxy_http_to_anyharness,
     proxy_websocket_to_anyharness,
 )
-from proliferate.server.cloud.gateway.service import ensure_cloud_sandbox_gateway_access
+from proliferate.server.cloud.gateway.service import (
+    ensure_cloud_sandbox_gateway_access,
+    invalidate_gateway_access_for_user,
+)
 
 router = APIRouter(tags=["cloud-sandbox-gateway"])
 
@@ -35,12 +41,19 @@ async def proxy_cloud_sandbox_anyharness_http(
     user: User = Depends(current_product_user),
 ) -> object:
     access = await ensure_cloud_sandbox_gateway_access(db, user)
-    return await proxy_http_to_anyharness(
-        request,
-        upstream_base_url=access.upstream_base_url,
-        upstream_token=access.upstream_token,
-        path=path,
-    )
+    try:
+        return await proxy_http_to_anyharness(
+            request,
+            upstream_base_url=access.upstream_base_url,
+            upstream_token=access.upstream_token,
+            path=path,
+        )
+    except CloudApiError as exc:
+        if exc.code == "cloud_sandbox_resuming":
+            # Invalidate cached access so the next retry re-resolves and re-wakes
+            # the sandbox before attempting the proxy connection again.
+            invalidate_gateway_access_for_user(user.id)
+        raise
 
 
 @router.websocket("/cloud-sandbox/anyharness/{path:path}")
@@ -58,10 +71,17 @@ async def proxy_cloud_sandbox_anyharness_websocket(
     except GatewayWebSocketAuthError:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
-    await proxy_websocket_to_anyharness(
-        websocket,
-        upstream_base_url=access.upstream_base_url,
-        upstream_token=access.upstream_token,
-        path=path,
-        accept_subprotocol=accepted_gateway_websocket_subprotocol(websocket),
-    )
+    try:
+        await proxy_websocket_to_anyharness(
+            websocket,
+            upstream_base_url=access.upstream_base_url,
+            upstream_token=access.upstream_token,
+            path=path,
+            accept_subprotocol=accepted_gateway_websocket_subprotocol(websocket),
+        )
+    except CloudApiError as exc:
+        if exc.code == "cloud_sandbox_resuming":
+            invalidate_gateway_access_for_user(user.id)
+        with suppress(RuntimeError):
+            await websocket.close(code=1011)
+        return
