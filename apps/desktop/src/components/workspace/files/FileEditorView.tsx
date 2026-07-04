@@ -42,6 +42,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     rawPath: filePath,
     workspacePath: filePath,
   });
+  const canOpenExternal = fileActions.canOpenExternal;
   const [wordWrap, setWordWrap] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const changedPaths = useGitChangedPaths(materializedWorkspaceId);
@@ -126,6 +127,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         richPreviewEnabled={normalizedEffectiveMode === "rendered"}
         canCopyContent={false}
         canFindInFile={false}
+        canOpenExternal={canOpenExternal}
         onToggleWordWrap={() => setWordWrap((value) => !value)}
         onToggleRichPreview={toggleRichPreview}
         onCopyContent={copyContent}
@@ -152,6 +154,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         richPreviewEnabled={normalizedEffectiveMode === "rendered"}
         canCopyContent={false}
         canFindInFile={false}
+        canOpenExternal={canOpenExternal}
         onToggleWordWrap={() => setWordWrap((value) => !value)}
         onToggleRichPreview={toggleRichPreview}
         onCopyContent={copyContent}
@@ -179,6 +182,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       richPreviewEnabled={normalizedEffectiveMode === "rendered"}
       canCopyContent={Boolean(read?.isText && !read.tooLarge)}
       canFindInFile={canFindInFile}
+      canOpenExternal={canOpenExternal}
       onToggleWordWrap={() => setWordWrap((value) => !value)}
       onToggleRichPreview={toggleRichPreview}
       onCopyContent={copyContent}
