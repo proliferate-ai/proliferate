@@ -7,6 +7,7 @@ import {
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
 import {
+  DiffCollapsedContextCluster,
   DiffContextExpander,
   DiffGapInfoRow,
   type ExpandDirection,
@@ -209,7 +210,7 @@ function SplitCollapsedCells({
       <div
         data-gutter=""
         data-separator="line-info"
-        className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--diffs-bg)]"
+        className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--codex-diffs-separator-surface)]"
       />
       <Button
         type="button"
@@ -218,15 +219,14 @@ function SplitCollapsedCells({
         data-content=""
         data-separator="line-info"
         onClick={onExpand}
-        aria-label={`Show ${section.lineCount} unmodified lines`}
+        aria-label={`Expand ${section.lineCount} unmodified lines`}
         title={`${section.lineCount} unmodified lines`}
-        className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center gap-2 border-0 bg-transparent px-2 py-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/70 hover:text-muted-foreground"
+        className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
       >
-        <span className="h-px min-w-4 flex-1 bg-border/60" />
-        <span data-unmodified-lines="" className="shrink-0 text-[10px] leading-none">
-          Show {section.lineCount} unchanged line{section.lineCount === 1 ? "" : "s"}
-        </span>
-        <span className="h-px min-w-4 flex-1 bg-border/60" />
+        <DiffCollapsedContextCluster
+          lineCount={section.lineCount}
+          stickyLeft="var(--diffs-column-number-width)"
+        />
       </Button>
     </>
   );

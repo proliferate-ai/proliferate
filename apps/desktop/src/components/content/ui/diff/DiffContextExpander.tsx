@@ -106,6 +106,39 @@ export function DiffContextExpander({
 }
 
 /**
+ * Inner cluster for legacy intra-hunk CollapsedContext sections (lines
+ * present in the patch but folded away). One click on the wrapping
+ * button reveals the whole section, so this is a single expand-all
+ * affordance — same treatment as the small-gap expander: left-anchored,
+ * scroll-pinned. The chevron is decorative; the caller's button owns
+ * the interaction and accessible name.
+ */
+export function DiffCollapsedContextCluster({
+  lineCount,
+  stickyLeft = "0px",
+}: {
+  lineCount: number;
+  stickyLeft?: string;
+}) {
+  return (
+    <span
+      style={{ position: "sticky", left: stickyLeft }}
+      className="flex w-max items-center gap-0.5 px-2"
+    >
+      <span
+        aria-hidden="true"
+        className="flex shrink-0 items-center justify-center rounded p-0.5"
+      >
+        <ChevronsUpDown className="h-3 w-3" />
+      </span>
+      <span className="shrink-0 pl-1 text-[10px] leading-none">
+        {formatUnmodifiedLinesLabel(lineCount)}
+      </span>
+    </span>
+  );
+}
+
+/**
  * Non-interactive variant for surfaces where gap expansion is
  * unavailable (content fetch impossible for the diff's revision).
  * Same left-anchored, scroll-pinned layout.

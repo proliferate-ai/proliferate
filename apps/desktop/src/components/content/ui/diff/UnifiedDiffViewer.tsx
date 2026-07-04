@@ -2,6 +2,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
 import {
+  DiffCollapsedContextCluster,
   DiffContextExpander,
   DiffGapInfoRow,
   type ExpandDirection,
@@ -105,9 +106,11 @@ function CollapsedSection({
           setExpanded(true);
         }
       }}
-      className="flex cursor-pointer items-center justify-center py-0.5 text-[10px] text-muted-foreground/40 transition-colors hover:text-muted-foreground/70 hover:bg-muted/20"
+      aria-label={`Expand ${section.lineCount} unmodified lines`}
+      title={`${section.lineCount} unmodified lines`}
+      className="flex min-h-[var(--diffs-line-height)] cursor-pointer items-center bg-[var(--codex-diffs-separator-surface)] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
-      ↕ {section.lineCount} unmodified lines
+      <DiffCollapsedContextCluster lineCount={section.lineCount} />
     </div>
   );
 }
