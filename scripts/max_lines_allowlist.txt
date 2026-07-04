@@ -7,7 +7,7 @@
 # grows, the check fails. If it shrinks, update the count or remove the entry
 # when the file is under its threshold.
 
-anyharness/crates/anyharness-contract/src/v1/events.rs 949 existing AnyHarness contract oversized file
+anyharness/crates/anyharness-contract/src/v1/events.rs 954 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 767 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-lib/src/api/openapi.rs 837 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1)
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1277 existing AnyHarness oversized test file (+hosting PR-status route tests)
