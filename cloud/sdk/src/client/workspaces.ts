@@ -54,6 +54,7 @@ function normalizeCloudWorkspaceStatus(value: string | undefined): CloudWorkspac
     case "archived":
     case "stopped":
       return "archived";
+    case "materialization_stalled":
     case "error":
     default:
       return "error";

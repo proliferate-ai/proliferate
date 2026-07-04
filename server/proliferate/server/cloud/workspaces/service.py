@@ -8,6 +8,7 @@ stores the returned workspace id.
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 from typing import Literal, Protocol
 from uuid import UUID
 
@@ -484,6 +485,7 @@ async def _workspace_payload(
     payload_type = WorkspaceDetail if detail else WorkspaceSummary
     status = _workspace_status(workspace)
     runtime_status = _runtime_status(sandbox)
+    stalled = status == "materialization_stalled"
     return payload_type(
         id=str(workspace.id),
         target_id=None,
@@ -504,6 +506,16 @@ async def _workspace_payload(
             status=runtime_status,
             generation=sandbox.runtime_generation if sandbox is not None else 0,
         ),
+        status_detail=(
+            "Workspace provisioning timed out. Delete this workspace and try again."
+            if stalled
+            else None
+        ),
+        last_error=(
+            "Provisioning did not complete within the expected time."
+            if stalled
+            else None
+        ),
         updated_at=workspace.updated_at.isoformat() if workspace.updated_at else None,
         created_at=workspace.created_at.isoformat() if workspace.created_at else None,
         ready_at=workspace.created_at.isoformat() if workspace.created_at else None,
@@ -512,10 +524,24 @@ async def _workspace_payload(
     )
 
 
+# A workspace row without an anyharness_workspace_id is still materializing.
+# If it remains in that state longer than this deadline (measured from
+# created_at), we report it as stalled so the client can stop spinning and
+# surface a recovery action.  The deadline must exceed the repo-clone timeout
+# (600 s in materialize/repo_environment.py) plus overhead for AnyHarness
+# worktree creation.
+_MATERIALIZATION_STALL_DEADLINE = timedelta(seconds=900)
+
+
 def _workspace_status(workspace: CloudWorkspaceValue) -> CloudWorkspaceStatus:
     if workspace.archived_at is not None:
         return "archived"
     if not workspace.anyharness_workspace_id:
+        from proliferate.utils.time import utcnow
+
+        elapsed = utcnow() - workspace.created_at
+        if elapsed > _MATERIALIZATION_STALL_DEADLINE:
+            return "materialization_stalled"
         return "materializing"
     return "ready"
 

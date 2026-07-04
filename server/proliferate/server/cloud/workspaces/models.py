@@ -7,7 +7,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-CloudWorkspaceStatus = Literal["pending", "materializing", "ready", "archived", "error"]
+CloudWorkspaceStatus = Literal[
+    "pending", "materializing", "materialization_stalled", "ready", "archived", "error"
+]
 CloudRuntimeStatus = Literal["pending", "running", "paused", "error", "disabled"]
 
 

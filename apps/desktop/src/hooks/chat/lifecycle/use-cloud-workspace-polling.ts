@@ -27,6 +27,17 @@ import {
 
 const CLOUD_WORKSPACE_POLL_INTERVAL_MS = 3000;
 
+/**
+ * Client-side deadline for materialization polling. If a workspace has been in
+ * a pending/materializing state for longer than this duration (measured from
+ * the pending entry createdAt timestamp), the poller will treat it as stalled
+ * and surface an error regardless of what the server still reports. This is a
+ * belt-and-suspenders guard against infinite spinners — the server itself will
+ * report materialization_stalled after 15 min, but the client enforces a
+ * matching deadline in case network issues delay that signal.
+ */
+const CLIENT_MATERIALIZATION_DEADLINE_MS = 16 * 60 * 1000; // 16 minutes
+
 export function useCloudWorkspacePolling() {
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
@@ -117,6 +128,41 @@ export function useCloudWorkspacePolling() {
           pendingElapsedMs: pendingWorkspaceEntry ? elapsedSince(pendingWorkspaceEntry.createdAt) : null,
         });
         if (cancelled) {
+          return;
+        }
+
+        // Client-side staleness deadline: if we have been polling for longer
+        // than CLIENT_MATERIALIZATION_DEADLINE_MS and the workspace is still
+        // not ready, treat it as failed regardless of server status.
+        const pendingElapsed = pendingWorkspaceEntry
+          ? elapsedSince(pendingWorkspaceEntry.createdAt)
+          : null;
+        if (
+          refreshedStatus !== "ready"
+          && refreshedStatus !== "error"
+          && pendingElapsed != null
+          && pendingElapsed > CLIENT_MATERIALIZATION_DEADLINE_MS
+        ) {
+          shouldScheduleNextPoll = false;
+          const pending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
+          if (
+            pending
+            && pending.workspaceId === selectedWorkspaceId
+            && pending.stage === "awaiting-cloud-ready"
+          ) {
+            setPendingWorkspaceEntry({
+              ...pending,
+              stage: "failed",
+              request: { kind: "select-existing", workspaceId: selectedWorkspaceId },
+              errorMessage:
+                "Workspace provisioning timed out. Delete this workspace and try again.",
+            });
+          }
+          logLatency("workspace.cloud_polling.client_deadline_exceeded", {
+            workspaceId: selectedWorkspaceId,
+            pendingAttemptId: pending?.attemptId ?? null,
+            pendingElapsedMs: pendingElapsed,
+          });
           return;
         }
 
