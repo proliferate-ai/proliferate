@@ -26,6 +26,9 @@ pub struct ResolvedLaunchModelOption {
     pub status: Option<crate::domains::agents::model::ModelCatalogStatus>,
     pub effort: Option<ResolvedModelEffort>,
     pub fast_mode: bool,
+    /// The permission/agent modes the model supports (`controls.mode.values`);
+    /// `None` when the model declares no mode control (contract §5).
+    pub modes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]

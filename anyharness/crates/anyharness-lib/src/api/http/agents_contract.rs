@@ -309,6 +309,7 @@ pub(super) fn launch_options_response(
                             default: effort.default,
                         }),
                         fast_mode: Some(model.fast_mode),
+                        modes: model.modes,
                     })
                     .collect(),
             })

@@ -110,6 +110,10 @@ impl SessionService {
                             }
                         }),
                         fast_mode: model.controls.contains_key("fast_mode"),
+                        modes: model
+                            .controls
+                            .get("mode")
+                            .map(|control| control.values.clone()),
                     })
                     .collect(),
             });
