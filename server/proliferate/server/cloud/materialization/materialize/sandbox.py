@@ -7,6 +7,9 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
+from proliferate.db.store import (
+    cloud_repo_environment_materializations as repo_mat_store,
+)
 from proliferate.db.store import repositories as repositories_store
 from proliferate.server.cloud.materialization import operation
 from proliferate.server.cloud.materialization.materialize import (
@@ -53,10 +56,18 @@ async def _materialize_sandbox(
         user_id=user_id,
     )
     for repo_environment in repo_environments:
+        materialization = await repo_mat_store.begin_repo_environment_materialization(
+            db,
+            cloud_sandbox_id=ctx.sandbox.id,
+            repo_environment_id=repo_environment.id,
+        )
+        attempt_updated_at = materialization.updated_at
         await repo_environment_materializer.materialize_repo_environment_in_context(
             db,
             ctx=ctx,
-            repo_environment=repo_environment,
+            repo_environment_id=repo_environment.id,
+            materialization_id=materialization.id,
+            attempt_updated_at=attempt_updated_at,
         )
     # Last, defensively: agent-auth materialization writes a fail-closed state
     # even when a selection can't yet be satisfied (e.g. enrollment still
