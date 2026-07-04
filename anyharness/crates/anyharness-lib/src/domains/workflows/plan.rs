@@ -83,6 +83,8 @@ impl PlanStep {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind")]
 pub enum StepKind {
+    #[serde(rename = "agent.config")]
+    AgentConfig(AgentConfigStep),
     #[serde(rename = "agent.prompt")]
     AgentPrompt(AgentPromptStep),
     #[serde(rename = "shell.run")]
@@ -98,6 +100,7 @@ pub enum StepKind {
 impl StepKind {
     pub fn slug(&self) -> &'static str {
         match self {
+            StepKind::AgentConfig(_) => "agent.config",
             StepKind::AgentPrompt(_) => "agent.prompt",
             StepKind::ShellRun(_) => "shell.run",
             StepKind::ScmOpenPr(_) => "scm.open_pr",
@@ -111,11 +114,18 @@ impl StepKind {
 pub struct AgentPromptStep {
     pub prompt: String,
     #[serde(default)]
-    pub model_override: Option<String>,
-    #[serde(default)]
-    pub harness_override: Option<String>,
-    #[serde(default)]
     pub goal: Option<GoalSpec>,
+}
+
+/// Sets the active agent harness and/or model for the steps below it. At least
+/// one of `harness` / `model` is present (enforced server-side); it executes
+/// instantly and never opens a session of its own.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AgentConfigStep {
+    #[serde(default)]
+    pub harness: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -254,10 +264,10 @@ mod tests {
             "setup": { "harness": "claude", "model": "sonnet", "session_binding": "fresh" },
             "args": { "ticket": "ABC-1" },
             "steps": [
+                { "kind": "agent.config", "harness": "codex", "model": "opus" },
                 {
                     "kind": "agent.prompt",
                     "prompt": "fix {{steps[0].output.thing}}",
-                    "model_override": "opus",
                     "goal": {
                         "objective": "make CI green",
                         "max_turns": 25,
@@ -282,33 +292,41 @@ mod tests {
         assert_eq!(plan.version_n, Some(2));
         assert_eq!(plan.setup.harness, "claude");
         assert_eq!(plan.setup.session_binding, SessionBinding::Fresh);
-        assert_eq!(plan.step_count(), 5);
+        assert_eq!(plan.step_count(), 6);
 
-        let StepKind::AgentPrompt(agent) = &plan.steps[0].kind else {
+        let StepKind::AgentConfig(config) = &plan.steps[0].kind else {
+            panic!("expected agent.config");
+        };
+        assert_eq!(config.harness.as_deref(), Some("codex"));
+        assert_eq!(config.model.as_deref(), Some("opus"));
+        assert_eq!(plan.steps[0].kind_slug(), "agent.config");
+        // agent.config with no explicit on_fail defaults to stop.
+        assert_eq!(plan.steps[0].on_fail.kind, OnFailKind::Stop);
+
+        let StepKind::AgentPrompt(agent) = &plan.steps[1].kind else {
             panic!("expected agent.prompt");
         };
-        assert_eq!(agent.model_override.as_deref(), Some("opus"));
         let goal = agent.goal.as_ref().expect("goal");
         assert_eq!(goal.max_turns, 25);
         assert_eq!(goal.on_blocked, OnBlocked::PauseForApproval);
         assert_eq!(goal.verify.as_ref().expect("verify").expect_exit, 0);
-        assert_eq!(plan.steps[0].on_fail.kind, OnFailKind::Retry);
-        assert_eq!(plan.steps[0].on_fail.n, 2);
+        assert_eq!(plan.steps[1].on_fail.kind, OnFailKind::Retry);
+        assert_eq!(plan.steps[1].on_fail.n, 2);
 
-        let StepKind::ShellRun(shell) = &plan.steps[1].kind else {
+        let StepKind::ShellRun(shell) = &plan.steps[2].kind else {
             panic!("expected shell.run");
         };
         assert_eq!(shell.command, "cargo build");
         assert_eq!(shell.timeout_secs, Some(600));
         // stop is the default failure policy
-        assert_eq!(plan.steps[1].on_fail.kind, OnFailKind::Stop);
+        assert_eq!(plan.steps[2].on_fail.kind, OnFailKind::Stop);
 
-        let StepKind::Notify(notify) = &plan.steps[3].kind else {
+        let StepKind::Notify(notify) = &plan.steps[4].kind else {
             panic!("expected notify");
         };
         assert_eq!(notify.channel, NotifyChannel::Slack);
 
-        let StepKind::HumanApproval(approval) = &plan.steps[4].kind else {
+        let StepKind::HumanApproval(approval) = &plan.steps[5].kind else {
             panic!("expected human.approval");
         };
         assert_eq!(approval.on_timeout, OnTimeout::Continue);
@@ -330,8 +348,32 @@ mod tests {
             panic!("expected agent.prompt");
         };
         assert!(agent.goal.is_none());
-        assert!(agent.harness_override.is_none());
         assert_eq!(plan.steps[0].on_fail.kind, OnFailKind::Stop);
+    }
+
+    #[test]
+    fn parses_agent_config_with_partial_fields() {
+        let plan = parse(
+            r#"{
+                "run_id": "run-cfg",
+                "setup": { "harness": "claude", "session_binding": "fresh" },
+                "steps": [
+                    { "kind": "agent.config", "harness": "codex" },
+                    { "kind": "agent.config", "model": "opus" }
+                ]
+            }"#,
+        )
+        .expect("parse agent.config plan");
+        let StepKind::AgentConfig(harness_only) = &plan.steps[0].kind else {
+            panic!("expected agent.config");
+        };
+        assert_eq!(harness_only.harness.as_deref(), Some("codex"));
+        assert!(harness_only.model.is_none());
+        let StepKind::AgentConfig(model_only) = &plan.steps[1].kind else {
+            panic!("expected agent.config");
+        };
+        assert!(model_only.harness.is_none());
+        assert_eq!(model_only.model.as_deref(), Some("opus"));
     }
 
     #[test]

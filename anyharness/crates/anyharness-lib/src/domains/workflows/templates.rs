@@ -12,8 +12,8 @@
 use std::collections::HashMap;
 
 use super::plan::{
-    AgentPromptStep, GoalSpec, HumanApprovalStep, NotifyStep, PlanStep, ScmOpenPrStep, ShellRunStep,
-    StepKind, VerifySpec,
+    AgentConfigStep, AgentPromptStep, GoalSpec, HumanApprovalStep, NotifyStep, PlanStep,
+    ScmOpenPrStep, ShellRunStep, StepKind, VerifySpec,
 };
 
 /// Completed step outputs keyed by step index.
@@ -114,10 +114,13 @@ fn render_value(value: &serde_json::Value) -> String {
 /// late-bound against `outputs`.
 pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
     let kind = match &step.kind {
+        // agent.config carries only literal harness/model ids — nothing to bind.
+        StepKind::AgentConfig(config) => StepKind::AgentConfig(AgentConfigStep {
+            harness: config.harness.clone(),
+            model: config.model.clone(),
+        }),
         StepKind::AgentPrompt(agent) => StepKind::AgentPrompt(AgentPromptStep {
             prompt: resolve_string(&agent.prompt, outputs),
-            model_override: agent.model_override.clone(),
-            harness_override: agent.harness_override.clone(),
             goal: agent.goal.as_ref().map(|goal| resolve_goal(goal, outputs)),
         }),
         StepKind::ShellRun(shell) => StepKind::ShellRun(ShellRunStep {
