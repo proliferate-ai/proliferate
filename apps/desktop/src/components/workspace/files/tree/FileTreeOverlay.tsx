@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -8,27 +7,20 @@ import {
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Button } from "@proliferate/ui/primitives/Button";
-import {
-  ChevronRight,
-  Search,
-} from "@proliferate/ui/icons";
+import { Search } from "@proliferate/ui/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkspaceFileEntry } from "@anyharness/sdk";
 import {
   useSearchWorkspaceFilesQuery,
   useWorkspaceFilesQuery,
 } from "@anyharness/sdk-react";
-import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
-import { fileTreeIconToneClass } from "@/components/workspace/files/tree/file-tree-icon-colors";
+import { FileTreeRow } from "@/components/workspace/files/tree/FileTreeRow";
+import { useTreePanelResize } from "@/components/workspace/files/tree/use-tree-panel-resize";
 import {
   buildFileSearchTree,
   truncatePathLabel,
 } from "@/lib/domain/files/file-search-tree";
-import {
-  FILE_TREE_MAX_WIDTH_RATIO,
-  FILE_TREE_MIN_WIDTH,
-  useFileTreeStore,
-} from "@/stores/editor/file-tree-store";
+import { useFileTreeStore } from "@/stores/editor/file-tree-store";
 
 interface FileTreeOverlayProps {
   open: boolean;
@@ -57,7 +49,11 @@ export function FileTreeOverlay({
   const setWidth = useFileTreeStore((s) => s.setWidth);
 
   const panelRef = useRef<HTMLElement>(null);
-  const [resizing, setResizing] = useState(false);
+  const { resizing, handleResizeStart } = useTreePanelResize({
+    panelRef,
+    width,
+    setWidth,
+  });
 
   useEffect(() => {
     if (!open) {
@@ -75,36 +71,6 @@ export function FileTreeOverlay({
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose, open]);
-
-  const handleResizeStart = useCallback(
-    (event: React.PointerEvent) => {
-      event.preventDefault();
-      setResizing(true);
-      const startX = event.clientX;
-      const startWidth = width;
-
-      const handleMove = (moveEvent: PointerEvent) => {
-        const paneWidth = panelRef.current?.parentElement?.clientWidth ?? 1000;
-        const maxWidth = paneWidth * FILE_TREE_MAX_WIDTH_RATIO;
-        // Panel is right-anchored, so dragging left grows it.
-        const newWidth = Math.min(
-          maxWidth,
-          Math.max(FILE_TREE_MIN_WIDTH, startWidth + (startX - moveEvent.clientX)),
-        );
-        setWidth(newWidth);
-      };
-
-      const handleUp = () => {
-        setResizing(false);
-        window.removeEventListener("pointermove", handleMove);
-        window.removeEventListener("pointerup", handleUp);
-      };
-
-      window.addEventListener("pointermove", handleMove);
-      window.addEventListener("pointerup", handleUp);
-    },
-    [width, setWidth],
-  );
 
   if (!open) {
     return null;
@@ -468,74 +434,5 @@ function FileTreeEntryRow({
         />
       )}
     </div>
-  );
-}
-
-function FileTreeRow({
-  name,
-  path,
-  kind,
-  level,
-  selected = false,
-  expanded,
-  changed = false,
-  onClick,
-}: {
-  name: string;
-  path: string;
-  kind: "file" | "directory";
-  level: number;
-  selected?: boolean;
-  expanded?: boolean;
-  changed?: boolean;
-  onClick: () => void;
-}) {
-  const isDirectory = kind === "directory";
-  const paddingLeft = isDirectory ? 6 + level * 12 : 18 + level * 12;
-  const iconTone = fileTreeIconToneClass(name, path, kind);
-
-  return (
-    <button
-      type="button"
-      role="treeitem"
-      aria-expanded={isDirectory ? expanded : undefined}
-      aria-selected={selected}
-      aria-level={level + 1}
-      title={path}
-      className={twMerge(
-        "flex h-7 w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[13px] leading-none transition-colors duration-150",
-        "hover:bg-sidebar-accent",
-        isDirectory ? "text-sidebar-muted-foreground" : "text-sidebar-foreground",
-        selected && "bg-sidebar-accent text-sidebar-foreground",
-      )}
-      style={{ paddingLeft }}
-      onClick={onClick}
-    >
-      {isDirectory && (
-        <ChevronRight
-          className={twMerge(
-            "size-3 shrink-0 text-sidebar-muted-foreground/50 transition-transform duration-150",
-            expanded && "rotate-90",
-          )}
-        />
-      )}
-      <FileTreeEntryIcon
-        name={name}
-        path={path}
-        kind={kind}
-        isExpanded={isDirectory ? expanded : undefined}
-        className="size-3.5 shrink-0"
-        toneClassName={iconTone}
-      />
-      <span className="min-w-0 flex-1 truncate">
-        {name}
-      </span>
-      {changed && (
-        <span
-          className="inline-flex size-1.5 shrink-0 rounded-full bg-accent"
-          aria-label="Modified"
-        />
-      )}
-    </button>
   );
 }
