@@ -7,6 +7,10 @@
     "dist"
   ],
   "exports": {
+    "./code/code-theme-tokens": {
+      "types": "./dist/code/code-theme-tokens.d.ts",
+      "import": "./dist/code/code-theme-tokens.js"
+    },
     "./account/AccountIdentityCard": {
       "types": "./dist/account/AccountIdentityCard.d.ts",
       "import": "./dist/account/AccountIdentityCard.js"
