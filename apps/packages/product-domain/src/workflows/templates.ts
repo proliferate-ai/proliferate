@@ -5,14 +5,17 @@
  * gallery and as the seed a "start from template" create writes. The Setup
  * harness/model here are readable placeholders — the create flow re-defaults
  * Setup to the user's first available catalog agent, so the ids need not match a
- * live catalog. Every templated field uses only declared args and earlier-step
- * outputs, so each definition passes validation as-is.
+ * live catalog. Each template's step list leads with an `agent.config` step that
+ * pins the agent the template was written for (agent/model config is its own
+ * step, not a Setup detail). Every templated field uses only declared args and
+ * earlier-step outputs, so each definition passes validation as-is.
  */
 
 import {
   WORKFLOW_GOAL_DEFAULT_MAX_TURNS,
   WORKFLOW_GOAL_DEFAULT_MAX_WALL_SECS,
   WORKFLOW_GOAL_DEFAULT_TOKEN_BUDGET,
+  type AgentConfigStep,
   type WorkflowDefinition,
   type WorkflowSetup,
 } from "./definition";
@@ -28,6 +31,11 @@ export interface WorkflowTemplate {
 
 function setup(harness: string, model: string): WorkflowSetup {
   return { harness, model, sessionBinding: "fresh" };
+}
+
+/** The leading Agent step every template opens with. */
+function agentStep(harness: string, model: string): AgentConfigStep {
+  return { kind: "agent.config", onFail: { kind: "stop" }, harness, model };
 }
 
 const DEFAULT_GOAL_CAPS = {
@@ -47,6 +55,7 @@ const FIX_UNTIL_GREEN: WorkflowTemplate = {
     ],
     setup: setup("claude-code", "sonnet"),
     steps: [
+      agentStep("claude-code", "sonnet"),
       {
         kind: "shell.run",
         onFail: { kind: "continue" },
@@ -86,6 +95,7 @@ const SENTRY_TRIAGE: WorkflowTemplate = {
     args: [{ name: "issue_url", type: "string", required: true }],
     setup: setup("claude-code", "sonnet"),
     steps: [
+      agentStep("claude-code", "sonnet"),
       {
         kind: "agent.prompt",
         onFail: { kind: "stop" },
@@ -127,6 +137,7 @@ const PR_QA: WorkflowTemplate = {
     ],
     setup: setup("claude-code", "sonnet"),
     steps: [
+      agentStep("claude-code", "sonnet"),
       {
         kind: "shell.run",
         onFail: { kind: "stop" },
@@ -165,6 +176,7 @@ const CHANGELOG: WorkflowTemplate = {
     args: [{ name: "since", type: "string", required: false, default: "HEAD~50" }],
     setup: setup("claude-code", "sonnet"),
     steps: [
+      agentStep("claude-code", "sonnet"),
       {
         kind: "shell.run",
         onFail: { kind: "stop" },
@@ -176,13 +188,13 @@ const CHANGELOG: WorkflowTemplate = {
         onFail: { kind: "stop" },
         prompt:
           "Write a user-facing changelog from these commits, grouped by feature and fix:\n"
-          + "{{steps[0].output.commits}}",
+          + "{{steps[1].output.commits}}",
       },
       {
         kind: "scm.open_pr",
         onFail: { kind: "stop" },
         title: "Update changelog",
-        body: "{{steps[1].output.changelog}}",
+        body: "{{steps[2].output.changelog}}",
         draft: true,
       },
     ],
@@ -198,6 +210,7 @@ const WEEKLY_DIGEST: WorkflowTemplate = {
     args: [],
     setup: setup("claude-code", "sonnet"),
     steps: [
+      agentStep("claude-code", "sonnet"),
       {
         kind: "shell.run",
         onFail: { kind: "continue" },
@@ -209,13 +222,13 @@ const WEEKLY_DIGEST: WorkflowTemplate = {
         onFail: { kind: "stop" },
         prompt:
           "Summarize the past week of work into a short digest with highlights and risks, "
-          + "from these commits:\n{{steps[0].output.commits}}",
+          + "from these commits:\n{{steps[1].output.commits}}",
       },
       {
         kind: "notify",
         onFail: { kind: "continue" },
         channel: "slack",
-        message: "Weekly digest:\n{{steps[1].output.digest}}",
+        message: "Weekly digest:\n{{steps[2].output.digest}}",
       },
     ],
   },
