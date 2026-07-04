@@ -85,9 +85,10 @@ export function FileDiffCard({
       : {}),
     backgroundColor: "var(--codex-diffs-surface)",
   } as CSSProperties;
-  // Sidebar review cards use a frosted sticky header: the sticky wrapper paints
-  // a translucent color-mix of the header surface + backdrop-blur, so the
-  // inner shell must stay transparent for the blur to read through.
+  // Sidebar review cards use a near-opaque sticky header: the sticky wrapper
+  // paints a 97% color-mix of the header surface (no backdrop-filter — blur
+  // resampling across many sticky headers starves the WKWebView compositor),
+  // so the inner shell must stay transparent for that paint to show.
   const headerShellClass = isSidebar
     ? "bg-transparent"
     : "bg-[var(--codex-diffs-header-surface)]";
@@ -132,7 +133,7 @@ export function FileDiffCard({
           : undefined
       }
       data-chat-diff-wrap-context-trigger={isSidebar ? undefined : "file-header"}
-      className={`z-10 select-none ${isSidebar ? "sticky top-0 backdrop-blur-sm bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_88%,transparent)]" : "bg-[var(--codex-diffs-header-surface)]"} ${canExpand ? "cursor-pointer" : ""}`}
+      className={`z-10 select-none ${isSidebar ? "sticky top-0 bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_97%,transparent)]" : "bg-[var(--codex-diffs-header-surface)]"} ${canExpand ? "cursor-pointer" : ""}`}
     >
       <div className={headerShellClass}>
         <div className={headerInnerClass}>

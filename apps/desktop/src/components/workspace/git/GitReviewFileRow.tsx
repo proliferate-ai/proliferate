@@ -32,6 +32,38 @@ const SIDEBAR_DIFF_SURFACE_STYLE = {
   "--codex-diffs-surface-override": "var(--color-diff-surface)",
 } as CSSProperties;
 
+// Header row (min-h-9 + py) plus the diff viewer's 24-line viewport cap
+// (GitReviewFileRow passes max-h of --diffs-line-height * 24 to DiffViewer).
+const REVIEW_CARD_HEADER_ESTIMATE_PX = 38;
+const REVIEW_CARD_MAX_VISIBLE_LINES = 24;
+
+/**
+ * Off-screen review cards skip layout/paint via content-visibility:auto —
+ * without it every diff row of every file stays painted and long change
+ * lists starve the WKWebView compositor (black flashes while scrolling).
+ * The intrinsic-size estimate keeps the scrollbar stable: header height
+ * plus the expected visible diff lines (changed lines ~+50% context,
+ * capped by the viewer's 24-line viewport) in --diffs-line-height units.
+ */
+function reviewCardVirtualizationStyle({
+  collapsed,
+  changedLines,
+}: {
+  collapsed: boolean;
+  changedLines: number;
+}): CSSProperties {
+  const estimatedLines = collapsed
+    ? 0
+    : Math.min(
+        Math.ceil(Math.max(changedLines, 1) * 1.5),
+        REVIEW_CARD_MAX_VISIBLE_LINES,
+      );
+  return {
+    contentVisibility: "auto",
+    containIntrinsicSize: `auto calc(${REVIEW_CARD_HEADER_ESTIMATE_PX}px + var(--diffs-line-height) * ${estimatedLines})`,
+  } as CSSProperties;
+}
+
 export function GitReviewFileRow({
   id,
   workspaceId,
@@ -162,7 +194,13 @@ export function GitReviewFileRow({
       id={id}
       data-review-path={file.path}
       className="scroll-mt-2"
-      style={SIDEBAR_DIFF_SURFACE_STYLE}
+      style={{
+        ...SIDEBAR_DIFF_SURFACE_STYLE,
+        ...reviewCardVirtualizationStyle({
+          collapsed,
+          changedLines: additions + deletions,
+        }),
+      }}
     >
       <FileDiffCard
         filePath={file.displayPath}
