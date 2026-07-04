@@ -235,7 +235,7 @@ describe("FileEditorView", () => {
     expect(container.querySelector(".file-source-line-number")?.textContent).toBe("1");
     expect(container.querySelector(".file-source-scroll")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("File viewer options"));
-    expect(screen.getByText("Enable word wrap")).toBeTruthy();
+    expect(screen.getByText("Word wrap")).toBeTruthy();
   });
 
   it("virtualizes large source files instead of mounting every line", () => {
