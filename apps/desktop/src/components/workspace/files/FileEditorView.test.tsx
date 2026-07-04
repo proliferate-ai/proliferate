@@ -10,6 +10,7 @@ import {
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useFileTreeSidebarStore } from "@/stores/editor/file-tree-sidebar-store";
 import { FileEditorView } from "./FileEditorView";
 
 const readWorkspaceFileQuery = vi.fn();
@@ -66,11 +67,14 @@ vi.mock("@/hooks/workspaces/workflows/files/use-workspace-file-target-actions", 
   }),
 }));
 
+const gitStatusQuery = vi.fn();
+
 vi.mock("@anyharness/sdk-react", () => ({
   useReadWorkspaceFileQuery: (options: unknown) => readWorkspaceFileQuery(options),
   useGitDiffQuery: (options: unknown) => gitDiffQuery(options),
   useWorkspaceFilesQuery: (options: unknown) => workspaceFilesQuery(options),
   useSearchWorkspaceFilesQuery: (options: unknown) => searchWorkspaceFilesQuery(options),
+  useGitStatusQuery: (options: unknown) => gitStatusQuery(options),
 }));
 
 describe("FileEditorView", () => {
@@ -98,6 +102,7 @@ describe("FileEditorView", () => {
     gitDiffQuery.mockReset();
     workspaceFilesQuery.mockReset();
     searchWorkspaceFilesQuery.mockReset();
+    gitStatusQuery.mockReset();
     openFileMock.mockReset();
     workspaceFileContext = {
       workspaceUiKey: "workspace-1",
@@ -136,7 +141,16 @@ describe("FileEditorView", () => {
       data: undefined,
       isLoading: false,
     });
+    gitStatusQuery.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    });
     useWorkspaceViewerTabsStore.getState().reset();
+    useFileTreeSidebarStore.setState({
+      width: 250,
+      collapsed: false,
+      expandedPaths: new Set(),
+    });
     useContentSearchStore.setState({
       open: false,
       query: "",
@@ -257,7 +271,7 @@ describe("FileEditorView", () => {
     expect(container.querySelectorAll("[data-source-line]").length).toBeLessThan(lines.length);
   });
 
-  it("overlays the file browser without replacing the source view", () => {
+  it("renders the persistent file tree sidebar alongside source view", () => {
     const target = fileViewerTarget("package.json");
     const targetKey = viewerTargetKey(target);
     useWorkspaceViewerTabsStore.setState({
@@ -277,28 +291,18 @@ describe("FileEditorView", () => {
       isLoading: false,
     });
 
-    const { container } = render(createElement(FileEditorView, {
+    render(createElement(FileEditorView, {
       filePath: "package.json",
       targetKey,
     }));
 
-    fireEvent.click(screen.getByLabelText("Show files"));
-
-    expect(screen.getByRole("dialog", { name: "Browse files" })).toBeTruthy();
-    expect(container.querySelector("[data-pane-side-overlay]")).toBeTruthy();
-    expect(container.querySelector("[data-file-browser-overlay]")).toBeTruthy();
+    // Sidebar is visible by default (not collapsed)
     expect(screen.getByText("{\"ok\":true}")).toBeTruthy();
-    expect(screen.getByText("README.md")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Filter files…")).toBeTruthy();
     expect(workspaceFilesQuery).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       path: "",
       enabled: true,
-    });
-    expect(searchWorkspaceFilesQuery).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      query: "",
-      limit: 60,
-      enabled: false,
     });
   });
 
