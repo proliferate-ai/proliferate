@@ -1,11 +1,6 @@
-import type {
-  GetSessionLiveConfigResponse,
-  SessionRawNotificationEnvelope,
-} from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import type { SupportDiagnosticsBundle } from "@/lib/access/tauri/diagnostics";
 import { sanitizeSupportUploadPayload } from "@/lib/domain/support/report-upload-sanitizer";
-import { sanitizeSessionDebugExportedSession } from "@/lib/domain/support/session-debug/sanitizer";
 import type {
   SupportReportJob,
   SupportReportServerCorrelation,
@@ -19,8 +14,6 @@ const MAX_WORKSPACES = 5;
 const MAX_SESSIONS_PER_WORKSPACE = 3;
 const MAX_EVENTS_PER_SESSION = 200;
 const MAX_RAW_NOTIFICATIONS_PER_SESSION = 100;
-const SENSITIVE_LIVE_CONFIG_KEY_PATTERN =
-  /(prompt|instruction|message|content|text|rawInput|rawOutput|rawConfig)/i;
 
 export interface SupportReportUploadDependencies<
   Connection extends AnyHarnessResolvedConnection = AnyHarnessResolvedConnection,
@@ -49,17 +42,19 @@ interface SupportReportPackageSession {
 }
 
 export interface SupportReportPackage {
-  schemaVersion: 2;
+  schemaVersion: 3;
   generatedAt: string;
   correlation?: SupportReportServerCorrelation;
   report: {
     jobId: string;
     createdAt: string;
-    messagePresent: boolean;
-    messageLength: number;
+    message: string;
     scope: SupportReportJob["scope"];
     context: SupportReportJob["snapshot"]["context"];
     openedAt: string;
+    activeWorkspaceId?: string;
+    activeSessionId?: string;
+    reportOpenedAt?: string;
   };
   runtimeDiagnostics: SupportDiagnosticsBundle | null;
   workspaces: SupportReportPackageWorkspace[];
@@ -90,17 +85,19 @@ export async function buildSupportReportPackage<
   );
 
   return sanitizeSupportUploadPayload({
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: dependencies.now().toISOString(),
     correlation: serverCorrelation,
     report: {
       jobId: job.jobId,
       createdAt: job.createdAt,
-      messagePresent: job.message.trim().length > 0,
-      messageLength: job.message.trim().length,
+      message: job.message.trim(),
       scope: job.scope,
       context: job.snapshot.context,
       openedAt: job.snapshot.openedAt,
+      activeWorkspaceId: job.activeWorkspaceId,
+      activeSessionId: job.activeSessionId,
+      reportOpenedAt: job.reportOpenedAt,
     },
     runtimeDiagnostics,
     workspaces,
@@ -176,24 +173,16 @@ async function collectSessionDiagnostics(
     "rawNotifications",
     async () => {
       const notifications = await client.sessions.listRawNotifications(sessionId);
-      return notifications.slice(-MAX_RAW_NOTIFICATIONS_PER_SESSION).map(redactNotificationBody);
+      return notifications.slice(-MAX_RAW_NOTIFICATIONS_PER_SESSION);
     },
   );
 
-  const sanitized = sanitizeSessionDebugExportedSession({
-    session: summary,
-    normalizedEvents: Array.isArray(normalizedEvents) ? normalizedEvents : [],
-    liveConfig: sanitizeLiveConfig(liveConfig),
-    rawNotifications: Array.isArray(rawNotifications) ? rawNotifications : [],
-    errors: [],
-  });
-
   return {
     sessionId,
-    summary: sanitized.session,
-    normalizedEvents: sanitized.normalizedEvents ?? [],
-    liveConfig: sanitized.liveConfig,
-    rawNotifications: sanitized.rawNotifications ?? [],
+    summary,
+    normalizedEvents: Array.isArray(normalizedEvents) ? normalizedEvents : [],
+    liveConfig,
+    rawNotifications: Array.isArray(rawNotifications) ? rawNotifications : [],
     errors,
   };
 }
@@ -233,42 +222,6 @@ function dateMs(value: string | null | undefined): number {
   return Number.isFinite(time) ? time : 0;
 }
 
-function redactNotificationBody(
-  value: SessionRawNotificationEnvelope,
-): SessionRawNotificationEnvelope {
-  return {
-    ...value,
-    notification: { redacted: true },
-  };
-}
-
-function sanitizeLiveConfig(
-  value: GetSessionLiveConfigResponse | null,
-): GetSessionLiveConfigResponse | null {
-  return sanitizeLiveConfigValue(value) as GetSessionLiveConfigResponse | null;
-}
-
-function sanitizeLiveConfigValue(value: unknown, keyHint = ""): unknown {
-  if (value == null) {
-    return value;
-  }
-  if (typeof value === "string") {
-    return SENSITIVE_LIVE_CONFIG_KEY_PATTERN.test(keyHint) ? "[REDACTED]" : value;
-  }
-  if (typeof value !== "object") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => sanitizeLiveConfigValue(item, keyHint));
-  }
-  const output: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    output[key] = SENSITIVE_LIVE_CONFIG_KEY_PATTERN.test(key)
-      ? "[REDACTED]"
-      : sanitizeLiveConfigValue(item, key);
-  }
-  return output;
-}
 
 function formatError(scope: string, error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);

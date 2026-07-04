@@ -6,6 +6,7 @@ import {
   CreditCard,
   Globe,
   Keyboard,
+  Lightbulb,
   LogOut,
   MessageSquare,
   Settings,
@@ -35,6 +36,7 @@ import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-o
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import { useSupportModalStore } from "@/stores/support/support-modal-store";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
@@ -64,6 +66,7 @@ export function SidebarAccountFooter() {
   const handleSignOut = useAppSidebarSignOutAction();
   const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const openSupport = useOpenSupportReportWindow({ source: "sidebar" });
+  const openPrompt = useSupportModalStore((state) => state.openPrompt);
   const showToast = useToastStore((state) => state.show);
   const { data: billingPlan } = useCloudBilling();
   const {
@@ -297,6 +300,15 @@ export function SidebarAccountFooter() {
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSupport)}</span>}
                   onClick={() => {
                     openSupport();
+                    close();
+                  }}
+                />
+                <PopoverMenuItem
+                  variant="sidebar"
+                  label="Submit a prompt"
+                  icon={<Lightbulb className="size-4" />}
+                  onClick={() => {
+                    openPrompt();
                     close();
                   }}
                 />

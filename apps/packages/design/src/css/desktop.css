@@ -61,21 +61,21 @@
      appearance-css-drift.test.ts in apps/desktop. The semantic tokens
      (--text-ui, --text-ui-sm, --text-composer, --text-title, --text-hero)
      are declared in dom.css, which this file imports. */
-  --text-xs: 0.5rem;                  /* 8px  — badges, counters */
-  --text-xs--line-height: 0.75rem;
-  --text-sm: 0.625rem;                /* 10px — settings labels, descriptions */
-  --text-sm--line-height: 1rem;
-  --text-base: 0.6875rem;             /* 11px — body, buttons, tabs, sidebar */
-  --text-base--line-height: 1rem;
-  --text-chat: 12px;                  /* default chat/message text (UI_FONT_SCALES default preset) */
+  --text-xs: 0.4375rem;               /* 7px  — badges, counters */
+  --text-xs--line-height: 0.6875rem;
+  --text-sm: 0.5rem;                  /* 8px — settings labels, descriptions */
+  --text-sm--line-height: 0.8125rem;
+  --text-base: 0.5625rem;             /* 9px — body, buttons, tabs, sidebar */
+  --text-base--line-height: 0.875rem;
+  --text-chat: 10px;                  /* default chat/message text (UI_FONT_SCALES default preset) */
   /* NOTE: --text-chat--line-height is load-bearing for the no-scroll-bump
      streaming handoff in MessageList.tsx. TRAILING_STATUS_MIN_HEIGHT derives
      from this token, so keep the two in sync structurally. */
-  --text-chat--line-height: 20px;     /* font size + 8px */
-  --text-lg: 0.875rem;                /* 14px — emphasis, section labels */
-  --text-lg--line-height: 1.25rem;
-  --text-xl: 1.125rem;                /* 18px — unchanged */
-  --text-xl--line-height: 1.75rem;
+  --text-chat--line-height: 18px;     /* font size + 8px */
+  --text-lg: 0.75rem;                 /* 12px — emphasis, section labels */
+  --text-lg--line-height: 1.125rem;
+  --text-xl: 1rem;                    /* 16px — unchanged */
+  --text-xl--line-height: 1.5rem;
 
   /* -- Animations -- */
   --animate-blink-cursor: blink-cursor 1s step-end infinite;
@@ -126,7 +126,7 @@
   --color-input: rgba(255, 255, 255, 0.15);
   --color-input-border: rgba(255, 255, 255, 0.15);
   --color-separator: #232323;
-  --color-ring: rgba(131, 195, 255, 0.76);
+  --color-ring: rgba(255, 255, 255, 0.28);
   --color-border-light: rgba(255, 255, 255, 0.05);
   --color-border-heavy: rgba(255, 255, 255, 0.15);
 
@@ -314,15 +314,15 @@
   --color-diff-added: #00a240;
   --color-diff-deleted: #e02e2a;
   --diffs-font-family: var(--font-mono);
-  --diffs-font-size: 11px;
-  --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
+  --diffs-font-size: 9px;
+  --diffs-line-height: calc(var(--diffs-font-size, 9px) * 1.8);
   --scratch-font-family: var(--font-sans);
   --scratch-code-font-family: var(--font-mono);
-  --scratch-font-size: var(--text-chat, 12px);
-  --scratch-line-height: var(--text-chat--line-height, 20px);
+  --scratch-font-size: var(--text-chat, 10px);
+  --scratch-line-height: var(--text-chat--line-height, 18px);
   --scratch-list-marker-leading-space: 0.48em;
   --scratch-task-box-size: 0.82em;
-  --readable-code-font-size: 0.6875rem;
+  --readable-code-font-size: 0.5625rem;
   --readable-code-line-height: 1.625;
   --diffs-min-number-column-width: 4ch;
   --diffs-fg: #fcfcfc;
@@ -360,7 +360,7 @@
   --color-input: color-mix(in oklab, #ffffff 12%, transparent);
   --color-input-border: color-mix(in oklab, #ffffff 12%, transparent);
   --color-separator: color-mix(in oklab, #ffffff 4%, transparent);
-  --color-ring: color-mix(in oklab, #339cff 70%, transparent);
+  --color-ring: color-mix(in oklab, #ffffff 28%, transparent);
   --color-border-light: color-mix(in oklab, #ffffff 5%, transparent);
   --color-border-heavy: color-mix(in oklab, #ffffff 12%, transparent);
   --color-surface-control: color-mix(in oklab, #2b2b2b 96%, transparent);
@@ -497,7 +497,7 @@ mark.codex-thread-find-active {
   --color-input: rgba(13, 13, 13, 0.1);
   --color-input-border: rgba(13, 13, 13, 0.1);
   --color-separator: #f5f5f5;
-  --color-ring: #0285ff;
+  --color-ring: rgba(13, 13, 13, 0.3);
   --color-border-light: rgba(13, 13, 13, 0.05);
   --color-border-heavy: rgba(13, 13, 13, 0.12);
   --color-surface: #ffffff;
@@ -667,7 +667,7 @@ mark.codex-thread-find-active {
   --color-input: var(--color-surface-control);
   --color-input-border: var(--color-border);
   --color-separator: var(--color-border-light);
-  --color-ring: #339cff;
+  --color-ring: color-mix(in oklab, var(--color-foreground) 30%, transparent);
 
   /* Codex electron-light accent is blue-300 #339cff even on white
      (text-accent/icon-accent/border-focus all use it). */
@@ -1040,6 +1040,52 @@ body {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* ---- Shared modal enter/exit (ModalShell / kit Dialog) ----
+   Simple clean fade: overlay and panel both fade, no motion.
+   Radix Presence holds the node mounted until the exit animation ends, so
+   the out keyframes drive the close. Compositor-only (opacity/transform). */
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+/* Opacity ONLY — the panel is centered via Tailwind's standalone translate
+   property; putting translate() in these keyframes double-shifts the panel
+   during the animation and it snaps to center when the keyframe ends. */
+@keyframes modal-panel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-panel-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.modal-overlay-animated[data-state="open"] {
+  animation: modal-overlay-in 150ms cubic-bezier(0.19, 1, 0.22, 1);
+}
+.modal-overlay-animated[data-state="closed"] {
+  animation: modal-overlay-out 120ms ease-in forwards;
+}
+.modal-panel-animated[data-state="open"] {
+  animation: modal-panel-in 150ms cubic-bezier(0.19, 1, 0.22, 1);
+}
+.modal-panel-animated[data-state="closed"] {
+  animation: modal-panel-out 120ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay-animated[data-state="open"],
+  .modal-overlay-animated[data-state="closed"],
+  .modal-panel-animated[data-state="open"],
+  .modal-panel-animated[data-state="closed"] {
+    animation: none;
   }
 }
 

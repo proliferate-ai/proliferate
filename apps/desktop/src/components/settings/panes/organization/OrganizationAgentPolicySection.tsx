@@ -242,7 +242,7 @@ function PolicyChecklist({
           <Checkbox
             checked={checked.has(option.value)}
             disabled={disabled}
-            onChange={() => onToggle(option.value)}
+            onCheckedChange={() => onToggle(option.value)}
           />
           {option.label}
         </Label>

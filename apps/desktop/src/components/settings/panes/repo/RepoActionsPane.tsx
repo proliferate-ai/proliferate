@@ -280,12 +280,12 @@ function SetupHintRows({
             >
               <Checkbox
                 checked={checked}
-                onChange={(event) => onChange(toggleSetupHint(
+                onCheckedChange={(next) => onChange(toggleSetupHint(
                   currentScript,
                   hint.suggestedCommand,
-                  event.target.checked,
+                  next === true,
                 ))}
-                className="size-3.5 shrink-0 accent-foreground"
+                className="size-3.5 shrink-0"
               />
               <span className="min-w-0 flex-1 truncate font-mono text-ui-sm text-foreground">
                 {hint.suggestedCommand}

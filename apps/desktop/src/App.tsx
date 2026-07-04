@@ -50,6 +50,7 @@ import {
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
+import { SupportModalHost } from "@/components/support/SupportModalHost"
 import { AddRepoFlowHost } from "@/components/workspace/repo-setup/AddRepoFlowHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
@@ -359,6 +360,7 @@ function AppRuntime() {
           </InstrumentedRoutes>
           <RepoSetupModalHost />
           <AddRepoFlowHost />
+          <SupportModalHost />
           {/* Legacy toast store container (non-update toasts) — kept until all
               toast call sites migrate to Sonner. */}
           <ToastContainer />

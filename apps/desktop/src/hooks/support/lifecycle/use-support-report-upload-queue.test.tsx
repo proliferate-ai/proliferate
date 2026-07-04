@@ -353,7 +353,6 @@ describe("useSupportReportUploadQueue", () => {
       expect(cloudSupportMocks.createSupportReport).toHaveBeenCalledTimes(1);
       expect(cloudSupportMocks.createSupportReportUploadTargets).not.toHaveBeenCalled();
       expect(cloudSupportMocks.completeSupportReportUpload).not.toHaveBeenCalled();
-      expect(cloudSupportMocks.ensureSupportReportTracker).toHaveBeenCalledWith("report-1");
     });
   });
 });
@@ -384,7 +383,9 @@ function makeSupportReportJob(
       kind: "app_only",
       workspaceIds: [],
     },
-    publicContentConsent: true,
+    publicContentConsent: false,
+    kind: "bug",
+    creditConsent: false,
     snapshot: {
       openedAt: "2026-05-31T12:00:00.000Z",
       source: "sidebar",

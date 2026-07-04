@@ -38,7 +38,10 @@ export function buildCreateReportRequest(
       diagnostics: true,
       attachmentCount,
     },
-    publicContentConsent: job.publicContentConsent !== false,
+    publicContentConsent: false,
+    kind: job.kind ?? "bug",
+    creditConsent: job.creditConsent ?? false,
+    creditName: job.creditName ?? null,
   };
 }
 

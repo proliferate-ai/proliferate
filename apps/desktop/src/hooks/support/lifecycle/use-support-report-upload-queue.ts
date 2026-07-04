@@ -8,7 +8,6 @@ import {
   completeSupportReportUpload,
   createSupportReport,
   createSupportReportUploadTargets,
-  ensureSupportReportTracker,
 } from "@proliferate/cloud-sdk/client/support";
 import type {
   SupportReportCompleteRequest,
@@ -219,7 +218,6 @@ async function uploadSupportReport(
   const report = await createSupportReport(buildCreateReportRequest(job, job.attachments.length));
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
-    void nudgeSupportReportTracker(report.reportId);
     trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length);
     await deleteSupportReportJobAttachments(job);
     return {
@@ -284,14 +282,9 @@ async function uploadSupportReport(
     attachments: completedAttachments,
   });
   await completeSupportReportUpload(upload.reportId, completeRequest);
-  void nudgeSupportReportTracker(upload.reportId);
   trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
   await deleteSupportReportJobAttachments(job);
   return {
     reportId: upload.reportId,
   };
-}
-
-async function nudgeSupportReportTracker(reportId: string): Promise<void> {
-  await ensureSupportReportTracker(reportId).catch(() => null);
 }

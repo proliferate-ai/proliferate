@@ -53,8 +53,7 @@ export function UpdateDialogContent({
       <Label className="mb-0 flex select-none items-center gap-2 pl-[4.5rem] text-ui">
         <Checkbox
           checked={autoUpdate}
-          onChange={(event) => onToggleAutoUpdate(event.target.checked)}
-          className="size-4"
+          onCheckedChange={(checked) => onToggleAutoUpdate(checked === true)}
         />
         Keep Proliferate up to date automatically
       </Label>

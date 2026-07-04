@@ -24,7 +24,10 @@ export function StreamingIndicator({
   return (
     <DebugProfiler id="streaming-indicator">
       <div className="flex min-h-5 items-end gap-1.5 py-1 text-muted-foreground">
-        <ThinkingText text={label} />
+        <ThinkingText
+          text={label}
+          className="text-[length:var(--text-message)] leading-[var(--text-message--line-height)]"
+        />
         {elapsedSeconds !== null && (
           <span className="text-ui-sm leading-[var(--text-ui-sm--line-height)] tabular-nums text-faint">
             {"· "}

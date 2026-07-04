@@ -10,16 +10,16 @@
       defaults MUST match that table's default preset — drift-locked by
       appearance-css-drift.test.ts in apps/desktop. -- */
 @theme {
-  --text-ui: 13px;                    /* rows, pills, controls, popover items, menus, card titles */
-  --text-ui--line-height: 18px;       /* font size + 5px */
-  --text-ui-sm: 12px;                 /* descriptions, secondary labels, notices, meta */
-  --text-ui-sm--line-height: 16px;    /* font size + 4px */
-  --text-composer: 14px;              /* composer input text only */
-  --text-composer--line-height: 22px; /* font size + 8px */
-  --text-title: 20px;                 /* page/settings titles (SettingsPageHeader pairing) */
-  --text-title--line-height: 24px;    /* 1.2 × font size */
-  --text-hero: 28px;                  /* home hero heading */
-  --text-hero--line-height: 36px;     /* font size + 8px */
+  --text-ui: 11px;                    /* rows, pills, controls, popover items, menus, card titles */
+  --text-ui--line-height: 16px;       /* font size + 5px */
+  --text-ui-sm: 10px;                 /* descriptions, secondary labels, notices, meta */
+  --text-ui-sm--line-height: 14px;    /* font size + 4px */
+  --text-composer: 12px;              /* composer input text only */
+  --text-composer--line-height: 20px; /* font size + 8px */
+  --text-title: 18px;                 /* page/settings titles (SettingsPageHeader pairing) */
+  --text-title--line-height: 22px;    /* 1.2 × font size */
+  --text-hero: 25px;                  /* home hero heading */
+  --text-hero--line-height: 33px;     /* font size + 8px */
 }
 
 :root {
@@ -47,7 +47,7 @@
   /* Meta text (message timestamps, code-block language labels) tracks the
      chat font size — including runtime text-scale changes — but always sits
      one step below it. */
-  --text-chat-meta: calc(var(--text-chat, 12px) - 2px);
+  --text-chat-meta: calc(var(--text-chat, 10px) - 2px);
   /* Message body prose (assistant + user transcript bodies) reads at the
      composer size, so typed text and sent text match. Secondary chrome
      (tool/action rows, plans, work history) stays on --text-chat. Declared as

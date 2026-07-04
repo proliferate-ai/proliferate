@@ -15,8 +15,8 @@ import {
 const now = new Date("2026-05-31T12:00:00.000Z");
 
 describe("buildSupportReportPackage", () => {
-  it("redacts prompt, event, notification, and live-config bodies", async () => {
-    const sessionId = "session-redaction";
+  it("uploads full content without redacting prompts, events, notifications, or live-config", async () => {
+    const sessionId = "session-full";
     const connection: AnyHarnessResolvedConnection = {
       runtimeUrl: "http://127.0.0.1:7007",
       anyharnessWorkspaceId: "workspace-ah",
@@ -53,34 +53,38 @@ describe("buildSupportReportPackage", () => {
     });
     const json = JSON.stringify(payload);
 
-    expect(json).not.toContain("prompt secret");
-    expect(json).not.toContain("tool output secret");
-    expect(json).not.toContain("raw input secret");
-    expect(json).not.toContain("raw notification secret");
-    expect(json).not.toContain("system prompt secret");
+    // Full content is included (no redaction).
+    expect(json).toContain("prompt secret");
+    expect(json).toContain("tool output secret");
+    expect(json).toContain("raw notification secret");
+    expect(json).toContain("system prompt secret");
+
+    // Pending prompts include full text.
     expect(payload.workspaces[0]?.sessions[0]?.summary).toMatchObject({
-      pendingPrompts: [{ text: "[content:13]" }],
+      pendingPrompts: [{ text: "prompt secret" }],
     });
-    expect(payload.workspaces[0]?.sessions[0]?.normalizedEvents[0]).toMatchObject({
-      event: {
-        item: {
-          contentParts: [{ type: "tool_result_text", text: "[text:18]" }],
-          rawInput: undefined,
-          rawOutput: undefined,
-        },
-      },
-    });
+
+    // Raw notifications pass through unredacted.
     expect(payload.workspaces[0]?.sessions[0]?.rawNotifications[0]).toMatchObject({
-      notification: { redacted: true },
+      notification: { text: "raw notification secret" },
     });
+
+    // Live config includes full system prompt.
     expect(payload.workspaces[0]?.sessions[0]?.liveConfig).toMatchObject({
       liveConfig: {
-        systemPrompt: "[REDACTED]",
+        systemPrompt: "system prompt secret",
         normalizedControls: {
           model: { currentValue: "gpt-5.4" },
         },
       },
     });
+
+    // Schema version is 3.
+    expect(payload.schemaVersion).toBe(3);
+
+    // activeWorkspaceId and reportOpenedAt are captured.
+    expect(payload.report.activeWorkspaceId).toBe("workspace-ui");
+    expect(payload.report.reportOpenedAt).toBe(now.toISOString());
   });
 });
 
@@ -93,7 +97,9 @@ function makeJob(): SupportReportJob {
       kind: "most_recent_workspace",
       workspaceIds: ["workspace-ui"],
     },
-    publicContentConsent: true,
+    publicContentConsent: false,
+    kind: "bug",
+    creditConsent: false,
     snapshot: {
       openedAt: now.toISOString(),
       source: "sidebar",
@@ -115,6 +121,8 @@ function makeJob(): SupportReportJob {
       ],
     },
     attachments: [],
+    activeWorkspaceId: "workspace-ui",
+    reportOpenedAt: now.toISOString(),
   };
 }
 
