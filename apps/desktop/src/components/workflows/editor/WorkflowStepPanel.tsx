@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import type {
+  AgentConfigStep,
   AgentPromptStep,
   HumanApprovalStep,
   NotifyStep,
@@ -28,7 +29,9 @@ export interface EditorAgent {
 
 export interface WorkflowStepPanelProps {
   step: WorkflowStep;
-  setupHarness: string;
+  /** The effective harness for this step — Setup harness folded through any
+   * earlier `agent.config` steps. Drives goal-capability + model options. */
+  effectiveHarness: string;
   agents: readonly EditorAgent[];
   suggestions: readonly TemplateSuggestion[];
   slackConnected: boolean;
@@ -39,6 +42,16 @@ export interface WorkflowStepPanelProps {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <Label>{children}</Label>;
+}
+
+/** Label-left inline row (Family-4 C): fixed-width muted label, control right. */
+function InlineRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="w-28 shrink-0 text-sm text-muted-foreground">{label}</span>
+      <div className="flex flex-1 justify-end">{children}</div>
+    </div>
+  );
 }
 
 export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
@@ -54,6 +67,13 @@ export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
       <div className="flex-1 overflow-y-auto p-4">
         {step.kind === "agent.prompt" ? (
           <PromptEditor {...props} step={step} onChange={onChange} />
+        ) : step.kind === "agent.config" ? (
+          <AgentConfigEditor
+            step={step}
+            agents={props.agents}
+            effectiveHarness={props.effectiveHarness}
+            onChange={onChange}
+          />
         ) : step.kind === "shell.run" ? (
           <ScriptEditor step={step} suggestions={props.suggestions} onChange={onChange} />
         ) : step.kind === "scm.open_pr" ? (
@@ -70,16 +90,14 @@ export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
 
 function PromptEditor({
   step,
-  setupHarness,
+  effectiveHarness,
   agents,
   suggestions,
   supportsGoals,
   onChange,
 }: WorkflowStepPanelProps & { step: AgentPromptStep }) {
-  const effectiveHarness = step.harnessOverride ?? setupHarness;
   const effectiveAgent = agents.find((agent) => agent.kind === effectiveHarness);
   const harnessLabel = effectiveAgent?.displayName ?? effectiveHarness;
-  const modelOptions = effectiveAgent?.models ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -96,36 +114,6 @@ function PromptEditor({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <FieldLabel>Model</FieldLabel>
-          <WorkflowSelect
-            ariaLabel="Model"
-            value={step.modelOverride ?? ""}
-            options={[
-              { value: "", label: "inherit" },
-              ...modelOptions.map((model) => ({ value: model.id, label: model.label })),
-            ]}
-            onChange={(value) => onChange({ ...step, modelOverride: value || undefined })}
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <FieldLabel>Harness</FieldLabel>
-          <WorkflowSelect
-            ariaLabel="Harness"
-            value={step.harnessOverride ?? ""}
-            options={[
-              { value: "", label: "inherit" },
-              ...agents.map((agent) => ({ value: agent.kind, label: agent.displayName })),
-            ]}
-            onChange={(value) => onChange({ ...step, harnessOverride: value || undefined })}
-          />
-        </div>
-      </div>
-      {step.harnessOverride ? (
-        <p className="-mt-2 text-xs text-faint">Opens a new session in this workspace.</p>
-      ) : null}
-
       <WorkflowGoalAttachment
         goal={step.goal}
         supportsGoals={supportsGoals(effectiveHarness)}
@@ -133,7 +121,58 @@ function PromptEditor({
         suggestions={suggestions}
         onChange={(goal) => onChange({ ...step, goal })}
       />
-      <p className="text-xs text-faint">Workflow runs use the agent's bypass mode.</p>
+      <p className="text-xs text-faint">
+        Runs as <span className="text-muted-foreground">{harnessLabel}</span> in the agent's bypass mode.
+      </p>
+    </div>
+  );
+}
+
+function AgentConfigEditor({
+  step,
+  agents,
+  effectiveHarness,
+  onChange,
+}: {
+  step: AgentConfigStep;
+  agents: readonly EditorAgent[];
+  effectiveHarness: string;
+  onChange: (step: WorkflowStep) => void;
+}) {
+  // Model options scope to the chosen harness (or the inherited effective one).
+  const modelAgent = agents.find((agent) => agent.kind === (step.harness ?? effectiveHarness));
+  const modelOptions = modelAgent?.models ?? [];
+  return (
+    <div className="flex flex-col gap-4">
+      <InlineRow label="Agent">
+        <WorkflowSelect
+          ariaLabel="Agent"
+          value={step.harness ?? ""}
+          options={[
+            { value: "", label: "Keep current" },
+            ...agents.map((agent) => ({ value: agent.kind, label: agent.displayName })),
+          ]}
+          onChange={(value) => onChange({ ...step, harness: value || undefined })}
+        />
+      </InlineRow>
+      <InlineRow label="Model">
+        <WorkflowSelect
+          ariaLabel="Model"
+          value={step.model ?? ""}
+          options={[
+            { value: "", label: "Keep current" },
+            ...modelOptions.map((model) => ({ value: model.id, label: model.label })),
+          ]}
+          onChange={(value) => onChange({ ...step, model: value || undefined })}
+        />
+      </InlineRow>
+      <p className="text-xs text-faint">
+        Applies to every step below, until the next Agent step. Switching the agent opens a
+        new session; a model-only change applies at the next session.
+      </p>
+      {!(step.harness?.trim() || step.model?.trim()) ? (
+        <p className="text-xs text-destructive">Choose an agent or a model.</p>
+      ) : null}
     </div>
   );
 }
@@ -163,34 +202,31 @@ function ScriptEditor({
           invalid={step.command.trim() === ""}
         />
       </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel>Timeout (seconds)</FieldLabel>
-          <Input
-            type="number"
-            min={1}
-            className="w-32"
-            value={step.timeoutSecs ?? ""}
-            placeholder="none"
-            onChange={(event) =>
-              onChange({
-                ...step,
-                timeoutSecs: event.target.value === "" ? undefined : Number(event.target.value),
-              })
-            }
-          />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <FieldLabel>Output name</FieldLabel>
-          <Input
-            value={step.outputName ?? ""}
-            placeholder="results"
-            onChange={(event) =>
-              onChange({ ...step, outputName: event.target.value || undefined })
-            }
-          />
-        </div>
-      </div>
+      <InlineRow label="Timeout (s)">
+        <Input
+          type="number"
+          min={1}
+          className="w-32"
+          value={step.timeoutSecs ?? ""}
+          placeholder="none"
+          onChange={(event) =>
+            onChange({
+              ...step,
+              timeoutSecs: event.target.value === "" ? undefined : Number(event.target.value),
+            })
+          }
+        />
+      </InlineRow>
+      <InlineRow label="Output name">
+        <Input
+          className="w-40"
+          value={step.outputName ?? ""}
+          placeholder="results"
+          onChange={(event) =>
+            onChange({ ...step, outputName: event.target.value || undefined })
+          }
+        />
+      </InlineRow>
     </div>
   );
 }
@@ -206,14 +242,14 @@ function OpenPrEditor({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <FieldLabel>Base branch</FieldLabel>
+      <InlineRow label="Base branch">
         <Input
+          className="w-44"
           value={step.base ?? ""}
           placeholder="main"
           onChange={(event) => onChange({ ...step, base: event.target.value || undefined })}
         />
-      </div>
+      </InlineRow>
       <div className="flex flex-col gap-1.5">
         <FieldLabel>Title</FieldLabel>
         <Input
@@ -232,10 +268,9 @@ function OpenPrEditor({
           ariaLabel="PR body"
         />
       </div>
-      <label className="flex items-center justify-between gap-2">
-        <span className="text-sm text-foreground">Open as draft</span>
+      <InlineRow label="Open as draft">
         <Switch checked={step.draft ?? false} onChange={(draft) => onChange({ ...step, draft })} />
-      </label>
+      </InlineRow>
     </div>
   );
 }
@@ -253,8 +288,7 @@ function NotifyEditor({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <FieldLabel>Channel</FieldLabel>
+      <InlineRow label="Channel">
         <WorkflowSelect
           ariaLabel="Channel"
           value={step.channel}
@@ -269,8 +303,8 @@ function NotifyEditor({
           ]}
           onChange={(value) => onChange({ ...step, channel: value as WorkflowNotifyChannel })}
         />
-        <p className="text-xs text-faint">Always recorded in-app and in run history.</p>
-      </div>
+      </InlineRow>
+      <p className="-mt-1 text-xs text-faint">Always recorded in-app and in run history.</p>
       <div className="flex flex-col gap-1.5">
         <FieldLabel>Message</FieldLabel>
         <TemplateVarTextarea
@@ -311,17 +345,15 @@ function ApprovalEditor({
           onChange={(event) => onChange({ ...step, message: event.target.value })}
         />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <FieldLabel>On timeout</FieldLabel>
+      <InlineRow label="On timeout">
         <WorkflowSelect
           ariaLabel="On timeout"
           value={step.onTimeout}
           options={timeoutOptions.map((option) => ({ value: option.value, label: option.label }))}
           onChange={(value) => onChange({ ...step, onTimeout: value as WorkflowApprovalOnTimeout })}
         />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <FieldLabel>Timeout (seconds)</FieldLabel>
+      </InlineRow>
+      <InlineRow label="Timeout (s)">
         <Input
           type="number"
           min={1}
@@ -335,7 +367,7 @@ function ApprovalEditor({
             })
           }
         />
-      </div>
+      </InlineRow>
       <p className="text-xs text-faint">Approver: the workflow owner.</p>
     </div>
   );

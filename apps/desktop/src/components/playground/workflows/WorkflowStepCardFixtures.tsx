@@ -2,7 +2,6 @@ import type { WorkflowStep } from "@proliferate/product-domain/workflows/definit
 import { WorkflowStepCard } from "@proliferate/product-ui/workflows/WorkflowStepCard";
 import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
 import { WorkflowStepGlyphStrip } from "@proliferate/product-ui/workflows/WorkflowStepGlyphStrip";
-import { WorkflowStepConnector } from "@/components/workflows/editor/WorkflowStepConnector";
 import { workflowStepStrip } from "@proliferate/product-domain/workflows/presentation";
 import { WORKFLOW_TEMPLATES } from "@proliferate/product-domain/workflows/templates";
 
@@ -24,6 +23,13 @@ const GOAL_STEP: WorkflowStep = {
     onBlocked: "notify",
     verify: { shell: "make test", expectExit: 0 },
   },
+};
+
+const CONFIG_STEP: WorkflowStep = {
+  kind: "agent.config",
+  onFail: { kind: "stop" },
+  harness: "claude",
+  model: "sonnet",
 };
 
 const SHELL_STEP: WorkflowStep = {
@@ -64,6 +70,7 @@ interface Labeled {
 }
 
 const STEP_CARDS: Labeled[] = [
+  { label: "Agent (agent.config)", step: CONFIG_STEP },
   { label: "Prompt", step: PROMPT_STEP },
   { label: "Prompt + goal attachment (two-line)", step: GOAL_STEP },
   { label: "Script (shell.run)", step: SHELL_STEP },
@@ -106,16 +113,15 @@ export function WorkflowStepCardFixtures() {
 
       <Section title="Editor rail (connected chain)">
         <div className="flex w-[24rem] flex-col">
-          {[SHELL_STEP, GOAL_STEP, PR_STEP].map((step, index, all) => (
-            <div key={index}>
-              <WorkflowStepCard
-                step={step}
-                index={index}
-                selected={index === 1}
-                onSelect={() => undefined}
-              />
-              {index < all.length - 1 ? <WorkflowStepConnector /> : null}
-            </div>
+          {[CONFIG_STEP, GOAL_STEP, SHELL_STEP, PR_STEP].map((step, index, all) => (
+            <WorkflowStepCard
+              key={index}
+              step={step}
+              index={index}
+              selected={index === 1}
+              connector={index < all.length - 1}
+              onSelect={() => undefined}
+            />
           ))}
         </div>
       </Section>
@@ -123,7 +129,7 @@ export function WorkflowStepCardFixtures() {
       <Section title="Kind badges & glyph strips">
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-3">
-            {(["agent.prompt", "shell.run", "scm.open_pr", "notify", "human.approval"] as const).map(
+            {(["agent.prompt", "agent.config", "shell.run", "scm.open_pr", "notify", "human.approval"] as const).map(
               (kind) => (
                 <WorkflowStepKindBadge key={kind} kind={kind} />
               ),

@@ -3,7 +3,6 @@ import type { WorkflowStep } from "@proliferate/product-domain/workflows/definit
 import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/interpolation";
 import { WorkflowStepPanel, type EditorAgent } from "@/components/workflows/editor/WorkflowStepPanel";
 import { WorkflowStepRailCard } from "@/components/workflows/editor/WorkflowStepRailCard";
-import { WorkflowStepConnector } from "@/components/workflows/editor/WorkflowStepConnector";
 
 const AGENTS: EditorAgent[] = [
   {
@@ -22,11 +21,19 @@ const SUGGESTIONS: TemplateSuggestion[] = [
   { token: "{{steps.1.output}}", label: "steps.1.output", detail: "step 1 · Prompt output", kind: "stepOutput" },
 ];
 
-const SHELL_STEP: WorkflowStep = { kind: "shell.run", onFail: { kind: "continue" }, command: "make test", outputName: "results" };
+const CONFIG_STEP: WorkflowStep = { kind: "agent.config", onFail: { kind: "stop" }, harness: "claude", model: "sonnet" };
+const SHELL_STEP: WorkflowStep = {
+  kind: "shell.run",
+  onFail: { kind: "continue" },
+  command: "pnpm install --frozen-lockfile && pnpm build && make test",
+  outputName: "results",
+};
 const PROMPT_STEP: WorkflowStep = {
   kind: "agent.prompt",
   onFail: { kind: "stop" },
-  prompt: "The test suite is failing. Fix it.",
+  prompt:
+    "Triage the failing CI run for PR {{args.pr_number}}: read the logs, reproduce the failure locally, "
+    + "fix the root cause rather than the symptom, and add a regression test so it cannot come back.",
   goal: {
     objective: "the full test suite passes",
     maxTurns: 25,
@@ -46,7 +53,7 @@ function PanelHost({ initial, title }: { initial: WorkflowStep; title: string })
       <div className="h-[560px] w-[400px] overflow-hidden rounded-xl border border-border bg-background shadow-sm">
         <WorkflowStepPanel
           step={step}
-          setupHarness="claude"
+          effectiveHarness="claude"
           agents={AGENTS}
           suggestions={SUGGESTIONS}
           slackConnected={false}
@@ -59,35 +66,34 @@ function PanelHost({ initial, title }: { initial: WorkflowStep; title: string })
   );
 }
 
-const RAIL: WorkflowStep[] = [SHELL_STEP, PROMPT_STEP, EMPTY_STEP];
+const RAIL: WorkflowStep[] = [CONFIG_STEP, PROMPT_STEP, SHELL_STEP, EMPTY_STEP];
 
 export function WorkflowEditorFixtures() {
   const [selected, setSelected] = useState(1);
   return (
     <div className="flex flex-wrap gap-10">
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">Editor rail — connectors + add step</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">Editor rail — numbered spine (F), outline pills, agent step</h2>
         <div className="w-[440px] rounded-xl bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] p-5 [background-size:16px_16px]">
           {RAIL.map((step, index) => (
-            <div key={index}>
-              <WorkflowStepRailCard
-                step={step}
-                index={index}
-                selected={selected === index}
-                invalid={index === 2}
-                canMoveUp={index > 0}
-                canMoveDown={index < RAIL.length - 1}
-                onSelect={() => setSelected(index)}
-                onChange={() => undefined}
-                onDuplicate={() => undefined}
-                onDelete={() => undefined}
-                onMoveUp={() => undefined}
-                onMoveDown={() => undefined}
-              />
-              <WorkflowStepConnector />
-            </div>
+            <WorkflowStepRailCard
+              key={index}
+              step={step}
+              index={index}
+              selected={selected === index}
+              invalid={index === RAIL.length - 1}
+              connector
+              canMoveUp={index > 0}
+              canMoveDown={index < RAIL.length - 1}
+              onSelect={() => setSelected(index)}
+              onChange={() => undefined}
+              onDuplicate={() => undefined}
+              onDelete={() => undefined}
+              onMoveUp={() => undefined}
+              onMoveDown={() => undefined}
+            />
           ))}
-          <div className="flex justify-start pl-[4px]">
+          <div className="flex justify-start pl-[6px]">
             <button
               type="button"
               aria-label="Add step"
@@ -100,10 +106,11 @@ export function WorkflowEditorFixtures() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">Edit panel — per kind</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">Edit panel — label-left inline rows (F4-C)</h2>
         <div className="flex flex-wrap gap-6">
-          <PanelHost title="Script (shell) — one bordered command field, $-gutter inside" initial={SHELL_STEP} />
-          <PanelHost title="Prompt + goal attachment" initial={PROMPT_STEP} />
+          <PanelHost title="Agent — harness + model, own step" initial={CONFIG_STEP} />
+          <PanelHost title="Prompt + goal (no model/harness rows)" initial={PROMPT_STEP} />
+          <PanelHost title="Script (shell) — mono only in the $-gutter" initial={SHELL_STEP} />
         </div>
       </section>
     </div>

@@ -26,6 +26,8 @@ export interface WorkflowStepRailCardProps {
   index: number;
   selected: boolean;
   invalid: boolean;
+  /** Draw the connector spine down to the next card. */
+  connector: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onSelect: () => void;
@@ -42,6 +44,7 @@ export function WorkflowStepRailCard({
   index,
   selected,
   invalid,
+  connector,
   canMoveUp,
   canMoveDown,
   onSelect,
@@ -111,8 +114,8 @@ export function WorkflowStepRailCard({
       index={index}
       selected={selected}
       invalid={invalid}
+      connector={connector}
       onSelect={onSelect}
-      dragHandle={<span className="cursor-grab select-none font-mono text-xs leading-none" aria-hidden>⠿</span>}
       menu={menu}
       onFailControl={onFailControl}
     />

@@ -13,6 +13,7 @@ import {
   type WorkflowStepSessionLink,
 } from "@proliferate/product-domain/workflows/run-status";
 import { workflowTriggerLabel } from "@proliferate/product-domain/workflows/model";
+import { workflowStepPreview } from "@proliferate/product-domain/workflows/presentation";
 import { WorkflowRunTimelineRow } from "@proliferate/product-ui/workflows/WorkflowRunTimelineRow";
 import { WorkflowStatusPill } from "@proliferate/product-ui/workflows/WorkflowStatusPill";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -118,6 +119,7 @@ export function WorkflowRunView({
           <WorkflowRunTimelineRow
             key={view.index}
             view={view}
+            preview={definition.steps[index] ? workflowStepPreview(definition.steps[index]!) : null}
             connector={index < views.length - 1}
             onOpenSession={onOpenSession}
             approvalControls={

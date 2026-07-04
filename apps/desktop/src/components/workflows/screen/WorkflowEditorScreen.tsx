@@ -23,7 +23,6 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
-import { WorkflowStepConnector } from "../editor/WorkflowStepConnector";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
@@ -53,7 +52,7 @@ interface Draft {
   definition: WorkflowDefinition;
 }
 
-const STEP_KINDS: WorkflowStepKind[] = ["agent.prompt", "shell.run", "scm.open_pr", "notify", "human.approval"];
+const STEP_KINDS: WorkflowStepKind[] = ["agent.prompt", "agent.config", "shell.run", "scm.open_pr", "notify", "human.approval"];
 
 function stepOutputNames(step: WorkflowStep): string[] {
   switch (step.kind) {
@@ -66,6 +65,18 @@ function stepOutputNames(step: WorkflowStep): string[] {
     default:
       return [];
   }
+}
+
+/** The active harness at a step index: Setup harness folded through earlier `agent.config`. */
+function effectiveHarnessAt(definition: WorkflowDefinition, stepIndex: number): string {
+  let harness = definition.setup.harness;
+  for (let i = 0; i < stepIndex; i++) {
+    const step = definition.steps[i];
+    if (step && step.kind === "agent.config" && step.harness?.trim()) {
+      harness = step.harness;
+    }
+  }
+  return harness;
 }
 
 function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
@@ -306,38 +317,37 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
               <div className="flex flex-col">
                 {definition.steps.map((step, index) => (
-                  <div key={index}>
-                    <div
-                      draggable
-                      onDragStart={() => setDragIndex(index)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => {
-                        if (dragIndex !== null) {
-                          reorder(dragIndex, index);
-                        }
-                        setDragIndex(null);
-                      }}
-                    >
-                      <WorkflowStepRailCard
-                        step={step}
-                        index={index}
-                        selected={selectedStep === index}
-                        invalid={stepIssues(issues, index).length > 0}
-                        canMoveUp={index > 0}
-                        canMoveDown={index < definition.steps.length - 1}
-                        onSelect={() => setSelectedStep(index)}
-                        onChange={(next) => updateStep(index, next)}
-                        onDuplicate={() => duplicateStep(index)}
-                        onDelete={() => deleteStep(index)}
-                        onMoveUp={() => reorder(index, index - 1)}
-                        onMoveDown={() => reorder(index, index + 1)}
-                      />
-                    </div>
-                    <WorkflowStepConnector />
+                  <div
+                    key={index}
+                    draggable
+                    onDragStart={() => setDragIndex(index)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (dragIndex !== null) {
+                        reorder(dragIndex, index);
+                      }
+                      setDragIndex(null);
+                    }}
+                  >
+                    <WorkflowStepRailCard
+                      step={step}
+                      index={index}
+                      selected={selectedStep === index}
+                      invalid={stepIssues(issues, index).length > 0}
+                      connector
+                      canMoveUp={index > 0}
+                      canMoveDown={index < definition.steps.length - 1}
+                      onSelect={() => setSelectedStep(index)}
+                      onChange={(next) => updateStep(index, next)}
+                      onDuplicate={() => duplicateStep(index)}
+                      onDelete={() => deleteStep(index)}
+                      onMoveUp={() => reorder(index, index - 1)}
+                      onMoveDown={() => reorder(index, index + 1)}
+                    />
                   </div>
                 ))}
 
-                <div className="flex justify-start pl-[4px]">
+                <div className="flex justify-start pl-[6px]">
                   <PopoverButton
                     align="start"
                     side="bottom"
@@ -377,7 +387,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
             <div className="w-[380px] shrink-0 overflow-hidden border-l border-border bg-background">
               <WorkflowStepPanel
                 step={definition.steps[selectedStep]!}
-                setupHarness={definition.setup.harness}
+                effectiveHarness={effectiveHarnessAt(definition, selectedStep)}
                 agents={agents}
                 suggestions={suggestions}
                 slackConnected={false}

@@ -63,6 +63,43 @@ describe("planRelayReports", () => {
     expect(done.state.done).toBe(true);
   });
 
+  it("re-reports running when a running step's goal snapshot changes", () => {
+    // Live goal progress: the running prompt step's output_json goal counters
+    // advance while the status/cursor stay put. The signature hashes outputs, so
+    // the relay must forward the fresh snapshot (not debounce on status alone).
+    const first = planRelayReports(
+      initialRelayState(),
+      view({
+        status: "running",
+        stepCursor: 1,
+        steps: [{ stepIndex: 1, output: { goal: { iterations: 2, tokens_used: 40_000 } } }],
+      }),
+    );
+    expect(first.reports).toHaveLength(1);
+    const second = planRelayReports(
+      first.state,
+      view({
+        status: "running",
+        stepCursor: 1,
+        steps: [{ stepIndex: 1, output: { goal: { iterations: 3, tokens_used: 64_000 } } }],
+      }),
+    );
+    expect(second.reports).toHaveLength(1);
+    expect(second.reports[0].stepOutputs).toEqual({
+      "1": { goal: { iterations: 3, tokens_used: 64_000 } },
+    });
+    // An identical follow-up poll is debounced.
+    const third = planRelayReports(
+      second.state,
+      view({
+        status: "running",
+        stepCursor: 1,
+        steps: [{ stepIndex: 1, output: { goal: { iterations: 3, tokens_used: 64_000 } } }],
+      }),
+    );
+    expect(third.reports).toHaveLength(0);
+  });
+
   it("carries session ids and step outputs into the report", () => {
     const { reports } = planRelayReports(
       initialRelayState(),
