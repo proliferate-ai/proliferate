@@ -52,13 +52,14 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   const jobIdRef = useRef(crypto.randomUUID());
   const openedAtRef = useRef(new Date().toISOString());
 
-  // Write marker line into native log on mount.
+  // Write marker line into native log on mount so the log tail can be
+  // bisected around the report. Owns the marker (the store stays pure state).
   useEffect(() => {
     void logRendererEvent({
       source: "support_report",
-      message: `support-report-opened jobId=${jobIdRef.current}`,
+      message: `support-report-opened kind=${kind} jobId=${jobIdRef.current}`,
     }).catch(() => {});
-  }, []);
+  }, [kind]);
 
   const stageFiles = useCallback(async (files: FileList | File[]) => {
     const nextFiles = Array.from(files);
