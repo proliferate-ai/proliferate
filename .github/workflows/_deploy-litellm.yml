@@ -6,12 +6,15 @@
 #   - The ECS service + an initial task definition already registered
 #     (this workflow re-renders the latest task definition; it does not
 #     create the service).
+#   - For Bedrock access: the ECS task role must have the attached policy
+#     arn:aws:iam::157466816238:policy/proliferate-gateway-bedrock-invoke.
 #
 # Required GitHub environment configuration:
 #   vars:    AWS_DEPLOY_ROLE_ARN, ECS_CLUSTER, ECS_LITELLM_SERVICE,
 #            ECS_LITELLM_CONTAINER_NAME (default: litellm),
 #            ECR_LITELLM_REPOSITORY (default: proliferate-litellm),
-#            LITELLM_DEPLOY_ENABLED (set "true" once the RDS + ECS service exist)
+#            LITELLM_DEPLOY_ENABLED (set "true" once the RDS + ECS service exist),
+#            AWS_BEDROCK_REGION (default: us-east-1)
 #   secrets: LITELLM_DATABASE_URL, LITELLM_MASTER_KEY,
 #            AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY,
 #            AGENT_GATEWAY_MANAGED_OPENAI_API_KEY,
@@ -159,7 +162,10 @@ jobs:
             --type SecureString --value "$AGENT_GATEWAY_MANAGED_XAI_API_KEY" --overwrite >/dev/null
 
           jq -n \
-            '[]' > env-updates.json
+            --arg region "${AWS_BEDROCK_REGION:-us-east-1}" \
+            '[
+              {"name":"AWS_BEDROCK_REGION","value":$region}
+            ]' > env-updates.json
 
           jq -n \
             --arg prefix "$parameter_prefix" \
@@ -183,8 +189,7 @@ jobs:
                 | ["DATABASE_URL", "LITELLM_MASTER_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"] as $secret_names
                 | ($current | map(select(
                     .name as $name
-                    | ($updated_names | index($name) | not)
-                    and ($secret_names | index($name) | not)
+                    | (($updated_names + $secret_names) | index($name) | not)
                   ))) + $updates[0];
 
               def merge_secrets($updates):

@@ -40,7 +40,25 @@ pub enum GatewayModelSource {
 pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
     if model_id.starts_with("claude-") {
         Some("anthropic")
-    } else if model_id.starts_with("gpt-") || model_id.starts_with('o') {
+    } else if model_id.starts_with("anthropic.")
+        || model_id.starts_with("us.anthropic.")
+        || model_id.starts_with("global.anthropic.")
+        || model_id.starts_with("eu.anthropic.")
+        || model_id.starts_with("apac.anthropic.")
+    {
+        // Bedrock-style anthropic ids: us.anthropic.claude-sonnet-4-6,
+        // global.anthropic.claude-fable-5, us.anthropic.claude-haiku-4-5-...-v1:0
+        Some("anthropic")
+    } else if model_id.starts_with("openai.") {
+        // Bedrock-style openai ids: openai.gpt-oss-*
+        Some("openai")
+    } else if model_id.starts_with("gpt-") {
+        Some("openai")
+    } else if model_id.len() >= 2
+        && model_id.as_bytes()[0] == b'o'
+        && model_id.as_bytes()[1].is_ascii_digit()
+    {
+        // OpenAI o-series: o1, o3, o4-mini, etc. (but NOT opus/opus[1m])
         Some("openai")
     } else if model_id.starts_with("grok-") {
         Some("xai")
@@ -340,8 +358,40 @@ mod tests {
         assert!(!model_matches_provider("anthropic", "gpt-5.5"));
         assert!(model_matches_provider("openai", "gpt-5.5"));
         assert!(model_matches_provider("openai", "o3"));
+        assert!(model_matches_provider("openai", "o3-mini"));
+        assert!(model_matches_provider("openai", "o4-mini"));
+        assert!(model_matches_provider("openai", "openai.gpt-oss-120b-1:0"));
         assert!(model_matches_provider("xai", "grok-4"));
         assert!(!model_matches_provider("unknown", "claude-sonnet-4-5"));
+        // CLI selectors like opus/opus[1m] should NOT match openai
+        assert!(!model_matches_provider("openai", "opus"));
+        assert!(!model_matches_provider("openai", "opus[1m]"));
+        // Also verify they return None (no provider)
+        assert_eq!(provider_for_model("opus"), None);
+        assert_eq!(provider_for_model("opus[1m]"), None);
+        assert_eq!(provider_for_model("claude-sonnet-4-6"), Some("anthropic"));
+        // Bedrock-style anthropic ids (region-prefixed and bare) map to anthropic
+        // so filter_by_providers keeps them in claude's gateway model plan.
+        assert_eq!(
+            provider_for_model("us.anthropic.claude-sonnet-4-6"),
+            Some("anthropic")
+        );
+        assert_eq!(
+            provider_for_model("global.anthropic.claude-fable-5"),
+            Some("anthropic")
+        );
+        assert_eq!(
+            provider_for_model("us.anthropic.claude-haiku-4-5-20251001-v1:0"),
+            Some("anthropic")
+        );
+        assert_eq!(
+            provider_for_model("anthropic.claude-sonnet-4-6"),
+            Some("anthropic")
+        );
+        assert!(model_matches_provider(
+            "anthropic",
+            "us.anthropic.claude-sonnet-4-6"
+        ));
     }
 
     #[test]
