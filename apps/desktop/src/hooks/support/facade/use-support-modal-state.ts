@@ -8,62 +8,57 @@ import {
   type DragEvent,
 } from "react";
 import {
-  closeSupportReportWindow,
+  SUPPORT_REPORT_JOB_EVENT,
   deleteStagedSupportReportAttachment,
-  getSupportReportWindowSnapshot,
-  listenSupportSnapshotUpdates,
   stageSupportReportAttachment,
-  submitSupportReportJob,
 } from "@/lib/access/tauri/support";
+import { logRendererEvent } from "@/lib/access/tauri/diagnostics";
 import type {
   SupportReportAttachmentPayload,
   SupportReportJob,
-  SupportReportScopeKind,
-  SupportReportWindowSnapshot,
-  SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
+import { useSupportReportSnapshot } from "@/hooks/support/derived/use-support-report-snapshot";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import type { SupportModalKind } from "@/stores/support/support-modal-store";
 
-export interface StagedSupportReportAttachment extends SupportReportAttachmentPayload {
+export interface StagedAttachment extends SupportReportAttachmentPayload {
   id: string;
+  /** Object URL for image preview thumbnails. */
+  previewUrl?: string | null;
 }
 
-export function useSupportReportWindowState() {
-  const [snapshot, setSnapshot] = useState<SupportReportWindowSnapshot | null>(null);
+interface UseSupportModalStateOptions {
+  kind: SupportModalKind;
+  onClose: () => void;
+}
+
+export function useSupportModalState({ kind, onClose }: UseSupportModalStateOptions) {
+  const snapshot = useSupportReportSnapshot({ source: "sidebar" });
+  const activeSessionId = useSessionSelectionStore((state) => state.activeSessionId);
   const [message, setMessage] = useState("");
-  const [attachments, setAttachments] = useState<StagedSupportReportAttachment[]>([]);
-  const [scopeKind, setScopeKind] = useState<SupportReportScopeKind>("app_only");
-  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
-  const [publicContentConsent, setPublicContentConsent] = useState(true);
+  const [creditConsent, setCreditConsentRaw] = useState(false);
+  const [creditName, setCreditName] = useState("");
+  const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
+
+  function setCreditConsent(next: boolean) {
+    setCreditConsentRaw(next);
+    if (!next) {
+      setCreditName("");
+    }
+  }
   const [stagingError, setStagingError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submittingRef = useRef(false);
+  const jobIdRef = useRef(crypto.randomUUID());
+  const openedAtRef = useRef(new Date().toISOString());
 
-  const applySnapshotDefaults = useCallback((nextSnapshot: SupportReportWindowSnapshot) => {
-    setSnapshot(nextSnapshot);
-    setScopeKind(nextSnapshot.defaultScope);
-    setSelectedWorkspaceIds(nextSnapshot.defaultWorkspaceId ? [nextSnapshot.defaultWorkspaceId] : []);
-  }, []);
-
+  // Write marker line into native log on mount.
   useEffect(() => {
-    let disposed = false;
-    void getSupportReportWindowSnapshot().then((loaded) => {
-      if (!disposed && loaded) {
-        applySnapshotDefaults(loaded);
-      }
-    });
-    let unlisten: (() => void) | null = null;
-    void listenSupportSnapshotUpdates((nextSnapshot) => {
-      if (!disposed) {
-        applySnapshotDefaults(nextSnapshot);
-      }
-    }).then((cleanup) => {
-      unlisten = cleanup;
-    });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [applySnapshotDefaults]);
+    void logRendererEvent({
+      source: "support_report",
+      message: `support-report-opened jobId=${jobIdRef.current}`,
+    }).catch(() => {});
+  }, []);
 
   const stageFiles = useCallback(async (files: FileList | File[]) => {
     const nextFiles = Array.from(files);
@@ -113,87 +108,66 @@ export function useSupportReportWindowState() {
     event.currentTarget.value = "";
   }, [stageFiles]);
 
-  const defaultWorkspace = snapshot?.workspaceOptions.find((workspace) =>
-    workspace.id === snapshot.defaultWorkspaceId
-  ) ?? null;
-  const effectiveWorkspaceIds = scopeKind === "app_only"
-    ? []
-    : scopeKind === "choose_workspace"
-      ? selectedWorkspaceIds
-      : defaultWorkspace ? [defaultWorkspace.id] : [];
-  const workspaceSelectionRequired = scopeKind === "choose_workspace";
-  const canSend = (
-    message.trim().length > 0
-    || attachments.length > 0
-  ) && !isSubmitting && (
-    (!workspaceSelectionRequired || effectiveWorkspaceIds.length > 0)
-    && (scopeKind !== "most_recent_workspace" || effectiveWorkspaceIds.length > 0)
-  );
-
-  function setScope(kind: SupportReportScopeKind) {
-    if (kind === "most_recent_workspace" && !snapshot?.defaultWorkspaceId) {
-      return;
-    }
-    if (kind === "choose_workspace" && !snapshot?.workspaceOptions.length) {
-      return;
-    }
-    setScopeKind(kind);
-    if (kind === "app_only") {
-      setSelectedWorkspaceIds([]);
-      return;
-    }
-    if (selectedWorkspaceIds.length === 0 && snapshot?.defaultWorkspaceId) {
-      setSelectedWorkspaceIds([snapshot.defaultWorkspaceId]);
-    }
-  }
-
-  function toggleWorkspace(workspaceId: string) {
-    setSelectedWorkspaceIds((current) => {
-      return current.includes(workspaceId)
-        ? current.filter((id) => id !== workspaceId)
-        : [...current, workspaceId];
-    });
-  }
-
-  function removeAttachment(attachment: StagedSupportReportAttachment) {
+  function removeAttachment(attachment: StagedAttachment) {
     setAttachments((current) =>
       current.filter((candidate) => candidate.id !== attachment.id)
     );
+    if (attachment.previewUrl) {
+      URL.revokeObjectURL(attachment.previewUrl);
+    }
     if (attachment.stagedPath) {
       void deleteStagedSupportReportAttachment(attachment.stagedPath);
     }
   }
 
-  async function handleCancel() {
-    await Promise.all(attachments.map(async (attachment) => {
-      if (attachment.stagedPath) {
-        await deleteStagedSupportReportAttachment(attachment.stagedPath).catch(() => {});
-      }
-    }));
-    await closeSupportReportWindow();
-  }
+  const canSend = (
+    message.trim().length > 0
+    || attachments.length > 0
+  ) && !isSubmitting;
 
   async function handleSend() {
-    if (!snapshot || !canSend || submittingRef.current) {
+    if (!canSend || submittingRef.current) {
       return;
     }
     submittingRef.current = true;
     setIsSubmitting(true);
+
+    // Determine scope: use active workspace if available, else app_only.
+    const defaultWorkspaceId = snapshot.defaultWorkspaceId ?? null;
+    const scopeKind = defaultWorkspaceId ? "most_recent_workspace" as const : "app_only" as const;
+    const effectiveWorkspaceIds = defaultWorkspaceId ? [defaultWorkspaceId] : [];
+
     const job: SupportReportJob = {
-      jobId: crypto.randomUUID(),
+      jobId: jobIdRef.current,
       createdAt: new Date().toISOString(),
       message: message.trim(),
       scope: {
         kind: scopeKind,
         workspaceIds: effectiveWorkspaceIds,
       },
-      publicContentConsent,
-      snapshot,
-      attachments: attachments.map(({ id: _id, ...attachment }) => attachment),
+      publicContentConsent: false,
+      kind,
+      creditConsent: kind === "feature" ? creditConsent : false,
+      creditName: kind === "feature" && creditConsent ? creditName.trim() || null : null,
+      snapshot: {
+        ...snapshot,
+        openedAt: openedAtRef.current,
+      },
+      attachments: attachments.map(({ id: _id, previewUrl: _preview, ...attachment }) => attachment),
+      activeWorkspaceId: defaultWorkspaceId ?? undefined,
+      activeSessionId: activeSessionId ?? undefined,
+      reportOpenedAt: openedAtRef.current,
     };
+
     try {
-      await submitSupportReportJob(job);
-      await closeSupportReportWindow();
+      // Enqueue in-process by dispatching a DOM event; the upload queue's
+      // listener is the single owner of persistence + draining. Persisting
+      // here too would make the listener's persist dedupe and silently skip
+      // draining, so the report would never upload until the next app launch.
+      window.dispatchEvent(
+        new CustomEvent(SUPPORT_REPORT_JOB_EVENT, { detail: job }),
+      );
+      onClose();
     } catch (error) {
       submittingRef.current = false;
       setIsSubmitting(false);
@@ -201,10 +175,24 @@ export function useSupportReportWindowState() {
     }
   }
 
+  function handleCancel() {
+    // Clean up staged files.
+    for (const attachment of attachments) {
+      if (attachment.previewUrl) {
+        URL.revokeObjectURL(attachment.previewUrl);
+      }
+      if (attachment.stagedPath) {
+        void deleteStagedSupportReportAttachment(attachment.stagedPath).catch(() => {});
+      }
+    }
+    onClose();
+  }
+
   return {
     attachments,
     canSend,
-    defaultWorkspace,
+    creditConsent,
+    creditName,
     handleAttachmentDragOver,
     handleAttachmentDrop,
     handleAttachmentInputChange,
@@ -213,16 +201,11 @@ export function useSupportReportWindowState() {
     handleSend,
     isSubmitting,
     message,
-    publicContentConsent,
     removeAttachment,
-    scopeKind,
-    selectedWorkspaceIds,
+    setCreditConsent,
+    setCreditName,
     setMessage,
-    setPublicContentConsent,
-    setScope,
-    snapshot,
     stagingError,
-    toggleWorkspace,
   };
 }
 
@@ -230,7 +213,7 @@ function scopeFallbackFileName(file: File): string {
   return file.name || fallbackAttachmentFileName(file.type);
 }
 
-async function stageAttachment(file: File): Promise<StagedSupportReportAttachment> {
+async function stageAttachment(file: File): Promise<StagedAttachment> {
   const dataBase64 = await fileToBase64(file);
   const id = crypto.randomUUID();
   const stagedPath = await stageSupportReportAttachment({
@@ -238,6 +221,13 @@ async function stageAttachment(file: File): Promise<StagedSupportReportAttachmen
     fileName: scopeFallbackFileName(file),
     dataBase64,
   });
+
+  // Create preview URL for image types.
+  let previewUrl: string | null = null;
+  if (file.type.startsWith("image/")) {
+    previewUrl = URL.createObjectURL(file);
+  }
+
   return {
     id,
     clientFileId: id,
@@ -246,6 +236,7 @@ async function stageAttachment(file: File): Promise<StagedSupportReportAttachmen
     sizeBytes: file.size,
     dataBase64: stagedPath ? undefined : dataBase64,
     stagedPath,
+    previewUrl,
   };
 }
 
@@ -296,5 +287,3 @@ function fallbackAttachmentFileName(contentType: string): string {
       return "attachment";
   }
 }
-
-export type SupportReportWindowDefaultWorkspace = SupportReportWorkspaceOption | null;

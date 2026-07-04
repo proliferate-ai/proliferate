@@ -2,7 +2,6 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
-import { SupportReportWindow } from "./components/support/SupportReportWindow";
 import { initializeTheme } from "./config/theme";
 import "./lib/access/cloud/client";
 import { bootstrapProliferateApiConfig } from "./lib/infra/proliferate-api";
@@ -25,8 +24,6 @@ import {
 import { installDebugMeasurement } from "./lib/infra/measurement/debug-measurement-install";
 import { startLayoutShiftObserver } from "./lib/infra/measurement/debug-layout-shift";
 import { logRendererEvent } from "./lib/access/tauri/diagnostics";
-import { useAppearancePreferenceLifecycle } from "./hooks/preferences/lifecycle/use-appearance-preference-lifecycle";
-import { useUserPreferencesLifecycle } from "./hooks/preferences/lifecycle/use-user-preferences-lifecycle";
 import { AppProviders } from "./providers/AppProviders";
 import "./index.css";
 
@@ -34,9 +31,6 @@ const IS_TAURI_DESKTOP =
   typeof window !== "undefined"
   && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>);
 const API_CONFIG_STARTUP_BUDGET_MS = 1500;
-const IS_SUPPORT_WINDOW =
-  typeof window !== "undefined"
-  && new URLSearchParams(window.location.search).get("support") === "1";
 
 document.documentElement.dataset.proliferateClient = "desktop";
 initializeTheme();
@@ -109,31 +103,21 @@ if (!import.meta.env.DEV) {
 
 function renderApp() {
   recordRendererStartupEvent("render.start");
-  const content = IS_SUPPORT_WINDOW ? (
-    <SupportReportWindowHost />
-  ) : (
-    <BrowserRouter>
-      <AppProviders>
-        <App />
-      </AppProviders>
-    </BrowserRouter>
-  );
   ReactDOM.createRoot(
     document.getElementById("root") as HTMLElement,
     getDesktopTelemetryRootHandlers(),
   ).render(
     <React.StrictMode>
-      {content}
+      <BrowserRouter>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </BrowserRouter>
     </React.StrictMode>,
   );
   recordRendererStartupEvent("render.scheduled");
 }
 
-function SupportReportWindowHost() {
-  useUserPreferencesLifecycle();
-  useAppearancePreferenceLifecycle();
-  return <SupportReportWindow />;
-}
 
 let appRendered = false;
 

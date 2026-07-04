@@ -78,8 +78,7 @@ from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.version import server_version
 
-# SUPPORT PARKED: diagnostics imports deleted target runtime access models.
-# from proliferate.server.support.api import router as support_router
+from proliferate.server.support.api import router as support_router
 from proliferate.utils.logging import configure_server_logging
 
 
@@ -116,26 +115,6 @@ def _validate_e2b_template_configuration() -> None:
         "template instead of the base E2B image."
     )
 
-
-def _validate_support_tracker_configuration() -> None:
-    if not settings.support_tracker_enabled or settings.debug:
-        return
-    missing = [
-        name
-        for name, value in {
-            "SUPPORT_GITHUB_APP_ID": settings.support_github_app_id,
-            "SUPPORT_GITHUB_APP_PRIVATE_KEY": settings.support_github_app_private_key,
-            "SUPPORT_GITHUB_APP_INSTALLATION_ID": settings.support_github_app_installation_id,
-            "SUPPORT_GITHUB_OWNER": settings.support_github_owner,
-            "SUPPORT_GITHUB_REPO": settings.support_github_repo,
-        }.items()
-        if not value.strip()
-    ]
-    if missing:
-        raise RuntimeError(
-            "support_tracker_enabled=true requires GitHub support tracker configuration: "
-            + ", ".join(missing)
-        )
 
 
 # Fragments that mark a request-body field as secret-bearing. FastAPI's default
@@ -209,7 +188,6 @@ async def _proliferate_error_handler(
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _validate_cloud_billing_configuration()
     _validate_e2b_template_configuration()
-    _validate_support_tracker_configuration()
     try:
         async with db_engine.engine.begin() as conn:
             await conn.run_sync(validate_database_schema)
@@ -310,9 +288,7 @@ def create_app() -> FastAPI:
     app.include_router(gateway_router, prefix=f"{api_prefix}/v1/gateway", tags=["gateway"])
     app.include_router(catalogs_router, prefix=f"{api_prefix}/v1", tags=["catalogs"])
     app.include_router(ai_magic_router, prefix=f"{api_prefix}/v1", tags=["ai_magic"])
-    # SUPPORT PARKED: /v1/support/* is intentionally disabled until diagnostics
-    # stop depending on deleted cloud target runtime access tables.
-    # app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
+    app.include_router(support_router, prefix=f"{api_prefix}/v1", tags=["support"])
     app.include_router(billing_router, prefix=f"{api_prefix}/v1", tags=["billing"])
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
     app.include_router(

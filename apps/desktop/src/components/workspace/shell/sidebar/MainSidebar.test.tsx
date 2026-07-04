@@ -5,12 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-
-const openSupportReportWindow = vi.hoisted(() => vi.fn(async () => {}));
-
-vi.mock("@/lib/access/tauri/support", () => ({
-  openSupportReportWindow,
-}));
+import { useSupportModalStore } from "@/stores/support/support-modal-store";
 
 vi.mock("@/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -252,14 +247,15 @@ function renderMainSidebar() {
   );
 }
 
-describe("MainSidebar support window", () => {
-  it("opens the support report window from Support", async () => {
+describe("MainSidebar support modal", () => {
+  it("opens the feedback modal from Support", async () => {
     renderMainSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: /Support/ }));
 
     await waitFor(() => {
-      expect(openSupportReportWindow).toHaveBeenCalledTimes(1);
+      expect(useSupportModalStore.getState().open).toBe(true);
+      expect(useSupportModalStore.getState().kind).toBe("bug");
     });
   });
 });

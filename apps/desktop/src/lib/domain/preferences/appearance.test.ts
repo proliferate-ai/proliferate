@@ -95,23 +95,49 @@ describe("appearance preferences", () => {
 
   it("preserves current default UI token values", () => {
     expect(UI_FONT_SCALES.default).toEqual({
-      xs: { fontSize: "0.5rem", lineHeight: "0.75rem" },
-      sm: { fontSize: "0.625rem", lineHeight: "1rem" },
-      base: { fontSize: "0.6875rem", lineHeight: "1rem" },
-      uiSm: { fontSize: "12px", lineHeight: "16px" },
-      ui: { fontSize: "13px", lineHeight: "18px" },
-      chat: { fontSize: "12px", lineHeight: "20px" },
-      composer: { fontSize: "14px", lineHeight: "22px" },
-      lg: { fontSize: "0.875rem", lineHeight: "1.25rem" },
-      xl: { fontSize: "1.125rem", lineHeight: "1.75rem" },
-      title: { fontSize: "20px", lineHeight: "24px" },
-      hero: { fontSize: "28px", lineHeight: "36px" },
+      xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
+      sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
+      base: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
+      uiSm: { fontSize: "10px", lineHeight: "14px" },
+      ui: { fontSize: "11px", lineHeight: "16px" },
+      chat: { fontSize: "10px", lineHeight: "18px" },
+      composer: { fontSize: "12px", lineHeight: "20px" },
+      lg: { fontSize: "0.75rem", lineHeight: "1.125rem" },
+      xl: { fontSize: "1rem", lineHeight: "1.5rem" },
+      title: { fontSize: "18px", lineHeight: "22px" },
+      hero: { fontSize: "25px", lineHeight: "33px" },
     });
   });
 
   it("defines exact UI font preset values", () => {
     expect(UI_FONT_SCALES).toEqual({
       xxsmall: {
+        xs: { fontSize: "0.375rem", lineHeight: "0.6875rem" },
+        sm: { fontSize: "0.4375rem", lineHeight: "0.8125rem" },
+        base: { fontSize: "0.46875rem", lineHeight: "0.78125rem" },
+        uiSm: { fontSize: "8.5px", lineHeight: "12.5px" },
+        ui: { fontSize: "9.5px", lineHeight: "14.5px" },
+        chat: { fontSize: "8.5px", lineHeight: "16.5px" },
+        composer: { fontSize: "10.5px", lineHeight: "18.5px" },
+        lg: { fontSize: "0.65625rem", lineHeight: "1.03125rem" },
+        xl: { fontSize: "0.90625rem", lineHeight: "1.3125rem" },
+        title: { fontSize: "15px", lineHeight: "19px" },
+        hero: { fontSize: "22px", lineHeight: "30px" },
+      },
+      xsmall: {
+        xs: { fontSize: "0.40625rem", lineHeight: "0.6875rem" },
+        sm: { fontSize: "0.46875rem", lineHeight: "0.8125rem" },
+        base: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
+        uiSm: { fontSize: "9px", lineHeight: "13px" },
+        ui: { fontSize: "10px", lineHeight: "15px" },
+        chat: { fontSize: "9px", lineHeight: "17px" },
+        composer: { fontSize: "11px", lineHeight: "19px" },
+        lg: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
+        xl: { fontSize: "0.9375rem", lineHeight: "1.375rem" },
+        title: { fontSize: "16px", lineHeight: "20px" },
+        hero: { fontSize: "23px", lineHeight: "31px" },
+      },
+      small: {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
         sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
         base: { fontSize: "0.53125rem", lineHeight: "0.84375rem" },
@@ -124,7 +150,7 @@ describe("appearance preferences", () => {
         title: { fontSize: "17px", lineHeight: "21px" },
         hero: { fontSize: "24px", lineHeight: "32px" },
       },
-      xsmall: {
+      default: {
         xs: { fontSize: "0.4375rem", lineHeight: "0.6875rem" },
         sm: { fontSize: "0.5rem", lineHeight: "0.8125rem" },
         base: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
@@ -137,7 +163,7 @@ describe("appearance preferences", () => {
         title: { fontSize: "18px", lineHeight: "22px" },
         hero: { fontSize: "25px", lineHeight: "33px" },
       },
-      small: {
+      large: {
         xs: { fontSize: "0.46875rem", lineHeight: "0.75rem" },
         sm: { fontSize: "0.5625rem", lineHeight: "0.9375rem" },
         base: { fontSize: "0.625rem", lineHeight: "0.9375rem" },
@@ -150,7 +176,7 @@ describe("appearance preferences", () => {
         title: { fontSize: "19px", lineHeight: "23px" },
         hero: { fontSize: "26.5px", lineHeight: "34.5px" },
       },
-      default: {
+      xlarge: {
         xs: { fontSize: "0.5rem", lineHeight: "0.75rem" },
         sm: { fontSize: "0.625rem", lineHeight: "1rem" },
         base: { fontSize: "0.6875rem", lineHeight: "1rem" },
@@ -163,7 +189,7 @@ describe("appearance preferences", () => {
         title: { fontSize: "20px", lineHeight: "24px" },
         hero: { fontSize: "28px", lineHeight: "36px" },
       },
-      large: {
+      xxlarge: {
         xs: { fontSize: "0.5625rem", lineHeight: "0.875rem" },
         sm: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
         base: { fontSize: "0.75rem", lineHeight: "1.125rem" },
@@ -176,7 +202,7 @@ describe("appearance preferences", () => {
         title: { fontSize: "21px", lineHeight: "25px" },
         hero: { fontSize: "29.5px", lineHeight: "37.5px" },
       },
-      xlarge: {
+      xxxlarge: {
         xs: { fontSize: "0.625rem", lineHeight: "1rem" },
         sm: { fontSize: "0.75rem", lineHeight: "1.125rem" },
         base: { fontSize: "0.8125rem", lineHeight: "1.25rem" },
@@ -189,42 +215,16 @@ describe("appearance preferences", () => {
         title: { fontSize: "22px", lineHeight: "26px" },
         hero: { fontSize: "31px", lineHeight: "39px" },
       },
-      xxlarge: {
-        xs: { fontSize: "0.6875rem", lineHeight: "1.0625rem" },
-        sm: { fontSize: "0.8125rem", lineHeight: "1.25rem" },
-        base: { fontSize: "0.875rem", lineHeight: "1.375rem" },
-        uiSm: { fontSize: "15px", lineHeight: "19px" },
-        ui: { fontSize: "16px", lineHeight: "21px" },
-        chat: { fontSize: "15px", lineHeight: "23px" },
-        composer: { fontSize: "17px", lineHeight: "25px" },
-        lg: { fontSize: "1.0625rem", lineHeight: "1.625rem" },
-        xl: { fontSize: "1.3125rem", lineHeight: "2.125rem" },
-        title: { fontSize: "23.5px", lineHeight: "27.5px" },
-        hero: { fontSize: "32.5px", lineHeight: "40.5px" },
-      },
-      xxxlarge: {
-        xs: { fontSize: "0.75rem", lineHeight: "1.125rem" },
-        sm: { fontSize: "0.875rem", lineHeight: "1.3125rem" },
-        base: { fontSize: "0.9375rem", lineHeight: "1.5rem" },
-        uiSm: { fontSize: "16px", lineHeight: "20px" },
-        ui: { fontSize: "17px", lineHeight: "22px" },
-        chat: { fontSize: "16px", lineHeight: "24px" },
-        composer: { fontSize: "18px", lineHeight: "26px" },
-        lg: { fontSize: "1.125rem", lineHeight: "1.75rem" },
-        xl: { fontSize: "1.375rem", lineHeight: "2.25rem" },
-        title: { fontSize: "24.5px", lineHeight: "28.5px" },
-        hero: { fontSize: "34px", lineHeight: "42px" },
-      },
     });
   });
 
   it("preserves current default readable code values", () => {
     expect(READABLE_CODE_FONT_SCALES.default).toEqual({
-      monacoFontSize: 11,
-      monacoLineHeight: 18,
-      diffsFontSize: "11px",
+      monacoFontSize: 9,
+      monacoLineHeight: 16,
+      diffsFontSize: "9px",
       diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-      codeFontSize: "0.6875rem",
+      codeFontSize: "0.5625rem",
       codeLineHeight: "1.625",
     });
   });
@@ -242,6 +242,22 @@ describe("appearance preferences", () => {
   it("defines exact readable code preset values", () => {
     expect(READABLE_CODE_FONT_SCALES).toEqual({
       xxsmall: {
+        monacoFontSize: 7.5,
+        monacoLineHeight: 14,
+        diffsFontSize: "7.5px",
+        diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
+        codeFontSize: "0.46875rem",
+        codeLineHeight: "1.625",
+      },
+      xsmall: {
+        monacoFontSize: 8,
+        monacoLineHeight: 14.5,
+        diffsFontSize: "8px",
+        diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
+        codeFontSize: "0.5rem",
+        codeLineHeight: "1.625",
+      },
+      small: {
         monacoFontSize: 8.5,
         monacoLineHeight: 15.5,
         diffsFontSize: "8.5px",
@@ -249,7 +265,7 @@ describe("appearance preferences", () => {
         codeFontSize: "0.53125rem",
         codeLineHeight: "1.625",
       },
-      xsmall: {
+      default: {
         monacoFontSize: 9,
         monacoLineHeight: 16,
         diffsFontSize: "9px",
@@ -257,7 +273,7 @@ describe("appearance preferences", () => {
         codeFontSize: "0.5625rem",
         codeLineHeight: "1.625",
       },
-      small: {
+      large: {
         monacoFontSize: 10,
         monacoLineHeight: 17,
         diffsFontSize: "10px",
@@ -265,7 +281,7 @@ describe("appearance preferences", () => {
         codeFontSize: "0.625rem",
         codeLineHeight: "1.625",
       },
-      default: {
+      xlarge: {
         monacoFontSize: 11,
         monacoLineHeight: 18,
         diffsFontSize: "11px",
@@ -273,7 +289,7 @@ describe("appearance preferences", () => {
         codeFontSize: "0.6875rem",
         codeLineHeight: "1.625",
       },
-      large: {
+      xxlarge: {
         monacoFontSize: 12,
         monacoLineHeight: 20,
         diffsFontSize: "12px",
@@ -281,28 +297,12 @@ describe("appearance preferences", () => {
         codeFontSize: "0.75rem",
         codeLineHeight: "1.625",
       },
-      xlarge: {
+      xxxlarge: {
         monacoFontSize: 13,
         monacoLineHeight: 21,
         diffsFontSize: "13px",
         diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
         codeFontSize: "0.8125rem",
-        codeLineHeight: "1.625",
-      },
-      xxlarge: {
-        monacoFontSize: 14,
-        monacoLineHeight: 23,
-        diffsFontSize: "14px",
-        diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-        codeFontSize: "0.875rem",
-        codeLineHeight: "1.625",
-      },
-      xxxlarge: {
-        monacoFontSize: 15,
-        monacoLineHeight: 24,
-        diffsFontSize: "15px",
-        diffsLineHeight: "calc(var(--diffs-font-size) * 1.8)",
-        codeFontSize: "0.9375rem",
         codeLineHeight: "1.625",
       },
     });
@@ -339,14 +339,14 @@ describe("appearance preferences", () => {
   });
 
   it("keeps the new lower bound close to the previous smallest size", () => {
-    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.xs.fontSize)).toBe(7);
-    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.sm.fontSize)).toBe(8);
-    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.base.fontSize)).toBeGreaterThanOrEqual(8.5);
-    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.chat.fontSize)).toBeGreaterThanOrEqual(9.5);
-    expect(READABLE_CODE_FONT_SCALES.xxsmall.monacoFontSize).toBeGreaterThanOrEqual(8.5);
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.xs.fontSize)).toBe(6);
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.sm.fontSize)).toBe(7);
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.base.fontSize)).toBeGreaterThanOrEqual(7.5);
+    expect(cssLengthToPx(UI_FONT_SCALES.xxsmall.chat.fontSize)).toBeGreaterThanOrEqual(8.5);
+    expect(READABLE_CODE_FONT_SCALES.xxsmall.monacoFontSize).toBeGreaterThanOrEqual(7.5);
     expect(cssLengthToPx(READABLE_CODE_FONT_SCALES.xxsmall.diffsFontSize))
-      .toBeGreaterThanOrEqual(8.5);
+      .toBeGreaterThanOrEqual(7.5);
     expect(cssLengthToPx(READABLE_CODE_FONT_SCALES.xxsmall.codeFontSize))
-      .toBeGreaterThanOrEqual(8.5);
+      .toBeGreaterThanOrEqual(7.5);
   });
 });

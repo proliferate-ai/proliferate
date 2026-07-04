@@ -64,6 +64,12 @@ export interface SupportReportJob {
     workspaceIds: string[];
   };
   publicContentConsent: boolean;
+  kind: "bug" | "feature";
+  creditConsent: boolean;
+  creditName?: string | null;
   snapshot: SupportReportWindowSnapshot;
   attachments: SupportReportAttachmentPayload[];
+  activeWorkspaceId?: string;
+  activeSessionId?: string;
+  reportOpenedAt?: string;
 }

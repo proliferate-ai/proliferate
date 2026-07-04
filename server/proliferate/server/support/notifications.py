@@ -15,7 +15,6 @@ from proliferate.middleware.request_context import get_request_id
 from proliferate.server.support.domain.message import (
     build_support_message_plan,
     build_support_report_plan,
-    build_support_tracker_plan,
     normalize_support_message,
 )
 from proliferate.server.support.errors import (
@@ -74,6 +73,9 @@ async def notify_support_report(
     context: dict[str, object] | None,
     diagnostics_included: bool,
     attachment_count: int,
+    kind: str = "bug",
+    credit_consent: bool = False,
+    credit_name: str | None = None,
     correlation: dict[str, object] | None,
 ) -> None:
     webhook_url = settings.support_slack_webhook_url.strip()
@@ -88,6 +90,9 @@ async def notify_support_report(
         internal_url=_support_report_internal_url(report_id),
         diagnostics_included=diagnostics_included,
         attachment_count=attachment_count,
+        kind=kind,
+        credit_consent=credit_consent,
+        credit_name=credit_name,
         context=context,
         correlation=correlation,
         request_id=get_request_id(),
@@ -106,39 +111,6 @@ async def notify_support_report(
         )
     except SlackWebhookError as exc:
         logger.warning("Support report Slack notification failed: %s", exc)
-
-
-async def notify_support_report_tracker(
-    *,
-    report_id: str,
-    github_issue_url: str | None,
-    linear_issue_url: str | None,
-) -> bool:
-    webhook_url = settings.support_slack_webhook_url.strip()
-    if not webhook_url:
-        return False
-
-    plan = build_support_tracker_plan(
-        report_id=report_id,
-        github_issue_url=github_issue_url,
-        linear_issue_url=linear_issue_url,
-        internal_url=_support_report_internal_url(report_id),
-    )
-    blocks = build_mrkdwn_message_blocks(
-        title="*Support report tracker ready*",
-        body=plan.message,
-        fields=tuple(SlackMessageField(field.label, field.value) for field in plan.fields),
-    )
-    try:
-        await post_incoming_webhook(
-            webhook_url=webhook_url,
-            text=plan.fallback_text,
-            blocks=blocks,
-        )
-    except SlackWebhookError as exc:
-        logger.warning("Support tracker Slack notification failed: %s", exc)
-        return False
-    return True
 
 
 def _support_report_internal_url(report_id: str) -> str | None:

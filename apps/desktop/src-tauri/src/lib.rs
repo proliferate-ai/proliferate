@@ -215,7 +215,6 @@ pub fn run() {
         .manage(QuitFlowState::default())
         .manage(workspace_activity_indicator::WorkspaceActivityIndicatorStore::default())
         .manage(ssh_tunnel::SshTunnelState::default())
-        .manage(support::SupportWindowState::default())
         .invoke_handler(tauri::generate_handler![
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
             anonymous_telemetry::save_anonymous_telemetry_state,
@@ -250,13 +249,9 @@ pub fn run() {
             google_workspace_mcp::reconcile_google_workspace_mcp_pending_setups,
             google_workspace_mcp::resolve_google_workspace_mcp_runtime_env,
             google_workspace_mcp::release_google_workspace_mcp_runtime_env,
-            support::close_support_report_window,
             support::delete_staged_support_report_attachment,
-            support::get_support_report_window_snapshot,
-            support::open_support_report_window,
             support::read_staged_support_report_attachment,
             support::stage_support_report_attachment,
-            support::submit_support_report_job,
             window_chrome::apply_macos_window_chrome,
             window_chrome::set_webview_zoom,
             process::command_exists,

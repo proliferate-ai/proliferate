@@ -109,11 +109,11 @@ export function ModalShell({
           </>
         ) : (
           <div className={headerClassName ?? `shrink-0 px-5 pb-3 pt-5 ${showCloseButton ? "pr-10" : ""}`}>
-            <DialogTitle className="text-lg font-medium leading-7 tracking-tight text-foreground">
+            <DialogTitle className="text-xl font-medium tracking-tight text-foreground">
               {title}
             </DialogTitle>
             {description && (
-              <DialogDescription className="mt-1 text-xs leading-4 text-muted-foreground">
+              <DialogDescription className="mt-1 text-ui text-muted-foreground">
                 {description}
               </DialogDescription>
             )}
