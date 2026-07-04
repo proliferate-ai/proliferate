@@ -514,7 +514,7 @@ function FileTreeRow({
       {isDirectory && (
         <ChevronRight
           className={twMerge(
-            "size-3 shrink-0 transition-transform duration-150",
+            "size-3 shrink-0 text-sidebar-muted-foreground/50 transition-transform duration-150",
             expanded && "rotate-90",
           )}
         />
@@ -524,7 +524,7 @@ function FileTreeRow({
         path={path}
         kind={kind}
         isExpanded={isDirectory ? expanded : undefined}
-        className="size-4 shrink-0"
+        className="size-3.5 shrink-0"
         toneClassName={iconTone}
       />
       <span className="min-w-0 flex-1 truncate">
@@ -532,7 +532,7 @@ function FileTreeRow({
       </span>
       {changed && (
         <span
-          className="inline-flex size-2 shrink-0 rounded-full bg-accent"
+          className="inline-flex size-1.5 shrink-0 rounded-full bg-accent"
           aria-label="Modified"
         />
       )}
