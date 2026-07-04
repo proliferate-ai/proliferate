@@ -1,0 +1,26 @@
+# Caddyfile variant for bring-your-own TLS certificate.
+#
+# Use this when your organization requires certificates from an internal CA
+# rather than public ACME (Let's Encrypt). The standard Caddyfile obtains
+# certificates automatically; this variant expects you to provide them.
+#
+# Expected certificate location (mounted read-only into the caddy container):
+#   /certs/server.crt  — TLS certificate (PEM-encoded, may include full chain)
+#   /certs/server.key  — private key (PEM-encoded)
+#
+# File permissions: the caddy process runs as UID 1000 by default. Ensure the
+# mounted certificate files are readable by that user (chmod 644 for .crt,
+# chmod 600 for .key on the host is standard; the read-only mount prevents
+# modification).
+#
+# IMPORTANT: Desktop machines and any other clients connecting to this server
+# must trust your internal CA's root certificate. Without that trust, connections
+# will fail with certificate verification errors.
+#
+# To use this variant, see docker-compose.byo-cert.yml and docs/byo-cert.md.
+
+{$SITE_ADDRESS} {
+  tls /certs/server.crt /certs/server.key
+  encode zstd gzip
+  reverse_proxy api:8000
+}

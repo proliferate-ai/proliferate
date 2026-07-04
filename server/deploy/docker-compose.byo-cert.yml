@@ -1,0 +1,25 @@
+# Compose override for bring-your-own TLS certificate.
+#
+# Use this when your organization requires certificates from an internal CA
+# rather than public ACME. This override:
+#   - Switches Caddy to the BYO-cert Caddyfile variant
+#   - Mounts a host directory containing your certificate files
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml -f docker-compose.byo-cert.yml up -d
+#
+# Prerequisites:
+#   1. Place your certificate files on the host at /opt/proliferate/certs/
+#      (or customize PROLIFERATE_HOST_CERT_DIR in your .env file):
+#        - server.crt (certificate, PEM-encoded, may include full chain)
+#        - server.key (private key, PEM-encoded, mode 600)
+#   2. Ensure the caddy user (UID 1000) can read the files
+#   3. Ensure client machines trust your internal CA's root certificate
+#
+# See docs/byo-cert.md for full setup instructions.
+
+services:
+  caddy:
+    volumes:
+      - ./Caddyfile.byo-cert:/etc/caddy/Caddyfile:ro
+      - ${PROLIFERATE_HOST_CERT_DIR:-/opt/proliferate/certs}:/certs:ro
