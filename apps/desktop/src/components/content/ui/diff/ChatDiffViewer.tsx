@@ -4,42 +4,37 @@ import {
   useMemo,
   useState,
   type CSSProperties,
-  type ReactNode,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
 import {
-  DiffCollapsedContentLabel,
-  DiffCollapsedGutterIcon,
-  DiffGapContentLabel,
-  DiffGapGutterControls,
   DiffGapInfoRow,
   type ExpandDirection,
 } from "@/components/content/ui/diff/DiffContextExpander";
 import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { HunkActionPill } from "@/components/content/ui/diff/HunkActionPill";
 import type { UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
+import {
+  ChatCollapsedRow,
+  ChatContentLine,
+  ChatGutterColumn,
+} from "@/components/content/ui/diff/ChatDiffCells";
+import {
+  flattenWithGapExpansion,
+  type ChatRenderRow,
+} from "@/lib/domain/files/chat-diff-rows";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import {
   buildContentSearchLineMatchIds,
   normalizeContentSearchQuery,
 } from "@/lib/domain/content-search/content-search";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import type { InterHunkGap, ParsedPatch } from "@/lib/domain/files/diff-parser";
 import {
   getChatDiffRows,
-  getChatLineNumber,
-  getChatLineType,
-  getDiffLineIndex,
   getDiffLineNumberColumnWidth,
-  type ChatDiffRow,
 } from "@/lib/domain/files/diff-view-rows";
 import {
-  clampGapReveal,
-  resolveGapLineCount,
   useGapExpansion,
-  type GapExpansionState,
 } from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
@@ -58,158 +53,6 @@ const CHAT_DIFF_CODE_BASE_STYLE = {
   "--diffs-column-content-width": "700px",
   "--diffs-column-width": "736px",
 } as CSSProperties;
-
-function ChatGutterLine({ line }: { line: DiffLine }) {
-  const lineType = getChatLineType(line);
-  const lineNumber = getChatLineNumber(line);
-
-  return (
-    <div
-      data-line-type={lineType}
-      data-column-number={lineNumber ?? undefined}
-      data-line-index={getDiffLineIndex(line)}
-      className="diff-gutter-cell box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-start justify-end bg-[var(--diffs-bg)] pr-2 pl-3 pt-[calc((var(--diffs-line-height)-1em)/2)] text-right tabular-nums"
-    >
-      <span data-line-number-content="">{lineNumber ?? ""}</span>
-    </div>
-  );
-}
-
-function ChatGutterSeparatorLine({ children }: { children?: React.ReactNode }) {
-  return (
-    <div
-      data-separator="simple"
-      className="diff-gutter-cell flex min-h-[var(--diffs-line-height)] items-center justify-center bg-[var(--codex-diffs-separator-surface)]"
-    >
-      {children}
-    </div>
-  );
-}
-
-function ChatContentLine({
-  line,
-  tokens,
-  wrapLongLines,
-  contentSearchQuery,
-  activeMatchId,
-  contentSearchUnitId,
-  hunkIndex,
-  onHunkHover,
-  pill,
-}: {
-  line: DiffLine;
-  tokens: HighlightedToken[][] | null;
-  wrapLongLines: boolean;
-  contentSearchQuery: string;
-  activeMatchId: string | null;
-  contentSearchUnitId: string;
-  hunkIndex?: number;
-  onHunkHover?: (hunkIndex: number) => void;
-  pill?: ReactNode;
-}) {
-  const lineType = getChatLineType(line);
-  const lineNumber = getChatLineNumber(line);
-  const altLineNumber = line.type === "context" ? line.oldLineNum : undefined;
-
-  return (
-    <div
-      data-line={lineNumber ?? undefined}
-      data-alt-line={altLineNumber}
-      data-line-type={lineType}
-      data-line-index={getDiffLineIndex(line)}
-      onMouseEnter={
-        onHunkHover != null && hunkIndex != null
-          ? () => onHunkHover(hunkIndex)
-          : undefined
-      }
-      className={`diff-content-cell relative min-h-[var(--diffs-line-height)] pr-3 pl-2 ${
-        wrapLongLines
-          ? "block min-w-0 whitespace-pre-wrap break-words py-[calc((var(--diffs-line-height)-1em)/2)]"
-          : "flex min-w-max items-center whitespace-pre"
-      }`}
-    >
-      <DiffLineContent
-        line={line}
-        tokens={tokens}
-        contentSearchQuery={contentSearchQuery}
-        activeMatchId={activeMatchId}
-        contentSearchLineId={`${contentSearchUnitId}:line:${line.tokenIndex}`}
-      />
-      {pill}
-    </div>
-  );
-}
-
-function ChatCollapsedRow({
-  section,
-  onExpand,
-}: {
-  section: CollapsedContext;
-  onExpand: () => void;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="unstyled"
-      size="unstyled"
-      data-separator="simple"
-      onClick={onExpand}
-      aria-label={`Expand ${section.lineCount} unmodified lines`}
-      title={`${section.lineCount} unmodified lines`}
-      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
-    >
-      <DiffCollapsedContentLabel
-        lineCount={section.lineCount}
-        stickyLeft="var(--diffs-column-number-width)"
-      />
-    </Button>
-  );
-}
-
-function ChatGutterColumn({
-  rows,
-  rowCount,
-  onExpandGap,
-  canExpandGaps,
-}: {
-  rows: ChatRenderRow[];
-  rowCount: number;
-  onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
-  canExpandGaps: boolean;
-}) {
-  return (
-    <div
-      data-gutter=""
-      style={{ gridColumn: "1", gridRow: `1 / span ${rowCount}` }}
-      className="sticky left-0 z-10 grid bg-[var(--diffs-bg)] [grid-template-rows:subgrid]"
-    >
-      {rows.map((row) => {
-        if (row.kind === "line" || row.kind === "expanded-gap-line") {
-          return <ChatGutterLine key={row.key} line={row.line} />;
-        }
-        if (row.kind === "gap" && canExpandGaps) {
-          return (
-            <ChatGutterSeparatorLine key={row.key}>
-              <DiffGapGutterControls
-                gap={row.gap}
-                onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
-              />
-            </ChatGutterSeparatorLine>
-          );
-        }
-        if (row.kind === "collapsed") {
-          return (
-            <ChatGutterSeparatorLine key={row.key}>
-              <DiffCollapsedGutterIcon />
-            </ChatGutterSeparatorLine>
-          );
-        }
-        // gap without expand capability
-        return <ChatGutterSeparatorLine key={row.key} />;
-      })}
-    </div>
-  );
-}
 
 function ChatContentColumn({
   rows,
@@ -327,87 +170,6 @@ function ChatContentColumn({
   );
 }
 
-/** Flattened render row: either a data row from the diff or an expanded gap line */
-type ChatRenderRow =
-  | ChatDiffRow
-  | { kind: "expanded-gap-line"; key: string; line: DiffLine };
-
-function makeGapContextLine(
-  fileLines: string[],
-  gap: InterHunkGap,
-  offset: number,
-): DiffLine {
-  const newLine = gap.newStartLine + offset;
-  return {
-    type: "context",
-    marker: " ",
-    content: fileLines[newLine - 1] ?? "",
-    oldLineNum: gap.oldStartLine + offset,
-    newLineNum: newLine,
-    lineNum: newLine,
-    tokenIndex: -1,
-  };
-}
-
-function flattenWithGapExpansion(
-  rows: ChatDiffRow[],
-  gapStates: Map<number, GapExpansionState>,
-  fileLines: string[] | undefined,
-): ChatRenderRow[] {
-  const result: ChatRenderRow[] = [];
-  for (const row of rows) {
-    if (row.kind !== "gap") {
-      result.push(row);
-      continue;
-    }
-
-    // Resolve unknown trailing gap count against fetched file length
-    const gap = resolveGapLineCount(row.gap, fileLines);
-    if (!gap) continue;
-    const resolvedRow: ChatDiffRow = gap === row.gap ? row : { ...row, gap };
-
-    const state = gapStates.get(row.gapIndex);
-    if (!fileLines || !state || gap.lineCount <= 0) {
-      result.push(resolvedRow);
-      continue;
-    }
-
-    const totalGapLines = gap.lineCount;
-    const { top, bottom, fullyExpanded } = clampGapReveal(state, totalGapLines);
-    if (top === 0 && bottom === 0) {
-      result.push(resolvedRow);
-      continue;
-    }
-
-    for (let i = 0; i < top; i++) {
-      result.push({
-        kind: "expanded-gap-line",
-        key: `${row.key}-top-${i}`,
-        line: makeGapContextLine(fileLines, gap, i),
-      });
-    }
-
-    if (!fullyExpanded) {
-      const residualGap: InterHunkGap = {
-        kind: "gap",
-        oldStartLine: gap.oldStartLine + top,
-        newStartLine: gap.newStartLine + top,
-        lineCount: totalGapLines - top - bottom,
-      };
-      result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
-    }
-
-    for (let i = totalGapLines - bottom; i < totalGapLines; i++) {
-      result.push({
-        kind: "expanded-gap-line",
-        key: `${row.key}-bottom-${i}`,
-        line: makeGapContextLine(fileLines, gap, i),
-      });
-    }
-  }
-  return result;
-}
-
 export function ChatDiffViewer({
   parsed,
   tokens,
@@ -497,10 +259,9 @@ export function ChatDiffViewer({
   const lineNumberDigits = useMemo(() => {
     let maxLineNumber = 0;
     for (const row of rows) {
-      if (row.kind === "line") {
-        maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
-      } else if (row.kind === "expanded-gap-line") {
-        maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
+      if (row.kind === "line" || row.kind === "expanded-gap-line") {
+        const lineNum = row.line.newLineNum ?? row.line.oldLineNum ?? 0;
+        maxLineNumber = Math.max(maxLineNumber, lineNum);
       }
     }
     return Math.max(String(maxLineNumber).length, 1);
