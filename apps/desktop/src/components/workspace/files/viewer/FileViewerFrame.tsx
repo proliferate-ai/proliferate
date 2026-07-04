@@ -8,10 +8,8 @@ import {
   ChevronRight,
   Copy,
   ExternalLink,
-  FileText,
   FolderTree,
   Search,
-  WrapText,
 } from "@proliferate/ui/icons";
 import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
 import {
