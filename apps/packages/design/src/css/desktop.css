@@ -314,8 +314,8 @@
   --color-diff-added: #00a240;
   --color-diff-deleted: #e02e2a;
   --diffs-font-family: var(--font-mono);
-  --diffs-font-size: 9px;
-  --diffs-line-height: calc(var(--diffs-font-size, 9px) * 1.8);
+  --diffs-font-size: 12px;
+  --diffs-line-height: calc(var(--diffs-font-size, 12px) * 1.8);
   --scratch-font-family: var(--font-sans);
   --scratch-code-font-family: var(--font-mono);
   --scratch-font-size: var(--text-chat, 10px);
@@ -340,10 +340,12 @@
   --diffs-bg-context-override: var(--codex-diffs-context-surface);
   --diffs-bg-separator-override: var(--codex-diffs-separator-surface);
   --diffs-bg-hover-override: var(--codex-diffs-hover-surface);
-  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #00a240);
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #e02e2a);
-  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #00a240);
-  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #e02e2a);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 88%, #00a240);
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 88%, #e02e2a);
+  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--color-diff-main-surface) 82%, #00a240);
+  --diffs-bg-deletion-hover-override: color-mix(in srgb, var(--color-diff-main-surface) 82%, #e02e2a);
+  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 91%, #00a240);
+  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 91%, #e02e2a);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 
@@ -810,6 +812,8 @@ mark.codex-thread-find-active {
   --color-file-icon-red: hsl(0 0% 17%);
   --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
   --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-hover-override: color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-deletion-color-override));
   --color-diff-chat-turn-header-surface: var(--color-diff-surface);
   --color-diff-chat-inline-tool-header-surface: var(--color-diff-surface);
 }
@@ -879,6 +883,29 @@ mark.codex-thread-find-active {
 
 .composer-diff-simple-line [data-line-type="change-deletion"] {
   background-color: var(--diffs-bg-deletion-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-addition"]:hover,
+.composer-diff-simple-line [data-line-type="change-addition"]:hover > .diff-gutter-cell {
+  background-color: var(--diffs-bg-addition-hover-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-deletion"]:hover,
+.composer-diff-simple-line [data-line-type="change-deletion"]:hover > .diff-gutter-cell {
+  background-color: var(--diffs-bg-deletion-hover-override);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="context"],
+.composer-diff-simple-line .diff-content-cell[data-line-type="context"] {
+  color: color-mix(in srgb, var(--diffs-fg) 30%, transparent);
+}
+
+.composer-diff-simple-line .diff-content-cell[data-line-type="change-addition"] {
+  color: var(--color-diff-added);
+}
+
+.composer-diff-simple-line .diff-content-cell[data-line-type="change-deletion"] {
+  color: var(--color-diff-deleted);
 }
 
 .composer-diff-simple-line [data-separator] {
