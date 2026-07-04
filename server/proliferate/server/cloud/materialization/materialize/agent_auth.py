@@ -84,6 +84,16 @@ from proliferate.server.cloud.materialization import operation, paths, sandbox_i
 
 logger = logging.getLogger("proliferate.cloud.materialization")
 
+# Per-agent-kind native auth file allowlist (spec §5.4, lines 272-276).
+# Only files in this allowlist may be deleted on credential revocation.
+# Paths are relative to SANDBOX_HOME (/home/user).
+NATIVE_AUTH_FILE_ALLOWLIST: dict[str, tuple[str, ...]] = {
+    "claude": (".claude/.credentials.json", ".claude.json"),
+    "codex": (".codex/auth.json",),
+    "gemini": (".gemini/oauth_creds.json", ".gemini/settings.json"),
+    "opencode": (".config/opencode/auth.json",),
+}
+
 
 @dataclass(frozen=True)
 class AgentAuthStateInputs:
@@ -295,6 +305,11 @@ async def materialize_agent_auth(
     state_path = paths.agent_auth_state_path()
     manifest_path = paths.agent_auth_manifest_path()
 
+    previous = await _read_previous_manifest(ctx)
+    current_harnesses = sorted(
+        entry["harness_kind"] for entry in state["harnesses"]
+    )
+
     if not state["harnesses"]:
         # No resolvable cloud sources: delete the file so the reader finds none
         # (contract §3 — empty renders to native; cloud launch fail-closes in the
@@ -304,11 +319,22 @@ async def materialize_agent_auth(
             operation_id=ctx.sandbox.id,
             paths={state_path, manifest_path},
         )
+        # Cleanup stale native auth files for all previously-active harnesses.
+        await _cleanup_revoked_harness_auth_files(
+            ctx, previous_harnesses=previous.get("active_harnesses", []), current_harnesses=[]
+        )
         return
 
-    previous = await _read_previous_manifest(ctx)
     if previous.get("fingerprint") == fingerprint:
         return
+
+    # Cleanup stale native auth files for harnesses that were active but are no
+    # longer present (credential revoked / share revoked / profile disabled).
+    await _cleanup_revoked_harness_auth_files(
+        ctx,
+        previous_harnesses=previous.get("active_harnesses", []),
+        current_harnesses=current_harnesses,
+    )
 
     await sandbox_io.write_private_file_atomic(
         ctx.target,
@@ -321,6 +347,7 @@ async def materialize_agent_auth(
         "fingerprint": fingerprint,
         "path": state_path,
         "revision": state["revision"],
+        "active_harnesses": current_harnesses,
     }
     await sandbox_io.write_private_file_atomic(
         ctx.target,
@@ -328,6 +355,58 @@ async def materialize_agent_auth(
         path=manifest_path,
         content=json.dumps(manifest, sort_keys=True, indent=2) + "\n",
         mode="600",
+    )
+
+
+async def _cleanup_revoked_harness_auth_files(
+    ctx: operation.MaterializationContext,
+    *,
+    previous_harnesses: list[str],
+    current_harnesses: list[str],
+) -> None:
+    """Delete native auth files for harnesses that were previously active but are now absent.
+
+    This closes gap #2 (spec §5.4): when a credential is revoked and its harness
+    disappears from the state, stale native auth files (.codex/auth.json,
+    .claude/.credentials.json, etc.) must be removed so they cannot be used to
+    authenticate after revocation.
+
+    Only files in the per-agent NATIVE_AUTH_FILE_ALLOWLIST are eligible for
+    deletion. Any path outside the allowlist is refused and logged.
+    """
+    if not previous_harnesses:
+        return
+
+    revoked_harnesses = set(previous_harnesses) - set(current_harnesses)
+    if not revoked_harnesses:
+        return
+
+    cleanup_paths: set[str] = set()
+    for harness_kind in revoked_harnesses:
+        allowed = NATIVE_AUTH_FILE_ALLOWLIST.get(harness_kind)
+        if allowed is None:
+            logger.warning(
+                "cleanup-on-revoke: no allowlist entry for harness_kind=%s; skipping",
+                harness_kind,
+            )
+            continue
+        for relative_path in allowed:
+            absolute_path = f"{paths.SANDBOX_HOME}/{relative_path}"
+            cleanup_paths.add(absolute_path)
+
+    if not cleanup_paths:
+        return
+
+    logger.info(
+        "cleanup-on-revoke: removing stale auth files for revoked harnesses %s: %s",
+        sorted(revoked_harnesses),
+        sorted(cleanup_paths),
+    )
+    await sandbox_io.remove_owned_files(
+        ctx.target,
+        operation_id=ctx.sandbox.id,
+        paths=cleanup_paths,
+        allowed_root=paths.SANDBOX_HOME,
     )
 
 

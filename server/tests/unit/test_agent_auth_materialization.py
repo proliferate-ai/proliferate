@@ -468,3 +468,128 @@ class TestMaterializeAgentAuth:
         serialized = json.dumps(state)
         assert "sk-live" in serialized
         assert str(revoked_id) not in serialized
+
+    @pytest.mark.asyncio
+    async def test_revoke_credential_deletes_auth_files(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Gap #2 (spec §5.4): revoking a credential removes stale native auth files."""
+        # Current state: only codex is active (claude was revoked).
+        live_id = uuid.uuid4()
+        inputs = _inputs(
+            (
+                _selection(
+                    harness="codex",
+                    source_kind="api_key",
+                    api_key_id=live_id,
+                    env_var_name="OPENAI_API_KEY",
+                ),
+            ),
+            api_key_values={live_id: "sk-live"},
+        )
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        # Previous manifest shows both claude and codex were active.
+        spy = _install_spy(
+            monkeypatch,
+            previous_manifest={
+                "fingerprint": "old-fp",
+                "active_harnesses": ["claude", "codex"],
+            },
+        )
+
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        # Claude's native auth files should be removed.
+        assert f"{paths.SANDBOX_HOME}/.claude/.credentials.json" in spy.removed
+        assert f"{paths.SANDBOX_HOME}/.claude.json" in spy.removed
+        # Codex auth files should NOT be removed (it's still active).
+        assert f"{paths.SANDBOX_HOME}/.codex/auth.json" not in spy.removed
+        # State file should still be written (codex still active).
+        assert len(spy.writes) == 2
+        state = json.loads(str(spy.writes[0]["content"]))
+        assert [entry["harness_kind"] for entry in state["harnesses"]] == ["codex"]
+
+    @pytest.mark.asyncio
+    async def test_revoke_all_credentials_deletes_all_auth_files(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When all harnesses are revoked, both state file and auth files are cleaned."""
+        inputs = _inputs(
+            (_selection(harness="claude", source_kind="gateway"),),
+            enrollment_sync_status="pending",
+            gateway_virtual_key=None,
+        )
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        spy = _install_spy(
+            monkeypatch,
+            previous_manifest={
+                "fingerprint": "old-fp",
+                "active_harnesses": ["claude", "codex"],
+            },
+        )
+
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        # State file + manifest should be deleted.
+        assert paths.agent_auth_state_path() in spy.removed
+        assert paths.agent_auth_manifest_path() in spy.removed
+        # Both claude and codex native auth files should be cleaned up.
+        assert f"{paths.SANDBOX_HOME}/.claude/.credentials.json" in spy.removed
+        assert f"{paths.SANDBOX_HOME}/.claude.json" in spy.removed
+        assert f"{paths.SANDBOX_HOME}/.codex/auth.json" in spy.removed
+
+    @pytest.mark.asyncio
+    async def test_no_cleanup_when_no_previous_harnesses(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No cleanup runs when previous manifest has no active_harnesses field."""
+        inputs = _inputs(
+            (_selection(harness="codex", source_kind="gateway"),),
+        )
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        # Old-style manifest without active_harnesses field.
+        spy = _install_spy(monkeypatch, previous_manifest={"fingerprint": "old-fp"})
+
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        # Only the state file and manifest are written, no auth files removed.
+        removed_minus_state = spy.removed - {
+            paths.agent_auth_state_path(),
+            paths.agent_auth_manifest_path(),
+        }
+        assert removed_minus_state == set()
+
+    @pytest.mark.asyncio
+    async def test_manifest_includes_active_harnesses(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The manifest tracks active_harnesses for future cleanup passes."""
+        inputs = _inputs(
+            (
+                _selection(harness="claude", source_kind="gateway"),
+                _selection(harness="codex", source_kind="gateway"),
+            ),
+        )
+
+        async def fake_load(db: object, *, user_id: uuid.UUID, surface: str = "cloud") -> Any:
+            return inputs
+
+        monkeypatch.setattr(agent_auth, "_load_state_inputs", fake_load)
+        spy = _install_spy(monkeypatch, previous_manifest=None)
+
+        await agent_auth.materialize_agent_auth(object(), ctx=_ctx(), user_id=USER_ID)
+
+        manifest = json.loads(str(spy.writes[1]["content"]))
+        assert manifest["active_harnesses"] == ["claude", "codex"]
