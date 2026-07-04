@@ -6,7 +6,7 @@ import type {
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileChangeStats } from "@/components/content/ui/FileChangeStats";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
-import { HighlightedCodePanel } from "@/components/content/ui/HighlightedCodePanel";
+import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
 import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ChevronRight, FilePen } from "@proliferate/ui/icons";
@@ -150,7 +150,7 @@ function EditActionRow({
           </FileDiffCard>
         </div>
       ) : expanded && part.preview ? (
-        <HighlightedCodePanel
+        <HighlightedCodeBlock
           code={part.preview}
           filename={pathLabel}
           showLanguageLabel={false}

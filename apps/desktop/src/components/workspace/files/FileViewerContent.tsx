@@ -1,6 +1,7 @@
 import type { ReadWorkspaceFileResponse } from "@anyharness/sdk";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
-import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
+import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileDiffPane } from "@/components/workspace/files/viewer/FileDiffPane";
 import { FileSourceView } from "@/components/workspace/files/viewer/FileSourceView";
@@ -79,7 +80,7 @@ function RichPreview({
 
   return (
     <div className="h-full min-h-0 min-w-0 overflow-auto bg-background px-8 py-6">
-      <MarkdownRenderer content={content} />
+      <MarkdownBody content={content} renderCodeBlock={renderDesktopCodeBlock} />
     </div>
   );
 }

@@ -13,7 +13,8 @@ import type {
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
-import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
+import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
 import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSeparator";
 import {
@@ -285,9 +286,10 @@ function AgentResultBlock({ content }: { content: string }) {
           : undefined}
       >
         <div ref={contentRef} className="text-chat leading-[var(--text-chat--line-height)] select-text text-foreground">
-          <MarkdownRenderer
+          <MarkdownBody
             content={content}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            renderCodeBlock={renderDesktopCodeBlock}
           />
         </div>
         {!resultExpanded && needsTruncation && (

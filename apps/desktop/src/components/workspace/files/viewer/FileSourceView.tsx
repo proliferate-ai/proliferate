@@ -1,11 +1,15 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   type CSSProperties,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { CodeTokenLine } from "@proliferate/product-ui/code/CodeTokenLine";
+import type { RenderTokenFn } from "@proliferate/product-ui/code/types";
 import { renderContentSearchMarkedToken } from "@/components/content/ui/search/ContentSearchMarks";
 import { useHighlightedLines } from "@/hooks/ui/highlighting/use-highlighted-lines";
 import {
@@ -80,10 +84,21 @@ export function FileSourceView({
     },
     [contentSearchQuery, contentSearchUnitId, lines],
   );
-  const maxLineCharacterWidth = useMemo(
-    () => maxVisualLineLength(lines),
-    [lines],
-  );
+  // Track the max visual line width lazily: instead of scanning every line
+  // (O(n) main-thread cost on large files), measure scrollWidth on the
+  // painted <code> element after layout. The running max is updated each time
+  // the virtualizer paints new rows.
+  const maxContentWidthRef = useRef(0);
+  const codeElementRef = useRef<HTMLElement>(null);
+
+  useLayoutEffect(() => {
+    const el = codeElementRef.current;
+    if (!el) return;
+    const sw = el.scrollWidth;
+    if (sw > maxContentWidthRef.current) {
+      maxContentWidthRef.current = sw;
+    }
+  });
   const virtualizer = useVirtualizer({
     count: lines.length,
     getScrollElement: () => scrollRef.current,
@@ -106,9 +121,8 @@ export function FileSourceView({
     [lines.length],
   );
   const renderedRows = virtualRows.length > 0 ? virtualRows : initialVirtualRows;
-  const codeMinWidth = wordWrap
-    ? undefined
-    : `calc(var(--diffs-column-number-width) + var(--file-source-content-gap) + ${maxLineCharacterWidth}ch + (var(--file-source-content-padding-inline) * 2))`;
+  // When word-wrap is off, the code element is w-max (intrinsic width from
+  // content) so no explicit minWidth is needed — scrollWidth handles it.
 
   useEffect(() => {
     if (!activeMatchId?.startsWith(`${contentSearchUnitId}:`)) {
@@ -163,13 +177,13 @@ export function FileSourceView({
           className="m-0 min-h-full min-w-full p-0 font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] outline-none"
         >
           <code
+            ref={codeElementRef}
             data-code
             className={`relative block min-h-full ${
               wordWrap ? "w-full min-w-0" : "w-max min-w-full"
             }`}
             style={{
               height: `${virtualizer.getTotalSize()}px`,
-              minWidth: codeMinWidth,
             }}
           >
             {renderedRows.map((virtualRow) => (
@@ -225,6 +239,18 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
     contentSearchQuery,
   );
 
+  const renderToken: RenderTokenFn = useCallback(
+    (text: string, tokenIndex: number) => {
+      return renderContentSearchMarkedToken({
+        text,
+        matchSegments: matchSegmentsByToken[tokenIndex] ?? [],
+        activeMatchId,
+        matchIdPrefix: `${contentSearchUnitId}:${lineNumber}`,
+      });
+    },
+    [matchSegmentsByToken, activeMatchId, contentSearchUnitId, lineNumber],
+  );
+
   return (
     <span
       ref={ref}
@@ -260,40 +286,16 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
         data-line-index={virtualIndex}
         data-line-type="context"
       >
-        {tokens.length > 0
-          ? tokens.map((token, index) => (
-              <span
-                key={index}
-                style={token.color ? { color: token.color } : undefined}
-              >
-                {renderContentSearchMarkedToken({
-                  text: token.content,
-                  matchSegments: matchSegmentsByToken[index] ?? [],
-                  activeMatchId,
-                  matchIdPrefix: `${contentSearchUnitId}:${lineNumber}`,
-                })}
-              </span>
-            ))
-          : "\n"}
+        <CodeTokenLine
+          tokens={tokens}
+          lineIndex={virtualIndex}
+          renderToken={contentSearchQuery ? renderToken : undefined}
+        />
       </span>
     </span>
   );
 });
 
-function visualLineLength(tokens: HighlightedToken[]): number {
-  return tokens.reduce(
-    (length, token) => length + token.content.replaceAll("\t", "  ").length,
-    0,
-  );
-}
-
-function maxVisualLineLength(lines: readonly HighlightedToken[][]): number {
-  let maxLength = 1;
-  for (const line of lines) {
-    maxLength = Math.max(maxLength, visualLineLength(line));
-  }
-  return maxLength;
-}
 
 function buildInitialVirtualRows(lineCount: number): SourceVirtualRow[] {
   const count = Math.min(lineCount, FILE_SOURCE_INITIAL_ROW_COUNT);

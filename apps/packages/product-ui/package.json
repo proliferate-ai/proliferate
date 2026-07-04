@@ -7,6 +7,30 @@
     "dist"
   ],
   "exports": {
+    "./code/code-theme-tokens": {
+      "types": "./dist/code/code-theme-tokens.d.ts",
+      "import": "./dist/code/code-theme-tokens.js"
+    },
+    "./code/types": {
+      "types": "./dist/code/types.d.ts",
+      "import": "./dist/code/types.js"
+    },
+    "./code/CodeTokenLine": {
+      "types": "./dist/code/CodeTokenLine.d.ts",
+      "import": "./dist/code/CodeTokenLine.js"
+    },
+    "./code/CodeBlock": {
+      "types": "./dist/code/CodeBlock.d.ts",
+      "import": "./dist/code/CodeBlock.js"
+    },
+    "./code/CodeBlockTokenContent": {
+      "types": "./dist/code/CodeBlockTokenContent.d.ts",
+      "import": "./dist/code/CodeBlockTokenContent.js"
+    },
+    "./code/VirtualizedCodeContent": {
+      "types": "./dist/code/VirtualizedCodeContent.d.ts",
+      "import": "./dist/code/VirtualizedCodeContent.js"
+    },
     "./account/AccountIdentityCard": {
       "types": "./dist/account/AccountIdentityCard.d.ts",
       "import": "./dist/account/AccountIdentityCard.js"
