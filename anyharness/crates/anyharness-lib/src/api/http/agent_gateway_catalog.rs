@@ -75,11 +75,16 @@ pub(crate) fn map_model_status(status: DomainModelCatalogStatus) -> ModelCatalog
 }
 
 /// The effort control joined from a catalog model, if it declares one.
+/// Falls back to `reasoning_effort` for codex models.
 pub(crate) fn model_effort(model: &AgentCatalogModel) -> Option<ModelEffort> {
-    model.controls.get("effort").map(|control| ModelEffort {
-        values: control.values.clone(),
-        default: control.observed_value.clone(),
-    })
+    model
+        .controls
+        .get("effort")
+        .or_else(|| model.controls.get("reasoning_effort"))
+        .map(|control| ModelEffort {
+            values: control.values.clone(),
+            default: control.observed_value.clone(),
+        })
 }
 
 /// The permission/agent modes joined from a catalog model (`controls.mode`), if
@@ -457,5 +462,56 @@ mod tests {
         assert!(resolve_catalog_match("claude-sonnet-4-5-20250929", &models).is_none());
         assert!(resolve_catalog_match("claude-haiku-4-5", &models).is_none());
         assert!(resolve_catalog_match("claude-opus-4-6-20260205", &models).is_none());
+    }
+
+    #[test]
+    fn codex_model_with_reasoning_effort_enriches_effort() {
+        // Codex models use "reasoning_effort" key — verify the fallback works.
+        let mut controls = BTreeMap::new();
+        controls.insert(
+            "reasoning_effort".to_string(),
+            AgentCatalogModelControl {
+                values: vec![
+                    "low".to_string(),
+                    "medium".to_string(),
+                    "high".to_string(),
+                    "xhigh".to_string(),
+                ],
+                default: None,
+                observed_value: Some("medium".to_string()),
+            },
+        );
+        let model = AgentCatalogModel {
+            id: "codex-model".to_string(),
+            display_name: "Codex Model".to_string(),
+            description: None,
+            aliases: vec![],
+            family: None,
+            availability: AgentCatalogAvailability {
+                any_of: vec!["codex-api".to_string()],
+            },
+            default_visible: true,
+            controls,
+            status: DomainModelCatalogStatus::Active,
+            provenance: None,
+        };
+
+        let effort = model_effort(&model).expect("effort should be present");
+        assert_eq!(effort.values, vec!["low", "medium", "high", "xhigh"]);
+        assert_eq!(effort.default.as_deref(), Some("medium"));
+
+        // Also test enrichment via enrich_model
+        let entry = enrich_model("codex-model".to_string(), Some(&model));
+        assert!(entry.effort.is_some());
+        assert_eq!(entry.effort.unwrap().values, vec!["low", "medium", "high", "xhigh"]);
+    }
+
+    #[test]
+    fn claude_model_with_effort_still_works() {
+        // Claude models use "effort" key — verify it still works.
+        let model = catalog_model("claude-sonnet-4-5");
+        let effort = model_effort(&model).expect("effort should be present");
+        assert_eq!(effort.values, vec!["low", "medium", "high"]);
+        assert_eq!(effort.default.as_deref(), Some("medium"));
     }
 }

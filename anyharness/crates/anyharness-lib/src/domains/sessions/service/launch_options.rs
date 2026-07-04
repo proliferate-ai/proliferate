@@ -103,12 +103,14 @@ impl SessionService {
                         provider: gateway_resolver::provider_for_model(&model.id)
                             .map(str::to_string),
                         status: Some(model.status),
-                        effort: model.controls.get("effort").map(|control| {
-                            ResolvedModelEffort {
+                        effort: model
+                            .controls
+                            .get("effort")
+                            .or_else(|| model.controls.get("reasoning_effort"))
+                            .map(|control| ResolvedModelEffort {
                                 values: control.values.clone(),
                                 default: control.observed_value.clone(),
-                            }
-                        }),
+                            }),
                         fast_mode: model.controls.contains_key("fast_mode"),
                         modes: model
                             .controls
