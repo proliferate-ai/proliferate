@@ -137,7 +137,7 @@ function ChatCollapsedRow({
       onClick={onExpand}
       aria-label={`Expand ${section.lineCount} unmodified lines`}
       title={`${section.lineCount} unmodified lines`}
-      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
+      className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
       <DiffCollapsedContextCluster
         lineCount={section.lineCount}

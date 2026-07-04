@@ -76,7 +76,8 @@ export function clampGapReveal(
 /**
  * Resolve a gap with unknown line count (-1, trailing gap) against the
  * fetched file's total line count. Returns null when the gap turns out
- * to be empty.
+ * to be empty, or when the count is unknown and file content has not
+ * been fetched yet — a separator must never render without a number.
  */
 export function resolveGapLineCount(
   gap: InterHunkGap,
@@ -86,7 +87,7 @@ export function resolveGapLineCount(
     return gap.lineCount === 0 ? null : gap;
   }
   if (!fileLines) {
-    return gap;
+    return null;
   }
   // Trailing file content often ends with a newline, producing one empty
   // trailing element from split("\n") that is not a real line.
