@@ -32,6 +32,7 @@ export function FileViewerFrame({
   onCopyContent,
   onCopyPath,
   onOpenExternal,
+  canOpenExternal,
   onOpenContentSearch,
   browserOpen,
   onToggleBrowser,
@@ -45,6 +46,7 @@ export function FileViewerFrame({
   richPreviewEnabled: boolean;
   canCopyContent: boolean;
   canFindInFile: boolean;
+  canOpenExternal: boolean;
   onToggleWordWrap: () => void;
   onToggleRichPreview: () => void;
   onCopyContent: () => void;
@@ -81,6 +83,7 @@ export function FileViewerFrame({
           />
           <FileViewerToolbarButton
             label="Open in default editor"
+            disabled={!canOpenExternal}
             onClick={onOpenExternal}
           >
             <ExternalLink className="size-4" />
@@ -170,11 +173,13 @@ function FileBreadcrumbs({
 function FileViewerToolbarButton({
   label,
   active = false,
+  disabled = false,
   onClick,
   children,
 }: {
   label: string;
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: ReactNode;
 }) {
@@ -184,6 +189,7 @@ function FileViewerToolbarButton({
       variant="ghost"
       size="icon-sm"
       aria-label={label}
+      disabled={disabled}
       className={`${FILE_VIEWER_TOOLBAR_BUTTON_CLASS} ${
         active ? "bg-list-hover text-foreground" : ""
       }`}
