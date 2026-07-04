@@ -156,12 +156,14 @@ describe("GitPanel", () => {
       wrapLongLines: true,
       fileTreeOpen: false,
       allFilesCollapsed: false,
+      reviewEntries: [],
       onFilterChange: vi.fn(),
       onBaseRefChange: vi.fn(),
       onToggleLayout: vi.fn(),
       onToggleWrap: vi.fn(),
       onToggleFileTree: vi.fn(),
       onToggleAllFiles: vi.fn(),
+      onFocusFile: vi.fn(),
       onRefresh: vi.fn(),
     };
 
@@ -199,6 +201,7 @@ describe("GitPanel", () => {
         wrapLongLines: false,
         fileTreeOpen: false,
         allFilesCollapsed: false,
+        reviewEntries: [],
         changesFilter: "unstaged",
         onFilterChange: vi.fn(),
         onBaseRefChange: vi.fn(),
@@ -206,6 +209,7 @@ describe("GitPanel", () => {
         onToggleWrap: vi.fn(),
         onToggleFileTree: vi.fn(),
         onToggleAllFiles: vi.fn(),
+        onFocusFile: vi.fn(),
         onRefresh: vi.fn(),
       }),
     );

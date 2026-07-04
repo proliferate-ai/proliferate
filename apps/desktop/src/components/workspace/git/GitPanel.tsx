@@ -5,6 +5,7 @@ import {
   useUnstageGitPathsMutation,
 } from "@anyharness/sdk-react";
 import { GitPanelHeader } from "./GitPanelHeader";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { GitReviewFileTree } from "./GitReviewFileTree";
 import { GitPanelReviewBody } from "./GitPanelReviewBody";
 import { formatGitPanelUndoError } from "./GitPanelReviewChrome";
@@ -47,14 +48,50 @@ export function GitPanel() {
   if (diffReviewMeasurement.deferQueryMount) {
     return (
       <div className="flex h-full min-w-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
-        <p className="px-4 py-8 text-center text-xs text-sidebar-muted-foreground">
-          Loading changes
-        </p>
+        <GitPanelLoadingSkeleton />
       </div>
     );
   }
 
   return <GitPanelContent diffReviewMeasurement={diffReviewMeasurement} />;
+}
+
+function GitPanelLoadingSkeleton() {
+  return (
+    <div
+      className="flex flex-col gap-1.5 px-2 pt-2"
+      role="status"
+      aria-label="Loading changes"
+    >
+      {[0, 1, 2].map((index) => (
+        <div
+          key={index}
+          className="overflow-clip rounded-lg bg-[var(--color-diff-panel-surface)]"
+        >
+          <div className="flex min-h-9 items-center gap-2.5 bg-[var(--color-diff-sidebar-file-header-surface)] px-5 py-1.5">
+            <SkeletonBlock
+              className="h-3 w-40 bg-sidebar-accent"
+              style={shimmerDelay(index)}
+            />
+            <SkeletonBlock
+              className="ms-auto h-3 w-12 bg-sidebar-accent"
+              style={shimmerDelay(index + 1)}
+            />
+          </div>
+          <div className="space-y-2 px-5 py-3">
+            <SkeletonBlock
+              className="h-2.5 w-3/4 bg-sidebar-accent"
+              style={shimmerDelay(index + 1)}
+            />
+            <SkeletonBlock
+              className="h-2.5 w-1/2 bg-sidebar-accent"
+              style={shimmerDelay(index + 2)}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 type DiffReviewMeasurementState = ReturnType<typeof useDiffReviewMeasurement>;
@@ -330,12 +367,14 @@ function GitPanelContent({
         wrapLongLines={wrapLongLines}
         fileTreeOpen={fileTreeOpen}
         allFilesCollapsed={allFilesCollapsed}
+        reviewEntries={reviewEntries}
         onFilterChange={setChangesFilter}
         onBaseRefChange={setSelectedBaseRef}
         onToggleLayout={handleToggleLayout}
         onToggleWrap={handleToggleWrap}
         onToggleFileTree={() => setFileTreeOpen((value) => !value)}
         onToggleAllFiles={handleToggleAllFiles}
+        onFocusFile={focusReviewFile}
         onRefresh={() => void refetch()}
       />
 

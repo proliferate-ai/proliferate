@@ -848,6 +848,24 @@ mark.codex-thread-find-active {
   contain-intrinsic-size: auto 36px;
 }
 
+/*
+ * Row-level virtualization for LARGE sidebar review diffs (opted in per card
+ * via data-diff-row-virtualization when the patch exceeds
+ * DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD). Every diff row cell — gutter and
+ * content are separate grid children in all three viewers — skips layout and
+ * paint while outside its scrollport, so scrolling one multi-thousand-row
+ * diff no longer keeps every row painted. `auto` in contain-intrinsic-size
+ * remembers each cell's real rendered height, so wrapped lines and per-gap
+ * context expanders don't make the scrollbar jump after first paint; the
+ * one-line-height fallback matches the min-height every unwrapped row has,
+ * keeping subgrid track sizing stable for cells that were never rendered.
+ */
+[data-diff-row-virtualization] .diff-gutter-cell,
+[data-diff-row-virtualization] .diff-content-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--diffs-line-height);
+}
+
 .composer-diff-simple-line {
   --codex-diffs-surface: var(--color-diff-main-surface);
   --codex-diffs-header-surface: var(--codex-diffs-surface);
