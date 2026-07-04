@@ -12,6 +12,8 @@
 #   ANTHROPIC_API_KEY  (deploy: from AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY)
 #   OPENAI_API_KEY     (deploy: from AGENT_GATEWAY_MANAGED_OPENAI_API_KEY)
 #   XAI_API_KEY        (deploy: from AGENT_GATEWAY_MANAGED_XAI_API_KEY)
+#   DEEPSEEK_API_KEY   (deploy: from AGENT_GATEWAY_MANAGED_DEEPSEEK_API_KEY)
+#   ZHIPU_API_KEY      (deploy: from AGENT_GATEWAY_MANAGED_ZHIPU_API_KEY)
 #
 # Aliasing rule: a model_name may only be re-pointed at a different upstream
 # model id when both are served by the SAME provider (e.g. grok-build below
@@ -174,6 +176,32 @@ model_list:
     litellm_params:
       model: bedrock/openai.gpt-oss-20b-1:0
       aws_region_name: os.environ/AWS_BEDROCK_REGION
+
+  # DeepSeek. Direct API at api.deepseek.com; LiteLLM has a first-class
+  # `deepseek/` provider that handles auth and routing. Key comes from
+  # DEEPSEEK_API_KEY in the container environment.
+  - model_name: deepseek-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+  - model_name: deepseek-reasoner
+    litellm_params:
+      model: deepseek/deepseek-reasoner
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  # Zhipu GLM. LiteLLM does not have a dedicated zhipu provider; route via
+  # the openai-compatible transport with a custom api_base pointing to
+  # Zhipu's OpenAI-compatible endpoint. Key comes from ZHIPU_API_KEY.
+  - model_name: glm-4-plus
+    litellm_params:
+      model: openai/glm-4-plus
+      api_key: os.environ/ZHIPU_API_KEY
+      api_base: https://open.bigmodel.cn/api/paas/v4
+  - model_name: glm-4-flash
+    litellm_params:
+      model: openai/glm-4-flash
+      api_key: os.environ/ZHIPU_API_KEY
+      api_base: https://open.bigmodel.cn/api/paas/v4
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

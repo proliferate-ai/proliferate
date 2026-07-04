@@ -62,6 +62,12 @@ pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
         Some("openai")
     } else if model_id.starts_with("grok-") {
         Some("xai")
+    } else if model_id.starts_with("deepseek-") {
+        // DeepSeek models: deepseek-chat, deepseek-reasoner, etc.
+        Some("deepseek")
+    } else if model_id.starts_with("glm-") {
+        // Zhipu GLM models: glm-4-plus, glm-4-flash, etc.
+        Some("zhipu")
     } else {
         None
     }
@@ -392,6 +398,18 @@ mod tests {
             "anthropic",
             "us.anthropic.claude-sonnet-4-6"
         ));
+        // DeepSeek models
+        assert_eq!(provider_for_model("deepseek-chat"), Some("deepseek"));
+        assert_eq!(provider_for_model("deepseek-reasoner"), Some("deepseek"));
+        assert!(model_matches_provider("deepseek", "deepseek-chat"));
+        assert!(model_matches_provider("deepseek", "deepseek-reasoner"));
+        assert!(!model_matches_provider("openai", "deepseek-chat"));
+        // Zhipu GLM models
+        assert_eq!(provider_for_model("glm-4-plus"), Some("zhipu"));
+        assert_eq!(provider_for_model("glm-4-flash"), Some("zhipu"));
+        assert!(model_matches_provider("zhipu", "glm-4-plus"));
+        assert!(model_matches_provider("zhipu", "glm-4-flash"));
+        assert!(!model_matches_provider("openai", "glm-4-plus"));
     }
 
     #[test]
@@ -410,6 +428,30 @@ mod tests {
         let filtered =
             filter_by_providers(models, &["anthropic".to_string(), "openai".to_string()]);
         assert_eq!(filtered, vec!["claude-sonnet-4-5", "gpt-5.5"]);
+    }
+
+    #[test]
+    fn providers_filter_includes_open_models() {
+        let models = vec![
+            "claude-sonnet-4-5".to_string(),
+            "deepseek-chat".to_string(),
+            "deepseek-reasoner".to_string(),
+            "glm-4-plus".to_string(),
+            "glm-4-flash".to_string(),
+            "gpt-5.5".to_string(),
+        ];
+        // Filter to deepseek + zhipu only
+        let filtered = filter_by_providers(
+            models.clone(),
+            &["deepseek".to_string(), "zhipu".to_string()],
+        );
+        assert_eq!(
+            filtered,
+            vec!["deepseek-chat", "deepseek-reasoner", "glm-4-plus", "glm-4-flash"]
+        );
+        // Filter to all (empty providers = no filtering)
+        let all = filter_by_providers(models, &[]);
+        assert_eq!(all.len(), 6);
     }
 
     // --- normalize_model_family (contract §5), exercised with the REAL id sets
