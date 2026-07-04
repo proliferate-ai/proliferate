@@ -20,7 +20,6 @@ from proliferate.middleware.request_context import (
 )
 from proliferate.server.support.domain.message import normalize_support_message
 from proliferate.server.support.domain.report_records import (
-    cloud_workspace_ids_from_refs,
     expected_manifest_entries,
     expected_manifest_keys,
     expected_upload_keys,
@@ -178,7 +177,11 @@ async def create_support_report(
             public_content_consent=False,
             kind=body.kind,
             credit_consent=body.credit_consent,
-            credit_name=body.credit_name if body.kind == "feature" and body.credit_consent else None,
+            credit_name=(
+                body.credit_name
+                if body.kind == "feature" and body.credit_consent
+                else None
+            ),
             request_id=get_request_id(),
             cloud_diagnostics_status="pending" if authorized_cloud_refs else "not_applicable",
         )
