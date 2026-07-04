@@ -9,6 +9,11 @@ pub const OPUS_4_6_FALLBACK_MODEL_ID: &str = "claude-opus-4-6";
 /// Substrings (matched case-insensitively) that indicate a network/connectivity
 /// failure between the harness and the model provider, rather than an
 /// application-level error such as a rate limit or invalid request.
+///
+/// NOTE: "connection closed before" and "connection reset" cannot reliably
+/// distinguish a client-side network loss from a server-side stream termination.
+/// Presentation copy consuming this classification must therefore stay
+/// direction-neutral (see session-error-presentation.ts).
 const NETWORK_CONNECTION_MARKERS: &[&str] = &[
     "connection closed before",
     "connection reset",

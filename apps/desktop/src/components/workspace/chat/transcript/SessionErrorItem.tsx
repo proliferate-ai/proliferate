@@ -7,6 +7,7 @@ import { presentSessionError } from "@proliferate/product-domain/chats/transcrip
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useConnectivityStore } from "@/stores/infra/connectivity-store";
 
 export function SessionErrorItem({
   item,
@@ -22,6 +23,7 @@ export function SessionErrorItem({
   const [isApplyingFallback, setIsApplyingFallback] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
 
+  const isOnline = useConnectivityStore((state) => state.isOnline);
   const isNetworkError = (item.details as { kind?: string } | null)?.kind === "network_connection";
 
   const handleRetryNetworkError = () => {
@@ -102,6 +104,8 @@ export function SessionErrorItem({
               type="button"
               variant="secondary"
               size="sm"
+              disabled={!isOnline}
+              title={!isOnline ? "You are offline" : undefined}
               onClick={handleRetryNetworkError}
               className="px-2.5 text-sm"
             >

@@ -16,9 +16,9 @@ export function presentSessionError(item: ErrorItem): SessionErrorPresentation {
   // contract variant may ship after this code, so we check by string value.
   if ((item.details as { kind?: string } | null)?.kind === "network_connection") {
     return {
-      title: "Connection lost",
+      title: "Connection interrupted",
       description:
-        "Your message couldn't reach the model. Your work is saved — retry when you're back online.",
+        "The connection to the model was lost. Your work is saved — retry to continue.",
       technicalDetail: normalizeTechnicalDetail(item.message),
       fallbackModelLabel: null,
     };

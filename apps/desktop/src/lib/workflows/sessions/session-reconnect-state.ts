@@ -18,6 +18,9 @@ export function clearSessionReconnectTimer(sessionId: string): void {
     window.clearTimeout(timerId);
     sessionReconnectTimers.delete(sessionId);
   }
+  // Also remove any parked offline runner so it cannot fire on the next
+  // online flush after the session has been torn down.
+  offlineSessionReconnects.delete(sessionId);
 }
 
 export function scheduleSessionReconnectTimer(
