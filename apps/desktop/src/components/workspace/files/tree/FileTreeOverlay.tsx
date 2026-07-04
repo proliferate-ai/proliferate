@@ -1,5 +1,7 @@
 import {
   useCallback,
+  useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -9,7 +11,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import {
   ChevronRight,
   Search,
-  SplitPanelLeft,
 } from "@proliferate/ui/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { WorkspaceFileEntry } from "@anyharness/sdk";
@@ -18,32 +19,62 @@ import {
   useWorkspaceFilesQuery,
 } from "@anyharness/sdk-react";
 import { FileTreeEntryIcon } from "@/components/workspace/files/file-icons";
+import { fileTreeIconToneClass } from "@/components/workspace/files/tree/file-tree-icon-colors";
+import {
+  buildFileSearchTree,
+  truncatePathLabel,
+} from "@/lib/domain/files/file-search-tree";
 import {
   FILE_TREE_MAX_WIDTH_RATIO,
   FILE_TREE_MIN_WIDTH,
-  useFileTreeSidebarStore,
-} from "@/stores/editor/file-tree-sidebar-store";
+  useFileTreeStore,
+} from "@/stores/editor/file-tree-store";
 
-interface FileTreeSidebarProps {
+interface FileTreeOverlayProps {
+  open: boolean;
   workspaceId: string | null;
   selectedPath: string;
   onOpenFile: (path: string) => void;
+  onClose: () => void;
   changedPaths?: Set<string>;
 }
 
-export function FileTreeSidebar({
+/**
+ * Codex-style floating file browser: an overlay panel anchored top-right
+ * within the files pane, layered over the code viewer (no viewer reflow).
+ * Opened via the FolderTree toolbar button; dismissed on Escape or
+ * outside-click. Width is drag-resizable from the left edge and persisted.
+ */
+export function FileTreeOverlay({
+  open,
   workspaceId,
   selectedPath,
   onOpenFile,
+  onClose,
   changedPaths,
-}: FileTreeSidebarProps) {
-  const width = useFileTreeSidebarStore((s) => s.width);
-  const collapsed = useFileTreeSidebarStore((s) => s.collapsed);
-  const setWidth = useFileTreeSidebarStore((s) => s.setWidth);
-  const toggleCollapsed = useFileTreeSidebarStore((s) => s.toggleCollapsed);
+}: FileTreeOverlayProps) {
+  const width = useFileTreeStore((s) => s.width);
+  const setWidth = useFileTreeStore((s) => s.setWidth);
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const [resizing, setResizing] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, open]);
 
   const handleResizeStart = useCallback(
     (event: React.PointerEvent) => {
@@ -53,9 +84,13 @@ export function FileTreeSidebar({
       const startWidth = width;
 
       const handleMove = (moveEvent: PointerEvent) => {
-        const parentWidth = containerRef.current?.parentElement?.clientWidth ?? 1000;
-        const maxWidth = parentWidth * FILE_TREE_MAX_WIDTH_RATIO;
-        const newWidth = Math.min(maxWidth, Math.max(FILE_TREE_MIN_WIDTH, startWidth + (moveEvent.clientX - startX)));
+        const paneWidth = panelRef.current?.parentElement?.clientWidth ?? 1000;
+        const maxWidth = paneWidth * FILE_TREE_MAX_WIDTH_RATIO;
+        // Panel is right-anchored, so dragging left grows it.
+        const newWidth = Math.min(
+          maxWidth,
+          Math.max(FILE_TREE_MIN_WIDTH, startWidth + (startX - moveEvent.clientX)),
+        );
         setWidth(newWidth);
       };
 
@@ -71,55 +106,43 @@ export function FileTreeSidebar({
     [width, setWidth],
   );
 
-  if (collapsed) {
+  if (!open) {
     return null;
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="relative flex h-full shrink-0 flex-col border-r border-border bg-sidebar-background"
-      style={{ width }}
-    >
-      <FileTreeHeader onToggleCollapse={toggleCollapsed} />
-      <FileTreeBody
-        workspaceId={workspaceId}
-        selectedPath={selectedPath}
-        onOpenFile={onOpenFile}
-        changedPaths={changedPaths}
-      />
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        className={twMerge(
-          "absolute right-0 top-0 bottom-0 z-10 w-[4px] cursor-col-resize transition-colors duration-150",
-          resizing
-            ? "bg-accent"
-            : "hover:bg-border",
-        )}
-        style={{ transform: "translateX(50%)" }}
-        onPointerDown={handleResizeStart}
-      />
-    </div>
-  );
-}
-
-function FileTreeHeader({ onToggleCollapse }: { onToggleCollapse: () => void }) {
-  return (
-    <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-2">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Files
-      </span>
+    <div className="pointer-events-none absolute inset-0 z-30" data-file-tree-overlay>
       <Button
         type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Hide file tree"
-        className="size-6 rounded text-muted-foreground hover:bg-list-hover hover:text-foreground"
-        onClick={onToggleCollapse}
+        variant="unstyled"
+        size="unstyled"
+        aria-label="Close file browser"
+        className="pointer-events-auto absolute inset-0 cursor-default bg-transparent"
+        onClick={onClose}
+      />
+      <section
+        ref={panelRef}
+        role="dialog"
+        aria-label="Browse files"
+        className="pointer-events-auto absolute bottom-2 right-2 top-2 flex min-w-0 flex-col overflow-hidden rounded-lg border border-sidebar-border/80 bg-sidebar-background/95 shadow-floating-dark backdrop-blur"
+        style={{ width: `min(${width}px, calc(100% - 1rem))` }}
       >
-        <SplitPanelLeft className="size-3.5" />
-      </Button>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className={twMerge(
+            "absolute left-0 top-0 bottom-0 z-10 w-[5px] cursor-col-resize transition-colors duration-150",
+            resizing ? "bg-accent" : "hover:bg-border",
+          )}
+          onPointerDown={handleResizeStart}
+        />
+        <FileTreeBody
+          workspaceId={workspaceId}
+          selectedPath={selectedPath}
+          onOpenFile={onOpenFile}
+          changedPaths={changedPaths}
+        />
+      </section>
     </div>
   );
 }
@@ -150,12 +173,13 @@ function FileTreeBody({
             value={filter}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => setFilter(event.target.value)}
             placeholder="Filter files…"
+            autoFocus
             className="h-full border-0 bg-transparent px-0 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
           />
         </div>
       </div>
       {isSearching ? (
-        <FileSearchResults
+        <FileSearchResultsTree
           workspaceId={workspaceId}
           query={query}
           selectedPath={selectedPath}
@@ -176,7 +200,7 @@ function FileTreeBody({
   );
 }
 
-interface FileSearchResultsProps {
+interface FileSearchResultsTreeProps {
   workspaceId: string | null;
   query: string;
   selectedPath: string;
@@ -184,21 +208,23 @@ interface FileSearchResultsProps {
   changedPaths?: Set<string>;
 }
 
-function FileSearchResults({
+function FileSearchResultsTree({
   workspaceId,
   query,
   selectedPath,
   onOpenFile,
   changedPaths,
-}: FileSearchResultsProps) {
+}: FileSearchResultsTreeProps) {
   const searchQuery = useSearchWorkspaceFilesQuery({
     workspaceId,
     query,
     limit: 60,
     enabled: Boolean(workspaceId) && query.length > 0,
   });
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const results = searchQuery.data?.results ?? [];
+  const groups = useMemo(() => buildFileSearchTree(results), [results]);
 
   if (results.length === 0) {
     return (
@@ -208,20 +234,47 @@ function FileSearchResults({
     );
   }
 
+  const toggleGroup = (path: string) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
-      {results.map((result) => (
-        <FileTreeRow
-          key={result.path}
-          name={result.name}
-          path={result.path}
-          kind="file"
-          level={0}
-          selected={result.path === selectedPath}
-          changed={changedPaths?.has(result.path)}
-          onClick={() => onOpenFile(result.path)}
-        />
-      ))}
+    <div role="tree" className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+      {groups.map((group) => {
+        const collapsed = collapsedGroups.has(group.path);
+        return (
+          <div key={group.path || "__root__"}>
+            <FileTreeRow
+              name={truncatePathLabel(group.label)}
+              path={group.path}
+              kind="directory"
+              level={0}
+              expanded={!collapsed}
+              onClick={() => toggleGroup(group.path)}
+            />
+            {!collapsed && group.files.map((file) => (
+              <FileTreeRow
+                key={file.path}
+                name={file.name}
+                path={file.path}
+                kind="file"
+                level={1}
+                selected={file.path === selectedPath}
+                changed={changedPaths?.has(file.path)}
+                onClick={() => onOpenFile(file.path)}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -243,8 +296,8 @@ function FileTreeDirectory({
   changedPaths,
   level,
 }: FileTreeDirectoryProps) {
-  const expandedPaths = useFileTreeSidebarStore((s) => s.expandedPaths);
-  const toggleExpanded = useFileTreeSidebarStore((s) => s.toggleExpanded);
+  const expandedPaths = useFileTreeStore((s) => s.expandedPaths);
+  const toggleExpanded = useFileTreeStore((s) => s.toggleExpanded);
 
   const filesQuery = useWorkspaceFilesQuery({
     workspaceId,
@@ -258,7 +311,11 @@ function FileTreeDirectory({
   // Only virtualize the root level
   if (level === 0) {
     return (
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+      <div
+        ref={scrollRef}
+        role="tree"
+        className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1"
+      >
         <VirtualizedTree
           scrollRef={scrollRef}
           entries={entries}
@@ -321,6 +378,9 @@ function VirtualizedTree({
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 28,
     overscan: 20,
+    // jsdom (tests) and pre-layout frames report a zero-height scroll
+    // element; seed a viewport so initial rows render.
+    initialRect: { width: 400, height: 800 },
   });
 
   return (
@@ -432,6 +492,7 @@ function FileTreeRow({
 }) {
   const isDirectory = kind === "directory";
   const paddingLeft = isDirectory ? 6 + level * 12 : 18 + level * 12;
+  const iconTone = fileTreeIconToneClass(name, path, kind);
 
   return (
     <button
@@ -464,6 +525,7 @@ function FileTreeRow({
         kind={kind}
         isExpanded={isDirectory ? expanded : undefined}
         className="size-4 shrink-0"
+        toneClassName={iconTone}
       />
       <span className="min-w-0 flex-1 truncate">
         {name}

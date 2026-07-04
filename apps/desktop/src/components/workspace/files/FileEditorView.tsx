@@ -7,7 +7,7 @@ import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
-import { FileTreeSidebar } from "@/components/workspace/files/sidebar/FileTreeSidebar";
+import { FileTreeOverlay } from "@/components/workspace/files/tree/FileTreeOverlay";
 import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
 import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
@@ -20,7 +20,6 @@ import {
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
-import { useFileTreeSidebarStore } from "@/stores/editor/file-tree-sidebar-store";
 import { useGitChangedPaths } from "@/hooks/workspaces/derived/files/use-git-changed-paths";
 
 interface FileEditorViewProps {
@@ -44,8 +43,7 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     workspacePath: filePath,
   });
   const [wordWrap, setWordWrap] = useState(false);
-  const sidebarCollapsed = useFileTreeSidebarStore((s) => s.collapsed);
-  const toggleSidebar = useFileTreeSidebarStore((s) => s.toggleCollapsed);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const changedPaths = useGitChangedPaths(materializedWorkspaceId);
   const activeDiffTarget = diffTarget ?? null;
   const effectiveMode = activeDiffTarget
@@ -90,27 +88,32 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     );
   };
   const browsePath = (_path: string) => {
-    // Open the sidebar when a breadcrumb is clicked
-    if (sidebarCollapsed) {
-      toggleSidebar();
-    }
+    setBrowserOpen(true);
   };
-  const handleOpenFile = (path: string) => {
+  const toggleBrowser = () => {
+    setBrowserOpen((open) => !open);
+  };
+  const closeBrowser = () => {
+    setBrowserOpen(false);
+  };
+  const openBrowserFile = (path: string) => {
     void openFile(path);
   };
   const canFindInFile = !activeDiffTarget && Boolean(read?.isText && !read.tooLarge);
 
   const renderPaneContent = (content: ReactNode) => (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
-      <FileTreeSidebar
-        workspaceId={materializedWorkspaceId}
-        selectedPath={filePath}
-        onOpenFile={handleOpenFile}
-        changedPaths={changedPaths}
-      />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {content}
       </div>
+      <FileTreeOverlay
+        open={browserOpen}
+        workspaceId={materializedWorkspaceId}
+        selectedPath={filePath}
+        onOpenFile={openBrowserFile}
+        onClose={closeBrowser}
+        changedPaths={changedPaths}
+      />
     </div>
   );
 
@@ -129,8 +132,8 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         onCopyPath={copyPath}
         onOpenExternal={openExternal}
         onOpenContentSearch={openFindInDiffs}
-        sidebarVisible={!sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
+        browserOpen={browserOpen}
+        onToggleBrowser={toggleBrowser}
         onBrowsePath={browsePath}
       >
         {renderPaneContent(
@@ -155,8 +158,8 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
         onCopyPath={copyPath}
         onOpenExternal={openExternal}
         onOpenContentSearch={openFindInDiffs}
-        sidebarVisible={!sidebarCollapsed}
-        onToggleSidebar={toggleSidebar}
+        browserOpen={browserOpen}
+        onToggleBrowser={toggleBrowser}
         onBrowsePath={browsePath}
       >
         {renderPaneContent(
@@ -182,8 +185,8 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       onCopyPath={copyPath}
       onOpenExternal={openExternal}
       onOpenContentSearch={openFindInDiffs}
-      sidebarVisible={!sidebarCollapsed}
-      onToggleSidebar={toggleSidebar}
+      browserOpen={browserOpen}
+      onToggleBrowser={toggleBrowser}
       onBrowsePath={browsePath}
     >
       {renderPaneContent(
@@ -201,4 +204,3 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     </FileViewerFrame>
   );
 }
-

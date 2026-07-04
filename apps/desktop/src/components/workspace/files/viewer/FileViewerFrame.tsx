@@ -34,8 +34,8 @@ export function FileViewerFrame({
   onCopyPath,
   onOpenExternal,
   onOpenContentSearch,
-  sidebarVisible,
-  onToggleSidebar,
+  browserOpen,
+  onToggleBrowser,
   onBrowsePath,
   children,
 }: {
@@ -52,8 +52,8 @@ export function FileViewerFrame({
   onCopyPath: () => void;
   onOpenExternal: () => void;
   onOpenContentSearch: () => void;
-  sidebarVisible: boolean;
-  onToggleSidebar: () => void;
+  browserOpen: boolean;
+  onToggleBrowser: () => void;
   onBrowsePath: (path: string) => void;
   children: ReactNode;
 }) {
@@ -95,9 +95,9 @@ export function FileViewerFrame({
             </FileViewerToolbarButton>
           )}
           <FileViewerToolbarButton
-            label={sidebarVisible ? "Hide file tree" : "Show file tree"}
-            active={sidebarVisible}
-            onClick={onToggleSidebar}
+            label={browserOpen ? "Hide files" : "Show files"}
+            active={browserOpen}
+            onClick={onToggleBrowser}
           >
             <FolderTree className="size-4" />
           </FileViewerToolbarButton>
