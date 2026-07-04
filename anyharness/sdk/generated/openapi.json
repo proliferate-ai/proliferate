@@ -4340,6 +4340,60 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "stage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch staged"
+          },
+          "400": {
+            "description": "Patch could not be applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/git/status": {
       "get": {
         "tags": [
@@ -4411,6 +4465,60 @@
         "responses": {
           "200": {
             "description": "Files unstaged"
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "unstage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch unstaged"
+          },
+          "400": {
+            "description": "Patch could not be removed from index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "404": {
             "description": "Workspace not found",
@@ -15047,6 +15155,18 @@
           "failed"
         ]
       },
+      "StagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to apply to the index."
+          }
+        }
+      },
       "StagePathsRequest": {
         "type": "object",
         "required": [
@@ -15759,6 +15879,18 @@
       },
       "TurnStartedEvent": {
         "type": "object"
+      },
+      "UnstagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to reverse-apply from the index."
+          }
+        }
       },
       "UnstagePathsRequest": {
         "type": "object",

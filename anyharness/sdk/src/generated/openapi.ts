@@ -1268,6 +1268,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stage_patch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/git/status": {
         parameters: {
             query?: never;
@@ -1294,6 +1310,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["unstage_paths"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unstage_patch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3913,6 +3945,10 @@ export interface components {
         };
         /** @enum {string} */
         SetupScriptStatus: "queued" | "running" | "succeeded" | "failed";
+        StagePatchRequest: {
+            /** @description A valid unified diff patch (file headers + hunk) to apply to the index. */
+            patch: string;
+        };
         StagePathsRequest: {
             paths: string[];
         };
@@ -4078,6 +4114,10 @@ export interface components {
             stopReason: components["schemas"]["StopReason"];
         };
         TurnStartedEvent: Record<string, never>;
+        UnstagePatchRequest: {
+            /** @description A valid unified diff patch (file headers + hunk) to reverse-apply from the index. */
+            patch: string;
+        };
         UnstagePathsRequest: {
             paths: string[];
         };
@@ -7677,6 +7717,49 @@ export interface operations {
             };
         };
     };
+    stage_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StagePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Patch staged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Patch could not be applied */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_git_status: {
         parameters: {
             query?: never;
@@ -7731,6 +7814,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unstage_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnstagePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Patch unstaged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Patch could not be removed from index */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
             /** @description Workspace not found */
             404: {
