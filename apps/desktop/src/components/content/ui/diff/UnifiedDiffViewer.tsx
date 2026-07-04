@@ -1,7 +1,11 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
-import { DiffContextExpander, type ExpandDirection } from "@/components/content/ui/diff/DiffContextExpander";
+import {
+  DiffContextExpander,
+  DiffGapInfoRow,
+  type ExpandDirection,
+} from "@/components/content/ui/diff/DiffContextExpander";
 import type {
   CollapsedContext,
   DiffHunk,
@@ -162,14 +166,11 @@ function GapSeparator({
   onExpand: (direction: ExpandDirection) => void;
   canExpand: boolean;
 }) {
+  // The AutoHideScrollArea viewport owns horizontal scroll and there is
+  // no sticky gutter in this simple layout, so the cluster pins at left 0.
   if (!canExpand) {
-    // Non-interactive informational row
     if (gap.lineCount <= 0) return null;
-    return (
-      <div className="flex items-center justify-center bg-[var(--codex-diffs-separator-surface)] py-0.5 text-[10px] text-muted-foreground/40">
-        {gap.lineCount} unmodified lines
-      </div>
-    );
+    return <DiffGapInfoRow lineCount={gap.lineCount} />;
   }
 
   return <DiffContextExpander gap={gap} onExpand={onExpand} />;

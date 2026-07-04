@@ -6,7 +6,11 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
-import { DiffContextExpander, type ExpandDirection } from "@/components/content/ui/diff/DiffContextExpander";
+import {
+  DiffContextExpander,
+  DiffGapInfoRow,
+  type ExpandDirection,
+} from "@/components/content/ui/diff/DiffContextExpander";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
@@ -237,26 +241,8 @@ function SplitGapCells({
   onExpand: (direction: ExpandDirection) => void;
   canExpand: boolean;
 }) {
-  if (!canExpand) {
-    // Show non-interactive info row when no file lines available
-    return (
-      <>
-        <div
-          data-gutter=""
-          data-separator="line-info"
-          className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--codex-diffs-separator-surface)]"
-        />
-        <div
-          data-content=""
-          data-separator="line-info"
-          className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)] px-2 text-[10px] text-muted-foreground/70"
-        >
-          {gap.lineCount > 0 ? `${gap.lineCount} unmodified lines` : ""}
-        </div>
-      </>
-    );
-  }
-
+  // Each split code column owns its own horizontal scroll; the gutter cell
+  // is sticky at left 0, so the cluster pins just past the gutter width.
   return (
     <>
       <div
@@ -269,7 +255,18 @@ function SplitGapCells({
         data-separator="gap-expander"
         className="diff-content-cell min-h-[var(--diffs-line-height)] bg-[var(--codex-diffs-separator-surface)]"
       >
-        <DiffContextExpander gap={gap} onExpand={onExpand} />
+        {canExpand ? (
+          <DiffContextExpander
+            gap={gap}
+            onExpand={onExpand}
+            stickyLeft="var(--diffs-column-number-width)"
+          />
+        ) : (
+          <DiffGapInfoRow
+            lineCount={gap.lineCount}
+            stickyLeft="var(--diffs-column-number-width)"
+          />
+        )}
       </div>
     </>
   );

@@ -7,7 +7,11 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
-import { DiffContextExpander, type ExpandDirection } from "@/components/content/ui/diff/DiffContextExpander";
+import {
+  DiffContextExpander,
+  DiffGapInfoRow,
+  type ExpandDirection,
+} from "@/components/content/ui/diff/DiffContextExpander";
 import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import {
@@ -224,22 +228,15 @@ function ChatContentColumn({
           );
         }
         if (row.kind === "gap") {
+          // The chat viewport owns horizontal scroll and the gutter column
+          // is sticky at left 0, so pin the cluster just past the gutter.
           if (!canExpandGaps) {
-            // Informational-only separator when expansion is unavailable
             return (
-              <div
+              <DiffGapInfoRow
                 key={row.key}
-                data-separator="gap-info"
-                className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center gap-2 bg-[var(--codex-diffs-separator-surface)] px-2 text-muted-foreground/60"
-              >
-                <span className="h-px min-w-4 flex-1 bg-border/40" />
-                <span className="shrink-0 text-[10px] leading-none">
-                  {row.gap.lineCount > 0
-                    ? `${row.gap.lineCount} unmodified line${row.gap.lineCount === 1 ? "" : "s"}`
-                    : "unmodified lines"}
-                </span>
-                <span className="h-px min-w-4 flex-1 bg-border/40" />
-              </div>
+                lineCount={row.gap.lineCount}
+                stickyLeft="var(--diffs-column-number-width)"
+              />
             );
           }
           return (
@@ -247,6 +244,7 @@ function ChatContentColumn({
               key={row.key}
               gap={row.gap}
               onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
+              stickyLeft="var(--diffs-column-number-width)"
             />
           );
         }
