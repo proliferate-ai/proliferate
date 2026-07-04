@@ -65,11 +65,11 @@ export function FileViewerFrame({
       data-file-viewer-frame
     >
       <div
-        className="z-20 flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border bg-background px-2 text-foreground"
+        className="z-20 flex h-9 min-h-9 shrink-0 items-center gap-1 border-b border-border bg-background px-2 text-foreground"
         data-file-viewer-toolbar
       >
         <FileBreadcrumbs filePath={filePath} onBrowsePath={onBrowsePath} />
-        <div className="flex shrink-0 items-center gap-px">
+        <div className="flex shrink-0 items-center gap-1">
           <FileViewerOptionsMenu
             canRenderRichPreview={canRenderRichPreview}
             richPreviewEnabled={richPreviewEnabled}
@@ -110,7 +110,7 @@ export function FileViewerFrame({
 }
 
 const FILE_VIEWER_TOOLBAR_BUTTON_CLASS =
-  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground";
+  "size-7 rounded-lg text-muted-foreground hover:bg-list-hover hover:text-foreground data-[state=open]:bg-list-hover data-[state=open]:text-foreground [&_svg]:size-4";
 
 function FileBreadcrumbs({
   filePath,
@@ -132,7 +132,7 @@ function FileBreadcrumbs({
       aria-label="File path"
       className="hide-scrollbar flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
     >
-      <ol className="flex min-w-max flex-1 items-center gap-1 text-xs text-muted-foreground">
+      <ol className="flex min-w-max flex-1 items-center gap-1 text-[12px] leading-none text-muted-foreground">
         {crumbs.map((part, index) => {
           const isLast = index === crumbs.length - 1;
           const isWorkspaceCrumb = workspaceName && index === 0;
@@ -142,7 +142,7 @@ function FileBreadcrumbs({
             : parts.slice(0, Math.max(0, index - workspaceOffset + 1)).join("/");
           return (
             <li key={`${part}-${index}`} className="flex min-w-0 items-center gap-1">
-              {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground/55" />}
+              {index > 0 && <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />}
               {browsable ? (
                 <Button
                   type="button"

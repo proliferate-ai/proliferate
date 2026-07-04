@@ -1,6 +1,4 @@
 import {
-  useEffect,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -9,7 +7,7 @@ import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { useReadWorkspaceFileQuery } from "@anyharness/sdk-react";
 import { CenterMessage } from "@/components/workspace/files/viewer/CenterMessage";
 import { FileViewerFrame } from "@/components/workspace/files/viewer/FileViewerFrame";
-import { WorkspaceFileBrowserOverlay } from "@/components/workspace/files/viewer/WorkspaceFileBrowserOverlay";
+import { FileTreeOverlay } from "@/components/workspace/files/tree/FileTreeOverlay";
 import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { useWorkspaceFileContext } from "@/hooks/workspaces/derived/files/use-workspace-file-context";
 import { useWorkspaceFileTargetActions } from "@/hooks/workspaces/workflows/files/use-workspace-file-target-actions";
@@ -22,6 +20,7 @@ import {
 } from "@/lib/domain/workspaces/viewer/viewer-target";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 import { useWorkspaceViewerTabsStore } from "@/stores/editor/workspace-viewer-tabs-store";
+import { useGitChangedPaths } from "@/hooks/workspaces/derived/files/use-git-changed-paths";
 
 interface FileEditorViewProps {
   filePath: string;
@@ -44,9 +43,8 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     workspacePath: filePath,
   });
   const [wordWrap, setWordWrap] = useState(false);
-  const parentPath = useMemo(() => parentDirectoryPath(filePath), [filePath]);
   const [browserOpen, setBrowserOpen] = useState(false);
-  const [browserPath, setBrowserPath] = useState(parentPath);
+  const changedPaths = useGitChangedPaths(materializedWorkspaceId);
   const activeDiffTarget = diffTarget ?? null;
   const effectiveMode = activeDiffTarget
     ? "diff"
@@ -61,12 +59,6 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
     path: filePath,
     enabled: requiresFileRead,
   });
-
-  useEffect(() => {
-    if (!browserOpen) {
-      setBrowserPath(parentPath);
-    }
-  }, [browserOpen, parentPath]);
 
   const read = readQuery.data;
   const copyContent = () => {
@@ -95,39 +87,32 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       normalizedEffectiveMode === "rendered" ? "source" : "rendered",
     );
   };
-  const browsePath = (path: string) => {
-    setBrowserPath(path);
+  const browsePath = (_path: string) => {
     setBrowserOpen(true);
   };
   const toggleBrowser = () => {
-    setBrowserOpen((open) => {
-      if (!open) {
-        setBrowserPath(parentPath);
-      }
-      return !open;
-    });
+    setBrowserOpen((open) => !open);
   };
   const closeBrowser = () => {
     setBrowserOpen(false);
   };
   const openBrowserFile = (path: string) => {
-    setBrowserOpen(false);
     void openFile(path);
   };
   const canFindInFile = !activeDiffTarget && Boolean(read?.isText && !read.tooLarge);
+
   const renderPaneContent = (content: ReactNode) => (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {content}
       </div>
-      <WorkspaceFileBrowserOverlay
+      <FileTreeOverlay
         open={browserOpen}
         workspaceId={materializedWorkspaceId}
         selectedPath={filePath}
-        pathPrefix={browserPath}
-        onPathPrefixChange={setBrowserPath}
         onOpenFile={openBrowserFile}
         onClose={closeBrowser}
+        changedPaths={changedPaths}
       />
     </div>
   );
@@ -218,10 +203,4 @@ export function FileEditorView({ filePath, targetKey, diffTarget }: FileEditorVi
       )}
     </FileViewerFrame>
   );
-}
-
-function parentDirectoryPath(path: string): string {
-  const parts = path.split("/").filter(Boolean);
-  parts.pop();
-  return parts.join("/");
 }
