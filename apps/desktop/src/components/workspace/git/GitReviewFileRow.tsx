@@ -19,7 +19,10 @@ import { GitReviewStageAction } from "@/components/workspace/git/GitReviewStageA
 import { GitReviewStatusBadge } from "@/components/workspace/git/GitReviewStatusBadge";
 import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
+import {
+  DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
+  resolveDiffDisplayPolicy,
+} from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type {
   GitPanelReviewFile,
   GitPanelReviewScope,
@@ -164,6 +167,14 @@ export function GitReviewFileRow({
     && !diffQuery.data
     && !diffQuery.isError,
   );
+  // Opt large diffs into per-row content-visibility virtualization (the
+  // [data-diff-row-virtualization] rule in design desktop.css): the diff
+  // scrolls inside this card's 24-line max-h viewport, so without it every
+  // row of a multi-thousand-line patch stays painted while scrolling.
+  const virtualizeDiffRows = Boolean(
+    patchPolicy
+    && patchPolicy.patchLineCount > DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
+  );
   const emptyDiffState = formatEmptyDiffState({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
@@ -193,6 +204,7 @@ export function GitReviewFileRow({
     <div
       id={id}
       data-review-path={file.path}
+      data-diff-row-virtualization={virtualizeDiffRows ? "" : undefined}
       className="scroll-mt-2"
       style={{
         ...SIDEBAR_DIFF_SURFACE_STYLE,
