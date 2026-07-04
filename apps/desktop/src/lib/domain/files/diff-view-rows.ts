@@ -11,8 +11,8 @@ export type DiffLineDisplayType =
   | "change-deletion";
 
 export type ChatDiffRow =
-  | { kind: "line"; key: string; line: DiffLine }
-  | { kind: "collapsed"; key: string; section: CollapsedContext }
+  | { kind: "line"; key: string; line: DiffLine; hunkIndex: number; isHunkFirstRow: boolean }
+  | { kind: "collapsed"; key: string; section: CollapsedContext; hunkIndex: number }
   | { kind: "gap"; key: string; gap: InterHunkGap; gapIndex: number };
 
 export type SplitSide = "old" | "new";
@@ -69,6 +69,7 @@ export function getChatDiffRows(
       }
     }
 
+    let emittedHunkRow = false;
     hunk.items.forEach((item, itemIndex) => {
       const key = `${hunkIndex}-${itemIndex}`;
       if ("kind" in item && item.kind === "collapsed") {
@@ -78,10 +79,14 @@ export function getChatDiffRows(
               kind: "line",
               key: `${key}-${line.tokenIndex}`,
               line,
+              hunkIndex,
+              isHunkFirstRow: !emittedHunkRow,
             });
+            emittedHunkRow = true;
           });
         } else {
-          rows.push({ kind: "collapsed", key, section: item });
+          rows.push({ kind: "collapsed", key, section: item, hunkIndex });
+          emittedHunkRow = true;
         }
         return;
       }
@@ -91,7 +96,10 @@ export function getChatDiffRows(
         kind: "line",
         key: `${key}-${line.tokenIndex}`,
         line,
+        hunkIndex,
+        isHunkFirstRow: !emittedHunkRow,
       });
+      emittedHunkRow = true;
     });
   });
 

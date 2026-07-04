@@ -298,6 +298,14 @@ pub fn build_router(state: AppState) -> Router {
             post(git::unstage_paths),
         )
         .route(
+            "/workspaces/{workspace_id}/git/stage-patch",
+            post(git::stage_patch),
+        )
+        .route(
+            "/workspaces/{workspace_id}/git/unstage-patch",
+            post(git::unstage_patch),
+        )
+        .route(
             "/workspaces/{workspace_id}/git/revert-patches",
             post(git::revert_patches),
         )

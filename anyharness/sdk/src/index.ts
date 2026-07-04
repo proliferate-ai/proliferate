@@ -441,6 +441,8 @@ export type {
   RenameBranchResponse,
   StagePathsRequest,
   UnstagePathsRequest,
+  StagePatchRequest,
+  UnstagePatchRequest,
   GitRevertPatchEntry,
   GitRevertPatchesRequest,
   GitRevertPatchesResponse,

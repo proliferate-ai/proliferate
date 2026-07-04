@@ -34,6 +34,18 @@ vi.mock("@anyharness/sdk-react", () => ({
     mutateAsync: vi.fn(),
     isPending: false,
   }),
+  useStagePatchMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useUnstagePatchMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useReadWorkspaceFileMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 vi.mock("@/hooks/workspaces/facade/files/use-workspace-file-actions", () => ({

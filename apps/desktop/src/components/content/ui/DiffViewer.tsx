@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { ChatDiffViewer } from "@/components/content/ui/diff/ChatDiffViewer";
 import { SplitDiffViewer } from "@/components/content/ui/diff/SplitDiffViewer";
-import { UnifiedDiffViewer } from "@/components/content/ui/diff/UnifiedDiffViewer";
+import { UnifiedDiffViewer, type UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
 import { useDiffHighlight } from "@/hooks/ui/highlighting/use-diff-highlight";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { useChatDiffPreferencesStore } from "@/stores/chat/chat-diff-preferences-store";
@@ -33,6 +33,11 @@ interface DiffViewerProps {
    * `fileLines` arrives.
    */
   onRequestFileLines?: () => void;
+  /**
+   * When provided, enables hunk-level action pills (revert/stage/unstage)
+   * on each hunk in unified layout.
+   */
+  hunkActions?: UnifiedDiffHunkActions | null;
 }
 
 const ROOT_CLASS =
@@ -54,6 +59,7 @@ export function DiffViewer({
   chainVerticalWheel,
   fileLines,
   onRequestFileLines,
+  hunkActions,
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
   const chatWrapLongLines = useChatDiffPreferencesStore((state) =>
@@ -78,6 +84,7 @@ export function DiffViewer({
           chainVerticalWheel={chainVerticalWheel}
           fileLines={fileLines}
           onRequestFileLines={onRequestFileLines}
+          hunkActions={hunkActions}
         />
       </DebugProfiler>
     );
@@ -120,6 +127,7 @@ export function DiffViewer({
         chainVerticalWheel={chainVerticalWheel}
         fileLines={fileLines}
         onRequestFileLines={onRequestFileLines}
+        hunkActions={hunkActions}
       />
     </DebugProfiler>
   );
