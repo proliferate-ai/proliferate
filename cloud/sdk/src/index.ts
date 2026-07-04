@@ -14,6 +14,7 @@ export * from "./client/integrations.js";
 export * from "./client/deep-links.js";
 export * from "./client/cloud-sandboxes.js";
 export * from "./client/desktop-workers.js";
+export * from "./client/org-sandbox-profiles.js";
 export * from "./client/organizations.js";
 export * from "./client/repositories.js";
 export * from "./client/repos.js";

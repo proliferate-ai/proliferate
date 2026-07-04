@@ -37,6 +37,7 @@ class CloudSandboxValue:
     anyharness_bearer_token_ciphertext: str | None
     anyharness_data_key_ciphertext: str | None
     runtime_generation: int
+    display_name: str | None
     created_at: datetime
     updated_at: datetime
     ready_at: datetime | None
@@ -49,13 +50,16 @@ def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
     sandbox_type = (
         row.sandbox_type.value if hasattr(row.sandbox_type, "value") else row.sandbox_type
     )
+    owner_scope = getattr(row, "owner_scope", None) or (
+        "personal" if row.owner_user_id is not None else "unknown"
+    )
     return CloudSandboxValue(
         id=row.id,
-        owner_scope="personal" if row.owner_user_id is not None else "unknown",
+        owner_scope=owner_scope,
         owner_user_id=row.owner_user_id,
-        organization_id=None,
-        created_by_user_id=row.owner_user_id,
-        billing_subject_id=None,
+        organization_id=getattr(row, "organization_id", None),
+        created_by_user_id=getattr(row, "created_by_user_id", None) or row.owner_user_id,
+        billing_subject_id=getattr(row, "billing_subject_id", None),
         status=status,
         last_error=None,
         e2b_sandbox_id=row.provider_sandbox_id,
@@ -64,6 +68,7 @@ def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
         anyharness_bearer_token_ciphertext=row.runtime_token_ciphertext,
         anyharness_data_key_ciphertext=row.anyharness_data_key_ciphertext,
         runtime_generation=0,
+        display_name=getattr(row, "display_name", None),
         created_at=row.created_at,
         updated_at=row.updated_at,
         ready_at=row.ready_at,
@@ -79,12 +84,19 @@ async def acquire_cloud_sandbox_owner_lock(
     owner_user_id: UUID | None,
     organization_id: UUID | None,
 ) -> None:
-    del organization_id
-    if owner_scope != "personal" or owner_user_id is None:
-        raise ValueError("Only personal cloud sandboxes are supported.")
+    if owner_scope == "personal":
+        if owner_user_id is None:
+            raise ValueError("owner_user_id is required for personal scope.")
+        lock_key = f"cloud-sandbox:personal:{owner_user_id}"
+    elif owner_scope == "organization":
+        if organization_id is None:
+            raise ValueError("organization_id is required for organization scope.")
+        lock_key = f"cloud-sandbox:organization:{organization_id}"
+    else:
+        raise ValueError(f"Unknown owner_scope: {owner_scope}")
     await db.execute(
         text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
-        {"lock_key": f"cloud-sandbox:personal:{owner_user_id}"},
+        {"lock_key": lock_key},
     )
 
 
@@ -109,9 +121,36 @@ async def load_organization_cloud_sandbox(
     organization_id: UUID,
     *,
     lock_row: bool = False,
+    sandbox_id: UUID | None = None,
 ) -> CloudSandboxValue | None:
-    del db, organization_id, lock_row
-    return None
+    stmt = select(CloudSandbox).where(
+        CloudSandbox.organization_id == organization_id,
+        CloudSandbox.owner_scope == "organization",
+        CloudSandbox.destroyed_at.is_(None),
+    )
+    if sandbox_id is not None:
+        stmt = stmt.where(CloudSandbox.id == sandbox_id)
+    if lock_row:
+        stmt = stmt.with_for_update()
+    row = (await db.execute(stmt)).scalar_one_or_none()
+    return cloud_sandbox_value(row) if row is not None else None
+
+
+async def list_organization_cloud_sandboxes(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> list[CloudSandboxValue]:
+    stmt = (
+        select(CloudSandbox)
+        .where(
+            CloudSandbox.organization_id == organization_id,
+            CloudSandbox.owner_scope == "organization",
+            CloudSandbox.destroyed_at.is_(None),
+        )
+        .order_by(CloudSandbox.created_at.desc())
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return [cloud_sandbox_value(row) for row in rows]
 
 
 async def load_cloud_sandbox_by_id(
@@ -151,13 +190,17 @@ async def ensure_personal_cloud_sandbox(
     billing_subject_id: UUID,
     e2b_template_ref: str,
 ) -> CloudSandboxValue:
-    del created_by_user_id, billing_subject_id, e2b_template_ref
+    del e2b_template_ref
     existing = await load_personal_cloud_sandbox(db, user_id, lock_row=True)
     if existing is not None:
         return existing
     now = utcnow()
     row = CloudSandbox(
+        owner_scope="personal",
         owner_user_id=user_id,
+        organization_id=None,
+        created_by_user_id=created_by_user_id,
+        billing_subject_id=billing_subject_id,
         sandbox_type="e2b",
         provider_sandbox_id=None,
         status="creating",
@@ -179,9 +222,38 @@ async def ensure_organization_cloud_sandbox(
     created_by_user_id: UUID | None,
     billing_subject_id: UUID,
     e2b_template_ref: str,
+    display_name: str,
 ) -> CloudSandboxValue:
-    del db, organization_id, created_by_user_id, billing_subject_id, e2b_template_ref
-    raise ValueError("Organization cloud sandboxes are not supported.")
+    """Create an org-scoped cloud sandbox if one with the same display_name doesn't exist."""
+    existing_stmt = select(CloudSandbox).where(
+        CloudSandbox.organization_id == organization_id,
+        CloudSandbox.owner_scope == "organization",
+        CloudSandbox.display_name == display_name,
+        CloudSandbox.destroyed_at.is_(None),
+    ).with_for_update()
+    existing = (await db.execute(existing_stmt)).scalar_one_or_none()
+    if existing is not None:
+        return cloud_sandbox_value(existing)
+    now = utcnow()
+    row = CloudSandbox(
+        owner_scope="organization",
+        owner_user_id=None,
+        organization_id=organization_id,
+        created_by_user_id=created_by_user_id,
+        billing_subject_id=billing_subject_id,
+        display_name=display_name,
+        sandbox_type="e2b",
+        provider_sandbox_id=None,
+        status="creating",
+        anyharness_base_url=None,
+        runtime_token_ciphertext=None,
+        anyharness_data_key_ciphertext=None,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(row)
+    await db.flush()
+    return cloud_sandbox_value(row)
 
 
 async def update_cloud_sandbox_status(
