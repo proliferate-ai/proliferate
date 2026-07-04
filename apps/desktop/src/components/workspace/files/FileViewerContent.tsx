@@ -79,7 +79,7 @@ function RichPreview({
   }
 
   return (
-    <div className="h-full min-h-0 min-w-0 overflow-auto bg-background px-8 py-6">
+    <div className="file-source-scroll h-full min-h-0 min-w-0 overflow-auto bg-background px-8 py-6">
       <MarkdownBody content={content} renderCodeBlock={renderDesktopCodeBlock} />
     </div>
   );

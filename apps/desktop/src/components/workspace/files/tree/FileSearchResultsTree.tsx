@@ -34,7 +34,7 @@ export function FileSearchResultsTree({
 
   if (results.length === 0) {
     return (
-      <p className="px-3 py-3 text-xs text-sidebar-muted-foreground">
+      <p className="px-3 py-3 text-[13px] text-sidebar-muted-foreground">
         {searchQuery.isLoading ? "Searching…" : "No matching files"}
       </p>
     );
@@ -53,7 +53,7 @@ export function FileSearchResultsTree({
   };
 
   return (
-    <div role="tree" className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
+    <div role="tree" className="file-tree-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
       {groups.map((group) => {
         const collapsed = collapsedGroups.has(group.path);
         return (

@@ -194,7 +194,7 @@ function FileTreeDirectory({
       <div
         ref={scrollRef}
         role="tree"
-        className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1"
+        className="file-tree-scroll min-h-0 flex-1 overflow-y-auto px-1.5 py-1"
       >
         <VirtualizedTree
           scrollRef={scrollRef}
