@@ -81,9 +81,7 @@ def build_support_report_plan(
         SupportMessageField("Attachments", str(attachment_count)),
     ]
     if kind == "feature":
-        fields.append(
-            SupportMessageField("Credit consent", "Yes" if credit_consent else "No")
-        )
+        fields.append(SupportMessageField("Credit consent", "Yes" if credit_consent else "No"))
         if credit_name:
             fields.append(SupportMessageField("Credit", credit_name))
     _append_context_field(fields, "Internal report", internal_url)

@@ -178,9 +178,7 @@ async def create_support_report(
             kind=body.kind,
             credit_consent=body.credit_consent,
             credit_name=(
-                body.credit_name
-                if body.kind == "feature" and body.credit_consent
-                else None
+                body.credit_name if body.kind == "feature" and body.credit_consent else None
             ),
             request_id=get_request_id(),
             cloud_diagnostics_status="pending" if authorized_cloud_refs else "not_applicable",

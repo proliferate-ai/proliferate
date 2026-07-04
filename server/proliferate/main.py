@@ -115,7 +115,6 @@ def _validate_e2b_template_configuration() -> None:
     )
 
 
-
 # Fragments that mark a request-body field as secret-bearing. FastAPI's default
 # 422 handler echoes the offending input verbatim, so a single unrelated invalid
 # field (e.g. a missing displayName) would otherwise reflect the whole body —
