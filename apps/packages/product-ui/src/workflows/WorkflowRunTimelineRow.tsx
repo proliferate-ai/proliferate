@@ -14,7 +14,7 @@ import { WorkflowStepRunDot } from "./WorkflowStepRunDot";
  */
 function OutputChip({ chip }: { chip: WorkflowStepOutputChip }) {
   const base =
-    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px] leading-none tabular-nums";
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-xs leading-none tabular-nums";
   switch (chip.kind) {
     case "exit":
       return (
@@ -116,7 +116,7 @@ export function WorkflowRunTimelineRow({
               <OutputChip key={index} chip={chip} />
             ))}
             {durationLabel ? (
-              <span className="font-mono text-[11px] tabular-nums text-faint">{durationLabel}</span>
+              <span className="font-mono text-xs tabular-nums text-faint">{durationLabel}</span>
             ) : null}
           </span>
         </div>
