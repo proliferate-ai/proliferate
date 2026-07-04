@@ -9,17 +9,11 @@ import type {
 } from "@/lib/domain/files/diff-parser";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 
-const LINE_BG: Record<DiffLine["type"], string> = {
-  added: "bg-[var(--color-diff-added-bg)]",
-  removed: "bg-[var(--color-diff-deleted-bg)]",
-  context: "",
-};
-
-const LINE_MARKER: Record<DiffLine["type"], string> = {
-  added: "text-[color:var(--color-diff-added)]",
-  removed: "text-[color:var(--color-diff-deleted)]",
-  context: "text-muted-foreground/30",
-};
+function getLineType(type: DiffLine["type"]): string {
+  if (type === "added") return "change-addition";
+  if (type === "removed") return "change-deletion";
+  return "context";
+}
 
 function DiffLineRow({
   line,
@@ -32,18 +26,23 @@ function DiffLineRow({
   wrapLongLines: boolean;
   variant: "default" | "chat";
 }) {
+  const lineType = getLineType(line.type);
   const lineNumberClass =
     variant === "chat"
-      ? "inline-block min-w-[4ch] shrink-0 select-none pr-1.5 text-right text-[10px] text-muted-foreground/35"
-      : "inline-block w-6 shrink-0 select-none pr-1 text-right text-[10px] text-muted-foreground/30";
+      ? "diff-gutter-cell inline-block min-w-[4ch] shrink-0 select-none pr-1.5 text-right tabular-nums"
+      : "diff-gutter-cell inline-block w-6 shrink-0 select-none pr-1 text-right tabular-nums";
 
   return (
-    <div className={`flex min-w-max py-px ${LINE_BG[line.type]}`}>
-      <span className={lineNumberClass}>
+    <div
+      data-line-type={lineType}
+      className="flex min-w-max"
+    >
+      <span className={lineNumberClass} data-line-type={lineType}>
         {line.lineNum ?? ""}
       </span>
       <span
-        className={`inline-block w-4 shrink-0 select-none whitespace-pre text-center text-[11px] ${LINE_MARKER[line.type]}`}
+        className="diff-content-cell inline-block w-4 shrink-0 select-none whitespace-pre text-center"
+        data-line-type={lineType}
       >
         {line.marker}
       </span>
@@ -173,8 +172,8 @@ export function UnifiedDiffViewer({
   return (
     <AutoHideScrollArea
       className={className}
-      viewportClassName={`bg-[var(--codex-diffs-surface)] ${viewportClassName ?? ""}`}
-      contentClassName={`min-h-full bg-[var(--codex-diffs-surface)] ${
+      viewportClassName={`composer-diff-simple-line bg-[var(--codex-diffs-surface)] ${viewportClassName ?? ""}`}
+      contentClassName={`min-h-full bg-[var(--codex-diffs-surface)] font-[family:var(--diffs-font-family)] text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)] text-[color:var(--diffs-fg)] ${
         wrapLongLines ? "" : "min-w-max"
       }`}
       allowHorizontal={!wrapLongLines}
