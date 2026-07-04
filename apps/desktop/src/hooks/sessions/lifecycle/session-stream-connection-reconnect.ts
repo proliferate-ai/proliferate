@@ -1,7 +1,10 @@
 import {
   clearSessionReconnectTimer,
+  nextSessionReconnectDelayMs,
+  registerOfflineSessionReconnect,
   scheduleSessionReconnectTimer,
 } from "@/lib/workflows/sessions/session-reconnect-state";
+import { isConnectivityOnline } from "@/stores/infra/connectivity-store";
 import { shouldReconnectStream } from "@/hooks/sessions/lifecycle/session-runtime-helpers";
 import type {
   RefreshSessionSlotMeta,
@@ -37,7 +40,7 @@ export function scheduleSessionStreamReconnect({
     return;
   }
 
-  scheduleSessionReconnectTimer(sessionId, () => {
+  const runner = () => {
     if (!isStillCurrent() || !shouldReconnectStream(sessionId)) {
       return;
     }
@@ -53,5 +56,15 @@ export function scheduleSessionStreamReconnect({
           });
         }
       });
-  }, delayMs);
+  };
+
+  // If offline, park the runner instead of spinning a timer — it will fire
+  // once the online transition triggers flushOfflineSessionReconnects.
+  if (!isConnectivityOnline()) {
+    registerOfflineSessionReconnect(sessionId, runner);
+    return;
+  }
+
+  const backoffDelay = nextSessionReconnectDelayMs(sessionId, delayMs);
+  scheduleSessionReconnectTimer(sessionId, runner, backoffDelay);
 }

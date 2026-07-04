@@ -4,6 +4,7 @@ import {
   clearSessionStreamHandle,
   setSessionStreamHandle,
 } from "@/lib/access/anyharness/session-stream-handles";
+import { resetSessionReconnectBackoff } from "@/lib/workflows/sessions/session-reconnect-state";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   finishOrCancelMeasurementOperation,
@@ -187,6 +188,7 @@ export async function openSessionStreamConnection({
       useSessionDirectoryStore.getState().patchEntry(sessionId, {
         streamConnectionState: "open",
       });
+      resetSessionReconnectBackoff(sessionId);
       useSessionIngestStore.getState().markCurrentIfContiguous(
         sessionId,
         getSessionRecord(sessionId)?.transcript.lastSeq ?? 0,

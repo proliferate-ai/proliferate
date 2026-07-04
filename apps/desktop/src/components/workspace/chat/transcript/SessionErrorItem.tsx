@@ -5,6 +5,9 @@ import { CircleAlert, CircleQuestion, RefreshCw } from "@proliferate/ui/icons";
 import { useSessionModelFallbackAction } from "@/hooks/sessions/workflows/use-session-model-fallback-action";
 import { presentSessionError } from "@proliferate/product-domain/chats/transcript/session-error-presentation";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useChatInputStore } from "@/stores/chat/chat-input-store";
+import { getSessionRecord } from "@/stores/sessions/session-records";
+import { useConnectivityStore } from "@/stores/infra/connectivity-store";
 
 export function SessionErrorItem({
   item,
@@ -19,6 +22,51 @@ export function SessionErrorItem({
   const showToast = useToastStore((state) => state.show);
   const [isApplyingFallback, setIsApplyingFallback] = useState(false);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+
+  const isOnline = useConnectivityStore((state) => state.isOnline);
+  const isNetworkError = (item.details as { kind?: string } | null)?.kind === "network_connection";
+
+  const handleRetryNetworkError = () => {
+    if (!sessionId) {
+      return;
+    }
+    const record = getSessionRecord(sessionId);
+    if (!record) {
+      return;
+    }
+    // Find the last user message in the transcript for this turn.
+    const turnId = item.turnId;
+    const turn = turnId ? record.transcript.turnsById[turnId] : null;
+    let lastUserText: string | null = null;
+    if (turn) {
+      for (const itemId of turn.itemOrder) {
+        const transcriptItem = record.transcript.itemsById[itemId];
+        if (transcriptItem?.kind === "user_message") {
+          lastUserText = transcriptItem.text;
+        }
+      }
+    }
+    // If we couldn't find it in the turn, scan all items for the last user message.
+    if (!lastUserText) {
+      const allItems = Object.values(record.transcript.itemsById);
+      for (const ti of allItems) {
+        if (ti.kind === "user_message" && ti.text) {
+          lastUserText = ti.text;
+        }
+      }
+    }
+    if (!lastUserText) {
+      showToast("Could not find the original prompt to retry.", "info");
+      return;
+    }
+    const workspaceId = record.workspaceId;
+    if (!workspaceId) {
+      return;
+    }
+    // Pre-fill the composer and focus it so the user can re-send with one click.
+    useChatInputStore.getState().setDraftText(workspaceId, lastUserText);
+    useChatInputStore.getState().requestFocus();
+  };
 
   const handleFallback = () => {
     if (!fallback || !sessionId || isApplyingFallback) {
@@ -49,8 +97,22 @@ export function SessionErrorItem({
           <div className="mt-0.5 text-muted-foreground">{presentation.description}</div>
         </div>
       </div>
-      {(fallback && sessionId) || presentation.technicalDetail ? (
+      {(fallback && sessionId) || isNetworkError || presentation.technicalDetail ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
+          {isNetworkError && sessionId && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={!isOnline}
+              title={!isOnline ? "You are offline" : undefined}
+              onClick={handleRetryNetworkError}
+              className="px-2.5 text-sm"
+            >
+              <RefreshCw className="size-3.5" />
+              Retry
+            </Button>
+          )}
           {fallback && sessionId && (
             <Button
               type="button"
