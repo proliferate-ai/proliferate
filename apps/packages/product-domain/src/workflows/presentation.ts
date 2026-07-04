@@ -25,6 +25,7 @@ export interface WorkflowStepKindMeta {
 /** Spec 3.6 step-glyph vocabulary. */
 export const WORKFLOW_STEP_META: Record<WorkflowStepKind, WorkflowStepKindMeta> = {
   "agent.prompt": { glyph: "◇", label: "Prompt", hint: "Send a prompt" },
+  "agent.config": { glyph: "⚙", label: "Agent", hint: "Set the agent" },
   "shell.run": { glyph: "$", label: "Script", hint: "Run a command" },
   "scm.open_pr": { glyph: "⇈", label: "Open PR", hint: "Open a pull request" },
   notify: { glyph: "🔔", label: "Notify", hint: "Send a notification" },
@@ -60,11 +61,21 @@ function collapse(value: string, maxChars = PREVIEW_MAX_CHARS): string {
   return `${collapsed.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
+/** The `harness · model` summary line for an agent-config step (empty when unset). */
+export function agentConfigSummary(step: {
+  harness?: string;
+  model?: string;
+}): string {
+  return [step.harness, step.model].filter((part) => part && part.trim()).join(" · ");
+}
+
 /** One-line content preview shown on a step card. */
 export function workflowStepPreview(step: WorkflowStep): string {
   switch (step.kind) {
     case "agent.prompt":
       return collapse(step.prompt) || WORKFLOW_STEP_META[step.kind].hint;
+    case "agent.config":
+      return agentConfigSummary(step) || WORKFLOW_STEP_META[step.kind].hint;
     case "shell.run":
       return collapse(step.command) || WORKFLOW_STEP_META[step.kind].hint;
     case "scm.open_pr":
@@ -73,6 +84,28 @@ export function workflowStepPreview(step: WorkflowStep): string {
       return collapse(step.message) || WORKFLOW_STEP_META[step.kind].hint;
     case "human.approval":
       return collapse(step.message) || WORKFLOW_STEP_META[step.kind].hint;
+  }
+}
+
+/**
+ * The raw, whitespace-normalized-but-uncapped content of a step's primary field,
+ * for the roomy rail card (line-clamp does the clamping). Returns "" when empty
+ * so the card falls back to the kind hint.
+ */
+export function workflowStepExcerpt(step: WorkflowStep): string {
+  const normalize = (value: string) => value.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim();
+  switch (step.kind) {
+    case "agent.prompt":
+      return normalize(step.prompt);
+    case "agent.config":
+      return agentConfigSummary(step);
+    case "shell.run":
+      return normalize(step.command);
+    case "scm.open_pr":
+      return normalize(step.title);
+    case "notify":
+    case "human.approval":
+      return normalize(step.message);
   }
 }
 

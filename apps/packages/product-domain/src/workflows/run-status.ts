@@ -214,6 +214,16 @@ function outputChipsFor(kind: WorkflowStepKind, output: Record<string, unknown> 
     }
     case "agent.prompt":
       return [];
+    case "agent.config": {
+      const parts: string[] = [];
+      if (typeof output.harness === "string") {
+        parts.push(output.harness);
+      }
+      if (typeof output.model === "string") {
+        parts.push(output.model);
+      }
+      return parts.length > 0 ? [{ kind: "text", label: parts.join(" · ") }] : [];
+    }
   }
 }
 

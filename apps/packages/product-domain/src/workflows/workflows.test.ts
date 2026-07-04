@@ -90,6 +90,23 @@ describe("definition parse/serialize", () => {
     expect(parsed.steps[0]).toMatchObject({ kind: "agent.prompt", onFail: { kind: "retry", n: 2 } });
     expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
   });
+
+  it("round-trips an agent.config step", () => {
+    const wire = {
+      args: [],
+      setup: { harness: "claude", model: "sonnet", session_binding: "fresh" },
+      steps: [
+        { kind: "agent.config", on_fail: { kind: "stop" }, harness: "codex", model: "opus" },
+        { kind: "agent.config", on_fail: { kind: "stop" }, harness: "claude" },
+        { kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" },
+      ],
+    };
+    const parsed = parseWorkflowDefinition(wire);
+    expect(parsed.steps[0]).toMatchObject({ kind: "agent.config", harness: "codex", model: "opus" });
+    expect(parsed.steps[1]).toMatchObject({ kind: "agent.config", harness: "claude" });
+    expect((parsed.steps[1] as { model?: string }).model).toBeUndefined();
+    expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
+  });
 });
 
 describe("validation", () => {
@@ -112,6 +129,41 @@ describe("validation", () => {
     const codes = validateWorkflowDefinition(bad).map((i) => i.code);
     expect(codes).toContain("invalid_definition");
     expect(codes).toContain("unknown_arg_reference");
+  });
+
+  it("requires at least one of harness/model on an agent.config step", () => {
+    const empty: WorkflowDefinition = {
+      ...base,
+      steps: [{ kind: "agent.config", onFail: { kind: "stop" } }],
+    };
+    expect(validateWorkflowDefinition(empty).map((i) => i.code)).toContain("invalid_definition");
+    const ok: WorkflowDefinition = {
+      ...base,
+      steps: [
+        { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "go" },
+      ],
+    };
+    expect(validateWorkflowDefinition(ok)).toEqual([]);
+  });
+
+  it("folds agent.config harness for goal-capability checks", () => {
+    const codes = validateWorkflowDefinition(
+      {
+        ...base,
+        steps: [
+          { kind: "agent.config", onFail: { kind: "stop" }, harness: "no-goals" },
+          {
+            kind: "agent.prompt",
+            onFail: { kind: "stop" },
+            prompt: "go",
+            goal: { objective: "x", maxTurns: 5, maxWallSecs: 60, onBlocked: "notify" },
+          },
+        ],
+      },
+      { harnessSupportsGoals: (h) => h !== "no-goals" },
+    ).map((i) => i.code);
+    expect(codes).toContain("goal_unsupported_harness");
   });
 
   it("requires goal caps and objective when a goal is attached", () => {

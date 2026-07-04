@@ -61,6 +61,8 @@ function templatedFields(step: WorkflowStep): TemplatedField[] {
       }
       return fields;
     }
+    case "agent.config":
+      return [];
     case "shell.run":
       return [{ field: "command", value: step.command }];
     case "scm.open_pr": {
@@ -169,6 +171,7 @@ function validateStep(
   step: WorkflowStep,
   stepIndex: number,
   options: ValidateWorkflowOptions,
+  effectiveHarness: string,
 ): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
   const push = (issue: WorkflowIssue | null) => {
@@ -199,10 +202,9 @@ function validateStep(
         if (step.goal.verify) {
           push(requireText(step.goal.verify.shell, "Verify command is required.", stepIndex, "goal.verify.shell"));
         }
-        const effectiveHarness = step.harnessOverride ?? null;
         if (
           options.harnessSupportsGoals
-          && effectiveHarness !== null
+          && effectiveHarness.trim() !== ""
           && !options.harnessSupportsGoals(effectiveHarness)
         ) {
           push({
@@ -211,6 +213,16 @@ function validateStep(
             location: { scope: "step", stepIndex, field: "goal" },
           });
         }
+      }
+      break;
+    }
+    case "agent.config": {
+      if (!(step.harness?.trim() || step.model?.trim())) {
+        push({
+          code: "invalid_definition",
+          message: "Choose an agent or a model for this step.",
+          location: { scope: "step", stepIndex, field: "harness" },
+        });
       }
       break;
     }
@@ -264,8 +276,14 @@ export function validateWorkflowDefinition(
   }
 
   const argNames = new Set(definition.args.map((arg) => arg.name));
+  // The effective harness for goal-capability checks folds forward through any
+  // `agent.config` steps (the active-agent model the runtime uses), seeded from Setup.
+  let effectiveHarness = definition.setup.harness;
   definition.steps.forEach((step, stepIndex) => {
-    issues.push(...validateStep(step, stepIndex, options));
+    if (step.kind === "agent.config" && step.harness?.trim()) {
+      effectiveHarness = step.harness;
+    }
+    issues.push(...validateStep(step, stepIndex, options, effectiveHarness));
     for (const { field, value } of templatedFields(step)) {
       for (const refIssue of validateStringReferences(value, { argNames, stepIndex })) {
         issues.push({

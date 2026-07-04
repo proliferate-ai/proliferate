@@ -17,6 +17,7 @@
 
 export const WORKFLOW_STEP_KINDS = [
   "agent.prompt",
+  "agent.config",
   "shell.run",
   "scm.open_pr",
   "notify",
@@ -109,12 +110,20 @@ interface StepBase {
 export interface AgentPromptStep extends StepBase {
   kind: "agent.prompt";
   prompt: string;
-  /** Per-step model override; absent means inherit the Setup model. */
-  modelOverride?: string;
-  /** Per-step harness switch; absent means inherit the Setup harness. */
-  harnessOverride?: string;
   /** Goal attachment — arms a native goal for this prompt. */
   goal?: WorkflowGoal;
+}
+
+/**
+ * Sets the active agent (harness and/or model) for every step below it, until
+ * the next `agent.config`. Switching harness opens a new session; a model-only
+ * change applies at the next session creation. At least one of harness/model is
+ * required (the editor + server enforce this).
+ */
+export interface AgentConfigStep extends StepBase {
+  kind: "agent.config";
+  harness?: string;
+  model?: string;
 }
 
 export interface ShellRunStep extends StepBase {
@@ -148,6 +157,7 @@ export interface HumanApprovalStep extends StepBase {
 
 export type WorkflowStep =
   | AgentPromptStep
+  | AgentConfigStep
   | ShellRunStep
   | ScmOpenPrStep
   | NotifyStep
@@ -178,6 +188,8 @@ export function createWorkflowStep(kind: WorkflowStepKind): WorkflowStep {
   switch (kind) {
     case "agent.prompt":
       return { kind, onFail: { ...DEFAULT_ON_FAIL }, prompt: "" };
+    case "agent.config":
+      return { kind, onFail: { ...DEFAULT_ON_FAIL } };
     case "shell.run":
       return { kind, onFail: { ...DEFAULT_ON_FAIL }, command: "" };
     case "scm.open_pr":
@@ -286,19 +298,23 @@ function parseStep(raw: unknown): WorkflowStep | null {
   switch (kind) {
     case "agent.prompt": {
       const step: AgentPromptStep = { kind, onFail, prompt: asString(record.prompt) ?? "" };
-      const modelOverride = asString(record.model_override);
-      if (modelOverride !== undefined) {
-        step.modelOverride = modelOverride;
-      }
-      const harnessOverride = asString(record.harness_override);
-      if (harnessOverride !== undefined) {
-        step.harnessOverride = harnessOverride;
-      }
       const goal = record.goal === undefined || record.goal === null
         ? undefined
         : parseGoal(record.goal);
       if (goal) {
         step.goal = goal;
+      }
+      return step;
+    }
+    case "agent.config": {
+      const step: AgentConfigStep = { kind, onFail };
+      const harness = asString(record.harness);
+      if (harness !== undefined) {
+        step.harness = harness;
+      }
+      const model = asString(record.model);
+      if (model !== undefined) {
+        step.model = model;
       }
       return step;
     }
@@ -417,14 +433,17 @@ function serializeStep(step: WorkflowStep): Record<string, unknown> {
   switch (step.kind) {
     case "agent.prompt": {
       base.prompt = step.prompt;
-      if (step.modelOverride !== undefined) {
-        base.model_override = step.modelOverride;
-      }
-      if (step.harnessOverride !== undefined) {
-        base.harness_override = step.harnessOverride;
-      }
       if (step.goal) {
         base.goal = serializeGoal(step.goal);
+      }
+      return base;
+    }
+    case "agent.config": {
+      if (step.harness !== undefined) {
+        base.harness = step.harness;
+      }
+      if (step.model !== undefined) {
+        base.model = step.model;
       }
       return base;
     }
