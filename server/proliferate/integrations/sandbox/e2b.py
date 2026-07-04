@@ -24,6 +24,7 @@ from proliferate.integrations.sandbox.base import (
     ProviderSandboxState,
     RuntimeEndpoint,
     SandboxHandle,
+    SandboxNotFoundError,
     SandboxProviderKind,
     SandboxRuntimeContext,
 )
@@ -57,6 +58,20 @@ def _load_command_exit_exception() -> type[BaseException] | tuple[type[BaseExcep
     except ImportError:  # pragma: no cover - depends on sdk layout
         return ()
     return CommandExitException
+
+
+def _load_sandbox_not_found_exception() -> type[BaseException] | tuple[type[BaseException], ...]:
+    """Load the E2B SDK's SandboxNotFoundException class (or empty tuple if unavailable)."""
+    try:
+        from e2b.exceptions import SandboxNotFoundException  # type: ignore[import-untyped]
+    except ImportError:  # pragma: no cover - depends on sdk version
+        # Fallback: older SDKs may only have NotFoundException
+        try:
+            from e2b.exceptions import NotFoundException  # type: ignore[import-untyped]
+        except ImportError:
+            return ()
+        return NotFoundException
+    return SandboxNotFoundException
 
 
 def _try_timeout_variants(
@@ -299,13 +314,19 @@ class E2BSandboxProvider:
         effective_timeout_seconds = (
             timeout_seconds if timeout_seconds is not None else E2B_TIMEOUT_SECONDS
         )
-        sandbox = _try_timeout_variants(
-            lambda **kw: connect_fn(sandbox_id, **kw),
-            (),
-            {"api_key": api_key},
-            effective_timeout_seconds,
-            label="sandbox connect",
-        )
+        not_found_exc = _load_sandbox_not_found_exception()
+        try:
+            sandbox = _try_timeout_variants(
+                lambda **kw: connect_fn(sandbox_id, **kw),
+                (),
+                {"api_key": api_key},
+                effective_timeout_seconds,
+                label="sandbox connect",
+            )
+        except not_found_exc:
+            raise SandboxNotFoundError(
+                sandbox_id, detail="E2B sandbox expired or was killed"
+            ) from None
         logger.info(
             "e2b sandbox connect finished sandbox_id=%s elapsed_ms=%s",
             sandbox_id,

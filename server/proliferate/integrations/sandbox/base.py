@@ -16,6 +16,17 @@ class SandboxProviderError(RuntimeError):
     """Raised when sandbox provider configuration or operations are invalid."""
 
 
+class SandboxNotFoundError(SandboxProviderError):
+    """Raised when the provider sandbox no longer exists (expired, killed, etc)."""
+
+    def __init__(self, sandbox_id: str, *, detail: str = "") -> None:
+        self.sandbox_id = sandbox_id
+        msg = f"Provider sandbox not found: {sandbox_id}"
+        if detail:
+            msg += f" ({detail})"
+        super().__init__(msg)
+
+
 @dataclass(frozen=True)
 class SandboxHandle:
     provider: SandboxProviderKind

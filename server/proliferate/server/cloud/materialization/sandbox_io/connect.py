@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import shlex
 
@@ -11,6 +12,7 @@ from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import (
     RuntimeEndpoint,
+    SandboxNotFoundError,
     SandboxProvider,
     SandboxRuntimeContext,
     get_sandbox_provider,
@@ -38,6 +40,8 @@ from proliferate.server.cloud.runtime.sandbox_exec import (
     runtime_launcher_path,
 )
 from proliferate.utils.crypto import decrypt_text, encrypt_text
+
+logger = logging.getLogger("proliferate.cloud.sandbox_io.connect")
 
 
 def _runtime_token(sandbox: CloudSandboxValue) -> str | None:
@@ -80,7 +84,56 @@ async def connect_ready_sandbox(
             sandbox = refreshed
         await db.commit()
 
-    provider_sandbox = await provider.resume_sandbox(provider_sandbox_id)
+    try:
+        provider_sandbox = await provider.resume_sandbox(provider_sandbox_id)
+    except SandboxNotFoundError:
+        # The provider sandbox was killed/expired out from under us.  Clear the
+        # stale reference and recreate.
+        logger.warning(
+            "Provider sandbox not found — clearing stale id and recreating. "
+            "cloud_sandbox_id=%s stale_provider_id=%s",
+            sandbox.id,
+            provider_sandbox_id,
+        )
+        handle = await provider.create_sandbox(
+            metadata={
+                "proliferate_cloud_sandbox_id": str(sandbox.id),
+                "proliferate_owner_user_id": str(sandbox.owner_user_id or ""),
+            }
+        )
+        provider_sandbox_id = handle.sandbox_id
+        refreshed = await cloud_sandboxes_store.record_cloud_sandbox_provider_sandbox(
+            db,
+            sandbox.id,
+            e2b_sandbox_id=provider_sandbox_id,
+            e2b_template_ref=provider.template_version,
+        )
+        if refreshed is not None:
+            sandbox = refreshed
+        await db.commit()
+        # Reset runtime credentials so we force a fresh launch below.
+        sandbox = CloudSandboxValue(
+            id=sandbox.id,
+            owner_scope=sandbox.owner_scope,
+            owner_user_id=sandbox.owner_user_id,
+            organization_id=sandbox.organization_id,
+            created_by_user_id=sandbox.created_by_user_id,
+            billing_subject_id=sandbox.billing_subject_id,
+            status=sandbox.status,
+            last_error=sandbox.last_error,
+            e2b_sandbox_id=provider_sandbox_id,
+            e2b_template_ref=sandbox.e2b_template_ref,
+            anyharness_base_url=None,
+            anyharness_bearer_token_ciphertext=None,
+            anyharness_data_key_ciphertext=None,
+            runtime_generation=sandbox.runtime_generation,
+            created_at=sandbox.created_at,
+            updated_at=sandbox.updated_at,
+            ready_at=sandbox.ready_at,
+            last_health_at=sandbox.last_health_at,
+            destroyed_at=sandbox.destroyed_at,
+        )
+        provider_sandbox = await provider.resume_sandbox(provider_sandbox_id)
     endpoint = await provider.resolve_runtime_endpoint(provider_sandbox)
     runtime_context = await provider.resolve_runtime_context(provider_sandbox)
     runtime_token = _runtime_token(sandbox)
