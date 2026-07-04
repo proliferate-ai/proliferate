@@ -24,9 +24,21 @@ check_command() {
   fi
 }
 
+# Detect which checksum tool is available
+detect_checksum_tool() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    printf "sha256sum"
+  elif command -v shasum >/dev/null 2>&1; then
+    printf "shasum"
+  else
+    printf ""
+  fi
+}
+
 check_command curl
 check_command tar
-check_command shasum
+
+CHECKSUM_TOOL=$(detect_checksum_tool)
 
 if [ -d "$INSTALL_DIR" ] && [ -n "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
   error "Directory '$INSTALL_DIR' already exists and is not empty. Remove it or run from a different location."
@@ -57,17 +69,32 @@ log "Downloading $tarball_name..."
 curl -fsSL -o "$tarball_name" "$tarball_url" || error "Failed to download $tarball_name."
 
 if [ -n "$checksum_url" ]; then
-  log "Downloading checksum..."
-  curl -fsSL -o "$checksum_name" "$checksum_url" || log "Checksum file not available (non-fatal)."
+  if [ -z "$CHECKSUM_TOOL" ]; then
+    log "WARNING: Neither sha256sum nor shasum found. Skipping checksum verification."
+    log "For security, consider installing sha256sum (Linux) or shasum (macOS)."
+  else
+    log "Downloading checksum..."
+    curl -fsSL -o "$checksum_name" "$checksum_url" || log "Checksum file not available (non-fatal)."
 
-  if [ -f "$checksum_name" ]; then
-    log "Verifying checksum..."
-    if ! shasum -a 256 -c "$checksum_name" >/dev/null 2>&1; then
-      rm -f "$tarball_name" "$checksum_name"
-      error "Checksum verification failed. The download may be corrupted or tampered with."
+    if [ -f "$checksum_name" ]; then
+      log "Verifying checksum..."
+      case "$CHECKSUM_TOOL" in
+        sha256sum)
+          if ! sha256sum -c "$checksum_name" >/dev/null 2>&1; then
+            rm -f "$tarball_name" "$checksum_name"
+            error "Checksum verification failed. The download may be corrupted or tampered with."
+          fi
+          ;;
+        shasum)
+          if ! shasum -a 256 -c "$checksum_name" >/dev/null 2>&1; then
+            rm -f "$tarball_name" "$checksum_name"
+            error "Checksum verification failed. The download may be corrupted or tampered with."
+          fi
+          ;;
+      esac
+      log "Checksum verified successfully."
+      rm -f "$checksum_name"
     fi
-    log "Checksum verified successfully."
-    rm -f "$checksum_name"
   fi
 fi
 
