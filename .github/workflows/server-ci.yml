@@ -280,7 +280,12 @@ jobs:
           cp -R server/deploy/. "$bundle_root/proliferate-deploy/"
           rm -rf "$bundle_root/proliferate-deploy/smoke"
           printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
+          # Legacy name for compatibility
           tar czf artifacts/proliferate-deploy.tar.gz \
+            --owner=0 --group=0 --numeric-owner \
+            -C "$bundle_root" proliferate-deploy
+          # B7: Versioned self-host installer bundle
+          tar czf "artifacts/proliferate-selfhost-${VERSION}.tar.gz" \
             --owner=0 --group=0 --numeric-owner \
             -C "$bundle_root" proliferate-deploy
           rm -rf "$bundle_root"
@@ -291,7 +296,10 @@ jobs:
               anyharness-aarch64-unknown-linux-musl.tar.gz \
               proliferate-self-hosted-aws-template.yaml \
               proliferate-deploy.tar.gz \
+              "proliferate-selfhost-${VERSION}.tar.gz" \
               > self-hosted-assets.SHA256SUMS
+            # B7: Individual checksum for curl|sh installer
+            sha256sum "proliferate-selfhost-${VERSION}.tar.gz" > "proliferate-selfhost-${VERSION}.tar.gz.sha256"
           )
         working-directory: .
 
@@ -325,4 +333,6 @@ jobs:
             artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz
             artifacts/proliferate-self-hosted-aws-template.yaml
             artifacts/proliferate-deploy.tar.gz
+            artifacts/proliferate-selfhost-*.tar.gz
+            artifacts/proliferate-selfhost-*.tar.gz.sha256
             artifacts/self-hosted-assets.SHA256SUMS
