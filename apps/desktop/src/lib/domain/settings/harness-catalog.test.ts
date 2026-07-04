@@ -80,20 +80,24 @@ describe("normalizeGatewayModels", () => {
         gatewayModel({
           id: "claude-sonnet-4-5",
           displayName: "Sonnet 4.6",
+          description: "Balanced coding model",
           provider: "anthropic",
           status: "active",
           effort: { values: ["low", "medium", "high"], default: "medium" },
           fastMode: true,
+          modes: ["default", "acceptEdits", "plan"],
         }),
       ]),
     ).toEqual([
       {
         id: "claude-sonnet-4-5",
         displayName: "Sonnet 4.6",
+        description: "Balanced coding model",
         provider: "anthropic",
         status: "active",
         effort: { values: ["low", "medium", "high"], default: "medium" },
         fastMode: true,
+        modes: ["default", "acceptEdits", "plan"],
         enabled: true,
       },
     ]);
@@ -106,10 +110,12 @@ describe("normalizeGatewayModels", () => {
       {
         id: "gpt-5.5",
         displayName: "gpt-5.5",
+        description: null,
         provider: "openai",
         status: null,
         effort: null,
         fastMode: null,
+        modes: null,
         enabled: true,
       },
     ]);
@@ -122,10 +128,12 @@ describe("normalizeGatewayModels", () => {
       {
         id: "grok-5",
         displayName: "grok-5",
+        description: null,
         provider: null,
         status: null,
         effort: null,
         fastMode: null,
+        modes: null,
         enabled: true,
       },
     ]);
@@ -140,10 +148,12 @@ describe("normalizeCatalogModels", () => {
         {
           id: "sonnet",
           displayName: "Sonnet 4.6",
+          description: "Balanced coding model",
           provider: "anthropic",
           status: "active",
           effort: { values: ["low", "high"], default: "high" },
           fastMode: false,
+          modes: ["default", "plan"],
         },
         { id: "haiku", displayName: "Haiku 4.5", enabled: false },
       ]),
@@ -151,19 +161,23 @@ describe("normalizeCatalogModels", () => {
       {
         id: "sonnet",
         displayName: "Sonnet 4.6",
+        description: "Balanced coding model",
         provider: "anthropic",
         status: "active",
         effort: { values: ["low", "high"], default: "high" },
         fastMode: false,
+        modes: ["default", "plan"],
         enabled: true,
       },
       {
         id: "haiku",
         displayName: "Haiku 4.5",
+        description: null,
         provider: null,
         status: null,
         effort: null,
         fastMode: null,
+        modes: null,
         enabled: false,
       },
     ]);
@@ -174,10 +188,12 @@ describe("normalizeCatalogModels", () => {
       {
         id: "legacy",
         displayName: "legacy",
+        description: null,
         provider: null,
         status: null,
         effort: null,
         fastMode: null,
+        modes: null,
         enabled: true,
       },
     ]);
@@ -233,6 +249,7 @@ describe("buildRuntimeCatalogModelsJson", () => {
               status: "active",
               effort: { values: ["low", "medium", "high"], default: "medium" },
               fastMode: true,
+              modes: ["default", "acceptEdits", "plan"],
             },
           ],
         },
@@ -249,6 +266,7 @@ describe("buildRuntimeCatalogModelsJson", () => {
           status: "active",
           effort: { values: ["low", "medium", "high"], default: "medium" },
           fastMode: true,
+          modes: ["default", "acceptEdits", "plan"],
         },
       ]),
     );

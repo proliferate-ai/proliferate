@@ -114,6 +114,11 @@ pub struct AgentLaunchModelOption {
     pub effort: Option<ModelEffort>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fast_mode: Option<bool>,
+    /// The permission/agent modes the model supports (joined from the bundled
+    /// catalog's `controls.mode.values`); absent when the model has no mode
+    /// control (contract §5).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modes: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

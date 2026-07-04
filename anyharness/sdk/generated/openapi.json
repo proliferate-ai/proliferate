@@ -5955,6 +5955,16 @@
           "isDefault": {
             "type": "boolean"
           },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (joined from the bundled\ncatalog's `controls.mode.values`); absent when the model has no mode\ncontrol (contract §5)."
+          },
           "provider": {
             "type": [
               "string",
@@ -8587,6 +8597,16 @@
           "id": {
             "type": "string",
             "description": "The gateway model id (always present — the render plane keys on this)."
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (`controls.mode.values`);\nabsent when the model has no mode control or is probe-only (contract §5)."
           },
           "provider": {
             "type": [

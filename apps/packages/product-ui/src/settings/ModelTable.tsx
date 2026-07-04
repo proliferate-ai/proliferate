@@ -1,5 +1,5 @@
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
-import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 
 export interface ModelTableEffort {
@@ -12,9 +12,17 @@ export interface ModelTableRow {
   id: string;
   /** Falls back to `id` (caller-normalized); the monospace id line is shown only when it differs. */
   displayName: string;
+  /** Catalog description; when present it becomes the name-block subtitle and the id moves to a hover title. */
+  description?: string | null;
   provider?: string | null;
   effort?: ModelTableEffort | null;
+  /** The permission/agent modes the model supports (contract §5); "—" when absent. */
+  modes?: readonly string[] | null;
   fastMode?: boolean | null;
+  /**
+   * Retained on the row type but no longer rendered (contract §5 dropped the Status
+   * column until non-`active` statuses actually occur).
+   */
   status?: string | null;
   enabled: boolean;
   /** Toggle is read-only (e.g. runtime-resolved gateway rows have no override endpoint). */
@@ -34,13 +42,6 @@ const TH_CLASS =
   "border-b border-border bg-accent px-3 py-2 text-left text-[11px] font-medium whitespace-nowrap text-faint";
 const TD_CLASS =
   "border-t border-border px-3 py-[11px] align-top text-[13px] whitespace-nowrap";
-
-const STATUS_TONE: Record<string, BadgeTone> = {
-  active: "success",
-  candidate: "info",
-  deprecated: "warning",
-  hidden: "neutral",
-};
 
 function Dash() {
   return <span className="text-[12px] text-faint">—</span>;
@@ -80,18 +81,47 @@ function FastModeCell({ fastMode }: { fastMode?: boolean | null }) {
   return fastMode ? <Badge tone="success">On</Badge> : <Badge tone="neutral">Off</Badge>;
 }
 
-function StatusCell({ status }: { status?: string | null }) {
-  if (!status) {
+// Quiet mode pills (contract §5 / design-system `.ds-mct-pill`): a bordered,
+// muted-foreground, un-highlighted treatment so Modes reads quieter than the
+// Thinking chips (whose default value is bg-filled + medium-weight). Only the
+// first MAX_VISIBLE_MODES render as pills; the rest collapse into a single
+// "+N" overflow pill (review finding: six full-word pills pushed Fast
+// mode/Enabled off-viewport). The cell's title attribute always lists every
+// mode, comma-separated, so hovering reveals the full set.
+const MAX_VISIBLE_MODES = 3;
+
+function ModesPills({ modes }: { modes?: readonly string[] | null }) {
+  if (!modes || modes.length === 0) {
     return <Dash />;
   }
-  const tone = STATUS_TONE[status] ?? "neutral";
-  const label = status.charAt(0).toUpperCase() + status.slice(1);
-  return <Badge tone={tone}>{label}</Badge>;
+  const visible = modes.slice(0, MAX_VISIBLE_MODES);
+  const overflowCount = modes.length - visible.length;
+  return (
+    <span
+      className="inline-flex flex-nowrap gap-1"
+      aria-label="Modes"
+      title={modes.join(", ")}
+    >
+      {visible.map((mode) => (
+        <span
+          key={mode}
+          className="whitespace-nowrap rounded-[5px] border border-border px-1.5 py-px text-[11px] text-muted-foreground"
+        >
+          {mode}
+        </span>
+      ))}
+      {overflowCount > 0 ? (
+        <span className="whitespace-nowrap rounded-[5px] border border-border px-1.5 py-px text-[11px] text-muted-foreground">
+          +{overflowCount}
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
 /**
- * "All Models" catalog table (CONTRACT §2): a scroll-contained table with
- * Model · Provider · Thinking · Fast mode · Status · Enabled columns. Rows are
+ * "All Models" catalog table (CONTRACT §2/§5): a scroll-contained table with
+ * Model · Provider · Thinking · Modes · Fast mode · Enabled columns. Rows are
  * intentionally sparse — probe-only models carry only an id and render "—" for
  * every unknown cell. Styled after the design-system `.ds-mct` treatment.
  * `ModelConfigGrid` still backs the org agent-policy grid; only the All-Models
@@ -111,14 +141,18 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
             <th className={TH_CLASS}>Model</th>
             <th className={TH_CLASS}>Provider</th>
             <th className={TH_CLASS}>Thinking</th>
+            <th className={TH_CLASS}>Modes</th>
             <th className={TH_CLASS}>Fast mode</th>
-            <th className={TH_CLASS}>Status</th>
             <th className={twMerge(TH_CLASS, "text-right")}>Enabled</th>
           </tr>
         </thead>
         <tbody>
           {models.map((model) => {
             const showId = model.displayName !== model.id;
+            // Subtitle precedence (contract §5): description wins; the id then
+            // moves to a hover title on the name block. Absent description falls
+            // back to the id subtitle, but only when it differs from the name.
+            const hasDescription = Boolean(model.description);
             return (
               <tr
                 key={model.id}
@@ -128,10 +162,17 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
                 )}
               >
                 <td className={twMerge(TD_CLASS, "max-w-[260px]")}>
-                  <div className="truncate font-medium text-foreground">
+                  <div
+                    className="truncate font-medium text-foreground"
+                    title={hasDescription ? model.id : undefined}
+                  >
                     {model.displayName}
                   </div>
-                  {showId ? (
+                  {hasDescription ? (
+                    <div className="mt-[3px] truncate text-[12px] leading-[1.4] text-muted-foreground">
+                      {model.description}
+                    </div>
+                  ) : showId ? (
                     <div className="mt-[3px] truncate font-mono text-[12px] text-faint">
                       {model.id}
                     </div>
@@ -148,10 +189,10 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
                   <EffortChips effort={model.effort} />
                 </td>
                 <td className={TD_CLASS}>
-                  <FastModeCell fastMode={model.fastMode} />
+                  <ModesPills modes={model.modes} />
                 </td>
                 <td className={TD_CLASS}>
-                  <StatusCell status={model.status} />
+                  <FastModeCell fastMode={model.fastMode} />
                 </td>
                 <td className={twMerge(TD_CLASS, "text-right")}>
                   <Switch

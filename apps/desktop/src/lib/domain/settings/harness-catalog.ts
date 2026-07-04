@@ -13,15 +13,34 @@ export interface HarnessCatalogModelEffort {
 export interface HarnessCatalogModel {
   id: string;
   displayName: string;
+  // Catalog description (contract §5): becomes the table's name-block subtitle
+  // when present; null for probe-only ids and old thin snapshots.
+  description: string | null;
   provider: string | null;
   status: string | null;
   effort: HarnessCatalogModelEffort | null;
   fastMode: boolean | null;
+  // The permission/agent modes the model supports (contract §5), joined from the
+  // catalog's `controls.mode.values`; null when the model has no mode control or
+  // for old thin snapshots that predate mode enrichment.
+  modes: string[] | null;
   enabled: boolean;
 }
 
 function normalizeString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+// The enriched modes list (contract §5): a non-empty array of non-empty strings.
+// Old thin snapshots (pre-enrichment) omit it → null, so the row renders sparse.
+function normalizeModes(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const modes = value.filter(
+    (entry): entry is string => typeof entry === "string" && entry.length > 0,
+  );
+  return modes.length > 0 ? modes : null;
 }
 
 // The enriched effort control (contract §1): `{ values, default }`. Old thin
@@ -60,10 +79,12 @@ export function normalizeCatalogModels(
     normalized.push({
       id,
       displayName: normalizeString(entry.displayName) ?? id,
+      description: normalizeString(entry.description),
       provider: normalizeString(entry.provider),
       status: normalizeString(entry.status),
       effort: normalizeEffort(entry.effort),
       fastMode: typeof entry.fastMode === "boolean" ? entry.fastMode : null,
+      modes: normalizeModes(entry.modes),
       enabled: entry.enabled !== false,
     });
   }
@@ -84,10 +105,12 @@ export function normalizeGatewayModels(
     .map((model) => ({
       id: model.id,
       displayName: normalizeString(model.displayName) ?? model.id,
+      description: normalizeString(model.description),
       provider: normalizeString(model.provider),
       status: normalizeString(model.status),
       effort: normalizeEffort(model.effort),
       fastMode: typeof model.fastMode === "boolean" ? model.fastMode : null,
+      modes: normalizeModes(model.modes),
       enabled: true,
     }));
 }
@@ -120,6 +143,7 @@ export function buildRuntimeCatalogModelsJson(
     ...(model.status != null ? { status: model.status } : {}),
     ...(model.effort != null ? { effort: model.effort } : {}),
     ...(model.fastMode != null ? { fastMode: model.fastMode } : {}),
+    ...(model.modes != null ? { modes: model.modes } : {}),
   }));
   return JSON.stringify(entries);
 }

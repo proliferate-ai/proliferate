@@ -49,6 +49,71 @@ pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
     }
 }
 
+/// Normalize a model id to a conservative FAMILY key for the enrichment join
+/// (contract §5). Catalog ids and gateway ids share almost no exact ids
+/// (catalog: `sonnet`, `us.anthropic.claude-sonnet-4-6[1m]`; gateway:
+/// `claude-sonnet-4-5`, `claude-opus-4-6-20260205`), so the enrichment falls
+/// back to matching on this key. It strips, in order:
+///   1. the `us.anthropic.` / `global.anthropic.` vendor prefix,
+///   2. a trailing `[1m]` context-window suffix,
+///   3. a trailing bedrock `-vN:M` version suffix (colon-bearing only — a bare
+///      `-vN` is deliberately NOT a version suffix),
+///   4. a trailing `-YYYYMMDD` release date,
+/// and lowercases the result. Pure CLI selectors (`default`, `sonnet`, `opus`,
+/// `haiku`) normalize to themselves, which never equals a real gateway model id
+/// family — so they stay unbridged by design (no guessy displayName matching).
+pub fn normalize_model_family(model_id: &str) -> String {
+    let mut s = model_id.trim();
+    for prefix in ["us.anthropic.", "global.anthropic."] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            s = rest;
+            break;
+        }
+    }
+    let mut s = s.to_ascii_lowercase();
+    if let Some(rest) = s.strip_suffix("[1m]") {
+        s = rest.to_string();
+    }
+    s = strip_bedrock_version_suffix(&s);
+    s = strip_release_date_suffix(&s);
+    s
+}
+
+/// Strip a trailing bedrock `-vN:M` version suffix (e.g. `-v1:0`). A bare `-vN`
+/// (no colon) is left intact — the catalog uses `claude-opus-4-6-v1` as a
+/// distinct family from `claude-opus-4-6`.
+fn strip_bedrock_version_suffix(s: &str) -> String {
+    let Some(idx) = s.rfind("-v") else {
+        return s.to_string();
+    };
+    let tail = &s[idx + 2..];
+    let Some((n, m)) = tail.split_once(':') else {
+        return s.to_string();
+    };
+    if !n.is_empty()
+        && n.bytes().all(|b| b.is_ascii_digit())
+        && !m.is_empty()
+        && m.bytes().all(|b| b.is_ascii_digit())
+    {
+        s[..idx].to_string()
+    } else {
+        s.to_string()
+    }
+}
+
+/// Strip a trailing `-YYYYMMDD` release date (dash + exactly 8 ASCII digits).
+fn strip_release_date_suffix(s: &str) -> String {
+    let Some(idx) = s.rfind('-') else {
+        return s.to_string();
+    };
+    let tail = &s[idx + 1..];
+    if tail.len() == 8 && tail.bytes().all(|b| b.is_ascii_digit()) {
+        s[..idx].to_string()
+    } else {
+        s.to_string()
+    }
+}
+
 /// Does `provider` serve `model_id`? A provider not in the family table (or a
 /// model matching no family) matches nothing.
 fn model_matches_provider(provider: &str, model_id: &str) -> bool {
@@ -295,5 +360,111 @@ mod tests {
         let filtered =
             filter_by_providers(models, &["anthropic".to_string(), "openai".to_string()]);
         assert_eq!(filtered, vec!["claude-sonnet-4-5", "gpt-5.5"]);
+    }
+
+    // --- normalize_model_family (contract §5), exercised with the REAL id sets
+    // from catalogs/agents/catalog.json (catalog) and server/litellm/config.yaml
+    // (gateway). ---
+
+    #[test]
+    fn normalize_strips_vendor_prefix_bracket_version_and_date() {
+        // Vendor prefix + [1m] window suffix (catalog).
+        assert_eq!(
+            normalize_model_family("us.anthropic.claude-sonnet-4-6[1m]"),
+            "claude-sonnet-4-6"
+        );
+        assert_eq!(
+            normalize_model_family("global.anthropic.claude-fable-5"),
+            "claude-fable-5"
+        );
+        // Bedrock version + date (catalog).
+        assert_eq!(
+            normalize_model_family("us.anthropic.claude-opus-4-1-20250805-v1:0"),
+            "claude-opus-4-1"
+        );
+        // Trailing release dates (gateway / config.yaml).
+        assert_eq!(
+            normalize_model_family("claude-sonnet-4-5-20250929"),
+            "claude-sonnet-4-5"
+        );
+        assert_eq!(
+            normalize_model_family("claude-haiku-4-5-20251001"),
+            "claude-haiku-4-5"
+        );
+        assert_eq!(
+            normalize_model_family("claude-opus-4-6-20260205"),
+            "claude-opus-4-6"
+        );
+        // Pure CLI selectors normalize to themselves.
+        assert_eq!(normalize_model_family("opus[1m]"), "opus");
+        assert_eq!(normalize_model_family("sonnet"), "sonnet");
+        assert_eq!(normalize_model_family("default"), "default");
+    }
+
+    #[test]
+    fn bare_dash_v_is_not_a_version_suffix() {
+        // The catalog's bedrock opus-4-6 entry carries a bare `-v1` (no colon),
+        // which is a DISTINCT family from a plain `claude-opus-4-6`.
+        assert_eq!(
+            normalize_model_family("us.anthropic.claude-opus-4-6-v1[1m]"),
+            "claude-opus-4-6-v1"
+        );
+    }
+
+    #[test]
+    fn sonnet_4_6_catalog_does_not_match_sonnet_4_5_gateway() {
+        // The headline real-data hazard: catalog moved to 4-6 while the gateway
+        // config still serves 4-5, so these must NOT bridge.
+        assert_ne!(
+            normalize_model_family("us.anthropic.claude-sonnet-4-6[1m]"),
+            normalize_model_family("claude-sonnet-4-5")
+        );
+    }
+
+    #[test]
+    fn opus_4_6_dated_gateway_family_key() {
+        // The dated gateway id normalizes to the plain family; it would bridge
+        // to a catalog `claude-opus-4-6` entry IF one existed. Today the closest
+        // catalog entry is a bedrock `-v1[1m]` variant, which normalizes
+        // distinctly, so opus-4-6 stays unbridged.
+        assert_eq!(
+            normalize_model_family("claude-opus-4-6-20260205"),
+            "claude-opus-4-6"
+        );
+        assert_ne!(
+            normalize_model_family("claude-opus-4-6-20260205"),
+            normalize_model_family("us.anthropic.claude-opus-4-6-v1[1m]")
+        );
+    }
+
+    #[test]
+    fn pure_selectors_never_match_a_gateway_id() {
+        // Selector families never collide with a real gateway model id family.
+        assert_ne!(
+            normalize_model_family("sonnet"),
+            normalize_model_family("claude-sonnet-4-5")
+        );
+        assert_ne!(
+            normalize_model_family("opus"),
+            normalize_model_family("claude-opus-4-6-20260205")
+        );
+    }
+
+    #[test]
+    fn dated_opus_4_8_bridges_to_bedrock_family() {
+        // A genuine positive: the catalog's opus-4-8 entries and a dated gateway
+        // opus-4-8 id share a family key.
+        assert_eq!(
+            normalize_model_family("us.anthropic.claude-opus-4-8[1m]"),
+            normalize_model_family("us.anthropic.claude-opus-4-8")
+        );
+        assert_eq!(
+            normalize_model_family("claude-opus-4-8-20260101"),
+            "claude-opus-4-8"
+        );
+        assert_eq!(
+            normalize_model_family("claude-opus-4-8-20260101"),
+            normalize_model_family("us.anthropic.claude-opus-4-8[1m]")
+        );
     }
 }

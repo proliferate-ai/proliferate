@@ -86,9 +86,11 @@ export function HarnessAllModelsSection({
   const rows: ModelTableRow[] = models.map((model) => ({
     id: model.id,
     displayName: model.displayName,
+    description: model.description,
     provider: model.provider,
     status: model.status,
     effort: model.effort,
+    modes: model.modes,
     fastMode: model.fastMode,
     enabled: model.enabled,
     toggleDisabled: isRuntimeGateway || upsertOverride.isPending,

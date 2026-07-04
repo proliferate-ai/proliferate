@@ -1800,6 +1800,12 @@ export interface components {
             fastMode?: boolean | null;
             id: string;
             isDefault: boolean;
+            /**
+             * @description The permission/agent modes the model supports (joined from the bundled
+             *     catalog's `controls.mode.values`); absent when the model has no mode
+             *     control (contract §5).
+             */
+            modes?: string[] | null;
             provider?: string | null;
             status?: null | components["schemas"]["ModelCatalogStatus"];
         };
@@ -2403,6 +2409,11 @@ export interface components {
             fastMode?: boolean | null;
             /** @description The gateway model id (always present — the render plane keys on this). */
             id: string;
+            /**
+             * @description The permission/agent modes the model supports (`controls.mode.values`);
+             *     absent when the model has no mode control or is probe-only (contract §5).
+             */
+            modes?: string[] | null;
             /**
              * @description Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent
              *     when no family matches.

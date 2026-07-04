@@ -18,13 +18,13 @@ use axum::{
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use std::collections::HashMap;
-
 use anyharness_contract::v1::{ModelCatalogStatus, ModelEffort};
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::catalog::gateway_resolver::{provider_for_model, GatewayModelSource};
+use crate::domains::agents::catalog::gateway_resolver::{
+    normalize_model_family, provider_for_model, GatewayModelSource,
+};
 use crate::domains::agents::catalog::schema::AgentCatalogModel;
 use crate::domains::agents::model::ModelCatalogStatus as DomainModelCatalogStatus;
 use crate::domains::agents::route_auth::load_state_file;
@@ -58,6 +58,10 @@ pub struct GatewayModelEntry {
     /// Whether the model carries a `fast_mode` control; absent for probe-only ids.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fast_mode: Option<bool>,
+    /// The permission/agent modes the model supports (`controls.mode.values`);
+    /// absent when the model has no mode control or is probe-only (contract §5).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modes: Option<Vec<String>>,
 }
 
 /// Map the runtime-owned lifecycle status to the wire enum (identical variants).
@@ -78,6 +82,41 @@ pub(crate) fn model_effort(model: &AgentCatalogModel) -> Option<ModelEffort> {
     })
 }
 
+/// The permission/agent modes joined from a catalog model (`controls.mode`), if
+/// it declares that control (contract §5).
+pub(crate) fn model_modes(model: &AgentCatalogModel) -> Option<Vec<String>> {
+    model
+        .controls
+        .get("mode")
+        .map(|control| control.values.clone())
+}
+
+/// Resolve the bundled catalog row for a resolved gateway id (contract §5).
+/// Tries an exact id match first, then falls back to a FAMILY-key match (see
+/// [`normalize_model_family`]). When several catalog entries share the family
+/// key, prefer the non-`[1m]` entry, then the longest (most-specific) id, then
+/// a lexical tiebreak — deterministic regardless of catalog ordering.
+fn resolve_catalog_match<'a>(
+    id: &str,
+    catalog_models: &'a [AgentCatalogModel],
+) -> Option<&'a AgentCatalogModel> {
+    if let Some(model) = catalog_models.iter().find(|model| model.id == id) {
+        return Some(model);
+    }
+    let key = normalize_model_family(id);
+    catalog_models
+        .iter()
+        .filter(|model| normalize_model_family(&model.id) == key)
+        .max_by(|a, b| {
+            let a_non_1m = !a.id.ends_with("[1m]");
+            let b_non_1m = !b.id.ends_with("[1m]");
+            a_non_1m
+                .cmp(&b_non_1m)
+                .then_with(|| a.id.len().cmp(&b.id.len()))
+                .then_with(|| a.id.cmp(&b.id))
+        })
+}
+
 /// Enrich a resolved gateway model id by joining the bundled catalog row.
 /// Catalog-known → full object; probe-only → `{ id, provider? }`.
 fn enrich_model(id: String, catalog: Option<&AgentCatalogModel>) -> GatewayModelEntry {
@@ -91,6 +130,7 @@ fn enrich_model(id: String, catalog: Option<&AgentCatalogModel>) -> GatewayModel
             status: Some(map_model_status(model.status)),
             effort: model_effort(model),
             fast_mode: Some(model.controls.contains_key("fast_mode")),
+            modes: model_modes(model),
         },
         None => GatewayModelEntry {
             id,
@@ -100,6 +140,7 @@ fn enrich_model(id: String, catalog: Option<&AgentCatalogModel>) -> GatewayModel
             status: None,
             effort: None,
             fast_mode: None,
+            modes: None,
         },
     }
 }
@@ -159,15 +200,11 @@ pub async fn get_gateway_models(
         GatewayModelSource::Probe { probed_at } => ("probe".to_string(), Some(probed_at)),
     };
     let catalog_models = state.gateway_model_resolver.catalog_models(&kind);
-    let lookup: HashMap<&str, &AgentCatalogModel> = catalog_models
-        .iter()
-        .map(|model| (model.id.as_str(), model))
-        .collect();
     let models = plan
         .models
         .into_iter()
         .map(|id| {
-            let catalog = lookup.get(id.as_str()).copied();
+            let catalog = resolve_catalog_match(&id, &catalog_models);
             enrich_model(id, catalog)
         })
         .collect();
@@ -284,6 +321,18 @@ mod tests {
                 observed_value: None,
             },
         );
+        controls.insert(
+            "mode".to_string(),
+            AgentCatalogModelControl {
+                values: vec![
+                    "default".to_string(),
+                    "acceptEdits".to_string(),
+                    "plan".to_string(),
+                ],
+                default: None,
+                observed_value: None,
+            },
+        );
         AgentCatalogModel {
             id: id.to_string(),
             display_name: "Claude Sonnet 4.5".to_string(),
@@ -314,6 +363,14 @@ mod tests {
         assert_eq!(effort.values, vec!["low", "medium", "high"]);
         assert_eq!(effort.default.as_deref(), Some("medium"));
         assert_eq!(entry.fast_mode, Some(true));
+        assert_eq!(
+            entry.modes,
+            Some(vec![
+                "default".to_string(),
+                "acceptEdits".to_string(),
+                "plan".to_string()
+            ])
+        );
     }
 
     #[test]
@@ -324,6 +381,7 @@ mod tests {
 
         assert!(entry.effort.is_none());
         assert_eq!(entry.fast_mode, Some(false));
+        assert!(entry.modes.is_none());
         // Catalog-known rows still carry display metadata + status.
         assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
         assert!(entry.status.is_some());
@@ -350,5 +408,54 @@ mod tests {
         assert_eq!(entry.id, "mystery-model");
         assert!(entry.provider.is_none());
         assert!(entry.display_name.is_none());
+    }
+
+    // --- The family-key join (contract §5, `resolve_catalog_match`), exercised
+    // with the REAL claude catalog + gateway id sets. ---
+
+    /// The catalog's real claude opus-4-8 entries (three ids sharing a family
+    /// key) plus the drifted sonnet/opus-4-6 entries that DON'T bridge today.
+    fn claude_catalog() -> Vec<AgentCatalogModel> {
+        [
+            "sonnet",
+            "opus[1m]",
+            "us.anthropic.claude-sonnet-4-6",
+            "us.anthropic.claude-sonnet-4-6[1m]",
+            "us.anthropic.claude-opus-4-6-v1[1m]",
+            "claude-opus-4-8",
+            "us.anthropic.claude-opus-4-8",
+            "us.anthropic.claude-opus-4-8[1m]",
+        ]
+        .into_iter()
+        .map(catalog_model)
+        .collect()
+    }
+
+    #[test]
+    fn exact_id_wins_over_family() {
+        let models = claude_catalog();
+        let hit = resolve_catalog_match("claude-opus-4-8", &models).expect("match");
+        // Exact id match, even though bedrock opus-4-8 variants share its family.
+        assert_eq!(hit.id, "claude-opus-4-8");
+    }
+
+    #[test]
+    fn dated_gateway_id_family_joins_preferring_non_1m_most_specific() {
+        let models = claude_catalog();
+        // No exact id: the dated gateway id family-matches the three opus-4-8
+        // catalog entries; prefer non-[1m], then the longest/most-specific id.
+        let hit = resolve_catalog_match("claude-opus-4-8-20260101", &models).expect("match");
+        assert_eq!(hit.id, "us.anthropic.claude-opus-4-8");
+    }
+
+    #[test]
+    fn drifted_gateway_ids_stay_sparse_today() {
+        let models = claude_catalog();
+        // Real config.yaml gateway ids: catalog moved to 4-6/4-8, gateway serves
+        // 4-5 and a bedrock-`-v1` 4-6 — none bridge, so enrichment is sparse.
+        assert!(resolve_catalog_match("claude-sonnet-4-5", &models).is_none());
+        assert!(resolve_catalog_match("claude-sonnet-4-5-20250929", &models).is_none());
+        assert!(resolve_catalog_match("claude-haiku-4-5", &models).is_none());
+        assert!(resolve_catalog_match("claude-opus-4-6-20260205", &models).is_none());
     }
 }
