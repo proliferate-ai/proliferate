@@ -7,10 +7,12 @@ import {
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
 import {
-  DiffCollapsedContextCluster,
-  DiffContextExpander,
-  DiffGapInfoRow,
+  DiffCollapsedContentLabel,
+  DiffCollapsedGutterIcon,
+  DiffGapContentLabel,
+  DiffGapGutterControls,
   type ExpandDirection,
+  formatUnmodifiedLinesLabel,
 } from "@/components/content/ui/diff/DiffContextExpander";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -207,11 +209,19 @@ function SplitCollapsedCells({
 }) {
   return (
     <>
-      <div
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
         data-gutter=""
         data-separator="line-info"
-        className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--codex-diffs-separator-surface)]"
-      />
+        onClick={onExpand}
+        aria-label={`Expand ${section.lineCount} unmodified lines`}
+        title={`${section.lineCount} unmodified lines`}
+        className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] cursor-pointer items-center justify-center bg-[var(--codex-diffs-separator-surface)] border-0 p-0 text-muted-foreground/60 transition-colors hover:text-foreground"
+      >
+        <DiffCollapsedGutterIcon />
+      </Button>
       <Button
         type="button"
         variant="unstyled"
@@ -223,7 +233,7 @@ function SplitCollapsedCells({
         title={`${section.lineCount} unmodified lines`}
         className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
       >
-        <DiffCollapsedContextCluster
+        <DiffCollapsedContentLabel
           lineCount={section.lineCount}
           stickyLeft="var(--diffs-column-number-width)"
         />
@@ -241,31 +251,35 @@ function SplitGapCells({
   onExpand: (direction: ExpandDirection) => void;
   canExpand: boolean;
 }) {
-  // Each split code column owns its own horizontal scroll; the gutter cell
-  // is sticky at left 0, so the cluster pins just past the gutter width.
   return (
     <>
       <div
         data-gutter=""
         data-separator="gap-expander"
-        className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--codex-diffs-separator-surface)]"
-      />
+        className="diff-gutter-cell sticky left-0 z-10 box-border flex min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] items-center justify-center bg-[var(--codex-diffs-separator-surface)]"
+      >
+        {canExpand && (
+          <DiffGapGutterControls gap={gap} onExpand={onExpand} />
+        )}
+      </div>
       <div
         data-content=""
         data-separator="gap-expander"
-        className="diff-content-cell min-h-[var(--diffs-line-height)] bg-[var(--codex-diffs-separator-surface)]"
+        className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)]"
       >
         {canExpand ? (
-          <DiffContextExpander
+          <DiffGapContentLabel
             gap={gap}
             onExpand={onExpand}
             stickyLeft="var(--diffs-column-number-width)"
           />
         ) : (
-          <DiffGapInfoRow
-            lineCount={gap.lineCount}
-            stickyLeft="var(--diffs-column-number-width)"
-          />
+          <span
+            style={{ position: "sticky", left: "var(--diffs-column-number-width)" }}
+            className="w-max px-2 text-[10px] leading-none text-muted-foreground/50"
+          >
+            {formatUnmodifiedLinesLabel(gap.lineCount)}
+          </span>
         )}
       </div>
     </>

@@ -8,8 +8,10 @@ import {
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
 import {
-  DiffCollapsedContextCluster,
-  DiffContextExpander,
+  DiffCollapsedContentLabel,
+  DiffCollapsedGutterIcon,
+  DiffGapContentLabel,
+  DiffGapGutterControls,
   DiffGapInfoRow,
   type ExpandDirection,
 } from "@/components/content/ui/diff/DiffContextExpander";
@@ -70,12 +72,14 @@ function ChatGutterLine({ line }: { line: DiffLine }) {
   );
 }
 
-function ChatGutterSeparatorLine() {
+function ChatGutterSeparatorLine({ children }: { children?: React.ReactNode }) {
   return (
     <div
       data-separator="simple"
-      className="diff-gutter-cell min-h-[var(--diffs-line-height)] bg-[var(--codex-diffs-separator-surface)]"
-    />
+      className="diff-gutter-cell flex min-h-[var(--diffs-line-height)] items-center justify-center bg-[var(--codex-diffs-separator-surface)]"
+    >
+      {children}
+    </div>
   );
 }
 
@@ -139,7 +143,7 @@ function ChatCollapsedRow({
       title={`${section.lineCount} unmodified lines`}
       className="diff-content-cell flex min-h-[var(--diffs-line-height)] cursor-pointer items-center justify-start border-0 bg-[var(--codex-diffs-separator-surface)] p-0 text-left font-[inherit] text-[inherit] leading-[inherit] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
-      <DiffCollapsedContextCluster
+      <DiffCollapsedContentLabel
         lineCount={section.lineCount}
         stickyLeft="var(--diffs-column-number-width)"
       />
@@ -150,9 +154,13 @@ function ChatCollapsedRow({
 function ChatGutterColumn({
   rows,
   rowCount,
+  onExpandGap,
+  canExpandGaps,
 }: {
   rows: ChatRenderRow[];
   rowCount: number;
+  onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
+  canExpandGaps: boolean;
 }) {
   return (
     <div
@@ -160,13 +168,30 @@ function ChatGutterColumn({
       style={{ gridColumn: "1", gridRow: `1 / span ${rowCount}` }}
       className="sticky left-0 z-10 grid bg-[var(--diffs-bg)] [grid-template-rows:subgrid]"
     >
-      {rows.map((row) =>
-        row.kind === "line" || row.kind === "expanded-gap-line" ? (
-          <ChatGutterLine key={row.key} line={row.line} />
-        ) : (
-          <ChatGutterSeparatorLine key={row.key} />
-        )
-      )}
+      {rows.map((row) => {
+        if (row.kind === "line" || row.kind === "expanded-gap-line") {
+          return <ChatGutterLine key={row.key} line={row.line} />;
+        }
+        if (row.kind === "gap" && canExpandGaps) {
+          return (
+            <ChatGutterSeparatorLine key={row.key}>
+              <DiffGapGutterControls
+                gap={row.gap}
+                onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
+              />
+            </ChatGutterSeparatorLine>
+          );
+        }
+        if (row.kind === "collapsed") {
+          return (
+            <ChatGutterSeparatorLine key={row.key}>
+              <DiffCollapsedGutterIcon />
+            </ChatGutterSeparatorLine>
+          );
+        }
+        // gap without expand capability
+        return <ChatGutterSeparatorLine key={row.key} />;
+      })}
     </div>
   );
 }
@@ -228,8 +253,7 @@ function ChatContentColumn({
           );
         }
         if (row.kind === "gap") {
-          // The chat viewport owns horizontal scroll and the gutter column
-          // is sticky at left 0, so pin the cluster just past the gutter.
+          // Controls are in the gutter; content column shows just the label.
           if (!canExpandGaps) {
             return (
               <DiffGapInfoRow
@@ -240,12 +264,17 @@ function ChatContentColumn({
             );
           }
           return (
-            <DiffContextExpander
+            <div
               key={row.key}
-              gap={row.gap}
-              onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
-              stickyLeft="var(--diffs-column-number-width)"
-            />
+              data-separator="gap-expander"
+              className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)]"
+            >
+              <DiffGapContentLabel
+                gap={row.gap}
+                onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
+                stickyLeft="var(--diffs-column-number-width)"
+              />
+            </div>
           );
         }
         // collapsed
@@ -523,7 +552,7 @@ export function ChatDiffViewer({
               : "grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
           }`}
         >
-          <ChatGutterColumn rows={rows} rowCount={rowCount} />
+          <ChatGutterColumn rows={rows} rowCount={rowCount} onExpandGap={expandGapWithFetch} canExpandGaps={canExpandGaps} />
           <ChatContentColumn
             rows={rows}
             rowCount={rowCount}

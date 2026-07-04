@@ -7,6 +7,8 @@ import {
   DiffGapInfoRow,
   type ExpandDirection,
 } from "@/components/content/ui/diff/DiffContextExpander";
+// UnifiedDiffViewer uses the legacy combined DiffContextExpander / DiffCollapsedContextCluster
+// which now render controls at the row-start gutter-width area internally.
 import type {
   CollapsedContext,
   DiffHunk,
