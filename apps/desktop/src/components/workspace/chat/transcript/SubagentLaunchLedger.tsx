@@ -1,5 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
+import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { ExternalLink, StickyNote } from "@proliferate/ui/icons";
 import { ToolActionDetailsPanel } from "@/components/workspace/chat/tool-calls/ToolActionDetailsPanel";
@@ -77,9 +78,10 @@ export function SubagentLaunchLedger({
                   viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
                 >
                   <div className="px-3 py-2 text-sm leading-relaxed text-muted-foreground">
-                    <MarkdownRenderer
+                    <MarkdownBody
                       content={prompt}
                       className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                      renderCodeBlock={renderDesktopCodeBlock}
                     />
                   </div>
                 </AutoHideScrollArea>
