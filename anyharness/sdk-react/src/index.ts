@@ -197,6 +197,8 @@ export {
   useGitBranchesQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
+  useStagePatchMutation,
+  useUnstagePatchMutation,
   useRevertGitPatchesMutation,
   useCommitGitMutation,
   usePushGitMutation,

@@ -260,6 +260,38 @@ export function useUnstageGitPathsMutation(options?: { workspaceId?: string | nu
   });
 }
 
+export function useStagePatchMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (patch: string) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      await client.git.stagePatch(resolved.connection.anyharnessWorkspaceId, patch);
+    },
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+  });
+}
+
+export function useUnstagePatchMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const queryClient = useQueryClient();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (patch: string) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      await client.git.unstagePatch(resolved.connection.anyharnessWorkspaceId, patch);
+    },
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+  });
+}
+
 export function useRevertGitPatchesMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();

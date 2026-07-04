@@ -7,8 +7,7 @@ import {
   DiffGapInfoRow,
   type ExpandDirection,
 } from "@/components/content/ui/diff/DiffContextExpander";
-// UnifiedDiffViewer uses the legacy combined DiffContextExpander / DiffCollapsedContextCluster
-// which now render controls at the row-start gutter-width area internally.
+import { HunkActionPill, type HunkActionMode } from "@/components/content/ui/diff/HunkActionPill";
 import type {
   CollapsedContext,
   DiffHunk,
@@ -122,14 +121,32 @@ function HunkView({
   tokens,
   wrapLongLines,
   variant,
+  hunkActionMode,
+  hunkActionDisabled,
+  onHunkRevert,
+  onHunkStageOrUnstage,
 }: {
   hunk: DiffHunk;
   tokens: HighlightedToken[][] | null;
   wrapLongLines: boolean;
   variant: "default" | "chat";
+  hunkActionMode?: HunkActionMode | null;
+  hunkActionDisabled?: boolean;
+  onHunkRevert?: () => void;
+  onHunkStageOrUnstage?: () => void;
 }) {
+  const showPill = Boolean(hunkActionMode && onHunkStageOrUnstage);
+
   return (
-    <div>
+    <div className={showPill ? "group/hunk relative" : undefined}>
+      {showPill && (
+        <HunkActionPill
+          mode={hunkActionMode!}
+          disabled={hunkActionDisabled ?? false}
+          onRevert={onHunkRevert ?? (() => {})}
+          onStageOrUnstage={onHunkStageOrUnstage!}
+        />
+      )}
       {hunk.contextLabel && (
         <div className="px-3 py-0.5 text-[10px] italic text-muted-foreground/50">
           {hunk.contextLabel}
@@ -205,6 +222,13 @@ function ExpandedGapLines({
   );
 }
 
+export interface UnifiedDiffHunkActions {
+  mode: HunkActionMode;
+  disabled: boolean;
+  onRevert: (hunkIndex: number) => void;
+  onStageOrUnstage: (hunkIndex: number) => void;
+}
+
 export function UnifiedDiffViewer({
   parsed,
   tokens,
@@ -218,6 +242,7 @@ export function UnifiedDiffViewer({
   chainVerticalWheel,
   fileLines,
   onRequestFileLines,
+  hunkActions,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -231,6 +256,7 @@ export function UnifiedDiffViewer({
   chainVerticalWheel?: boolean;
   fileLines?: string[];
   onRequestFileLines?: () => void;
+  hunkActions?: UnifiedDiffHunkActions | null;
 }) {
   const { gapStates, expandGap } = useGapExpansion();
   const canExpandGaps = Boolean(fileLines || onRequestFileLines);
@@ -344,6 +370,10 @@ export function UnifiedDiffViewer({
               tokens={tokens}
               wrapLongLines={wrapLongLines}
               variant={variant}
+              hunkActionMode={hunkActions?.mode}
+              hunkActionDisabled={hunkActions?.disabled}
+              onHunkRevert={hunkActions ? () => hunkActions.onRevert(index) : undefined}
+              onHunkStageOrUnstage={hunkActions ? () => hunkActions.onStageOrUnstage(index) : undefined}
             />
           </div>
         );

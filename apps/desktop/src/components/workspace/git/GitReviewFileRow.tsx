@@ -1,9 +1,13 @@
-import { useEffect, useMemo, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
 import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
+  useRevertGitPatchesMutation,
+  useStagePatchMutation,
+  useUnstagePatchMutation,
 } from "@anyharness/sdk-react";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
+import type { UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
   CircleAlert,
@@ -19,6 +23,8 @@ import { GitReviewStageAction } from "@/components/workspace/git/GitReviewStageA
 import { GitReviewStatusBadge } from "@/components/workspace/git/GitReviewStatusBadge";
 import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
+import { extractHunkPatch, isHunkActionEligible } from "@/lib/domain/files/hunk-patch";
+import { useToastStore } from "@/stores/toast/toast-store";
 import {
   DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
   resolveDiffDisplayPolicy,
@@ -108,6 +114,14 @@ export function GitReviewFileRow({
   const isBranchMode = sectionScope === "branch";
   const isLastTurnMode = sectionScope === "last_turn";
   const shouldUnstage = sectionScope === "staged";
+
+  // Hunk-level mutation hooks (lightweight — share the same query client)
+  const revertMutation = useRevertGitPatchesMutation({ workspaceId });
+  const stagePatchMutation = useStagePatchMutation({ workspaceId });
+  const unstagePatchMutation = useUnstagePatchMutation({ workspaceId });
+  const showToast = useToastStore((state) => state.show);
+  const hunkMutationInFlight =
+    revertMutation.isPending || stagePatchMutation.isPending || unstagePatchMutation.isPending;
   // Gap expansion reads the worktree file, which only matches the diff's
   // NEW side for worktree-target scopes: `unstaged` (worktree vs index) and
   // `last_turn`/`base_worktree` (worktree vs merge-base). `staged` diffs
@@ -179,6 +193,68 @@ export function GitReviewFileRow({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
   });
+
+  // Hunk-level actions: only for working-tree scopes (unstaged/staged) in
+  // unified layout, and only when the patch is complete and the file is not
+  // binary/rename/copy. Branch and last-turn diffs are excluded — their hunks
+  // are not guaranteed to apply against the current worktree/index.
+  const hunkActionsEnabled = Boolean(
+    patch
+    && !isBranchMode
+    && !isLastTurnMode
+    && layout === "unified"
+    && !diffQuery.data?.truncated
+    && isHunkActionEligible(patch, file.oldPath)
+    && isRuntimeReady,
+  );
+
+  const handleHunkRevert = useCallback(
+    (hunkIndex: number) => {
+      if (!patch) return;
+      const result = extractHunkPatch({ patch, hunkIndex, filePath: file.path, oldPath: file.oldPath });
+      if (result) {
+        revertMutation
+          .mutateAsync({
+            entries: [{
+              path: file.path,
+              operation: "edit",
+              patch: result.patch,
+            }],
+          })
+          .catch((error: unknown) => {
+            showToast(formatHunkActionError(error, "Could not revert this change."));
+          });
+      }
+    },
+    [patch, file.path, file.oldPath, revertMutation, showToast],
+  );
+
+  const handleHunkStageOrUnstage = useCallback(
+    (hunkIndex: number) => {
+      if (!patch) return;
+      const result = extractHunkPatch({ patch, hunkIndex, filePath: file.path, oldPath: file.oldPath });
+      if (!result) return;
+      if (shouldUnstage) {
+        unstagePatchMutation.mutateAsync(result.patch).catch((error: unknown) => {
+          showToast(formatHunkActionError(error, "Could not unstage this change."));
+        });
+      } else {
+        stagePatchMutation.mutateAsync(result.patch).catch((error: unknown) => {
+          showToast(formatHunkActionError(error, "Could not stage this change."));
+        });
+      }
+    },
+    [patch, file.path, file.oldPath, shouldUnstage, stagePatchMutation, unstagePatchMutation, showToast],
+  );
+
+  const hunkActions: UnifiedDiffHunkActions | null = hunkActionsEnabled
+    ? {
+        mode: shouldUnstage ? "staged" : "unstaged",
+        disabled: !isRuntimeReady || hunkMutationInFlight,
+        onRevert: handleHunkRevert,
+        onStageOrUnstage: handleHunkStageOrUnstage,
+      }
+    : null;
 
   useEffect(() => {
     if (diffQuery.data || diffQuery.isError) {
@@ -290,6 +366,7 @@ export function GitReviewFileRow({
                 chainVerticalWheel
                 fileLines={fileLines}
                 onRequestFileLines={requestFileLines}
+                hunkActions={hunkActions}
               />
               {diffQuery.data?.truncated ? (
                 <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
@@ -319,4 +396,11 @@ function formatDiffErrorMessage(error: unknown): string {
     return error;
   }
   return "Failed to load diff";
+}
+
+function formatHunkActionError(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
 }
