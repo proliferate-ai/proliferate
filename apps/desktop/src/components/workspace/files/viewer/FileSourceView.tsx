@@ -22,7 +22,11 @@ import { useContentSearchStore } from "@/stores/search/content-search-store";
 
 const FILE_SOURCE_ESTIMATED_LINE_HEIGHT = 20;
 const FILE_SOURCE_VERTICAL_PADDING_PX = 8;
-const FILE_SOURCE_VIRTUAL_OVERSCAN = 24;
+// Overscan is the buffer of off-screen rows kept mounted above/below the
+// viewport. A fast fling can jump well past a small buffer in a single frame,
+// briefly exposing the (dark) code element background as "blank rows" until
+// the next render catches up. A larger buffer absorbs typical fling deltas.
+const FILE_SOURCE_VIRTUAL_OVERSCAN = 60;
 const FILE_SOURCE_INITIAL_VIEWPORT_HEIGHT = 600;
 const FILE_SOURCE_INITIAL_ROW_COUNT =
   Math.ceil(FILE_SOURCE_INITIAL_VIEWPORT_HEIGHT / FILE_SOURCE_ESTIMATED_LINE_HEIGHT)
@@ -113,7 +117,6 @@ export function FileSourceView({
     },
     measureElement: (element) =>
       element.getBoundingClientRect().height || FILE_SOURCE_ESTIMATED_LINE_HEIGHT,
-    useAnimationFrameWithResizeObserver: true,
   });
   const virtualRows = virtualizer.getVirtualItems();
   const initialVirtualRows = useMemo(
