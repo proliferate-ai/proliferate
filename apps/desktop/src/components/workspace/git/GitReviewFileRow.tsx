@@ -41,18 +41,18 @@ const SIDEBAR_DIFF_SURFACE_STYLE = {
   "--codex-diffs-surface-override": "var(--color-diff-surface)",
 } as CSSProperties;
 
-// Header row (min-h-9 + py) plus the diff viewer's 24-line viewport cap
-// (GitReviewFileRow passes max-h of --diffs-line-height * 24 to DiffViewer).
+// Header row (min-h-9 + py) height estimate for content-visibility sizing.
 const REVIEW_CARD_HEADER_ESTIMATE_PX = 38;
-const REVIEW_CARD_MAX_VISIBLE_LINES = 24;
 
 /**
  * Off-screen review cards skip layout/paint via content-visibility:auto —
  * without it every diff row of every file stays painted and long change
  * lists starve the WKWebView compositor (black flashes while scrolling).
- * The intrinsic-size estimate keeps the scrollbar stable: header height
- * plus the expected visible diff lines (changed lines ~+50% context,
- * capped by the viewer's 24-line viewport) in --diffs-line-height units.
+ *
+ * Full-height layout: diffs render at natural height (no inner 24-line
+ * viewport cap), so the intrinsic-size estimate uses the full expected
+ * line count (changed lines + ~50% context) rather than the old capped
+ * value. This keeps the outer panel scrollbar stable for off-screen cards.
  */
 function reviewCardVirtualizationStyle({
   collapsed,
@@ -61,12 +61,11 @@ function reviewCardVirtualizationStyle({
   collapsed: boolean;
   changedLines: number;
 }): CSSProperties {
+  // Estimate total rendered lines: changed lines + ~50% context lines.
+  // No cap — diffs render full height in this layout variant.
   const estimatedLines = collapsed
     ? 0
-    : Math.min(
-        Math.ceil(Math.max(changedLines, 1) * 1.5),
-        REVIEW_CARD_MAX_VISIBLE_LINES,
-      );
+    : Math.ceil(Math.max(changedLines, 1) * 1.5);
   return {
     contentVisibility: "auto",
     containIntrinsicSize: `auto calc(${REVIEW_CARD_HEADER_ESTIMATE_PX}px + var(--diffs-line-height) * ${estimatedLines})`,
@@ -183,7 +182,7 @@ export function GitReviewFileRow({
   );
   // Opt large diffs into per-row content-visibility virtualization (the
   // [data-diff-row-virtualization] rule in design desktop.css): the diff
-  // scrolls inside this card's 24-line max-h viewport, so without it every
+  // renders at full height in the outer panel scroll, so without it every
   // row of a multi-thousand-line patch stays painted while scrolling.
   const virtualizeDiffRows = Boolean(
     patchPolicy
@@ -359,7 +358,6 @@ export function GitReviewFileRow({
                 wrapLongLines={wrapLongLines}
                 layout={layout}
                 variant={layout === "unified" ? "chat" : "default"}
-                viewportClassName="max-h-[calc(var(--diffs-line-height)*24)]"
                 operationId={measurementOperationId ?? null}
                 overscrollBehaviorX="none"
                 overscrollBehaviorY="none"
