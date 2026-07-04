@@ -4,13 +4,12 @@ import type {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
+  Check,
   ChevronRight,
   Copy,
   ExternalLink,
-  FileText,
   FolderTree,
   Search,
-  WrapText,
 } from "@proliferate/ui/icons";
 import { PaneOptionsMenuItem } from "@proliferate/ui/layout/PaneOptionsMenuItem";
 import {
@@ -241,20 +240,22 @@ function FileViewerOptionsMenu({
           />
           <PaneOptionsMenuSeparator />
           <PaneOptionsMenuItem
-            icon={<WrapText />}
-            label={wordWrap ? "Disable word wrap" : "Enable word wrap"}
+            reserveIconSlot
+            icon={wordWrap ? <Check /> : null}
+            label="Word wrap"
+            trailing={wordWrap ? "On" : "Off"}
             onClick={() => {
               onToggleWordWrap();
-              close();
             }}
           />
           {canRenderRichPreview && (
             <PaneOptionsMenuItem
-              icon={<FileText />}
-              label={richPreviewEnabled ? "Disable rich preview" : "Enable rich preview"}
+              reserveIconSlot
+              icon={richPreviewEnabled ? <Check /> : null}
+              label="Rich preview"
+              trailing={richPreviewEnabled ? "On" : "Off"}
               onClick={() => {
                 onToggleRichPreview();
-                close();
               }}
             />
           )}

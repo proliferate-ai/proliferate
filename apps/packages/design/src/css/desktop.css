@@ -408,6 +408,15 @@
   scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
 }
 
+.file-tree-scroll {
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+.file-tree-scroll:hover {
+  scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
+}
+
 .file-source-view [data-file] {
   background: var(--codex-diffs-surface);
   color: var(--diffs-fg);
