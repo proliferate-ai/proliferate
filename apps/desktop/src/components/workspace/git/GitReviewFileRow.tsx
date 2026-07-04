@@ -161,6 +161,7 @@ export function GitReviewFileRow({
     <div
       id={id}
       data-review-path={file.path}
+      className="scroll-mt-2"
       style={SIDEBAR_DIFF_SURFACE_STYLE}
     >
       <FileDiffCard

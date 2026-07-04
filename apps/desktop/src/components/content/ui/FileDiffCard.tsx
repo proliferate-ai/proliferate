@@ -85,8 +85,11 @@ export function FileDiffCard({
       : {}),
     backgroundColor: "var(--codex-diffs-surface)",
   } as CSSProperties;
+  // Sidebar review cards use a frosted sticky header: the sticky wrapper paints
+  // a translucent color-mix of the header surface + backdrop-blur, so the
+  // inner shell must stay transparent for the blur to read through.
   const headerShellClass = isSidebar
-    ? "bg-[var(--codex-diffs-header-surface)]"
+    ? "bg-transparent"
     : "bg-[var(--codex-diffs-header-surface)]";
   const chatHeaderHoverClass = headerTone === "inlineTool"
     ? "hover:bg-[var(--color-diff-chat-inline-tool-header-hover-surface)]"
@@ -129,7 +132,7 @@ export function FileDiffCard({
           : undefined
       }
       data-chat-diff-wrap-context-trigger={isSidebar ? undefined : "file-header"}
-      className={`z-10 select-none bg-[var(--codex-diffs-header-surface)] ${isSidebar ? "sticky top-0" : ""} ${canExpand ? "cursor-pointer" : ""}`}
+      className={`z-10 select-none ${isSidebar ? "sticky top-0 backdrop-blur-sm bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_88%,transparent)]" : "bg-[var(--codex-diffs-header-surface)]"} ${canExpand ? "cursor-pointer" : ""}`}
     >
       <div className={headerShellClass}>
         <div className={headerInnerClass}>
