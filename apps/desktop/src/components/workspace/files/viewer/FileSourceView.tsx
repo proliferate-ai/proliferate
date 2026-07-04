@@ -27,6 +27,13 @@ const FILE_SOURCE_VERTICAL_PADDING_PX = 8;
 // briefly exposing the (dark) code element background as "blank rows" until
 // the next render catches up. A larger buffer absorbs typical fling deltas.
 const FILE_SOURCE_VIRTUAL_OVERSCAN = 60;
+// Below this line count we render every row in normal document flow (no
+// windowing). Virtualization's absolute-positioned rows get repositioned via
+// transform on scroll, and a fast fling can outrun that reposition for a frame
+// — showing the dark background as "blank blocks". Small files don't need
+// windowing at all, so rendering them statically removes that failure mode
+// entirely and native scroll of static content can never blank.
+const FILE_SOURCE_VIRTUALIZE_THRESHOLD = 2000;
 const FILE_SOURCE_INITIAL_VIEWPORT_HEIGHT = 600;
 const FILE_SOURCE_INITIAL_ROW_COUNT =
   Math.ceil(FILE_SOURCE_INITIAL_VIEWPORT_HEIGHT / FILE_SOURCE_ESTIMATED_LINE_HEIGHT)
@@ -118,6 +125,7 @@ export function FileSourceView({
     measureElement: (element) =>
       element.getBoundingClientRect().height || FILE_SOURCE_ESTIMATED_LINE_HEIGHT,
   });
+  const shouldVirtualize = lines.length > FILE_SOURCE_VIRTUALIZE_THRESHOLD;
   const virtualRows = virtualizer.getVirtualItems();
   const initialVirtualRows = useMemo(
     () => buildInitialVirtualRows(lines.length),
@@ -182,33 +190,51 @@ export function FileSourceView({
           <code
             ref={codeElementRef}
             data-code
-            className={`relative block min-h-full ${
+            className={`relative block min-h-full bg-background ${
               wordWrap ? "w-full min-w-0" : "w-max min-w-full"
             }`}
-            style={{
-              height: `${virtualizer.getTotalSize()}px`,
-            }}
+            style={
+              shouldVirtualize
+                ? { height: `${virtualizer.getTotalSize()}px` }
+                : undefined
+            }
           >
-            {renderedRows.map((virtualRow) => (
-              <SourceLine
-                ref={virtualizer.measureElement}
-                key={virtualRow.key}
-                virtualIndex={virtualRow.index}
-                lineNumber={virtualRow.index + 1}
-                tokens={lines[virtualRow.index] ?? []}
-                wordWrap={wordWrap}
-                contentSearchQuery={contentSearchQuery}
-                activeMatchId={activeMatchId}
-                contentSearchUnitId={contentSearchUnitId}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: wordWrap ? "100%" : "max-content",
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              />
-            ))}
+            {shouldVirtualize
+              ? renderedRows.map((virtualRow) => (
+                  <SourceLine
+                    ref={virtualizer.measureElement}
+                    key={virtualRow.key}
+                    virtualIndex={virtualRow.index}
+                    lineNumber={virtualRow.index + 1}
+                    tokens={lines[virtualRow.index] ?? []}
+                    wordWrap={wordWrap}
+                    contentSearchQuery={contentSearchQuery}
+                    activeMatchId={activeMatchId}
+                    contentSearchUnitId={contentSearchUnitId}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: wordWrap ? "100%" : "max-content",
+                      transform: `translateY(${virtualRow.start}px)`,
+                    }}
+                  />
+                ))
+              : lines.map((tokens, index) => (
+                  <SourceLine
+                    key={index}
+                    virtualIndex={index}
+                    lineNumber={index + 1}
+                    tokens={tokens}
+                    wordWrap={wordWrap}
+                    contentSearchQuery={contentSearchQuery}
+                    activeMatchId={activeMatchId}
+                    contentSearchUnitId={contentSearchUnitId}
+                    style={{
+                      width: wordWrap ? "100%" : "max-content",
+                    }}
+                  />
+                ))}
           </code>
         </pre>
       </div>
@@ -270,7 +296,7 @@ const SourceLine = forwardRef<HTMLSpanElement, SourceLineProps>(function SourceL
       style={style}
     >
       <span
-        className="file-source-line-number sticky left-0 z-10 select-none px-2 text-right tabular-nums"
+        className="file-source-line-number select-none bg-background px-2 text-right tabular-nums"
         data-column-number={lineNumber}
         data-gutter=""
         data-line-index={virtualIndex}
