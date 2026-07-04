@@ -4,6 +4,7 @@ import {
   useAuthSelections,
   usePutAuthSelections,
 } from "@proliferate/cloud-sdk-react";
+import { useRuntimeHealthQuery } from "@anyharness/sdk-react";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { planFirstRunAuthAdoption } from "@/lib/domain/agents/auth-onboarding";
@@ -27,20 +28,29 @@ export function useFirstRunAuthAdoption() {
     reconcileSnapshot,
     reconcileStatus,
   } = useAgentCatalog();
+  const runtimeHealth = useRuntimeHealthQuery({
+    pollWhileAgentSeedHydrating: true,
+  });
   const putSelections = usePutAuthSelections();
   const attemptedRef = useRef(false);
 
   const selections = selectionsQuery.data;
   const gatewayEnabled = capabilitiesQuery.data?.gatewayEnabled;
   const putMutate = putSelections.mutate;
+  const agentSeedStatus = runtimeHealth.data?.agentSeed?.status;
 
   // The runtime hydrates the bundled seed then runs an installed-only reconcile
   // at startup; agent credential/install states are only trustworthy once that
   // pass has SETTLED. Deciding from a mid-hydration snapshot permanently misses
   // native creds for harnesses that hydrate after the (one-shot) decision.
+  // We must wait for BOTH agentSeed hydration AND reconcile to settle before
+  // making the one-shot adoption decision.
   const reconcileActive =
     reconcileStatus === "queued" || reconcileStatus === "running";
-  const readinessSettled = reconcileSnapshot !== null && !reconcileActive;
+  const agentSeedSettled =
+    agentSeedStatus !== "hydrating" && agentSeedStatus !== undefined;
+  const readinessSettled =
+    reconcileSnapshot !== null && !reconcileActive && agentSeedSettled;
 
   useEffect(() => {
     if (attemptedRef.current || !cloudActive) {
