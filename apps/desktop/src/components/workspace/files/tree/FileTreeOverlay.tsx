@@ -168,13 +168,13 @@ function FileTreeBody({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 px-2 pt-2 pb-1">
         <div className="flex h-7 items-center gap-1.5 rounded-[10px] bg-sidebar-accent px-2 text-sidebar-muted-foreground">
-          <Search className="size-3 shrink-0" />
+          <Search className="size-4 shrink-0" />
           <Input
             value={filter}
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => setFilter(event.target.value)}
             placeholder="Filter files…"
             autoFocus
-            className="h-full border-0 bg-transparent px-0 text-xs text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
+            className="h-full border-0 bg-transparent px-0 text-[13px] text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
           />
         </div>
       </div>
