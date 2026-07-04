@@ -7,6 +7,7 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import { DiffContextExpander, type ExpandDirection } from "@/components/content/ui/diff/DiffContextExpander";
 import { ChatDiffLineWrapContextMenu } from "@/components/content/ui/diff/ChatDiffLineWrapContextMenu";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import {
@@ -15,16 +16,16 @@ import {
 } from "@/lib/domain/content-search/content-search";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type { CollapsedContext, DiffLine, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "@/lib/domain/files/diff-parser";
 import {
   getChatDiffRows,
   getChatLineNumber,
-  getChatLineNumberDigits,
   getChatLineType,
   getDiffLineIndex,
   getDiffLineNumberColumnWidth,
   type ChatDiffRow,
 } from "@/lib/domain/files/diff-view-rows";
+import { useGapExpansion } from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 
@@ -141,7 +142,7 @@ function ChatGutterColumn({
   rows,
   rowCount,
 }: {
-  rows: ChatDiffRow[];
+  rows: ChatRenderRow[];
   rowCount: number;
 }) {
   return (
@@ -151,7 +152,7 @@ function ChatGutterColumn({
       className="sticky left-0 z-10 grid bg-[var(--diffs-bg)] [grid-template-rows:subgrid]"
     >
       {rows.map((row) =>
-        row.kind === "line" ? (
+        row.kind === "line" || row.kind === "expanded-gap-line" ? (
           <ChatGutterLine key={row.key} line={row.line} />
         ) : (
           <ChatGutterSeparatorLine key={row.key} />
@@ -170,8 +171,10 @@ function ChatContentColumn({
   activeMatchId,
   contentSearchUnitId,
   onExpandCollapsedRow,
+  onExpandGap,
+  fileLines,
 }: {
-  rows: ChatDiffRow[];
+  rows: ChatRenderRow[];
   rowCount: number;
   tokens: HighlightedToken[][] | null;
   wrapLongLines: boolean;
@@ -179,6 +182,8 @@ function ChatContentColumn({
   activeMatchId: string | null;
   contentSearchUnitId: string;
   onExpandCollapsedRow: (key: string) => void;
+  onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
+  fileLines?: string[];
 }) {
   return (
     <div
@@ -186,27 +191,158 @@ function ChatContentColumn({
       style={{ gridColumn: "2", gridRow: `1 / span ${rowCount}` }}
       className="grid [grid-template-rows:subgrid]"
     >
-      {rows.map((row) =>
-        row.kind === "line" ? (
-          <ChatContentLine
-            key={row.key}
-            line={row.line}
-            tokens={tokens}
-            wrapLongLines={wrapLongLines}
-            contentSearchQuery={contentSearchQuery}
-            activeMatchId={activeMatchId}
-            contentSearchUnitId={contentSearchUnitId}
-          />
-        ) : (
+      {rows.map((row) => {
+        if (row.kind === "line") {
+          return (
+            <ChatContentLine
+              key={row.key}
+              line={row.line}
+              tokens={tokens}
+              wrapLongLines={wrapLongLines}
+              contentSearchQuery={contentSearchQuery}
+              activeMatchId={activeMatchId}
+              contentSearchUnitId={contentSearchUnitId}
+            />
+          );
+        }
+        if (row.kind === "expanded-gap-line") {
+          return (
+            <ChatContentLine
+              key={row.key}
+              line={row.line}
+              tokens={null}
+              wrapLongLines={wrapLongLines}
+              contentSearchQuery={contentSearchQuery}
+              activeMatchId={activeMatchId}
+              contentSearchUnitId={contentSearchUnitId}
+            />
+          );
+        }
+        if (row.kind === "gap") {
+          // Only show expander if file lines are available
+          if (!fileLines) {
+            return (
+              <ChatCollapsedRow
+                key={row.key}
+                section={{ kind: "collapsed", lineCount: row.gap.lineCount > 0 ? row.gap.lineCount : 0, lines: [] }}
+                onExpand={() => {}}
+              />
+            );
+          }
+          return (
+            <DiffContextExpander
+              key={row.key}
+              gap={row.gap}
+              onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
+            />
+          );
+        }
+        // collapsed
+        return (
           <ChatCollapsedRow
             key={row.key}
             section={row.section}
             onExpand={() => onExpandCollapsedRow(row.key)}
           />
-        )
-      )}
+        );
+      })}
     </div>
   );
+}
+
+/** Flattened render row: either a data row from the diff or an expanded gap line */
+type ChatRenderRow =
+  | ChatDiffRow
+  | { kind: "expanded-gap-line"; key: string; line: DiffLine };
+
+function flattenWithGapExpansion(
+  rows: ChatDiffRow[],
+  gapStates: Map<number, { revealedTop: number; revealedBottom: number; fullyExpanded: boolean }>,
+  fileLines: string[] | undefined,
+): ChatRenderRow[] {
+  if (!fileLines || gapStates.size === 0) return rows;
+
+  const result: ChatRenderRow[] = [];
+  for (const row of rows) {
+    if (row.kind !== "gap") {
+      result.push(row);
+      continue;
+    }
+
+    const state = gapStates.get(row.gapIndex);
+    if (!state || (state.revealedTop === 0 && state.revealedBottom === 0)) {
+      result.push(row);
+      continue;
+    }
+
+    const { gap } = row;
+    const totalGapLines = gap.lineCount;
+    if (totalGapLines <= 0) {
+      result.push(row);
+      continue;
+    }
+
+    const gapFileStart = gap.newStartLine - 1; // 0-indexed into fileLines
+
+    // Top expanded lines
+    for (let i = 0; i < state.revealedTop && i < totalGapLines; i++) {
+      const fileIndex = gapFileStart + i;
+      const content = fileLines[fileIndex] ?? "";
+      const oldLine = gap.oldStartLine + i;
+      const newLine = gap.newStartLine + i;
+      result.push({
+        kind: "expanded-gap-line",
+        key: `${row.key}-top-${i}`,
+        line: {
+          type: "context",
+          marker: " ",
+          content,
+          oldLineNum: oldLine,
+          newLineNum: newLine,
+          lineNum: newLine,
+          tokenIndex: -1,
+        },
+      });
+    }
+
+    // Remaining gap separator (if not fully expanded)
+    if (!state.fullyExpanded) {
+      const remainingLines = totalGapLines - state.revealedTop - state.revealedBottom;
+      if (remainingLines > 0) {
+        const residualGap: InterHunkGap = {
+          kind: "gap",
+          oldStartLine: gap.oldStartLine + state.revealedTop,
+          newStartLine: gap.newStartLine + state.revealedTop,
+          lineCount: remainingLines,
+        };
+        result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
+      }
+    }
+
+    // Bottom expanded lines
+    const bottomStart = totalGapLines - state.revealedBottom;
+    for (let i = bottomStart; i < totalGapLines; i++) {
+      if (i < state.revealedTop) continue; // already shown by top
+      const fileIndex = gapFileStart + i;
+      const content = fileLines[fileIndex] ?? "";
+      const oldLine = gap.oldStartLine + i;
+      const newLine = gap.newStartLine + i;
+      result.push({
+        kind: "expanded-gap-line",
+        key: `${row.key}-bottom-${i}`,
+        line: {
+          type: "context",
+          marker: " ",
+          content,
+          oldLineNum: oldLine,
+          newLineNum: newLine,
+          lineNum: newLine,
+          tokenIndex: -1,
+        },
+      });
+    }
+  }
+  return result;
 }
 
 export function ChatDiffViewer({
@@ -221,6 +357,7 @@ export function ChatDiffViewer({
   overscrollBehaviorX,
   overscrollBehaviorY,
   chainVerticalWheel = false,
+  fileLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -233,14 +370,20 @@ export function ChatDiffViewer({
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  fileLines?: string[];
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
     new Set(),
   );
-  const rows = useMemo(
+  const { gapStates, expandGap } = useGapExpansion();
+  const baseRows = useMemo(
     () => getChatDiffRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
+  );
+  const rows = useMemo(
+    () => flattenWithGapExpansion(baseRows, gapStates, fileLines),
+    [baseRows, gapStates, fileLines],
   );
   const contentSearchSurface = useContentSearchStore((state) => state.surface);
   const contentSearchOpen = useContentSearchStore((state) => state.open);
@@ -274,7 +417,17 @@ export function ChatDiffViewer({
     [contentSearchQuery, contentSearchUnitId, parsed.allCodeLines, tokens],
   );
   const rowCount = Math.max(rows.length, 1);
-  const lineNumberDigits = getChatLineNumberDigits(rows);
+  const lineNumberDigits = useMemo(() => {
+    let maxLineNumber = 0;
+    for (const row of rows) {
+      if (row.kind === "line") {
+        maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
+      } else if (row.kind === "expanded-gap-line") {
+        maxLineNumber = Math.max(maxLineNumber, getChatLineNumber(row.line) ?? 0);
+      }
+    }
+    return Math.max(String(maxLineNumber).length, 1);
+  }, [rows]);
   const codeStyle = useMemo(
     () => ({
       ...CHAT_DIFF_CODE_BASE_STYLE,
@@ -372,6 +525,8 @@ export function ChatDiffViewer({
             activeMatchId={activeMatchId}
             contentSearchUnitId={contentSearchUnitId}
             onExpandCollapsedRow={expandCollapsedRow}
+            onExpandGap={expandGap}
+            fileLines={fileLines}
           />
         </code>
       </pre>

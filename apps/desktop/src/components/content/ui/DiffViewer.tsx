@@ -21,6 +21,12 @@ interface DiffViewerProps {
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  /**
+   * Full file content (new-side) split into lines. When provided, enables
+   * Codex-style per-gap context expansion. Without this, gap separators
+   * are still rendered but expansion is disabled.
+   */
+  fileLines?: string[];
 }
 
 const ROOT_CLASS =
@@ -40,6 +46,7 @@ export function DiffViewer({
   overscrollBehaviorX,
   overscrollBehaviorY,
   chainVerticalWheel,
+  fileLines,
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
   const chatWrapLongLines = useChatDiffPreferencesStore((state) =>
@@ -62,6 +69,7 @@ export function DiffViewer({
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}
           chainVerticalWheel={chainVerticalWheel}
+          fileLines={fileLines}
         />
       </DebugProfiler>
     );
@@ -82,6 +90,7 @@ export function DiffViewer({
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}
           chainVerticalWheel={chainVerticalWheel}
+          fileLines={fileLines}
         />
       </DebugProfiler>
     );
@@ -100,6 +109,7 @@ export function DiffViewer({
         overscrollBehaviorX={overscrollBehaviorX}
         overscrollBehaviorY={overscrollBehaviorY}
         chainVerticalWheel={chainVerticalWheel}
+        fileLines={fileLines}
       />
     </DebugProfiler>
   );

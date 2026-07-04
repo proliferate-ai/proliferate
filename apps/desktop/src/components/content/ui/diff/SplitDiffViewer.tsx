@@ -6,10 +6,11 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import { DiffContextExpander, type ExpandDirection } from "@/components/content/ui/diff/DiffContextExpander";
 import { useResolvedMode } from "@/hooks/theme/derived/use-resolved-mode";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { chainVerticalWheelScroll } from "@proliferate/ui/utils/scroll-chain";
-import type { CollapsedContext, DiffLine, ParsedPatch } from "@/lib/domain/files/diff-parser";
+import type { CollapsedContext, DiffLine, InterHunkGap, ParsedPatch } from "@/lib/domain/files/diff-parser";
 import {
   getDiffLineIndex,
   getDiffLineNumberColumnWidth,
@@ -17,12 +18,101 @@ import {
   getSplitDiffRows,
   getSplitEmptyLineType,
   getSplitLineNumber,
-  getSplitLineNumberDigits,
   getSplitLineType,
   type SplitDiffRow,
   type SplitSide,
 } from "@/lib/domain/files/diff-view-rows";
+import { useGapExpansion } from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
+
+/** Flattened render row for split view */
+type SplitRenderRow =
+  | SplitDiffRow
+  | { kind: "expanded-gap-line"; key: string; oldLine: DiffLine; newLine: DiffLine };
+
+function flattenSplitWithGapExpansion(
+  rows: SplitDiffRow[],
+  gapStates: Map<number, { revealedTop: number; revealedBottom: number; fullyExpanded: boolean }>,
+  fileLines: string[] | undefined,
+): SplitRenderRow[] {
+  if (!fileLines || gapStates.size === 0) return rows;
+
+  const result: SplitRenderRow[] = [];
+  for (const row of rows) {
+    if (row.kind !== "gap") {
+      result.push(row);
+      continue;
+    }
+
+    const state = gapStates.get(row.gapIndex);
+    if (!state || (state.revealedTop === 0 && state.revealedBottom === 0)) {
+      result.push(row);
+      continue;
+    }
+
+    const { gap } = row;
+    const totalGapLines = gap.lineCount;
+    if (totalGapLines <= 0) {
+      result.push(row);
+      continue;
+    }
+
+    const gapFileStart = gap.newStartLine - 1;
+
+    // Top expanded lines
+    for (let i = 0; i < state.revealedTop && i < totalGapLines; i++) {
+      const fileIndex = gapFileStart + i;
+      const content = fileLines[fileIndex] ?? "";
+      const oldLine = gap.oldStartLine + i;
+      const newLine = gap.newStartLine + i;
+      const line: DiffLine = {
+        type: "context",
+        marker: " ",
+        content,
+        oldLineNum: oldLine,
+        newLineNum: newLine,
+        lineNum: newLine,
+        tokenIndex: -1,
+      };
+      result.push({ kind: "expanded-gap-line", key: `${row.key}-top-${i}`, oldLine: line, newLine: line });
+    }
+
+    // Residual gap
+    if (!state.fullyExpanded) {
+      const remainingLines = totalGapLines - state.revealedTop - state.revealedBottom;
+      if (remainingLines > 0) {
+        const residualGap: InterHunkGap = {
+          kind: "gap",
+          oldStartLine: gap.oldStartLine + state.revealedTop,
+          newStartLine: gap.newStartLine + state.revealedTop,
+          lineCount: remainingLines,
+        };
+        result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
+      }
+    }
+
+    // Bottom expanded lines
+    const bottomStart = totalGapLines - state.revealedBottom;
+    for (let i = bottomStart; i < totalGapLines; i++) {
+      if (i < state.revealedTop) continue;
+      const fileIndex = gapFileStart + i;
+      const content = fileLines[fileIndex] ?? "";
+      const oldLine = gap.oldStartLine + i;
+      const newLine = gap.newStartLine + i;
+      const line: DiffLine = {
+        type: "context",
+        marker: " ",
+        content,
+        oldLineNum: oldLine,
+        newLineNum: newLine,
+        lineNum: newLine,
+        tokenIndex: -1,
+      };
+      result.push({ kind: "expanded-gap-line", key: `${row.key}-bottom-${i}`, oldLine: line, newLine: line });
+    }
+  }
+  return result;
+}
 
 const SPLIT_DIFF_PRE_STYLE = {
   color: "var(--diffs-fg)",
@@ -147,6 +237,53 @@ function SplitCollapsedCells({
   );
 }
 
+function SplitGapCells({
+  gap,
+  onExpand,
+  fileLines,
+}: {
+  gap: InterHunkGap;
+  onExpand: (direction: ExpandDirection) => void;
+  fileLines?: string[];
+}) {
+  if (!fileLines) {
+    // Show non-interactive info row when no file lines available
+    return (
+      <>
+        <div
+          data-gutter=""
+          data-separator="line-info"
+          className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--codex-diffs-separator-surface)]"
+        />
+        <div
+          data-content=""
+          data-separator="line-info"
+          className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center bg-[var(--codex-diffs-separator-surface)] px-2 text-[10px] text-muted-foreground/70"
+        >
+          {gap.lineCount > 0 ? `${gap.lineCount} unmodified lines` : ""}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div
+        data-gutter=""
+        data-separator="gap-expander"
+        className="diff-gutter-cell sticky left-0 z-10 box-border min-h-[var(--diffs-line-height)] w-[var(--diffs-column-number-width)] min-w-[var(--diffs-column-number-width)] bg-[var(--codex-diffs-separator-surface)]"
+      />
+      <div
+        data-content=""
+        data-separator="gap-expander"
+        className="diff-content-cell min-h-[var(--diffs-line-height)] bg-[var(--codex-diffs-separator-surface)]"
+      >
+        <DiffContextExpander gap={gap} onExpand={onExpand} />
+      </div>
+    </>
+  );
+}
+
 function SplitCodeColumn({
   side,
   rows,
@@ -155,14 +292,18 @@ function SplitCodeColumn({
   wrapLongLines,
   lineNumberDigits,
   onExpandCollapsed,
+  onExpandGap,
+  fileLines,
 }: {
   side: SplitSide;
-  rows: SplitDiffRow[];
+  rows: SplitRenderRow[];
   rowCount: number;
   tokens: HighlightedToken[][] | null;
   wrapLongLines: boolean;
   lineNumberDigits: number;
   onExpandCollapsed: (key: string) => void;
+  onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
+  fileLines?: string[];
 }) {
   const codeStyle = useMemo(
     () => ({
@@ -191,26 +332,53 @@ function SplitCodeColumn({
           : "min-w-0 max-w-full overflow-x-auto overflow-y-hidden [overscroll-behavior-x:contain] grid-cols-[var(--diffs-column-number-width)_minmax(max-content,1fr)]"
       }`}
     >
-      {rows.map((row) =>
-        row.kind === "line" ? (
-          <Fragment key={row.key}>
-            <SplitLineCells
-              line={side === "old" ? row.oldLine : row.newLine}
-              peerLine={side === "old" ? row.newLine : row.oldLine}
-              tokens={tokens}
-              side={side}
-              wrapLongLines={wrapLongLines}
-            />
-          </Fragment>
-        ) : (
+      {rows.map((row) => {
+        if (row.kind === "line") {
+          return (
+            <Fragment key={row.key}>
+              <SplitLineCells
+                line={side === "old" ? row.oldLine : row.newLine}
+                peerLine={side === "old" ? row.newLine : row.oldLine}
+                tokens={tokens}
+                side={side}
+                wrapLongLines={wrapLongLines}
+              />
+            </Fragment>
+          );
+        }
+        if (row.kind === "expanded-gap-line") {
+          return (
+            <Fragment key={row.key}>
+              <SplitLineCells
+                line={side === "old" ? row.oldLine : row.newLine}
+                peerLine={side === "old" ? row.newLine : row.oldLine}
+                tokens={null}
+                side={side}
+                wrapLongLines={wrapLongLines}
+              />
+            </Fragment>
+          );
+        }
+        if (row.kind === "gap") {
+          return (
+            <Fragment key={row.key}>
+              <SplitGapCells
+                gap={row.gap}
+                onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
+                fileLines={fileLines}
+              />
+            </Fragment>
+          );
+        }
+        return (
           <Fragment key={row.key}>
             <SplitCollapsedCells
               section={row.section}
               onExpand={() => onExpandCollapsed(row.key)}
             />
           </Fragment>
-        )
-      )}
+        );
+      })}
     </code>
   );
 }
@@ -225,6 +393,7 @@ export function SplitDiffViewer({
   overscrollBehaviorX,
   overscrollBehaviorY,
   chainVerticalWheel = false,
+  fileLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -235,18 +404,42 @@ export function SplitDiffViewer({
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  fileLines?: string[];
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
     new Set(),
   );
-  const rows = useMemo(
+  const { gapStates, expandGap } = useGapExpansion();
+  const baseRows = useMemo(
     () => getSplitDiffRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
   );
+  const rows = useMemo(
+    () => flattenSplitWithGapExpansion(baseRows, gapStates, fileLines),
+    [baseRows, gapStates, fileLines],
+  );
   const rowCount = Math.max(rows.length, 1);
-  const oldLineNumberDigits = getSplitLineNumberDigits(rows, "old");
-  const newLineNumberDigits = getSplitLineNumberDigits(rows, "new");
+  const oldLineNumberDigits = useMemo(() => {
+    let max = 0;
+    for (const row of rows) {
+      if (row.kind === "line" || row.kind === "expanded-gap-line") {
+        const line = row.oldLine;
+        if (line) max = Math.max(max, line.oldLineNum ?? 0);
+      }
+    }
+    return Math.max(String(max).length, 1);
+  }, [rows]);
+  const newLineNumberDigits = useMemo(() => {
+    let max = 0;
+    for (const row of rows) {
+      if (row.kind === "line" || row.kind === "expanded-gap-line") {
+        const line = row.newLine;
+        if (line) max = Math.max(max, line.newLineNum ?? 0);
+      }
+    }
+    return Math.max(String(max).length, 1);
+  }, [rows]);
   const viewportStyle = useMemo(
     () => ({
       overscrollBehavior,
@@ -313,6 +506,8 @@ export function SplitDiffViewer({
             wrapLongLines={wrapLongLines}
             lineNumberDigits={oldLineNumberDigits}
             onExpandCollapsed={expandCollapsedRow}
+            onExpandGap={expandGap}
+            fileLines={fileLines}
           />
           <SplitCodeColumn
             side="new"
@@ -322,6 +517,8 @@ export function SplitDiffViewer({
             wrapLongLines={wrapLongLines}
             lineNumberDigits={newLineNumberDigits}
             onExpandCollapsed={expandCollapsedRow}
+            onExpandGap={expandGap}
+            fileLines={fileLines}
           />
         </pre>
       </div>

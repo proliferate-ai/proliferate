@@ -1,12 +1,15 @@
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import { DiffContextExpander, type ExpandDirection } from "@/components/content/ui/diff/DiffContextExpander";
 import type {
   CollapsedContext,
   DiffHunk,
   DiffLine,
+  InterHunkGap,
   ParsedPatch,
 } from "@/lib/domain/files/diff-parser";
+import { useGapExpansion } from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 
 function getLineType(type: DiffLine["type"]): string {
@@ -146,6 +149,52 @@ function HunkView({
   );
 }
 
+function GapSeparator({
+  gap,
+  onExpand,
+  fileLines,
+}: {
+  gap: InterHunkGap;
+  onExpand: (direction: ExpandDirection) => void;
+  fileLines?: string[];
+}) {
+  if (!fileLines) {
+    // Non-interactive informational row
+    if (gap.lineCount <= 0) return null;
+    return (
+      <div className="flex items-center justify-center bg-[var(--codex-diffs-separator-surface)] py-0.5 text-[10px] text-muted-foreground/40">
+        {gap.lineCount} unmodified lines
+      </div>
+    );
+  }
+
+  return <DiffContextExpander gap={gap} onExpand={onExpand} />;
+}
+
+function ExpandedGapLines({
+  lines,
+  wrapLongLines,
+  variant,
+}: {
+  lines: DiffLine[];
+  wrapLongLines: boolean;
+  variant: "default" | "chat";
+}) {
+  return (
+    <>
+      {lines.map((line, i) => (
+        <DiffLineRow
+          key={`expanded-${line.newLineNum}-${i}`}
+          line={line}
+          tokens={null}
+          wrapLongLines={wrapLongLines}
+          variant={variant}
+        />
+      ))}
+    </>
+  );
+}
+
 export function UnifiedDiffViewer({
   parsed,
   tokens,
@@ -157,6 +206,7 @@ export function UnifiedDiffViewer({
   overscrollBehaviorX,
   overscrollBehaviorY,
   chainVerticalWheel,
+  fileLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -168,7 +218,67 @@ export function UnifiedDiffViewer({
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  fileLines?: string[];
 }) {
+  const { gapStates, expandGap } = useGapExpansion();
+  const gaps = parsed.interHunkGaps;
+
+  // Build expanded gap line arrays
+  const expandedGapContent = useMemo(() => {
+    if (!fileLines || gapStates.size === 0) return new Map<number, { topLines: DiffLine[]; bottomLines: DiffLine[]; residualGap: InterHunkGap | null }>();
+    const result = new Map<number, { topLines: DiffLine[]; bottomLines: DiffLine[]; residualGap: InterHunkGap | null }>();
+    for (const [gapIndex, state] of gapStates) {
+      const gap = gaps[gapIndex];
+      if (!gap || gap.lineCount <= 0) continue;
+      const totalGapLines = gap.lineCount;
+      const gapFileStart = gap.newStartLine - 1;
+
+      const topLines: DiffLine[] = [];
+      for (let i = 0; i < state.revealedTop && i < totalGapLines; i++) {
+        const fileIndex = gapFileStart + i;
+        const content = fileLines[fileIndex] ?? "";
+        topLines.push({
+          type: "context", marker: " ", content,
+          oldLineNum: gap.oldStartLine + i,
+          newLineNum: gap.newStartLine + i,
+          lineNum: gap.newStartLine + i,
+          tokenIndex: -1,
+        });
+      }
+
+      const bottomLines: DiffLine[] = [];
+      const bottomStart = totalGapLines - state.revealedBottom;
+      for (let i = bottomStart; i < totalGapLines; i++) {
+        if (i < state.revealedTop) continue;
+        const fileIndex = gapFileStart + i;
+        const content = fileLines[fileIndex] ?? "";
+        bottomLines.push({
+          type: "context", marker: " ", content,
+          oldLineNum: gap.oldStartLine + i,
+          newLineNum: gap.newStartLine + i,
+          lineNum: gap.newStartLine + i,
+          tokenIndex: -1,
+        });
+      }
+
+      let residualGap: InterHunkGap | null = null;
+      if (!state.fullyExpanded) {
+        const remaining = totalGapLines - state.revealedTop - state.revealedBottom;
+        if (remaining > 0) {
+          residualGap = {
+            kind: "gap",
+            oldStartLine: gap.oldStartLine + state.revealedTop,
+            newStartLine: gap.newStartLine + state.revealedTop,
+            lineCount: remaining,
+          };
+        }
+      }
+
+      result.set(gapIndex, { topLines, bottomLines, residualGap });
+    }
+    return result;
+  }, [fileLines, gapStates, gaps]);
+
   return (
     <AutoHideScrollArea
       className={className}
@@ -182,15 +292,73 @@ export function UnifiedDiffViewer({
       overscrollBehaviorY={overscrollBehaviorY}
       chainVerticalWheel={chainVerticalWheel}
     >
-      {parsed.hunks.map((hunk, index) => (
-        <HunkView
-          key={index}
-          hunk={hunk}
-          tokens={tokens}
-          wrapLongLines={wrapLongLines}
-          variant={variant}
-        />
-      ))}
+      {parsed.hunks.map((hunk, index) => {
+        const gapBefore = gaps[index];
+        const expandedBefore = expandedGapContent.get(index);
+        const showGapBefore = gapBefore && gapBefore.lineCount !== 0;
+
+        return (
+          <div key={index}>
+            {showGapBefore && expandedBefore && (
+              <>
+                <ExpandedGapLines lines={expandedBefore.topLines} wrapLongLines={wrapLongLines} variant={variant} />
+                {expandedBefore.residualGap ? (
+                  <GapSeparator
+                    gap={expandedBefore.residualGap}
+                    onExpand={(dir) => expandGap(index, expandedBefore.residualGap!, dir)}
+                    fileLines={fileLines}
+                  />
+                ) : null}
+                <ExpandedGapLines lines={expandedBefore.bottomLines} wrapLongLines={wrapLongLines} variant={variant} />
+              </>
+            )}
+            {showGapBefore && !expandedBefore && (
+              <GapSeparator
+                gap={gapBefore}
+                onExpand={(dir) => expandGap(index, gapBefore, dir)}
+                fileLines={fileLines}
+              />
+            )}
+            <HunkView
+              hunk={hunk}
+              tokens={tokens}
+              wrapLongLines={wrapLongLines}
+              variant={variant}
+            />
+          </div>
+        );
+      })}
+      {/* Gap after last hunk */}
+      {(() => {
+        const lastGapIndex = parsed.hunks.length;
+        const gapAfter = gaps[lastGapIndex];
+        const expandedAfter = expandedGapContent.get(lastGapIndex);
+        if (!gapAfter || gapAfter.lineCount === 0) return null;
+
+        if (expandedAfter) {
+          return (
+            <div>
+              <ExpandedGapLines lines={expandedAfter.topLines} wrapLongLines={wrapLongLines} variant={variant} />
+              {expandedAfter.residualGap ? (
+                <GapSeparator
+                  gap={expandedAfter.residualGap}
+                  onExpand={(dir) => expandGap(lastGapIndex, expandedAfter.residualGap!, dir)}
+                  fileLines={fileLines}
+                />
+              ) : null}
+              <ExpandedGapLines lines={expandedAfter.bottomLines} wrapLongLines={wrapLongLines} variant={variant} />
+            </div>
+          );
+        }
+
+        return (
+          <GapSeparator
+            gap={gapAfter}
+            onExpand={(dir) => expandGap(lastGapIndex, gapAfter, dir)}
+            fileLines={fileLines}
+          />
+        );
+      })()}
     </AutoHideScrollArea>
   );
 }
