@@ -27,6 +27,12 @@ interface DiffViewerProps {
    * are still rendered but expansion is disabled.
    */
   fileLines?: string[];
+  /**
+   * Lazy fetch trigger for `fileLines`, invoked on the first expander
+   * interaction. When provided, expanders are interactive even before
+   * `fileLines` arrives.
+   */
+  onRequestFileLines?: () => void;
 }
 
 const ROOT_CLASS =
@@ -47,6 +53,7 @@ export function DiffViewer({
   overscrollBehaviorY,
   chainVerticalWheel,
   fileLines,
+  onRequestFileLines,
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
   const chatWrapLongLines = useChatDiffPreferencesStore((state) =>
@@ -70,6 +77,7 @@ export function DiffViewer({
           overscrollBehaviorY={overscrollBehaviorY}
           chainVerticalWheel={chainVerticalWheel}
           fileLines={fileLines}
+          onRequestFileLines={onRequestFileLines}
         />
       </DebugProfiler>
     );
@@ -91,6 +99,7 @@ export function DiffViewer({
           overscrollBehaviorY={overscrollBehaviorY}
           chainVerticalWheel={chainVerticalWheel}
           fileLines={fileLines}
+          onRequestFileLines={onRequestFileLines}
         />
       </DebugProfiler>
     );
@@ -110,6 +119,7 @@ export function DiffViewer({
         overscrollBehaviorY={overscrollBehaviorY}
         chainVerticalWheel={chainVerticalWheel}
         fileLines={fileLines}
+        onRequestFileLines={onRequestFileLines}
       />
     </DebugProfiler>
   );

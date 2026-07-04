@@ -25,7 +25,12 @@ import {
   getDiffLineNumberColumnWidth,
   type ChatDiffRow,
 } from "@/lib/domain/files/diff-view-rows";
-import { useGapExpansion } from "@/hooks/ui/diff/use-gap-expansion";
+import {
+  clampGapReveal,
+  resolveGapLineCount,
+  useGapExpansion,
+  type GapExpansionState,
+} from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 import { useContentSearchStore } from "@/stores/search/content-search-store";
 
@@ -172,7 +177,7 @@ function ChatContentColumn({
   contentSearchUnitId,
   onExpandCollapsedRow,
   onExpandGap,
-  fileLines,
+  canExpandGaps,
 }: {
   rows: ChatRenderRow[];
   rowCount: number;
@@ -183,7 +188,7 @@ function ChatContentColumn({
   contentSearchUnitId: string;
   onExpandCollapsedRow: (key: string) => void;
   onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
-  fileLines?: string[];
+  canExpandGaps: boolean;
 }) {
   return (
     <div
@@ -219,14 +224,22 @@ function ChatContentColumn({
           );
         }
         if (row.kind === "gap") {
-          // Only show expander if file lines are available
-          if (!fileLines) {
+          if (!canExpandGaps) {
+            // Informational-only separator when expansion is unavailable
             return (
-              <ChatCollapsedRow
+              <div
                 key={row.key}
-                section={{ kind: "collapsed", lineCount: row.gap.lineCount > 0 ? row.gap.lineCount : 0, lines: [] }}
-                onExpand={() => {}}
-              />
+                data-separator="gap-info"
+                className="diff-content-cell flex min-h-[var(--diffs-line-height)] items-center gap-2 bg-[var(--codex-diffs-separator-surface)] px-2 text-muted-foreground/60"
+              >
+                <span className="h-px min-w-4 flex-1 bg-border/40" />
+                <span className="shrink-0 text-[10px] leading-none">
+                  {row.gap.lineCount > 0
+                    ? `${row.gap.lineCount} unmodified line${row.gap.lineCount === 1 ? "" : "s"}`
+                    : "unmodified lines"}
+                </span>
+                <span className="h-px min-w-4 flex-1 bg-border/40" />
+              </div>
             );
           }
           return (
@@ -255,13 +268,28 @@ type ChatRenderRow =
   | ChatDiffRow
   | { kind: "expanded-gap-line"; key: string; line: DiffLine };
 
+function makeGapContextLine(
+  fileLines: string[],
+  gap: InterHunkGap,
+  offset: number,
+): DiffLine {
+  const newLine = gap.newStartLine + offset;
+  return {
+    type: "context",
+    marker: " ",
+    content: fileLines[newLine - 1] ?? "",
+    oldLineNum: gap.oldStartLine + offset,
+    newLineNum: newLine,
+    lineNum: newLine,
+    tokenIndex: -1,
+  };
+}
+
 function flattenWithGapExpansion(
   rows: ChatDiffRow[],
-  gapStates: Map<number, { revealedTop: number; revealedBottom: number; fullyExpanded: boolean }>,
+  gapStates: Map<number, GapExpansionState>,
   fileLines: string[] | undefined,
 ): ChatRenderRow[] {
-  if (!fileLines || gapStates.size === 0) return rows;
-
   const result: ChatRenderRow[] = [];
   for (const row of rows) {
     if (row.kind !== "gap") {
@@ -269,76 +297,47 @@ function flattenWithGapExpansion(
       continue;
     }
 
+    // Resolve unknown trailing gap count against fetched file length
+    const gap = resolveGapLineCount(row.gap, fileLines);
+    if (!gap) continue;
+    const resolvedRow: ChatDiffRow = gap === row.gap ? row : { ...row, gap };
+
     const state = gapStates.get(row.gapIndex);
-    if (!state || (state.revealedTop === 0 && state.revealedBottom === 0)) {
-      result.push(row);
+    if (!fileLines || !state || gap.lineCount <= 0) {
+      result.push(resolvedRow);
       continue;
     }
 
-    const { gap } = row;
     const totalGapLines = gap.lineCount;
-    if (totalGapLines <= 0) {
-      result.push(row);
+    const { top, bottom, fullyExpanded } = clampGapReveal(state, totalGapLines);
+    if (top === 0 && bottom === 0) {
+      result.push(resolvedRow);
       continue;
     }
 
-    const gapFileStart = gap.newStartLine - 1; // 0-indexed into fileLines
-
-    // Top expanded lines
-    for (let i = 0; i < state.revealedTop && i < totalGapLines; i++) {
-      const fileIndex = gapFileStart + i;
-      const content = fileLines[fileIndex] ?? "";
-      const oldLine = gap.oldStartLine + i;
-      const newLine = gap.newStartLine + i;
+    for (let i = 0; i < top; i++) {
       result.push({
         kind: "expanded-gap-line",
         key: `${row.key}-top-${i}`,
-        line: {
-          type: "context",
-          marker: " ",
-          content,
-          oldLineNum: oldLine,
-          newLineNum: newLine,
-          lineNum: newLine,
-          tokenIndex: -1,
-        },
+        line: makeGapContextLine(fileLines, gap, i),
       });
     }
 
-    // Remaining gap separator (if not fully expanded)
-    if (!state.fullyExpanded) {
-      const remainingLines = totalGapLines - state.revealedTop - state.revealedBottom;
-      if (remainingLines > 0) {
-        const residualGap: InterHunkGap = {
-          kind: "gap",
-          oldStartLine: gap.oldStartLine + state.revealedTop,
-          newStartLine: gap.newStartLine + state.revealedTop,
-          lineCount: remainingLines,
-        };
-        result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
-      }
+    if (!fullyExpanded) {
+      const residualGap: InterHunkGap = {
+        kind: "gap",
+        oldStartLine: gap.oldStartLine + top,
+        newStartLine: gap.newStartLine + top,
+        lineCount: totalGapLines - top - bottom,
+      };
+      result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
     }
 
-    // Bottom expanded lines
-    const bottomStart = totalGapLines - state.revealedBottom;
-    for (let i = bottomStart; i < totalGapLines; i++) {
-      if (i < state.revealedTop) continue; // already shown by top
-      const fileIndex = gapFileStart + i;
-      const content = fileLines[fileIndex] ?? "";
-      const oldLine = gap.oldStartLine + i;
-      const newLine = gap.newStartLine + i;
+    for (let i = totalGapLines - bottom; i < totalGapLines; i++) {
       result.push({
         kind: "expanded-gap-line",
         key: `${row.key}-bottom-${i}`,
-        line: {
-          type: "context",
-          marker: " ",
-          content,
-          oldLineNum: oldLine,
-          newLineNum: newLine,
-          lineNum: newLine,
-          tokenIndex: -1,
-        },
+        line: makeGapContextLine(fileLines, gap, i),
       });
     }
   }
@@ -358,6 +357,7 @@ export function ChatDiffViewer({
   overscrollBehaviorY,
   chainVerticalWheel = false,
   fileLines,
+  onRequestFileLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -371,12 +371,22 @@ export function ChatDiffViewer({
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
   fileLines?: string[];
+  onRequestFileLines?: () => void;
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
     new Set(),
   );
   const { gapStates, expandGap } = useGapExpansion();
+  const canExpandGaps = Boolean(fileLines || onRequestFileLines);
+  const expandGapWithFetch = (
+    gapIndex: number,
+    gap: InterHunkGap,
+    direction: ExpandDirection,
+  ) => {
+    onRequestFileLines?.();
+    expandGap(gapIndex, gap, direction);
+  };
   const baseRows = useMemo(
     () => getChatDiffRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
@@ -525,8 +535,8 @@ export function ChatDiffViewer({
             activeMatchId={activeMatchId}
             contentSearchUnitId={contentSearchUnitId}
             onExpandCollapsedRow={expandCollapsedRow}
-            onExpandGap={expandGap}
-            fileLines={fileLines}
+            onExpandGap={expandGapWithFetch}
+            canExpandGaps={canExpandGaps}
           />
         </code>
       </pre>

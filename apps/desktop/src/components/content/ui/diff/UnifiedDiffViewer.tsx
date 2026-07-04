@@ -9,7 +9,11 @@ import type {
   InterHunkGap,
   ParsedPatch,
 } from "@/lib/domain/files/diff-parser";
-import { useGapExpansion } from "@/hooks/ui/diff/use-gap-expansion";
+import {
+  clampGapReveal,
+  resolveGapLineCount,
+  useGapExpansion,
+} from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 
 function getLineType(type: DiffLine["type"]): string {
@@ -152,13 +156,13 @@ function HunkView({
 function GapSeparator({
   gap,
   onExpand,
-  fileLines,
+  canExpand,
 }: {
   gap: InterHunkGap;
   onExpand: (direction: ExpandDirection) => void;
-  fileLines?: string[];
+  canExpand: boolean;
 }) {
-  if (!fileLines) {
+  if (!canExpand) {
     // Non-interactive informational row
     if (gap.lineCount <= 0) return null;
     return (
@@ -207,6 +211,7 @@ export function UnifiedDiffViewer({
   overscrollBehaviorY,
   chainVerticalWheel,
   fileLines,
+  onRequestFileLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -219,59 +224,68 @@ export function UnifiedDiffViewer({
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
   fileLines?: string[];
+  onRequestFileLines?: () => void;
 }) {
   const { gapStates, expandGap } = useGapExpansion();
-  const gaps = parsed.interHunkGaps;
+  const canExpandGaps = Boolean(fileLines || onRequestFileLines);
+  const expandGapWithFetch = (
+    gapIndex: number,
+    gap: InterHunkGap,
+    direction: ExpandDirection,
+  ) => {
+    onRequestFileLines?.();
+    expandGap(gapIndex, gap, direction);
+  };
+
+  // Resolve unknown trailing gap counts against fetched file length
+  const gaps = useMemo(
+    () =>
+      parsed.interHunkGaps.map((gap) => resolveGapLineCount(gap, fileLines)),
+    [parsed.interHunkGaps, fileLines],
+  );
 
   // Build expanded gap line arrays
   const expandedGapContent = useMemo(() => {
-    if (!fileLines || gapStates.size === 0) return new Map<number, { topLines: DiffLine[]; bottomLines: DiffLine[]; residualGap: InterHunkGap | null }>();
     const result = new Map<number, { topLines: DiffLine[]; bottomLines: DiffLine[]; residualGap: InterHunkGap | null }>();
+    if (!fileLines || gapStates.size === 0) return result;
     for (const [gapIndex, state] of gapStates) {
       const gap = gaps[gapIndex];
       if (!gap || gap.lineCount <= 0) continue;
       const totalGapLines = gap.lineCount;
-      const gapFileStart = gap.newStartLine - 1;
+      const { top, bottom, fullyExpanded } = clampGapReveal(state, totalGapLines);
+      if (top === 0 && bottom === 0) continue;
+
+      const makeLine = (offset: number): DiffLine => {
+        const newLine = gap.newStartLine + offset;
+        return {
+          type: "context",
+          marker: " ",
+          content: fileLines[newLine - 1] ?? "",
+          oldLineNum: gap.oldStartLine + offset,
+          newLineNum: newLine,
+          lineNum: newLine,
+          tokenIndex: -1,
+        };
+      };
 
       const topLines: DiffLine[] = [];
-      for (let i = 0; i < state.revealedTop && i < totalGapLines; i++) {
-        const fileIndex = gapFileStart + i;
-        const content = fileLines[fileIndex] ?? "";
-        topLines.push({
-          type: "context", marker: " ", content,
-          oldLineNum: gap.oldStartLine + i,
-          newLineNum: gap.newStartLine + i,
-          lineNum: gap.newStartLine + i,
-          tokenIndex: -1,
-        });
+      for (let i = 0; i < top; i++) {
+        topLines.push(makeLine(i));
       }
 
       const bottomLines: DiffLine[] = [];
-      const bottomStart = totalGapLines - state.revealedBottom;
-      for (let i = bottomStart; i < totalGapLines; i++) {
-        if (i < state.revealedTop) continue;
-        const fileIndex = gapFileStart + i;
-        const content = fileLines[fileIndex] ?? "";
-        bottomLines.push({
-          type: "context", marker: " ", content,
-          oldLineNum: gap.oldStartLine + i,
-          newLineNum: gap.newStartLine + i,
-          lineNum: gap.newStartLine + i,
-          tokenIndex: -1,
-        });
+      for (let i = totalGapLines - bottom; i < totalGapLines; i++) {
+        bottomLines.push(makeLine(i));
       }
 
       let residualGap: InterHunkGap | null = null;
-      if (!state.fullyExpanded) {
-        const remaining = totalGapLines - state.revealedTop - state.revealedBottom;
-        if (remaining > 0) {
-          residualGap = {
-            kind: "gap",
-            oldStartLine: gap.oldStartLine + state.revealedTop,
-            newStartLine: gap.newStartLine + state.revealedTop,
-            lineCount: remaining,
-          };
-        }
+      if (!fullyExpanded) {
+        residualGap = {
+          kind: "gap",
+          oldStartLine: gap.oldStartLine + top,
+          newStartLine: gap.newStartLine + top,
+          lineCount: totalGapLines - top - bottom,
+        };
       }
 
       result.set(gapIndex, { topLines, bottomLines, residualGap });
@@ -295,28 +309,28 @@ export function UnifiedDiffViewer({
       {parsed.hunks.map((hunk, index) => {
         const gapBefore = gaps[index];
         const expandedBefore = expandedGapContent.get(index);
-        const showGapBefore = gapBefore && gapBefore.lineCount !== 0;
+        const showGapBefore = Boolean(gapBefore && gapBefore.lineCount !== 0);
 
         return (
           <div key={index}>
-            {showGapBefore && expandedBefore && (
+            {gapBefore && showGapBefore && expandedBefore && (
               <>
                 <ExpandedGapLines lines={expandedBefore.topLines} wrapLongLines={wrapLongLines} variant={variant} />
                 {expandedBefore.residualGap ? (
                   <GapSeparator
                     gap={expandedBefore.residualGap}
-                    onExpand={(dir) => expandGap(index, expandedBefore.residualGap!, dir)}
-                    fileLines={fileLines}
+                    onExpand={(dir) => expandGapWithFetch(index, expandedBefore.residualGap!, dir)}
+                    canExpand={canExpandGaps}
                   />
                 ) : null}
                 <ExpandedGapLines lines={expandedBefore.bottomLines} wrapLongLines={wrapLongLines} variant={variant} />
               </>
             )}
-            {showGapBefore && !expandedBefore && (
+            {gapBefore && showGapBefore && !expandedBefore && (
               <GapSeparator
                 gap={gapBefore}
-                onExpand={(dir) => expandGap(index, gapBefore, dir)}
-                fileLines={fileLines}
+                onExpand={(dir) => expandGapWithFetch(index, gapBefore, dir)}
+                canExpand={canExpandGaps}
               />
             )}
             <HunkView
@@ -342,8 +356,8 @@ export function UnifiedDiffViewer({
               {expandedAfter.residualGap ? (
                 <GapSeparator
                   gap={expandedAfter.residualGap}
-                  onExpand={(dir) => expandGap(lastGapIndex, expandedAfter.residualGap!, dir)}
-                  fileLines={fileLines}
+                  onExpand={(dir) => expandGapWithFetch(lastGapIndex, expandedAfter.residualGap!, dir)}
+                  canExpand={canExpandGaps}
                 />
               ) : null}
               <ExpandedGapLines lines={expandedAfter.bottomLines} wrapLongLines={wrapLongLines} variant={variant} />
@@ -354,8 +368,8 @@ export function UnifiedDiffViewer({
         return (
           <GapSeparator
             gap={gapAfter}
-            onExpand={(dir) => expandGap(lastGapIndex, gapAfter, dir)}
-            fileLines={fileLines}
+            onExpand={(dir) => expandGapWithFetch(lastGapIndex, gapAfter, dir)}
+            canExpand={canExpandGaps}
           />
         );
       })()}

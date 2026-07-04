@@ -22,7 +22,12 @@ import {
   type SplitDiffRow,
   type SplitSide,
 } from "@/lib/domain/files/diff-view-rows";
-import { useGapExpansion } from "@/hooks/ui/diff/use-gap-expansion";
+import {
+  clampGapReveal,
+  resolveGapLineCount,
+  useGapExpansion,
+  type GapExpansionState,
+} from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 
 /** Flattened render row for split view */
@@ -30,13 +35,28 @@ type SplitRenderRow =
   | SplitDiffRow
   | { kind: "expanded-gap-line"; key: string; oldLine: DiffLine; newLine: DiffLine };
 
+function makeSplitGapContextLine(
+  fileLines: string[],
+  gap: InterHunkGap,
+  offset: number,
+): DiffLine {
+  const newLine = gap.newStartLine + offset;
+  return {
+    type: "context",
+    marker: " ",
+    content: fileLines[newLine - 1] ?? "",
+    oldLineNum: gap.oldStartLine + offset,
+    newLineNum: newLine,
+    lineNum: newLine,
+    tokenIndex: -1,
+  };
+}
+
 function flattenSplitWithGapExpansion(
   rows: SplitDiffRow[],
-  gapStates: Map<number, { revealedTop: number; revealedBottom: number; fullyExpanded: boolean }>,
+  gapStates: Map<number, GapExpansionState>,
   fileLines: string[] | undefined,
 ): SplitRenderRow[] {
-  if (!fileLines || gapStates.size === 0) return rows;
-
   const result: SplitRenderRow[] = [];
   for (const row of rows) {
     if (row.kind !== "gap") {
@@ -44,70 +64,41 @@ function flattenSplitWithGapExpansion(
       continue;
     }
 
+    // Resolve unknown trailing gap count against fetched file length
+    const gap = resolveGapLineCount(row.gap, fileLines);
+    if (!gap) continue;
+    const resolvedRow: SplitDiffRow = gap === row.gap ? row : { ...row, gap };
+
     const state = gapStates.get(row.gapIndex);
-    if (!state || (state.revealedTop === 0 && state.revealedBottom === 0)) {
-      result.push(row);
+    if (!fileLines || !state || gap.lineCount <= 0) {
+      result.push(resolvedRow);
       continue;
     }
 
-    const { gap } = row;
     const totalGapLines = gap.lineCount;
-    if (totalGapLines <= 0) {
-      result.push(row);
+    const { top, bottom, fullyExpanded } = clampGapReveal(state, totalGapLines);
+    if (top === 0 && bottom === 0) {
+      result.push(resolvedRow);
       continue;
     }
 
-    const gapFileStart = gap.newStartLine - 1;
-
-    // Top expanded lines
-    for (let i = 0; i < state.revealedTop && i < totalGapLines; i++) {
-      const fileIndex = gapFileStart + i;
-      const content = fileLines[fileIndex] ?? "";
-      const oldLine = gap.oldStartLine + i;
-      const newLine = gap.newStartLine + i;
-      const line: DiffLine = {
-        type: "context",
-        marker: " ",
-        content,
-        oldLineNum: oldLine,
-        newLineNum: newLine,
-        lineNum: newLine,
-        tokenIndex: -1,
-      };
+    for (let i = 0; i < top; i++) {
+      const line = makeSplitGapContextLine(fileLines, gap, i);
       result.push({ kind: "expanded-gap-line", key: `${row.key}-top-${i}`, oldLine: line, newLine: line });
     }
 
-    // Residual gap
-    if (!state.fullyExpanded) {
-      const remainingLines = totalGapLines - state.revealedTop - state.revealedBottom;
-      if (remainingLines > 0) {
-        const residualGap: InterHunkGap = {
-          kind: "gap",
-          oldStartLine: gap.oldStartLine + state.revealedTop,
-          newStartLine: gap.newStartLine + state.revealedTop,
-          lineCount: remainingLines,
-        };
-        result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
-      }
+    if (!fullyExpanded) {
+      const residualGap: InterHunkGap = {
+        kind: "gap",
+        oldStartLine: gap.oldStartLine + top,
+        newStartLine: gap.newStartLine + top,
+        lineCount: totalGapLines - top - bottom,
+      };
+      result.push({ kind: "gap", key: `${row.key}-residual`, gap: residualGap, gapIndex: row.gapIndex });
     }
 
-    // Bottom expanded lines
-    const bottomStart = totalGapLines - state.revealedBottom;
-    for (let i = bottomStart; i < totalGapLines; i++) {
-      if (i < state.revealedTop) continue;
-      const fileIndex = gapFileStart + i;
-      const content = fileLines[fileIndex] ?? "";
-      const oldLine = gap.oldStartLine + i;
-      const newLine = gap.newStartLine + i;
-      const line: DiffLine = {
-        type: "context",
-        marker: " ",
-        content,
-        oldLineNum: oldLine,
-        newLineNum: newLine,
-        lineNum: newLine,
-        tokenIndex: -1,
-      };
+    for (let i = totalGapLines - bottom; i < totalGapLines; i++) {
+      const line = makeSplitGapContextLine(fileLines, gap, i);
       result.push({ kind: "expanded-gap-line", key: `${row.key}-bottom-${i}`, oldLine: line, newLine: line });
     }
   }
@@ -240,13 +231,13 @@ function SplitCollapsedCells({
 function SplitGapCells({
   gap,
   onExpand,
-  fileLines,
+  canExpand,
 }: {
   gap: InterHunkGap;
   onExpand: (direction: ExpandDirection) => void;
-  fileLines?: string[];
+  canExpand: boolean;
 }) {
-  if (!fileLines) {
+  if (!canExpand) {
     // Show non-interactive info row when no file lines available
     return (
       <>
@@ -293,7 +284,7 @@ function SplitCodeColumn({
   lineNumberDigits,
   onExpandCollapsed,
   onExpandGap,
-  fileLines,
+  canExpandGaps,
 }: {
   side: SplitSide;
   rows: SplitRenderRow[];
@@ -303,7 +294,7 @@ function SplitCodeColumn({
   lineNumberDigits: number;
   onExpandCollapsed: (key: string) => void;
   onExpandGap: (gapIndex: number, gap: InterHunkGap, direction: ExpandDirection) => void;
-  fileLines?: string[];
+  canExpandGaps: boolean;
 }) {
   const codeStyle = useMemo(
     () => ({
@@ -365,7 +356,7 @@ function SplitCodeColumn({
               <SplitGapCells
                 gap={row.gap}
                 onExpand={(direction) => onExpandGap(row.gapIndex, row.gap, direction)}
-                fileLines={fileLines}
+                canExpand={canExpandGaps}
               />
             </Fragment>
           );
@@ -394,6 +385,7 @@ export function SplitDiffViewer({
   overscrollBehaviorY,
   chainVerticalWheel = false,
   fileLines,
+  onRequestFileLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -405,12 +397,22 @@ export function SplitDiffViewer({
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
   fileLines?: string[];
+  onRequestFileLines?: () => void;
 }) {
   const resolvedMode = useResolvedMode();
   const [expandedCollapsedKeys, setExpandedCollapsedKeys] = useState<Set<string>>(
     new Set(),
   );
   const { gapStates, expandGap } = useGapExpansion();
+  const canExpandGaps = Boolean(fileLines || onRequestFileLines);
+  const expandGapWithFetch = (
+    gapIndex: number,
+    gap: InterHunkGap,
+    direction: ExpandDirection,
+  ) => {
+    onRequestFileLines?.();
+    expandGap(gapIndex, gap, direction);
+  };
   const baseRows = useMemo(
     () => getSplitDiffRows(parsed, expandedCollapsedKeys),
     [parsed, expandedCollapsedKeys],
@@ -506,8 +508,8 @@ export function SplitDiffViewer({
             wrapLongLines={wrapLongLines}
             lineNumberDigits={oldLineNumberDigits}
             onExpandCollapsed={expandCollapsedRow}
-            onExpandGap={expandGap}
-            fileLines={fileLines}
+            onExpandGap={expandGapWithFetch}
+            canExpandGaps={canExpandGaps}
           />
           <SplitCodeColumn
             side="new"
@@ -517,8 +519,8 @@ export function SplitDiffViewer({
             wrapLongLines={wrapLongLines}
             lineNumberDigits={newLineNumberDigits}
             onExpandCollapsed={expandCollapsedRow}
-            onExpandGap={expandGap}
-            fileLines={fileLines}
+            onExpandGap={expandGapWithFetch}
+            canExpandGaps={canExpandGaps}
           />
         </pre>
       </div>
