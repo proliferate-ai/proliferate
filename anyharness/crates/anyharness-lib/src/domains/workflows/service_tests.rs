@@ -456,3 +456,70 @@ fn list_non_terminal_runs_excludes_completed() {
         .unwrap();
     assert_eq!(service.list_non_terminal_runs().unwrap().len(), 0);
 }
+
+// --------------------------------------------------------------------------
+// agent.config + live goal progress
+// --------------------------------------------------------------------------
+
+#[tokio::test]
+async fn agent_config_step_advances_the_cursor_and_records_output() {
+    let service = test_service();
+    let run_id = create(
+        &service,
+        r#"[
+            { "kind": "agent.config", "harness": "codex", "model": "opus" },
+            { "kind": "agent.prompt", "prompt": "go" }
+        ]"#,
+    );
+    let executor = FakeExecutor::script(vec![
+        completed(serde_json::json!({ "harness": "codex", "model": "opus", "session_switched": true })),
+        completed(serde_json::json!({ "session_id": "sess-1" })),
+    ]);
+    let progress = drive(&service, &run_id, &executor).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+
+    let (_, rows) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert_eq!(rows[0].kind, "agent.config");
+    assert_eq!(rows[0].status, WorkflowStepStatus::Completed);
+    assert!(rows[0].output_json.as_ref().unwrap().contains("session_switched"));
+}
+
+#[test]
+fn record_step_goal_progress_only_writes_while_running() {
+    let service = test_service();
+    let run_id = create(
+        &service,
+        r#"[{ "kind": "agent.prompt", "prompt": "hi",
+             "goal": { "objective": "green", "max_turns": 5, "max_wall_secs": 60, "on_blocked": "notify" } }]"#,
+    );
+
+    // Pending step: the snapshot is a no-op (a terminal write must never be
+    // clobbered by a late snapshot, and pending steps have not begun).
+    service
+        .record_step_goal_progress(&run_id, 0, serde_json::json!({ "goal": { "iterations": 1 } }))
+        .unwrap();
+    let (_, rows) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert!(rows[0].output_json.is_none());
+
+    // Flip the step to Running, then a snapshot is persisted.
+    service
+        .store()
+        .with_tx_anyhow(|tx| {
+            let mut step = WorkflowStore::find_step_run_tx(tx, &run_id, 0)?.unwrap();
+            step.status = WorkflowStepStatus::Running;
+            WorkflowStore::update_step_run(tx, &step)?;
+            Ok(())
+        })
+        .unwrap();
+    service
+        .record_step_goal_progress(
+            &run_id,
+            0,
+            serde_json::json!({ "goal": { "iterations": 3, "tokens_used": 64000 }, "session_id": "s1" }),
+        )
+        .unwrap();
+    let (_, rows) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    let output = rows[0].output_json.as_ref().unwrap();
+    assert!(output.contains("iterations"));
+    assert!(output.contains("tokens_used"));
+}

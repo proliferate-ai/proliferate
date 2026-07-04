@@ -9,22 +9,23 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyharness_contract::v1::{
-    GoalArmState, GoalSourceKind, GoalStatus, PromptInputBlock, SessionEvent,
+    Goal, GoalArmState, GoalSourceKind, GoalStatus, PromptInputBlock, SessionEvent,
     SessionEventEnvelope, SetSessionGoalRequest,
 };
-use serde_json::json;
+use serde_json::{json, Map, Value};
 use tokio::sync::broadcast;
 
 use super::commands;
 use super::exec_policy::{bypass_mode_for_kind, WorkflowOwnedSessions};
 use crate::domains::goals::runtime::{GoalOpError, GoalRuntime};
+use crate::domains::sessions::live_config::ACP_MODEL_COMPAT_CONFIG_ID;
 use crate::domains::sessions::runtime::{SendPromptOutcome, SessionRuntime};
 use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
 use crate::domains::workflows::model::WorkflowRunRecord;
 use crate::domains::workflows::plan::{
-    AgentPromptStep, GoalSpec, HumanApprovalStep, OnBlocked, OnTimeout, PlanStep, PlanSetup,
-    ScmOpenPrStep, ShellRunStep, StepKind,
+    AgentConfigStep, AgentPromptStep, GoalSpec, HumanApprovalStep, OnBlocked, OnTimeout, PlanSetup,
+    PlanStep, ScmOpenPrStep, ShellRunStep, StepKind,
 };
 use crate::domains::workflows::service::WorkflowService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -62,14 +63,26 @@ struct CurrentSession {
     harness: String,
 }
 
+/// The run's *active agent config*: the harness/model that subsequent agent
+/// steps use. Seeded from Setup and mutated only by `agent.config` steps. It is
+/// never persisted separately — on crash-resume it is recomputed by replaying
+/// the plan prefix (see [`WorkflowStepExecutorImpl::recompute_active_config`]).
+#[derive(Clone)]
+struct ActiveConfig {
+    harness: String,
+    model: Option<String>,
+}
+
 /// One executor per run. `current` tracks the run's live session for harness
-/// continuity; it is hydrated from the run record on resume.
+/// continuity; `active` tracks the harness/model agent steps use. Both are
+/// hydrated from the run record on resume.
 pub struct WorkflowStepExecutorImpl {
     deps: Arc<WorkflowExecDeps>,
     run_id: String,
     workspace_id: String,
     setup: PlanSetup,
     current: Mutex<Option<CurrentSession>>,
+    active: Mutex<ActiveConfig>,
 }
 
 impl WorkflowStepExecutorImpl {
@@ -79,18 +92,25 @@ impl WorkflowStepExecutorImpl {
         workspace_id: String,
         setup: PlanSetup,
     ) -> Self {
+        let active = ActiveConfig {
+            harness: setup.harness.clone(),
+            model: setup.model.clone(),
+        };
         Self {
             deps,
             run_id,
             workspace_id,
             setup,
             current: Mutex::new(None),
+            active: Mutex::new(active),
         }
     }
 
-    /// Restore the current-session pointer from a run record (crash-resume):
-    /// the last opened session, with its harness read back from the session row.
+    /// Restore the current-session pointer AND the active agent config from a run
+    /// record (crash-resume): the last opened session (harness read back from the
+    /// session row) and the config folded from the plan prefix up to the cursor.
     pub fn hydrate_from_run(&self, run: &WorkflowRunRecord) {
+        self.recompute_active_config(run);
         let Some(session_id) = run.current_session_id() else {
             return;
         };
@@ -105,14 +125,30 @@ impl WorkflowStepExecutorImpl {
         }
     }
 
-    async fn ensure_session(
-        &self,
-        harness_override: Option<&str>,
-        model_override: Option<&str>,
-    ) -> Result<String, StepOutcome> {
-        let effective_harness = harness_override
-            .map(str::to_string)
-            .unwrap_or_else(|| self.setup.harness.clone());
+    /// Recompute the active config by folding every `agent.config` step in the
+    /// plan prefix `[0, step_cursor)` over the Setup seed. Derives state purely
+    /// from the persisted plan + cursor, so no extra state is stored on resume.
+    fn recompute_active_config(&self, run: &WorkflowRunRecord) {
+        let mut config = ActiveConfig {
+            harness: self.setup.harness.clone(),
+            model: self.setup.model.clone(),
+        };
+        if let Ok(plan) = crate::domains::workflows::plan::parse(&run.plan_json) {
+            let cursor = run.step_cursor.max(0) as usize;
+            for step in plan.steps.iter().take(cursor) {
+                if let StepKind::AgentConfig(cfg) = &step.kind {
+                    apply_config(&mut config, cfg);
+                }
+            }
+        }
+        *self.active.lock().unwrap() = config;
+    }
+
+    async fn ensure_session(&self) -> Result<String, StepOutcome> {
+        let (effective_harness, model) = {
+            let active = self.active.lock().unwrap();
+            (active.harness.clone(), active.model.clone())
+        };
         // Reuse the current session only when its harness matches.
         {
             let current = self.current.lock().unwrap();
@@ -122,9 +158,6 @@ impl WorkflowStepExecutorImpl {
                 }
             }
         }
-        let model = model_override
-            .map(str::to_string)
-            .or_else(|| self.setup.model.clone());
         // Exec policy (goals-and-workflows-v1 §3.3 "always bypass"): open the
         // session in the harness's native bypass-equivalent mode so agent turns
         // and native-goal auto-continuation never stall on a permission prompt.
@@ -192,10 +225,7 @@ impl WorkflowStepExecutorImpl {
     }
 
     async fn run_prompt(&self, agent: &AgentPromptStep) -> StepOutcome {
-        let session_id = match self
-            .ensure_session(agent.harness_override.as_deref(), agent.model_override.as_deref())
-            .await
-        {
+        let session_id = match self.ensure_session().await {
             Ok(id) => id,
             Err(outcome) => return outcome,
         };
@@ -217,11 +247,8 @@ impl WorkflowStepExecutorImpl {
         }
     }
 
-    async fn run_goal(&self, agent: &AgentPromptStep, goal: &GoalSpec) -> StepOutcome {
-        let session_id = match self
-            .ensure_session(agent.harness_override.as_deref(), agent.model_override.as_deref())
-            .await
-        {
+    async fn run_goal(&self, agent: &AgentPromptStep, goal: &GoalSpec, step_index: usize) -> StepOutcome {
+        let session_id = match self.ensure_session().await {
             Ok(id) => id,
             Err(outcome) => return outcome,
         };
@@ -229,6 +256,21 @@ impl WorkflowStepExecutorImpl {
             Instant::now() + Duration::from_secs(goal.max_wall_secs) + GOAL_BACKSTOP_GRACE;
         let mut prompt = agent.prompt.clone();
         let mut verify_attempts = 0u32;
+        // Live progress: while awaiting the goal's terminal state, mirror each
+        // changed GoalUpdated into the RUNNING step's output_json under `goal`
+        // so the run timeline can render honest iteration/token counters.
+        let mut last_snapshot: Option<GoalSnapshot> = None;
+        let mut on_progress = |g: &Goal| {
+            let snapshot = GoalSnapshot::from_goal(g);
+            if goal_progress_changed(last_snapshot.as_ref(), &snapshot) {
+                let _ = self.deps.workflow_service.record_step_goal_progress(
+                    &self.run_id,
+                    step_index as i64,
+                    snapshot.to_output_json(&session_id),
+                );
+                last_snapshot = Some(snapshot);
+            }
+        };
 
         loop {
             if let Err(outcome) = self.arm_goal(&session_id, goal).await {
@@ -241,7 +283,7 @@ impl WorkflowStepExecutorImpl {
             if let Err(outcome) = self.send_prompt(&session_id, &prompt).await {
                 return outcome;
             }
-            match await_goal_terminal(&mut events, deadline, goal.on_blocked).await {
+            match await_goal_terminal(&mut events, deadline, goal.on_blocked, &mut on_progress).await {
                 GoalWait::Met { met_reason } => match &goal.verify {
                     None => {
                         return StepOutcome::Completed {
@@ -375,6 +417,64 @@ impl WorkflowStepExecutorImpl {
         commands::open_pr_step(&workspace_path, &env, step).await
     }
 
+    /// `agent.config` executes instantly: it folds the harness/model onto the
+    /// run's active config for every step below. Switching harness opens a NEW
+    /// session at the next agent step (`session_switched: true`). A model-only
+    /// change on an existing matching-harness session is applied LIVE via the
+    /// session's live-config path; with no live session yet it simply takes
+    /// effect at the next session creation.
+    async fn run_agent_config(&self, cfg: &AgentConfigStep) -> StepOutcome {
+        // The current session's harness, before we mutate the active config.
+        let (current_session_id, current_harness) = {
+            let current = self.current.lock().unwrap();
+            match current.as_ref() {
+                Some(session) => (Some(session.session_id.clone()), Some(session.harness.clone())),
+                None => (None, None),
+            }
+        };
+        // Fold the config change into the active state.
+        let new_active = {
+            let mut active = self.active.lock().unwrap();
+            apply_config(&mut active, cfg);
+            active.clone()
+        };
+
+        let harness_changed = current_harness
+            .as_deref()
+            .map(|h| h != new_active.harness)
+            .unwrap_or(false);
+
+        let mut session_switched = false;
+        if harness_changed {
+            // A new session will open on the next agent step (ensure_session
+            // sees the harness mismatch). Nothing to do now.
+            session_switched = true;
+        } else if cfg.model.is_some() {
+            // Harness unchanged and the model changed: apply it live to the
+            // current session if one exists, else it applies at next creation.
+            if let (Some(session_id), Some(model)) = (current_session_id, new_active.model.as_deref())
+            {
+                let _ = self
+                    .deps
+                    .session_runtime
+                    .set_live_session_config_option(&session_id, ACP_MODEL_COMPAT_CONFIG_ID, model)
+                    .await;
+            }
+        }
+
+        let mut output = Map::new();
+        if let Some(harness) = &cfg.harness {
+            output.insert("harness".to_string(), Value::String(harness.clone()));
+        }
+        if let Some(model) = &cfg.model {
+            output.insert("model".to_string(), Value::String(model.clone()));
+        }
+        output.insert("session_switched".to_string(), Value::Bool(session_switched));
+        StepOutcome::Completed {
+            output: Value::Object(output),
+        }
+    }
+
     fn human_approval(&self, step: &HumanApprovalStep) -> StepOutcome {
         let deadline_at = step.timeout_secs.map(|secs| {
             (chrono::Utc::now() + chrono::Duration::seconds(secs as i64)).to_rfc3339()
@@ -397,11 +497,12 @@ impl WorkflowStepExecutorImpl {
 
 #[async_trait::async_trait]
 impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
-    async fn execute_step(&self, step: &PlanStep, _ctx: &StepExecContext) -> StepOutcome {
+    async fn execute_step(&self, step: &PlanStep, ctx: &StepExecContext) -> StepOutcome {
         match &step.kind {
+            StepKind::AgentConfig(cfg) => self.run_agent_config(cfg).await,
             StepKind::AgentPrompt(agent) => match &agent.goal {
                 None => self.run_prompt(agent).await,
-                Some(goal) => self.run_goal(agent, goal).await,
+                Some(goal) => self.run_goal(agent, goal, ctx.step_index).await,
             },
             StepKind::ShellRun(shell) => self.run_shell(shell).await,
             StepKind::ScmOpenPr(pr) => self.run_scm(pr).await,
@@ -457,6 +558,7 @@ async fn await_goal_terminal(
     events: &mut broadcast::Receiver<SessionEventEnvelope>,
     deadline: Instant,
     on_blocked: OnBlocked,
+    on_progress: &mut (dyn FnMut(&Goal) + Send),
 ) -> GoalWait {
     let deadline = tokio::time::Instant::from_std(deadline);
     loop {
@@ -467,7 +569,11 @@ async fn await_goal_terminal(
                         met_reason: payload.goal.met_reason.clone(),
                     }
                 }
-                SessionEvent::GoalUpdated(payload) => match payload.goal.status {
+                SessionEvent::GoalUpdated(payload) => {
+                    // Mirror every observed goal update as a live progress
+                    // snapshot (the callback throttles unchanged values).
+                    on_progress(&payload.goal);
+                    match payload.goal.status {
                     GoalStatus::Failed => {
                         return GoalWait::Failed {
                             reason: payload
@@ -487,7 +593,8 @@ async fn await_goal_terminal(
                         _ => return GoalWait::Blocked,
                     },
                     _ => {}
-                },
+                    }
+                }
                 SessionEvent::GoalCleared(_) => {
                     return GoalWait::Failed {
                         reason: "goal_cleared".to_string(),
@@ -523,6 +630,68 @@ fn verify_feedback_tail(tail: &str) -> String {
     tail[start..].to_string()
 }
 
+/// Fold an `agent.config` step onto the active config: only present fields
+/// override; absent fields keep the prior active value.
+fn apply_config(active: &mut ActiveConfig, cfg: &AgentConfigStep) {
+    if let Some(harness) = &cfg.harness {
+        active.harness = harness.clone();
+    }
+    if let Some(model) = &cfg.model {
+        active.model = Some(model.clone());
+    }
+}
+
+/// A throttleable snapshot of an in-flight goal's progress. Two snapshots are
+/// "equal" when status, iterations, and tokens are all unchanged.
+#[derive(Clone, PartialEq)]
+struct GoalSnapshot {
+    objective: String,
+    status: GoalStatus,
+    iterations: Option<i64>,
+    tokens_used: Option<i64>,
+}
+
+impl GoalSnapshot {
+    fn from_goal(goal: &Goal) -> Self {
+        Self {
+            objective: goal.objective.clone(),
+            status: goal.status,
+            iterations: goal.iterations,
+            tokens_used: goal.tokens_used,
+        }
+    }
+
+    /// The RUNNING step's output_json body: `{ goal: {...}, session_id }`.
+    fn to_output_json(&self, session_id: &str) -> Value {
+        let status = serde_json::to_value(self.status)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_else(|| "active".to_string());
+        json!({
+            "goal": {
+                "objective": self.objective,
+                "status": status,
+                "iterations": self.iterations,
+                "tokens_used": self.tokens_used,
+            },
+            "session_id": session_id,
+        })
+    }
+}
+
+/// Throttle rule: write only when status, iterations, or tokens changed from the
+/// last written snapshot (the objective is stable within a step).
+fn goal_progress_changed(prev: Option<&GoalSnapshot>, next: &GoalSnapshot) -> bool {
+    match prev {
+        None => true,
+        Some(prev) => {
+            prev.status != next.status
+                || prev.iterations != next.iterations
+                || prev.tokens_used != next.tokens_used
+        }
+    }
+}
+
 fn failed(code: &str) -> StepOutcome {
     StepOutcome::Failed {
         code: code.to_string(),
@@ -536,5 +705,67 @@ fn failed_msg(code: &str, message: impl Into<String>) -> StepOutcome {
         code: code.to_string(),
         message: Some(message.into()),
         output: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cfg(harness: Option<&str>, model: Option<&str>) -> AgentConfigStep {
+        AgentConfigStep {
+            harness: harness.map(str::to_string),
+            model: model.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn apply_config_only_overrides_present_fields() {
+        let mut active = ActiveConfig {
+            harness: "claude".to_string(),
+            model: Some("sonnet".to_string()),
+        };
+        // Model-only change keeps the harness.
+        apply_config(&mut active, &cfg(None, Some("opus")));
+        assert_eq!(active.harness, "claude");
+        assert_eq!(active.model.as_deref(), Some("opus"));
+        // Harness-only change keeps the (now folded) model.
+        apply_config(&mut active, &cfg(Some("codex"), None));
+        assert_eq!(active.harness, "codex");
+        assert_eq!(active.model.as_deref(), Some("opus"));
+    }
+
+    fn snapshot(status: GoalStatus, iterations: Option<i64>, tokens: Option<i64>) -> GoalSnapshot {
+        GoalSnapshot {
+            objective: "make CI green".to_string(),
+            status,
+            iterations,
+            tokens_used: tokens,
+        }
+    }
+
+    #[test]
+    fn goal_progress_first_snapshot_always_writes() {
+        assert!(goal_progress_changed(None, &snapshot(GoalStatus::Active, Some(1), Some(100))));
+    }
+
+    #[test]
+    fn goal_progress_throttles_unchanged_values() {
+        let prev = snapshot(GoalStatus::Active, Some(3), Some(64_000));
+        // Identical snapshot → skip the write.
+        assert!(!goal_progress_changed(Some(&prev), &snapshot(GoalStatus::Active, Some(3), Some(64_000))));
+        // Any of status / iterations / tokens changing → write.
+        assert!(goal_progress_changed(Some(&prev), &snapshot(GoalStatus::Active, Some(4), Some(64_000))));
+        assert!(goal_progress_changed(Some(&prev), &snapshot(GoalStatus::Active, Some(3), Some(70_000))));
+        assert!(goal_progress_changed(Some(&prev), &snapshot(GoalStatus::Blocked, Some(3), Some(64_000))));
+    }
+
+    #[test]
+    fn goal_snapshot_output_uses_snake_case_status_and_token_key() {
+        let out = snapshot(GoalStatus::Active, Some(3), Some(64_000)).to_output_json("sess_1");
+        assert_eq!(out["goal"]["status"], "active");
+        assert_eq!(out["goal"]["iterations"], 3);
+        assert_eq!(out["goal"]["tokens_used"], 64_000);
+        assert_eq!(out["session_id"], "sess_1");
     }
 }

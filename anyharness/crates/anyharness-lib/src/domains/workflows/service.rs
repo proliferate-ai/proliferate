@@ -166,6 +166,30 @@ impl WorkflowService {
         })
     }
 
+    /// Upsert a live progress snapshot onto a RUNNING step's `output_json`
+    /// (spec 3.6 live goal progress). No-op unless the step is still `running`,
+    /// so a terminal write from the step driver is never clobbered by a late
+    /// snapshot. The executor throttles unchanged snapshots before calling in.
+    pub fn record_step_goal_progress(
+        &self,
+        run_id: &str,
+        step_index: i64,
+        output: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        self.store.with_tx_anyhow(|tx| {
+            let Some(mut step) = WorkflowStore::find_step_run_tx(tx, run_id, step_index)? else {
+                return Ok(());
+            };
+            if step.status != WorkflowStepStatus::Running {
+                return Ok(());
+            }
+            step.output_json = Some(output.to_string());
+            step.updated_at = now();
+            WorkflowStore::update_step_run(tx, &step)?;
+            Ok(())
+        })
+    }
+
     // ---------------------------------------------------------------------
     // The step driver
     // ---------------------------------------------------------------------
