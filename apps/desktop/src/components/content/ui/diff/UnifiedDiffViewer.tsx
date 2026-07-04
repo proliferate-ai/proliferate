@@ -1,12 +1,26 @@
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { DiffLineContent } from "@/components/content/ui/diff/DiffLineContent";
+import {
+  DiffCollapsedContextCluster,
+  DiffContextExpander,
+  DiffGapInfoRow,
+  type ExpandDirection,
+} from "@/components/content/ui/diff/DiffContextExpander";
+// UnifiedDiffViewer uses the legacy combined DiffContextExpander / DiffCollapsedContextCluster
+// which now render controls at the row-start gutter-width area internally.
 import type {
   CollapsedContext,
   DiffHunk,
   DiffLine,
+  InterHunkGap,
   ParsedPatch,
 } from "@/lib/domain/files/diff-parser";
+import {
+  clampGapReveal,
+  resolveGapLineCount,
+  useGapExpansion,
+} from "@/hooks/ui/diff/use-gap-expansion";
 import type { HighlightedToken } from "@/lib/infra/editor/highlighting";
 
 function getLineType(type: DiffLine["type"]): string {
@@ -94,9 +108,11 @@ function CollapsedSection({
           setExpanded(true);
         }
       }}
-      className="flex cursor-pointer items-center justify-center py-0.5 text-[10px] text-muted-foreground/40 transition-colors hover:text-muted-foreground/70 hover:bg-muted/20"
+      aria-label={`Expand ${section.lineCount} unmodified lines`}
+      title={`${section.lineCount} unmodified lines`}
+      className="flex min-h-[var(--diffs-line-height)] cursor-pointer items-center bg-[var(--codex-diffs-separator-surface)] text-muted-foreground/60 transition-colors hover:text-foreground"
     >
-      ↕ {section.lineCount} unmodified lines
+      <DiffCollapsedContextCluster lineCount={section.lineCount} />
     </div>
   );
 }
@@ -146,6 +162,49 @@ function HunkView({
   );
 }
 
+function GapSeparator({
+  gap,
+  onExpand,
+  canExpand,
+}: {
+  gap: InterHunkGap;
+  onExpand: (direction: ExpandDirection) => void;
+  canExpand: boolean;
+}) {
+  // The AutoHideScrollArea viewport owns horizontal scroll and there is
+  // no sticky gutter in this simple layout, so the cluster pins at left 0.
+  if (!canExpand) {
+    if (gap.lineCount <= 0) return null;
+    return <DiffGapInfoRow lineCount={gap.lineCount} />;
+  }
+
+  return <DiffContextExpander gap={gap} onExpand={onExpand} />;
+}
+
+function ExpandedGapLines({
+  lines,
+  wrapLongLines,
+  variant,
+}: {
+  lines: DiffLine[];
+  wrapLongLines: boolean;
+  variant: "default" | "chat";
+}) {
+  return (
+    <>
+      {lines.map((line, i) => (
+        <DiffLineRow
+          key={`expanded-${line.newLineNum}-${i}`}
+          line={line}
+          tokens={null}
+          wrapLongLines={wrapLongLines}
+          variant={variant}
+        />
+      ))}
+    </>
+  );
+}
+
 export function UnifiedDiffViewer({
   parsed,
   tokens,
@@ -157,6 +216,8 @@ export function UnifiedDiffViewer({
   overscrollBehaviorX,
   overscrollBehaviorY,
   chainVerticalWheel,
+  fileLines,
+  onRequestFileLines,
 }: {
   parsed: ParsedPatch;
   tokens: HighlightedToken[][] | null;
@@ -168,7 +229,76 @@ export function UnifiedDiffViewer({
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  fileLines?: string[];
+  onRequestFileLines?: () => void;
 }) {
+  const { gapStates, expandGap } = useGapExpansion();
+  const canExpandGaps = Boolean(fileLines || onRequestFileLines);
+  const expandGapWithFetch = (
+    gapIndex: number,
+    gap: InterHunkGap,
+    direction: ExpandDirection,
+  ) => {
+    onRequestFileLines?.();
+    expandGap(gapIndex, gap, direction);
+  };
+
+  // Resolve unknown trailing gap counts against fetched file length
+  const gaps = useMemo(
+    () =>
+      parsed.interHunkGaps.map((gap) => resolveGapLineCount(gap, fileLines)),
+    [parsed.interHunkGaps, fileLines],
+  );
+
+  // Build expanded gap line arrays
+  const expandedGapContent = useMemo(() => {
+    const result = new Map<number, { topLines: DiffLine[]; bottomLines: DiffLine[]; residualGap: InterHunkGap | null }>();
+    if (!fileLines || gapStates.size === 0) return result;
+    for (const [gapIndex, state] of gapStates) {
+      const gap = gaps[gapIndex];
+      if (!gap || gap.lineCount <= 0) continue;
+      const totalGapLines = gap.lineCount;
+      const { top, bottom, fullyExpanded } = clampGapReveal(state, totalGapLines);
+      if (top === 0 && bottom === 0) continue;
+
+      const makeLine = (offset: number): DiffLine => {
+        const newLine = gap.newStartLine + offset;
+        return {
+          type: "context",
+          marker: " ",
+          content: fileLines[newLine - 1] ?? "",
+          oldLineNum: gap.oldStartLine + offset,
+          newLineNum: newLine,
+          lineNum: newLine,
+          tokenIndex: -1,
+        };
+      };
+
+      const topLines: DiffLine[] = [];
+      for (let i = 0; i < top; i++) {
+        topLines.push(makeLine(i));
+      }
+
+      const bottomLines: DiffLine[] = [];
+      for (let i = totalGapLines - bottom; i < totalGapLines; i++) {
+        bottomLines.push(makeLine(i));
+      }
+
+      let residualGap: InterHunkGap | null = null;
+      if (!fullyExpanded) {
+        residualGap = {
+          kind: "gap",
+          oldStartLine: gap.oldStartLine + top,
+          newStartLine: gap.newStartLine + top,
+          lineCount: totalGapLines - top - bottom,
+        };
+      }
+
+      result.set(gapIndex, { topLines, bottomLines, residualGap });
+    }
+    return result;
+  }, [fileLines, gapStates, gaps]);
+
   return (
     <AutoHideScrollArea
       className={className}
@@ -182,15 +312,73 @@ export function UnifiedDiffViewer({
       overscrollBehaviorY={overscrollBehaviorY}
       chainVerticalWheel={chainVerticalWheel}
     >
-      {parsed.hunks.map((hunk, index) => (
-        <HunkView
-          key={index}
-          hunk={hunk}
-          tokens={tokens}
-          wrapLongLines={wrapLongLines}
-          variant={variant}
-        />
-      ))}
+      {parsed.hunks.map((hunk, index) => {
+        const gapBefore = gaps[index];
+        const expandedBefore = expandedGapContent.get(index);
+        const showGapBefore = Boolean(gapBefore && gapBefore.lineCount !== 0);
+
+        return (
+          <div key={index}>
+            {gapBefore && showGapBefore && expandedBefore && (
+              <>
+                <ExpandedGapLines lines={expandedBefore.topLines} wrapLongLines={wrapLongLines} variant={variant} />
+                {expandedBefore.residualGap ? (
+                  <GapSeparator
+                    gap={expandedBefore.residualGap}
+                    onExpand={(dir) => expandGapWithFetch(index, expandedBefore.residualGap!, dir)}
+                    canExpand={canExpandGaps}
+                  />
+                ) : null}
+                <ExpandedGapLines lines={expandedBefore.bottomLines} wrapLongLines={wrapLongLines} variant={variant} />
+              </>
+            )}
+            {gapBefore && showGapBefore && !expandedBefore && (
+              <GapSeparator
+                gap={gapBefore}
+                onExpand={(dir) => expandGapWithFetch(index, gapBefore, dir)}
+                canExpand={canExpandGaps}
+              />
+            )}
+            <HunkView
+              hunk={hunk}
+              tokens={tokens}
+              wrapLongLines={wrapLongLines}
+              variant={variant}
+            />
+          </div>
+        );
+      })}
+      {/* Gap after last hunk */}
+      {(() => {
+        const lastGapIndex = parsed.hunks.length;
+        const gapAfter = gaps[lastGapIndex];
+        const expandedAfter = expandedGapContent.get(lastGapIndex);
+        if (!gapAfter || gapAfter.lineCount === 0) return null;
+
+        if (expandedAfter) {
+          return (
+            <div>
+              <ExpandedGapLines lines={expandedAfter.topLines} wrapLongLines={wrapLongLines} variant={variant} />
+              {expandedAfter.residualGap ? (
+                <GapSeparator
+                  gap={expandedAfter.residualGap}
+                  onExpand={(dir) => expandGapWithFetch(lastGapIndex, expandedAfter.residualGap!, dir)}
+                  canExpand={canExpandGaps}
+                />
+              ) : null}
+              <ExpandedGapLines lines={expandedAfter.bottomLines} wrapLongLines={wrapLongLines} variant={variant} />
+            </div>
+          );
+        }
+
+        return (
+          <GapSeparator
+            gap={gapAfter}
+            onExpand={(dir) => expandGapWithFetch(lastGapIndex, gapAfter, dir)}
+            canExpand={canExpandGaps}
+          />
+        );
+      })()}
     </AutoHideScrollArea>
   );
 }

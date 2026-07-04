@@ -116,6 +116,54 @@ index 1111111..2222222 100644
     ]);
   });
 
+  it("computes inter-hunk gaps between hunks", () => {
+    const parsed = parsePatch(`@@ -5,3 +5,3 @@
+ context
+-old
++new
+@@ -20,3 +20,3 @@
+ context
+-old2
++new2`);
+
+    expect(parsed.interHunkGaps).toHaveLength(3);
+    // Gap before first hunk: lines 1..4
+    expect(parsed.interHunkGaps[0]).toMatchObject({
+      kind: "gap",
+      oldStartLine: 1,
+      newStartLine: 1,
+      lineCount: 4,
+    });
+    // Gap between hunks: lines 8..19 (first hunk ends at new line 8, second starts at 20)
+    expect(parsed.interHunkGaps[1]).toMatchObject({
+      kind: "gap",
+      oldStartLine: 8,
+      newStartLine: 8,
+      lineCount: 12,
+    });
+    // Gap after last hunk: unknown (-1) since totalNewLines not provided
+    expect(parsed.interHunkGaps[2]).toMatchObject({
+      kind: "gap",
+      lineCount: -1,
+    });
+  });
+
+  it("computes gap after last hunk when totalNewLines provided", () => {
+    const parsed = parsePatch(`@@ -1,3 +1,3 @@
+ context
+-old
++new`, 10);
+
+    // Gap before: 0 lines (hunk starts at line 1)
+    expect(parsed.interHunkGaps[0]).toMatchObject({ lineCount: 0 });
+    // Gap after: lines 4..10 = 7 lines
+    expect(parsed.interHunkGaps[1]).toMatchObject({
+      kind: "gap",
+      newStartLine: 4,
+      lineCount: 7,
+    });
+  });
+
   it("preserves line numbers and token indexes inside collapsed context", () => {
     const parsed = parsePatch(`@@ -1,8 +1,8 @@
  one

@@ -17,6 +17,7 @@ import {
 } from "@/components/workspace/git/GitReviewInlineState";
 import { GitReviewStageAction } from "@/components/workspace/git/GitReviewStageAction";
 import { GitReviewStatusBadge } from "@/components/workspace/git/GitReviewStatusBadge";
+import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type {
@@ -72,6 +73,17 @@ export function GitReviewFileRow({
   const isBranchMode = sectionScope === "branch";
   const isLastTurnMode = sectionScope === "last_turn";
   const shouldUnstage = sectionScope === "staged";
+  // Gap expansion reads the worktree file, which only matches the diff's
+  // NEW side for worktree-target scopes: `unstaged` (worktree vs index) and
+  // `last_turn`/`base_worktree` (worktree vs merge-base). `staged` diffs
+  // target the index and `branch` diffs target HEAD, so those degrade to
+  // informational separators.
+  const gapExpansionScopeValid = sectionScope === "unstaged" || isLastTurnMode;
+  const { fileLines, requestFileLines } = useLazyDiffFileLines({
+    workspaceId,
+    path: file.path,
+    enabled: gapExpansionScopeValid && isRuntimeReady,
+  });
   const metadataPolicy = useMemo(
     () => currentDiff
       ? resolveDiffDisplayPolicy({
@@ -225,6 +237,8 @@ export function GitReviewFileRow({
                 overscrollBehaviorX="none"
                 overscrollBehaviorY="none"
                 chainVerticalWheel
+                fileLines={fileLines}
+                onRequestFileLines={requestFileLines}
               />
               {diffQuery.data?.truncated ? (
                 <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
