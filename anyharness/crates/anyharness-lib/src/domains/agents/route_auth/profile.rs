@@ -8,10 +8,18 @@
 //! Composition is just "a list of sources": the server already validated which
 //! source combinations are legal per harness (contract §2), so resolution here
 //! is a straight mapping — the harness entry's enabled `sources[]` become
-//! typed [`ResolvedSource`]s. Absent harness or empty sources → [`Native`]
-//! (empty delta; the harness's own login owns auth). The only failures are
-//! shape problems the server should never emit: an unknown source `kind` or a
-//! source missing its required fields.
+//! typed [`ResolvedSource`]s.
+//!
+//! **Fail-closed semantics (spec §3):** when the state file carries a non-empty
+//! `harnesses` list (proving the control plane scoped this session), a harness
+//! that has NO entry in that list is rejected with [`RouteAuthError::SelectionMissing`]
+//! rather than falling through to native. A harness that IS present but has
+//! empty sources resolves to [`Native`] (the control plane explicitly cleared
+//! its auth). When the state file is absent or has an empty harnesses list,
+//! every harness resolves [`Native`] (fully unscoped local session).
+//!
+//! The only other failures are shape problems the server should never emit: an
+//! unknown source `kind` or a source missing its required fields.
 //!
 //! [`Native`]: AgentRuntimeAuthProfile::Native
 
@@ -67,11 +75,15 @@ pub struct GatewayProfile {
 
 /// Resolve the auth profile for `harness_kind` from the loaded state.
 ///
-/// - `state == None` (no file): `Native`.
-/// - harness absent, or present with no sources: `Native`. A harness the user
-///   never configured uses its own native login — the least-surprising default,
-///   and safe (native = the user's own CLI sign-in, never ambient/leaked
-///   credentials).
+/// - `state == None` (no file): `Native` — local/desktop without cloud state.
+/// - `state.harnesses` is empty: `Native` — state file exists but the control
+///   plane has not scoped any harness yet.
+/// - harness absent from a NON-EMPTY `harnesses` list: fail closed with
+///   [`RouteAuthError::SelectionMissing`]. A non-empty harnesses list proves the
+///   control plane scoped this session; an unconfigured harness must not silently
+///   fall through to native (spec §3 fail-closed invariant).
+/// - harness present with no sources: `Native` — the control plane explicitly
+///   cleared this harness's auth (no credentials = native login).
 /// - harness present with sources: each source is validated + typed. An unknown
 ///   `kind`, or a source missing its required fields, is a typed error (the
 ///   server should never emit these).
@@ -82,12 +94,32 @@ pub fn resolve_profile(
     let Some(state) = state else {
         return Ok(AgentRuntimeAuthProfile::Native);
     };
-    let raw_sources = state.sources_for(harness_kind);
-    if raw_sources.is_empty() {
+    // An empty harnesses list means the state file carries no scoping — treat
+    // the same as an absent file (fully unscoped, native behavior).
+    if state.harnesses.is_empty() {
         return Ok(AgentRuntimeAuthProfile::Native);
     }
-    let mut sources = Vec::with_capacity(raw_sources.len());
-    for source in raw_sources {
+    // The harnesses list is non-empty, so this is a scoped session. Look up the
+    // requested harness; if it has no entry, fail closed.
+    let harness_entry = state
+        .harnesses
+        .iter()
+        .find(|entry| entry.harness_kind == harness_kind);
+    let Some(entry) = harness_entry else {
+        // Fail closed: the control plane scoped other harnesses but not this
+        // one. Launching native would bypass the org's auth routing.
+        return Err(RouteAuthError::SelectionMissing {
+            harness_kind: harness_kind.to_string(),
+            revision: state.revision,
+        });
+    };
+    // Harness present but empty sources: the control plane explicitly set it to
+    // native (no credentials configured = the harness's own login owns auth).
+    if entry.sources.is_empty() {
+        return Ok(AgentRuntimeAuthProfile::Native);
+    }
+    let mut sources = Vec::with_capacity(entry.sources.len());
+    for source in &entry.sources {
         sources.push(resolve_source(harness_kind, source)?);
     }
     Ok(AgentRuntimeAuthProfile::Sources(HarnessSources {
@@ -186,15 +218,16 @@ mod tests {
     }
 
     #[test]
-    fn missing_harness_falls_back_to_native() {
-        // codex configured (bumps the global revision) must NOT block claude,
-        // which the user never configured — claude resolves Native.
+    fn missing_harness_in_scoped_state_fails_closed() {
+        // codex configured (non-empty harnesses list proves scoped session);
+        // claude has no entry → fail closed with SelectionMissing.
         let state = state(
             7,
             vec![harness("codex", vec![gateway_source("https://gw", "sk")])],
         );
-        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
-        assert_eq!(profile, AgentRuntimeAuthProfile::Native);
+        let error = resolve_profile(Some(&state), "claude").expect_err("fail closed");
+        assert!(matches!(error, RouteAuthError::SelectionMissing { .. }));
+        assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_MISSING");
     }
 
     #[test]
@@ -344,5 +377,77 @@ mod tests {
         );
         let error = resolve_profile(Some(&state), "claude").expect_err("blank base_url");
         assert!(matches!(error, RouteAuthError::SelectionIncomplete { .. }));
+    }
+
+    // --- Fail-closed vs unscoped safety rail tests ---
+
+    #[test]
+    fn unscoped_no_state_file_is_native() {
+        // Local/desktop with no cloud state: must resolve Native (no interference).
+        let profile = resolve_profile(None, "claude").expect("resolve");
+        assert_eq!(profile, AgentRuntimeAuthProfile::Native);
+    }
+
+    #[test]
+    fn unscoped_empty_harnesses_list_is_native() {
+        // State file exists but harnesses is empty: no scoping applied, native.
+        let state = state(1, vec![]);
+        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
+        assert_eq!(profile, AgentRuntimeAuthProfile::Native);
+    }
+
+    #[test]
+    fn scoped_harness_present_with_empty_sources_is_native() {
+        // Control plane explicitly listed the harness but with no sources —
+        // this means "use native login for this harness" (not fail-closed).
+        let state = state(
+            5,
+            vec![
+                harness("codex", vec![gateway_source("https://gw", "sk")]),
+                harness("claude", vec![]),
+            ],
+        );
+        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
+        assert_eq!(profile, AgentRuntimeAuthProfile::Native);
+    }
+
+    #[test]
+    fn scoped_harness_absent_fails_closed_with_correct_revision() {
+        // Non-empty harnesses list proves scoped session; absent harness = fail.
+        let state = state(
+            42,
+            vec![harness("codex", vec![gateway_source("https://gw", "sk")])],
+        );
+        let error = resolve_profile(Some(&state), "opencode").expect_err("fail closed");
+        match error {
+            RouteAuthError::SelectionMissing {
+                harness_kind,
+                revision,
+            } => {
+                assert_eq!(harness_kind, "opencode");
+                assert_eq!(revision, 42);
+            }
+            other => panic!("expected SelectionMissing, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn scoped_harness_present_with_sources_resolves_normally() {
+        // Scoped session where the requested harness IS configured: resolves sources.
+        let state = state(
+            10,
+            vec![
+                harness("claude", vec![gateway_source("https://gw", "sk-vk")]),
+                harness("codex", vec![api_key_source("OPENAI_API_KEY", "sk-raw")]),
+            ],
+        );
+        let profile = resolve_profile(Some(&state), "claude").expect("resolve");
+        match profile {
+            AgentRuntimeAuthProfile::Sources(sources) => {
+                assert_eq!(sources.harness_kind, "claude");
+                assert_eq!(sources.revision, 10);
+            }
+            other => panic!("expected sources, got {other:?}"),
+        }
     }
 }

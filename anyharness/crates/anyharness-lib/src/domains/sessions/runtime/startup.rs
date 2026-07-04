@@ -326,9 +326,10 @@ impl SessionRuntime {
         )
         .map_err(StartSessionError::Internal)?;
         // Agent-auth render plane: read the declarative state file fresh and
-        // render the route layer for this harness. Absent file = empty layer
-        // (legacy/native); a scoped file with no selection fails the launch
-        // closed with a typed error (spec §3).
+        // render the route layer for this harness. Absent file or empty
+        // harnesses list = empty layer (legacy/native); a scoped file (non-empty
+        // harnesses list) with no entry for this harness fails the launch closed
+        // with SelectionMissing (spec §3 fail-closed invariant).
         let route_auth = resolve_launch_route_auth(
             &self.runtime_home,
             &record.agent_kind,

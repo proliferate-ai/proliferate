@@ -415,16 +415,14 @@ fn grok_api_key_sets_exactly_its_var() {
 // --- native / missing / malformed ------------------------------------------
 
 #[test]
-fn absent_harness_renders_native_delta() {
-    // codex configured (revision bumped) must NOT block claude, which the user
-    // never configured — claude renders an empty (native) delta.
-    let home = TempHome::new("absent-native");
+fn absent_harness_in_scoped_state_fails_closed() {
+    // codex configured (non-empty harnesses list proves scoped session);
+    // claude has no entry → fail closed with SelectionMissing.
+    let home = TempHome::new("absent-fails-closed");
     home.write_state_json(&gateway_state("codex")); // no claude entry
 
-    let rendered = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect("render");
-    assert!(rendered.set.is_empty());
-    assert!(rendered.remove.is_empty());
-    assert!(rendered.files.is_empty());
+    let error = resolve_launch_route_auth(home.path(), "claude", &HarnessPlanResolver).expect_err("fail closed");
+    assert_eq!(error.code(), "AGENT_ROUTE_SELECTION_MISSING");
 }
 
 #[test]
