@@ -26,11 +26,17 @@ def _repo_environment(
 ) -> RepoEnvironmentValue:
     return RepoEnvironmentValue(
         id=id or uuid.uuid4(),
+        repo_config_id=uuid.uuid4(),
         user_id=user_id,
-        environment_kind="cloud",
+        git_provider="github",
         git_owner=git_owner,
         git_repo_name=git_repo_name,
+        environment_kind="cloud",
+        desktop_install_id=None,
+        local_path=None,
         default_branch=None,
+        setup_script="",
+        run_command="",
         created_at=NOW,
         updated_at=NOW,
     )
