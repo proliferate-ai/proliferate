@@ -9,6 +9,7 @@ import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
+import { useConnectivityListeners } from "@/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
 import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
@@ -191,6 +192,7 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_export_running_agent_count")
   useExportRunningAgentCount()
   recordBootDiagnosticOnce("app_runtime.render.after.use_export_running_agent_count")
+  useConnectivityListeners()
   useUpdateRestartWatcher()
   useDebugSessionActivity()
   // Mounted here (not in AuthenticatedAppHost, which unmounts on sign-out) so

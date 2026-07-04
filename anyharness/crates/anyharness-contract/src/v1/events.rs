@@ -759,6 +759,11 @@ pub enum ErrorEventDetails {
         unit: String,
         fallback_model_id: String,
     },
+    #[serde(rename_all = "camelCase")]
+    NetworkConnection {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

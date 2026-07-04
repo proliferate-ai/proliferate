@@ -2,7 +2,10 @@ use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionExecutionPhase, StopReason};
 use tokio::sync::mpsc;
 
-use crate::acp::provider_errors::{classify_provider_rate_limit_error, PROVIDER_RATE_LIMIT_CODE};
+use crate::acp::provider_errors::{
+    classify_network_connection_error, classify_provider_rate_limit_error,
+    NETWORK_CONNECTION_CODE, PROVIDER_RATE_LIMIT_CODE,
+};
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::live::sessions::actor::config::queue::apply_pending_config_changes_if_idle;
 use crate::live::sessions::actor::state::SessionActor;
@@ -203,10 +206,16 @@ impl SessionActor {
                     "session.actor.prompt.conn_failed"
                 );
                 let error_message = e.to_string();
-                let error_details = classify_provider_rate_limit_error(&error_message);
-                let error_code = error_details
-                    .as_ref()
-                    .map(|_| PROVIDER_RATE_LIMIT_CODE.to_string());
+                let (error_details, error_code) =
+                    match classify_provider_rate_limit_error(&error_message) {
+                        Some(details) => (Some(details), Some(PROVIDER_RATE_LIMIT_CODE.to_string())),
+                        None => match classify_network_connection_error(&error_message) {
+                            Some(details) => {
+                                (Some(details), Some(NETWORK_CONNECTION_CODE.to_string()))
+                            }
+                            None => (None, None),
+                        },
+                    };
                 let mut sink = self.event_sink.lock().await;
                 sink.error_with_details(error_message, error_code, error_details.clone());
                 let last_event_seq = sink.debug_snapshot().next_seq - 1;

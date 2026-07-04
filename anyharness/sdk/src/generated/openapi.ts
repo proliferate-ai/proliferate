@@ -2345,6 +2345,10 @@ export interface components {
             provider: string;
             providerModel: string;
             unit: string;
+        } | {
+            /** @enum {string} */
+            kind: "network_connection";
+            provider?: string | null;
         };
         ExportReplayRecordingRequest: {
             name?: string | null;
