@@ -199,15 +199,20 @@ describe("templates", () => {
 });
 
 describe("run-status derivation", () => {
-  const definition = WORKFLOW_TEMPLATES[0]!.definition; // shell -> goal prompt -> pr
+  const definition = WORKFLOW_TEMPLATES[0]!.definition; // agent config -> shell -> goal prompt -> pr
 
-  it("marks earlier steps complete, the cursor running, later pending", () => {
+  it("marks earlier steps complete, the cursor goal-iterating, later pending", () => {
     const views = deriveStepRunViews({
       definition,
       runStatus: "running",
-      stepCursor: 1,
+      stepCursor: 2,
     });
-    expect(views.map((v) => v.status)).toEqual(["completed", "goal_iterating", "pending"]);
+    expect(views.map((v) => v.status)).toEqual([
+      "completed",
+      "completed",
+      "goal_iterating",
+      "pending",
+    ]);
   });
 
   it("resolves every step on completion", () => {
@@ -219,22 +224,22 @@ describe("run-status derivation", () => {
     const views = deriveStepRunViews({
       definition,
       runStatus: "failed",
-      stepCursor: 0,
-      stepOutputs: { "0": { exit_code: 1 } },
+      stepCursor: 1,
+      stepOutputs: { "1": { exit_code: 1 } },
     });
-    expect(views.map((v) => v.status)).toEqual(["failed", "skipped", "skipped"]);
-    expect(views[0]!.chips).toEqual([{ kind: "exit", label: "exit 1", ok: false }]);
+    expect(views.map((v) => v.status)).toEqual(["completed", "failed", "skipped", "skipped"]);
+    expect(views[1]!.chips).toEqual([{ kind: "exit", label: "exit 1", ok: false }]);
   });
 });
 
 describe("presentation", () => {
   it("uses the goal glyph for goal-armed prompts", () => {
     const strip = workflowStepStrip(WORKFLOW_TEMPLATES[0]!.definition);
-    expect(strip).toEqual(["$", "◎", "⇈"]);
+    expect(strip).toEqual(["⚙", "$", "◎", "⇈"]);
   });
 
   it("renders the two-line goal rail treatment", () => {
-    const line = goalRailLine(WORKFLOW_TEMPLATES[0]!.definition.steps[1]!);
+    const line = goalRailLine(WORKFLOW_TEMPLATES[0]!.definition.steps[2]!);
     expect(line?.glyph).toBe("◎");
     expect(line?.text).toContain("25t · 90m · 400k");
   });

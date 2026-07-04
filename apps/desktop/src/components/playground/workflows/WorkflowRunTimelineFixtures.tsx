@@ -7,6 +7,7 @@ import {
 } from "@proliferate/product-domain/workflows/run-status";
 import { WorkflowRunTimelineRow } from "@proliferate/product-ui/workflows/WorkflowRunTimelineRow";
 import { WorkflowStatusPill } from "@proliferate/product-ui/workflows/WorkflowStatusPill";
+import { workflowStepPreview } from "@proliferate/product-domain/workflows/presentation";
 import { WORKFLOW_TEMPLATES } from "@proliferate/product-domain/workflows/templates";
 
 const FIX_UNTIL_GREEN = WORKFLOW_TEMPLATES[0]!.definition; // shell -> goal prompt -> pr
@@ -38,18 +39,23 @@ interface RunScenario {
 
 const SCENARIOS: RunScenario[] = [
   {
+    // FIX_UNTIL_GREEN now leads with an agent.config step (index 0).
     label: "Running · goal-iterating",
     definition: FIX_UNTIL_GREEN,
     status: "running",
-    stepCursor: 1,
-    stepOutputs: { "0": { exit_code: 1 }, "1": GOAL_OUTPUT },
+    stepCursor: 2,
+    stepOutputs: {
+      "0": { harness: "claude-code", model: "sonnet", session_switched: true },
+      "1": { exit_code: 1 },
+      "2": GOAL_OUTPUT,
+    },
   },
   {
     label: "Failed",
     definition: FIX_UNTIL_GREEN,
     status: "failed",
-    stepCursor: 0,
-    stepOutputs: { "0": { exit_code: 1 } },
+    stepCursor: 1,
+    stepOutputs: { "0": { harness: "claude-code", model: "sonnet" }, "1": { exit_code: 1 } },
   },
   {
     label: "Waiting for approval",
@@ -65,9 +71,10 @@ const SCENARIOS: RunScenario[] = [
     status: "completed",
     stepCursor: null,
     stepOutputs: {
-      "0": { exit_code: 0 },
-      "1": { ...GOAL_OUTPUT, goal: { ...GOAL_OUTPUT.goal, status: "met", iterations: 6, tokens_used: 128_000 } },
-      "2": { pr_number: 912, pr_url: "https://github.com/proliferate-ai/proliferate/pull/912" },
+      "0": { harness: "claude-code", model: "sonnet" },
+      "1": { exit_code: 0 },
+      "2": { ...GOAL_OUTPUT, goal: { ...GOAL_OUTPUT.goal, status: "met", iterations: 6, tokens_used: 128_000 } },
+      "3": { pr_number: 912, pr_url: "https://github.com/proliferate-ai/proliferate/pull/912" },
     },
   },
 ];
@@ -107,6 +114,11 @@ function RunTimeline({ scenario }: { scenario: RunScenario }) {
         <WorkflowRunTimelineRow
           key={view.index}
           view={view}
+          preview={
+            scenario.definition.steps[index]
+              ? workflowStepPreview(scenario.definition.steps[index]!)
+              : null
+          }
           durationLabel={view.status === "completed" ? "18s" : undefined}
           connector={index < views.length - 1}
           onOpenSession={() => undefined}
