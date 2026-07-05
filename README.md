@@ -2,202 +2,228 @@
 
 <p>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/proliferate-wordmark-dark.svg" />
-    <img src="./specs/developing/assets/readme/proliferate-wordmark-light.svg" width="320" alt="Proliferate" />
+    <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/proliferate-lockup-dark.svg" />
+    <img src="./specs/developing/assets/readme/proliferate-lockup-light.svg" width="180" alt="Proliferate" />
   </picture>
 </p>
 
-<h3>The Open Source AI IDE</h3>
-
 <p>
-  <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
-  <a href="https://proliferate.com/changelog"><img alt="Latest release" src="https://img.shields.io/badge/release-changelog-0969DA?style=flat" /></a>
-  <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat" /></a>
-  <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
-  <a href="https://proliferate.com"><img alt="Website" src="https://img.shields.io/badge/website-visit-0969DA?style=flat" /></a>
-  <a href="https://discord.gg/7b5afMTqW"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
+  <a href="https://github.com/proliferate-ai/proliferate/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&label=%E2%98%85&color=2f363d" /></a>
+  <a href="./LICENSE"><img alt="License: AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-45618E?style=flat" /></a>
+  <a href="https://discord.gg/wCEgUnEuF"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-5865F2?style=flat&logo=discord&logoColor=white" /></a>
+  <img alt="Platform: macOS" src="https://img.shields.io/badge/macOS-2f363d?style=flat&logo=apple&logoColor=white" />
 </p>
 
-<br />
+<p>
+  The open-source AI IDE for working with any coding agent — Claude Code, Codex, Cursor, Grok,<br />
+  or open models through OpenCode and Ollama — locally or in the cloud, in one workspace.<br />
+  Run agents in parallel, move live sessions between laptop and cloud, and self-host all of it.
+</p>
 
-Run Claude Code, Codex, OpenCode, and any other coding agent in parallel, in one workspace.<br />
-Move running sessions between your machine and the cloud. Works solo or across a team.
-
-<br />
+<h3><a href="https://proliferate.com"><ins>Download for macOS</ins></a></h3>
 
 <p>
-  <a href="https://proliferate.com"><strong>Download for macOS</strong></a>
-  &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/docs">Documentation</a>
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/changelog">Changelog</a>
   &nbsp;&bull;&nbsp;
-  <a href="https://discord.gg/7b5afMTqW">Discord</a>
+  <a href="https://proliferate.com/docs/deployment">Self-hosting</a>
+  &nbsp;&bull;&nbsp;
+  <a href="https://discord.gg/wCEgUnEuF">Discord</a>
 </p>
 
-<img width="full" alt="Proliferate" src="./specs/developing/assets/readme/hero.png" />
+<!-- TODO(asset): hero.gif — composite: desktop app running 3-4 agents in parallel worktrees, one cloud session visible; see SHOTLIST.md -->
+<picture>
+  <source srcset="./specs/developing/assets/readme/hero.gif" type="image/gif" />
+  <img width="100%" alt="Proliferate running multiple coding agents in parallel" src="./specs/developing/assets/readme/hero.png" />
+</picture>
+
+<p>
+  <!-- Same video as the Show HN / launch posts -->
+  <a href="{DEMO_LINK}"><b>▶ Watch: how I use Proliferate day to day (2 min)</b></a>
+</p>
 
 </div>
 
-<br />
+## Features
 
-Proliferate is a desktop and web app for running coding agents in parallel, locally or in cloud sandboxes.
+<table>
+<tr>
+<td width="50%" valign="middle">
 
-- **Run any mix of agents in parallel**, each in its own isolated worktree or sandbox, with native tools, auth, and config intact
-- **Let your agents manage each other**, like having Codex hand design work to Claude Code
-- **Set up MCPs and skills once**, shared across every agent
+### Move sessions between laptop and cloud
+
+Start an agent locally, hand the running session to a cloud sandbox — or pull it back — mid-task, with history and changes intact.
+
+[Docs →](https://proliferate.com/docs/concepts/workspaces)
+
+</td>
+<td width="50%">
+  <!-- TODO(asset): feature-wall/session-handoff.{gif,jpg} — see SHOTLIST.md -->
+  <a href="https://proliferate.com/docs/concepts/workspaces"><picture><source srcset="./specs/developing/assets/readme/feature-wall/session-handoff.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/session-handoff.jpg" alt="Moving a running agent session from laptop to cloud" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Parallel agents, isolated worktrees
+
+Fan work across any mix of agents, each in its own worktree or cloud sandbox, with native tools, auth, and config intact. Kick off long-running work, close your laptop, check in later.
+
+[Docs →](https://proliferate.com/docs/concepts/workspaces)
+
+</td>
+<td width="50%">
+  <!-- TODO(asset): feature-wall/parallel-agents.{gif,jpg} — see SHOTLIST.md -->
+  <a href="https://proliferate.com/docs/concepts/workspaces"><picture><source srcset="./specs/developing/assets/readme/feature-wall/parallel-agents.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/parallel-agents.jpg" alt="Multiple agents working in parallel worktrees" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Automate work by chaining agents
+
+Chain prompts, goals, shell checks, approvals, and PR opening into workflows any agent can run — on demand or on a schedule. The release-QA workflow on this repo runs on GLM 5.2 and costs ~$0.04 a pass.
+
+[Docs →](https://proliferate.com/docs/concepts/automations)
+
+</td>
+<td width="50%">
+  <!-- TODO(asset): feature-wall/workflows.{gif,jpg} — workflow run view w/ step timeline + cost readout; see SHOTLIST.md -->
+  <a href="https://proliferate.com/docs/concepts/automations"><picture><source srcset="./specs/developing/assets/readme/feature-wall/workflows.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/workflows.jpg" alt="A workflow chaining agents with a visible cost readout" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Agents managing agents
+
+Delegate across harnesses: Codex hands design work to Claude Code, and subagents take on investigation, implementation, and review.
+
+[Docs →](https://proliferate.com/docs/concepts/subagents)
+
+</td>
+<td width="50%">
+  <!-- TODO(asset): feature-wall/agent-delegation.{gif,jpg} — see SHOTLIST.md -->
+  <a href="https://proliferate.com/docs/concepts/subagents"><picture><source srcset="./specs/developing/assets/readme/feature-wall/agent-delegation.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/agent-delegation.jpg" alt="One agent delegating work to another" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Review before you merge
+
+Inspect and edit agent diffs in-app — down to staging or reverting individual hunks — and let reviewer agents check plans, changes, and branch readiness before you do.
+
+[Docs →](https://proliferate.com/docs/concepts/review)
+
+</td>
+<td width="50%">
+  <!-- TODO(asset): feature-wall/review.{gif,jpg} — see SHOTLIST.md -->
+  <a href="https://proliferate.com/docs/concepts/review"><picture><source srcset="./specs/developing/assets/readme/feature-wall/review.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/review.jpg" alt="Reviewing agent diffs in Proliferate" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Self-host the whole thing
+
+AGPL, one Docker Compose stack — the app, the gateway, and the cloud itself. Point the official desktop app at your own server: your infra, your keys, your data. Attach your own machines over SSH as runners.
+
+[Docs →](https://proliferate.com/docs/deployment)
+
+</td>
+<td width="50%">
+  <!-- TODO(asset): feature-wall/self-host.{gif,jpg} — see SHOTLIST.md -->
+  <a href="https://proliferate.com/docs/deployment"><picture><source srcset="./specs/developing/assets/readme/feature-wall/self-host.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/self-host.jpg" alt="Self-hosting Proliferate with Docker Compose" width="100%" /></picture></a>
+</td>
+</tr>
+</table>
+
+**Also in the box:**
+
+- **AI gateway &amp; budgets**: bring your own provider keys or agent subscriptions; agents and sandboxes only ever see short-lived per-user keys. See and cap what every person and every agent spends.
+- **Native features, preserved**: goals an agent iterates toward, recurring in-session loops, plan modes, subagents — each through the harness's own machinery, not a re-implementation.
+- **MCPs &amp; skills**: configured once, shared by every agent — plus Computer Use, Browser Use, and custom tools.
+- **[Artifacts](https://proliferate.com/docs/concepts/artifacts)**: docs, UI, demos, and components rendered inline as agents produce them.
+- **SSH access**: drop into any cloud sandbox from your terminal.
+- **Teams (early)**: shared cloud sessions, org settings, per-member budgets — expanding over the coming weeks.
+- **Mobile**: coming soon. Dispatch work, approve actions, and follow runs from your phone.
+- **And more, constantly**: the [changelog](https://proliferate.com/changelog) is the real feature list.
+
+---
 
 ## Bring Your Agent
 
-Each agent runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact. New harness features show up in Proliferate the day they ship.
+Any coding agent, frontier or open. Each one runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact — and new harness features show up in Proliferate the day they ship.
 
-<table>
-  <tr>
-    <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/claude.svg" width="40" height="40" alt="Claude" /><br />
-      <strong>Claude</strong>
-    </td>
-    <td align="center" width="120">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="./apps/desktop/public/provider-icons/codex-dark.svg" />
-        <img src="./apps/desktop/public/provider-icons/codex.svg" width="40" height="40" alt="Codex" />
-      </picture><br />
-      <strong>Codex</strong>
-    </td>
-    <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/opencode.png" width="40" height="40" alt="OpenCode" /><br />
-      <strong>OpenCode</strong>
-    </td>
-    <td align="center" width="120">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/cursor-dark.svg" />
-        <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" />
-      </picture><br />
-      <strong>Cursor</strong>
-    </td>
-  </tr>
-</table>
+<p>
+  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/claude.svg" alt="Claude" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
+  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/codex.svg" alt="Codex" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
+  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/opencode.png" alt="OpenCode" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
+  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/cursor.svg" alt="Cursor" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
+  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/grok.svg" alt="Grok" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
+  <kbd>+ any coding agent</kbd>
+</p>
 
-## Features
+Sign in with the subscriptions you already pay for, plug in API keys, or use the managed gateway — per agent, your choice.
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** - Claude Code, Codex, OpenCode, Cursor, and more
-- 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** - an isolated branch and working directory for every task
-- 🔍 **[Git & diff review](https://proliferate.com/docs/concepts/review)** - inspect and edit agent changes without leaving the app
-- 🛡️ **[Plan & code review agents](https://proliferate.com/docs/concepts/review)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
-- 🪆 **[Subagents](https://proliferate.com/docs/concepts/subagents)** - agents delegate investigation, implementation, and review to other agents
-- 🧩 **[Plugins](https://proliferate.com/docs/concepts/plugins)** - MCPs, skills, Computer Use, Browser Use, and custom tools, configured once and shared by every agent
-- ⏰ **[Automations](https://proliferate.com/docs/concepts/automations)** - run any agent on any schedule
-- 🖼️ **[Artifacts](https://proliferate.com/docs/concepts/artifacts)** - docs, UI, demos, and components rendered inline as agents produce them
+---
 
-## Open Source
+## Install
 
-Proliferate is AGPL-3.0. The desktop and web apps are open today.
-Self-hosting the full cloud control plane is in beta — see
-[Self-hosting](#self-hosting) below.
-
-## Getting Started
-
-### Quick Start
-
-Download Proliferate from [proliferate.com](https://proliferate.com) or follow
-the [installation guide](https://proliferate.com/docs/installation).
+**[Download for macOS](https://proliferate.com)**, or follow the [installation guide](https://proliferate.com/docs/installation).
 
 <details>
 <summary>Run from source</summary>
 
-### Run Locally From Source
-
-Requirements:
-
-- Rust stable
-- Node.js 22+
-- pnpm
-
-Run the desktop app with the bundled local AnyHarness runtime:
+Requirements: Rust stable, Node.js 22+, pnpm.
 
 ```bash
 make install
 make dev-local
 ```
 
-### Local Full-Stack Development
+That runs the desktop app with the bundled local runtime. No server needed.
 
-Requirements:
-
-- Rust stable
-- Node.js 22+
-- pnpm
-- Python 3.12+
-- `uv`
-- Docker, for the local control plane database
-
-Use named dev profiles for full-stack development when multiple worktrees run at
-the same time.
+For full-stack development (Python 3.12+, `uv`, and Docker also required), use named dev profiles:
 
 ```bash
 make server-install
 make setup PROFILE=main
-make build # first clean worktree, or after generated/Rust/frontend artifacts change
-make dev-list
+make build
 make run PROFILE=main
 ```
 
-See [dev profiles](./specs/developing/local/dev-profiles.md) for profile state, ports,
-generated Tauri config, and app labels.
+See [dev profiles](./specs/developing/local/dev-profiles.md) and [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 </details>
 
-<details id="self-hosting">
-<summary>Self-host Proliferate Cloud (beta)</summary>
+## Self-hosting
 
-### Self-hosting
+Run the whole Proliferate server yourself (beta) — one line:
 
-Self-hosting the full Proliferate Cloud control plane is in **beta**. The
-deployment path works today via Docker Compose, with polished end-to-end docs
-on the way.
+```bash
+curl -fsSL https://raw.githubusercontent.com/proliferate-ai/proliferate/main/scripts/self-host/install.sh | sh
+```
 
-- **Docker Compose:** [self-hosted-deploy.md](./specs/developing/deploying/self-hosted-deploy.md) —
-  Caddy + Postgres + API, with bootstrap and update scripts
-- **AWS (one-click):** [self-hosted-aws.md](./specs/developing/deploying/self-hosted-aws.md) —
-  CloudFormation wrapper that provisions the stack on EC2
-- **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
-  documents every required and optional setting
+That boots the full stack — app server, gateway, and cloud control plane — with Docker Compose on your box. Point the official desktop app at your server and you're on your own infrastructure. Optional add-ons: cloud sandboxes (E2B — the one external dependency) and the LiteLLM gateway; or attach your own machines over SSH as runners.
 
-Point the desktop app at your control plane by setting `apiBaseUrl` in
-`~/.proliferate/config.json`. Expect rough edges — [open an issue](../../issues/new/choose) or ask in
-[Discord](https://discord.gg/7b5afMTqW) if you hit problems, and see
-[SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
+- **[Self-hosting docs](https://proliferate.com/docs/deployment)**: quickstart, add-ons, BYO certificates, and operations
 
-</details>
+Expect rough edges while in beta: [open an issue](../../issues/new/choose) or ask in [Discord](https://discord.gg/wCEgUnEuF). See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
-## Proliferate Cloud (Beta)
-
-> Proliferate Cloud is in beta and rolling out in waves - request access at
-> [proliferate.com](https://proliferate.com). Everything local above is open
-> today.
-
-- ☁️ **Cloud sandboxes** - isolated cloud environments that keep working after you close your laptop
-- 🔁 **Workspace mobility** - move a running workspace between your machine and the cloud, mid-task, with changes and history intact
-- 👥 **Multiplayer cloud chats** - live sessions your team can inspect, claim, and continue
-- 💬 **Team Slackbot** - turn a Slack message into shared agent work for the whole team
-- 🤝 **Team automations** - shared recurring fixes and reviews the whole team can run
-- 🛰️ **Remote dispatch** - kick off and steer work on your own machine from the web
-- 🔑 **SSH access** - drop into any cloud sandbox from your terminal
-- 🔐 **Credential gateway** - your keys and subscriptions never touch the sandbox; sandboxes only get short-lived tokens
-- 🏢 **Organizations** - team seats, shared settings, cloud limits, and governance controls
-- 📱 **Mobile** - coming soon: dispatch work, approve actions, and follow runs from your phone
-- 🏗️ **Self-hosted Proliferate Cloud** - beta: run the full cloud control plane yourself ([docs](#self-hosting))
-
-Proliferate Cloud is open source (AGPL-3.0) and self-hostable today in beta; the
-self-host experience will be polished as Cloud moves toward GA.
+> **Proliferate Cloud** (hosted) is in beta and rolling out in waves; request access at [proliferate.com](https://proliferate.com). Everything local is open today.
 
 ## Community
 
-Join our community on [Discord](https://discord.gg/7b5afMTqW)!
+- **Discord:** join us on [Discord](https://discord.gg/wCEgUnEuF)
+- **Feedback &amp; ideas:** we ship every day; [request a feature](../../issues/new/choose) and there's a decent chance it exists by Friday
+- **Show support:** [star this repo](https://github.com/proliferate-ai/proliferate) to follow along
 
 ## Contributing
 
-Contributing? See the [Contribution Guide](./CONTRIBUTING.md).
+Contributions welcome. See the [Contribution Guide](./CONTRIBUTING.md).
 
 ## License
 
