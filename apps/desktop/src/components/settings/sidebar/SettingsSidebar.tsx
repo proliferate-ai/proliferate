@@ -1,7 +1,6 @@
 import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
 import {
   Blocks,
-  Bot,
   Brain,
   Building2,
   CircleUser,
@@ -30,7 +29,6 @@ import {
   type SettingsSection,
 } from "@/config/settings";
 import {
-  SETTINGS_HARNESS_SECTIONS,
   SETTINGS_HELP_ITEMS,
   getHarnessKindForSettingsSection,
   getSettingsScopeNav,
