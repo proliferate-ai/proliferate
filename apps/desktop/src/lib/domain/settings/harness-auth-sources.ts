@@ -4,6 +4,11 @@ import type {
   AgentAuthSurface,
 } from "@proliferate/cloud-sdk";
 
+// The three auth methods a harness surface can use. Single-source harnesses
+// hold exactly one (radio); multi-source (opencode) may combine gateway +
+// api_key.
+export type AuthMethod = "gateway" | "api_key" | "cli";
+
 // Mirror of the server env-var shape (selection_rules.py ENV_VAR_NAME_RE) so the
 // UI can gate the enabled switch and reject a bad name before the PUT round-trip.
 const ENV_VAR_NAME_RE = /^[A-Z][A-Z0-9_]{0,127}$/;

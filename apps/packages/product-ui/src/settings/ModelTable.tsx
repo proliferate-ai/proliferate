@@ -37,11 +37,12 @@ export interface ModelTableProps {
 
 // Header/body cell classes mirror the design-system `.ds-mct` treatment
 // (Design System Preview.html) translated onto product-ui tokens: 11px faint
-// header on `accent`, 13px hairline-divided body rows, first row un-bordered.
+// header on `accent`, 12px hairline-divided body rows (matching the 12px page
+// body), first row un-bordered.
 const TH_CLASS =
   "border-b border-border bg-accent px-3 py-2 text-left text-[11px] font-medium whitespace-nowrap text-faint";
 const TD_CLASS =
-  "border-t border-border px-3 py-[11px] align-top text-[13px] whitespace-nowrap";
+  "border-t border-border px-3 py-2 align-top text-[12px] whitespace-nowrap";
 
 function Dash() {
   return <span className="text-[12px] text-faint">—</span>;
@@ -169,11 +170,11 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
                     {model.displayName}
                   </div>
                   {hasDescription ? (
-                    <div className="mt-[3px] truncate text-[12px] leading-[1.4] text-muted-foreground">
+                    <div className="mt-[3px] truncate text-[11px] leading-[1.4] text-muted-foreground">
                       {model.description}
                     </div>
                   ) : showId ? (
-                    <div className="mt-[3px] truncate font-mono text-[12px] text-faint">
+                    <div className="mt-[3px] truncate font-mono text-[11px] text-faint">
                       {model.id}
                     </div>
                   ) : null}

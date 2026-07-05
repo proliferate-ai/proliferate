@@ -17,6 +17,7 @@ import {
   deriveEditorState,
   isMultiSourceHarness,
   isNativeState,
+  type AuthMethod,
   type EditableApiKeyRow,
   type HarnessAuthEditorState,
 } from "@/lib/domain/settings/harness-auth-sources";
@@ -37,6 +38,11 @@ export interface HarnessAuthEditorApi {
   busy: boolean;
   editorState: HarnessAuthEditorState;
   native: boolean;
+  // Single-source radio: the method the user last clicked that has no wired
+  // source yet (e.g. "api_key" before a key is chosen, or "cli"). Cleared once a
+  // real source becomes enabled and reset per (harness, surface) scope.
+  pendingMethod: AuthMethod | null;
+  setPendingMethod: (method: AuthMethod | null) => void;
   localAgent: ReturnType<ReturnType<typeof useAgentCatalog>["agentsByKind"]["get"]>;
   loginSession: ReturnType<
     typeof useAgentLoginTerminalWorkflow
@@ -76,6 +82,7 @@ export function useHarnessAuthEditor(
   // from a later refetch of the same scope, so a PUT never clobbers the draft.
   const [gatewayEnabled, setGatewayEnabled] = useState(false);
   const [rows, setRows] = useState<EditableApiKeyRow[]>([]);
+  const [pendingMethod, setPendingMethod] = useState<AuthMethod | null>(null);
   const seededScopeRef = useRef<string | null>(null);
   const lastPutSigRef = useRef<string>("");
   const draftCounterRef = useRef(0);
@@ -91,6 +98,9 @@ export function useHarnessAuthEditor(
     const derived = deriveEditorState(selections, harnessKind, surface);
     setGatewayEnabled(derived.gatewayEnabled);
     setRows(derived.rows);
+    // A fresh scope starts with no pending selection — the derived state alone
+    // drives the radio until the user clicks a method.
+    setPendingMethod(null);
     lastPutSigRef.current = JSON.stringify(buildDesiredSources(derived));
   }, [selections, scopeKey, harnessKind, surface]);
 
@@ -222,6 +232,8 @@ export function useHarnessAuthEditor(
     busy,
     editorState,
     native,
+    pendingMethod,
+    setPendingMethod,
     localAgent,
     loginSession,
     loginWorkflow,
