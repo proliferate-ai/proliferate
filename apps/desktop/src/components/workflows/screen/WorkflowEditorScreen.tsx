@@ -17,7 +17,7 @@ import { deriveEffectiveConfigs } from "@proliferate/product-domain/workflows/ef
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
-import { ArrowLeft, CircleAlert, Plus } from "@proliferate/ui/icons";
+import { ArrowLeft, CircleAlert, Plus, Robot, X } from "@proliferate/ui/icons";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
@@ -32,11 +32,12 @@ import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflo
 import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
-import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
+import { WorkflowSetupCard, WorkflowSetupAgentCard } from "../editor/WorkflowSetupCard";
 import { WorkflowTriggersCard } from "../editor/WorkflowTriggersCard";
 import { WorkflowStepRailCard } from "../editor/WorkflowStepRailCard";
 import { WorkflowStepConnector } from "../editor/WorkflowStepConnector";
 import { WorkflowStepPanel, type EditorAgent } from "../editor/WorkflowStepPanel";
+import { WorkflowSelect } from "../editor/WorkflowSelect";
 
 interface CatalogModel {
   id: string;
@@ -101,6 +102,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
+  const [setupSelected, setSetupSelected] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -298,11 +300,11 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
           </div>
         </header>
 
-        <div className="flex min-h-0 flex-1">
+        <div className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] grid-cols-[1fr]" style={(selectedStep !== null && definition.steps[selectedStep]) || setupSelected ? { gridTemplateColumns: "1fr minmax(0, min(50%, 420px))" } : undefined}>
           <div
-            className="min-w-0 flex-1 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] [background-size:16px_16px]"
+            className="min-w-0 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] [background-size:16px_16px]"
           >
-            <div className="mx-auto flex max-w-2xl flex-col gap-3 px-6 py-6">
+            <div className="mx-auto flex max-w-[720px] flex-col gap-3 px-6 py-6">
               <WorkflowMetaCard
                 name={draft.name}
                 description={draft.description}
@@ -314,6 +316,12 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                   markDirty();
                   setDraft((prev) => (prev ? { ...prev, description } : prev));
                 }}
+              />
+              <WorkflowSetupAgentCard
+                setup={definition.setup}
+                agents={agents}
+                selected={setupSelected}
+                onSelect={() => { setSetupSelected(true); setSelectedStep(null); }}
               />
               <WorkflowSetupCard setup={definition.setup} args={definition.args} agents={agents} onSetupChange={setSetup} onArgsChange={setArgs} />
               <WorkflowTriggersCard
@@ -355,7 +363,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                         connector={!nextIsNewSession}
                         canMoveUp={index > 0}
                         canMoveDown={index < definition.steps.length - 1}
-                        onSelect={() => setSelectedStep(index)}
+                        onSelect={() => { setSelectedStep(index); setSetupSelected(false); }}
                         onChange={(next) => updateStep(index, next)}
                         onDuplicate={() => duplicateStep(index)}
                         onDelete={() => deleteStep(index)}
@@ -414,7 +422,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
           </div>
 
           {selectedStep !== null && definition.steps[selectedStep] ? (
-            <div className="w-[380px] shrink-0 overflow-hidden border-l border-border bg-background">
+            <div className="overflow-hidden border-l border-border bg-background">
               <WorkflowStepPanel
                 step={definition.steps[selectedStep]!}
                 effectiveHarness={effectiveHarnessAt(definition, selectedStep)}
@@ -425,6 +433,54 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 onChange={(next) => updateStep(selectedStep, next)}
                 onClose={() => setSelectedStep(null)}
               />
+            </div>
+          ) : setupSelected ? (
+            <div className="flex h-full flex-col overflow-hidden border-l border-border bg-background">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <span className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-transparent px-3 py-0.5 text-xs font-medium leading-none text-foreground">
+                  <Robot className="size-3.5 shrink-0 text-foreground" />
+                  <span>Agent</span>
+                </span>
+                <Button variant="ghost" size="icon-sm" onClick={() => setSetupSelected(false)} aria-label="Close panel">
+                  <X className="size-4" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="w-28 shrink-0 text-sm text-muted-foreground">Agent</span>
+                    <div className="flex flex-1 justify-end">
+                      <WorkflowSelect
+                        ariaLabel="Agent"
+                        value={definition.setup.harness || ""}
+                        placeholder="Select agent"
+                        options={agents.map((agent) => ({ value: agent.kind, label: agent.displayName }))}
+                        onChange={(harness) => {
+                          markDirty();
+                          const next = agents.find((agent) => agent.kind === harness);
+                          setSetup({ ...definition.setup, harness, model: next?.models[0]?.id ?? "" });
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="w-28 shrink-0 text-sm text-muted-foreground">Model</span>
+                    <div className="flex flex-1 justify-end">
+                      <WorkflowSelect
+                        ariaLabel="Model"
+                        value={definition.setup.model || ""}
+                        placeholder="Select model"
+                        disabled={(agents.find((a) => a.kind === definition.setup.harness)?.models ?? []).length === 0}
+                        options={(agents.find((a) => a.kind === definition.setup.harness)?.models ?? []).map((model) => ({ value: model.id, label: model.label }))}
+                        onChange={(model) => {
+                          markDirty();
+                          setSetup({ ...definition.setup, model });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
         </div>

@@ -9,7 +9,8 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { ChevronDown, ChevronRight, Plus, X } from "@proliferate/ui/icons";
+import { ChevronDown, ChevronRight, Plus, Robot, X } from "@proliferate/ui/icons";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import type { EditorAgent } from "./WorkflowStepPanel";
 import { WorkflowSelect } from "./WorkflowSelect";
 
@@ -22,21 +23,6 @@ export interface WorkflowSetupCardProps {
 }
 
 const ARG_TYPES: WorkflowArgType[] = ["string", "number", "boolean", "enum"];
-
-function summaryText(setup: WorkflowSetup, agents: readonly EditorAgent[], argCount: number): string {
-  const agent = agents.find((a) => a.kind === setup.harness);
-  const harness = agent?.displayName ?? (setup.harness || "No agent");
-  const model = agent?.models.find((m) => m.id === setup.model)?.label ?? setup.model;
-  const parts = [harness];
-  if (model) {
-    parts.push(model);
-  }
-  parts.push(setup.sessionBinding === "headless" ? "headless" : "fresh");
-  if (argCount > 0) {
-    parts.push(`${argCount} ${argCount === 1 ? "arg" : "args"}`);
-  }
-  return parts.join(" · ");
-}
 
 /** Aligned columns shared by the arg table header and every arg row. */
 function ArgRow({
@@ -131,15 +117,99 @@ function ArgRow({
   );
 }
 
-export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsChange }: WorkflowSetupCardProps) {
-  const [expanded, setExpanded] = useState(false);
+/**
+ * The Setup "Agent scope" rail card — renders as the position-0 card on the rail,
+ * speaking the same visual language as WorkflowStepCard (numbered spine, outline
+ * kind pill, roomy card, connector). This is the workflow's initial agent scope.
+ */
+export function WorkflowSetupAgentCard({
+  setup,
+  agents,
+  selected = false,
+  onSelect,
+}: {
+  setup: WorkflowSetup;
+  agents: readonly EditorAgent[];
+  selected?: boolean;
+  onSelect?: () => void;
+}) {
+  const agent = agents.find((a) => a.kind === setup.harness);
+  const harness = agent?.displayName ?? (setup.harness || "No agent");
+  const model = agent?.models.find((m) => m.id === setup.model)?.label ?? setup.model;
 
-  const selectedAgent = agents.find((agent) => agent.kind === setup.harness);
-  const modelOptions = selectedAgent?.models ?? [];
+  return (
+    <div className="flex flex-col">
+      <div className="mb-1.5 flex items-center gap-2 pl-9">
+        <span className="font-mono text-[10px] leading-tight text-muted-foreground/70">
+          {harness}{model ? ` · ${model}` : ""}
+        </span>
+      </div>
+      <div className="flex gap-3.5">
+        <div className="flex shrink-0 flex-col items-center">
+          <span className="flex size-6 items-center justify-center rounded-full border border-border bg-surface-elevated-secondary font-mono text-xs leading-none tabular-nums text-muted-foreground">
+            0
+          </span>
+          <span className="mt-1.5 w-px flex-1 bg-border" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1 pb-4">
+          <div
+            className={twMerge(
+              "group rounded-xl border p-4 shadow-sm transition-colors bg-background",
+              selected
+                ? "border-border-heavy ring-1 ring-border-heavy"
+                : "border-border hover:border-border-heavy",
+              onSelect ? "cursor-pointer" : "",
+            )}
+            onClick={onSelect}
+            role={onSelect ? "button" : undefined}
+            tabIndex={onSelect ? 0 : undefined}
+            onKeyDown={
+              onSelect
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelect();
+                    }
+                  }
+                : undefined
+            }
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-transparent px-3 py-0.5 text-xs font-medium leading-none text-foreground">
+                <Robot className="size-3.5 shrink-0 text-foreground" aria-hidden />
+                <span>Agent</span>
+              </span>
+              <span className="flex-1" />
+            </div>
+            <p className="mt-3 text-sm text-foreground">
+              {harness}{model ? ` · ${model}` : ""}
+            </p>
+            <p className="mt-2.5 text-xs leading-snug text-faint">
+              starts the first session
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Setup configuration card: session mode, arguments, bypass hint.
+ * Visually consistent with the rail card language (rounded-xl, border, shadow-sm).
+ */
+export function WorkflowSetupCard({ setup, args, agents: _agents, onSetupChange, onArgsChange }: WorkflowSetupCardProps) {
+  const [expanded, setExpanded] = useState(false);
 
   const updateArg = (index: number, next: WorkflowArgSpec) => {
     onArgsChange(args.map((arg, i) => (i === index ? next : arg)));
   };
+
+  const sessionLabel = setup.sessionBinding === "headless" ? "Headless" : "Fresh (visible)";
+  const summaryParts = [sessionLabel];
+  if (args.length > 0) {
+    summaryParts.push(`${args.length} ${args.length === 1 ? "arg" : "args"}`);
+  }
 
   return (
     <div className="rounded-xl border border-border bg-background shadow-sm">
@@ -149,41 +219,14 @@ export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsCh
         className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-left transition-colors hover:bg-list-hover"
       >
         <span className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium text-foreground">Setup</span>
-          <span className="truncate text-xs text-muted-foreground">{summaryText(setup, agents, args.length)}</span>
+          <span className="text-sm font-medium text-foreground">Configuration</span>
+          <span className="truncate text-xs text-muted-foreground">{summaryParts.join(" · ")}</span>
         </span>
         {expanded ? <ChevronDown className="size-4 shrink-0 text-faint" /> : <ChevronRight className="size-4 shrink-0 text-faint" />}
       </button>
 
       {expanded ? (
         <div className="flex flex-col gap-4 border-t border-border/60 px-4 py-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <Label>Agent</Label>
-              <WorkflowSelect
-                ariaLabel="Agent"
-                value={setup.harness || ""}
-                placeholder="Select agent"
-                options={agents.map((agent) => ({ value: agent.kind, label: agent.displayName }))}
-                onChange={(harness) => {
-                  const next = agents.find((agent) => agent.kind === harness);
-                  onSetupChange({ ...setup, harness, model: next?.models[0]?.id ?? "" });
-                }}
-              />
-            </div>
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <Label>Model</Label>
-              <WorkflowSelect
-                ariaLabel="Model"
-                value={setup.model || ""}
-                placeholder="Select model"
-                disabled={modelOptions.length === 0}
-                options={modelOptions.map((model) => ({ value: model.id, label: model.label }))}
-                onChange={(model) => onSetupChange({ ...setup, model })}
-              />
-            </div>
-          </div>
-
           <div className="flex flex-col gap-1.5">
             <Label>Session</Label>
             <WorkflowSelect
