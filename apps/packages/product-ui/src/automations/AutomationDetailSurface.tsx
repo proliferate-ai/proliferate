@@ -1,4 +1,4 @@
-import { ArrowLeft, Pause, Pencil, Play, Zap } from "lucide-react";
+import { Archive, ArrowLeft, Pause, Pencil, Play, Zap } from "lucide-react";
 import { type ReactNode } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import type {
@@ -24,6 +24,7 @@ export interface AutomationDetailSurfaceProps {
   onEdit?: (automationId: string) => void;
   onPause?: (automationId: string) => void;
   onResume?: (automationId: string) => void;
+  onArchive?: (automationId: string) => void;
   onRunSelect?: (runId: string) => void;
 }
 
@@ -49,6 +50,7 @@ export function AutomationDetailSurface({
   onEdit,
   onPause,
   onResume,
+  onArchive,
   onRunSelect,
 }: AutomationDetailSurfaceProps) {
   const title = automation?.title ?? "Workflow";
@@ -65,6 +67,7 @@ export function AutomationDetailSurface({
           onEdit={onEdit}
           onPause={onPause}
           onResume={onResume}
+          onArchive={onArchive}
         />
       ) : null}
       maxWidthClassName={maxWidthClassName}
@@ -198,6 +201,7 @@ function AutomationDetailActions({
   onEdit,
   onPause,
   onResume,
+  onArchive,
 }: {
   automation: AutomationInventoryItemView;
   busy: boolean;
@@ -205,6 +209,7 @@ function AutomationDetailActions({
   onEdit?: (automationId: string) => void;
   onPause?: (automationId: string) => void;
   onResume?: (automationId: string) => void;
+  onArchive?: (automationId: string) => void;
 }) {
   const runDisabledReason = automation.runNowDisabledReason
     ?? (!automation.enabled ? "Resume before queueing a run." : null);
@@ -254,6 +259,18 @@ function AutomationDetailActions({
         >
           <Play className="size-4" aria-hidden />
           Resume
+        </Button>
+      ) : null}
+      {onArchive ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onArchive(automation.id)}
+          disabled={busy}
+          className="text-destructive hover:text-destructive"
+        >
+          <Archive className="size-4" aria-hidden />
+          Archive
         </Button>
       ) : null}
     </div>

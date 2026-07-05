@@ -51,6 +51,7 @@ class AutomationValue:
     cloud_agent_run_config_id: UUID
     enabled: bool
     paused_at: datetime | None
+    archived_at: datetime | None
     next_run_at: datetime | None
     last_scheduled_at: datetime | None
     created_at: datetime
@@ -84,6 +85,7 @@ def _automation_value(record: Automation, repo_config: CloudRepoConfig) -> Autom
         cloud_agent_run_config_id=record.cloud_agent_run_config_id,
         enabled=record.enabled,
         paused_at=record.paused_at,
+        archived_at=record.archived_at,
         next_run_at=record.next_run_at,
         last_scheduled_at=record.last_scheduled_at,
         created_at=record.created_at,
@@ -211,19 +213,23 @@ async def list_automations_for_user(
     *,
     owner_scope: str = AUTOMATION_OWNER_SCOPE_PERSONAL,
     organization_id: UUID | None = None,
+    include_archived: bool = False,
 ) -> list[AutomationValue]:
+    predicates = list(
+        _automation_owner_predicates(
+            user_id=user_id,
+            owner_scope=owner_scope,
+            organization_id=organization_id,
+        )
+    )
+    if not include_archived:
+        predicates.append(Automation.archived_at.is_(None))
     rows = list(
         (
             await db.execute(
                 select(Automation, CloudRepoConfig)
                 .join(CloudRepoConfig, Automation.cloud_repo_config_id == CloudRepoConfig.id)
-                .where(
-                    *_automation_owner_predicates(
-                        user_id=user_id,
-                        owner_scope=owner_scope,
-                        organization_id=organization_id,
-                    )
-                )
+                .where(*predicates)
                 .order_by(Automation.created_at.desc())
             )
         ).all()
@@ -264,6 +270,7 @@ async def update_automation_for_user(
     cloud_agent_run_config_id: object = _UNSET,
     enabled: object = _UNSET,
     paused_at: object = _UNSET,
+    archived_at: object = _UNSET,
     next_run_at: object = _UNSET,
 ) -> AutomationValue | None:
     record = (
@@ -298,6 +305,8 @@ async def update_automation_for_user(
         record.enabled = enabled  # type: ignore[assignment]
     if paused_at is not _UNSET:
         record.paused_at = paused_at  # type: ignore[assignment]
+    if archived_at is not _UNSET:
+        record.archived_at = archived_at  # type: ignore[assignment]
     if next_run_at is not _UNSET:
         record.next_run_at = next_run_at  # type: ignore[assignment]
     record.updated_at = utcnow()

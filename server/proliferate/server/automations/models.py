@@ -85,6 +85,7 @@ class AutomationResponse(AutomationBaseModel):
     cloud_agent_run_config_id: str = Field(alias="cloudAgentRunConfigId")
     enabled: bool
     paused_at: str | None = Field(alias="pausedAt")
+    archived_at: str | None = Field(alias="archivedAt")
     last_scheduled_at: str | None = Field(alias="lastScheduledAt")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
@@ -219,6 +220,7 @@ def automation_payload(value: AutomationValue) -> AutomationResponse:
         cloud_agent_run_config_id=str(value.cloud_agent_run_config_id),
         enabled=value.enabled,
         paused_at=_to_iso(value.paused_at),
+        archived_at=_to_iso(value.archived_at),
         last_scheduled_at=_to_iso(value.last_scheduled_at),
         created_at=value.created_at.isoformat(),
         updated_at=value.updated_at.isoformat(),

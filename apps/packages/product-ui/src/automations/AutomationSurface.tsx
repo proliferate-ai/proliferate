@@ -21,7 +21,7 @@ export interface AutomationSurfaceProps {
   error?: boolean;
   actionError?: string | null;
   busyAutomationId?: string | null;
-  busyAction?: "pause" | "resume" | "run" | null;
+  busyAction?: "pause" | "resume" | "run" | "archive" | null;
   actionsDisabled?: boolean;
   description?: ReactNode;
   maxWidthClassName?: string;
@@ -34,6 +34,7 @@ export interface AutomationSurfaceProps {
   onPause?: (automationId: string) => void;
   onResume?: (automationId: string) => void;
   onRunNow?: (automationId: string) => void;
+  onArchive?: (automationId: string) => void;
 }
 
 export function AutomationSurface({
@@ -58,6 +59,7 @@ export function AutomationSurface({
   onPause,
   onResume,
   onRunNow,
+  onArchive,
 }: AutomationSurfaceProps) {
   const itemCount = groups.reduce((sum, group) => sum + group.items.length, 0);
 
@@ -134,6 +136,7 @@ export function AutomationSurface({
           onPause={onPause}
           onResume={onResume}
           onRunNow={onRunNow}
+          onArchive={onArchive}
         />
       )}
     </ProductPageShell>

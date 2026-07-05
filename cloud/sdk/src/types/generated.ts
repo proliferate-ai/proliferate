@@ -300,6 +300,7 @@ export interface AutomationResponse {
   cloudAgentRunConfigId: string;
   enabled: boolean;
   pausedAt: string | null;
+  archivedAt: string | null;
   lastScheduledAt: string | null;
   createdAt: string;
   updatedAt: string;

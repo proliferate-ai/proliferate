@@ -15,6 +15,7 @@ export function useAutomationActions() {
     pauseMutation,
     resumeMutation,
     runNowMutation,
+    archiveMutation,
   } = useAutomationMutations();
   const showToast = useToastStore((state) => state.show);
 
@@ -42,6 +43,14 @@ export function useAutomationActions() {
     }
   }, [runNowMutation, showToast]);
 
+  const archive = useCallback(async (automationId: string) => {
+    try {
+      await archiveMutation.mutateAsync(automationId);
+    } catch (error) {
+      showToast(`Failed to archive workflow: ${errorMessage(error)}`);
+    }
+  }, [archiveMutation, showToast]);
+
   return {
     createAutomation: createMutation.mutateAsync,
     isCreatingAutomation: createMutation.isPending,
@@ -53,5 +62,7 @@ export function useAutomationActions() {
     isResumingAutomation: resumeMutation.isPending,
     runAutomationNow: runNow,
     isRunningAutomationNow: runNowMutation.isPending,
+    archiveAutomation: archive,
+    isArchivingAutomation: archiveMutation.isPending,
   };
 }

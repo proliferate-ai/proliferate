@@ -1,4 +1,4 @@
-import { MoreHorizontal, Pause, Pencil, Play, Zap } from "lucide-react";
+import { Archive, MoreHorizontal, Pause, Pencil, Play, Zap } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -11,13 +11,14 @@ import { AutomationStatusGlyph } from "./AutomationStatusGlyph";
 export interface AutomationInventoryListProps {
   groups: readonly AutomationInventoryGroupView[];
   busyAutomationId?: string | null;
-  busyAction?: "pause" | "resume" | "run" | null;
+  busyAction?: "pause" | "resume" | "run" | "archive" | null;
   actionsDisabled?: boolean;
   onAutomationSelect: (automationId: string) => void;
   onEdit?: (automationId: string) => void;
   onPause?: (automationId: string) => void;
   onResume?: (automationId: string) => void;
   onRunNow?: (automationId: string) => void;
+  onArchive?: (automationId: string) => void;
 }
 
 export function AutomationInventoryList({
@@ -30,6 +31,7 @@ export function AutomationInventoryList({
   onPause,
   onResume,
   onRunNow,
+  onArchive,
 }: AutomationInventoryListProps) {
   return (
     <div className="w-full min-w-0 overflow-visible pb-10" role="region" aria-label="Workflows">
@@ -51,6 +53,7 @@ export function AutomationInventoryList({
                 onPause={onPause}
                 onResume={onResume}
                 onRunNow={onRunNow}
+                onArchive={onArchive}
               />
             ))}
           </div>
@@ -69,19 +72,21 @@ function AutomationInventoryRow({
   onPause,
   onResume,
   onRunNow,
+  onArchive,
 }: {
   item: AutomationInventoryItemView;
-  busy: "pause" | "resume" | "run" | null;
+  busy: "pause" | "resume" | "run" | "archive" | null;
   actionsDisabled: boolean;
   onAutomationSelect: (automationId: string) => void;
   onEdit?: (automationId: string) => void;
   onPause?: (automationId: string) => void;
   onResume?: (automationId: string) => void;
   onRunNow?: (automationId: string) => void;
+  onArchive?: (automationId: string) => void;
 }) {
   const runNowReason = runNowDisabledReason(item);
   const hasToggleAction = item.enabled ? Boolean(onPause) : Boolean(onResume);
-  const hasRowActions = Boolean(onRunNow || onEdit || hasToggleAction);
+  const hasRowActions = Boolean(onRunNow || onEdit || hasToggleAction || onArchive);
 
   return (
     <div role="listitem" className="group relative">
@@ -145,6 +150,7 @@ function AutomationInventoryRow({
             onPause={onPause}
             onResume={onResume}
             onRunNow={onRunNow}
+            onArchive={onArchive}
           />
         </span>
       ) : null}
@@ -160,20 +166,22 @@ function AutomationActionMenu({
   onPause,
   onResume,
   onRunNow,
+  onArchive,
 }: {
   item: AutomationInventoryItemView;
-  busy: "pause" | "resume" | "run" | null;
+  busy: "pause" | "resume" | "run" | "archive" | null;
   actionsDisabled: boolean;
   onEdit?: (automationId: string) => void;
   onPause?: (automationId: string) => void;
   onResume?: (automationId: string) => void;
   onRunNow?: (automationId: string) => void;
+  onArchive?: (automationId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const runNowReason = runNowDisabledReason(item);
   const toggleAction = item.enabled ? onPause : onResume;
-  const hasActions = Boolean(onRunNow || onEdit || toggleAction);
+  const hasActions = Boolean(onRunNow || onEdit || toggleAction || onArchive);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -241,6 +249,17 @@ function AutomationActionMenu({
               disabled={actionsDisabled || busy !== null}
               onClick={() => {
                 toggleAction(item.id);
+                close();
+              }}
+            />
+          ) : null}
+          {onArchive ? (
+            <MenuAction
+              label="Archive"
+              icon={<Archive className="size-3.5" aria-hidden />}
+              disabled={actionsDisabled || busy !== null}
+              onClick={() => {
+                onArchive(item.id);
                 close();
               }}
             />

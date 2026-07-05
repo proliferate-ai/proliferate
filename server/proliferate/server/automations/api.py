@@ -45,6 +45,7 @@ from proliferate.server.automations.models import (
     automation_run_payload,
 )
 from proliferate.server.automations.service import (
+    archive_automation,
     create_automation,
     get_automation,
     list_automation_runs,
@@ -244,6 +245,15 @@ async def resume_automation_endpoint(
     user: User = Depends(current_product_user),
 ) -> AutomationResponse:
     return automation_payload(await resume_automation(db, user.id, automation_id))
+
+
+@router.post("/{automation_id}/archive", response_model=AutomationResponse)
+async def archive_automation_endpoint(
+    automation_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> AutomationResponse:
+    return automation_payload(await archive_automation(db, user.id, automation_id))
 
 
 @router.post("/{automation_id}/run-now", response_model=AutomationRunResponse)

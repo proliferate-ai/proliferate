@@ -7,6 +7,7 @@ import type {
   UpdateAutomationRequest,
 } from "@/lib/access/cloud/client";
 import {
+  archiveAutomation,
   createAutomation,
   pauseAutomation,
   resumeAutomation,
@@ -61,12 +62,18 @@ export function useAutomationMutations() {
     onSuccess: (_, automationId) => invalidateAutomation(automationId),
   });
 
+  const archiveMutation = useMutation<AutomationResponse, Error, string>({
+    mutationFn: (automationId) => archiveAutomation(automationId),
+    onSuccess: (automation) => invalidateAutomation(automation.id),
+  });
+
   return {
     createMutation,
     updateMutation,
     pauseMutation,
     resumeMutation,
     runNowMutation,
+    archiveMutation,
     invalidateAutomation,
   };
 }

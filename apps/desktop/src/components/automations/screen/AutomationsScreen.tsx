@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { AutomationEditorModal } from "@/components/automations/editor/AutomationEditorModal";
 import { useAutomationActions } from "@/hooks/automations/workflows/use-automation-actions";
@@ -32,7 +33,7 @@ import { AutomationSurface } from "@proliferate/product-ui/automations/Automatio
 
 const EMPTY_AUTOMATIONS: AutomationRecord[] = [];
 const EMPTY_AUTOMATION_RUNS: AutomationRunRecord[] = [];
-type AutomationListAction = "pause" | "resume" | "run";
+type AutomationListAction = "pause" | "resume" | "run" | "archive";
 
 interface AutomationsScreenProps {
   selectedAutomationId?: string | null;
@@ -225,7 +226,24 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
     || actions.isUpdatingAutomation
     || actions.isPausingAutomation
     || actions.isResumingAutomation
-    || actions.isRunningAutomationNow;
+    || actions.isRunningAutomationNow
+    || actions.isArchivingAutomation;
+
+  const [archiveTargetId, setArchiveTargetId] = useState<string | null>(null);
+
+  const handleArchiveRequest = useCallback((automationId: string) => {
+    setArchiveTargetId(automationId);
+  }, []);
+
+  const handleArchiveConfirm = useCallback(async () => {
+    if (!archiveTargetId) return;
+    const targetId = archiveTargetId;
+    setArchiveTargetId(null);
+    await actions.archiveAutomation(targetId);
+    if (isDetailView) {
+      navigate("/workflows");
+    }
+  }, [archiveTargetId, actions, isDetailView, navigate]);
 
   return (
     <>
@@ -255,6 +273,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
             onResume={(automationId) => {
               void actions.resumeAutomation(automationId);
             }}
+            onArchive={handleArchiveRequest}
             onRunSelect={openRun}
           />
         ) : (
@@ -301,6 +320,7 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
                 () => actions.runAutomationNow(automationId),
               );
             }}
+            onArchive={handleArchiveRequest}
           />
         )}
       </MainSidebarPageShell>
@@ -321,6 +341,17 @@ export function AutomationsScreen({ selectedAutomationId = null }: AutomationsSc
           onUpdate={handleUpdate}
         />
       )}
+
+      <ConfirmationDialog
+        open={archiveTargetId !== null}
+        title="Archive this workflow?"
+        description="It will stop running and disappear from this list."
+        confirmLabel="Archive"
+        confirmVariant="destructive"
+        loading={actions.isArchivingAutomation}
+        onClose={() => setArchiveTargetId(null)}
+        onConfirm={() => { void handleArchiveConfirm(); }}
+      />
     </>
   );
 }

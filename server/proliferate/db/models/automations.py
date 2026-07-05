@@ -91,6 +91,7 @@ class Automation(Base):
     )
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_scheduled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),

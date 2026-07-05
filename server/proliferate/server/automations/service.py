@@ -48,6 +48,7 @@ from proliferate.server.automations.domain.validation import (
     normalize_title,
 )
 from proliferate.server.automations.errors import (
+    AutomationArchived,
     AutomationInvalidField,
     AutomationNotFound,
     AutomationPaused,
@@ -456,6 +457,8 @@ async def pause_automation(
         automation_id=automation_id,
         require_admin=True,
     )
+    if existing.archived_at is not None:
+        raise AutomationArchived()
     value = await update_automation_for_user(
         db,
         user_id=user_id,
@@ -482,6 +485,8 @@ async def resume_automation(
         automation_id=automation_id,
         require_admin=True,
     )
+    if existing.archived_at is not None:
+        raise AutomationArchived()
     next_run_at = next_future_occurrence(
         rrule_text=existing.schedule_rrule,
         timezone=existing.schedule_timezone,
@@ -502,6 +507,35 @@ async def resume_automation(
     return value
 
 
+async def archive_automation(
+    db: AsyncSession,
+    user_id: UUID,
+    automation_id: UUID,
+) -> AutomationValue:
+    existing = await _load_actor_automation(
+        db,
+        actor_user_id=user_id,
+        automation_id=automation_id,
+        require_admin=True,
+    )
+    if existing.archived_at is not None:
+        raise AutomationArchived()
+    value = await update_automation_for_user(
+        db,
+        user_id=user_id,
+        automation_id=automation_id,
+        owner_scope=existing.owner_scope,
+        organization_id=existing.organization_id,
+        enabled=False,
+        paused_at=None,
+        archived_at=utcnow(),
+        next_run_at=None,
+    )
+    if value is None:
+        raise AutomationNotFound()
+    return value
+
+
 async def run_automation_now(
     db: AsyncSession,
     user_id: UUID,
@@ -513,6 +547,8 @@ async def run_automation_now(
         automation_id=automation_id,
         require_admin=True,
     )
+    if existing.archived_at is not None:
+        raise AutomationArchived()
     if not existing.enabled:
         raise AutomationPaused()
     await _ensure_repo_config_id(

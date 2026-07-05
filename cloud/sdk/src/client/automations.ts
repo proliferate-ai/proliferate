@@ -114,6 +114,24 @@ export async function resumeAutomationWithClient(
   });
 }
 
+export async function archiveAutomation(
+  automationId: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AutomationResponse> {
+  return archiveAutomationWithClient(automationId, client);
+}
+
+export async function archiveAutomationWithClient(
+  automationId: string,
+  client: ProliferateCloudClient,
+): Promise<AutomationResponse> {
+  return client.requestJson<AutomationResponse>({
+    method: "POST",
+    path: "/v1/automations/{automation_id}/archive",
+    pathParams: { automation_id: automationId },
+  });
+}
+
 export async function runAutomationNow(
   automationId: string,
   client: ProliferateCloudClient = getProliferateClient(),

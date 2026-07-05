@@ -83,6 +83,16 @@ class AutomationPaused(InvalidRequest):
         )
 
 
+class AutomationArchived(InvalidRequest):
+    code = "automation_archived"
+
+    def __init__(self) -> None:
+        super().__init__(
+            message="This automation is archived and cannot be modified.",
+            code=self.code,
+        )
+
+
 class AutomationRepoLimitExceeded(Conflict):
     code = "repo_limit_exceeded"
 
