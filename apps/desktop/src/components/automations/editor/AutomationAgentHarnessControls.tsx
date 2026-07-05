@@ -22,7 +22,7 @@ export function AutomationAgentHarnessControls({
   onSelectModel: (agent: DesktopAgentLaunchAgent, model: DesktopAgentLaunchModel) => void;
 }) {
   const label = selectedAgent && selectedModel
-    ? `${selectedAgent.displayName} · ${selectedModel.displayName}`
+    ? selectedModel.displayName
     : loading
       ? "Loading agents"
       : "Agent harness";
