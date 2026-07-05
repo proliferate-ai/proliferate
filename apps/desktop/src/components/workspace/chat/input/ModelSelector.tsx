@@ -143,7 +143,7 @@ export function ModelSelector({
                   onClick={() => {
                     handleClose();
                     // UX_SPEC §5: add-harness routes to Settings → Agents.
-                    navigate(buildSettingsHref({ section: "agents" }));
+                    navigate(buildSettingsHref({ section: "agent-claude" }));
                   }}
                   icon={<Plus className="size-3.5 shrink-0" />}
                   label={CHAT_MODEL_SELECTOR_LABELS.addHarness}

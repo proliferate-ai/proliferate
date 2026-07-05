@@ -36,7 +36,7 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
     return "general";
   }
   if (value === "defaults" || value === "advanced" || value === "agent-defaults") {
-    return "agents";
+    return "agent-claude";
   }
   if (value === "agent-authentication") {
     // The Bifrost-era authentication pane was replaced by the API key pool page.
