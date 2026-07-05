@@ -7,7 +7,16 @@ export const HARNESS_PANE_COPY = {
   apiKeysTitle: "API keys",
   envVarPlaceholder: "ENV_VAR_NAME",
   addVariable: "Add variable",
+  addApiKey: "Add API key",
   addProvider: "Add provider",
+  // Shared "Add API key" modal (agent context).
+  addApiKeyModalTitle: "Add API key",
+  addApiKeyModalDescription:
+    "Save a secret to your vault and wire it into this harness in one step.",
+  addApiKeyEnvVarLabel: "Environment variable",
+  addApiKeyEnvVarHelp: "The variable this key is exposed as, e.g. ANTHROPIC_API_KEY.",
+  addApiKeySubmit: "Add key",
+  addApiKeyError: "Could not add the API key.",
   removeVariable: "Remove variable",
   runLogin: "Run login",
   runLoginOpening: "Opening...",

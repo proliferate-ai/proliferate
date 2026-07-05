@@ -6,6 +6,7 @@ import { AgentsOverviewPane } from "@/components/settings/panes/agents/overview/
 import { ApiKeysPane } from "@/components/settings/panes/agents/api-keys/ApiKeysPane";
 import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
+import { CloudGuard, type CloudGateFlags } from "@/components/cloud/CloudGuard";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
@@ -18,9 +19,6 @@ import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecrets
 import { UserIntegrationsPane } from "@/components/settings/panes/UserIntegrationsPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
-import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
-import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
-import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
 import { RepoActionsPane } from "@/components/settings/panes/repo/RepoActionsPane";
 import { RepoConfigurePane } from "@/components/settings/panes/repo/RepoConfigurePane";
 import { RepoEnvironmentPane } from "@/components/settings/panes/repo/RepoEnvironmentPane";
@@ -36,25 +34,9 @@ import {
 } from "@/lib/domain/settings/navigation-presentation";
 import { isSettingsScaffoldPageId } from "@/copy/settings/settings-scaffold-copy";
 
-interface CloudGateFlags {
-  cloudEnabled: boolean;
-  cloudActive: boolean;
-  cloudSignInChecking: boolean;
-  cloudSignInAvailable: boolean;
-}
-
 /** Cloud-gated sections: unavailable build → sign-in states → the pane itself. */
 function renderCloudGatedPane(flags: CloudGateFlags, pane: () => ReactNode): ReactNode {
-  if (!flags.cloudEnabled) {
-    return <CloudUnavailablePane />;
-  }
-  if (flags.cloudActive) {
-    return pane();
-  }
-  if (flags.cloudSignInChecking || flags.cloudSignInAvailable) {
-    return <CloudSignInRequiredPane />;
-  }
-  return <CloudAuthUnavailablePane />;
+  return <CloudGuard flags={flags}>{pane()}</CloudGuard>;
 }
 
 export function renderSettingsSection(
@@ -86,19 +68,7 @@ export function renderSettingsSection(
     return <AgentDefaultsPane />;
   }
   if (activeSection === "agent-api-keys") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <ApiKeysPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+    return renderCloudGatedPane(cloudGate, () => <ApiKeysPane />);
   }
   if (activeSection === "general") {
     return <GeneralPane />;
@@ -113,19 +83,7 @@ export function renderSettingsSection(
     return renderCloudGatedPane(cloudGate, () => <PersonalSecretsPane />);
   }
   if (activeSection === "integrations") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <UserIntegrationsPane focus={focus} />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+    return renderCloudGatedPane(cloudGate, () => <UserIntegrationsPane focus={focus} />);
   }
   if (activeSection === "billing") {
     return <BillingPane />;
@@ -140,19 +98,7 @@ export function renderSettingsSection(
     return renderCloudGatedPane(cloudGate, () => <OrganizationSecretsPane />);
   }
   if (activeSection === "organization-integrations") {
-    if (!cloudEnabled) {
-      return <CloudUnavailablePane />;
-    }
-
-    if (cloudActive) {
-      return <OrganizationIntegrationsPane />;
-    }
-
-    if (cloudSignInChecking) {
-      return <CloudSignInRequiredPane />;
-    }
-
-    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+    return renderCloudGatedPane(cloudGate, () => <OrganizationIntegrationsPane />);
   }
   // BUDGETS PARKED: render branch is intentionally disabled with the settings entry point.
   // if (activeSection === "organization-limits") {

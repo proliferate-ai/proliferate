@@ -161,7 +161,14 @@ vi.mock("./ProviderPickerModal", () => ({
 }));
 
 vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
-  useCloudAvailabilityState: () => ({ cloudActive: state.cloudActive }),
+  useCloudAvailabilityState: () => ({
+    cloudEnabled: true,
+    cloudActive: state.cloudActive,
+    cloudSignInChecking: false,
+    // When cloud is inactive the CloudGuard should fall through to the
+    // sign-in-required pane (sign-in is available), matching the real hook.
+    cloudSignInAvailable: !state.cloudActive,
+  }),
 }));
 
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({

@@ -1,6 +1,9 @@
 import type React from "react";
+import type { ReactNode } from "react";
+import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { CloudGuard } from "@/components/cloud/CloudGuard";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import {
@@ -14,6 +17,7 @@ export type { AuthMethod };
 interface HarnessAuthSectionProps {
   harnessKind: string;
   displayName: string;
+  surface: AgentAuthSurface;
   editor: HarnessAuthEditorApi;
 }
 
@@ -49,6 +53,7 @@ const CURSOR_HARNESS = "cursor";
 export function HarnessAuthSection({
   harnessKind,
   displayName,
+  surface,
   editor,
 }: HarnessAuthSectionProps) {
   if (harnessKind === CURSOR_HARNESS) {
@@ -58,6 +63,21 @@ export function HarnessAuthSection({
           {HARNESS_PANE_COPY.cursorNativeDescription(displayName)}
         </p>
       </SettingsSection>
+    );
+  }
+
+  // The cloud surface shares the reusable CloudGuard (build-disabled →
+  // sign-in states → active). The local surface keeps its lighter inline
+  // sign-in prompt so nothing changes when running fully offline.
+  if (surface === "cloud") {
+    return (
+      <CloudGuard>
+        <HarnessAuthMethods
+          harnessKind={harnessKind}
+          displayName={displayName}
+          editor={editor}
+        />
+      </CloudGuard>
     );
   }
 
@@ -71,6 +91,26 @@ export function HarnessAuthSection({
     );
   }
 
+  return (
+    <HarnessAuthMethods
+      harnessKind={harnessKind}
+      displayName={displayName}
+      editor={editor}
+    />
+  );
+}
+
+interface HarnessAuthMethodsProps {
+  harnessKind: string;
+  displayName: string;
+  editor: HarnessAuthEditorApi;
+}
+
+function HarnessAuthMethods({
+  harnessKind,
+  displayName,
+  editor,
+}: HarnessAuthMethodsProps): ReactNode {
   if (editor.selectionsQuery.isLoading) {
     return (
       <SettingsSection title={HARNESS_PANE_COPY.authenticationTitle}>
