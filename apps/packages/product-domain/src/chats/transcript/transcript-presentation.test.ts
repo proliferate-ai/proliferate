@@ -125,11 +125,11 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
-  it("keeps native Agent calls with nested child work as normal item blocks", () => {
+  it("keeps native Agent calls with nested child work as normal item blocks ONLY while running", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       agent: {
-        ...toolItem("agent", "turn-1", 1, "subagent"),
+        ...toolItem("agent", "turn-1", 1, "subagent", "in_progress"),
         nativeToolName: "Agent",
       },
       childRead: {
@@ -142,10 +142,107 @@ describe("buildTurnPresentation", () => {
 
     const presentation = buildTurnPresentation(turn, transcript);
 
+    // Running native Agent items produce normal item blocks (the renderer
+    // hides them with an early-return).
     expect(presentation.childrenByParentId.get("agent")).toEqual(["childRead"]);
     expect(presentation.displayBlocks).toEqual([
       { kind: "item", itemId: "agent" },
       { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("routes finished foreground native Agent subagents to subagent_creations blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: {
+        ...toolItem("agent", "turn-1", 1, "subagent", "completed"),
+        nativeToolName: "Agent",
+        rawOutput: { summary: "Task completed." },
+      },
+      final: assistantItem("final", "turn-1", 2),
+    };
+    const turn = turnRecord(["agent", "final"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // Finished foreground native Agent items route to subagent_creations
+    // blocks (rendered via SubagentCreationGroupBlock as quiet done-lines).
+    expect(presentation.displayBlocks).toEqual([
+      {
+        kind: "subagent_creations",
+        blockId: "agent-agent",
+        itemIds: ["agent"],
+      },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("routes finished background native Agent subagents to subagent_creations blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: {
+        ...toolItem("agent", "turn-1", 1, "subagent", "completed"),
+        nativeToolName: "Agent",
+        rawInput: { run_in_background: true },
+        rawOutput: {
+          summary: "Background work finished.",
+          _anyharness: {
+            backgroundWork: {
+              trackerKind: "claude_async_agent",
+              state: "completed",
+            },
+          },
+        },
+      },
+      final: assistantItem("final", "turn-1", 2),
+    };
+    const turn = turnRecord(["agent", "final"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // Finished background native Agent items also route to subagent_creations
+    // blocks.
+    expect(presentation.displayBlocks).toEqual([
+      {
+        kind: "subagent_creations",
+        blockId: "agent-agent",
+        itemIds: ["agent"],
+      },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
+  it("keeps running background native Agent subagents as normal item blocks", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      agent: {
+        ...toolItem("agent", "turn-1", 1, "subagent", "completed"),
+        nativeToolName: "Agent",
+        rawInput: { run_in_background: true },
+        rawOutput: {
+          _anyharness: {
+            backgroundWork: {
+              trackerKind: "claude_async_agent",
+              state: "pending",
+            },
+          },
+        },
+        contentParts: [
+          {
+            type: "tool_result_text",
+            text: "Async agent launched successfully.\nThe agent is working in the background.",
+          },
+        ],
+      },
+    };
+    const turn = turnRecord(["agent"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // Background launches with pending state are still running, so they
+    // produce normal item blocks (the renderer hides them).
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "agent" },
     ]);
   });
 

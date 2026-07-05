@@ -73,10 +73,22 @@ export function TranscriptAgentGroupBlock({
 
   // Native subagent lifecycle (session-activity-architecture): while a
   // subagent is still running it lives ONLY in the composer ⑂ roster — the
-  // transcript stays quiet and shows nothing. It resolves into a quiet
-  // done-line here once finished. This mirrors the MCP-created path
-  // (SubagentCreationGroupBlock) so both spawn routes behave identically.
+  // transcript stays quiet and shows nothing. Once finished, the item is
+  // routed to SubagentCreationGroupBlock (via buildTranscriptDisplayBlocks)
+  // and renders as a quiet done-line there. This block should NEVER receive
+  // finished subagents, but if one leaks through (e.g., stale transcript
+  // state or classification gap), hide it rather than show the old metadata
+  // block.
   if (isRunning) {
+    return null;
+  }
+
+  // Finished subagents should have been routed to SubagentCreationGroupBlock
+  // by buildTranscriptDisplayBlocks. If one reached here, it's a
+  // classification gap — hide it silently (the roster already showed the live
+  // work, and SubagentCreationGroupBlock will render the done-line if the
+  // transcript re-classifies correctly on next update).
+  if (isWorkComplete) {
     return null;
   }
 
