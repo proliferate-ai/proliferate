@@ -35,7 +35,7 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const selectedMethod = deriveSelectedMethod(editor);
 
   return (
-    <section className="max-w-4xl space-y-6">
+    <section className="space-y-6">
       <SettingsPageHeader
         title={displayName}
         action={
@@ -47,28 +47,39 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
         }
       />
 
-      <HarnessAuthSection
-        harnessKind={harnessKind}
-        displayName={displayName}
-        surface={surface}
-        editor={editor}
-      />
+      {/* Two-column setup surface: the auth/config hero panel reads as its own
+          distinct setup card on the left, with the model catalog as a quieter
+          reference column on the right. Stacks vertically below `lg`. */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="w-full shrink-0 divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02] lg:w-[360px]">
+          <HarnessAuthSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface={surface}
+            editor={editor}
+            variant="panel"
+          />
 
-      <HarnessAuthDetailsSection
-        harnessKind={harnessKind}
-        displayName={displayName}
-        surface={surface}
-        selectedMethod={selectedMethod}
-        editor={editor}
-      />
+          <HarnessAuthDetailsSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface={surface}
+            selectedMethod={selectedMethod}
+            editor={editor}
+            variant="panel"
+          />
 
-      <HarnessSettingsSection harnessKind={harnessKind} />
+          <HarnessSettingsSection harnessKind={harnessKind} variant="panel" />
+        </div>
 
-      <HarnessAllModelsSection
-        harnessKind={harnessKind}
-        displayName={displayName}
-        surface={surface}
-      />
+        <div className="min-w-0 flex-1">
+          <HarnessAllModelsSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface={surface}
+          />
+        </div>
+      </div>
     </section>
   );
 }
