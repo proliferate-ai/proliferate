@@ -15,9 +15,7 @@
 </p>
 
 <p>
-  The open-source AI IDE for working with any coding agent — Claude Code, Codex, Cursor, Grok,<br />
-  or open models through OpenCode and Ollama — locally or in the cloud, in one workspace.<br />
-  Run agents in parallel, move live sessions between laptop and cloud, and self-host all of it.
+  The open-source AI IDE for working with any coding agent locally or in the cloud.
 </p>
 
 <h3><a href="https://proliferate.com"><ins>Download for macOS</ins></a></h3>
