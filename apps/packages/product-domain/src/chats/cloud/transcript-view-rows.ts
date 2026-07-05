@@ -118,7 +118,11 @@ function appendDisplayBlockRows(
     return;
   }
 
-  if (block.kind === "inline_tools" || block.kind === "subagent_creations") {
+  if (
+    block.kind === "inline_tools"
+    || block.kind === "subagent_creations"
+    || block.kind === "subagent_activity"
+  ) {
     for (const itemId of block.itemIds) {
       appendItemRows(itemId, row, transcript, rows);
     }

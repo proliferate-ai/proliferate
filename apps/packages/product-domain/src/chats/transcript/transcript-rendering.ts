@@ -186,7 +186,11 @@ function blockContainsActiveToolWork(
     return false;
   }
 
-  if (block.kind === "collapsed_actions" || block.kind === "subagent_creations") {
+  if (
+    block.kind === "collapsed_actions"
+    || block.kind === "subagent_creations"
+    || block.kind === "subagent_activity"
+  ) {
     return block.itemIds.some((itemId) => isActiveToolItem(transcript.itemsById[itemId]));
   }
   if (block.kind === "inline_tools") {
@@ -209,6 +213,7 @@ export function blockBelongsToCompletedHistory(
     block.kind === "collapsed_actions"
     || block.kind === "inline_tools"
     || block.kind === "subagent_creations"
+    || block.kind === "subagent_activity"
   ) {
     return block.itemIds.length > 0
       && block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));

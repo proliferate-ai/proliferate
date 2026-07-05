@@ -394,6 +394,7 @@ function blockBelongsToCompletedHistory(
     block.kind === "collapsed_actions"
     || block.kind === "inline_tools"
     || block.kind === "subagent_creations"
+    || block.kind === "subagent_activity"
   ) {
     return block.itemIds.every((itemId) => completedHistoryRootIds.has(itemId));
   }
@@ -410,7 +411,7 @@ function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
   if (block.kind === "inline_tools") {
     return block.itemIds[0] ?? block.blockId;
   }
-  if (block.kind === "subagent_creations") {
+  if (block.kind === "subagent_creations" || block.kind === "subagent_activity") {
     return block.blockId;
   }
   return block.itemId;

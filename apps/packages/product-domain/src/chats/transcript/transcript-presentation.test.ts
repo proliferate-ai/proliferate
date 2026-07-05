@@ -149,6 +149,94 @@ describe("buildTurnPresentation", () => {
     ]);
   });
 
+  it("wraps background-subagent work orphaned from an out-of-turn Agent into one bounded block", () => {
+    // Background/async native subagent: the launching `Agent` tool call lived in
+    // an earlier turn (not present in this turn's items), and the subagent's own
+    // tool calls stream in here tagged with `parentToolCallId` pointing at it.
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      c1: {
+        ...terminalItem("c1", "turn-2", 1, "ls"),
+        parentToolCallId: "agent-1",
+      },
+      c2: {
+        ...toolItem("c2", "turn-2", 2, "file_read"),
+        parentToolCallId: "agent-1",
+      },
+      done: assistantItem("done", "turn-2", 3),
+    };
+    const turn = { ...turnRecord(["c1", "c2", "done"]), turnId: "turn-2" };
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.subagentActivityParentByRootId.get("c1")).toBe("agent-1");
+    expect(presentation.childrenByParentId.get("agent-1")).toBeUndefined();
+    expect(presentation.displayBlocks).toEqual([
+      {
+        kind: "subagent_activity",
+        blockId: "subagent-activity-agent-1",
+        parentToolCallId: "agent-1",
+        itemIds: ["c1", "c2"],
+      },
+      { kind: "item", itemId: "done" },
+    ]);
+  });
+
+  it("coalesces interleaved concurrent subagents into one block per launching Agent", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      a1: { ...terminalItem("a1", "turn-2", 1, "ls"), parentToolCallId: "agent-1" },
+      b1: { ...terminalItem("b1", "turn-2", 2, "pwd"), parentToolCallId: "agent-2" },
+      a2: { ...toolItem("a2", "turn-2", 3, "file_read"), parentToolCallId: "agent-1" },
+    };
+    const turn = { ...turnRecord(["a1", "b1", "a2"]), turnId: "turn-2" };
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // agent-1's a1 and a2 (interleaved with agent-2's b1) collapse into a single
+    // block positioned at agent-1's first appearance — exactly one block per
+    // subagent, not one per burst.
+    expect(presentation.displayBlocks).toEqual([
+      {
+        kind: "subagent_activity",
+        blockId: "subagent-activity-agent-1",
+        parentToolCallId: "agent-1",
+        itemIds: ["a1", "a2"],
+      },
+      {
+        kind: "subagent_activity",
+        blockId: "subagent-activity-agent-2",
+        parentToolCallId: "agent-2",
+        itemIds: ["b1"],
+      },
+    ]);
+  });
+
+  it("nests deeper subagent tool children under their in-turn parent within the activity block", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      // in-turn parent whose OWN parent (the Agent) is out of turn
+      inner: { ...toolItem("inner", "turn-2", 1, "other"), parentToolCallId: "agent-1" },
+      // child of `inner` — resolves to a same-turn parent
+      leaf: { ...toolItem("leaf", "turn-2", 2, "file_read"), parentToolCallId: "inner" },
+    };
+    const turn = { ...turnRecord(["inner", "leaf"]), turnId: "turn-2" };
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.subagentActivityParentByRootId.get("inner")).toBe("agent-1");
+    expect(presentation.subagentActivityParentByRootId.has("leaf")).toBe(false);
+    expect(presentation.childrenByParentId.get("inner")).toEqual(["leaf"]);
+    expect(presentation.displayBlocks).toEqual([
+      {
+        kind: "subagent_activity",
+        blockId: "subagent-activity-agent-1",
+        parentToolCallId: "agent-1",
+        itemIds: ["inner"],
+      },
+    ]);
+  });
+
   it("does not group creation receipts with subagent communication calls", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
