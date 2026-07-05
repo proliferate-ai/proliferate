@@ -157,10 +157,10 @@ Any coding agent, frontier or open. Each one runs through its native harness, so
 
 <p>
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/claude.svg" alt="Claude" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
-  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/codex.svg" alt="Codex" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
+  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/codex-dark.svg" alt="Codex" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/opencode.png" alt="OpenCode" width="16" valign="middle" /> OpenCode</kbd></a> &nbsp;
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/cursor.svg" alt="Cursor" width="16" valign="middle" /> Cursor</kbd></a> &nbsp;
-  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/grok.svg" alt="Grok" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
+  <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd>Grok</kbd></a> &nbsp;
   <kbd>+ any coding agent</kbd>
 </p>
 
