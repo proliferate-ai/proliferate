@@ -30,7 +30,7 @@
   <a href="https://discord.gg/wCEgUnEuF">Discord</a>
 </p>
 
-<!-- TODO(asset): hero.gif — composite: desktop app running 3-4 agents in parallel worktrees, one cloud session visible; see SHOTLIST.md -->
+<!-- TODO(asset): hero.gif- composite: desktop app running 3-4 agents in parallel worktrees, one cloud session visible; see SHOTLIST.md -->
 <picture>
   <source srcset="./specs/developing/assets/readme/hero.gif" type="image/gif" />
   <img width="100%" alt="Proliferate running multiple coding agents in parallel" src="./specs/developing/assets/readme/hero.png" />
@@ -51,13 +51,13 @@
 
 ### Move sessions between laptop and cloud
 
-Start an agent locally, hand the running session to a cloud sandbox — or pull it back — mid-task, with history and changes intact.
+Start an agent locally, hand the running session to a cloud sandbox- or pull it back- mid-task, with history and changes intact.
 
 [Docs →](https://proliferate.com/docs/concepts/workspaces)
 
 </td>
 <td width="50%">
-  <!-- TODO(asset): feature-wall/session-handoff.{gif,jpg} — see SHOTLIST.md -->
+  <!-- TODO(asset): feature-wall/session-handoff.{gif,jpg}- see SHOTLIST.md -->
   <a href="https://proliferate.com/docs/concepts/workspaces"><picture><source srcset="./specs/developing/assets/readme/feature-wall/session-handoff.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/session-handoff.jpg" alt="Moving a running agent session from laptop to cloud" width="100%" /></picture></a>
 </td>
 </tr>
@@ -72,7 +72,7 @@ Fan work across any mix of agents, each in its own worktree or cloud sandbox, wi
 
 </td>
 <td width="50%">
-  <!-- TODO(asset): feature-wall/parallel-agents.{gif,jpg} — see SHOTLIST.md -->
+  <!-- TODO(asset): feature-wall/parallel-agents.{gif,jpg}- see SHOTLIST.md -->
   <a href="https://proliferate.com/docs/concepts/workspaces"><picture><source srcset="./specs/developing/assets/readme/feature-wall/parallel-agents.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/parallel-agents.jpg" alt="Multiple agents working in parallel worktrees" width="100%" /></picture></a>
 </td>
 </tr>
@@ -81,13 +81,13 @@ Fan work across any mix of agents, each in its own worktree or cloud sandbox, wi
 
 ### Automate work by chaining agents
 
-Chain prompts, goals, shell checks, approvals, and PR opening into workflows any agent can run — on demand or on a schedule. The release-QA workflow on this repo runs on GLM 5.2 and costs ~$0.04 a pass.
+Chain prompts, goals, shell checks, approvals, and PR opening into workflows any agent can run, on demand or on a schedule. The release-QA workflow on this repo runs on GLM 5.2 and costs ~$0.04 a pass.
 
 [Docs →](https://proliferate.com/docs/concepts/automations)
 
 </td>
 <td width="50%">
-  <!-- TODO(asset): feature-wall/workflows.{gif,jpg} — workflow run view w/ step timeline + cost readout; see SHOTLIST.md -->
+  <!-- TODO(asset): feature-wall/workflows.{gif,jpg}- workflow run view w/ step timeline + cost readout; see SHOTLIST.md -->
   <a href="https://proliferate.com/docs/concepts/automations"><picture><source srcset="./specs/developing/assets/readme/feature-wall/workflows.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/workflows.jpg" alt="A workflow chaining agents with a visible cost readout" width="100%" /></picture></a>
 </td>
 </tr>
@@ -102,7 +102,7 @@ Delegate across harnesses: Codex hands design work to Claude Code, and subagents
 
 </td>
 <td width="50%">
-  <!-- TODO(asset): feature-wall/agent-delegation.{gif,jpg} — see SHOTLIST.md -->
+  <!-- TODO(asset): feature-wall/agent-delegation.{gif,jpg}- see SHOTLIST.md -->
   <a href="https://proliferate.com/docs/concepts/subagents"><picture><source srcset="./specs/developing/assets/readme/feature-wall/agent-delegation.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/agent-delegation.jpg" alt="One agent delegating work to another" width="100%" /></picture></a>
 </td>
 </tr>
@@ -111,13 +111,13 @@ Delegate across harnesses: Codex hands design work to Claude Code, and subagents
 
 ### Review before you merge
 
-Inspect and edit agent diffs in-app — down to staging or reverting individual hunks — and let reviewer agents check plans, changes, and branch readiness before you do.
+Inspect and edit agent diffs in-app, down to staging or reverting individual hunks, and let reviewer agents check plans, changes, and branch readiness before you do.
 
 [Docs →](https://proliferate.com/docs/concepts/review)
 
 </td>
 <td width="50%">
-  <!-- TODO(asset): feature-wall/review.{gif,jpg} — see SHOTLIST.md -->
+  <!-- TODO(asset): feature-wall/review.{gif,jpg}- see SHOTLIST.md -->
   <a href="https://proliferate.com/docs/concepts/review"><picture><source srcset="./specs/developing/assets/readme/feature-wall/review.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/review.jpg" alt="Reviewing agent diffs in Proliferate" width="100%" /></picture></a>
 </td>
 </tr>
@@ -126,13 +126,13 @@ Inspect and edit agent diffs in-app — down to staging or reverting individual 
 
 ### Self-host the whole thing
 
-AGPL, one Docker Compose stack — the app, the gateway, and the cloud itself. Point the official desktop app at your own server: your infra, your keys, your data. Attach your own machines over SSH as runners.
+AGPL, one Docker Compose stack- the app, the gateway, and the cloud itself. Point the official desktop app at your own server- your infra and your keys. Attach your own machines over SSH as runners.
 
 [Docs →](https://proliferate.com/docs/deployment)
 
 </td>
 <td width="50%">
-  <!-- TODO(asset): feature-wall/self-host.{gif,jpg} — see SHOTLIST.md -->
+  <!-- TODO(asset): feature-wall/self-host.{gif,jpg}- see SHOTLIST.md -->
   <a href="https://proliferate.com/docs/deployment"><picture><source srcset="./specs/developing/assets/readme/feature-wall/self-host.gif" type="image/gif"><img src="./specs/developing/assets/readme/feature-wall/self-host.jpg" alt="Self-hosting Proliferate with Docker Compose" width="100%" /></picture></a>
 </td>
 </tr>
@@ -141,11 +141,11 @@ AGPL, one Docker Compose stack — the app, the gateway, and the cloud itself. P
 **Also in the box:**
 
 - **AI gateway &amp; budgets**: bring your own provider keys or agent subscriptions; agents and sandboxes only ever see short-lived per-user keys. See and cap what every person and every agent spends.
-- **Native features, preserved**: goals an agent iterates toward, recurring in-session loops, plan modes, subagents — each through the harness's own machinery, not a re-implementation.
-- **MCPs &amp; skills**: configured once, shared by every agent — plus Computer Use, Browser Use, and custom tools.
+- **Native features, preserved**: goals an agent iterates toward, recurring in-session loops, plan modes, subagents- each runs through the harness's own machinery, not a copy of it.
+- **MCPs &amp; skills**: configured once, shared by every agent, plus Computer Use, Browser Use, and custom tools.
 - **[Artifacts](https://proliferate.com/docs/concepts/artifacts)**: docs, UI, demos, and components rendered inline as agents produce them.
 - **SSH access**: drop into any cloud sandbox from your terminal.
-- **Teams (early)**: shared cloud sessions, org settings, per-member budgets — expanding over the coming weeks.
+- **Teams (early)**: shared cloud sessions, org settings, per-member budgets- expanding over the coming weeks.
 - **Mobile**: coming soon. Dispatch work, approve actions, and follow runs from your phone.
 - **And more, constantly**: the [changelog](https://proliferate.com/changelog) is the real feature list.
 
@@ -153,7 +153,7 @@ AGPL, one Docker Compose stack — the app, the gateway, and the cloud itself. P
 
 ## Bring Your Agent
 
-Any coding agent, frontier or open. Each one runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact — and new harness features show up in Proliferate the day they ship.
+Any coding agent, frontier or open. Each one runs through its native harness, so auth, tools, models, permissions, and transcript behavior stay intact, and new harness features show up in Proliferate the day they ship.
 
 <p>
   <a href="https://proliferate.com/docs/concepts/agents-and-harnesses"><kbd><img src="./apps/desktop/public/provider-icons/claude.svg" alt="Claude" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
@@ -164,7 +164,7 @@ Any coding agent, frontier or open. Each one runs through its native harness, so
   <kbd>+ any coding agent</kbd>
 </p>
 
-Sign in with the subscriptions you already pay for, plug in API keys, or use the managed gateway — per agent, your choice.
+Sign in with the subscriptions you already pay for, plug in API keys, or use the managed gateway, per agent.
 
 ---
 
@@ -199,13 +199,13 @@ See [dev profiles](./specs/developing/local/dev-profiles.md) and [CONTRIBUTING.m
 
 ## Self-hosting
 
-Run the whole Proliferate server yourself (beta) — one line:
+Run the whole Proliferate server yourself (beta)- one line:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/proliferate-ai/proliferate/main/scripts/self-host/install.sh | sh
 ```
 
-That boots the full stack — app server, gateway, and cloud control plane — with Docker Compose on your box. Point the official desktop app at your server and you're on your own infrastructure. Optional add-ons: cloud sandboxes (E2B — the one external dependency) and the LiteLLM gateway; or attach your own machines over SSH as runners.
+That boots the full stack- app server, gateway, and cloud control plane- with Docker Compose on your box. Point the official desktop app at your server and you're on your own infrastructure. Optional add-ons: cloud sandboxes (E2B- the one external dependency) and the LiteLLM gateway; or attach your own machines over SSH as runners.
 
 - **[Self-hosting docs](https://proliferate.com/docs/deployment)**: quickstart, add-ons, BYO certificates, and operations
 
