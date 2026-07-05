@@ -5,6 +5,7 @@
     "registryVersion": "2026-06-10.1"
   },
   "generatedAt": "2026-06-18T06:23:46.960Z",
+  "defaultAgentKind": "claude",
   "agents": [
     {
       "kind": "claude",

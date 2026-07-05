@@ -5,7 +5,6 @@ export type SettingsNavIconId =
   | "agent-api-keys"
   | "agent-claude"
   | "agent-codex"
-  | "agent-defaults"
   | "agent-grok"
   | "agent-opencode"
   | "appearance"
@@ -143,7 +142,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "agent-opencode", label: "OpenCode", iconId: "agent-opencode" },
           { kind: "section", id: "agent-grok", label: "Grok", iconId: "agent-grok" },
           { kind: "section", id: "agent-api-keys", label: "API keys", iconId: "agent-api-keys" },
-          { kind: "section", id: "agent-defaults", label: "Defaults", iconId: "agent-defaults" },
         ],
       },
     ],
