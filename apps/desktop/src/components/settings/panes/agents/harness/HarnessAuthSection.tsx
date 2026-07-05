@@ -37,14 +37,15 @@ export function deriveSelectedMethod(editor: HarnessAuthEditorApi): AuthMethod {
 
 /**
  * Multi-source selection (opencode only): gateway and api_key are independent
- * toggles and may both be selected on purpose. CLI is shown only when neither is
- * on.
+ * toggles that may both be active. CLI (native auth) is ALWAYS selected because
+ * opencode's native providers coexist with injected sources — the render plane
+ * no longer isolates XDG_DATA_HOME, so `opencode auth login` providers are
+ * always reachable alongside gateway/api_key sources.
  */
 export function deriveSelectedMethods(editor: HarnessAuthEditorApi): Set<AuthMethod> {
-  const methods = new Set<AuthMethod>();
+  const methods = new Set<AuthMethod>(["cli"]);
   if (editor.editorState.gatewayEnabled) methods.add("gateway");
   if (editor.editorState.rows.some((row) => row.enabled)) methods.add("api_key");
-  if (methods.size === 0) methods.add("cli");
   return methods;
 }
 
@@ -154,7 +155,8 @@ function HarnessAuthMethods({
           label={HARNESS_PANE_COPY.methodCli}
           icon={<SquareTerminal className="size-5" />}
           selected={selectedMethods.has("cli")}
-          disabled={editor.busy}
+          disabled={multiSource || editor.busy}
+          disabledReason={multiSource ? HARNESS_PANE_COPY.cliAlwaysActive : undefined}
           onClick={() => selectMethod("cli")}
         />
       </div>
@@ -230,11 +232,9 @@ function handleMultiSourceSelect(method: AuthMethod, editor: HarnessAuthEditorAp
       break;
     }
     case "cli":
-      // Clicking CLI in multi-source disables everything.
-      editor.commit({
-        gatewayEnabled: false,
-        rows: editor.editorState.rows.map((row) => ({ ...row, enabled: false })),
-      });
+      // No-op: native auth always participates for multi-source harnesses
+      // (opencode's own providers coexist with gateway/api_key sources).
+      // The CLI card is permanently selected and not a toggle.
       break;
   }
 }

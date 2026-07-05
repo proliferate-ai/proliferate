@@ -93,7 +93,7 @@ Recipe:
 - **UPDATED (2026-07-03 re-verification):** with a valid OPENAI_API_KEY, gpt-5-mini/gpt-5.2 now fail with a *different*, external error — `404 ... organization must be verified` — not a key problem. The cross-provider path (claude-haiku-4-5-20251001, tested here for both plain completion and a shell tool call) remains the verified, supported route; native gpt-5-family stays blocked-external pending OpenAI org verification (out of scope to fix).
 
 ## opencode — WORKS
-Recipe (opencode.json in workdir; XDG_CONFIG_HOME/XDG_DATA_HOME isolated):
+Recipe (opencode.json in workdir; XDG_CONFIG_HOME isolated, XDG_DATA_HOME ambient for native auth coexistence):
   {"provider":{"proliferate":{"npm":"@ai-sdk/openai-compatible","options":{"baseURL":"http://<proxy>/v1","apiKey":"{env:PROLIFERATE_GATEWAY_KEY}"},"models":{"claude-haiku-4-5-20251001":{}}}}}
   opencode run -m proliferate/claude-haiku-4-5-20251001 "..."
 - Endpoint: POST /v1/chat/completions 200. Explicit models map REQUIRED (confirms spec).
