@@ -11,7 +11,7 @@ export const HARNESS_PANE_COPY = {
   addVariable: "Add variable",
   addProvider: "Add provider",
   removeVariable: "Remove variable",
-  runLogin: "Run login",
+  runLogin: "Authenticate",
   runLoginOpening: "Opening...",
   harnessSettingsTitle: "Harness settings",
   harnessSettingsPlaceholderLabel: "Harness-specific settings",
