@@ -388,9 +388,12 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
                   // Real action — number it 1..N ignoring scope boundaries.
                   actionNumber += 1;
-                  // Draw the connector spine unless the next step opens a new
-                  // session (that break is now carried by the scope header).
-                  const nextIsNewSession = effectiveConfigs[index + 1]?.isNewSession === true;
+                  // Draw the spine only to the next contiguous action. When the
+                  // next step is a scope boundary (agent.config), the header is
+                  // the clean break, so the spine stops here.
+                  const nextIsAction =
+                    definition.steps[index + 1] !== undefined &&
+                    definition.steps[index + 1]!.kind !== "agent.config";
                   return (
                     <div key={index} {...dragProps}>
                       <WorkflowStepRailCard
@@ -399,7 +402,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                         stepNumber={actionNumber}
                         selected={selectedStep === index}
                         invalid={stepIssues(issues, index).length > 0}
-                        connector={index < definition.steps.length - 1 && !nextIsNewSession}
+                        connector={nextIsAction}
                         canMoveUp={index > 0}
                         canMoveDown={index < definition.steps.length - 1}
                         onSelect={() => { setSelectedStep(index); setSetupSelected(false); }}

@@ -113,7 +113,9 @@ function ScopeDemoRail() {
         }
 
         actionNumber += 1;
-        const nextIsNewSession = effectiveConfigs[index + 1]?.isNewSession === true;
+        const nextIsAction =
+          SCOPE_DEMO_STEPS[index + 1] !== undefined &&
+          SCOPE_DEMO_STEPS[index + 1]!.kind !== "agent.config";
         return (
           <WorkflowStepRailCard
             key={index}
@@ -122,7 +124,7 @@ function ScopeDemoRail() {
             stepNumber={actionNumber}
             selected={selected === index}
             invalid={false}
-            connector={index < SCOPE_DEMO_STEPS.length - 1 && !nextIsNewSession}
+            connector={nextIsAction}
             canMoveUp={index > 0}
             canMoveDown={index < SCOPE_DEMO_STEPS.length - 1}
             onSelect={() => setSelected(index)}
