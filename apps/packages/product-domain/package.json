@@ -71,6 +71,10 @@
       "types": "./dist/workflows/model.d.ts",
       "import": "./dist/workflows/model.js"
     },
+    "./workflows/effective-config": {
+      "types": "./dist/workflows/effective-config.d.ts",
+      "import": "./dist/workflows/effective-config.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

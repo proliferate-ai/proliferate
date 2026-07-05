@@ -14,6 +14,7 @@ import { validateWorkflowDefinition } from "./validation";
 import { deriveStepRunViews } from "./run-status";
 import { WORKFLOW_TEMPLATES } from "./templates";
 import { goalRailLine, workflowStepStrip } from "./presentation";
+import { deriveEffectiveConfigs, deriveScopeGroups } from "./effective-config";
 
 describe("interpolation", () => {
   it("parses arg and step-output references", () => {
@@ -242,5 +243,98 @@ describe("presentation", () => {
     const line = goalRailLine(WORKFLOW_TEMPLATES[0]!.definition.steps[2]!);
     expect(line?.glyph).toBe("◎");
     expect(line?.text).toContain("25t · 90m · 400k");
+  });
+});
+
+describe("effective-config derivation", () => {
+  it("setup-only: all steps share scope 0, first agent.prompt opens session", () => {
+    const def: WorkflowDefinition = {
+      args: [],
+      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
+      steps: [
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "hello" },
+        { kind: "shell.run", onFail: { kind: "stop" }, command: "make test" },
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "done" },
+      ],
+    };
+    const configs = deriveEffectiveConfigs(def);
+    expect(configs).toHaveLength(3);
+    // First prompt opens the session
+    expect(configs[0]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "sonnet", isNewSession: true, scopeIndex: 0 });
+    // Shell step: same scope, no new session
+    expect(configs[1]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "sonnet", isNewSession: false, scopeIndex: 0 });
+    // Second prompt: same scope, no new session
+    expect(configs[2]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "sonnet", isNewSession: false, scopeIndex: 0 });
+  });
+
+  it("model-only change: same session (scope unchanged)", () => {
+    const def: WorkflowDefinition = {
+      args: [],
+      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
+      steps: [
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "start" },
+        { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "continue" },
+      ],
+    };
+    const configs = deriveEffectiveConfigs(def);
+    expect(configs[0]).toMatchObject({ isNewSession: true, scopeIndex: 0 });
+    // Model-only config: NOT a new session (harness unchanged)
+    expect(configs[1]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "opus", isNewSession: false, scopeIndex: 0 });
+    expect(configs[2]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "opus", isNewSession: false, scopeIndex: 0 });
+  });
+
+  it("harness change: opens new session (new scope)", () => {
+    const def: WorkflowDefinition = {
+      args: [],
+      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
+      steps: [
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "start" },
+        { kind: "agent.config", onFail: { kind: "stop" }, harness: "codex", model: "gpt" },
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "in codex" },
+      ],
+    };
+    const configs = deriveEffectiveConfigs(def);
+    expect(configs[0]).toMatchObject({ effectiveHarness: "claude", isNewSession: true, scopeIndex: 0 });
+    // Harness change IS a new session
+    expect(configs[1]).toMatchObject({ effectiveHarness: "codex", effectiveModel: "gpt", isNewSession: true, scopeIndex: 1 });
+    expect(configs[2]).toMatchObject({ effectiveHarness: "codex", isNewSession: false, scopeIndex: 1 });
+  });
+
+  it("consecutive configs: each harness change increments scope", () => {
+    const def: WorkflowDefinition = {
+      args: [],
+      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
+      steps: [
+        { kind: "agent.config", onFail: { kind: "stop" }, harness: "codex" },
+        { kind: "agent.config", onFail: { kind: "stop" }, harness: "opencode" },
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "go" },
+      ],
+    };
+    const configs = deriveEffectiveConfigs(def);
+    // First config: opens first scope (no prior agent-touching step)
+    expect(configs[0]).toMatchObject({ effectiveHarness: "codex", isNewSession: true, scopeIndex: 0 });
+    // Second config: harness changed from codex -> opencode
+    expect(configs[1]).toMatchObject({ effectiveHarness: "opencode", isNewSession: true, scopeIndex: 1 });
+    // Prompt inherits
+    expect(configs[2]).toMatchObject({ effectiveHarness: "opencode", isNewSession: false, scopeIndex: 1 });
+  });
+
+  it("scope groups derive correctly", () => {
+    const def: WorkflowDefinition = {
+      args: [],
+      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
+      steps: [
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "a" },
+        { kind: "shell.run", onFail: { kind: "stop" }, command: "test" },
+        { kind: "agent.config", onFail: { kind: "stop" }, harness: "codex" },
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "b" },
+      ],
+    };
+    const configs = deriveEffectiveConfigs(def);
+    const groups = deriveScopeGroups(configs);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ startIndex: 0, endIndex: 1, scopeIndex: 0, harness: "claude" });
+    expect(groups[1]).toMatchObject({ startIndex: 2, endIndex: 3, scopeIndex: 1, harness: "codex" });
   });
 });
