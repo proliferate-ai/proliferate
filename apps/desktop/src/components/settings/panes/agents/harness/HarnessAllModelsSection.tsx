@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
   useAgentCatalog,
@@ -163,6 +163,42 @@ export function HarnessAllModelsSection({
 
   const isLoading = isRuntimeGateway ? gatewayModelsQuery.isLoading : catalogQuery.isLoading;
   const isRefreshing = isRuntimeGateway ? refreshGatewayModels.isPending : refreshCatalog.isPending;
+
+  // Auto-probe an empty catalog: landing on a resolved-but-empty catalog kicks
+  // off the same refresh the button uses, exactly once per (harnessKind, surface,
+  // route) scope. Guards against loops — we only fire when nothing is
+  // loading/refreshing and we haven't already probed this scope. For
+  // runtime-probed routes we skip when the runtime launch options aren't
+  // available yet (buildRuntimeCatalogModelsJson would be null); the empty
+  // message stays until the runtime is reachable.
+  const autoProbedScopeRef = useRef<string | null>(null);
+  const autoProbeScope = `${harnessKind}:${surface}:${route}`;
+  const runtimeModelsUnavailable =
+    isRuntimeProbedRoute
+    && buildRuntimeCatalogModelsJson(harnessKind, runtimeLaunchOptionsQuery.data) === null;
+  useEffect(() => {
+    if (!cloudActive || isLoading || isRefreshing || models.length > 0) {
+      return;
+    }
+    if (autoProbedScopeRef.current === autoProbeScope) {
+      return;
+    }
+    if (runtimeModelsUnavailable) {
+      return;
+    }
+    autoProbedScopeRef.current = autoProbeScope;
+    handleRefresh();
+  }, [
+    cloudActive,
+    isLoading,
+    isRefreshing,
+    models.length,
+    autoProbeScope,
+    runtimeModelsUnavailable,
+  ]);
+  // Empty catalog with a probe in flight (auto or manual) shows the probing state
+  // instead of the static empty copy.
+  const isProbingEmpty = models.length === 0 && isRefreshing;
   const freshnessLine = isRuntimeGateway
     ? gatewayModelsQuery.data
       ? gatewayModelsQuery.data.source === "probe" && gatewayModelsQuery.data.probedAt
@@ -202,6 +238,11 @@ export function HarnessAllModelsSection({
         {isLoading ? (
           <p className="text-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsLoading}
+          </p>
+        ) : isProbingEmpty ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <RefreshCw className="size-3.5 animate-spin" />
+            {HARNESS_PANE_COPY.allModelsProbing}
           </p>
         ) : models.length === 0 ? (
           <p className="text-sm text-muted-foreground">

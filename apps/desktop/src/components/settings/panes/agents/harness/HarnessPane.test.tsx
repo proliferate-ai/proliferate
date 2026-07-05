@@ -342,6 +342,28 @@ describe("HarnessPane authentication", () => {
     );
   });
 
+  it("selects exactly one method for a single-source harness: API key then CLI ends on CLI", () => {
+    renderPane("claude");
+
+    const gateway = () =>
+      screen.getByRole("button", { name: "Proliferate gateway" });
+    const apiKey = () => screen.getByRole("button", { name: "API key" });
+    const cli = () => screen.getByRole("button", { name: "CLI login" });
+
+    // Clicking API key seeds a draft row and highlights ONLY the API key card —
+    // gateway and api_key are never selected together on a single-source harness.
+    fireEvent.click(apiKey());
+    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
+    expect(gateway().getAttribute("aria-pressed")).toBe("false");
+    expect(cli().getAttribute("aria-pressed")).toBe("false");
+
+    // Clicking CLI drops the incomplete draft and sticks on CLI.
+    fireEvent.click(cli());
+    expect(cli().getAttribute("aria-pressed")).toBe("true");
+    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
+    expect(gateway().getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("shows the native empty-state copy when nothing is enabled", () => {
     renderPane("claude");
     expect(

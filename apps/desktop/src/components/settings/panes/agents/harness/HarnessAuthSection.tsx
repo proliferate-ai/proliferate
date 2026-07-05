@@ -3,10 +3,13 @@ import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icon
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
-import { isMultiSourceHarness } from "@/lib/domain/settings/harness-auth-sources";
+import {
+  isMultiSourceHarness,
+  type AuthMethod,
+} from "@/lib/domain/settings/harness-auth-sources";
 import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
 
-export type AuthMethod = "gateway" | "api_key" | "cli";
+export type { AuthMethod };
 
 interface HarnessAuthSectionProps {
   harnessKind: string;
@@ -14,18 +17,29 @@ interface HarnessAuthSectionProps {
   editor: HarnessAuthEditorApi;
 }
 
+/**
+ * Single-source radio selection (claude/codex/grok/…): exactly one method is
+ * active. An enabled source wins; otherwise the user's last click (pendingMethod)
+ * highlights the card even before a key is wired; the implicit fallback is CLI.
+ * Never infers from a draft/disabled row's mere presence (that lit up api_key
+ * while gateway was on).
+ */
 export function deriveSelectedMethod(editor: HarnessAuthEditorApi): AuthMethod {
   if (editor.editorState.gatewayEnabled) return "gateway";
-  // Show api_key details when any row exists (even draft/disabled) — the user
-  // is actively configuring a key.
-  if (editor.editorState.rows.length > 0) return "api_key";
+  if (editor.editorState.rows.some((row) => row.enabled)) return "api_key";
+  if (editor.pendingMethod) return editor.pendingMethod;
   return "cli";
 }
 
+/**
+ * Multi-source selection (opencode only): gateway and api_key are independent
+ * toggles and may both be selected on purpose. CLI is shown only when neither is
+ * on.
+ */
 export function deriveSelectedMethods(editor: HarnessAuthEditorApi): Set<AuthMethod> {
   const methods = new Set<AuthMethod>();
   if (editor.editorState.gatewayEnabled) methods.add("gateway");
-  if (editor.editorState.rows.length > 0) methods.add("api_key");
+  if (editor.editorState.rows.some((row) => row.enabled)) methods.add("api_key");
   if (methods.size === 0) methods.add("cli");
   return methods;
 }
@@ -66,7 +80,11 @@ export function HarnessAuthSection({
   }
 
   const multiSource = isMultiSourceHarness(harnessKind);
-  const selectedMethods = deriveSelectedMethods(editor);
+  // Single-source harnesses are a radio (exactly one active method); only
+  // opencode keeps the independent multi-select set.
+  const selectedMethods = multiSource
+    ? deriveSelectedMethods(editor)
+    : new Set<AuthMethod>([deriveSelectedMethod(editor)]);
   const capabilities = editor.capabilitiesQuery.data;
   const enrollment = editor.enrollmentQuery.data;
 
@@ -114,11 +132,16 @@ export function HarnessAuthSection({
 function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuthEditorApi) {
   switch (method) {
     case "gateway":
+      // handleGatewayToggle already turns every api-key row off (radio
+      // semantics); an enabled gateway makes deriveSelectedMethod return
+      // "gateway" so no pending marker is needed.
       editor.handleGatewayToggle(true);
+      editor.setPendingMethod("gateway");
       break;
     case "api_key": {
       // Disable gateway; enable first complete row if one exists, otherwise seed
-      // a draft row via the existing env-var suggestion logic.
+      // a draft row via the existing env-var suggestion logic. Mark api_key
+      // pending so the card highlights immediately even before a key is wired.
       if (editor.editorState.gatewayEnabled) {
         editor.handleGatewayToggle(false);
       }
@@ -130,14 +153,20 @@ function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuthEditorA
       } else if (editor.editorState.rows.length === 0) {
         editor.handleAddVariable();
       }
+      editor.setPendingMethod("api_key");
       break;
     }
     case "cli":
-      // Disable everything → native state.
+      // Native state: drop gateway and any incomplete draft rows (so nothing
+      // keeps api_key "active"), and disable the rest. Marking cli pending makes
+      // the card stick even though complete rows may linger disabled.
       editor.commit({
         gatewayEnabled: false,
-        rows: editor.editorState.rows.map((row) => ({ ...row, enabled: false })),
+        rows: editor.editorState.rows
+          .filter((row) => row.apiKeyId !== null)
+          .map((row) => ({ ...row, enabled: false })),
       });
+      editor.setPendingMethod("cli");
       break;
   }
 }
