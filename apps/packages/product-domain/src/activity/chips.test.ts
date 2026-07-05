@@ -61,7 +61,7 @@ describe("deriveActivityChips", () => {
     expect(chips).toEqual([
       { kind: "loops", count: 1, liveCount: 1, label: "1 loop" },
       { kind: "terminals", count: 2, liveCount: 1, label: "2 terminals" },
-      { kind: "agents", count: 1, liveCount: 1, label: "1 agent" },
+      { kind: "agents", count: 1, liveCount: 1, label: "1 native subagent" },
     ]);
   });
 

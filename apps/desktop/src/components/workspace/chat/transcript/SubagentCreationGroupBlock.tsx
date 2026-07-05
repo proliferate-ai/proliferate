@@ -2,16 +2,13 @@ import { useState } from "react";
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
-import { DelegatedAgentHoverCard } from "@/components/workspace/shell/tabs/DelegatedAgentHoverCard";
+import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
 import {
   parseSubagentLaunchResult,
-  parseSubagentProvisioningStatus,
   resolveSubagentLaunchDisplay,
+  isSubagentWorkComplete,
 } from "@proliferate/product-domain/chats/subagents/subagent-launch";
 import { buildDelegatedAgentIdentity } from "@/lib/domain/delegated-work/identity";
-import {
-  delegatedWorkStatusCategoryFromLabel,
-} from "@/lib/domain/delegated-work/presentation";
 import { useTranscriptOpenSession } from "./TranscriptContexts";
 
 const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
@@ -27,10 +24,14 @@ export function SubagentCreationGroupBlock({
   const items = itemIds
     .map((itemId) => transcript.itemsById[itemId])
     .filter((item): item is ToolCallItem => item?.kind === "tool_call");
-  const openSession = useTranscriptOpenSession();
-  const summary = items.length === 1 ? "Created subagent" : `Created ${items.length} subagents`;
 
-  if (items.length === 0) {
+  // Filter to only show finished subagents in the transcript.
+  // Running subagents appear only in the composer ⑂ roster.
+  const finishedItems = items.filter((item) => isSubagentWorkComplete(item));
+  const openSession = useTranscriptOpenSession();
+  const summary = finishedItems.length === 1 ? "Subagent finished" : `${finishedItems.length} subagents finished`;
+
+  if (finishedItems.length === 0) {
     return null;
   }
 
@@ -57,8 +58,8 @@ export function SubagentCreationGroupBlock({
       </Button>
       {expanded && (
         <div className="ml-1 space-y-1 border-l border-border/70 pl-2">
-          {items.map((item) => (
-            <SubagentCreationRow
+          {finishedItems.map((item) => (
+            <SubagentFinishedRow
               key={item.itemId}
               item={item}
               parentTitle={transcript.sessionMeta.title ?? "Parent session"}
@@ -73,110 +74,97 @@ export function SubagentCreationGroupBlock({
   );
 }
 
-function SubagentCreationRow({
+/**
+ * A quiet, collapsible line for a finished subagent showing the clean result
+ * summary the parent agent used. The line reads "⑂ <task title> — done" and
+ * expands to show the subagent's summary field (never the raw orchestration
+ * metadata).
+ */
+function SubagentFinishedRow({
   item,
-  parentTitle,
   onOpenChild,
 }: {
   item: ToolCallItem;
   parentTitle: string;
   onOpenChild?: (childSessionId: string) => void;
 }) {
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
   const launchDisplay = resolveSubagentLaunchDisplay(item);
   const launchResult = parseSubagentLaunchResult(item);
-  const provisioningStatus = parseSubagentProvisioningStatus(item);
   const identity = buildDelegatedAgentIdentity({
     id: item.toolCallId ?? item.itemId,
     title: launchDisplay.title,
     sessionId: launchResult?.childSessionId ?? null,
     sessionLinkId: launchResult?.sessionLinkId ?? item.toolCallId ?? item.itemId,
   });
-  const promptPreview = formatPromptPreview(launchDisplay.prompt);
   const canOpenChild = !!launchResult?.childSessionId && !!onOpenChild;
-  const statusLabel = formatCreationStatusLabel(provisioningStatus?.promptStatus);
-  const hoverAgent = {
-    identity,
-    kind: "subagent" as const,
-    originLabel: "Subagent",
-    statusCategory: delegatedWorkStatusCategoryFromLabel({
-      statusLabel,
-      wakeScheduled: provisioningStatus?.wakeScheduled,
-    }),
-    statusLabel,
-    parentTitle,
-    hoverTitle: [
-      identity.displayName,
-      "Subagent",
-      parentTitle ? `Parent: ${parentTitle}` : null,
-      statusLabel,
-    ].filter((value): value is string => !!value).join("\n"),
-  };
+  const isFailed = item.status === "failed";
+
+  // Extract the clean summary from the rawOutput JSON (the structured result the
+  // parent agent received), not the raw tool_result_text contentParts (which may
+  // contain internal orchestration metadata).
+  const rawOutput = typeof item.rawOutput === "object" && item.rawOutput !== null
+    ? item.rawOutput as Record<string, unknown>
+    : null;
+  const summary = typeof rawOutput?.summary === "string" && rawOutput.summary.trim().length > 0
+    ? rawOutput.summary.trim()
+    : null;
+
   const openChild = () => {
-    if (canOpenChild) {
-      onOpenChild(launchResult.childSessionId!);
+    if (canOpenChild && launchResult?.childSessionId) {
+      onOpenChild(launchResult.childSessionId);
     }
   };
-  const identityContent = (
-    <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-baseline">
-      <Robot className={`size-3 shrink-0 ${identity.textColorClassName}`} />
-      <span className={`truncate font-medium ${identity.textColorClassName}`}>
-        {identity.displayName}
-      </span>
-    </span>
-  );
-  const identityNode = canOpenChild ? (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      data-chat-transcript-ignore
-      className="h-auto min-w-0 max-w-full rounded-none bg-transparent p-0 text-left text-chat font-normal leading-[var(--text-chat--line-height)] hover:bg-transparent focus-visible:ring-0"
-      title={`Open ${identity.displayName}`}
-      aria-label={`Open ${identity.displayName}`}
-      onClick={openChild}
-    >
-      {identityContent}
-    </Button>
-  ) : (
-    <span className="inline-flex min-w-0 max-w-full">{identityContent}</span>
-  );
 
   return (
-    <div className="flex min-w-0 max-w-full items-center gap-x-1 overflow-hidden whitespace-nowrap text-chat font-normal leading-[var(--text-chat--line-height)] text-muted-foreground">
-      <span className="shrink-0">Created subagent</span>
-      <DelegatedAgentHoverCard
-        agent={hoverAgent}
-        cardAriaLabel={`Open ${identity.displayName}`}
-        onCardClick={canOpenChild ? openChild : undefined}
+    <div className="min-w-0">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        data-chat-transcript-ignore
+        className={`group/subagent-done h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline`}
+        aria-expanded={detailsExpanded}
+        onClick={() => setDetailsExpanded((next) => !next)}
       >
-        {identityNode}
-      </DelegatedAgentHoverCard>
-      {promptPreview && (
-        <span className="min-w-0 flex-1 truncate">
-          with prompt &quot;{promptPreview}&quot;
+        <Robot
+          aria-hidden="true"
+          className={`size-3 shrink-0 transition-colors ${
+            detailsExpanded
+              ? "text-foreground/70"
+              : isFailed
+                ? "text-destructive/60"
+                : "text-faint group-hover/subagent-done:text-muted-foreground group-focus-visible/subagent-done:text-muted-foreground"
+          }`}
+        />
+        <span className="min-w-0 truncate">
+          {identity.displayName} — {isFailed ? "failed" : "done"}
         </span>
+      </Button>
+      {detailsExpanded && (
+        <div className="ml-1 mt-1 space-y-1 border-l border-border/70 pl-2">
+          {canOpenChild && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              data-chat-transcript-ignore
+              className={`h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal text-muted-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:ring-0`}
+              onClick={openChild}
+            >
+              <span className="min-w-0 truncate">Open subagent session</span>
+            </Button>
+          )}
+          {summary && (
+            <div className="text-chat leading-[var(--text-chat--line-height)] text-foreground/90">
+              <MarkdownRenderer
+                content={summary}
+                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+              />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
-}
-
-function formatPromptPreview(prompt: string | null | undefined): string | null {
-  const normalized = prompt
-    ?.replace(/\s+/gu, " ")
-    .trim();
-  if (!normalized) {
-    return null;
-  }
-  return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
-}
-
-function formatCreationStatusLabel(status: string | null | undefined): string {
-  const normalized = status
-    ?.replace(/[_-]+/gu, " ")
-    .replace(/\s+/gu, " ")
-    .trim();
-  if (!normalized) {
-    return "Created";
-  }
-  return normalized.slice(0, 1).toUpperCase() + normalized.slice(1).toLowerCase();
 }

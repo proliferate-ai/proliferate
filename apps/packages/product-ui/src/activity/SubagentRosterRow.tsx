@@ -34,12 +34,13 @@ export interface SubagentRosterRowProps {
 export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRowProps) {
   const tone = subagentStatusTone(subagent);
   const durationLabel = subagentUsageDurationLabel(subagent.usage, nowMs);
+  const displayTitle = subagentDisplayTitle(subagent);
   const content = (
     <>
       <GitFork className={twMerge("mt-0.5 size-3.5 shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs text-foreground" data-telemetry-mask>
-          {subagentDisplayTitle(subagent)}
+        <p className="truncate text-xs text-foreground" data-telemetry-mask title={displayTitle}>
+          {displayTitle}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
           <span className={TONE_CLASSNAME[tone]}>{subagentStatusLabel(subagent)}</span>

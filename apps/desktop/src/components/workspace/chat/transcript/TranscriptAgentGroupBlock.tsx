@@ -7,12 +7,10 @@ import {
 } from "react";
 import type {
   ToolCallItem,
-  ToolResultTextContentPart,
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
-import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
 import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
 import { SubagentLaunchLedger } from "@/components/workspace/chat/transcript/SubagentLaunchLedger";
@@ -20,10 +18,7 @@ import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSepara
 import {
   ScopedTranscriptBlocks,
 } from "@/components/workspace/chat/transcript/ScopedTranscriptBlocks";
-import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import { normalizeToolResultText } from "@proliferate/product-domain/chats/tools/tool-result-text";
 import {
-  parseAsyncSubagentLaunch,
   parseSubagentLaunchResult,
   parseSubagentProvisioningStatus,
   resolveSubagentExecutionState,
@@ -38,9 +33,6 @@ import {
 import {
   buildTranscriptDisplayBlocks,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
-import {
-  findTrailingLiveExplorationBlock,
-} from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import { useTranscriptOpenSession } from "./TranscriptContexts";
 import {
   collectDescendantItems,
@@ -61,12 +53,12 @@ export function TranscriptAgentGroupBlock({
   renderChild: (childId: string) => ReactNode;
 }) {
   const executionState = resolveSubagentExecutionState(item);
-  const asyncLaunch = parseAsyncSubagentLaunch(item);
   const provisioningStatus = parseSubagentProvisioningStatus(item);
   const launchResult = parseSubagentLaunchResult(item);
   const openSession = useTranscriptOpenSession();
   const isRunning = isSubagentExecutionStateRunning(executionState);
   const isWorkComplete = isSubagentWorkComplete(item);
+
   const scopedDisplayBlocks = useMemo(
     () => buildTranscriptDisplayBlocks({
       rootIds: childIds,
@@ -76,29 +68,33 @@ export function TranscriptAgentGroupBlock({
     }),
     [childIds, childrenByParentId, isWorkComplete, transcript],
   );
-  const liveExplorationBlock = useMemo(
-    () => findTrailingLiveExplorationBlock(
-      scopedDisplayBlocks,
-      transcript,
-      !isWorkComplete,
-    ),
-    [isWorkComplete, scopedDisplayBlocks, transcript],
-  );
   const [expanded, setExpanded] = useState(false);
   const [workExpanded, setWorkExpanded] = useState(false);
+
+  // Native subagent lifecycle (session-activity-architecture): while a
+  // subagent is still running it lives ONLY in the composer ⑂ roster — the
+  // transcript stays quiet and shows nothing. It resolves into a quiet
+  // done-line here once finished. This mirrors the MCP-created path
+  // (SubagentCreationGroupBlock) so both spawn routes behave identically.
+  if (isRunning) {
+    return null;
+  }
 
   const subagentDisplay = resolveSubagentLaunchDisplay(item);
   const normalizedPrompt = subagentDisplay.prompt?.trim() ?? "";
 
-  // Agent synthesis lives in the agent item's own tool_result_text content parts.
-  const agentResultText = item.contentParts
-    .filter((p): p is ToolResultTextContentPart => p.type === "tool_result_text")
-    .map((p) => p.text)
-    .join("\n\n");
+  // Only ever surface the structured `rawOutput.summary` — the clean result
+  // the parent agent received (identical to SubagentFinishedRow in the MCP
+  // create_subagent path). NEVER the raw tool_result_text content parts:
+  // those can carry the internal orchestration launch receipt ("Async agent
+  // launched successfully… agentId… output_file… Do NOT Read or tail this
+  // file…") which must never reach the human transcript.
+  const rawOutputRecord = isRecord(item.rawOutput) ? item.rawOutput : null;
+  const summaryText = typeof rawOutputRecord?.summary === "string"
+    ? rawOutputRecord.summary.trim()
+    : "";
   const hasProvisioningLedger = isSubagentProvisioningAction(item) && !!provisioningStatus;
-  const normalizedAgentResult = hasProvisioningLedger
-    ? ""
-    : normalizeToolResultText(agentResultText);
+  const normalizedAgentResult = hasProvisioningLedger ? "" : summaryText;
 
   const descendants = collectDescendantItems(childIds, transcript, childrenByParentId);
   const toolCallCount = descendants.filter(
@@ -119,28 +115,23 @@ export function TranscriptAgentGroupBlock({
   const hasWork = childIds.length > 0;
   const hasLaunchLedger = !!normalizedPrompt || hasProvisioningLedger;
   const hasBodyContent = hasWork || hasLaunchLedger || !!normalizedAgentResult;
-  const renderScopedWork = (
-    autoFollowCollapsedActionBlockId: string | null,
-  ) => (
+  // Only finished subagents render here (running ones return null above and
+  // live in the composer roster), so the work view is always the collapsed
+  // done-state form.
+  const renderScopedWork = () => (
     <ScopedTranscriptBlocks
       displayBlocks={scopedDisplayBlocks}
       transcript={transcript}
-      autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+      autoFollowCollapsedActionBlockId={null}
       renderItem={renderChild}
     />
   );
   const headerVerb = formatSubagentHeaderVerb({ item, executionState, isRunning });
   const collapsedSummary =
     workSummary
-    || (executionState === "background"
-      ? "Running in background"
-      : executionState === "expired_background"
-        ? "Stopped updating in background"
-      : executionState === "completed_background"
-        ? "Completed in background"
-      : isRunning
-        ? "Working"
-        : null);
+    || (executionState === "expired_background"
+      ? "Stopped updating in background"
+      : null);
   const headerExpandable = hasBodyContent;
 
   return (
@@ -189,82 +180,34 @@ export function TranscriptAgentGroupBlock({
         )}
 
         {hasWork && (
-          isRunning ? (
-            <div className="space-y-1">
-              {renderScopedWork(liveExplorationBlock?.blockId ?? null)}
-            </div>
-          ) : (
-            <div className="py-0.5">
-              <TurnSeparator
-                label={workSummary}
-                interactive
-                expanded={workExpanded}
-                onClick={() => setWorkExpanded(!workExpanded)}
-              />
-              {workExpanded && (
-                <div className="mt-1.5 space-y-1">
-                  {renderScopedWork(null)}
-                </div>
-              )}
-            </div>
-          )
+          <div className="py-0.5">
+            <TurnSeparator
+              label={workSummary}
+              interactive
+              expanded={workExpanded}
+              onClick={() => setWorkExpanded(!workExpanded)}
+            />
+            {workExpanded && (
+              <div className="mt-1.5 space-y-1">
+                {renderScopedWork()}
+              </div>
+            )}
+          </div>
         )}
 
         {normalizedAgentResult && (
-          asyncLaunch
-            ? <AsyncAgentLaunchBlock launch={asyncLaunch} />
-            : <AgentResultBlock content={normalizedAgentResult} />
+          <AgentResultBlock content={normalizedAgentResult} />
         )}
       </div>}
     </div>
   );
 }
 
-const AGENT_RESULT_COLLAPSED_HEIGHT = 200;
-
-function AsyncAgentLaunchBlock({
-  launch,
-}: {
-  launch: { rawText: string; agentId: string | null; outputFile: string | null };
-}) {
-  const [detailsExpanded, setDetailsExpanded] = useState(false);
-  const hasLaunchDetails = !!launch.agentId || !!launch.outputFile;
-
-  return (
-    <div className="mt-1 rounded-md bg-foreground/5 px-3 py-2">
-      <div className="text-sm font-medium text-foreground/90">Running in background</div>
-      <p className="mt-1 text-sm leading-[var(--text-sm--line-height)] text-muted-foreground">
-        You&apos;ll be notified when it finishes.
-      </p>
-      {hasLaunchDetails && (
-        <div className="mt-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            data-chat-transcript-ignore
-            className="-ml-2 h-auto px-2 py-1 text-xs"
-            onClick={() => setDetailsExpanded((expanded) => !expanded)}
-          >
-            {detailsExpanded ? "Hide launch details" : "Show launch details"}
-          </Button>
-          {detailsExpanded && (
-            <div className="mt-2 overflow-hidden rounded-md border border-border/60 bg-background/60">
-              <AutoHideScrollArea
-                className="w-full"
-                viewportClassName={TOOL_CALL_BODY_MAX_HEIGHT_CLASS}
-              >
-                <div className="whitespace-pre-wrap px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-muted-foreground">
-                  {launch.rawText}
-                </div>
-              </AutoHideScrollArea>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
+
+const AGENT_RESULT_COLLAPSED_HEIGHT = 200;
 
 function AgentResultBlock({ content }: { content: string }) {
   const [resultExpanded, setResultExpanded] = useState(false);

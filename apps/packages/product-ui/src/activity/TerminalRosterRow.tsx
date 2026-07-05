@@ -37,7 +37,7 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
     <>
       <SquareTerminal className={twMerge("mt-0.5 size-3.5 shrink-0", TONE_CLASSNAME[tone])} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-mono text-xs text-foreground" data-telemetry-mask>
+        <p className="truncate font-mono text-xs text-foreground" data-telemetry-mask title={process.command}>
           {process.command}
         </p>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">

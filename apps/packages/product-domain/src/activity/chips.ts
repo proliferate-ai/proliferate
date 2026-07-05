@@ -56,7 +56,7 @@ export function deriveActivityChips(input: ActivityChipsInput): ActivityChipDesc
       kind: "agents",
       count: input.agents.length,
       liveCount,
-      label: pluralize(input.agents.length, "agent"),
+      label: pluralize(input.agents.length, "native subagent"),
     });
   }
 
