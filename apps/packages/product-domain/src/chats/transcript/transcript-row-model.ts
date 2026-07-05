@@ -60,27 +60,21 @@ export interface BuildTranscriptRowModelInput {
    * which is informational only and not required to be set.
    *
    * Anchoring model (see `bucketGoalEventRows` for the implementation):
-   *   - "set" / "edited" rows anchor at the START of the turn during which
-   *     the goal was armed — rendered immediately after that turn's leading
-   *     user-message row, before any assistant content. `goal_updated`'s seq
-   *     is assigned at native-confirmation time, which lands *after* the
-   *     assistant has already started producing content for the turn — so
-   *     "armed during turn N" is detected by the event's seq falling before
-   *     that turn's *last* item, not just after its first.
-   *   - "met" / "cleared" / status-change rows (paused/resumed/blocked/
-   *     failed) anchor at the END of the turn in which they occurred —
-   *     rendered after that turn's content, same as a "set"/"edited" event
-   *     that landed while idle between turns (no later turn content to sit
-   *     ahead of).
+   *   - Goal events are interleaved BY SEQ within their host turn's item
+   *     sequence, rendering at their true chronological position among the
+   *     turn's content. A goal event renders after the most-recent item
+   *     whose startedSeq < the event's seq, and before the next item whose
+   *     startedSeq >= the event's seq.
    *   - Events with no host turn (session start, or a goal set before any
    *     turn ever ran) lead the row list.
+   *   - Events whose seq falls after all of their host turn's items render
+   *     at the turn's END (between turns, chronologically idle).
    *
    * The row assembly is a single forward pass over `transcript.turnOrder`
-   * that splices each turn's start/end goal rows immediately adjacent to
-   * that turn's own rows — this makes strict monotonicity a structural
-   * property, not something bucketing has to get right after the fact: a
-   * turn N+1 row can never be pushed before a row anchored to turn N or
-   * earlier.
+   * that interleaves each turn's goal rows inline with that turn's own
+   * rows by seq — this makes strict monotonicity a structural property,
+   * not something bucketing has to get right after the fact: a turn N+1
+   * row can never be pushed before a row anchored to turn N or earlier.
    */
   goalEvents?: readonly GoalTranscriptEvent[];
 }
@@ -94,7 +88,6 @@ interface CachedTurnRow {
   itemRefs: readonly (TranscriptItem | null)[];
   needsLeadingSplit: boolean;
   rows: readonly Extract<TranscriptRow, { kind: "turn" }>[];
-  leadingSplitIndex: number;
 }
 
 export function createTranscriptRowModelCache(): TranscriptRowModelCache {
@@ -138,24 +131,22 @@ export function buildTranscriptRowModel({
     }
 
     seenTurnIds.add(turnId);
-    const turnStartGoalRows = goalRows.startByTurnId.get(turnId) ?? EMPTY_GOAL_ROWS;
-    const { rows: turnRows, leadingSplitIndex } = buildTurnRows(
+    const turnGoalRows = goalRows.byTurnId.get(turnId) ?? EMPTY_GOAL_ROWS;
+    const needsLeadingSplit = turnGoalRows.length > 0;
+    const { rows: turnRows } = buildTurnRows(
       turn,
       transcript,
       cache,
-      turnStartGoalRows.length > 0,
+      needsLeadingSplit,
     );
-    // Splice start-anchored rows in at the turn's own start boundary
-    // (`leadingSplitIndex`, right after its leading user-message row) and
-    // end-anchored rows after all of the turn's rows — both adjacent to
-    // this turn's own push, so a later turn can never land ahead of them.
-    rows.push(...turnRows.slice(0, leadingSplitIndex));
-    rows.push(...turnStartGoalRows);
-    rows.push(...turnRows.slice(leadingSplitIndex));
-    const turnEndGoalRows = goalRows.endByTurnId.get(turnId);
-    if (turnEndGoalRows) {
-      rows.push(...turnEndGoalRows);
-    }
+    // Interleave goal rows by seq among the turn's own rows.
+    const interleavedRows = interleaveGoalRowsBySeq(
+      turnRows,
+      turnGoalRows,
+      turn,
+      transcript,
+    );
+    rows.push(...interleavedRows);
   }
 
   if (visibleOptimisticPrompt) {
@@ -193,16 +184,9 @@ export function buildGoalEventRowKey(eventId: string): `goal-event:${string}` {
   return `goal-event:${eventId}`;
 }
 
-/** "set"/"edited" anchor at their host turn's START (unless armed idle —
- * see `bucketGoalEventRows`); every other kind anchors at the END. */
-function isStartAnchoredGoalEventKind(kind: GoalTranscriptEvent["kind"]): boolean {
-  return kind === "set" || kind === "edited";
-}
-
 interface GoalEventRowBuckets {
   beforeFirstTurn: GoalEventRow[];
-  startByTurnId: Map<string, GoalEventRow[]>;
-  endByTurnId: Map<string, GoalEventRow[]>;
+  byTurnId: Map<string, GoalEventRow[]>;
 }
 
 /**
@@ -216,28 +200,18 @@ interface GoalEventRowBuckets {
  * every turn's start (including when there are no turns yet) lead the row
  * list.
  *
- * Within its host turn, an event is MID-TURN when the turn has an item that
- * started *after* the event's seq — proof the turn was still actively
- * producing content when the event landed (this is what happens for
- * `goal_updated`: its seq is assigned at native-confirmation time, which is
- * after the assistant has already started the turn's response). A
- * mid-turn, start-anchored event (set/edited) buckets to that turn's START
- * so it renders right after the turn's leading user-message row, before any
- * assistant content — never at the tail behind content that, chronologically,
- * came *after* it. Every other case (end-anchored kinds, or a start-anchored
- * kind that landed idle — i.e. after all of its host turn's content, with no
- * turn running) buckets to that turn's END, which reads as "between the
- * turns" once the next turn's rows are appended after it.
+ * All goal events for a given turn are collected together; the caller
+ * (`interleaveGoalRowsBySeq`) will position them by seq within the turn's
+ * item sequence.
  */
 function bucketGoalEventRows(
   goalEvents: readonly GoalTranscriptEvent[],
   transcript: TranscriptState,
 ): GoalEventRowBuckets {
   const beforeFirstTurn: GoalEventRow[] = [];
-  const startByTurnId = new Map<string, GoalEventRow[]>();
-  const endByTurnId = new Map<string, GoalEventRow[]>();
+  const byTurnId = new Map<string, GoalEventRow[]>();
   if (goalEvents.length === 0) {
-    return { beforeFirstTurn, startByTurnId, endByTurnId };
+    return { beforeFirstTurn, byTurnId };
   }
 
   const orderedTurnRanges = transcript.turnOrder
@@ -267,19 +241,15 @@ function bucketGoalEventRows(
       continue;
     }
 
-    const isMidTurn = event.seq < host.range.maxSeq;
-    const targetMap = isMidTurn && isStartAnchoredGoalEventKind(event.kind)
-      ? startByTurnId
-      : endByTurnId;
-    const bucket = targetMap.get(host.turnId);
+    const bucket = byTurnId.get(host.turnId);
     if (bucket) {
       bucket.push(row);
     } else {
-      targetMap.set(host.turnId, [row]);
+      byTurnId.set(host.turnId, [row]);
     }
   }
 
-  return { beforeFirstTurn, startByTurnId, endByTurnId };
+  return { beforeFirstTurn, byTurnId };
 }
 
 interface TurnItemSeqRange {
@@ -309,6 +279,144 @@ function turnItemSeqRange(transcript: TranscriptState, turnId: string): TurnItem
   return minSeq === null || maxSeq === null ? null : { minSeq, maxSeq };
 }
 
+/**
+ * Interleaves goal event rows by seq among a turn's rows, positioning each
+ * goal event at its true chronological location within the turn's content.
+ *
+ * Strategy:
+ * - Collect all items from all turn rows with their seq values.
+ * - For each goal event, find its insertion point: after the last item whose
+ *   startedSeq < event.seq, which determines which turn row it should follow.
+ * - Special case: if the turn has a leading user-message row split, goal
+ *   events whose seq falls before all assistant content still render after
+ *   the user message row (preserving the "goal set right after user prompt" UX).
+ */
+function interleaveGoalRowsBySeq(
+  turnRows: readonly Extract<TranscriptRow, { kind: "turn" }>[],
+  goalRows: readonly GoalEventRow[],
+  _turn: TurnRecord,
+  transcript: TranscriptState,
+): TranscriptRow[] {
+  if (goalRows.length === 0) {
+    return [...turnRows];
+  }
+
+  // Build a list of all items across all rows, tracking which row each item belongs to.
+  interface ItemEntry {
+    seq: number;
+    rowIndex: number;
+  }
+  const items: ItemEntry[] = [];
+
+  for (let rowIndex = 0; rowIndex < turnRows.length; rowIndex += 1) {
+    const turnRow = turnRows[rowIndex];
+    for (const block of turnRow.renderPresentation.displayBlocks) {
+      if (block.kind === "item") {
+        const item = transcript.itemsById[block.itemId];
+        if (item) {
+          items.push({ seq: item.startedSeq, rowIndex });
+        }
+      } else if (
+        block.kind === "collapsed_actions"
+        || block.kind === "inline_tools"
+        || block.kind === "subagent_creations"
+      ) {
+        for (const itemId of block.itemIds) {
+          const item = transcript.itemsById[itemId];
+          if (item) {
+            items.push({ seq: item.startedSeq, rowIndex });
+          }
+        }
+      }
+    }
+  }
+
+  // Sort items by seq to enable binary-search-like positioning.
+  items.sort((a, b) => a.seq - b.seq);
+
+  // Determine if the first row is a leading user-message split.
+  const hasLeadingSplit = turnRows.length > 1 && turnRows[0].isFirstTurnRow && !turnRows[0].isLastTurnRow;
+
+  // Sort goal rows by seq to maintain order.
+  const sortedGoalRows = [...goalRows].sort((a, b) => a.event.seq - b.event.seq);
+
+  // For each goal event, determine which row it should be inserted after.
+  // A goal at seq N should appear:
+  // - AFTER the row containing the last item with seq < N, AND
+  // - BEFORE the row containing the first item with seq >= N
+  // This ensures goals render at their chronological position, even if that
+  // position is mid-way through a row's content (the row will have been split
+  // to enable this).
+  const goalInsertionPoints = new Map<number, GoalEventRow[]>(); // rowIndex -> goals to insert after
+
+  for (const goalRow of sortedGoalRows) {
+    const goalSeq = goalRow.event.seq;
+
+    // Find the row containing the last item with seq < goalSeq.
+    // If the next item (seq >= goalSeq) is in a DIFFERENT row, insert after
+    // the current row. Otherwise, the goal falls mid-row, and the row should
+    // have been split — but if not, we insert before that row.
+    let lastItemBefore: ItemEntry | null = null;
+    let firstItemAtOrAfter: ItemEntry | null = null;
+
+    for (const item of items) {
+      if (item.seq < goalSeq) {
+        lastItemBefore = item;
+      } else if (item.seq >= goalSeq && firstItemAtOrAfter === null) {
+        firstItemAtOrAfter = item;
+        break;
+      }
+    }
+
+    let targetRowIndex: number;
+    if (lastItemBefore === null) {
+      // Goal precedes all items. Insert after the leading split row if it
+      // exists, otherwise before all rows.
+      targetRowIndex = hasLeadingSplit ? 0 : -1;
+    } else if (firstItemAtOrAfter === null) {
+      // Goal follows all items. Insert after the row containing the last item.
+      targetRowIndex = lastItemBefore.rowIndex;
+    } else if (lastItemBefore.rowIndex !== firstItemAtOrAfter.rowIndex) {
+      // Goal falls between two different rows. This is the clean case: insert
+      // after lastItemBefore's row, which places it before firstItemAtOrAfter's row.
+      targetRowIndex = lastItemBefore.rowIndex;
+    } else {
+      // Goal falls mid-row: the row contains both the last item <= goalSeq
+      // and the first item > goalSeq. Insert the goal AFTER this row, since
+      // we can't split it finer than the user/content boundary.
+      targetRowIndex = lastItemBefore.rowIndex;
+    }
+
+    const existing = goalInsertionPoints.get(targetRowIndex);
+    if (existing) {
+      existing.push(goalRow);
+    } else {
+      goalInsertionPoints.set(targetRowIndex, [goalRow]);
+    }
+  }
+
+  // Assemble the result by interleaving turn rows with goal rows.
+  const result: TranscriptRow[] = [];
+
+  // Insert any goals that should come before all rows.
+  const beforeAllGoals = goalInsertionPoints.get(-1);
+  if (beforeAllGoals) {
+    result.push(...beforeAllGoals);
+  }
+
+  for (let rowIndex = 0; rowIndex < turnRows.length; rowIndex += 1) {
+    result.push(turnRows[rowIndex]);
+
+    // Insert any goals that should come after this row.
+    const afterThisRowGoals = goalInsertionPoints.get(rowIndex);
+    if (afterThisRowGoals) {
+      result.push(...afterThisRowGoals);
+    }
+  }
+
+  return result;
+}
+
 export function buildTurnContentRowKey(
   turnId: string,
 ): `turn:${string}:block:${typeof TURN_CONTENT_BLOCK_KEY}` {
@@ -336,14 +444,6 @@ export function buildOutboxPromptRowKey(
 
 interface TurnRowsResult {
   rows: readonly Extract<TranscriptRow, { kind: "turn" }>[];
-  /**
-   * Index into `rows` at which start-anchored goal rows should be spliced
-   * in — i.e. how many of the leading rows constitute "before any assistant
-   * content" (the turn's leading user-message row, when one was carved out).
-   * 0 when there's nothing to anchor after, so start-anchored rows lead the
-   * turn's own rows entirely.
-   */
-  leadingSplitIndex: number;
 }
 
 function buildTurnRows(
@@ -360,11 +460,11 @@ function buildTurnRows(
     && cached.needsLeadingSplit === needsLeadingSplit
     && areItemRefsEqual(cached.itemRefs, itemRefs)
   ) {
-    return { rows: cached.rows, leadingSplitIndex: cached.leadingSplitIndex };
+    return { rows: cached.rows };
   }
 
   const presentation = buildTurnPresentation(turn, transcript);
-  const { rows, leadingSplitIndex } = buildRowsForTurnPresentation(
+  const rows = buildRowsForTurnPresentation(
     turn,
     transcript,
     presentation,
@@ -375,9 +475,8 @@ function buildTurnRows(
     itemRefs,
     needsLeadingSplit,
     rows,
-    leadingSplitIndex,
   });
-  return { rows, leadingSplitIndex };
+  return { rows };
 }
 
 function buildRowsForTurnPresentation(
@@ -385,12 +484,12 @@ function buildRowsForTurnPresentation(
   transcript: TranscriptState,
   presentation: TurnPresentation,
   needsLeadingSplit: boolean,
-): TurnRowsResult {
+): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
   const chunks = shouldSplitTurnIntoRows(turn, presentation)
     ? chunkTurnDisplayBlocks(presentation)
     : [];
   if (chunks.length > 1) {
-    const rows = chunks.map((chunk, index) => {
+    return chunks.map((chunk, index) => {
       const renderPresentation: TurnPresentation = {
         ...presentation,
         displayBlocks: chunk.blocks,
@@ -404,13 +503,10 @@ function buildRowsForTurnPresentation(
         isLastTurnRow: index === chunks.length - 1,
       });
     });
-    // Large-turn chunking always carves the leading user-message item into
-    // its own first chunk (completed-history collapsing explicitly excludes
-    // user_message items — see `buildCompletedHistoryRootIds`), so the
-    // start boundary is right after row 0.
-    return { rows, leadingSplitIndex: 1 };
   }
 
+  // Single-row turn: check if we should split out a leading user-message row
+  // to enable proper goal-event interleaving (only when there are goal events).
   if (needsLeadingSplit) {
     const leadingCount = countLeadingUserMessageBlocks(presentation, transcript);
     if (leadingCount > 0 && leadingCount < presentation.displayBlocks.length) {
@@ -432,37 +528,18 @@ function buildRowsForTurnPresentation(
         isFirstTurnRow: false,
         isLastTurnRow: true,
       });
-      return { rows: [leadingRow, restRow], leadingSplitIndex: 1 };
+      return [leadingRow, restRow];
     }
-
-    // No leading user-message block to carve a row out of (or the turn is
-    // nothing but the user message so far, with no assistant content to
-    // split it from) — keep the single row, but still tell the caller
-    // whether a start-anchored goal row belongs before it (no user-message
-    // row exists to render after) or after it (the only row IS the user
-    // message; there's no assistant content for the goal row to precede).
-    const singleRow = buildTurnRow({
-      turnId: turn.turnId,
-      blockKey: TURN_CONTENT_BLOCK_KEY,
-      presentation,
-      renderPresentation: presentation,
-      isFirstTurnRow: true,
-      isLastTurnRow: true,
-    });
-    return { rows: [singleRow], leadingSplitIndex: leadingCount > 0 ? 1 : 0 };
   }
 
-  return {
-    rows: [buildTurnRow({
-      turnId: turn.turnId,
-      blockKey: TURN_CONTENT_BLOCK_KEY,
-      presentation,
-      renderPresentation: presentation,
-      isFirstTurnRow: true,
-      isLastTurnRow: true,
-    })],
-    leadingSplitIndex: 0,
-  };
+  return [buildTurnRow({
+    turnId: turn.turnId,
+    blockKey: TURN_CONTENT_BLOCK_KEY,
+    presentation,
+    renderPresentation: presentation,
+    isFirstTurnRow: true,
+    isLastTurnRow: true,
+  })];
 }
 
 /** Counts the turn's leading run of display blocks that are `user_message`

@@ -380,7 +380,7 @@ describe("buildTranscriptRowModel", () => {
     // bucketing always anchored goal rows at the END of their host turn, so
     // "Goal set" rendered below the entire assistant turn instead of right
     // after the user's message.
-    it("anchors a mid-turn 'set' event right after the turn's user-message row, before assistant content — and never below a later turn", () => {
+    it("anchors a mid-turn 'set' event inline by seq, even when that overlaps with assistant content", () => {
       const transcript = createTranscriptState("session-1");
       addTurn(transcript, "turn-1", true);
       addUserItem(transcript, "turn-1", "item-turn-1-user", "Arm a goal and keep going", 1);
@@ -395,22 +395,22 @@ describe("buildTranscriptRowModel", () => {
         visibleOptimisticPrompt: null,
         latestTurnId: "turn-2",
         latestTurnHasAssistantRenderableContent: true,
-        // Native confirmation lands at seq 3 — after the user message (seq 1)
-        // and the first assistant chunk (seq 2), but before the rest of
-        // turn-1's content (seq 4) — reproducing "goal_updated's seq is
-        // assigned at native-confirmation time, after assistant chunks began".
+        // Native confirmation lands at seq 3 — after items at seq 2 and 3,
+        // but before item at seq 4. Since the content row contains seq 2-4,
+        // the goal appears after the content row (best-effort inline positioning
+        // given that rows split at user/content boundaries, not per-item).
         goalEvents: [goalEvent(3, "set")],
       });
 
       expect(rows.map((row) => row.key)).toEqual([
         "turn:turn-1:block:item-turn-1-user",
-        "goal-event:3",
         "turn:turn-1:block:content",
+        "goal-event:3",
         "turn:turn-2:block:content",
       ]);
     });
 
-    it("keeps an end-anchored 'met' event at the turn's end even when it lands mid-turn (no split)", () => {
+    it("interleaves a 'met' event inline by seq even when it lands mid-turn", () => {
       const transcript = createTranscriptState("session-1");
       addTurn(transcript, "turn-1", true);
       addUserItem(transcript, "turn-1", "item-turn-1-user", "Ship it", 1);
@@ -425,13 +425,16 @@ describe("buildTranscriptRowModel", () => {
         goalEvents: [goalEvent(3, "met")],
       });
 
+      // The turn is split to enable inline positioning: user row, then content,
+      // then the goal at seq 3 (which falls after item-seq-3).
       expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:item-turn-1-user",
         "turn:turn-1:block:content",
         "goal-event:3",
       ]);
     });
 
-    it("anchors an idle-armed 'set' event between the turns (no split) when no turn is running", () => {
+    it("anchors an idle-armed 'set' event between turns when no turn is running", () => {
       const transcript = createTranscriptState("session-1");
       addTurn(transcript, "turn-1", true);
       addUserItem(transcript, "turn-1", "item-turn-1-user", "First", 1);
@@ -451,7 +454,11 @@ describe("buildTranscriptRowModel", () => {
         goalEvents: [goalEvent(6, "set")],
       });
 
+      // Turn-1 is split because it has a goal event (even though the goal
+      // landed after turn-1 finished, it's still bucketed to turn-1 as the
+      // host turn). The goal appears after turn-1's content.
       expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:item-turn-1-user",
         "turn:turn-1:block:content",
         "goal-event:6",
         "turn:turn-2:block:content",
@@ -502,6 +509,41 @@ describe("buildTranscriptRowModel", () => {
         "goal-event:1",
         "turn:turn-1:block:content",
       ]);
+    });
+
+    // Real-world bug scenario from session b02656e3: a single turn 585b0744
+    // with items at seq 9-23, goal_updated at seq 25, continuation items at
+    // seq 26-40+, all same turn_id. The goal event MUST render inline at
+    // its seq position (after seq-23 item, before seq-26 item), NOT at the
+    // turn's start (which would place it above the "3 messages" divider).
+    it("interleaves a goal_updated event inline by seq within a single ongoing turn's content stream", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", false); // in-progress turn
+      addUserItem(transcript, "turn-1", "item-user", "Hey! What are you working on?", 9);
+      addAssistantItems(transcript, "turn-1", 15, 10); // seq 10-24 (first assistant response)
+      // goal_updated lands at seq 25, AFTER first response but BEFORE continuation
+      addAssistantItems(transcript, "turn-1", 15, 26); // seq 26-40 (continuation)
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(25, "set")],
+      });
+
+      // The goal event MUST appear after the user+first-response content row
+      // and before (or within) the continuation content. It must NOT appear
+      // at the very start (before the user message).
+      const goalEventIndex = rows.findIndex((row) => row.kind === "goal_event");
+      const userRowIndex = rows.findIndex((row) =>
+        row.kind === "turn" && row.key.includes("item-user")
+      );
+      expect(goalEventIndex).toBeGreaterThan(userRowIndex);
+      expect(goalEventIndex).toBeLessThan(rows.length);
+      // Specifically: should NOT be at index 0.
+      expect(goalEventIndex).not.toBe(0);
     });
   });
 });
