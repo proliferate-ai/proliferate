@@ -14,11 +14,15 @@ export function HarnessStatusDot({ agent }: HarnessStatusDotProps) {
     return null;
   }
 
+  // Don't show a dot for ready state (green dot = clutter for normal state)
+  // Only show amber/red dots that flag harnesses needing attention
+  if (agent.credentialState === "ready" && agent.installState !== "failed") {
+    return null;
+  }
+
   let colorClass: string;
   if (agent.installState === "failed") {
     colorClass = "bg-destructive";
-  } else if (agent.credentialState === "ready") {
-    colorClass = "bg-success";
   } else if (agent.credentialState === "login_required" || agent.credentialState === "missing_env") {
     colorClass = "bg-warning";
   } else {
