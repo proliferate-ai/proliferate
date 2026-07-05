@@ -58,6 +58,14 @@ export interface HarnessAuthEditorApi {
   handleRowEnvVarBlur: () => void;
   handleRemoveRow: (uid: string) => void;
   addRow: (envVarName: string, providerHint: string | null) => void;
+  // Wire a freshly-created vault key in one step: append an enabled, complete
+  // api_key row and PUT it (radio semantics on single-source: gateway off, other
+  // rows disabled). Powers the shared "Add API key" modal.
+  addBoundApiKey: (
+    envVarName: string,
+    apiKeyId: string,
+    providerHint: string | null,
+  ) => void;
   handleAddVariable: () => void;
 }
 
@@ -221,6 +229,33 @@ export function useHarnessAuthEditor(
     addRow(suggestion?.envVarName ?? "", suggestion?.providerHint ?? null);
   }
 
+  function addBoundApiKey(
+    envVarName: string,
+    apiKeyId: string,
+    providerHint: string | null,
+  ) {
+    draftCounterRef.current += 1;
+    const newRow: EditableApiKeyRow = {
+      uid: `draft-${draftCounterRef.current}`,
+      envVarName,
+      apiKeyId,
+      providerHint,
+      enabled: true,
+    };
+    // Reuse an existing row for the same env var rather than duplicate it.
+    const withoutDuplicate = rows.filter((row) => row.envVarName !== envVarName);
+    // Single-source stays a radio: enabling the new row turns gateway + every
+    // other row off. Multi-source (opencode) keeps its independent selections.
+    const nextRows = multiSource
+      ? [...withoutDuplicate, newRow]
+      : [...withoutDuplicate.map((row) => ({ ...row, enabled: false })), newRow];
+    commit({
+      gatewayEnabled: multiSource ? gatewayEnabled : false,
+      rows: nextRows,
+    });
+    setPendingMethod("api_key");
+  }
+
   return {
     cloudActive,
     capabilitiesQuery,
@@ -245,6 +280,7 @@ export function useHarnessAuthEditor(
     handleRowEnvVarBlur,
     handleRemoveRow,
     addRow,
+    addBoundApiKey,
     handleAddVariable,
   };
 }

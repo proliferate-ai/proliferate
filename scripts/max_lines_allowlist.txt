@@ -30,7 +30,7 @@ anyharness/sdk/src/reducer/transcript.ts 1591 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
 apps/desktop/src/components/content/ui/diff/ChatDiffViewer.tsx 622 existing desktop diff viewer component
 apps/desktop/src/components/content/ui/diff/SplitDiffViewer.tsx 540 existing desktop split diff viewer component
-apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 683 P3 runtime catalog extends All-Models coverage for the local+gateway runtime-resolved model plan (contract §5) + enriched gateway model row fixtures (model-table §3) + method-card UX fixtures
+apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 690 P3 runtime catalog extends All-Models coverage for the local+gateway runtime-resolved model plan (contract §5) + enriched gateway model row fixtures (model-table §3) + method-card UX fixtures + CloudGuard availability mock for the cloud-surface auth gate
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 631 existing desktop oversized test file

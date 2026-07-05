@@ -50,10 +50,12 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
       <HarnessAuthSection
         harnessKind={harnessKind}
         displayName={displayName}
+        surface={surface}
         editor={editor}
       />
 
       <HarnessAuthDetailsSection
+        harnessKind={harnessKind}
         displayName={displayName}
         surface={surface}
         selectedMethod={selectedMethod}
