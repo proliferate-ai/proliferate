@@ -35,8 +35,9 @@ export function normalizeSettingsSection(value: string | null): SettingsSection 
   if (value === "configuration") {
     return "general";
   }
-  if (value === "defaults" || value === "advanced") {
-    return "agent-defaults";
+  if (value === "defaults" || value === "advanced" || value === "agent-defaults") {
+    // AGENT DEFAULTS PAGE REMOVED: legacy links land on the Claude harness page.
+    return "agent-claude";
   }
   if (value === "agent-authentication") {
     // The Bifrost-era authentication pane was replaced by the API key pool page.

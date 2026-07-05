@@ -9,6 +9,7 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useActiveSessionLaunchState } from "@/hooks/chat/derived/use-active-session-config-state";
 import { useConfiguredLaunchReadiness } from "@/hooks/chat/derived/use-configured-launch-readiness";
 import { resolveAvailableLaunchSelection } from "@/lib/domain/chat/models/launch-selection-defaults";
@@ -21,6 +22,7 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
+import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
@@ -98,6 +100,9 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       return;
     }
 
+    // Last-used-wins: persist the selection so subsequent new chats default to it.
+    persistLastUsedLaunchSelection(launchSelection);
+
     if (selectedWorkspace?.surface === "cowork") {
       const latencyFlowId = startLatencyFlow({
         flowKind: "session_create",
@@ -161,4 +166,20 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
   return {
     handleLaunchSelect,
   };
+}
+
+/**
+ * Last-used-wins: persists the user's agent+model selection so the next new
+ * chat defaults to it (replacing the deleted "Agent Defaults" settings page).
+ */
+function persistLastUsedLaunchSelection(selection: ModelSelectorSelection): void {
+  const state = useUserPreferencesStore.getState();
+  state.setMultiple({
+    defaultChatAgentKind: selection.kind,
+    defaultChatModelIdByAgentKind: withUpdatedDefaultModelIdByAgentKind(
+      state.defaultChatModelIdByAgentKind,
+      selection.kind,
+      selection.modelId,
+    ),
+  });
 }
