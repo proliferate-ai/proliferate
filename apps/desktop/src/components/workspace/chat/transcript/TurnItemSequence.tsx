@@ -91,6 +91,7 @@ export function TurnItemSequence({
                         block={historyBlock}
                         transcript={transcript}
                         autoFollowCollapsedActionBlockId={null}
+                        childrenByParentId={presentation.childrenByParentId}
                         renderItem={(itemId) => (
                           <FragmentWithArtifacts
                             itemId={itemId}
@@ -116,6 +117,7 @@ export function TurnItemSequence({
             block={block}
             transcript={transcript}
             autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+            childrenByParentId={presentation.childrenByParentId}
             renderItem={(itemId) => (
               <FragmentWithArtifacts
                 itemId={itemId}
