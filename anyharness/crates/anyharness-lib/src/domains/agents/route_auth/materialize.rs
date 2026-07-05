@@ -43,8 +43,10 @@ const CLAUDE_CONFIG_DIR_NAME: &str = "claude-config";
 const CODEX_CONFIG_FILE_NAME: &str = "config.toml";
 pub(super) const OPENCODE_CONFIG_FILE_NAME: &str = "opencode.json";
 
-/// Isolated XDG subdir names materialized beside the opencode config; the
-/// render layer points XDG_CONFIG_HOME/XDG_DATA_HOME at these.
+/// Isolated XDG subdir names materialized beside the opencode config.
+/// XDG_CONFIG_HOME is pointed here (isolated provider config); XDG_DATA_HOME is
+/// left ambient (native auth coexistence). The xdg-data dir is still created
+/// for forward-compat but no env var points at it.
 pub(super) const OPENCODE_XDG_CONFIG_SUBDIR: &str = "xdg-config";
 pub(super) const OPENCODE_XDG_DATA_SUBDIR: &str = "xdg-data";
 

@@ -426,6 +426,34 @@ describe("HarnessPane authentication", () => {
     expect(screen.queryByRole("button", { name: /Add provider/ })).toBeNull();
   });
 
+  it("always shows CLI as selected for multi-source (opencode) even with gateway on", () => {
+    state.selections.data = [{
+      id: "sel-gw",
+      harnessKind: "opencode",
+      surface: "local",
+      sourceKind: "gateway",
+      apiKeyId: null,
+      keyTitle: null,
+      envVarName: null,
+      providerHint: null,
+      enabled: true,
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+    }];
+    renderPane("opencode");
+
+    const cli = screen.getByRole("button", { name: "CLI login" });
+    const gateway = screen.getByRole("button", { name: "Proliferate gateway" });
+
+    // CLI is always selected for multi-source harnesses (native coexistence).
+    expect(cli.getAttribute("aria-pressed")).toBe("true");
+    expect(gateway.getAttribute("aria-pressed")).toBe("true");
+
+    // CLI card is disabled (not a toggle) and shows the coexistence hint.
+    expect((cli as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText("Native logins always apply alongside other sources.")).not.toBeNull();
+  });
+
   it("prefills a new row from the opencode provider picker", () => {
     // Seed an api_key selection so the API key detail section is visible.
     state.selections.data = [{
