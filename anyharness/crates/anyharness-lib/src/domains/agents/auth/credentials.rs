@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyharness_credential_discovery::{
     detect_local_auth_state as discover_local_auth_state, LocalAuthState, ProviderId,
@@ -66,8 +67,10 @@ fn detect_slot_credentials(
         return CredentialState::Ready;
     }
 
-    if detect_local_auth(&slot.discovery, home_dir) {
-        return CredentialState::ReadyViaLocalAuth;
+    match detect_local_auth(&slot.discovery, home_dir) {
+        LocalAuthDetection::Present => return CredentialState::ReadyViaLocalAuth,
+        LocalAuthDetection::Expired => return CredentialState::LoginRequired,
+        LocalAuthDetection::Absent => {}
     }
 
     if slot.login.is_some() {
@@ -125,25 +128,40 @@ fn preferred_missing_state(slots: Vec<&ResolvedAuthSlot>) -> CredentialState {
     }
 }
 
+/// Local auth detection result: present, expired (credentials exist but past
+/// expiry), or absent.
+enum LocalAuthDetection {
+    Present,
+    Expired,
+    Absent,
+}
+
 /// Dispatches to the right provider-specific detector based on the discovery kind.
-fn detect_local_auth(kind: &CredentialDiscoveryKind, home_dir: &Path) -> bool {
+fn detect_local_auth(kind: &CredentialDiscoveryKind, home_dir: &Path) -> LocalAuthDetection {
     match kind {
-        CredentialDiscoveryKind::None => false,
+        CredentialDiscoveryKind::None => LocalAuthDetection::Absent,
         CredentialDiscoveryKind::Claude => detect_shared_local_auth(ProviderId::Claude, home_dir),
         CredentialDiscoveryKind::Codex => detect_shared_local_auth(ProviderId::Codex, home_dir),
         CredentialDiscoveryKind::OpenCode => detect_opencode_local_auth(home_dir),
-        CredentialDiscoveryKind::Cursor => detect_cursor_local_auth(home_dir),
+        CredentialDiscoveryKind::Cursor => {
+            if detect_cursor_local_auth(home_dir) {
+                LocalAuthDetection::Present
+            } else {
+                LocalAuthDetection::Absent
+            }
+        }
         CredentialDiscoveryKind::Grok => detect_shared_local_auth(ProviderId::Xai, home_dir),
     }
 }
 
-fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> bool {
+fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> LocalAuthDetection {
     match discover_local_auth_state(provider, home_dir) {
-        Ok(LocalAuthState::Present(_)) => true,
-        Ok(LocalAuthState::Absent) => false,
+        Ok(LocalAuthState::Present(_)) => LocalAuthDetection::Present,
+        Ok(LocalAuthState::Expired(_)) => LocalAuthDetection::Expired,
+        Ok(LocalAuthState::Absent) => LocalAuthDetection::Absent,
         Err(err) => {
             tracing::warn!(provider = ?provider, error = %err, "Shared credential discovery failed");
-            false
+            LocalAuthDetection::Absent
         }
     }
 }
@@ -153,18 +171,26 @@ fn detect_shared_local_auth(provider: ProviderId, home_dir: &Path) -> bool {
 /// Checks:
 /// - `~/.local/share/opencode/auth.json` for provider entries with `type: "api"` + `key`
 ///   or `type: "oauth"` + `access`, or `type: "wellknown"` + `token`.
-fn detect_opencode_local_auth(home_dir: &Path) -> bool {
+/// OAuth entries with an `expires` field (seconds epoch) in the past are treated as expired.
+fn detect_opencode_local_auth(home_dir: &Path) -> LocalAuthDetection {
     let path = home_dir
         .join(".local")
         .join("share")
         .join("opencode")
         .join("auth.json");
     let Some(data) = read_json_file(&path) else {
-        return false;
+        return LocalAuthDetection::Absent;
     };
     let Some(obj) = data.as_object() else {
-        return false;
+        return LocalAuthDetection::Absent;
     };
+
+    let now_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let mut found_expired = false;
 
     for (_provider, value) in obj {
         let Some(config) = value.as_object() else {
@@ -172,15 +198,33 @@ fn detect_opencode_local_auth(home_dir: &Path) -> bool {
         };
         let auth_type = config.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
-        if auth_type == "api" && non_empty_string(config, "key")
+        let has_credential = auth_type == "api" && non_empty_string(config, "key")
             || auth_type == "oauth" && non_empty_string(config, "access")
-            || auth_type == "wellknown" && non_empty_string(config, "token")
-        {
-            return true;
+            || auth_type == "wellknown" && non_empty_string(config, "token");
+
+        if !has_credential {
+            continue;
         }
+
+        // For oauth entries, check expiry if the `expires` field is present
+        if auth_type == "oauth" {
+            if let Some(expires_secs) = config.get("expires").and_then(|v| v.as_u64()) {
+                if expires_secs <= now_secs {
+                    found_expired = true;
+                    continue;
+                }
+            }
+        }
+
+        // Found a valid, non-expired credential
+        return LocalAuthDetection::Present;
     }
 
-    false
+    if found_expired {
+        LocalAuthDetection::Expired
+    } else {
+        LocalAuthDetection::Absent
+    }
 }
 
 fn non_empty_string(config: &serde_json::Map<String, serde_json::Value>, key: &str) -> bool {
@@ -226,10 +270,24 @@ fn read_nested_string<'a>(value: &'a serde_json::Value, path: &[&str]) -> Option
 mod tests {
     use super::*;
 
+    use crate::domains::agents::model::{CommandSpec, LoginSpec};
+
     fn make_temp_home() -> std::path::PathBuf {
         let path = std::env::temp_dir().join(format!("anyharness-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&path).expect("create temp home");
         path
+    }
+
+    fn test_login_spec() -> LoginSpec {
+        LoginSpec {
+            label: "Log in".into(),
+            command: CommandSpec {
+                program: "test".into(),
+                args: vec!["login".into()],
+            },
+            reuses_user_state: false,
+            message: None,
+        }
     }
 
     #[test]
@@ -241,7 +299,10 @@ mod tests {
         )
         .expect("write claude.json");
 
-        assert!(detect_shared_local_auth(ProviderId::Claude, &home));
+        assert!(matches!(
+            detect_shared_local_auth(ProviderId::Claude, &home),
+            LocalAuthDetection::Present
+        ));
 
         let _ = std::fs::remove_dir_all(&home);
     }
@@ -255,7 +316,10 @@ mod tests {
         )
         .expect("write claude.json");
 
-        assert!(!detect_shared_local_auth(ProviderId::Claude, &home));
+        assert!(matches!(
+            detect_shared_local_auth(ProviderId::Claude, &home),
+            LocalAuthDetection::Absent
+        ));
 
         let _ = std::fs::remove_dir_all(&home);
     }
@@ -286,7 +350,8 @@ mod tests {
     fn detects_opencode_api_oauth_and_wellknown_auth() {
         for auth_json in [
             r#"{"openai":{"type":"api","key":"sk-test"}}"#,
-            r#"{"github-copilot":{"type":"oauth","access":"access-token","refresh":"refresh-token","expires":1}}"#,
+            // expires far in the future
+            r#"{"github-copilot":{"type":"oauth","access":"access-token","refresh":"refresh-token","expires":2840000000}}"#,
             r#"{"https://example.com":{"type":"wellknown","key":"CUSTOM_TOKEN","token":"token"}}"#,
         ] {
             let home = make_temp_home();
@@ -294,10 +359,114 @@ mod tests {
             std::fs::create_dir_all(&opencode_dir).expect("create opencode dir");
             std::fs::write(opencode_dir.join("auth.json"), auth_json).expect("write auth json");
 
-            assert!(detect_opencode_local_auth(&home));
+            assert!(
+                matches!(detect_opencode_local_auth(&home), LocalAuthDetection::Present),
+                "Expected Present for: {auth_json}"
+            );
 
             let _ = std::fs::remove_dir_all(&home);
         }
+    }
+
+    #[test]
+    fn expired_claude_oauth_yields_login_required() {
+        let home = make_temp_home();
+        std::fs::create_dir_all(home.join(".claude")).expect("create claude dir");
+        // expiresAt in the past (epoch 1000ms = 1970)
+        std::fs::write(
+            home.join(".claude/.credentials.json"),
+            r#"{"claudeAiOauth":{"accessToken":"token","expiresAt":1000}}"#,
+        )
+        .expect("write claude creds");
+
+        let auth = AuthSpec {
+            readiness_policy: AuthReadinessPolicy::AnyRequiredSlot,
+            slots: vec![AuthSlotSpec {
+                id: "claude".into(),
+                label: "Claude".into(),
+                credential_provider_ids: vec!["anthropic".into()],
+                required_for_readiness: true,
+                env_vars: vec![],
+                login: Some(test_login_spec()),
+                discovery: CredentialDiscoveryKind::Claude,
+                materialization: Default::default(),
+            }],
+        };
+
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::LoginRequired
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn valid_claude_oauth_yields_ready_via_local_auth() {
+        let home = make_temp_home();
+        std::fs::create_dir_all(home.join(".claude")).expect("create claude dir");
+        // expiresAt far in the future
+        std::fs::write(
+            home.join(".claude/.credentials.json"),
+            r#"{"claudeAiOauth":{"accessToken":"token","expiresAt":2840000000000}}"#,
+        )
+        .expect("write claude creds");
+
+        let auth = AuthSpec {
+            readiness_policy: AuthReadinessPolicy::AnyRequiredSlot,
+            slots: vec![AuthSlotSpec {
+                id: "claude".into(),
+                label: "Claude".into(),
+                credential_provider_ids: vec!["anthropic".into()],
+                required_for_readiness: true,
+                env_vars: vec![],
+                login: Some(test_login_spec()),
+                discovery: CredentialDiscoveryKind::Claude,
+                materialization: Default::default(),
+            }],
+        };
+
+        // AnyRequiredSlot with a single ready slot → aggregate Ready
+        assert_eq!(detect_credentials(&auth, &home), CredentialState::Ready);
+        // Slot-level should be ReadyViaLocalAuth
+        let (_, slots) = detect_auth_slots(&auth, &home);
+        assert_eq!(slots[0].credential_state, CredentialState::ReadyViaLocalAuth);
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn expired_opencode_oauth_yields_login_required() {
+        let home = make_temp_home();
+        let opencode_dir = home.join(".local").join("share").join("opencode");
+        std::fs::create_dir_all(&opencode_dir).expect("create opencode dir");
+        // expires in the past (epoch 1 second = 1970)
+        std::fs::write(
+            opencode_dir.join("auth.json"),
+            r#"{"anthropic":{"type":"oauth","access":"token","refresh":"r","expires":1}}"#,
+        )
+        .expect("write auth json");
+
+        let auth = AuthSpec {
+            readiness_policy: AuthReadinessPolicy::AnyRequiredSlot,
+            slots: vec![AuthSlotSpec {
+                id: "opencode".into(),
+                label: "OpenCode".into(),
+                credential_provider_ids: vec!["anthropic".into()],
+                required_for_readiness: true,
+                env_vars: vec![],
+                login: Some(test_login_spec()),
+                discovery: CredentialDiscoveryKind::OpenCode,
+                materialization: Default::default(),
+            }],
+        };
+
+        assert_eq!(
+            detect_credentials(&auth, &home),
+            CredentialState::LoginRequired
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
@@ -315,7 +484,10 @@ mod tests {
         )
         .expect("write auth json");
 
-        assert!(!detect_opencode_local_auth(&home));
+        assert!(matches!(
+            detect_opencode_local_auth(&home),
+            LocalAuthDetection::Absent
+        ));
 
         let _ = std::fs::remove_dir_all(&home);
     }
