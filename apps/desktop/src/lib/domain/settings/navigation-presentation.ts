@@ -8,7 +8,6 @@ export type SettingsNavIconId =
   | "agent-defaults"
   | "agent-grok"
   | "agent-opencode"
-  | "agents"
   | "appearance"
   | "billing"
   | "check-for-updates"
@@ -139,7 +138,6 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "agents_main",
         heading: null,
         items: [
-          { kind: "section", id: "agents", label: "Overview", iconId: "agents" },
           { kind: "section", id: "agent-claude", label: "Claude Code", iconId: "agent-claude" },
           { kind: "section", id: "agent-codex", label: "Codex", iconId: "agent-codex" },
           { kind: "section", id: "agent-opencode", label: "OpenCode", iconId: "agent-opencode" },

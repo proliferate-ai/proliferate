@@ -22,6 +22,7 @@ import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsEyebrow } from "@proliferate/product-ui/settings/SettingsEyebrow";
 import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
+import { HarnessStatusDot } from "@/components/settings/sidebar/HarnessStatusDot";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   SETTINGS_SHORTCUT_SECTION_ORDER,
@@ -29,13 +30,17 @@ import {
   type SettingsSection,
 } from "@/config/settings";
 import {
+  SETTINGS_HARNESS_SECTIONS,
   SETTINGS_HELP_ITEMS,
+  getHarnessKindForSettingsSection,
   getSettingsScopeNav,
   isSettingsAdminOnlySection,
+  isSettingsHarnessSection,
   type SettingsNavIconId,
   type SettingsNavItem,
   type SettingsScope,
 } from "@/lib/domain/settings/navigation-presentation";
+import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useSettingsSectionShortcuts } from "@/hooks/settings/ui/use-settings-section-shortcuts";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
@@ -89,7 +94,6 @@ const SETTINGS_NAV_ICONS = {
   "agent-defaults": SlidersHorizontal,
   "agent-grok": harnessNavIcon("grok"),
   "agent-opencode": harnessNavIcon("opencode"),
-  agents: Bot,
   appearance: Palette,
   billing: CreditCard,
   "check-for-updates": RefreshCw,
@@ -137,8 +141,15 @@ function isSettingsItemDisabled(
 function settingsItemStatus(
   item: SettingsNavItem,
   updateActionState: SettingsSidebarProps["updateActionState"],
+  agentsByKind: Map<string, any>,
 ) {
   const statusItems: ReactNode[] = [];
+
+  if (item.kind === "section" && isSettingsHarnessSection(item.id)) {
+    const harnessKind = getHarnessKindForSettingsSection(item.id);
+    const agent = agentsByKind.get(harnessKind);
+    statusItems.push(<HarnessStatusDot key="harness-status" agent={agent} />);
+  }
 
   if (item.kind === "action" && item.id === "checkForUpdates") {
     if (!updateActionState.updatesSupported) {
@@ -190,6 +201,7 @@ export function SettingsSidebar({
   const appVersion = useAppVersion().data?.trim();
   const handleOpenSupport = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
+  const { agentsByKind } = useAgentCatalog();
   const visibleNavGroups = useMemo(() =>
     getSettingsScopeNav(activeScope).groups.map((group) => ({
       ...group,
@@ -265,7 +277,7 @@ export function SettingsSidebar({
         key={item.id}
         icon={<Icon className="size-4" />}
         label={item.label}
-        status={settingsItemStatus(item, updateActionState)}
+        status={settingsItemStatus(item, updateActionState, agentsByKind)}
         shortcutLabel={item.kind === "section" ? shortcutLabelBySection.get(item.id) : undefined}
         title={settingsItemDisabledReason(item, disabled, updateActionState)}
         onPress={() => handleItemClick(item)}
