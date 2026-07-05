@@ -1316,6 +1316,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["stage_patch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspace_id}/git/status": {
         parameters: {
             query?: never;
@@ -1342,6 +1358,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["unstage_paths"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unstage_patch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1891,9 +1923,20 @@ export interface components {
         AgentLaunchModelOption: {
             aliases?: string[];
             defaultOptIn?: boolean | null;
+            description?: string | null;
             displayName: string;
+            effort?: null | components["schemas"]["ModelEffort"];
+            fastMode?: boolean | null;
             id: string;
             isDefault: boolean;
+            /**
+             * @description The permission/agent modes the model supports (joined from the bundled
+             *     catalog's `controls.mode.values`); absent when the model has no mode
+             *     control (contract §5).
+             */
+            modes?: string[] | null;
+            provider?: string | null;
+            status?: null | components["schemas"]["ModelCatalogStatus"];
         };
         AgentLaunchOption: {
             defaultModelId?: string | null;
@@ -2447,6 +2490,10 @@ export interface components {
             provider: string;
             providerModel: string;
             unit: string;
+        } | {
+            /** @enum {string} */
+            kind: "network_connection";
+            provider?: string | null;
         };
         ExportReplayRecordingRequest: {
             name?: string | null;
@@ -2502,10 +2549,40 @@ export interface components {
         };
         /** @enum {string} */
         ForkSessionTargetType: "before_user_message";
+        /**
+         * @description One enriched gateway model row (spec §1). Catalog-known ids carry the joined
+         *     display metadata; probe-only ids (the proxy serves it but the bundled
+         *     catalog doesn't know it) emit just `{ id, provider? }`.
+         */
+        GatewayModelEntry: {
+            /** @description Catalog description; absent when the catalog omits one or for probe-only ids. */
+            description?: string | null;
+            /** @description Catalog display name; absent for probe-only ids. */
+            displayName?: string | null;
+            effort?: null | components["schemas"]["ModelEffort"];
+            /** @description Whether the model carries a `fast_mode` control; absent for probe-only ids. */
+            fastMode?: boolean | null;
+            /** @description The gateway model id (always present — the render plane keys on this). */
+            id: string;
+            /**
+             * @description The permission/agent modes the model supports (`controls.mode.values`);
+             *     absent when the model has no mode control or is probe-only (contract §5).
+             */
+            modes?: string[] | null;
+            /**
+             * @description Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent
+             *     when no family matches.
+             */
+            provider?: string | null;
+            status?: null | components["schemas"]["ModelCatalogStatus"];
+        };
         /** @description Resolved gateway model plan for the local surface. */
         GatewayModelsResponse: {
-            /** @description The resolved, provider-filtered model ids (probe rows or catalog seed). */
-            models: string[];
+            /**
+             * @description The resolved, provider-filtered models — each id enriched with the
+             *     bundled catalog row (or bare `{ id, provider? }` for probe-only ids).
+             */
+            models: components["schemas"]["GatewayModelEntry"][];
             /** @description When a probe supplied the list (RFC3339); absent for seed. */
             probedAt?: string | null;
             /** @description `"seed"` (no probe yet) or `"probe"` (a live probe supplied the list). */
@@ -3095,6 +3172,15 @@ export interface components {
         };
         /** @enum {string} */
         ModelCatalogStatus: "candidate" | "active" | "deprecated" | "hidden";
+        /**
+         * @description The thinking/effort control surfaced per model: the values the model
+         *     supports and the observed default (the runtime joins these from the
+         *     bundled catalog's `controls.effort.{values, observedValue}`).
+         */
+        ModelEffort: {
+            default?: string | null;
+            values: string[];
+        };
         /**
          * @description A product-normalized live session control derived from raw ACP config options.
          *
@@ -4173,6 +4259,10 @@ export interface components {
         };
         /** @enum {string} */
         SetupScriptStatus: "queued" | "running" | "succeeded" | "failed";
+        StagePatchRequest: {
+            /** @description A valid unified diff patch (file headers + hunk) to apply to the index. */
+            patch: string;
+        };
         StagePathsRequest: {
             paths: string[];
         };
@@ -4357,6 +4447,10 @@ export interface components {
         } | {
             /** @enum {string} */
             status: "idle";
+        };
+        UnstagePatchRequest: {
+            /** @description A valid unified diff patch (file headers + hunk) to reverse-apply from the index. */
+            patch: string;
         };
         UnstagePathsRequest: {
             paths: string[];
@@ -8242,6 +8336,49 @@ export interface operations {
             };
         };
     };
+    stage_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StagePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Patch staged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Patch could not be applied */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     get_git_status: {
         parameters: {
             query?: never;
@@ -8296,6 +8433,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    unstage_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Workspace ID */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnstagePatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Patch unstaged */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Patch could not be removed from index */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
             };
             /** @description Workspace not found */
             404: {

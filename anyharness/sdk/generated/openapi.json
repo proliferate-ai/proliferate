@@ -4717,6 +4717,60 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "stage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch staged"
+          },
+          "400": {
+            "description": "Patch could not be applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/git/status": {
       "get": {
         "tags": [
@@ -4788,6 +4842,60 @@
         "responses": {
           "200": {
             "description": "Files unstaged"
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "unstage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch unstaged"
+          },
+          "400": {
+            "description": "Patch could not be removed from index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "404": {
             "description": "Workspace not found",
@@ -6463,14 +6571,62 @@
               "null"
             ]
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "displayName": {
             "type": "string"
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort"
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "id": {
             "type": "string"
           },
           "isDefault": {
             "type": "boolean"
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (joined from the bundled\ncatalog's `controls.mode.values`); absent when the model has no mode\ncontrol (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus"
+              }
+            ]
           }
         }
       },
@@ -8886,6 +9042,26 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "network_connection"
+                ]
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
           }
         ]
       },
@@ -9094,6 +9270,79 @@
           "before_user_message"
         ]
       },
+      "GatewayModelEntry": {
+        "type": "object",
+        "description": "One enriched gateway model row (spec §1). Catalog-known ids carry the joined\ndisplay metadata; probe-only ids (the proxy serves it but the bundled\ncatalog doesn't know it) emit just `{ id, provider? }`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog description; absent when the catalog omits one or for probe-only ids."
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog display name; absent for probe-only ids."
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort",
+                "description": "The thinking/effort control (`values` + observed `default`); absent when\nthe model has no effort control or is probe-only."
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the model carries a `fast_mode` control; absent for probe-only ids."
+          },
+          "id": {
+            "type": "string",
+            "description": "The gateway model id (always present — the render plane keys on this)."
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (`controls.mode.values`);\nabsent when the model has no mode control or is probe-only (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent\nwhen no family matches."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus",
+                "description": "Catalog lifecycle status; absent for probe-only ids."
+              }
+            ]
+          }
+        }
+      },
       "GatewayModelsResponse": {
         "type": "object",
         "description": "Resolved gateway model plan for the local surface.",
@@ -9105,9 +9354,9 @@
           "models": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/GatewayModelEntry"
             },
-            "description": "The resolved, provider-filtered model ids (probe rows or catalog seed)."
+            "description": "The resolved, provider-filtered models — each id enriched with the\nbundled catalog row (or bare `{ id, provider? }` for probe-only ids)."
           },
           "probedAt": {
             "type": [
@@ -11525,6 +11774,27 @@
           "deprecated",
           "hidden"
         ]
+      },
+      "ModelEffort": {
+        "type": "object",
+        "description": "The thinking/effort control surfaced per model: the values the model\nsupports and the observed default (the runtime joins these from the\nbundled catalog's `controls.effort.{values, observedValue}`).",
+        "required": [
+          "values"
+        ],
+        "properties": {
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       },
       "NormalizedSessionControl": {
         "type": "object",
@@ -16098,6 +16368,18 @@
           "failed"
         ]
       },
+      "StagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to apply to the index."
+          }
+        }
+      },
       "StagePathsRequest": {
         "type": "object",
         "required": [
@@ -16902,6 +17184,18 @@
             }
           }
         ]
+      },
+      "UnstagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to reverse-apply from the index."
+          }
+        }
       },
       "UnstagePathsRequest": {
         "type": "object",

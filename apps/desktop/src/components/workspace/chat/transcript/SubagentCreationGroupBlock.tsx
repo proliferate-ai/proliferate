@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { ToolCallItem, TranscriptState } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Robot } from "@proliferate/ui/icons";
-import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
+import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
 import {
   parseSubagentLaunchResult,
   resolveSubagentLaunchDisplay,
@@ -157,9 +158,10 @@ function SubagentFinishedRow({
           )}
           {summary && (
             <div className="text-chat leading-[var(--text-chat--line-height)] text-foreground/90">
-              <MarkdownRenderer
+              <MarkdownBody
                 content={summary}
                 className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                renderCodeBlock={renderDesktopCodeBlock}
               />
             </div>
           )}
