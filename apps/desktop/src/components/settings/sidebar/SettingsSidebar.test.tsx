@@ -36,6 +36,15 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   }),
 }));
 
+vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+  useAgentCatalog: () => ({
+    agents: [],
+    agentsByKind: new Map(),
+    isLoading: false,
+    isReconciling: false,
+  }),
+}));
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -141,11 +150,10 @@ describe("SettingsSidebar layout and shortcuts", () => {
   });
 
   it("gives every harness its own entry in the Agents scope, in order", () => {
-    renderSettingsSidebar({ activeScope: "agents", activeSection: "agents" });
+    renderSettingsSidebar({ activeScope: "agents", activeSection: "agent-claude" });
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
-      "Overview",
       "Claude Code",
       "Codex",
       "OpenCode",
