@@ -1,6 +1,7 @@
 use std::path::Path;
 #[cfg(target_os = "macos")]
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::Value;
 
@@ -41,18 +42,25 @@ pub fn detect_local_auth_state(home_dir: &Path) -> Result<LocalAuthState, Discov
         tracing::debug!(path = %path.display(), "Checking Claude OAuth credential file");
         if let Some(data) = read_json_file(&path)? {
             if has_claude_oauth_payload(&data) {
-                tracing::debug!(path = %path.display(), "Claude OAuth credential file detected");
-                return Ok(LocalAuthState::Present(LocalAuthSource::File { path }));
+                let source = LocalAuthSource::File { path };
+                if is_oauth_expired(&data) {
+                    tracing::debug!("Claude OAuth credential expired");
+                    return Ok(LocalAuthState::Expired(source));
+                }
+                tracing::debug!("Claude OAuth credential file detected");
+                return Ok(LocalAuthState::Present(source));
             }
         }
     }
 
-    if let Some((service, account, _oauth)) = read_keychain_claude_oauth(home_dir)? {
+    if let Some((service, account, oauth)) = read_keychain_claude_oauth(home_dir)? {
         tracing::debug!(service, account, "Claude keychain auth detected");
-        return Ok(LocalAuthState::Present(LocalAuthSource::MacOsKeychain {
-            service,
-            account,
-        }));
+        let source = LocalAuthSource::MacOsKeychain { service, account };
+        if is_oauth_expired(&serde_json::json!({ CLAUDE_KEYCHAIN_ROOT_KEY: oauth })) {
+            tracing::debug!("Claude keychain OAuth credential expired");
+            return Ok(LocalAuthState::Expired(source));
+        }
+        return Ok(LocalAuthState::Present(source));
     }
 
     let config_path = home_dir.join(CLAUDE_CONFIG_PATH);
@@ -251,6 +259,22 @@ fn has_claude_oauth_payload(data: &Value) -> bool {
 fn extract_oauth_payload(data: &Value) -> Option<&Value> {
     data.get(CLAUDE_KEYCHAIN_ROOT_KEY)
         .filter(|oauth| oauth.is_object())
+}
+
+/// Returns true if the OAuth payload has an `expiresAt` field (ms epoch) that
+/// is in the past. Missing or non-numeric `expiresAt` → not expired (conservative).
+fn is_oauth_expired(data: &Value) -> bool {
+    let Some(oauth) = extract_oauth_payload(data) else {
+        return false;
+    };
+    let Some(expires_at_ms) = oauth.get("expiresAt").and_then(Value::as_u64) else {
+        return false;
+    };
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    expires_at_ms <= now_ms
 }
 
 #[cfg(target_os = "macos")]
@@ -485,6 +509,69 @@ mod tests {
         assert_eq!(
             serde_json::from_slice::<Value>(&export.files[0].content).expect("parse export"),
             serde_json::json!({"primaryApiKey":"sk-ant-123"})
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn detects_expired_oauth_credential() {
+        let home = make_temp_home();
+        fs::create_dir_all(home.join(".claude")).expect("create claude dir");
+        // expiresAt in the past (epoch 1000ms = 1970)
+        fs::write(
+            home.join(CLAUDE_CREDENTIALS_PATH),
+            r#"{"claudeAiOauth":{"accessToken":"token","expiresAt":1000}}"#,
+        )
+        .expect("write oauth creds");
+
+        let state = detect_local_auth_state(&home).expect("detect local auth");
+        assert!(
+            matches!(state, LocalAuthState::Expired(LocalAuthSource::File { .. })),
+            "Expected Expired, got {:?}",
+            state
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn detects_valid_oauth_credential_with_future_expiry() {
+        let home = make_temp_home();
+        fs::create_dir_all(home.join(".claude")).expect("create claude dir");
+        // expiresAt far in the future (year ~2060)
+        fs::write(
+            home.join(CLAUDE_CREDENTIALS_PATH),
+            r#"{"claudeAiOauth":{"accessToken":"token","expiresAt":2840000000000}}"#,
+        )
+        .expect("write oauth creds");
+
+        let state = detect_local_auth_state(&home).expect("detect local auth");
+        assert!(
+            matches!(state, LocalAuthState::Present(LocalAuthSource::File { .. })),
+            "Expected Present, got {:?}",
+            state
+        );
+
+        let _ = fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn missing_expires_at_treated_as_present() {
+        let home = make_temp_home();
+        fs::create_dir_all(home.join(".claude")).expect("create claude dir");
+        // No expiresAt field → conservative: Present
+        fs::write(
+            home.join(CLAUDE_CREDENTIALS_PATH),
+            r#"{"claudeAiOauth":{"accessToken":"token"}}"#,
+        )
+        .expect("write oauth creds");
+
+        let state = detect_local_auth_state(&home).expect("detect local auth");
+        assert!(
+            matches!(state, LocalAuthState::Present(LocalAuthSource::File { .. })),
+            "Expected Present, got {:?}",
+            state
         );
 
         let _ = fs::remove_dir_all(home);
