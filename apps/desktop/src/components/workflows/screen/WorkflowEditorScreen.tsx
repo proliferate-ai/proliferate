@@ -251,7 +251,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
   return (
     <MainSidebarPageShell>
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-3 pt-10">
           <button
             type="button"
