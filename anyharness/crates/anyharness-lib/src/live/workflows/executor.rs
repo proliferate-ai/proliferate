@@ -544,6 +544,7 @@ async fn await_turn_ended(
     }
 }
 
+#[derive(Debug)]
 enum GoalWait {
     Met { met_reason: Option<String> },
     Failed { reason: String },
@@ -603,6 +604,17 @@ async fn await_goal_terminal(
                 SessionEvent::SessionEnded(_) => {
                     return GoalWait::Failed {
                         reason: "session_closed".to_string(),
+                    }
+                }
+                // A turn that errors out (API/model failure, connection loss)
+                // is fatal to the goal: the agent can no longer make progress,
+                // so fail the step immediately rather than waiting out the
+                // wall-clock backstop. Note we deliberately do NOT treat
+                // `TurnEnded` as terminal — goal iteration ends turns
+                // repeatedly, and only an actual error stops progress.
+                SessionEvent::Error(payload) => {
+                    return GoalWait::Failed {
+                        reason: format!("turn_error: {}", payload.message),
                     }
                 }
                 _ => {}
@@ -767,5 +779,42 @@ mod tests {
         assert_eq!(out["goal"]["iterations"], 3);
         assert_eq!(out["goal"]["tokens_used"], 64_000);
         assert_eq!(out["session_id"], "sess_1");
+    }
+
+    fn envelope(event: SessionEvent) -> SessionEventEnvelope {
+        SessionEventEnvelope {
+            session_id: "sess_1".to_string(),
+            seq: 1,
+            timestamp: "2026-07-05T00:00:00Z".to_string(),
+            turn_id: None,
+            item_id: None,
+            event,
+        }
+    }
+
+    // Regression: a turn that errors out (bad model, API failure) must fail the
+    // goal step immediately, not hang until the wall-clock backstop. Before the
+    // `SessionEvent::Error` arm, this waited out `deadline` and returned Timeout.
+    #[tokio::test]
+    async fn goal_await_fails_fast_on_turn_error() {
+        let (tx, mut rx) = broadcast::channel(16);
+        let deadline = std::time::Instant::now() + Duration::from_secs(30);
+        tx.send(envelope(SessionEvent::Error(
+            anyharness_contract::v1::ErrorEvent {
+                message: "API Error (claude-fable-5): 400 invalid model".to_string(),
+                code: None,
+                details: None,
+            },
+        )))
+        .unwrap();
+        let mut noop = |_: &Goal| {};
+        let result = await_goal_terminal(&mut rx, deadline, OnBlocked::Fail, &mut noop).await;
+        match result {
+            GoalWait::Failed { reason } => {
+                assert!(reason.starts_with("turn_error:"), "reason was {reason}");
+                assert!(reason.contains("invalid model"));
+            }
+            other => panic!("expected Failed on turn error, got {other:?}"),
+        }
     }
 }
