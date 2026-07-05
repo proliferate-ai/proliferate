@@ -27,19 +27,11 @@ export interface WorkflowSetupCardProps {
 
 const ARG_TYPES: WorkflowArgType[] = ["string", "number", "boolean", "enum"];
 
-function summaryText(setup: WorkflowSetup, agents: readonly EditorAgent[], argCount: number): string {
-  const agent = agents.find((a) => a.kind === setup.harness);
-  const harness = agent?.displayName ?? (setup.harness || "No agent");
-  const model = agent?.models.find((m) => m.id === setup.model)?.label ?? setup.model;
-  const parts = [harness];
-  if (model) {
-    parts.push(model);
+function summaryText(argCount: number): string {
+  if (argCount === 0) {
+    return "No arguments";
   }
-  parts.push(setup.sessionBinding === "headless" ? "headless" : "fresh");
-  if (argCount > 0) {
-    parts.push(`${argCount} ${argCount === 1 ? "arg" : "args"}`);
-  }
-  return parts.join(" · ");
+  return `${argCount} ${argCount === 1 ? "arg" : "args"}`;
 }
 
 function ArgRow({
@@ -154,7 +146,7 @@ export function WorkflowSetupCard({ setup, args, agents, onSetupChange, onArgsCh
       >
         <span className="flex min-w-0 flex-col">
           <span className="text-ui-sm font-medium text-foreground">Setup</span>
-          <span className="truncate text-xs text-muted-foreground">{summaryText(setup, agents, args.length)}</span>
+          <span className="truncate text-xs text-muted-foreground">{summaryText(args.length)}</span>
         </span>
         {expanded ? <ChevronDown className="size-4 shrink-0 text-faint" /> : <ChevronRight className="size-4 shrink-0 text-faint" />}
       </button>
