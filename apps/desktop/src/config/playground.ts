@@ -66,6 +66,10 @@ export type ScenarioKey =
   | "tool-subagent-task"
   | "tool-subagent-creation-single"
   | "tool-subagent-creations"
+  | "subagent-activity-running"
+  | "subagent-activity-done"
+  | "subagent-activity-failed"
+  | "subagent-activity-concurrent"
   | "subagent-parent-send-card"
   | "end-turn-multi-file-diff"
   | "git-diff-panel"
@@ -162,6 +166,10 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "tool-subagent-task": { label: "Tool subagent task" },
   "tool-subagent-creation-single": { label: "Tool subagent creation" },
   "tool-subagent-creations": { label: "Tool subagent creations" },
+  "subagent-activity-running": { label: "Bg subagent running" },
+  "subagent-activity-done": { label: "Bg subagent done" },
+  "subagent-activity-failed": { label: "Bg subagent failed" },
+  "subagent-activity-concurrent": { label: "Bg subagents (3)" },
   "subagent-parent-send-card": { label: "Parent send receipt" },
   "end-turn-multi-file-diff": { label: "End-turn diff" },
   "git-diff-panel": { label: "Git diff panel" },
