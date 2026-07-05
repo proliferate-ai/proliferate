@@ -176,6 +176,7 @@ mod tests {
         HarnessAuth {
             harness_kind: kind.into(),
             sources,
+            settings: None,
         }
     }
 

@@ -60,6 +60,7 @@ def _inputs(
         enrollment_sync_status=enrollment_sync_status,
         gateway_virtual_key=gateway_virtual_key,
         gateway_base_url=gateway_base_url,
+        harness_settings={},
     )
 
 

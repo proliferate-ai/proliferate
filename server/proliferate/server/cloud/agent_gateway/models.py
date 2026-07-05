@@ -91,6 +91,11 @@ class AgentAuthSourceInput(AgentGatewayBaseModel):
 
 class AgentAuthSelectionsPutRequest(AgentGatewayBaseModel):
     sources: list[AgentAuthSourceInput]
+    # Per-harness advanced settings (catalog-declared toggles). Keys are setting
+    # keys from the agent catalog; values are booleans (v1). Null/absent means
+    # "no change to settings". The server validates shape (dict[str, bool]) but
+    # does NOT validate keys against the catalog (runtime-only artifact).
+    settings: dict[str, Any] | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -111,6 +116,7 @@ class AgentAuthStateSource(BaseModel):
 class AgentAuthStateHarness(BaseModel):
     harness_kind: str
     sources: list[AgentAuthStateSource]
+    settings: dict[str, Any] | None = None
 
 
 class AgentAuthStateResponse(BaseModel):

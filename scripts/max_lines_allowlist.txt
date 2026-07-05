@@ -36,6 +36,8 @@ apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 631 existing desktop oversized test file
 apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
+server/proliferate/db/models/cloud/agent_gateway.py 504 agent_auth_harness_settings model added for catalog-driven per-harness settings
+server/proliferate/server/cloud/agent_gateway/api.py 405 harness-settings GET/PUT routes added for catalog-driven per-harness settings
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
 server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
 server/tests/integration/test_agent_gateway_store.py 673 P1 auth rebuild rewrote store coverage for titled-key + agent_auth_selection model
