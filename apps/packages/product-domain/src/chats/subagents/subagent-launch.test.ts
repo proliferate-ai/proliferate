@@ -55,6 +55,28 @@ describe("parseAsyncSubagentLaunch", () => {
     }))).toBeNull();
   });
 
+  it("parses the launch receipt even without pending background metadata", () => {
+    const launch = parseAsyncSubagentLaunch(toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: undefined,
+      contentParts: [
+        {
+          type: "tool_result_text",
+          text: "Async agent launched successfully.\nThe agent is working in the background.",
+        },
+      ],
+    }));
+
+    expect(launch).toEqual({
+      rawText: "Async agent launched successfully.\nThe agent is working in the background.",
+      agentId: null,
+      outputFile: null,
+    });
+  });
+
   it("returns null for non-subagent tools", () => {
     expect(parseAsyncSubagentLaunch(toolCallItem({
       status: "completed",
@@ -84,6 +106,39 @@ describe("resolveSubagentExecutionState", () => {
         },
       ],
     }))).toBe("background");
+  });
+
+  it("treats a bare async launch receipt (no background metadata) as running", () => {
+    expect(resolveSubagentExecutionState(toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: undefined,
+      contentParts: [
+        {
+          type: "tool_result_text",
+          text: [
+            "Async agent launched successfully.",
+            "agentId: ad5087d157aab3117 (internal ID - do not mention to user.)",
+            "output_file: /tmp/task.output",
+          ].join("\n"),
+        },
+      ],
+    }))).toBe("background");
+  });
+
+  it("marks a background launch complete once a structured summary is present", () => {
+    expect(resolveSubagentExecutionState(toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: { summary: "The subagent finished the task." },
+      contentParts: [
+        { type: "tool_result_text", text: "The subagent finished the task." },
+      ],
+    }))).toBe("completed_background");
   });
 
   it("preserves failed status", () => {
@@ -141,6 +196,22 @@ describe("isSubagentWorkComplete", () => {
       nativeToolName: "Agent",
       rawInput: { run_in_background: true },
       rawOutput: backgroundWork("pending"),
+      contentParts: [
+        {
+          type: "tool_result_text",
+          text: "Async agent launched successfully.\nThe agent is working in the background.",
+        },
+      ],
+    }))).toBe(false);
+  });
+
+  it("keeps a bare async launch receipt (no background metadata) as still running", () => {
+    expect(isSubagentWorkComplete(toolCallItem({
+      status: "completed",
+      semanticKind: "subagent",
+      nativeToolName: "Agent",
+      rawInput: { run_in_background: true },
+      rawOutput: undefined,
       contentParts: [
         {
           type: "tool_result_text",
