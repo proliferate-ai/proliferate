@@ -9,23 +9,20 @@ afterEach(() => {
 });
 
 describe("ComposerAddActionPopover", () => {
-  it("renders file and plan actions without review controls", () => {
+  it("renders only file action", () => {
     render(
       <ComposerAddActionPopover
         canAttachFile
         attachFileDetail="Attach workspace files"
-        canAttachPlan
-        attachPlanDetail="Select an accepted plan"
-        workspaceUiKey="workspace-1"
-        sdkWorkspaceId="sdk-workspace-1"
         onAttachFile={() => {}}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add file or plan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add file" }));
 
     expect(screen.getByText("Add file")).toBeTruthy();
-    expect(screen.getByText("Add plan")).toBeTruthy();
+    expect(screen.queryByText("Add plan")).toBeNull();
+    expect(screen.queryByText("Set a goal")).toBeNull();
     expect(screen.queryByText("Code review agents")).toBeNull();
     expect(screen.queryByTitle("Configure code review agents")).toBeNull();
   });
