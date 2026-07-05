@@ -74,6 +74,33 @@ describe("deriveActivityChips", () => {
     expect(chips).toEqual([]);
   });
 
+  it("counts running native subagents only", () => {
+    const chips = deriveActivityChips({
+      loops: [],
+      processes: [],
+      agents: [
+        agent({ id: "a1", status: { status: "running" } }),
+        agent({ id: "a2", status: { status: "completed", summary: null } }),
+        agent({ id: "a3", status: { status: "failed" } }),
+      ],
+    });
+    expect(chips).toEqual([
+      { kind: "agents", count: 1, liveCount: 1, label: "1 native subagent" },
+    ]);
+  });
+
+  it("omits the agents chip when every native subagent has finished", () => {
+    const chips = deriveActivityChips({
+      loops: [],
+      processes: [],
+      agents: [
+        agent({ id: "a1", status: { status: "completed", summary: "done" } }),
+        agent({ id: "a2", status: { status: "failed" } }),
+      ],
+    });
+    expect(chips).toEqual([]);
+  });
+
   it("keeps the terminals chip visible for finished-but-listed processes", () => {
     const chips = deriveActivityChips({
       loops: [],

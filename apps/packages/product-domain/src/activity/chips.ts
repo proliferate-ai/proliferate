@@ -50,13 +50,20 @@ export function deriveActivityChips(input: ActivityChipsInput): ActivityChipDesc
     });
   }
 
-  if (input.agents.length > 0) {
-    const liveCount = input.agents.filter((agent) => agent.status.status === "running").length;
+  // Native subagents leave the roster the instant they finish (locked design:
+  // session-activity-architecture). The chip must therefore count RUNNING
+  // subagents only and disappear when none are running — otherwise the chip
+  // would advertise "3 native subagents" while the panel shows "No active
+  // native subagents". This mirrors the armed-only loops chip. (Terminals are
+  // intentionally different: exited processes stay in the roster so users can
+  // inspect output/exit codes, so that chip counts all processes.)
+  const runningAgents = input.agents.filter((agent) => agent.status.status === "running");
+  if (runningAgents.length > 0) {
     chips.push({
       kind: "agents",
-      count: input.agents.length,
-      liveCount,
-      label: pluralize(input.agents.length, "native subagent"),
+      count: runningAgents.length,
+      liveCount: runningAgents.length,
+      label: pluralize(runningAgents.length, "native subagent"),
     });
   }
 
