@@ -87,6 +87,7 @@ interface CachedTurnRow {
   turn: TurnRecord;
   itemRefs: readonly (TranscriptItem | null)[];
   needsLeadingSplit: boolean;
+  goalSeqBoundaries: readonly number[];
   rows: readonly Extract<TranscriptRow, { kind: "turn" }>[];
 }
 
@@ -133,11 +134,13 @@ export function buildTranscriptRowModel({
     seenTurnIds.add(turnId);
     const turnGoalRows = goalRows.byTurnId.get(turnId) ?? EMPTY_GOAL_ROWS;
     const needsLeadingSplit = turnGoalRows.length > 0;
+    const goalSeqBoundaries = turnGoalRows.map((row) => row.event.seq);
     const { rows: turnRows } = buildTurnRows(
       turn,
       transcript,
       cache,
       needsLeadingSplit,
+      goalSeqBoundaries,
     );
     // Interleave goal rows by seq among the turn's own rows.
     const interleavedRows = interleaveGoalRowsBySeq(
@@ -451,6 +454,7 @@ function buildTurnRows(
   transcript: TranscriptState,
   cache: TranscriptRowModelCache | undefined,
   needsLeadingSplit: boolean,
+  goalSeqBoundaries: readonly number[] = [],
 ): TurnRowsResult {
   const itemRefs = collectTurnItemRefs(turn, transcript);
   const cached = cache?.turnRowsById.get(turn.turnId) ?? null;
@@ -458,6 +462,7 @@ function buildTurnRows(
     cached
     && cached.turn === turn
     && cached.needsLeadingSplit === needsLeadingSplit
+    && areSeqBoundariesEqual(cached.goalSeqBoundaries, goalSeqBoundaries)
     && areItemRefsEqual(cached.itemRefs, itemRefs)
   ) {
     return { rows: cached.rows };
@@ -469,11 +474,13 @@ function buildTurnRows(
     transcript,
     presentation,
     needsLeadingSplit,
+    goalSeqBoundaries,
   );
   cache?.turnRowsById.set(turn.turnId, {
     turn,
     itemRefs,
     needsLeadingSplit,
+    goalSeqBoundaries: [...goalSeqBoundaries],
     rows,
   });
   return { rows };
@@ -484,6 +491,7 @@ function buildRowsForTurnPresentation(
   transcript: TranscriptState,
   presentation: TurnPresentation,
   needsLeadingSplit: boolean,
+  goalSeqBoundaries: readonly number[],
 ): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
   const chunks = shouldSplitTurnIntoRows(turn, presentation)
     ? chunkTurnDisplayBlocks(presentation)
@@ -503,6 +511,22 @@ function buildRowsForTurnPresentation(
         isLastTurnRow: index === chunks.length - 1,
       });
     });
+  }
+
+  // If goal events exist at specific seq boundaries, split the content row at
+  // those boundaries so goal rows can be inserted inline at their true
+  // chronological position.
+  if (goalSeqBoundaries.length > 0) {
+    const sortedBoundaries = [...goalSeqBoundaries].sort((a, b) => a - b);
+    const subRows = partitionBlocksBySeqBoundaries(
+      turn,
+      transcript,
+      presentation,
+      sortedBoundaries,
+    );
+    if (subRows.length > 1) {
+      return subRows;
+    }
   }
 
   // Single-row turn: check if we should split out a leading user-message row
@@ -688,4 +712,135 @@ function areItemRefsEqual(
     }
   }
   return true;
+}
+
+function areSeqBoundariesEqual(
+  left: readonly number[],
+  right: readonly number[],
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Partitions displayBlocks into multiple sub-rows based on goal seq boundaries.
+ * Each block is assigned to a sub-row based on its startedSeq relative to the
+ * sorted boundaries. This enables goal rows to be inserted inline between
+ * sub-rows at their true chronological position.
+ */
+function partitionBlocksBySeqBoundaries(
+  turn: TurnRecord,
+  transcript: TranscriptState,
+  presentation: TurnPresentation,
+  sortedBoundaries: readonly number[],
+): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
+  interface BlockWithSeq {
+    block: TurnDisplayBlock;
+    seq: number;
+  }
+
+  // Assign each block a seq value (for multi-item blocks, use the first item's seq)
+  const blocksWithSeq: BlockWithSeq[] = [];
+  for (const block of presentation.displayBlocks) {
+    let seq: number | null = null;
+    if (block.kind === "item" || block.kind === "inline_tool") {
+      const item = transcript.itemsById[block.itemId];
+      if (item) {
+        seq = item.startedSeq;
+      }
+    } else if (
+      block.kind === "collapsed_actions"
+      || block.kind === "inline_tools"
+      || block.kind === "subagent_creations"
+    ) {
+      // Use the first item's seq for multi-item blocks
+      for (const itemId of block.itemIds) {
+        const item = transcript.itemsById[itemId];
+        if (item) {
+          seq = item.startedSeq;
+          break;
+        }
+      }
+    }
+    if (seq !== null) {
+      blocksWithSeq.push({ block, seq });
+    }
+  }
+
+  if (blocksWithSeq.length === 0) {
+    // No blocks with valid seq — return single unsplit row
+    return [buildTurnRow({
+      turnId: turn.turnId,
+      blockKey: TURN_CONTENT_BLOCK_KEY,
+      presentation,
+      renderPresentation: presentation,
+      isFirstTurnRow: true,
+      isLastTurnRow: true,
+    })];
+  }
+
+  // Partition blocks into N+1 slices based on sorted boundaries
+  // Slice i contains blocks with seq in [boundaries[i-1], boundaries[i])
+  // (with -Infinity and +Infinity as implicit boundaries at the ends)
+  const slices: BlockWithSeq[][] = [];
+  for (let i = 0; i <= sortedBoundaries.length; i += 1) {
+    slices.push([]);
+  }
+
+  for (const blockWithSeq of blocksWithSeq) {
+    let sliceIndex = sortedBoundaries.length; // Default: after all boundaries
+    for (let i = 0; i < sortedBoundaries.length; i += 1) {
+      if (blockWithSeq.seq < sortedBoundaries[i]) {
+        sliceIndex = i;
+        break;
+      }
+    }
+    slices[sliceIndex].push(blockWithSeq);
+  }
+
+  // Build sub-rows for non-empty slices
+  const subRows: Extract<TranscriptRow, { kind: "turn" }>[] = [];
+  for (let i = 0; i < slices.length; i += 1) {
+    const slice = slices[i];
+    if (slice.length === 0) {
+      continue; // Skip empty slices
+    }
+    const sliceBlocks = slice.map((bws) => bws.block);
+    const minSeq = Math.min(...slice.map((bws) => bws.seq));
+    const maxSeq = Math.max(...slice.map((bws) => bws.seq));
+    const blockKey = `content:${minSeq}-${maxSeq}`;
+    subRows.push(buildTurnRow({
+      turnId: turn.turnId,
+      blockKey,
+      presentation,
+      renderPresentation: { ...presentation, displayBlocks: sliceBlocks },
+      isFirstTurnRow: subRows.length === 0,
+      isLastTurnRow: false, // Will update the last one below
+    }));
+  }
+
+  if (subRows.length > 0) {
+    // Mark the last sub-row
+    const lastSubRow = subRows[subRows.length - 1];
+    subRows[subRows.length - 1] = {
+      ...lastSubRow,
+      isLastTurnRow: true,
+    };
+  }
+
+  return subRows.length > 0 ? subRows : [buildTurnRow({
+    turnId: turn.turnId,
+    blockKey: TURN_CONTENT_BLOCK_KEY,
+    presentation,
+    renderPresentation: presentation,
+    isFirstTurnRow: true,
+    isLastTurnRow: true,
+  })];
 }

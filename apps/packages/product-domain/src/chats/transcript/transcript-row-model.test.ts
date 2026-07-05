@@ -396,16 +396,16 @@ describe("buildTranscriptRowModel", () => {
         latestTurnId: "turn-2",
         latestTurnHasAssistantRenderableContent: true,
         // Native confirmation lands at seq 3 — after items at seq 2 and 3,
-        // but before item at seq 4. Since the content row contains seq 2-4,
-        // the goal appears after the content row (best-effort inline positioning
-        // given that rows split at user/content boundaries, not per-item).
+        // but before item at seq 4. Now with seq-based splitting, the turn is
+        // split at seq 3, so the goal appears inline between the two sub-rows.
         goalEvents: [goalEvent(3, "set")],
       });
 
+      // With seq-based splitting: turn-1 is split into [seq 1-2] and [seq 3-4]
       expect(rows.map((row) => row.key)).toEqual([
-        "turn:turn-1:block:item-turn-1-user",
-        "turn:turn-1:block:content",
+        "turn:turn-1:block:content:1-2",
         "goal-event:3",
+        "turn:turn-1:block:content:3-4",
         "turn:turn-2:block:content",
       ]);
     });
@@ -425,12 +425,11 @@ describe("buildTranscriptRowModel", () => {
         goalEvents: [goalEvent(3, "met")],
       });
 
-      // The turn is split to enable inline positioning: user row, then content,
-      // then the goal at seq 3 (which falls after item-seq-3).
+      // The turn is split at seq 3 boundary: [seq 1-2] then goal, then [seq 3-4]
       expect(rows.map((row) => row.key)).toEqual([
-        "turn:turn-1:block:item-turn-1-user",
-        "turn:turn-1:block:content",
+        "turn:turn-1:block:content:1-2",
         "goal-event:3",
+        "turn:turn-1:block:content:3-4",
       ]);
     });
 
@@ -482,11 +481,14 @@ describe("buildTranscriptRowModel", () => {
         goalEvents: [goalEvent(2, "set"), goalEvent(5, "met")],
       });
 
+      // With two goal boundaries (seq 2 and 5), the turn is split into three slices:
+      // [seq 1], goal@2, [seq 2-4], goal@5, [seq 5]
       expect(rows.map((row) => row.key)).toEqual([
-        "turn:turn-1:block:item-turn-1-user",
+        "turn:turn-1:block:content:1-1",
         "goal-event:2",
-        "turn:turn-1:block:content",
+        "turn:turn-1:block:content:2-4",
         "goal-event:5",
+        "turn:turn-1:block:content:5-5",
       ]);
     });
 
@@ -545,6 +547,124 @@ describe("buildTranscriptRowModel", () => {
       // Specifically: should NOT be at index 0.
       expect(goalEventIndex).not.toBe(0);
     });
+
+    // CRITICAL TEST: Real session c42ad602, turn a423480f ground truth.
+    // This is the EXACT scenario that has been failing (third attempt).
+    // One turn with TWO goal events mid-stream, both must render inline.
+    it("interleaves multiple goal events inline at their exact seq positions within a single turn", () => {
+      const transcript = createTranscriptState("c42ad602");
+      addTurn(transcript, "a423480f", true);
+      // Turn seq range: 8-72
+      // seq 9: user "asdf"
+      addUserItem(transcript, "a423480f", "item-user", "asdf", 9);
+      // seq 10-29: assistant "Hey! What can I help you with?"
+      addAssistantItem(transcript, "a423480f", "item-hey", "Hey! What can I help you with?", 10);
+      // seq 31: goal_updated status=active "Goal set — Asdf" (MID-TURN, after item-hey)
+      // seq 32-71: assistant "Goal acknowledged: Asdf…"
+      addAssistantItem(transcript, "a423480f", "item-ack", "Goal acknowledged: Asdf…", 32);
+      // seq 72: goal_updated status=failed "Goal stopped — failed" (END of turn)
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "c42ad602",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "a423480f",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [
+          goalEvent(31, "set"), // Mid-turn, after "Hey!" before "Goal acknowledged"
+          goalEvent(72, "failed"), // End of turn, after "Goal acknowledged"
+        ],
+      });
+
+      // Expected row structure:
+      // [0] turn content sub-row: seq 9-30 (user "asdf" + assistant "Hey!")
+      // [1] goal event: seq 31 "Goal set — Asdf"
+      // [2] turn content sub-row: seq 32-71 (assistant "Goal acknowledged")
+      // [3] goal event: seq 72 "Goal stopped — failed"
+
+      // CRITICAL ASSERTIONS:
+      // 1. Must have 4 rows (2 content sub-rows + 2 goal rows)
+      expect(rows).toHaveLength(4);
+
+      // 2. First row: turn content with user + "Hey!"
+      expect(rows[0]).toMatchObject({
+        kind: "turn",
+        turnId: "a423480f",
+        isFirstTurnRow: true,
+        isLastTurnRow: false,
+      });
+      // Verify it contains items with seq < 31
+      const firstRowBlocks = (rows[0] as Extract<typeof rows[0], { kind: "turn" }>)
+        .renderPresentation.displayBlocks;
+      expect(firstRowBlocks.length).toBeGreaterThan(0);
+      expect(firstRowBlocks.some((b) =>
+        b.kind === "item" && b.itemId === "item-user"
+      )).toBe(true);
+      expect(firstRowBlocks.some((b) =>
+        b.kind === "item" && b.itemId === "item-hey"
+      )).toBe(true);
+
+      // 3. Second row: goal event seq 31
+      expect(rows[1]).toMatchObject({
+        kind: "goal_event",
+        event: expect.objectContaining({
+          seq: 31,
+          kind: "set",
+        }),
+      });
+
+      // 4. Third row: turn content with "Goal acknowledged"
+      expect(rows[2]).toMatchObject({
+        kind: "turn",
+        turnId: "a423480f",
+        isFirstTurnRow: false,
+        isLastTurnRow: true,
+      });
+      const thirdRowBlocks = (rows[2] as Extract<typeof rows[2], { kind: "turn" }>)
+        .renderPresentation.displayBlocks;
+      expect(thirdRowBlocks.some((b) =>
+        b.kind === "item" && b.itemId === "item-ack"
+      )).toBe(true);
+
+      // 5. Fourth row: goal event seq 72
+      expect(rows[3]).toMatchObject({
+        kind: "goal_event",
+        event: expect.objectContaining({
+          seq: 72,
+          kind: "failed",
+        }),
+      });
+
+      // CRITICAL: Goal rows are NOT at index 0 (not moved to top)
+      expect(rows.findIndex((r) => r.kind === "goal_event")).toBe(1);
+      // CRITICAL: Goal rows are NOT both at the end (not dumped to bottom)
+      const goalIndices = rows
+        .map((r, i) => (r.kind === "goal_event" ? i : -1))
+        .filter((i) => i >= 0);
+      expect(goalIndices).toEqual([1, 3]);
+    });
+
+    function addAssistantItem(
+      transcript: TranscriptState,
+      turnId: string,
+      itemId: string,
+      text: string,
+      startedSeq: number,
+    ) {
+      const turn = transcript.turnsById[turnId];
+      if (!turn) {
+        throw new Error(`missing test turn ${turnId}`);
+      }
+      turn.itemOrder.push(itemId);
+      transcript.itemsById[itemId] = {
+        kind: "assistant_prose",
+        itemId,
+        turnId,
+        text,
+        isStreaming: false,
+        startedSeq,
+      } as TranscriptState["itemsById"][string];
+    }
   });
 });
 
@@ -728,12 +848,12 @@ function pendingPrompt(): PendingPromptEntry {
   };
 }
 
-function goalEvent(seq: number, kind: GoalTranscriptEvent["kind"]): GoalTranscriptEvent {
+function goalEvent(seq: number, kind: string): GoalTranscriptEvent {
   return {
     id: String(seq),
     seq,
     turnId: null,
-    kind,
+    kind: kind as GoalTranscriptEvent["kind"],
     objective: "ship the thing",
     detail: null,
   };
