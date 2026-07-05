@@ -23,6 +23,12 @@ export function shortOnFailLabel(onFail: WorkflowOnFail): string | null {
 export interface WorkflowStepCardProps {
   step: WorkflowStep;
   index: number;
+  /**
+   * The spine number to display. When omitted, falls back to `index + 1`.
+   * Actions are numbered 1..N ignoring agent.config scope boundaries, so the
+   * editor passes an explicit action number here.
+   */
+  stepNumber?: number;
   selected?: boolean;
   invalid?: boolean;
   onSelect?: () => void;
@@ -76,6 +82,7 @@ function SpineNumber({ n, connector }: { n: number; connector: boolean }) {
 export function WorkflowStepCard({
   step,
   index,
+  stepNumber,
   selected = false,
   invalid = false,
   onSelect,
@@ -102,7 +109,7 @@ export function WorkflowStepCard({
         </div>
       ) : null}
       <div className="flex gap-3.5">
-      <SpineNumber n={index + 1} connector={connector} />
+      <SpineNumber n={stepNumber ?? index + 1} connector={connector} />
       <div className={twMerge("min-w-0 flex-1", connector ? "pb-4" : "")}>
         <div
           className={twMerge(

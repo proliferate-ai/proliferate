@@ -4,7 +4,7 @@ import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/i
 import { deriveEffectiveConfigs } from "@proliferate/product-domain/workflows/effective-config";
 import { WorkflowStepPanel, type EditorAgent } from "@/components/workflows/editor/WorkflowStepPanel";
 import { WorkflowStepRailCard } from "@/components/workflows/editor/WorkflowStepRailCard";
-import { WorkflowStepConnector } from "@/components/workflows/editor/WorkflowStepConnector";
+import { WorkflowScopeHeader } from "@/components/workflows/editor/WorkflowScopeHeader";
 
 const AGENTS: EditorAgent[] = [
   {
@@ -24,14 +24,14 @@ const SUGGESTIONS: TemplateSuggestion[] = [
   { token: "{{steps.1.output}}", label: "steps.1.output", detail: "step 1 · Prompt output", kind: "stepOutput" },
 ];
 
-// --- Scope-demo rail: exercises all scope cases ---
-// Setup: claude · sonnet
-// Step 0: agent.prompt (opens first session — scope 0)
-// Step 1: shell.run (same scope)
-// Step 2: agent.config model-only → opus (same session — no break)
-// Step 3: agent.prompt (continues session, model changed)
-// Step 4: agent.config harness → codex (NEW session — break)
-// Step 5: agent.prompt (in codex session)
+// --- Scope-demo rail: exercises all scope-boundary cases ---
+// Setup: claude · sonnet → INITIAL scope header (unnumbered)
+// Step 0: agent.prompt   → action 1
+// Step 1: shell.run      → action 2
+// Step 2: agent.config model-only → opus → MODEL-ONLY scope header (quiet, unnumbered)
+// Step 3: agent.prompt   → action 3
+// Step 4: agent.config harness → opencode → NEW-SESSION scope header (emphasis, unnumbered)
+// Step 5: agent.prompt   → action 4
 
 const SCOPE_DEMO_STEPS: WorkflowStep[] = [
   { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "Analyze the codebase and identify all API endpoints that lack input validation." },
@@ -60,55 +60,78 @@ const SCOPE_DEMO_DEFINITION: WorkflowDefinition = {
   steps: SCOPE_DEMO_STEPS,
 };
 
+function resolveLabels(harnessKind: string, modelId: string) {
+  const agent = AGENTS.find((a) => a.kind === harnessKind);
+  return {
+    harness: agent?.displayName ?? (harnessKind || "No agent"),
+    model: agent?.models.find((m) => m.id === modelId)?.label ?? modelId ?? "",
+  };
+}
+
 function ScopeDemoRail() {
-  const [selected, setSelected] = useState(0);
+  // -1 selects the initial (setup) scope header.
+  const [selected, setSelected] = useState<number>(0);
   const effectiveConfigs = useMemo(
     () => deriveEffectiveConfigs(SCOPE_DEMO_DEFINITION),
     [],
   );
 
+  let actionNumber = 0;
+
   return (
     <div className="w-[480px] rounded-xl bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] p-5 [background-size:16px_16px]">
+      <WorkflowScopeHeader
+        variant="initial"
+        {...resolveLabels(SCOPE_DEMO_DEFINITION.setup.harness, SCOPE_DEMO_DEFINITION.setup.model)}
+        selected={selected === -1}
+        onSelect={() => setSelected(-1)}
+      />
       {SCOPE_DEMO_STEPS.map((step, index) => {
-        const nextConfig = effectiveConfigs[index + 1];
-        const nextIsNewSession = nextConfig?.isNewSession === true;
         const thisConfig = effectiveConfigs[index];
-        const isFirstInScope = thisConfig && (
-          index === 0 || thisConfig.scopeIndex !== effectiveConfigs[index - 1]?.scopeIndex
-        );
-        const scopeLabel = isFirstInScope && thisConfig
-          ? `${thisConfig.effectiveHarness} · ${thisConfig.effectiveModel}`
-          : null;
 
-        return (
-          <div key={index}>
-            <WorkflowStepRailCard
-              step={step}
-              index={index}
+        if (step.kind === "agent.config") {
+          const labels = resolveLabels(
+            thisConfig?.effectiveHarness ?? step.harness ?? "",
+            thisConfig?.effectiveModel ?? step.model ?? "",
+          );
+          return (
+            <WorkflowScopeHeader
+              key={index}
+              variant={thisConfig?.isNewSession ? "new-session" : "model-only"}
+              harness={labels.harness}
+              model={labels.model}
               selected={selected === index}
-              invalid={false}
-              connector={!nextIsNewSession}
               canMoveUp={index > 0}
               canMoveDown={index < SCOPE_DEMO_STEPS.length - 1}
               onSelect={() => setSelected(index)}
-              onChange={() => undefined}
               onDuplicate={() => undefined}
               onDelete={() => undefined}
               onMoveUp={() => undefined}
               onMoveDown={() => undefined}
-              scopeAnnotation={
-                step.kind === "agent.config" && thisConfig
-                  ? thisConfig
-                  : null
-              }
-              scopeLabel={scopeLabel}
             />
-            {nextIsNewSession ? (
-              <WorkflowStepConnector
-                sessionBreak={{ label: `new session · ${nextConfig.effectiveHarness}` }}
-              />
-            ) : null}
-          </div>
+          );
+        }
+
+        actionNumber += 1;
+        const nextIsNewSession = effectiveConfigs[index + 1]?.isNewSession === true;
+        return (
+          <WorkflowStepRailCard
+            key={index}
+            step={step}
+            index={index}
+            stepNumber={actionNumber}
+            selected={selected === index}
+            invalid={false}
+            connector={index < SCOPE_DEMO_STEPS.length - 1 && !nextIsNewSession}
+            canMoveUp={index > 0}
+            canMoveDown={index < SCOPE_DEMO_STEPS.length - 1}
+            onSelect={() => setSelected(index)}
+            onChange={() => undefined}
+            onDuplicate={() => undefined}
+            onDelete={() => undefined}
+            onMoveUp={() => undefined}
+            onMoveDown={() => undefined}
+          />
         );
       })}
       <div className="flex justify-start pl-[6px]">
@@ -174,11 +197,11 @@ export function WorkflowEditorFixtures() {
   return (
     <div className="flex flex-wrap gap-10">
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">Scope-aware rail — session boundaries + scope labels</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">Scope-aware rail — agent config as scope boundary, actions numbered 1..N</h2>
         <p className="max-w-lg text-xs text-faint">
-          Setup: claude/sonnet. Steps 1-4 share scope 0 (model-only change to opus at step 3 continues
-          the session). Step 5 switches harness to opencode — the connector shows a session break, and
-          step 6 gets a new scope label.
+          Agent config is a scope boundary (◆ header), not a numbered step. Initial scope header →
+          action 1, 2 → model-only header (quiet, opus) → action 3 → new-session header (opencode,
+          emphasis) → action 4. Numbers run 1..4 on actions only; headers are unnumbered.
         </p>
         <ScopeDemoRail />
       </section>

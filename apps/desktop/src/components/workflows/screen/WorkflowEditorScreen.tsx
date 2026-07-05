@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   createWorkflowStep,
@@ -32,10 +32,10 @@ import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflo
 import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
-import { WorkflowSetupCard, WorkflowSetupAgentCard } from "../editor/WorkflowSetupCard";
+import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
+import { WorkflowScopeHeader } from "../editor/WorkflowScopeHeader";
 import { WorkflowTriggersCard } from "../editor/WorkflowTriggersCard";
 import { WorkflowStepRailCard } from "../editor/WorkflowStepRailCard";
-import { WorkflowStepConnector } from "../editor/WorkflowStepConnector";
 import { WorkflowStepPanel, type EditorAgent } from "../editor/WorkflowStepPanel";
 import { WorkflowSelect } from "../editor/WorkflowSelect";
 
@@ -249,6 +249,20 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const nameInvalid = draft.name.trim() === "";
   const canSave = !nameInvalid && issues.length === 0 && !updateMutation.isPending;
 
+  // Resolve raw harness/model ids to their catalog display labels for the
+  // scope-boundary headers. Falls back to the raw id when not in the catalog.
+  const resolveAgentLabels = (harnessKind: string, modelId: string) => {
+    const agent = agents.find((a) => a.kind === harnessKind);
+    return {
+      harness: agent?.displayName ?? (harnessKind || "No agent"),
+      model: agent?.models.find((m) => m.id === modelId)?.label ?? modelId ?? "",
+    };
+  };
+
+  // Running action counter: agent.config scope boundaries do NOT consume a
+  // number; only real actions are numbered 1..N.
+  let actionNumber = 0;
+
   return (
     <MainSidebarPageShell>
       <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
@@ -317,9 +331,9 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                   setDraft((prev) => (prev ? { ...prev, description } : prev));
                 }}
               />
-              <WorkflowSetupAgentCard
-                setup={definition.setup}
-                agents={agents}
+              <WorkflowScopeHeader
+                variant="initial"
+                {...resolveAgentLabels(definition.setup.harness, definition.setup.model)}
                 selected={setupSelected}
                 onSelect={() => { setSetupSelected(true); setSelectedStep(null); }}
               />
@@ -332,35 +346,60 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
               <div className="flex flex-col">
                 {definition.steps.map((step, index) => {
-                  const nextConfig = effectiveConfigs[index + 1];
-                  const nextIsNewSession = nextConfig?.isNewSession === true;
                   const thisConfig = effectiveConfigs[index];
-                  // Show scope label at the start of each scope group
-                  const isFirstInScope = thisConfig && (
-                    index === 0 || thisConfig.scopeIndex !== effectiveConfigs[index - 1]?.scopeIndex
-                  );
-                  const scopeLabel = isFirstInScope && thisConfig
-                    ? `${thisConfig.effectiveHarness} · ${thisConfig.effectiveModel}`
-                    : null;
+                  const dragProps = {
+                    draggable: true,
+                    onDragStart: () => setDragIndex(index),
+                    onDragOver: (event: DragEvent) => event.preventDefault(),
+                    onDrop: () => {
+                      if (dragIndex !== null) {
+                        reorder(dragIndex, index);
+                      }
+                      setDragIndex(null);
+                    },
+                  } as const;
+
+                  // Agent config is a SCOPE BOUNDARY, not a numbered action —
+                  // render it as a header/divider with no spine number.
+                  if (step.kind === "agent.config") {
+                    const labels = resolveAgentLabels(
+                      thisConfig?.effectiveHarness ?? step.harness ?? "",
+                      thisConfig?.effectiveModel ?? step.model ?? "",
+                    );
+                    return (
+                      <div key={index} {...dragProps}>
+                        <WorkflowScopeHeader
+                          variant={thisConfig?.isNewSession ? "new-session" : "model-only"}
+                          harness={labels.harness}
+                          model={labels.model}
+                          selected={selectedStep === index}
+                          invalid={stepIssues(issues, index).length > 0}
+                          canMoveUp={index > 0}
+                          canMoveDown={index < definition.steps.length - 1}
+                          onSelect={() => { setSelectedStep(index); setSetupSelected(false); }}
+                          onDuplicate={() => duplicateStep(index)}
+                          onDelete={() => deleteStep(index)}
+                          onMoveUp={() => reorder(index, index - 1)}
+                          onMoveDown={() => reorder(index, index + 1)}
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Real action — number it 1..N ignoring scope boundaries.
+                  actionNumber += 1;
+                  // Draw the connector spine unless the next step opens a new
+                  // session (that break is now carried by the scope header).
+                  const nextIsNewSession = effectiveConfigs[index + 1]?.isNewSession === true;
                   return (
-                    <div
-                      key={index}
-                      draggable
-                      onDragStart={() => setDragIndex(index)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => {
-                        if (dragIndex !== null) {
-                          reorder(dragIndex, index);
-                        }
-                        setDragIndex(null);
-                      }}
-                    >
+                    <div key={index} {...dragProps}>
                       <WorkflowStepRailCard
                         step={step}
                         index={index}
+                        stepNumber={actionNumber}
                         selected={selectedStep === index}
                         invalid={stepIssues(issues, index).length > 0}
-                        connector={!nextIsNewSession}
+                        connector={index < definition.steps.length - 1 && !nextIsNewSession}
                         canMoveUp={index > 0}
                         canMoveDown={index < definition.steps.length - 1}
                         onSelect={() => { setSelectedStep(index); setSetupSelected(false); }}
@@ -369,18 +408,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                         onDelete={() => deleteStep(index)}
                         onMoveUp={() => reorder(index, index - 1)}
                         onMoveDown={() => reorder(index, index + 1)}
-                        scopeAnnotation={
-                          step.kind === "agent.config" && effectiveConfigs[index]
-                            ? effectiveConfigs[index]
-                            : null
-                        }
-                        scopeLabel={scopeLabel}
                       />
-                      {nextIsNewSession ? (
-                        <WorkflowStepConnector
-                          sessionBreak={{ label: `new session · ${nextConfig.effectiveHarness}` }}
-                        />
-                      ) : null}
                     </div>
                   );
                 })}
