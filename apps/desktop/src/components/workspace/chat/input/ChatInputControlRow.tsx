@@ -11,6 +11,11 @@ import {
   buildComposerSessionControlGroups,
 } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
+import { Target } from "lucide-react";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";
+import { useSessionGoal } from "@/hooks/activity/derived/use-session-goal";
+import { useGoalBarStore } from "@/stores/activity/goal-bar-store";
 
 export interface ChatInputControlRowProps {
   runtimeControlsDisabled: boolean;
@@ -23,9 +28,6 @@ export interface ChatInputControlRowProps {
   supportsAttachments: boolean;
   canAttachFiles: boolean;
   activeSessionId: string | null;
-  workspaceUiKey: string | null;
-  sdkWorkspaceId: string | null;
-  hasUnresolvedPlans: boolean;
   onAttachFile: () => void;
   isRunning: boolean;
   isEmpty: boolean;
@@ -44,9 +46,6 @@ export function ChatInputControlRow({
   supportsAttachments,
   canAttachFiles,
   activeSessionId,
-  workspaceUiKey,
-  sdkWorkspaceId,
-  hasUnresolvedPlans,
   onAttachFile,
   isRunning,
   isEmpty,
@@ -57,9 +56,6 @@ export function ChatInputControlRow({
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
   const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
   const canAttachFile = canUseUtilityActions && canAttachFiles;
-  // Plan references resolve to markdown text in the runtime, so they do not
-  // depend on file/image attachment capabilities.
-  const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!sdkWorkspaceId;
   const attachFileDetail = canAttachFile
     ? "Upload image or text context."
     : !supportsAttachments
@@ -67,11 +63,12 @@ export function ChatInputControlRow({
         ? "Attachments are not supported by this agent"
         : "Attachments are available after a session starts"
       : "Chat is unavailable right now";
-  const attachPlanDetail = canAttachPlan
-    ? "Attach an existing plan snapshot."
-    : workspaceUiKey
-      ? "Chat is unavailable right now"
-      : "Select a workspace before attaching a plan";
+
+  const sessionGoal = useSessionGoal();
+  const beginComposingGoal = useGoalBarStore((state) => state.beginComposing);
+  const canSetGoal = !!sessionGoal
+    && sessionGoal.capabilities.supported
+    && deriveGoalBarState(sessionGoal.goal).kind !== "live";
 
   return (
     <ChatComposerControlRowFrame
@@ -81,10 +78,6 @@ export function ChatInputControlRow({
           <ComposerAddActionPopover
             canAttachFile={canAttachFile}
             attachFileDetail={attachFileDetail}
-            canAttachPlan={canAttachPlan}
-            attachPlanDetail={attachPlanDetail}
-            workspaceUiKey={workspaceUiKey}
-            sdkWorkspaceId={sdkWorkspaceId}
             onAttachFile={onAttachFile}
           />
         )}
@@ -107,6 +100,19 @@ export function ChatInputControlRow({
         <>
           <ComposerIntegrationsControl />
           <RuntimePressureIndicator />
+          {canSetGoal && (
+            <ComposerControlButton
+              icon={<Target className="size-4" />}
+              label="Set goal"
+              title="Give the agent an objective to keep pursuing."
+              onClick={() => {
+                if (activeSessionId) {
+                  beginComposingGoal(activeSessionId);
+                }
+              }}
+              className="max-w-[12rem]"
+            />
+          )}
           <div
             className={`flex min-w-0 items-center gap-1 ${
               runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
@@ -124,7 +130,7 @@ export function ChatInputControlRow({
         <ChatComposerActions
           isRunning={isRunning}
           isEmpty={isEmpty}
-          isDisabled={chatDisabled || hasUnresolvedPlans || isSubmitting}
+          isDisabled={chatDisabled || isSubmitting}
           isEditingQueuedPrompt={isEditingQueuedPrompt}
           onSubmit={onSubmit}
           onCancel={onCancel}

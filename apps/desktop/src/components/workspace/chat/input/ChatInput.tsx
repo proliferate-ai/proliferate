@@ -128,7 +128,7 @@ export function ChatInput({
     ? editDraft.trim().length === 0
     : isEmpty && !hasDraftAttachments;
   const canSubmit =
-    !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans && !isSubmitting;
+    !effectiveIsEmpty && !isDisabled && !isSubmitting;
   const canAcceptPastedAttachments =
     !effectiveIsEditingQueuedPrompt
     && !isDisabled
@@ -151,9 +151,6 @@ export function ChatInput({
     await runSubmit(async () => {
       if (effectiveIsEditingQueuedPrompt) {
         await commitEdit();
-        return;
-      }
-      if (planAttachments.hasUnresolvedPlans) {
         return;
       }
       const measurementOperationId = startMeasurementOperation({
@@ -369,9 +366,6 @@ export function ChatInput({
               supportsAttachments={attachments.supportsAttachments}
               canAttachFiles={attachments.canAttachFiles}
               activeSessionId={activeSessionIdForUi}
-              workspaceUiKey={workspaceUiKey}
-              sdkWorkspaceId={materializedWorkspaceId}
-              hasUnresolvedPlans={planAttachments.hasUnresolvedPlans}
               onAttachFile={() => fileInputRef.current?.click()}
               isRunning={isRunningForUi}
               isEmpty={effectiveIsEmpty}
