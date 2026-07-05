@@ -2,7 +2,6 @@ import type React from "react";
 import type { ReactNode } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
-import { CloudGuard } from "@/components/cloud/CloudGuard";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import {
@@ -68,23 +67,10 @@ export function HarnessAuthSection({
     );
   }
 
-  // The cloud surface shares the reusable CloudGuard (build-disabled →
-  // sign-in states → active). The local surface keeps its lighter inline
-  // sign-in prompt so nothing changes when running fully offline.
-  if (surface === "cloud") {
-    return (
-      <CloudGuard>
-        <HarnessAuthMethods
-          harnessKind={harnessKind}
-          displayName={displayName}
-          editor={editor}
-          variant={variant}
-        />
-      </CloudGuard>
-    );
-  }
-
-  if (!editor.cloudActive) {
+  // Cloud surface gating is now handled at the pane level by wrapping the
+  // entire cloud surface content in CloudGuard. Local surface keeps its
+  // lighter inline sign-in prompt so nothing changes when running fully offline.
+  if (surface === "local" && !editor.cloudActive) {
     return (
       <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.signInTitle}>
         <p className="py-3 text-sm text-muted-foreground">
