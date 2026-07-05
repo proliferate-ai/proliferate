@@ -217,6 +217,7 @@ Expect rough edges while in beta: [open an issue](../../issues/new/choose) or as
 
 - **Discord:** join us on [Discord](https://discord.gg/wCEgUnEuF)
 - **Feedback &amp; ideas:** we ship every day; [request a feature](../../issues/new/choose) and there's a decent chance it exists by Friday
+- **Talk to me:** [book a 20-min chat](https://cal.com/pablohansen/chat-with-proliferate-founder) - tell me what you're building and what you need
 - **Show support:** [star this repo](https://github.com/proliferate-ai/proliferate) to follow along
 
 ## Contributing
