@@ -1,7 +1,6 @@
 import { type ReactNode } from "react";
 import { type SettingsSection } from "@/config/settings";
 import { AccountPane } from "@/components/settings/panes/AccountPane";
-import { AgentDefaultsPane } from "@/components/settings/panes/AgentDefaultsPane";
 import { AgentsOverviewPane } from "@/components/settings/panes/agents/overview/AgentsOverviewPane";
 import { ApiKeysPane } from "@/components/settings/panes/agents/api-keys/ApiKeysPane";
 import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
@@ -82,10 +81,7 @@ export function renderSettingsSection(
   if (isSettingsHarnessSection(activeSection)) {
     return <HarnessPane harnessKind={getHarnessKindForSettingsSection(activeSection)} />;
   }
-  if (activeSection === "agent-defaults") {
-    return <AgentDefaultsPane />;
-  }
-  if (activeSection === "agent-api-keys") {
+if (activeSection === "agent-api-keys") {
     if (!cloudEnabled) {
       return <CloudUnavailablePane />;
     }

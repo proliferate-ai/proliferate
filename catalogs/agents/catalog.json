@@ -5,6 +5,7 @@
     "registryVersion": "2026-06-10.1"
   },
   "generatedAt": "2026-06-18T06:23:46.960Z",
+  "defaultAgentKind": "claude",
   "agents": [
     {
       "kind": "claude",
@@ -197,7 +198,7 @@
           {
             "id": "opus[1m]",
             "displayName": "Opus 4.8 (1M context)",
-            "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+            "description": "Opus 4.8 with 1M context \u00b7 Best for everyday, complex tasks \u00b7 $5/$25 per Mtok",
             "availability": {
               "anyOf": [
                 "anthropic-api"
@@ -247,7 +248,7 @@
           {
             "id": "sonnet",
             "displayName": "Sonnet 4.6",
-            "description": "Sonnet 4.6 · Efficient for routine tasks",
+            "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -291,7 +292,7 @@
           {
             "id": "sonnet[1m]",
             "displayName": "Sonnet 4.6 (1M context)",
-            "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
+            "description": "Sonnet 4.6 for long sessions \u00b7 $3/$15 per Mtok",
             "availability": {
               "anyOf": [
                 "anthropic-api"
@@ -333,7 +334,7 @@
           {
             "id": "haiku",
             "displayName": "Haiku 4.5",
-            "description": "Haiku 4.5 · Fastest for quick answers",
+            "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -368,7 +369,7 @@
           {
             "id": "opus",
             "displayName": "Opus 4.6",
-            "description": "Opus 4.6 · Legacy",
+            "description": "Opus 4.6 \u00b7 Legacy",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -524,7 +525,7 @@
           {
             "id": "us.anthropic.claude-sonnet-4-6",
             "displayName": "Sonnet 4.6",
-            "description": "Sonnet 4.6 · Efficient for routine tasks",
+            "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -606,7 +607,7 @@
           {
             "id": "us.anthropic.claude-fable-5",
             "displayName": "Fable 5",
-            "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
+            "description": "Fable 5 \u00b7 Most capable for your hardest and longest-running tasks",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -648,7 +649,7 @@
           {
             "id": "us.anthropic.claude-opus-4-1-20250805-v1:0",
             "displayName": "Opus 4.1",
-            "description": "Opus 4.1 · Legacy",
+            "description": "Opus 4.1 \u00b7 Legacy",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -679,7 +680,7 @@
           {
             "id": "us.anthropic.claude-opus-4-8",
             "displayName": "Opus 4.8",
-            "description": "Opus 4.8 · Best for everyday, complex tasks",
+            "description": "Opus 4.8 \u00b7 Best for everyday, complex tasks",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -763,7 +764,7 @@
           {
             "id": "us.anthropic.claude-opus-4-7",
             "displayName": "Opus 4.7",
-            "description": "Opus 4.7 · Legacy",
+            "description": "Opus 4.7 \u00b7 Legacy",
             "availability": {
               "anyOf": [
                 "bedrock"

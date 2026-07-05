@@ -86,7 +86,6 @@ const SETTINGS_NAV_ICONS = {
   "agent-api-keys": KeyRound,
   "agent-claude": harnessNavIcon("claude"),
   "agent-codex": harnessNavIcon("codex"),
-  "agent-defaults": SlidersHorizontal,
   "agent-grok": harnessNavIcon("grok"),
   "agent-opencode": harnessNavIcon("opencode"),
   agents: Bot,

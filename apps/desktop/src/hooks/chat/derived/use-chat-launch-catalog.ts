@@ -104,9 +104,10 @@ export function useChatLaunchCatalog({
     };
   }, [catalogData, launchAgents, selectedWorkspaceId]);
 
+  const catalogDefaultAgentKind = catalogData?.defaultAgentKind ?? null;
   const defaultLaunchSelection = useMemo(
-    () => resolveEffectiveLaunchSelection(launchAgents, preferences),
-    [launchAgents, preferences],
+    () => resolveEffectiveLaunchSelection(launchAgents, preferences, catalogDefaultAgentKind),
+    [launchAgents, preferences, catalogDefaultAgentKind],
   );
 
   const selectedLaunchSelection = useMemo(

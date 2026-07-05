@@ -58,6 +58,7 @@ function catalog(agents: DesktopAgentLaunchAgent[]): DesktopAgentLaunchCatalog {
     schemaVersion: 2,
     catalogVersion: "cloud-test",
     generatedAt: "2026-05-05T00:00:00Z",
+    defaultAgentKind: null,
     workspaceId: null,
     agents,
   };

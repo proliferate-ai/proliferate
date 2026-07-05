@@ -12,6 +12,7 @@ import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
 import { HarnessAuthSection } from "./HarnessAuthSection";
+import { HarnessConfigIssueBanner } from "./HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
 
 const SURFACE_ITEMS: readonly SegmentedControlItem<AgentAuthSurface>[] = [
@@ -34,10 +35,11 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   // The surface axis: every section below reads/writes the selected surface.
   const [surface, setSurface] = useState<AgentAuthSurface>("local");
   const [subtab, setSubtab] = useState<HarnessSubtab>("authentication");
-  const { agentsByKind } = useAgentCatalog();
+  const { agentsByKind, agentsNeedingSetup } = useAgentCatalog();
 
   const displayName =
     agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
+  const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
 
   return (
     <section className="space-y-5">
@@ -51,6 +53,8 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
           />
         }
       />
+
+      {issueAgent ? <HarnessConfigIssueBanner agent={issueAgent} /> : null}
 
       <Tabs
         items={SUBTABS}

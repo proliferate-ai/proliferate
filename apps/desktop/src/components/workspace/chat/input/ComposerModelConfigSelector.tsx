@@ -56,7 +56,7 @@ export function ComposerModelConfigSelector({
   // UX_SPEC §5: adding a harness routes to Settings → Agents instead of
   // opening AgentSetupModal in place.
   const handleAddHarness = useCallback(() => {
-    navigate(buildSettingsHref({ section: "agent-defaults" }));
+    navigate(buildSettingsHref({ section: "agents" }));
   }, [navigate]);
 
   const cancelPendingSubmenuClose = useCallback(() => {

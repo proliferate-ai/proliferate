@@ -25,6 +25,9 @@ pub struct AgentCatalogDocument {
     #[serde(default)]
     pub probed_against: Option<AgentCatalogProbedAgainst>,
     pub generated_at: String,
+    /// The shipped default agent kind when the user has no stored preference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_agent_kind: Option<String>,
     #[serde(default)]
     pub agents: Vec<AgentCatalogAgent>,
 }
@@ -379,6 +382,7 @@ mod tests {
         let catalog = parse_draft();
 
         assert_eq!(catalog.schema_version, 2);
+        assert_eq!(catalog.default_agent_kind.as_deref(), Some("claude"));
         assert_eq!(catalog.catalog_version, draft_catalog_version().as_str());
         let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
         assert_eq!(

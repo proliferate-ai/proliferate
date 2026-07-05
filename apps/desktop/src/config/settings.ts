@@ -21,7 +21,6 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "agent-opencode",
   "agent-grok",
   "agent-api-keys",
-  "agent-defaults",
   // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
   // the page until real budget data/enforcement replaces mocked UI.
   // "organization-limits",
@@ -60,7 +59,6 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "agent-opencode",
   "agent-grok",
   "agent-api-keys",
-  "agent-defaults",
   // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "organization-limits",
   // SLACK BOT PARKED: omit from Cmd-number settings shortcuts while disabled.
