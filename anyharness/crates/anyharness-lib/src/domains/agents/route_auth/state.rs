@@ -79,6 +79,11 @@ pub struct HarnessAuth {
     pub harness_kind: String,
     #[serde(default)]
     pub sources: Vec<AuthSource>,
+    /// Per-harness advanced settings (persisted toggle values). Keys are
+    /// setting keys declared in the agent catalog; values are JSON primitives
+    /// (booleans for v1). Absent/null when no settings are configured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// The whole declarative state file (contract §3, v2).
@@ -265,6 +270,7 @@ mod tests {
                 HarnessAuth {
                     harness_kind: "claude".into(),
                     sources: vec![gateway_source("https://llm.proliferate.ai", "sk-vk")],
+                    settings: None,
                 },
                 HarnessAuth {
                     harness_kind: "opencode".into(),
@@ -272,6 +278,7 @@ mod tests {
                         gateway_source("https://llm.proliferate.ai", "sk-vk"),
                         api_key_source("ANTHROPIC_API_KEY", "sk-ant"),
                     ],
+                    settings: None,
                 },
             ],
         };
@@ -291,6 +298,7 @@ mod tests {
             harnesses: vec![HarnessAuth {
                 harness_kind: "codex".into(),
                 sources: vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
+                settings: None,
             }],
         };
         assert_eq!(state.sources_for("codex").len(), 1);
@@ -314,6 +322,7 @@ mod tests {
             harnesses: vec![HarnessAuth {
                 harness_kind: "claude".into(),
                 sources: vec![api_key_source("ANTHROPIC_API_KEY", "sk-raw")],
+                settings: None,
             }],
         }
     }

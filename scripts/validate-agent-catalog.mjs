@@ -13,6 +13,9 @@ const CATALOG_PATH = path.resolve("catalogs/agents/catalog.json");
 const REGISTRY_PATH = path.resolve("catalogs/agents/registry.json");
 const VALID_AGENT_KINDS = new Set(["claude", "codex", "cursor", "opencode", "grok"]);
 const VALID_STATUSES = new Set(["candidate", "active", "deprecated", "hidden"]);
+const VALID_SETTING_TYPES = new Set(["boolean"]);
+const VALID_SETTING_SURFACES = new Set(["local", "cloud"]);
+const VALID_SETTING_MAPPING_KINDS = new Set(["cli_flag", "env"]);
 const BASELINE_CONTEXT_ID = "baseline";
 // The gateway auth context is route-engaged (its models/default are resolved by
 // the runtime gateway probe, not authored as catalog model rows), so its default
@@ -105,6 +108,7 @@ function validateCatalog(catalog) {
     }
 
     validateGatewayPolicy(kind, agent.session?.gatewayPolicy);
+    validateAgentSettings(kind, agent.settings);
   }
 }
 
@@ -134,6 +138,57 @@ function validateGatewayPolicy(kind, gatewayPolicy) {
       for (const [role, modelId] of Object.entries(roles)) {
         if (typeof modelId !== "string" || !modelId.trim()) {
           fail(`${kind}: gatewayPolicy.roles['${role}'] must be a non-empty string`);
+        }
+      }
+    }
+  }
+}
+
+function validateAgentSettings(kind, settings) {
+  if (settings === undefined || settings === null) return;
+  if (!Array.isArray(settings)) {
+    fail(`${kind}: settings must be an array`);
+    return;
+  }
+  const seenKeys = new Set();
+  for (const setting of settings) {
+    if (typeof setting.key !== "string" || !setting.key.trim()) {
+      fail(`${kind}: setting with empty key`);
+      continue;
+    }
+    if (seenKeys.has(setting.key)) {
+      fail(`${kind}: setting key '${setting.key}' is duplicated`);
+    }
+    seenKeys.add(setting.key);
+    if (!VALID_SETTING_TYPES.has(setting.type)) {
+      fail(`${kind}.settings.${setting.key}: type '${setting.type}' is not supported (must be one of: ${[...VALID_SETTING_TYPES].join(", ")})`);
+    }
+    if (typeof setting.label !== "string" || !setting.label.trim()) {
+      fail(`${kind}.settings.${setting.key}: label must be a non-empty string`);
+    }
+    if (!Array.isArray(setting.surfaces) || setting.surfaces.length === 0) {
+      fail(`${kind}.settings.${setting.key}: surfaces must be a non-empty array`);
+    } else {
+      for (const surface of setting.surfaces) {
+        if (!VALID_SETTING_SURFACES.has(surface)) {
+          fail(`${kind}.settings.${setting.key}: surface '${surface}' is not valid (must be one of: ${[...VALID_SETTING_SURFACES].join(", ")})`);
+        }
+      }
+    }
+    if (typeof setting.mapping !== "object" || setting.mapping === null || Array.isArray(setting.mapping)) {
+      fail(`${kind}.settings.${setting.key}: mapping must be an object`);
+    } else {
+      if (!VALID_SETTING_MAPPING_KINDS.has(setting.mapping.kind)) {
+        fail(`${kind}.settings.${setting.key}: mapping.kind '${setting.mapping.kind}' is not supported (must be one of: ${[...VALID_SETTING_MAPPING_KINDS].join(", ")})`);
+      }
+      if (setting.mapping.kind === "cli_flag") {
+        if (typeof setting.mapping.flag !== "string" || !setting.mapping.flag.trim()) {
+          fail(`${kind}.settings.${setting.key}: mapping.flag must be a non-empty string for cli_flag mapping`);
+        }
+      }
+      if (setting.mapping.kind === "env") {
+        if (typeof setting.mapping.env !== "string" || !setting.mapping.env.trim()) {
+          fail(`${kind}.settings.${setting.key}: mapping.env must be a non-empty string for env mapping`);
         }
       }
     }

@@ -2549,6 +2549,8 @@ export interface components {
         AgentAuthSelectionsPutRequest: {
             /** Sources */
             sources: components["schemas"]["AgentAuthSourceInput"][];
+            /** Settings */
+            settings?: Record<string, unknown> | null;
         };
         /**
          * AgentAuthSourceInput
@@ -2578,6 +2580,8 @@ export interface components {
             harness_kind: string;
             /** Sources */
             sources: components["schemas"]["AgentAuthStateSource"][];
+            /** Settings */
+            settings?: Record<string, unknown> | null;
         };
         /**
          * AgentAuthStateResponse

@@ -144,6 +144,23 @@ const MODEL_VISIBILITY_OPT_OUTS = {
   ],
 };
 
+// Per-harness advanced settings: declared here (curation-owned), emitted onto
+// the agent entry, and applied at launch per the mapping kind. v1 supports
+// boolean-only, surfaces ⊆ {local, cloud}, mapping.kind ∈ {cli_flag, env}.
+const HARNESS_SETTINGS = {
+  claude: [
+    {
+      key: "chrome",
+      type: "boolean",
+      label: "Use Claude Code with Chrome",
+      description: "Allow Claude Code to control your Chrome browser. Requires the Claude Code Chrome extension.",
+      default: false,
+      surfaces: ["local"],
+      mapping: { kind: "cli_flag", flag: "--chrome" },
+    },
+  ],
+};
+
 // Explicit display overrides where prettifying alone is ambiguous (two
 // "GPT-5.4" rows when the bedrock CMB models sit beside the API ones).
 const MODEL_DISPLAY_OVERRIDES = {
@@ -569,6 +586,7 @@ for (const [kind, runs] of byAgent) {
           : {}),
       })),
     session: { controls, models, defaults: AGENT_SESSION_DEFAULTS[kind] ?? {}, observedDefaults },
+    ...(HARNESS_SETTINGS[kind] ? { settings: HARNESS_SETTINGS[kind] } : {}),
     provenance: {
       probedAt: runs.map((r) => r.data.probedAt).sort().at(-1),
       attestation,

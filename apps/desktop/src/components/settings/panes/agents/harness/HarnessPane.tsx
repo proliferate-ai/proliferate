@@ -83,7 +83,7 @@ function HarnessSurfaceCloud({
           variant="panel"
         />
 
-        <HarnessSettingsSection harnessKind={harnessKind} variant="panel" />
+        <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="panel" />
       </div>
 
       <HarnessAllModelsSection
@@ -124,7 +124,7 @@ function HarnessSurfaceLocal({
           variant="panel"
         />
 
-        <HarnessSettingsSection harnessKind={harnessKind} variant="panel" />
+        <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="panel" />
       </div>
 
       <HarnessAllModelsSection
