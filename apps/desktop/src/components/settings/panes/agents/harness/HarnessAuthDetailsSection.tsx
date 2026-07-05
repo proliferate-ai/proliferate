@@ -1,15 +1,11 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { AgentLoginTerminalPanel } from "@/components/agents/AgentLoginTerminalPanel";
-import { ApiKeyCreatorModal } from "@/components/settings/panes/agent-auth/ApiKeyCreatorModal";
-import { getHarnessEnvVarSuggestions } from "@/config/harness-env-vars";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { isReadyAgent } from "@/lib/domain/agents/status";
-import { useToastStore } from "@/stores/toast/toast-store";
 import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
 import { HarnessAuthApiKeyRow } from "./HarnessAuthApiKeyRow";
 import { ProviderPickerModal } from "./ProviderPickerModal";
@@ -18,7 +14,6 @@ import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
 type AuthMethod = "gateway" | "api_key" | "cli";
 
 interface HarnessAuthDetailsSectionProps {
-  harnessKind: string;
   displayName: string;
   surface: AgentAuthSurface;
   selectedMethod: AuthMethod;
@@ -27,7 +22,6 @@ interface HarnessAuthDetailsSectionProps {
 }
 
 export function HarnessAuthDetailsSection({
-  harnessKind,
   displayName,
   surface,
   selectedMethod,
@@ -41,7 +35,6 @@ export function HarnessAuthDetailsSection({
   if (selectedMethod === "api_key") {
     return (
       <ApiKeyDetails
-        harnessKind={harnessKind}
         displayName={displayName}
         editor={editor}
         variant={variant}
@@ -77,52 +70,16 @@ function GatewayDetails({
 }
 
 function ApiKeyDetails({
-  harnessKind,
   displayName,
   editor,
   variant,
 }: {
-  harnessKind: string;
   displayName: string;
   editor: HarnessAuthEditorApi;
   variant: HarnessBlockVariant;
 }) {
   const apiKeys = editor.apiKeysQuery.data ?? [];
   const { providerModalOpen, setProviderModalOpen } = useProviderModal();
-  const [addKeyOpen, setAddKeyOpen] = useState(false);
-  const createKey = useCreateAgentApiKey();
-  const showToast = useToastStore((state) => state.show);
-
-  // Prefill the modal's env-var field with the first unused harness suggestion,
-  // mirroring the old "Add variable" seed.
-  const suggestion = useMemo(() => {
-    const used = new Set(editor.editorState.rows.map((row) => row.envVarName));
-    return getHarnessEnvVarSuggestions(harnessKind).find(
-      (candidate) => !used.has(candidate.envVarName),
-    );
-  }, [editor.editorState.rows, harnessKind]);
-
-  function handleCreate(input: { title: string; value: string; envVarName: string }) {
-    createKey.mutate(
-      { title: input.title, value: input.value },
-      {
-        onSuccess: (created) => {
-          // Bind the freshly-created vault key in one step: the modal's env-var
-          // field is committed as an enabled api_key source, so the user never
-          // touches the inline row (and api_key becomes the selected method).
-          editor.addBoundApiKey(
-            input.envVarName,
-            created.id,
-            suggestion?.providerHint ?? null,
-          );
-          setAddKeyOpen(false);
-        },
-        onError: (error) => {
-          showToast(error.message || HARNESS_PANE_COPY.addApiKeyError);
-        },
-      },
-    );
-  }
 
   return (
     <HarnessPanelBlock
@@ -148,13 +105,16 @@ function ApiKeyDetails({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          {/* "Add API key" adds a binding ROW (env var + key picker). Creating a
+              brand-new vault secret happens inside the row's KeyPicker via its
+              "New API key…" option — CREATE and BIND stay separate. */}
           <Button
             type="button"
             variant="secondary"
             size="sm"
             className="gap-1.5"
             disabled={editor.busy}
-            onClick={() => setAddKeyOpen(true)}
+            onClick={() => editor.handleAddVariable()}
           >
             <Plus className="size-3.5" />
             {HARNESS_PANE_COPY.addApiKey}
@@ -174,24 +134,6 @@ function ApiKeyDetails({
           ) : null}
         </div>
       </div>
-
-      <ApiKeyCreatorModal
-        open={addKeyOpen}
-        onClose={() => setAddKeyOpen(false)}
-        heading={HARNESS_PANE_COPY.addApiKeyModalTitle}
-        description={HARNESS_PANE_COPY.addApiKeyModalDescription}
-        showTitleField
-        envVarField={{
-          label: HARNESS_PANE_COPY.addApiKeyEnvVarLabel,
-          placeholder: HARNESS_PANE_COPY.envVarPlaceholder,
-          initialValue: suggestion?.envVarName ?? "",
-          helpText: HARNESS_PANE_COPY.addApiKeyEnvVarHelp,
-        }}
-        submitLabel={HARNESS_PANE_COPY.addApiKeySubmit}
-        submitting={createKey.isPending}
-        error={null}
-        onSubmit={handleCreate}
-      />
 
       {editor.multiSource ? (
         <ProviderPickerModal

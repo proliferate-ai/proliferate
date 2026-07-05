@@ -7,15 +7,17 @@ export const HARNESS_PANE_COPY = {
   apiKeysTitle: "API keys",
   envVarPlaceholder: "ENV_VAR_NAME",
   addVariable: "Add variable",
+  // "Add API key" adds a binding ROW (env var + key picker); it does NOT create
+  // a secret. Creating a vault secret happens from the row's KeyPicker.
   addApiKey: "Add API key",
   addProvider: "Add provider",
-  // Shared "Add API key" modal (agent context).
-  addApiKeyModalTitle: "Add API key",
-  addApiKeyModalDescription:
-    "Save a secret to your vault and wire it into this harness in one step.",
-  addApiKeyEnvVarLabel: "Environment variable",
-  addApiKeyEnvVarHelp: "The variable this key is exposed as, e.g. ANTHROPIC_API_KEY.",
-  addApiKeySubmit: "Add key",
+  // KeyPicker "New API key…" option → shared ApiKeyCreatorModal, create-only
+  // (title + value, no env-var field). The row already owns the env-var binding.
+  newApiKeyOption: "New API key…",
+  newApiKeyOptionDetail: "Save a new secret to your vault and wire it here.",
+  newApiKeyModalTitle: "New API key",
+  newApiKeyModalDescription: "Save a new secret to your vault.",
+  newApiKeySubmit: "Save key",
   addApiKeyError: "Could not add the API key.",
   removeVariable: "Remove variable",
   runLogin: "Run login",

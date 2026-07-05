@@ -60,7 +60,6 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
         />
 
         <HarnessAuthDetailsSection
-          harnessKind={harnessKind}
           displayName={displayName}
           surface={surface}
           selectedMethod={selectedMethod}

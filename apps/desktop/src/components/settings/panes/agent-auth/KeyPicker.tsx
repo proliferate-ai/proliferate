@@ -1,10 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
-import { Button } from "@proliferate/ui/primitives/Button";
 import { EnvironmentSearchSelect } from "@proliferate/ui/primitives/EnvironmentSearchSelect";
-import { Input } from "@proliferate/ui/primitives/Input";
+import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { ApiKeyCreatorModal } from "./ApiKeyCreatorModal";
 
 const ADD_NEW_KEY_OPTION_ID = "__add-new-key__";
 
@@ -19,8 +19,10 @@ export interface KeyPickerProps {
 
 /**
  * Searchable picker over the titled key vault (contract §7): title + redacted
- * hint, secrets never re-shown. "New API key…" saves a new secret to the vault
- * and wires it in one step — vault entries have no provider.
+ * hint, secrets never re-shown. "New API key…" opens the shared
+ * {@link ApiKeyCreatorModal} in create-only mode (title + value, no env-var
+ * field) — CREATE and BIND stay separate. On create we `onSelect` the new key
+ * into the row that owns this picker, which already holds the env-var binding.
  */
 export function KeyPicker({
   keys,
@@ -31,9 +33,7 @@ export function KeyPicker({
   const createKey = useCreateAgentApiKey();
   const showToast = useToastStore((state) => state.show);
 
-  const [adding, setAdding] = useState(false);
-  const [title, setTitle] = useState("");
-  const [value, setValue] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const pool = keys.filter((key) => key.status === "active");
   const selected = pool.find((key) => key.id === selectedKeyId) ?? null;
@@ -49,31 +49,22 @@ export function KeyPicker({
     })),
     {
       id: ADD_NEW_KEY_OPTION_ID,
-      label: "New API key…",
-      detail: "Save a new secret to your vault and wire it here.",
-      onSelect: () => setAdding(true),
+      label: HARNESS_PANE_COPY.newApiKeyOption,
+      detail: HARNESS_PANE_COPY.newApiKeyOptionDetail,
+      onSelect: () => setCreating(true),
     },
   ];
 
-  const canSubmit =
-    title.trim().length > 0 && value.trim().length > 0 && !createKey.isPending;
-
-  function handleAddKey(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!canSubmit) {
-      return;
-    }
+  function handleCreate(input: { title: string; value: string }) {
     createKey.mutate(
-      { title: title.trim(), value: value.trim() },
+      { title: input.title, value: input.value },
       {
         onSuccess: (created) => {
-          setAdding(false);
-          setTitle("");
-          setValue("");
+          setCreating(false);
           onSelect(created.id);
         },
         onError: (error) => {
-          showToast(error.message || "Could not add the API key.");
+          showToast(error.message || HARNESS_PANE_COPY.addApiKeyError);
         },
       },
     );
@@ -92,43 +83,18 @@ export function KeyPicker({
         emptyLabel="No API keys in your vault."
         disabled={disabled}
       />
-      {adding ? (
-        <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleAddKey}>
-          <Input
-            aria-label="Key title"
-            placeholder="Key title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            className="sm:flex-1"
-          />
-          <Input
-            aria-label="Value"
-            placeholder="Value"
-            type="password"
-            autoComplete="off"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            className="sm:flex-1"
-          />
-          <Button
-            type="submit"
-            variant="secondary"
-            size="md"
-            disabled={!canSubmit}
-            loading={createKey.isPending}
-          >
-            Save key
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="md"
-            onClick={() => setAdding(false)}
-          >
-            Cancel
-          </Button>
-        </form>
-      ) : null}
+
+      <ApiKeyCreatorModal
+        open={creating}
+        onClose={() => setCreating(false)}
+        heading={HARNESS_PANE_COPY.newApiKeyModalTitle}
+        description={HARNESS_PANE_COPY.newApiKeyModalDescription}
+        showTitleField
+        submitLabel={HARNESS_PANE_COPY.newApiKeySubmit}
+        submitting={createKey.isPending}
+        error={null}
+        onSubmit={handleCreate}
+      />
     </div>
   );
 }

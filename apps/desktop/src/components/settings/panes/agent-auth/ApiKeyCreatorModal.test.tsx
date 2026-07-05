@@ -51,6 +51,23 @@ describe("ApiKeyCreatorModal", () => {
     });
   });
 
+  it("create-only mode: no env-var field, submits title + value only", () => {
+    const { onSubmit } = renderModal({ submitLabel: "Save key" });
+
+    // No envVarField prop → no env-var input (the row owns the binding).
+    expect(screen.queryByLabelText("Environment variable")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Fresh key" } });
+    fireEvent.change(screen.getByLabelText("Value"), { target: { value: "sk-ant-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save key" }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      title: "Fresh key",
+      value: "sk-ant-secret",
+      envVarName: "",
+    });
+  });
+
   it("blocks submit on an invalid SCREAMING_SNAKE_CASE env var", () => {
     const { onSubmit } = renderModal({
       envVarField: { label: "Environment variable", initialValue: "" },
