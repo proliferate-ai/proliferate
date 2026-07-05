@@ -144,10 +144,13 @@ Every product MCP server: `definition.rs`, `auth.rs`, `context.rs`, `tools.rs`, 
 ### Agent Auth (spec 02)
 **`specs/codebase/primitives/agent-auth.md`**
 **`specs/codebase/primitives/agent-auth-bifrost-byok.md`**
+**`specs/codebase/architecture/agent-auth-architecture-current.md`** (current-state map, verified through #955 on 2026-07-04)
 
 One question per profile per harness: which credential + which materialization mode (`synced_files` = native auth files written by worker; `gateway_env` = Bifrost virtual key injected as protected env).
 
 10 agent-auth DB tables. 10 gaps identified and addressed (proactive grant rotation, cleanup-on-revoke, AnyHarness fail-closed on no selection → `AGENT_AUTH_SELECTION_REQUIRED`, worker scope synthesis, `protected_env` allowlist per agent+mode, hosted capability API, `needs_resync` detection).
+
+**Note:** The Bifrost-era specs above document the pre-2026-07-03 system; the architecture doc (`specs/codebase/architecture/agent-auth-architecture-current.md`) supersedes them for current LiteLLM gateway state (post-#906/#907/#908 cleanup, Bedrock provider #928, prod deployment).
 
 ### Cloud Commands / Running Alignment (spec 04)
 **`specs/codebase/primitives/cloud-commands.md`**
@@ -403,7 +406,7 @@ analytics systems, local dev, and deploying.
 | Cloud provisioning / sandbox creation | `primitives/sandbox-provisioning.md` |
 | Managed workspace creation | `primitives/workspace-provisioning.md` |
 | Cloud workspace commands / wake / projection | `primitives/cloud-commands.md` |
-| Agent LLM auth / Bifrost | `primitives/agent-auth.md` |
+| Agent LLM auth / LiteLLM gateway | `architecture/agent-auth-architecture-current.md` (current); `primitives/agent-auth.md` (historical Bifrost) |
 | MCP / skills / plugins runtime config | `primitives/mcp-skills.md` + `primitives/mcp-runtime.md` |
 | Product MCP tool (add/change) | `features/agent-features/servers.md` + `definitions/README.md` |
 | Onboarding / first-run readiness | `features/onboarding.md` + `features/product-auth.md` |

@@ -12,11 +12,12 @@ specs/
   README.md
   codebase/
     README.md
-    structures/   Folder rules, ownership boundaries, and code maps by system.
-    primitives/   Reusable product/runtime concepts used by multiple features.
-    features/     User-facing workflows and product surfaces.
-  developing/     Local dev, release, deployment, analytics, QA, and ops runbooks.
-  tbd/            Specs that are intentionally not yet authoritative.
+    structures/    Folder rules, ownership boundaries, and code maps by system.
+    primitives/    Reusable product/runtime concepts used by multiple features.
+    features/      User-facing workflows and product surfaces.
+    architecture/  As-built current-state architecture maps (comprehension references).
+  developing/      Local dev, release, deployment, analytics, QA, and ops runbooks.
+  tbd/             Specs that are intentionally not yet authoritative.
 ```
 
 ## Documentation Style
@@ -34,6 +35,7 @@ migration exception and state the canonical owner/rule directly.
 | `specs/codebase/structures/` | Folder decomposition, dependency direction, ownership rules, and code maps for each major system. | `specs/codebase/structures/README.md`, then the focused system spec. |
 | `specs/codebase/primitives/` | Reusable product/runtime concepts: sandbox provisioning, workspace provisioning, workspace lifecycle, MCP/skills, agent auth, cloud commands, claiming, billing, model catalog, and related low-level contracts. | `specs/codebase/primitives/README.md`, then the primitive that owns the tables, command contracts, or runtime behavior you are changing. |
 | `specs/codebase/features/` | Product workflows and surfaces built from primitives: onboarding, automations, Slack, dispatch, chat surfaces, workspace files, product MCPs, and settings/admin IA. | `specs/codebase/features/README.md`, then the feature spec for the user-facing workflow being changed, plus any primitive it depends on. |
+| `specs/codebase/architecture/` | As-built current-state architecture deep-dives (comprehension references, not design proposals). Goals/loops/workflows, agent auth, cloud materialization, model table, integrations. | `specs/codebase/architecture/README.md` for the architecture index. |
 | `specs/developing/` | How to run, verify, release, deploy, observe, and operate the repo. | `specs/developing/README.md`, `specs/developing/local/README.md`, `specs/developing/deploying/ci-cd.md`, `specs/developing/reference/env-vars.yaml` |
 | `specs/tbd/` | Material that should not be treated as current operating law yet. | `specs/tbd/README.md`; move a doc out of `tbd` only when it has a clear owner and canonical contract. |
 
@@ -49,7 +51,7 @@ migration exception and state the canonical owner/rule directly.
 | Proliferate Supervisor | `specs/codebase/structures/proliferate-supervisor/README.md` |
 | Server | `specs/codebase/structures/server/README.md`; focused guides under `specs/codebase/structures/server/guides/` |
 | AnyHarness SDKs | `specs/codebase/structures/sdk/README.md` |
-| Auth Gateway | No standalone structure spec today; split ownership is mapped in `specs/codebase/structures/README.md`, `specs/codebase/structures/server/guides/auth.md`, `specs/codebase/features/product-auth.md`, and `specs/codebase/primitives/agent-auth.md` |
+| Auth Gateway | No standalone structure spec today; split ownership is mapped in `specs/codebase/structures/README.md`, `specs/codebase/structures/server/guides/auth.md`, `specs/codebase/features/product-auth.md`, and `specs/codebase/primitives/agent-auth.md`; current LiteLLM gateway state in `specs/codebase/architecture/agent-auth-architecture-current.md` |
 | Cloud provisioning, workspace creation, commands, auth, MCPs, billing, claiming | `specs/codebase/primitives/README.md`; focused primitive specs under `specs/codebase/primitives/`, including `specs/codebase/primitives/workspace-provisioning.md` for managed workspace creation read order |
 | Product workflows and surfaces | `specs/codebase/features/README.md`; focused feature specs under `specs/codebase/features/`; `specs/codebase/features/support-reporting.md` for Desktop support report uploads |
 | Local dev, CI/CD, deployment, env vars, debugging, analytics, QA | `specs/developing/README.md`; focused process docs under `specs/developing/local/`, `specs/developing/deploying/`, `specs/developing/debugging/`, `specs/developing/analytics/`, `specs/developing/qa/`, `specs/developing/runbooks/`, and `specs/developing/reference/` |
