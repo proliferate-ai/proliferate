@@ -3,7 +3,6 @@ import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
 import { Plus } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { AgentLoginTerminalPanel } from "@/components/agents/AgentLoginTerminalPanel";
 import { ApiKeyCreatorModal } from "@/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 import { getHarnessEnvVarSuggestions } from "@/config/harness-env-vars";
@@ -11,6 +10,7 @@ import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { isReadyAgent } from "@/lib/domain/agents/status";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
 import { HarnessAuthApiKeyRow } from "./HarnessAuthApiKeyRow";
 import { ProviderPickerModal } from "./ProviderPickerModal";
 import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
@@ -23,6 +23,7 @@ interface HarnessAuthDetailsSectionProps {
   surface: AgentAuthSurface;
   selectedMethod: AuthMethod;
   editor: HarnessAuthEditorApi;
+  variant?: HarnessBlockVariant;
 }
 
 export function HarnessAuthDetailsSection({
@@ -31,9 +32,10 @@ export function HarnessAuthDetailsSection({
   surface,
   selectedMethod,
   editor,
+  variant = "section",
 }: HarnessAuthDetailsSectionProps) {
   if (selectedMethod === "gateway") {
-    return <GatewayDetails editor={editor} />;
+    return <GatewayDetails editor={editor} variant={variant} />;
   }
 
   if (selectedMethod === "api_key") {
@@ -42,6 +44,7 @@ export function HarnessAuthDetailsSection({
         harnessKind={harnessKind}
         displayName={displayName}
         editor={editor}
+        variant={variant}
       />
     );
   }
@@ -50,19 +53,26 @@ export function HarnessAuthDetailsSection({
     <CliDetails
       surface={surface}
       editor={editor}
+      variant={variant}
     />
   );
 }
 
-function GatewayDetails({ editor }: { editor: HarnessAuthEditorApi }) {
+function GatewayDetails({
+  editor,
+  variant,
+}: {
+  editor: HarnessAuthEditorApi;
+  variant: HarnessBlockVariant;
+}) {
   const capabilities = editor.capabilitiesQuery.data;
   const enrollment = editor.enrollmentQuery.data;
   return (
-    <SettingsSection title={HARNESS_PANE_COPY.detailsGateway}>
+    <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsGateway}>
       <p className="py-3 text-sm text-muted-foreground">
         {gatewaySubtitle(capabilities, enrollment)}
       </p>
-    </SettingsSection>
+    </HarnessPanelBlock>
   );
 }
 
@@ -70,10 +80,12 @@ function ApiKeyDetails({
   harnessKind,
   displayName,
   editor,
+  variant,
 }: {
   harnessKind: string;
   displayName: string;
   editor: HarnessAuthEditorApi;
+  variant: HarnessBlockVariant;
 }) {
   const apiKeys = editor.apiKeysQuery.data ?? [];
   const { providerModalOpen, setProviderModalOpen } = useProviderModal();
@@ -113,7 +125,8 @@ function ApiKeyDetails({
   }
 
   return (
-    <SettingsSection
+    <HarnessPanelBlock
+      variant={variant}
       title={HARNESS_PANE_COPY.detailsApiKey}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
@@ -188,26 +201,28 @@ function ApiKeyDetails({
             editor.addRow(provider.envVarNames[0] ?? "", provider.id)}
         />
       ) : null}
-    </SettingsSection>
+    </HarnessPanelBlock>
   );
 }
 
 function CliDetails({
   surface,
   editor,
+  variant,
 }: {
   surface: AgentAuthSurface;
   editor: HarnessAuthEditorApi;
+  variant: HarnessBlockVariant;
 }) {
   const { localAgent, loginSession, loginWorkflow } = editor;
 
   if (surface === "cloud") {
     return (
-      <SettingsSection title={HARNESS_PANE_COPY.detailsCli}>
+      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsCli}>
         <p className="py-3 text-sm text-muted-foreground">
           {HARNESS_PANE_COPY.nativeStateCloud}
         </p>
-      </SettingsSection>
+      </HarnessPanelBlock>
     );
   }
 
@@ -226,7 +241,7 @@ function CliDetails({
   const isAuthenticated = localAgent != null && isReadyAgent(localAgent);
 
   return (
-    <SettingsSection title={HARNESS_PANE_COPY.detailsCli}>
+    <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsCli}>
       <div className="space-y-3">
         {canRunLogin ? (
           <p className="text-sm font-medium text-destructive">
@@ -283,7 +298,7 @@ function CliDetails({
           />
         ) : null}
       </div>
-    </SettingsSection>
+    </HarnessPanelBlock>
   );
 }
 
