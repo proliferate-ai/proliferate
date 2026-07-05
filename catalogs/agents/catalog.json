@@ -421,14 +421,14 @@
           },
           {
             "id": "claude-fable-5",
-            "displayName": "Claude-Fable-5",
+            "displayName": "Fable 5",
             "availability": {
               "anyOf": [
                 "anthropic-api",
                 "anthropic-oauth"
               ]
             },
-            "defaultVisible": true,
+            "defaultVisible": false,
             "controls": {
               "mode": {
                 "values": [
@@ -472,7 +472,7 @@
           },
           {
             "id": "claude-opus-4-8",
-            "displayName": "Claude-Opus-4-8",
+            "displayName": "Opus 4.8",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -887,7 +887,7 @@
           },
           {
             "id": "global.anthropic.claude-fable-5",
-            "displayName": "Global.anthropic.claude-Fable-5",
+            "displayName": "Fable 5",
             "availability": {
               "anyOf": [
                 "bedrock"

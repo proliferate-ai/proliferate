@@ -129,7 +129,8 @@ const CONTROL_MAPPINGS = {
 // the probe can prove a model launches.
 const MODEL_VISIBILITY_OPT_OUTS = {
   claude: [
-    // trial-id duplicate of menu id "opus" (Opus 4.8)
+    // bare-direct current-gen duplicates of us.anthropic.* Bedrock entries
+    "claude-fable-5",
     "claude-opus-4-8",
     // global-region duplicate of us.anthropic.claude-fable-5 (bedrock)
     "global.anthropic.claude-fable-5",
@@ -146,6 +147,11 @@ const MODEL_VISIBILITY_OPT_OUTS = {
 // Explicit display overrides where prettifying alone is ambiguous (two
 // "GPT-5.4" rows when the bedrock CMB models sit beside the API ones).
 const MODEL_DISPLAY_OVERRIDES = {
+  claude: {
+    "claude-fable-5": "Fable 5",
+    "claude-opus-4-8": "Opus 4.8",
+    "global.anthropic.claude-fable-5": "Fable 5",
+  },
   codex: {
     "openai.gpt-5.4-cmb": "GPT-5.4 on Bedrock",
     "openai.gpt-5.4-cmb/xhigh": "GPT-5.4 (xhigh) on Bedrock",
