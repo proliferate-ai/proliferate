@@ -160,7 +160,7 @@ function LoopRow({
           )}
           <span
             className={twMerge(
-              "rounded px-1 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+              "rounded px-1 py-0.5 text-sm font-medium uppercase tracking-wide",
               loop.native ? "bg-muted text-muted-foreground" : "bg-warning/15 text-warning",
             )}
           >

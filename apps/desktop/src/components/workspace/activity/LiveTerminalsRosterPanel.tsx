@@ -82,7 +82,7 @@ function LiveTerminalRow({ process, nowMs, workspaceId, expanded, onToggle }: Li
       />
       {expanded && feed && (
         <pre
-          className="mx-1.5 mb-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 px-2 py-1.5 font-mono text-[11px] leading-snug text-muted-foreground"
+          className="mx-1.5 mb-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 px-2 py-1.5 font-mono text-sm leading-snug text-muted-foreground"
           data-terminal-feed
           data-telemetry-mask
         >
