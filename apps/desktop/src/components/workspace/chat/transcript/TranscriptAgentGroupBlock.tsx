@@ -131,7 +131,9 @@ export function TranscriptAgentGroupBlock({
     workSummary
     || (executionState === "expired_background"
       ? "Stopped updating in background"
-      : null);
+      : executionState === "completed_background"
+        ? "Completed in background"
+        : null);
   const headerExpandable = hasBodyContent;
 
   return (
