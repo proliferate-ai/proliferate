@@ -503,6 +503,71 @@ describe("buildTranscriptRowModel", () => {
         "turn:turn-1:block:content",
       ]);
     });
+
+    it("anchors a mid-conversation goal set inline after the preceding turn, not floated to top", () => {
+      const transcript = createTranscriptState("session-1");
+      // Turn 1 completes: user "hi" seq 1, assistant "Hey!" seq 2
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-turn-1-user", "hi", 1);
+      addAssistantItems(transcript, "turn-1", 1, 2); // seq 2
+      // THEN goal set at seq 5 (after turn 1 finished at seq 2)
+      // THEN turn 2 starts: user "keep going" seq 10, assistant "Got it…" seq 11
+      addTurn(transcript, "turn-2", true);
+      addUserItem(transcript, "turn-2", "item-turn-2-user", "keep going", 10);
+      addAssistantItems(transcript, "turn-2", 1, 11); // seq 11
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-2",
+        latestTurnHasAssistantRenderableContent: true,
+        // Goal set at seq 5: after turn-1 finished (maxSeq 2), before turn-2 started (minSeq 10)
+        goalEvents: [goalEvent(5, "set")],
+      });
+
+      // Expected: goal anchors at turn-1's END (between turn-1 and turn-2), NOT at index 0
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content",
+        "goal-event:5",
+        "turn:turn-2:block:content",
+      ]);
+      // Explicitly assert the goal is NOT floated to top
+      expect(rows[0].kind).not.toBe("goal_event");
+      expect(rows[1].kind).toBe("goal_event");
+    });
+
+    it("defensively anchors a goal with incorrectly-low seq at the last turn's end, not floated to top", () => {
+      const transcript = createTranscriptState("session-1");
+      // Turn 1 completes: user "hi" seq 1, assistant "Hey!" seq 2
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-turn-1-user", "hi", 1);
+      addAssistantItems(transcript, "turn-1", 1, 2); // seq 2
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        // BUG: seq mistakenly assigned as 0 (< turn-1's minSeq of 1)
+        // Without defensive fallback, this would float to beforeFirstTurn
+        goalEvents: [goalEvent(0, "set")],
+      });
+
+      // Expected: with defensive fallback, goal anchors to turn-1. Since
+      // seq 0 < turn-1's maxSeq (2), it's treated as mid-turn and anchors
+      // at START (after the user message, before assistant content) — which
+      // is better than floating to top. The turn splits to accommodate it.
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:item-turn-1-user",
+        "goal-event:0",
+        "turn:turn-1:block:content",
+      ]);
+      // Critically: goal is NOT floated to index 0 (beforeFirstTurn)
+      expect(rows[0].kind).not.toBe("goal_event");
+      expect(rows[1].kind).toBe("goal_event");
+    });
   });
 });
 

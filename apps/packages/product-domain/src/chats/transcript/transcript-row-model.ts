@@ -263,8 +263,19 @@ function bucketGoalEventRows(
     }
 
     if (host === null) {
-      beforeFirstTurn.push(row);
-      continue;
+      // Defensive fallback: if no host turn was found (event.seq < every
+      // turn's minSeq) but turns DO exist, anchor at the last turn's END
+      // instead of floating to beforeFirstTurn. This handles the case where
+      // a mid-conversation goal's seq was incorrectly assigned a very low
+      // value (e.g., 0 or stale). A goal genuinely set before any turn ever
+      // ran (session start) will still float to top correctly since
+      // orderedTurnRanges will be empty.
+      if (orderedTurnRanges.length > 0) {
+        host = orderedTurnRanges[orderedTurnRanges.length - 1];
+      } else {
+        beforeFirstTurn.push(row);
+        continue;
+      }
     }
 
     const isMidTurn = event.seq < host.range.maxSeq;
