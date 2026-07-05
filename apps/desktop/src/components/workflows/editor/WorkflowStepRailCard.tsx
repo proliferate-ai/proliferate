@@ -36,6 +36,14 @@ export interface WorkflowStepRailCardProps {
   onDelete: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  /** Scope annotation passed to the card for session-aware copy. */
+  scopeAnnotation?: {
+    isNewSession: boolean;
+    effectiveHarness: string;
+    effectiveModel: string;
+  } | null;
+  /** Scope label rendered above the card when it starts a scope group. */
+  scopeLabel?: string | null;
 }
 
 /** A rail step card: the shared card + an on-fail popover chip and a kebab menu. */
@@ -53,6 +61,8 @@ export function WorkflowStepRailCard({
   onDelete,
   onMoveUp,
   onMoveDown,
+  scopeAnnotation,
+  scopeLabel,
 }: WorkflowStepRailCardProps) {
   const onFailControl = (
     <WorkflowSelect
@@ -118,6 +128,8 @@ export function WorkflowStepRailCard({
       onSelect={onSelect}
       menu={menu}
       onFailControl={onFailControl}
+      scopeAnnotation={scopeAnnotation}
+      scopeLabel={scopeLabel}
     />
   );
 }

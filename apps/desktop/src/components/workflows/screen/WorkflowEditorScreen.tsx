@@ -13,6 +13,7 @@ import {
 import { templateSuggestions } from "@proliferate/product-domain/workflows/interpolation";
 import { WORKFLOW_STEP_META } from "@proliferate/product-domain/workflows/presentation";
 import { stepIssues, validateWorkflowDefinition } from "@proliferate/product-domain/workflows/validation";
+import { deriveEffectiveConfigs } from "@proliferate/product-domain/workflows/effective-config";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
@@ -34,6 +35,7 @@ import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
 import { WorkflowTriggersCard } from "../editor/WorkflowTriggersCard";
 import { WorkflowStepRailCard } from "../editor/WorkflowStepRailCard";
+import { WorkflowStepConnector } from "../editor/WorkflowStepConnector";
 import { WorkflowStepPanel, type EditorAgent } from "../editor/WorkflowStepPanel";
 
 interface CatalogModel {
@@ -141,6 +143,11 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
       draft
         ? validateWorkflowDefinition(draft.definition, { harnessSupportsGoals: harnessSupportsGoals })
         : [],
+    [draft],
+  );
+
+  const effectiveConfigs = useMemo(
+    () => (draft ? deriveEffectiveConfigs(draft.definition) : []),
     [draft],
   );
 
@@ -316,36 +323,59 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
               />
 
               <div className="flex flex-col">
-                {definition.steps.map((step, index) => (
-                  <div
-                    key={index}
-                    draggable
-                    onDragStart={() => setDragIndex(index)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => {
-                      if (dragIndex !== null) {
-                        reorder(dragIndex, index);
-                      }
-                      setDragIndex(null);
-                    }}
-                  >
-                    <WorkflowStepRailCard
-                      step={step}
-                      index={index}
-                      selected={selectedStep === index}
-                      invalid={stepIssues(issues, index).length > 0}
-                      connector
-                      canMoveUp={index > 0}
-                      canMoveDown={index < definition.steps.length - 1}
-                      onSelect={() => setSelectedStep(index)}
-                      onChange={(next) => updateStep(index, next)}
-                      onDuplicate={() => duplicateStep(index)}
-                      onDelete={() => deleteStep(index)}
-                      onMoveUp={() => reorder(index, index - 1)}
-                      onMoveDown={() => reorder(index, index + 1)}
-                    />
-                  </div>
-                ))}
+                {definition.steps.map((step, index) => {
+                  const nextConfig = effectiveConfigs[index + 1];
+                  const nextIsNewSession = nextConfig?.isNewSession === true;
+                  const thisConfig = effectiveConfigs[index];
+                  // Show scope label at the start of each scope group
+                  const isFirstInScope = thisConfig && (
+                    index === 0 || thisConfig.scopeIndex !== effectiveConfigs[index - 1]?.scopeIndex
+                  );
+                  const scopeLabel = isFirstInScope && thisConfig
+                    ? `${thisConfig.effectiveHarness} · ${thisConfig.effectiveModel}`
+                    : null;
+                  return (
+                    <div
+                      key={index}
+                      draggable
+                      onDragStart={() => setDragIndex(index)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={() => {
+                        if (dragIndex !== null) {
+                          reorder(dragIndex, index);
+                        }
+                        setDragIndex(null);
+                      }}
+                    >
+                      <WorkflowStepRailCard
+                        step={step}
+                        index={index}
+                        selected={selectedStep === index}
+                        invalid={stepIssues(issues, index).length > 0}
+                        connector={!nextIsNewSession}
+                        canMoveUp={index > 0}
+                        canMoveDown={index < definition.steps.length - 1}
+                        onSelect={() => setSelectedStep(index)}
+                        onChange={(next) => updateStep(index, next)}
+                        onDuplicate={() => duplicateStep(index)}
+                        onDelete={() => deleteStep(index)}
+                        onMoveUp={() => reorder(index, index - 1)}
+                        onMoveDown={() => reorder(index, index + 1)}
+                        scopeAnnotation={
+                          step.kind === "agent.config" && effectiveConfigs[index]
+                            ? effectiveConfigs[index]
+                            : null
+                        }
+                        scopeLabel={scopeLabel}
+                      />
+                      {nextIsNewSession ? (
+                        <WorkflowStepConnector
+                          sessionBreak={{ label: `new session · ${nextConfig.effectiveHarness}` }}
+                        />
+                      ) : null}
+                    </div>
+                  );
+                })}
 
                 <div className="flex justify-start pl-[6px]">
                   <PopoverButton

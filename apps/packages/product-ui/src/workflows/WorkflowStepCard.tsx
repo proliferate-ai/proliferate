@@ -35,6 +35,22 @@ export interface WorkflowStepCardProps {
   onFailControl?: ReactNode;
   /** Draw the connector spine down to the next card. */
   connector?: boolean;
+  /**
+   * Scope annotation for agent.config steps. When provided, overrides the
+   * static caption with session-aware copy:
+   * - `isNewSession: true` → "opens a new session"
+   * - `isNewSession: false` → "continues session · model → X"
+   */
+  scopeAnnotation?: {
+    isNewSession: boolean;
+    effectiveHarness: string;
+    effectiveModel: string;
+  } | null;
+  /**
+   * Scope label shown at the start of a scope group on the spine (e.g. "claude · sonnet").
+   * Rendered as a quiet annotation above the card.
+   */
+  scopeLabel?: string | null;
   className?: string;
 }
 
@@ -66,6 +82,8 @@ export function WorkflowStepCard({
   menu,
   onFailControl,
   connector = false,
+  scopeAnnotation,
+  scopeLabel,
   className = "",
 }: WorkflowStepCardProps) {
   const goalLine = goalRailLine(step);
@@ -75,7 +93,15 @@ export function WorkflowStepCard({
   const onFailChip = shortOnFailLabel(step.onFail);
 
   return (
-    <div className="flex gap-3.5">
+    <div className="flex flex-col">
+      {scopeLabel ? (
+        <div className="mb-1.5 flex items-center gap-2 pl-9">
+          <span className="font-mono text-[10px] leading-tight text-muted-foreground/70">
+            {scopeLabel}
+          </span>
+        </div>
+      ) : null}
+      <div className="flex gap-3.5">
       <SpineNumber n={index + 1} connector={connector} />
       <div className={twMerge("min-w-0 flex-1", connector ? "pb-4" : "")}>
         <div
@@ -125,7 +151,11 @@ export function WorkflowStepCard({
 
           {isAgentConfig ? (
             <p className="mt-2.5 text-xs leading-snug text-faint">
-              Sets the agent for the steps below · switching harness opens a new session
+              {scopeAnnotation
+                ? scopeAnnotation.isNewSession
+                  ? `opens a new session · ${scopeAnnotation.effectiveHarness}`
+                  : `continues session · model → ${scopeAnnotation.effectiveModel}`
+                : "Sets the agent for the steps below · switching harness opens a new session"}
             </p>
           ) : null}
 
@@ -143,6 +173,7 @@ export function WorkflowStepCard({
           {invalid ? <span className="mt-2 block text-xs text-destructive">Needs attention</span> : null}
         </div>
       </div>
+    </div>
     </div>
   );
 }
