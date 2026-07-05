@@ -280,15 +280,17 @@ fn render_opencode_gateway(
         materialize::OPENCODE_CONFIG_PREFIX,
         revision,
     );
-    // Isolate XDG so opencode cannot reach the user's global config/auth
-    // (HARNESS-MATRIX opencode recipe: XDG_CONFIG_HOME/XDG_DATA_HOME isolated).
+    // Isolate XDG_CONFIG_HOME so opencode reads OUR injected provider config
+    // (revision-keyed, deterministic) rather than the user's global
+    // ~/.config/opencode. XDG_DATA_HOME is intentionally LEFT AMBIENT so that
+    // opencode resolves auth at the real ~/.local/share/opencode/auth.json —
+    // this lets natively-logged-in providers (via `opencode auth login`)
+    // coexist with the injected proliferate provider and any api_key env
+    // sources. The config-layer merge design ("ADDS it to the user's own
+    // providers") only works when the auth file is reachable.
     rendered.set(
         "XDG_CONFIG_HOME",
         path_string(&config_dir.join(materialize::OPENCODE_XDG_CONFIG_SUBDIR)),
-    );
-    rendered.set(
-        "XDG_DATA_HOME",
-        path_string(&config_dir.join(materialize::OPENCODE_XDG_DATA_SUBDIR)),
     );
     rendered.set(
         "OPENCODE_CONFIG",
