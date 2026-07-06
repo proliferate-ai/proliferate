@@ -6,28 +6,58 @@ import { AgentLoginTerminalPanel } from "@/components/agents/AgentLoginTerminalP
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { isReadyAgent } from "@/lib/domain/agents/status";
+import {
+  isMultiSourceHarness,
+  type AuthMethod,
+} from "@/lib/domain/settings/harness-auth-sources";
 import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
 import { HarnessAuthApiKeyRow } from "./HarnessAuthApiKeyRow";
+import { isMultiSourceApiKeyConfigVisible } from "./HarnessAuthSection";
 import { ProviderPickerModal } from "./ProviderPickerModal";
 import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
 
-type AuthMethod = "gateway" | "api_key" | "cli";
-
 interface HarnessAuthDetailsSectionProps {
+  harnessKind: string;
   displayName: string;
   surface: AgentAuthSurface;
+  // Single-source harnesses pass the resolved radio method; multi-source
+  // harnesses ignore it and render the union of active/config blocks.
   selectedMethod: AuthMethod;
   editor: HarnessAuthEditorApi;
   variant?: HarnessBlockVariant;
 }
 
 export function HarnessAuthDetailsSection({
+  harnessKind,
   displayName,
   surface,
   selectedMethod,
   editor,
   variant = "section",
 }: HarnessAuthDetailsSectionProps) {
+  // Multi-source (opencode): gateway, api_key, and native CLI can all be active
+  // at once, so the details area is not a single-method switch. Render the
+  // gateway block when gateway is on, the api_key block whenever there are rows
+  // present or a key is being configured, and always the CLI/native block
+  // (opencode's own providers always coexist).
+  if (isMultiSourceHarness(harnessKind)) {
+    return (
+      <>
+        {editor.editorState.gatewayEnabled ? (
+          <GatewayDetails editor={editor} variant={variant} />
+        ) : null}
+        {isMultiSourceApiKeyConfigVisible(editor) ? (
+          <ApiKeyDetails
+            displayName={displayName}
+            editor={editor}
+            variant={variant}
+          />
+        ) : null}
+        <CliDetails surface={surface} editor={editor} variant={variant} />
+      </>
+    );
+  }
+
   if (selectedMethod === "gateway") {
     return <GatewayDetails editor={editor} variant={variant} />;
   }

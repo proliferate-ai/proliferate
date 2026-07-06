@@ -454,6 +454,124 @@ describe("HarnessPane authentication", () => {
     expect(screen.queryByText("Native logins always apply alongside other sources.")).not.toBeNull();
   });
 
+  it("opencode: clicking API key surfaces the row editor and reflects the in-progress state", () => {
+    renderPane("opencode");
+
+    const apiKey = () => screen.getByRole("button", { name: "API key" });
+    // Before the click there is no api_key detail block: no row editor and no
+    // multi-source-only "Add provider" affordance.
+    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByRole("button", { name: /Add provider/ })).toBeNull();
+    expect(screen.queryByLabelText("Environment variable name")).toBeNull();
+
+    fireEvent.click(apiKey());
+
+    // The card lights immediately (pending), even before a key is wired, and the
+    // api_key details block is now visible — this is the deadlock the fix closes.
+    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText("Environment variable name")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Add provider/ })).toBeTruthy();
+    // Seeding a draft row wires nothing, so nothing is PUT yet.
+    expect(putMutate).not.toHaveBeenCalled();
+
+    // CLI stays always-selected and disabled (native coexistence) throughout.
+    const cli = screen.getByRole("button", { name: "CLI login" }) as HTMLButtonElement;
+    expect(cli.getAttribute("aria-pressed")).toBe("true");
+    expect(cli.disabled).toBe(true);
+  });
+
+  it("opencode: toggling API key off darkens the card and collapses the bare draft", () => {
+    renderPane("opencode");
+
+    const apiKey = () => screen.getByRole("button", { name: "API key" });
+
+    fireEvent.click(apiKey());
+    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByRole("button", { name: /Add provider/ })).not.toBeNull();
+
+    // Clicking again turns api_key off: the bare draft (no wired key) is dropped
+    // and the highlight clears, so "off" visibly means off.
+    fireEvent.click(apiKey());
+    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByRole("button", { name: /Add provider/ })).toBeNull();
+    expect(screen.queryByLabelText("Environment variable name")).toBeNull();
+  });
+
+  it("opencode: enabling a wired api key lights it alongside the gateway", () => {
+    state.apiKeys.data = [{
+      id: "key-1",
+      title: "Work key",
+      redactedHint: "sk-...abcd",
+      status: "active",
+      createdAt: "2026-07-01T00:00:00Z",
+    }];
+    // Gateway on + a wired-but-disabled api_key row: the api_key editor is
+    // visible (rows present) but the card stays dark until a row is enabled.
+    state.selections.data = [
+      {
+        id: "sel-gw",
+        harnessKind: "opencode",
+        surface: "local",
+        sourceKind: "gateway",
+        apiKeyId: null,
+        keyTitle: null,
+        envVarName: null,
+        providerHint: null,
+        enabled: true,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+      {
+        id: "sel-key",
+        harnessKind: "opencode",
+        surface: "local",
+        sourceKind: "api_key",
+        apiKeyId: "key-1",
+        keyTitle: "Work key",
+        envVarName: "OPENROUTER_API_KEY",
+        providerHint: "openrouter",
+        enabled: false,
+        createdAt: "2026-07-01T00:00:00Z",
+        updatedAt: "2026-07-01T00:00:00Z",
+      },
+    ];
+    renderPane("opencode");
+
+    const apiKey = () => screen.getByRole("button", { name: "API key" });
+    expect(screen.getByDisplayValue("OPENROUTER_API_KEY")).toBeTruthy();
+    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
+    expect(gatewayCard().getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(screen.getByRole("switch", { name: "Enable OPENROUTER_API_KEY" }));
+
+    // The api_key card lights and the gateway stays on — both coexist.
+    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
+    expect(gatewayCard().getAttribute("aria-pressed")).toBe("true");
+    expect(
+      screen.getByRole("button", { name: "CLI login" }).getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    expect(putMutate).toHaveBeenLastCalledWith(
+      {
+        harnessKind: "opencode",
+        surface: "local",
+        body: {
+          sources: [
+            { sourceKind: "gateway", enabled: true },
+            {
+              sourceKind: "api_key",
+              apiKeyId: "key-1",
+              envVarName: "OPENROUTER_API_KEY",
+              providerHint: "openrouter",
+              enabled: true,
+            },
+          ],
+        },
+      },
+      expect.anything(),
+    );
+  });
+
   it("prefills a new row from the opencode provider picker", () => {
     // Seed an api_key selection so the API key detail section is visible.
     state.selections.data = [{
