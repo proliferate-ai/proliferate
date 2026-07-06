@@ -338,6 +338,11 @@ pub fn init() -> TelemetryGuards {
                     scope.set_tag("sandbox_id", &sandbox_id);
                 }
             }
+            if let Ok(user_id) = std::env::var("PROLIFERATE_USER_ID") {
+                if !user_id.trim().is_empty() {
+                    scope.set_tag("user_id", &user_id);
+                }
+            }
         });
     }
 

@@ -51,6 +51,7 @@ def _identity_env(
     *,
     organization_id: UUID | None = None,
     sandbox_id: str | None = None,
+    user_id: UUID | None = None,
 ) -> dict[str, str]:
     """Identity env vars for observability (Sentry tags on all runtime surfaces)."""
     env: dict[str, str] = {"PROLIFERATE_RUNTIME_ENV": "e2b"}
@@ -58,6 +59,8 @@ def _identity_env(
         env["PROLIFERATE_ORG_ID"] = str(organization_id)
     if sandbox_id:
         env["PROLIFERATE_SANDBOX_ID"] = sandbox_id
+    if user_id is not None:
+        env["PROLIFERATE_USER_ID"] = str(user_id)
     return env
 
 
@@ -69,6 +72,7 @@ def build_runtime_env(
     repo_env_vars: Mapping[str, str] | None = None,
     organization_id: UUID | None = None,
     sandbox_id: str | None = None,
+    user_id: UUID | None = None,
 ) -> dict[str, str]:
     env: dict[str, str] = {
         "ANYHARNESS_DEV_CORS": "1",
@@ -86,7 +90,9 @@ def build_runtime_env(
     env["ANYHARNESS_DATA_KEY"] = anyharness_data_key
     if target_id is not None:
         env["ANYHARNESS_RUNTIME_TARGET_ID"] = str(target_id)
-    env.update(_identity_env(organization_id=organization_id, sandbox_id=sandbox_id))
+    env.update(
+        _identity_env(organization_id=organization_id, sandbox_id=sandbox_id, user_id=user_id)
+    )
     if repo_env_vars:
         env.update(repo_env_vars)
     return env
@@ -214,11 +220,12 @@ def build_supervisor_config(
     *,
     organization_id: UUID | None = None,
     sandbox_id: str | None = None,
+    user_id: UUID | None = None,
 ) -> str:
     anyharness_env = {**runtime_context.base_env, **runtime_env}
     process_env = {
         **_target_sentry_env(),
-        **_identity_env(organization_id=organization_id, sandbox_id=sandbox_id),
+        **_identity_env(organization_id=organization_id, sandbox_id=sandbox_id, user_id=user_id),
     }
     values = {
         "anyharness_binary": runtime_context.runtime_binary_path,
@@ -257,6 +264,7 @@ def build_detached_supervisor_launch_command(
     *,
     organization_id: UUID | None = None,
     sandbox_id: str | None = None,
+    user_id: UUID | None = None,
 ) -> str:
     supervisor_binary = supervisor_binary_path(runtime_context)
     config_path = supervisor_config_path(runtime_context)
@@ -290,7 +298,7 @@ def build_detached_supervisor_launch_command(
         )
     combined_env = {
         **_target_sentry_env(),
-        **_identity_env(organization_id=organization_id, sandbox_id=sandbox_id),
+        **_identity_env(organization_id=organization_id, sandbox_id=sandbox_id, user_id=user_id),
     }
     target_env_lines = [
         f"export {key}={shlex.quote(value)}" for key, value in sorted(combined_env.items())

@@ -140,6 +140,11 @@ fn sentry_scope_tags() -> Vec<(&'static str, String)> {
             tags.push(("sandbox_id", sandbox_id));
         }
     }
+    if let Ok(user_id) = std::env::var("PROLIFERATE_USER_ID") {
+        if !user_id.trim().is_empty() {
+            tags.push(("user_id", user_id));
+        }
+    }
     if let Ok(target_id) = std::env::var("ANYHARNESS_RUNTIME_TARGET_ID") {
         if !target_id.trim().is_empty() {
             tags.push(("target_id", target_id));

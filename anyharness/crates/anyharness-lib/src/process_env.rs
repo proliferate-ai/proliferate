@@ -10,6 +10,7 @@ const RUNTIME_PRIVATE_ENV: &[&str] = &[
     "PROLIFERATE_ORG_ID",
     "PROLIFERATE_SANDBOX_ID",
     "PROLIFERATE_RUNTIME_ENV",
+    "PROLIFERATE_USER_ID",
 ];
 
 pub(crate) fn remove_runtime_private_env(command: &mut tokio::process::Command) {

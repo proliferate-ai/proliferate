@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import secrets
 import shlex
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
+from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.integrations.sandbox import (
     RuntimeEndpoint,
@@ -50,6 +52,29 @@ def _runtime_data_key(sandbox: CloudSandboxValue) -> str | None:
     if not sandbox.anyharness_data_key_ciphertext:
         return None
     return decrypt_text(sandbox.anyharness_data_key_ciphertext)
+
+
+async def _resolve_owner_organization_id(
+    db: AsyncSession,
+    sandbox: CloudSandboxValue,
+) -> UUID | None:
+    """Resolve the sandbox's owning organization for observability identity tags.
+
+    The cloud_sandbox row has no organization column, but the owner is one
+    membership lookup away. Uses the owner's current (first active)
+    membership; best-effort — identity tags must never block a launch.
+    """
+    if sandbox.organization_id is not None:
+        return sandbox.organization_id
+    if sandbox.owner_user_id is None:
+        return None
+    try:
+        record = await organizations_store.get_current_membership_for_user(
+            db, sandbox.owner_user_id
+        )
+    except Exception:  # noqa: BLE001 - identity tagging is best-effort.
+        return None
+    return record.organization.id if record is not None else None
 
 
 async def connect_ready_sandbox(
@@ -163,6 +188,7 @@ async def _launch_anyharness_runtime(
     anyharness_data_key: str,
 ) -> None:
     launcher_path = runtime_launcher_path(runtime_context)
+    organization_id = await _resolve_owner_organization_id(db, sandbox_record)
     await provider.write_file(
         provider_sandbox,
         launcher_path,
@@ -172,8 +198,9 @@ async def _launch_anyharness_runtime(
             build_runtime_env(
                 runtime_token,
                 anyharness_data_key=anyharness_data_key,
-                organization_id=sandbox_record.organization_id,
+                organization_id=organization_id,
                 sandbox_id=provider_sandbox_id,
+                user_id=sandbox_record.owner_user_id,
             ),
         ),
     )
