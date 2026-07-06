@@ -3,7 +3,7 @@
 Adds the `analytics` schema objects backing the provider-cost / support /
 retention dashboards:
 
-  * Provider snapshot tables (written by ``proliferate.analytics.provider_ingest``):
+  * Provider snapshot tables (written by ``server/scripts/analytics_ingest.py``):
     stripe_revenue_daily, stripe_mrr_snapshot, aws_cost_daily, e2b_cost_daily,
     sentry_errors_daily.
   * Derived views over existing raw tables: support_reports_daily,

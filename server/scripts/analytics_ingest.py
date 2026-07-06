@@ -1,21 +1,30 @@
-"""Provider-cost/usage ingestion job for the ``analytics`` Postgres schema.
+"""Pull provider revenue/cost/error data into the ``analytics`` Postgres schema.
 
-Pulls daily revenue/cost/error data from Stripe, AWS Cost Explorer, E2B, and
-Sentry and upserts it into the base tables created by alembic revision
-``15649bf2cf24`` (``analytics.stripe_revenue_daily``,
-``analytics.stripe_mrr_snapshot``, ``analytics.aws_cost_daily``,
-``analytics.e2b_cost_daily``, ``analytics.sentry_errors_daily``). Metabase
-reads those tables (and the views built on top of them) through the
-read-only ``metabase_readonly`` Postgres role.
+This is Proliferate-the-company's own operational tooling for populating our
+Metabase business dashboards — it is not part of the shipped product and has
+no bearing on self-hosted installs. It pulls daily revenue/cost/error data
+from Stripe, AWS Cost Explorer, E2B, and Sentry and upserts it into the base
+tables created by alembic revision ``15649bf2cf24``
+(``analytics.stripe_revenue_daily``, ``analytics.stripe_mrr_snapshot``,
+``analytics.aws_cost_daily``, ``analytics.e2b_cost_daily``,
+``analytics.sentry_errors_daily``). Our Metabase Cloud instance reads those
+tables (and the views built on top of them) through the read-only
+``metabase_readonly`` Postgres role.
 
-Run as a scheduled job::
+Auth: reads ``STRIPE_SECRET_KEY``/``DATABASE_URL`` from app settings, plus
+``E2B_SESSION_COOKIE``, ``E2B_TEAM_SLUG`` (required, no default — this is our
+own E2B team, not a self-hoster's), ``SENTRY_ANALYTICS_TOKEN``, and
+``SENTRY_ORG`` from the environment. AWS Cost Explorer uses the ambient AWS
+credentials/role.
 
-    python -m proliferate.analytics.provider_ingest
+Usage:
+    E2B_TEAM_SLUG=your-team-slug \\
+    uv --directory server run python scripts/analytics_ingest.py
 
 Each provider is fetched and upserted independently; a failure in one
 provider is logged and does not prevent the others from running. See
-``specs/tbd/dashboards-analytics-ingestion.md`` for the operational design
-(secrets, scheduling, etc).
+``specs/dashboards/analytics-dashboards-v1.md`` for the full operational
+design (secrets, scheduling, infra).
 """
 
 from __future__ import annotations
@@ -44,7 +53,6 @@ STRIPE_TIMEOUT_SECONDS = 30.0
 STRIPE_LOOKBACK_DAYS = 90
 
 E2B_API_BASE = "https://e2b.dev/api/trpc/billing.getUsage"
-DEFAULT_E2B_TEAM_SLUG = "pablo-5391"
 
 SENTRY_API_BASE = "https://sentry.io/api/0"
 
@@ -129,12 +137,23 @@ async def _ingest_stripe_revenue(client: httpx.AsyncClient, conn: AsyncConnectio
         },
     )
 
+    # analytics.stripe_revenue_daily.gross_collected_cents is a single USD
+    # figure with no per-currency breakdown, and economics_daily treats it as
+    # USD cents outright (e.g. subtracting AWS/E2B/LLM USD costs from it to
+    # get net_cents). Silently summing amount_paid across currencies would
+    # mix (say) EUR cents into a USD total, so non-USD invoices are excluded
+    # from the aggregate and logged instead of corrupting the number.
     daily: dict[date, dict[str, Any]] = defaultdict(
         lambda: {"gross_collected_cents": 0, "paid_invoice_count": 0, "currency": "usd"}
     )
+    skipped_non_usd = 0
     for invoice in invoices:
         amount_paid = invoice.get("amount_paid") or 0
         if amount_paid <= 0:
+            continue
+        currency = (invoice.get("currency") or "usd").lower()
+        if currency != "usd":
+            skipped_non_usd += 1
             continue
         status_transitions = invoice.get("status_transitions") or {}
         paid_at_ts = status_transitions.get("paid_at") or invoice.get("created")
@@ -144,9 +163,13 @@ async def _ingest_stripe_revenue(client: httpx.AsyncClient, conn: AsyncConnectio
         bucket = daily[activity_date]
         bucket["gross_collected_cents"] += amount_paid
         bucket["paid_invoice_count"] += 1
-        currency = invoice.get("currency")
-        if currency:
-            bucket["currency"] = currency
+
+    if skipped_non_usd:
+        logger.warning(
+            "Skipped %d non-USD paid invoice(s) when computing stripe_revenue_daily "
+            "(gross_collected_cents is USD-only)",
+            skipped_non_usd,
+        )
 
     now = datetime.now(UTC)
     for activity_date, bucket in daily.items():
@@ -324,7 +347,10 @@ async def ingest_e2b(conn: AsyncConnection) -> int:
         logger.warning("E2B_SESSION_COOKIE not configured, skipping E2B ingestion")
         return 0
 
-    team_slug = os.environ.get("E2B_TEAM_SLUG", DEFAULT_E2B_TEAM_SLUG)
+    team_slug = os.environ.get("E2B_TEAM_SLUG")
+    if not team_slug:
+        logger.warning("E2B_TEAM_SLUG not configured, skipping E2B ingestion")
+        return 0
     trpc_input = json.dumps({"0": {"json": {"teamSlug": team_slug}}})
     url = f"{E2B_API_BASE}?batch=1&input={urllib.parse.quote(trpc_input)}"
 
@@ -344,9 +370,7 @@ async def ingest_e2b(conn: AsyncConnection) -> int:
         logger.exception("E2B billing request failed, skipping E2B ingestion")
         return 0
     except ValueError:
-        logger.warning(
-            "E2B billing response was not JSON (likely an expired session), skipping"
-        )
+        logger.warning("E2B billing response was not JSON (likely an expired session), skipping")
         return 0
 
     try:

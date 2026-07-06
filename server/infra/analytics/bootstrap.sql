@@ -73,19 +73,35 @@ SELECT (occurred_at AT TIME ZONE 'UTC')::date AS activity_date, provider, model,
     coalesce(sum(cost_usd),0) AS cost_usd, coalesce(sum(total_tokens),0)::bigint AS tokens, count(*) AS requests
 FROM agent_llm_usage_event GROUP BY (occurred_at AT TIME ZONE 'UTC')::date, provider, model;
 
-CREATE OR REPLACE VIEW analytics.economics_daily AS
+-- AWS UnblendedCost folds promotional credits in as negative service lines
+-- (e.g. a -$135 credit booked against "AWS Data Transfer" cancels the compute).
+-- Summing everything nets to ~$0 and hides the true cost of serving, so
+-- economics_daily reports GROSS AWS cost (cost_usd > 0) as the cost-of-serving
+-- driver and surfaces credits/net separately. DROP first: adding the
+-- aws_credits_usd / aws_net_usd columns changes the view's column set, which
+-- CREATE OR REPLACE VIEW cannot do. Must stay in sync with the economics_daily
+-- definition in alembic 15649bf2cf24 (_create_derived_views).
+DROP VIEW IF EXISTS analytics.economics_daily;
+CREATE VIEW analytics.economics_daily AS
 WITH stripe_daily AS (SELECT activity_date, gross_collected_cents FROM analytics.stripe_revenue_daily),
-aws_daily AS (SELECT activity_date, sum(cost_usd) AS aws_cost_usd FROM analytics.aws_cost_daily GROUP BY activity_date),
+aws_daily AS (
+    SELECT activity_date,
+        sum(cost_usd) FILTER (WHERE cost_usd > 0) AS aws_gross_usd,
+        sum(cost_usd) FILTER (WHERE cost_usd < 0) AS aws_credits_usd,
+        sum(cost_usd) AS aws_net_usd
+    FROM analytics.aws_cost_daily GROUP BY activity_date),
 e2b_daily AS (SELECT activity_date, total_cost_usd AS e2b_cost_usd FROM analytics.e2b_cost_daily),
 llm_daily AS (SELECT (occurred_at AT TIME ZONE 'UTC')::date AS activity_date, sum(cost_usd) AS llm_cost_usd FROM agent_llm_usage_event GROUP BY (occurred_at AT TIME ZONE 'UTC')::date),
 all_dates AS (SELECT activity_date FROM stripe_daily UNION SELECT activity_date FROM aws_daily UNION SELECT activity_date FROM e2b_daily UNION SELECT activity_date FROM llm_daily)
 SELECT all_dates.activity_date,
     coalesce(stripe_daily.gross_collected_cents,0) AS stripe_gross_collected_cents,
-    coalesce(aws_daily.aws_cost_usd,0) AS aws_cost_usd,
+    coalesce(aws_daily.aws_gross_usd,0) AS aws_cost_usd,
+    coalesce(aws_daily.aws_credits_usd,0) AS aws_credits_usd,
+    coalesce(aws_daily.aws_net_usd,0) AS aws_net_usd,
     coalesce(e2b_daily.e2b_cost_usd,0) AS e2b_cost_usd,
     coalesce(llm_daily.llm_cost_usd,0) AS llm_cost_usd,
-    coalesce(aws_daily.aws_cost_usd,0)+coalesce(e2b_daily.e2b_cost_usd,0)+coalesce(llm_daily.llm_cost_usd,0) AS total_cost_usd,
-    coalesce(stripe_daily.gross_collected_cents,0) - ((coalesce(aws_daily.aws_cost_usd,0)+coalesce(e2b_daily.e2b_cost_usd,0)+coalesce(llm_daily.llm_cost_usd,0))*100) AS net_cents
+    coalesce(aws_daily.aws_gross_usd,0)+coalesce(e2b_daily.e2b_cost_usd,0)+coalesce(llm_daily.llm_cost_usd,0) AS total_cost_usd,
+    coalesce(stripe_daily.gross_collected_cents,0) - ((coalesce(aws_daily.aws_gross_usd,0)+coalesce(e2b_daily.e2b_cost_usd,0)+coalesce(llm_daily.llm_cost_usd,0))*100) AS net_cents
 FROM all_dates
 LEFT JOIN stripe_daily ON stripe_daily.activity_date=all_dates.activity_date
 LEFT JOIN aws_daily ON aws_daily.activity_date=all_dates.activity_date

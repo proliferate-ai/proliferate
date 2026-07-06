@@ -9,18 +9,22 @@ not consumed by IaC tooling).
 
 A nightly job pulls provider revenue/cost data — Stripe, AWS Cost Explorer,
 E2B, Sentry — into the `analytics.*` Postgres schema (see alembic revision
-`15649bf2cf24` and `proliferate/analytics/provider_ingest.py`). Metabase
+`15649bf2cf24` and `server/scripts/analytics_ingest.py`). Metabase
 Cloud reads that schema through a read-only Postgres role and renders the
-dashboards described in `metabase-dashboards.md`.
+dashboards described in `metabase-dashboards.md`. The ingestion script lives
+under `server/scripts/` (not the installed `proliferate` package) because it
+is Proliferate-the-company's own ops tooling, not part of the shipped product
+that self-hosters run.
 
 ## IMPORTANT: activation caveat
 
 **The nightly schedule is live now, but the job will fail until this PR is
 merged and deployed.** The scheduled ECS task runs the *prod server image*
-with command `python -m proliferate.analytics.provider_ingest` — that module
-only exists once this PR ships in the image. Until then, EventBridge fires
-on schedule and the task exits with `ModuleNotFoundError:
-No module named 'proliferate.analytics'`.
+with command `python /app/scripts/analytics_ingest.py` — that script is only
+copied into the image once this PR ships (the Dockerfile's
+`COPY server/scripts/ scripts/` line and the script itself are both in this
+PR). Until then, EventBridge fires on schedule and the task exits non-zero
+because the script isn't present.
 
 Data was bootstrapped once manually on 2026-07-05 (see "Bootstrap" below) so
 the dashboards aren't empty while this lands.
@@ -53,13 +57,15 @@ e.g. local dev).
   read (`ce:GetCostAndUsage`, `ce:GetCostForecast`) + Secrets Manager read
   scoped to the three secret prefixes below (see
   `iam-task-role-policy.json`).
-- **Command**: `python -m proliferate.analytics.provider_ingest`.
+- **Command**: `python /app/scripts/analytics_ingest.py` (the image pins
+  `proliferate-server:latest`; re-provisioning always picks up the current
+  image with the script present).
 
 ### Secrets (AWS Secrets Manager)
 
 | Secret | Keys | Notes |
 | --- | --- | --- |
-| `proliferate/prod/analytics-ingest` | `E2B_SESSION_COOKIE`, `E2B_TEAM_SLUG` | analytics-specific; needs periodic manual refresh, see below. |
+| `proliferate/prod/analytics-ingest` | `E2B_SESSION_COOKIE`, `E2B_TEAM_SLUG` | analytics-specific; `E2B_TEAM_SLUG` is required (the job skips E2B if unset — no hardcoded default); cookie needs periodic manual refresh, see below. |
 | `proliferate/prod/database` | `DATABASE_URL` | shared with the app. |
 | `proliferate/prod/server-app` | `JWT_SECRET`, `STRIPE_SECRET_KEY` | shared with the app; `JWT_SECRET` is pulled in only because `proliferate.config.Settings` requires it to construct, not because the job uses it. |
 
@@ -86,7 +92,8 @@ E2B provider, and continues with the others — it never fails the whole run.
 To refresh manually:
 
 1. Log into the E2B dashboard (e2b.dev) in a browser as the account tied to
-   team slug `E2B_TEAM_SLUG` (default `pablo-5391`).
+   the `E2B_TEAM_SLUG` team (Proliferate's own E2B team; there is no default —
+   the value is set in the secret).
 2. Capture the full `e2b_session` cookie value from devtools (Application →
    Cookies) or the request headers of a `billing.getUsage` call.
 3. Update the secret:
@@ -94,7 +101,7 @@ To refresh manually:
    ```
    aws secretsmanager put-secret-value \
      --secret-id proliferate/prod/analytics-ingest \
-     --secret-string '{"E2B_SESSION_COOKIE":"<cookie>","E2B_TEAM_SLUG":"pablo-5391"}'
+     --secret-string '{"E2B_SESSION_COOKIE":"<cookie>","E2B_TEAM_SLUG":"<team-slug>"}'
    ```
 
 There is no automated refresh; this is a known manual chore until E2B ships
@@ -118,11 +125,19 @@ separately so credits stay visible without hiding the true serving cost.
 `bootstrap.sql` is the idempotent DDL that was applied directly to prod on
 2026-07-05 to stand up the `analytics` schema objects (tables, views,
 grants) ahead of this migration landing, so the dashboards had real data to
-show immediately. It's intentionally the same shape as the alembic
-migration's `upgrade()` (all `CREATE TABLE IF NOT EXISTS` / `CREATE OR
-REPLACE VIEW`), so the migration re-asserts the same objects idempotently
-once it runs as part of a normal deploy — applying `bootstrap.sql` again is
-also safe.
+show immediately. It mirrors the alembic migration's `upgrade()`.
+
+**Divergence note:** the `bootstrap.sql` in this PR is the corrected version,
+matching the migration's `economics_daily` (with the `aws_credits_usd` /
+`aws_net_usd` gross/credits/net split). The version *originally* applied to
+prod on 2026-07-05 predated that split and lacked those two columns, so the
+Economics dashboard's credit/net cards errored on prod until the corrected
+view was re-applied. The migration's `economics_daily` is a
+`DROP VIEW ... CREATE VIEW` (not `CREATE OR REPLACE`) precisely because the
+column set changed — so when this PR deploys, `alembic upgrade head` cleanly
+replaces whatever view shape is currently on prod. Applying `bootstrap.sql`
+again is also safe (it `DROP VIEW IF EXISTS` first). Keep this file and the
+migration's `_create_derived_views` in sync when either changes.
 
 ## Re-provisioning from scratch
 

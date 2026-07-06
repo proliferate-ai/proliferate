@@ -1,6 +1,6 @@
 # Dashboards: provider-cost analytics ingestion (v1)
 
-Status: implemented (alembic `15649bf2cf24`, `proliferate.analytics.provider_ingest`,
+Status: implemented (alembic `15649bf2cf24`, `server/scripts/analytics_ingest.py`,
 infra provisioned in AWS + Metabase Cloud). See
 `server/infra/analytics/README.md` and `server/infra/analytics/metabase-dashboards.md`
 for the full operational writeup; this doc is the design record.
@@ -64,10 +64,11 @@ it's absent (e.g. local dev), so the migration is safe everywhere.
 
 ## Ingestion job
 
-`proliferate/analytics/provider_ingest.py`, run as:
+`server/scripts/analytics_ingest.py` (company ops tooling, deliberately not in
+the installed `proliferate` package), run as:
 
 ```
-python -m proliferate.analytics.provider_ingest
+E2B_TEAM_SLUG=<team-slug> uv --directory server run python scripts/analytics_ingest.py
 ```
 
 Each provider is its own async function, called independently from `run()`;
@@ -131,13 +132,16 @@ Required secrets (via Secrets Manager / task env):
 ## Merge-activation caveat
 
 The scheduled task runs the prod server image with
-`python -m proliferate.analytics.provider_ingest`. That module only exists
-in the image once this PR is merged and deployed — until then the schedule
-fires nightly and the task fails with `ModuleNotFoundError`. Data was
-bootstrapped once manually on 2026-07-05 (`server/infra/analytics/bootstrap.sql`,
-applied directly to prod) so the dashboards weren't empty while this lands;
-the migration re-asserts the same objects idempotently once it runs as part
-of a normal deploy.
+`python /app/scripts/analytics_ingest.py`. That script is only copied into
+the image once this PR is merged and deployed (via the Dockerfile's
+`COPY server/scripts/ scripts/` line, added in this PR) — until then the
+schedule fires nightly and the task exits non-zero because the script isn't
+present. Data was bootstrapped once manually on 2026-07-05
+(`server/infra/analytics/bootstrap.sql`, applied directly to prod) so the
+dashboards weren't empty while this lands. Note the original prod bootstrap
+predated the `economics_daily` gross/credits/net column split; the corrected
+`bootstrap.sql` in this PR matches the migration, and `alembic upgrade head`
+`DROP`s and recreates `economics_daily` on deploy to converge prod.
 
 ## Verified locally
 
@@ -145,7 +149,7 @@ of a normal deploy.
   local Postgres — schema creation, view creation, and grant no-op (no
   `metabase_readonly` role locally) all succeed; re-running `upgrade head`
   a second time is a clean no-op (idempotent `_has_table` guards).
-- `python -m proliferate.analytics.provider_ingest` run end-to-end twice
+- `python scripts/analytics_ingest.py` run end-to-end twice
   against local Postgres: Stripe/E2B/Sentry cleanly skip (no local
   credentials configured) and log a warning each; AWS Cost Explorer ran for
   real against the available AWS credentials and upserted 2052
