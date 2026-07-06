@@ -1,0 +1,8 @@
+{"Version":"2012-10-17","Statement":[
+ {"Sid":"CostExplorer","Effect":"Allow","Action":["ce:GetCostAndUsage","ce:GetCostForecast"],"Resource":"*"},
+ {"Sid":"Secrets","Effect":"Allow","Action":["secretsmanager:GetSecretValue"],"Resource":[
+   "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/analytics-ingest-*",
+   "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/database-*",
+   "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/server-app-*"
+ ]}
+]}

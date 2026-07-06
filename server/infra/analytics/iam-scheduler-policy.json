@@ -1,0 +1,6 @@
+{"Version":"2012-10-17","Statement":[
+ {"Effect":"Allow","Action":["ecs:RunTask"],"Resource":["arn:aws:ecs:us-east-1:157466816238:task-definition/proliferate-analytics-ingest:*"]},
+ {"Effect":"Allow","Action":["iam:PassRole"],"Resource":[
+   "arn:aws:iam::157466816238:role/proliferate-prod-ecs-execution",
+   "arn:aws:iam::157466816238:role/proliferate-prod-analytics-ingest-task"]}
+]}
