@@ -193,6 +193,46 @@ def capture_server_sentry_exception(
         sentry_sdk.capture_exception(normalized)
 
 
+_report_critical_logger = logging.getLogger("proliferate.critical")
+
+
+def report_critical(
+    error: Any,
+    *,
+    tags: dict[str, str] | None = None,
+    extras: dict[str, Any] | None = None,
+    **context: Any,
+) -> None:
+    """Report a page-worthy failure to Sentry (level=fatal) and structured logs.
+
+    Contract fields (stable for Grafana/Sentry alert rules):
+    - Sentry tag: critical_failure=true, level=fatal
+    - Log extra: critical_failure=True
+    - Log message contains "CRITICAL_FAILURE" marker for CloudWatch filtering
+    """
+    merged_tags = dict(tags or {})
+    merged_tags["critical_failure"] = "true"
+
+    capture_server_sentry_exception(
+        error,
+        level="fatal",
+        tags=merged_tags,
+        extras=extras,
+    )
+
+    log_extra: dict[str, Any] = {"critical_failure": True}
+    if context:
+        log_extra.update(context)
+    if extras:
+        log_extra.update(extras)
+
+    _report_critical_logger.exception(
+        "CRITICAL_FAILURE: %s",
+        str(error),
+        extra=log_extra,
+    )
+
+
 def flush_server_sentry(timeout: float = 2.0) -> None:
     if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
         return

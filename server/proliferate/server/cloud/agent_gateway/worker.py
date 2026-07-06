@@ -19,6 +19,7 @@ from contextlib import suppress
 
 from proliferate.config import settings
 from proliferate.db import session_ops as db_session
+from proliferate.integrations.sentry import report_critical
 from proliferate.server.cloud.agent_gateway.enrollment import backfill_enrollments
 from proliferate.server.cloud.agent_gateway.topups import (
     LlmTopupRunResult,
@@ -49,8 +50,11 @@ async def _backfill_loop() -> None:
                     "Agent gateway enrollment backfill processed subjects",
                     extra={"processed": processed},
                 )
-        except Exception:
-            logger.exception("Agent gateway enrollment backfill tick failed")
+        except Exception as exc:
+            report_critical(
+                exc,
+                tags={"domain": "agent_gateway", "action": "enrollment_backfill"},
+            )
         await asyncio.sleep(settings.agent_gateway_backfill_interval_seconds)
 
 
@@ -90,8 +94,11 @@ async def _usage_import_loop() -> None:
                         "exhausted_subjects": result.exhausted_subjects,
                     },
                 )
-        except Exception:
-            logger.exception("Agent gateway usage import tick failed")
+        except Exception as exc:
+            report_critical(
+                exc,
+                tags={"domain": "agent_gateway", "action": "usage_import"},
+            )
         await asyncio.sleep(settings.agent_gateway_usage_import_interval_seconds)
 
 
@@ -132,8 +139,11 @@ async def _topup_loop() -> None:
                         "skipped": result.skipped,
                     },
                 )
-        except Exception:
-            logger.exception("Agent gateway LLM top-up tick failed")
+        except Exception as exc:
+            report_critical(
+                exc,
+                tags={"domain": "agent_gateway", "action": "llm_topup"},
+            )
         await asyncio.sleep(settings.agent_gateway_topup_interval_seconds)
 
 

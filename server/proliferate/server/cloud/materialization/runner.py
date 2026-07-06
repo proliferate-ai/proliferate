@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import async_session_factory
 from proliferate.db.engine import run_after_commit as db_run_after_commit
+from proliferate.integrations.sentry import report_critical
 
 logger = logging.getLogger("proliferate.cloud.materialization")
 
@@ -24,8 +25,11 @@ async def run_after_commit(
     async def _run() -> None:
         try:
             await task()
-        except Exception:
-            logger.exception("cloud materialization task failed label=%s", label)
+        except Exception as exc:
+            report_critical(
+                exc,
+                tags={"domain": "cloud_materialization", "label": label},
+            )
 
     async def _callback() -> None:
         asyncio.create_task(_run())
@@ -48,9 +52,12 @@ async def _run_with_fresh_session(
         try:
             await fn(db, **kwargs)
             await db.commit()
-        except Exception:
+        except Exception as exc:
             await db.rollback()
-            logger.exception(
-                "cloud materialization fresh-session task failed fn=%s",
-                getattr(fn, "__name__", repr(fn)),
+            report_critical(
+                exc,
+                tags={
+                    "domain": "cloud_materialization",
+                    "fn": getattr(fn, "__name__", repr(fn)),
+                },
             )
