@@ -68,7 +68,11 @@ pub fn init(command: &Commands) -> TelemetryGuards {
                     env_or_default("ANYHARNESS_SENTRY_ENVIRONMENT", "trusted-beta").into(),
                 ),
                 release: Some(
-                    env_or_default("ANYHARNESS_SENTRY_RELEASE", "anyharness@0.1.0").into(),
+                    env_or_default(
+                        "ANYHARNESS_SENTRY_RELEASE",
+                        &format!("anyharness@{}", env!("CARGO_PKG_VERSION")),
+                    )
+                    .into(),
                 ),
                 traces_sample_rate: sample_rate("ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE", 1.0),
                 attach_stacktrace: true,

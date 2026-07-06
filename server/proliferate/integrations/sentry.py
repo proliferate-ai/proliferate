@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - optional dependency in local/test envs
     StarletteIntegration = None
 
 from proliferate.config import settings
+from proliferate.server.version import server_version
 from proliferate.utils.telemetry_mode import (
     get_server_telemetry_mode,
     is_vendor_telemetry_enabled,
@@ -98,7 +99,7 @@ def init_server_sentry() -> None:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.sentry_environment,
-        release=settings.sentry_release,
+        release=settings.sentry_release or f"proliferate-server@{server_version()}",
         attach_stacktrace=True,
         max_breadcrumbs=100,
         send_default_pii=False,

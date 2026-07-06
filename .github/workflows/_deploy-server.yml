@@ -202,6 +202,9 @@ jobs:
               >/dev/null
           fi
 
+          server_version="$(cat VERSION)"
+          short_sha="${GIT_SHA:0:12}"
+
           jq -n \
             --arg api_url "$API_URL" \
             --arg api_base "$API_BASE_URL" \
@@ -209,7 +212,7 @@ jobs:
             --arg environment "$DEPLOY_ENVIRONMENT" \
             --arg e2b "$E2B_TEMPLATE_REF" \
             --arg git "$GIT_SHA" \
-            --arg release "proliferate-server@${GIT_SHA:0:12}" \
+            --arg release "proliferate-server@${server_version}+${short_sha}" \
             --arg support_report_bucket "$SUPPORT_REPORT_S3_BUCKET" \
             --arg support_report_prefix "$SUPPORT_REPORT_S3_PREFIX" \
             --arg support_report_region "$SUPPORT_REPORT_S3_REGION" \
