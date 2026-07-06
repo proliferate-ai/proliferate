@@ -48,7 +48,8 @@ async def _sync_page(
     )
     workspace_counts: dict[UUID, int] = dict(workspace_counts_result.all())  # type: ignore[arg-type]
 
-    # last_active_at = GREATEST(MAX(client_daily_activity.last_seen_at), MAX(auth_identity.last_login_at))
+    # last_active_at = GREATEST of MAX(client_daily_activity.last_seen_at)
+    # and MAX(auth_identity.last_login_at)
     activity_result = await db.execute(
         select(
             ClientDailyActivity.actor_user_id,

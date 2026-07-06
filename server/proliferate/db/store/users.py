@@ -1,6 +1,5 @@
 """DB adapter for fastapi-users and user lookup store helpers."""
 
-from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select, update
