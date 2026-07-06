@@ -150,14 +150,15 @@ fn baseline_counts_as_a_context_when_active() {
 fn visible_models_are_the_default_visible_subset_of_available() {
     let catalog = draft_catalog();
 
-    // claude-opus-4-8 is available under oauth (trial-proven) but not
-    // defaultVisible: in models(), out of visible_models(). Fable 5 is the
-    // counter-case — trial-proven AND curation-advertised.
+    // claude-fable-5 and claude-opus-4-8 are oauth/api-only (the us.anthropic.*
+    // Bedrock variants are unavailable here), so they are NOT gateway duplicates
+    // and stay visible on native/api — an OAuth login serves them and this is
+    // the only form it can use.
     let available = model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"])));
     assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
         model_ids(catalog.visible_models("claude", &contexts(&["anthropic-oauth"]))),
-        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5"]
+        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5", "claude-opus-4-8"]
     );
 }
 
