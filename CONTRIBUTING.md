@@ -33,6 +33,34 @@ make dev-list
 make run PROFILE=main
 ```
 
+### Using existing Postgres/Redis (no Docker)
+
+`make setup` and `make run` start Postgres and Redis via Docker by default. If
+you already run them natively, skip Docker with:
+
+```bash
+make setup PROFILE=main USE_EXISTING_POSTGRES=1 USE_EXISTING_REDIS=1
+make run PROFILE=main USE_EXISTING_POSTGRES=1 USE_EXISTING_REDIS=1
+```
+
+The existing-Postgres path expects a `proliferate` role to exist; create it
+once before setup:
+
+```sql
+CREATE ROLE proliferate LOGIN PASSWORD 'localdev' SUPERUSER;
+CREATE DATABASE proliferate OWNER proliferate;
+```
+
+Setup then creates its per-profile database (e.g. `proliferate_dev_main`)
+itself.
+
+### Windows
+
+The toolchain targets macOS and Linux; on Windows, develop inside WSL2. Clone
+the repo into the WSL filesystem (e.g. `~/proliferate`) — Rust builds on a
+mounted Windows drive (`/mnt/...`) are an order of magnitude slower. Dev-server
+ports are forwarded to Windows automatically.
+
 ## Pull Requests
 
 Keep PRs focused and leave unrelated files alone.
