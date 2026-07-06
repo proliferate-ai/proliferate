@@ -257,7 +257,7 @@ class Settings(BaseSettings):
     # Observability
     sentry_dsn: str = ""
     sentry_environment: str = "trusted-beta"
-    sentry_release: str = "proliferate-server@0.1.0"
+    sentry_release: str = ""
     sentry_traces_sample_rate: float = 1.0
 
     # Secondary LLM flows

@@ -9,6 +9,18 @@ surface. It is intentionally separate from:
 - Customer.io: lifecycle messaging and engagement
 - anonymous telemetry: first-party aggregate install/usage records
 
+## Release Format
+
+All Sentry releases follow the format:
+
+- Local dev: `<component>@<VERSION>` (e.g., `proliferate-server@0.3.6`)
+- CI builds: `<component>@<VERSION>+<short_sha>` (e.g., `proliferate-server@0.3.6+a1b2c3d4e5f6`)
+
+The short SHA is always 12 characters, matching `${GIT_SHA:0:12}` in workflows.
+
+Defaults in code derive from real version sources (package.json, CARGO_PKG_VERSION,
+VERSION file) instead of hardcoded strings to prevent drift.
+
 ## Projects
 
 Use separate Sentry projects so alerts and releases can be owned by surface:

@@ -87,7 +87,7 @@ pub fn init() -> TelemetryGuards {
                 release: Some(
                     env_or_default(
                         "PROLIFERATE_DESKTOP_SENTRY_RELEASE",
-                        "proliferate-desktop-native@0.1.0",
+                        &format!("proliferate-desktop-native@{}", env!("CARGO_PKG_VERSION")),
                     )
                     .into(),
                 ),
