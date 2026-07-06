@@ -115,6 +115,8 @@ class SupportReportCreateRequest(BaseModel):
     kind: Literal["bug", "feature"] = Field(default="bug")
     credit_consent: bool = Field(default=False, alias="creditConsent")
     credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
+    urgent: bool = Field(default=False, alias="urgent")
+    notify_me: bool = Field(default=False, alias="notifyMe")
 
 
 class SupportReportServerCorrelation(BaseModel):

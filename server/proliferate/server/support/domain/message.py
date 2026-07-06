@@ -15,6 +15,7 @@ class SupportMessagePlan:
     message: str
     fallback_text: str
     fields: tuple[SupportMessageField, ...]
+    title: str = "*New support message*"
 
 
 def normalize_support_message(message: str) -> str | None:
@@ -66,6 +67,8 @@ def build_support_report_plan(
     kind: str = "bug",
     credit_consent: bool = False,
     credit_name: str | None = None,
+    urgent: bool = False,
+    notify_me: bool = False,
     context: Mapping[str, object] | None = None,
     correlation: Mapping[str, object] | None = None,
     request_id: str | None = None,
@@ -75,6 +78,8 @@ def build_support_report_plan(
     fields = [
         SupportMessageField("Report ID", report_id),
         SupportMessageField("Type", "Bug" if kind == "bug" else "Feature request"),
+        SupportMessageField("Urgent", "Yes" if urgent else "No"),
+        SupportMessageField("Notify requested", "Yes" if notify_me else "No"),
         SupportMessageField("From", sender_name),
         SupportMessageField("Email", sender_email),
         SupportMessageField("Diagnostics", "included" if diagnostics_included else "not included"),
@@ -100,10 +105,13 @@ def build_support_report_plan(
     _append_list_field(fields, "Cloud targets", payload_correlation.get("cloudTargetIds"))
     _append_context_field(fields, "Request ID", request_id)
 
+    title = "*:rotating_light: URGENT support report*" if urgent else "*New support report*"
+    fallback_prefix = "URGENT support report" if urgent else "Support report"
     return SupportMessagePlan(
         message=message,
-        fallback_text=f"Support report {report_id} from {sender_name}: {message[:140]}",
+        fallback_text=f"{fallback_prefix} {report_id} from {sender_name}: {message[:140]}",
         fields=tuple(fields),
+        title=title,
     )
 
 

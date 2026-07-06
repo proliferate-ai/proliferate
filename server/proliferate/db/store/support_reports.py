@@ -35,6 +35,8 @@ class SupportReportSnapshot:
     kind: str
     credit_consent: bool
     credit_name: str | None
+    urgent: bool
+    notify_me: bool
     request_id: str | None
     complete_request_id: str | None
     request_object_written_at: datetime | None
@@ -115,6 +117,8 @@ async def create_report(
     kind: str,
     credit_consent: bool,
     credit_name: str | None = None,
+    urgent: bool = False,
+    notify_me: bool = False,
     request_id: str | None = None,
     cloud_diagnostics_status: str = "not_applicable",
 ) -> SupportReportSnapshot:
@@ -139,6 +143,8 @@ async def create_report(
         kind=kind,
         credit_consent=credit_consent,
         credit_name=credit_name,
+        urgent=urgent,
+        notify_me=notify_me,
         request_id=request_id,
         cloud_diagnostics_status=cloud_diagnostics_status,
         created_at=now,
@@ -409,6 +415,8 @@ def _snapshot(row: SupportReport) -> SupportReportSnapshot:
         kind=row.kind,
         credit_consent=row.credit_consent,
         credit_name=row.credit_name,
+        urgent=row.urgent,
+        notify_me=row.notify_me,
         request_id=row.request_id,
         complete_request_id=row.complete_request_id,
         request_object_written_at=row.request_object_written_at,

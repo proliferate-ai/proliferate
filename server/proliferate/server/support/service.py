@@ -180,6 +180,8 @@ async def create_support_report(
             credit_name=(
                 body.credit_name if body.kind == "feature" and body.credit_consent else None
             ),
+            urgent=body.urgent,
+            notify_me=body.notify_me,
             request_id=get_request_id(),
             cloud_diagnostics_status="pending" if authorized_cloud_refs else "not_applicable",
         )
@@ -464,6 +466,8 @@ async def _complete_db_backed_report(
             kind=completed_report.kind,
             credit_consent=completed_report.credit_consent,
             credit_name=completed_report.credit_name,
+            urgent=completed_report.urgent,
+            notify_me=completed_report.notify_me,
             correlation=support_report_correlation_record(completed_report),
         )
         await support_reports.mark_report_slack_notified(db, report_id=completed_report.id)
@@ -556,6 +560,8 @@ async def _complete_legacy_report(
         attachment_count=len(body.attachments),
         kind="bug",
         credit_consent=False,
+        urgent=bool(request_record.get("urgent")),
+        notify_me=bool(request_record.get("notifyMe")),
         correlation=None,
     )
 

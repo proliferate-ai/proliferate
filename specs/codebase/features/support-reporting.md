@@ -123,6 +123,15 @@ Report creation writes `request.json` to the private support S3 prefix. This
 object contains the user message, source context, workspace refs, telemetry
 refs, and server-derived correlation IDs. It must not contain presigned URLs.
 
+Reports also carry two capture-only intent flags, `urgent` and `notifyMe`,
+persisted on the `support_report` row (`urgent`, `notify_me`) and mirrored into
+`request.json` (`urgent`, `notifyMe`). `urgent` marks a report the submitter
+flagged as time-sensitive; `notifyMe` records that the submitter asked to be
+contacted about the outcome. Both default to false and are capture signals
+only — they carry no resolution/triage state, which lives in a separate ops
+service. Follow-up, when requested, goes to the submitter's `outreach_email`
+override (see below) when set, otherwise their account email.
+
 `POST /v1/support/reports/{reportId}/upload-targets` validates diagnostics and
 attachment metadata for the report owner, persists the expected object manifest,
 and returns short-lived presigned `PUT` targets. Clients may call it again while
@@ -185,6 +194,20 @@ Slack receives two best-effort notifications: the report completion receipt and,
 once available, a tracker-links update. Slack messages contain the `reportId`,
 an internal report URL when configured, and tracker URLs. They never include S3
 keys, S3 prefixes, presigned URLs, diagnostics bodies, or uploaded file content.
+
+The completion receipt surfaces the capture flags: `urgent` reports get a clear
+leading urgent marker in the Slack title, and every report renders `Urgent:
+Yes/No` and `Notify requested: Yes/No` fields so a responder can triage without
+opening the case file.
+
+## User Outreach Email
+
+Each user may set an optional `outreach_email` override on their profile
+(`PATCH /v1/users/me`, exposed on `GET /v1/users/me`). It is the address the
+user prefers for support/outreach follow-up; sending an empty string or `null`
+clears it and falls back to the account email. A non-empty value must validate
+as an email. This is account-level profile state, independent of any single
+report.
 
 ## Debug Correlation
 
