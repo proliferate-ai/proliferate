@@ -284,13 +284,6 @@ class Settings(BaseSettings):
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""
-    slack_client_id: str = ""
-    slack_client_secret: str = ""
-    slack_signing_secret: str = ""
-    slack_oauth_redirect_url: str = ""
-    slack_outbound_max_attempts: int = 5
-    slack_outbound_rate_per_team_per_sec: float = 1.0
-    slack_run_cascade_max_attempts: int = 3
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_cloud_monthly_price_id: str = ""
@@ -318,13 +311,6 @@ class Settings(BaseSettings):
     cloud_target_sentry_environment: str = ""
     cloud_target_sentry_release: str = ""
     cloud_target_sentry_traces_sample_rate: float = 1.0
-    cloud_jwt_signing_key_pem: str = ""
-    cloud_jwt_signing_key_id: str = "local-dev"
-    cloud_jwt_verification_keys_json: str = "[]"
-    cloud_jwt_issuer: str = "https://api.proliferate.ai"
-    cloud_jwt_audience_anyharness: str = "anyharness"
-    cloud_jwt_direct_attach_ttl_seconds: int = 1200
-    cloud_mcp_enabled: bool = True
     automation_cloud_executor_claim_ttl_seconds: float = 300.0
     automation_cloud_executor_heartbeat_seconds: float = 30.0
     automation_cloud_executor_concurrency: int = 4
@@ -332,18 +318,10 @@ class Settings(BaseSettings):
     automation_cloud_executor_sweep_limit: int = 100
     automation_cloud_executor_branch_prefix: str = "automation"
     automation_cloud_executor_branch_slug_chars: int = 48
-    workspace_move_cleanup_max_attempts: int = 5
-    workspace_move_executor_heartbeat_timeout_seconds: int = 120
-    workspace_move_cleanup_reconciler_interval_seconds: int = 300
-    cloud_mcp_oauth_callback_base_url: str = ""
-    cloud_mcp_oauth_callback_fallback_base_url: str = "http://localhost:8000"
     cloud_mcp_slack_enabled: bool = False
     cloud_mcp_slack_client_id: str = ""
     cloud_mcp_slack_client_secret: str = ""
     cloud_mcp_slack_token_endpoint_auth_method: str = "client_secret_post"
-    cloud_mcp_google_workspace_enabled: bool = False
-    cloud_mcp_google_workspace_oauth_client_id: str = ""
-    cloud_mcp_google_workspace_oauth_client_secret: str = ""
     # Agent LLM gateway (LiteLLM proxy)
     agent_gateway_enabled: bool = False
     agent_gateway_litellm_base_url: str = "http://127.0.0.1:14000"
@@ -368,11 +346,6 @@ class Settings(BaseSettings):
     e2b_api_key: str = ""
     e2b_template_name: str = ""
     e2b_webhook_signature_secret: str = ""
-    proliferate_target_installer_url: str = (
-        "https://raw.githubusercontent.com/proliferate-ai/proliferate/main/"
-        "install/proliferate-target-install.sh"
-    )
-    proliferate_target_artifact_base_url: str = ""
 
     @property
     def single_org_mode(self) -> bool:
