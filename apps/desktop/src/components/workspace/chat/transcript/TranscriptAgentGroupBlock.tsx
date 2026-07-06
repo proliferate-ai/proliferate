@@ -174,7 +174,7 @@ export function TranscriptAgentGroupBlock({
           <span className="min-w-0 truncate text-inherit">{description}</span>
         )}
         {!expanded && collapsedSummary && (
-          <span className="ml-1 text-sm text-muted-foreground">
+          <span className="ml-1 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground">
             · {collapsedSummary}
           </span>
         )}
