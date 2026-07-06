@@ -233,9 +233,6 @@ class Settings(BaseSettings):
     # Customer.io (optional)
     customerio_site_id: str = ""
     customerio_api_key: str = ""
-    customerio_app_api_key: str = ""
-    customerio_from_email: str = "hello@proliferate.com"
-    customerio_welcome_transactional_message_id: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""

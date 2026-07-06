@@ -58,7 +58,6 @@ from proliferate.constants.auth import (
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
 )
-from proliferate.db.engine import async_session_factory
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth import (
     consume_auth_code,
@@ -66,16 +65,12 @@ from proliferate.db.store.auth import (
     create_auth_code,
 )
 from proliferate.db.store.users import (
-    claim_customerio_welcome_send,
-    clear_customerio_welcome_send,
     get_active_user_by_id,
     github_oauth_account_or_email_exists,
     update_user_github_profile,
 )
 from proliferate.integrations.customerio import (
-    customerio_welcome_email_enabled,
     identify_customerio_user,
-    send_customerio_welcome_email,
     track_customerio_desktop_authenticated,
 )
 from proliferate.integrations.github import (
@@ -230,38 +225,6 @@ async def sync_customerio_desktop_authenticated_user(user: User) -> None:
         created_at=user.created_at,
     )
     await track_customerio_desktop_authenticated(user_id=user_id)
-    await _send_customerio_welcome_email_once(user)
-
-
-async def _send_customerio_welcome_email_once(user: User) -> None:
-    """Send the Customer.io welcome email exactly once per user.
-
-    Uses a DB-backed claim on ``user.customerio_welcome_sent_at`` to dedupe across
-    concurrent auths, always cleared on any non-success (including exceptions or
-    cancellation) so a crash between claim and send can't permanently flag the user
-    as sent without delivering. Gated on ``customerio_welcome_email_enabled()`` first
-    so a missing-config environment does not burn the claim slot on every auth.
-    """
-    if not customerio_welcome_email_enabled():
-        return
-
-    async with async_session_factory() as db, db.begin():
-        claimed = await claim_customerio_welcome_send(db, user.id)
-    if not claimed:
-        return
-
-    sent = False
-    try:
-        sent = await send_customerio_welcome_email(
-            user_id=str(user.id),
-            email=user.email,
-            display_name=user.display_name,
-            github_login=user.github_login,
-        )
-    finally:
-        if not sent:
-            async with async_session_factory() as db, db.begin():
-                await clear_customerio_welcome_send(db, user.id)
 
 
 def _handle_customerio_sync_task_completion(task: asyncio.Task[None]) -> None:

@@ -1,6 +1,5 @@
 """DB adapter for fastapi-users and user lookup store helpers."""
 
-from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -113,36 +112,6 @@ async def update_user_github_profile(
     if display_name and not (user.display_name or "").strip():
         user.display_name = display_name
     return user
-
-
-async def claim_customerio_welcome_send(
-    db: AsyncSession,
-    user_id: UUID,
-) -> bool:
-    """Atomically claim the welcome-email send for ``user_id``.
-
-    Sets ``customerio_welcome_sent_at`` only when it is currently NULL. Returns
-    True when this caller won the claim, False when the welcome was already
-    sent (or the user is missing).
-    """
-    now = datetime.now(UTC)
-    result = await db.execute(
-        update(User)
-        .where(User.id == user_id)
-        .where(User.customerio_welcome_sent_at.is_(None))
-        .values(customerio_welcome_sent_at=now)
-    )
-    return (result.rowcount or 0) > 0
-
-
-async def clear_customerio_welcome_send(
-    db: AsyncSession,
-    user_id: UUID,
-) -> None:
-    """Clear ``customerio_welcome_sent_at`` so a future attempt can retry."""
-    await db.execute(
-        update(User).where(User.id == user_id).values(customerio_welcome_sent_at=None)
-    )
 
 
 async def load_user_with_oauth_accounts_by_id(
