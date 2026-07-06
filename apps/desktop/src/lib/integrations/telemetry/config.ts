@@ -23,6 +23,7 @@ export interface DesktopTelemetryConfig {
     dsn: string | null;
     tracesSampleRate: number;
     enableLogs: boolean;
+    replaysOnErrorSampleRate: number;
   };
   posthog: {
     enabled: boolean;
@@ -53,6 +54,10 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
       enableLogs: envFlagEnabled(
         import.meta.env.VITE_PROLIFERATE_SENTRY_ENABLE_LOGS,
         true,
+      ),
+      replaysOnErrorSampleRate: envFloat(
+        import.meta.env.VITE_PROLIFERATE_SENTRY_REPLAY_ON_ERROR_SAMPLE_RATE,
+        1.0,
       ),
     },
     posthog: {
