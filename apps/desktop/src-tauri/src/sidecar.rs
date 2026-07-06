@@ -223,6 +223,8 @@ where
         }
     }
 
+    env.insert("PROLIFERATE_RUNTIME_ENV".to_string(), "local".to_string());
+
     env
 }
 

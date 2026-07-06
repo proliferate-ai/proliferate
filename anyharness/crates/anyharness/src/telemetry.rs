@@ -108,7 +108,7 @@ pub fn init(command: &Commands) -> TelemetryGuards {
 
     if telemetry.is_some() {
         sentry::configure_scope(|scope| {
-            for (key, value) in sentry_scope_tags() {
+            for (key, value) in &sentry_scope_tags() {
                 scope.set_tag(key, value);
             }
         });
@@ -124,11 +124,38 @@ pub fn init(command: &Commands) -> TelemetryGuards {
     }
 }
 
-fn sentry_scope_tags() -> [(&'static str, &'static str); 2] {
-    [
-        ("surface", "anyharness_runtime"),
-        ("telemetry_mode", ANYHARNESS_TELEMETRY_MODE),
-    ]
+fn sentry_scope_tags() -> Vec<(&'static str, String)> {
+    let mut tags: Vec<(&'static str, String)> = vec![
+        ("surface", "anyharness_runtime".to_string()),
+        ("telemetry_mode", ANYHARNESS_TELEMETRY_MODE.to_string()),
+    ];
+
+    let runtime_env = std::env::var("PROLIFERATE_RUNTIME_ENV")
+        .unwrap_or_else(|_| "local".to_string());
+    tags.push(("runtime_env", runtime_env));
+
+    if let Ok(org_id) = std::env::var("PROLIFERATE_ORG_ID") {
+        if !org_id.trim().is_empty() {
+            tags.push(("org_id", org_id));
+        }
+    }
+    if let Ok(sandbox_id) = std::env::var("PROLIFERATE_SANDBOX_ID") {
+        if !sandbox_id.trim().is_empty() {
+            tags.push(("sandbox_id", sandbox_id));
+        }
+    }
+    if let Ok(user_id) = std::env::var("PROLIFERATE_USER_ID") {
+        if !user_id.trim().is_empty() {
+            tags.push(("user_id", user_id));
+        }
+    }
+    if let Ok(target_id) = std::env::var("ANYHARNESS_RUNTIME_TARGET_ID") {
+        if !target_id.trim().is_empty() {
+            tags.push(("target_id", target_id));
+        }
+    }
+
+    tags
 }
 
 #[cfg(test)]
@@ -143,13 +170,10 @@ mod tests {
 
     #[test]
     fn sentry_scope_tags_include_runtime_surface_and_mode() {
-        assert_eq!(
-            sentry_scope_tags(),
-            [
-                ("surface", "anyharness_runtime"),
-                ("telemetry_mode", "hosted_product"),
-            ]
-        );
+        let tags = sentry_scope_tags();
+        assert!(tags.iter().any(|(k, v)| *k == "surface" && v == "anyharness_runtime"));
+        assert!(tags.iter().any(|(k, v)| *k == "telemetry_mode" && v == "hosted_product"));
+        assert!(tags.iter().any(|(k, v)| *k == "runtime_env" && !v.is_empty()));
     }
 
     #[test]

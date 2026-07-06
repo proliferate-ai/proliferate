@@ -323,6 +323,26 @@ pub fn init() -> TelemetryGuards {
         sentry::configure_scope(|scope| {
             scope.set_tag("surface", "proliferate_worker");
             scope.set_tag("telemetry_mode", "hosted_product");
+
+            let runtime_env = std::env::var("PROLIFERATE_RUNTIME_ENV")
+                .unwrap_or_else(|_| "local".to_string());
+            scope.set_tag("runtime_env", &runtime_env);
+
+            if let Ok(org_id) = std::env::var("PROLIFERATE_ORG_ID") {
+                if !org_id.trim().is_empty() {
+                    scope.set_tag("org_id", &org_id);
+                }
+            }
+            if let Ok(sandbox_id) = std::env::var("PROLIFERATE_SANDBOX_ID") {
+                if !sandbox_id.trim().is_empty() {
+                    scope.set_tag("sandbox_id", &sandbox_id);
+                }
+            }
+            if let Ok(user_id) = std::env::var("PROLIFERATE_USER_ID") {
+                if !user_id.trim().is_empty() {
+                    scope.set_tag("user_id", &user_id);
+                }
+            }
         });
     }
 
