@@ -135,3 +135,14 @@ Slack notifications should be configured in Sentry alert rules, not custom app
 code. Use separate alert routing for server/runtime/client projects when volume
 requires it; the first default can be one product-errors channel with issue
 regression and new high-priority issue alerts.
+
+Live rules (created 2026-07-06): issue alert `17267915` (new/regressed,
+level=fatal OR `critical_failure=true`) and metric alert `442367`
+(`p95(span.duration) > 5s / 10min`), both on `proliferate-server` → Slack
+`#sentry-channel`. Grafana/CloudWatch latency + 5xx + CPU alerts route to
+`#alerts` via AWS Managed Grafana (workspace `proliferate-ops`, `g-e532d030d8`).
+
+The full implemented picture — every surface's identity tags, the log-line
+contract, release format, how to grep prod logs by tenant, and the current
+external-config state — lives in
+`exceptions-observability-implementation.md`.

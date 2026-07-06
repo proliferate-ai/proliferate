@@ -32,3 +32,16 @@ there and apply to you.
   (Rust tests hardcode catalog values); `catalog.json` is `include_str!`'d so
   the runtime needs a rebuild.
 - Prefer exercising the change in the running app over tests alone.
+
+## Logging & errors
+
+- Ambient/expected errors: `logger.exception(...)` (already JSON + correlated +
+  stack-traced). Page-worthy failures: `report_critical(exc, tags=...)` — do not
+  also log; it captures to Sentry at level=fatal and logs the `CRITICAL_FAILURE`
+  marker. Adding a `report_critical` site adds a pager duty — be deliberate.
+- Any new background loop/Celery task must bind correlation context (org/user) at
+  the unit-of-work boundary, or its logs are anonymous. New spawned processes pass
+  the `PROLIFERATE_ORG_ID/USER_ID/SANDBOX_ID/RUNTIME_ENV` env vars. Never hardcode a
+  release/version string.
+- Full rules + how to grep prod logs by tenant during an investigation:
+  `specs/developing/analytics/exceptions-observability-implementation.md` §8–8.5.

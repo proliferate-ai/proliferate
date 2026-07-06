@@ -6,7 +6,11 @@ docs: `sentry.md` (canonical project list / env vars / privacy posture),
 `sentry-setup-runbook.md` (click-through setup), and
 `specs/tbd/issue-autofix-system-v1.md` (the downstream consumer of everything here).
 
-Source PRs (every code block below is verbatim from these diffs):
+**Status: all four code PRs squash-merged to main 2026-07-06.** Instrumentation is live
+once the next server/desktop deploys ship. Lane-5 external config (Grafana/Sentry alerts)
+is done and verified; see §7 for the few residual human steps.
+
+Source PRs (every code block below is verbatim from these diffs, now merged):
 
 | PR | Branch | Scope |
 |---|---|---|
@@ -574,7 +578,78 @@ therefore requires a hosted build — steps documented in the PR body.
 - **Alert-channel consolidation (optional)** — invite the Sentry Slack app to `#alerts`
   and repoint rules 17267915 + 442367, so Sentry and Grafana alerts land in one channel.
 
-## 8. End-to-end: what happens when something breaks
+## 8. Logging best practices (rules for writing code)
+
+The behavioral contract when writing server code. These are what the tooling above
+assumes; agents and humans both follow them.
+
+1. **Ambient / expected-sometimes error** (retryable, non-blocking): `logger.exception("...")`
+   and nothing else. It is already emitted as JSON, correlated with the current
+   org/user/request context, and carries a stack trace. Do not also call Sentry directly.
+2. **Page-worthy error** (data loss, stuck money, broken launches, wedged provisioning):
+   `report_critical(exc, tags={"domain": ..., "action": ...})`. Do NOT also
+   `logger.exception` — `report_critical` logs (with the `CRITICAL_FAILURE` marker) and
+   captures to Sentry at level=fatal for you. **Adding a call site adds a pager duty** —
+   be deliberate; there are 7 today (§3.4).
+3. **New background loop / task / worker?** Bind identity at the unit-of-work boundary or
+   its logs are anonymous:
+   - asyncio loop: `with with_correlation_context(organization_id=..., user_id=...): ...`
+   - Celery: `@celery_app.task(base=CorrelatedTask, ...)` on the consumer +
+     `headers=capture_correlation_context()` on the producer's `send_task`.
+   The HTTP path is already covered (auth dependency + `permissions.py` owner resolution).
+4. **New endpoint that resolves an org-owned resource?** Route through the existing owner
+   helpers (`set_resource_tenant_context` fires inside `permissions.py`) so
+   `organization_id` lands on every log line for that request. An endpoint that reads
+   org-scoped data without hitting those helpers will log `user_id` but silently miss
+   `organization_id`. (A repo-wide audit for such endpoints is a tracked follow-up, §9.)
+5. **New spawned process (sandbox / sidecar)?** Pass the identity env vars
+   (`PROLIFERATE_ORG_ID` / `USER_ID` / `SANDBOX_ID` / `RUNTIME_ENV`) AND add them to the
+   `anyharness/crates/anyharness-lib/src/process_env.rs` strip list so they never leak
+   into user shells (§4.3).
+6. **New sensitive UI surface (desktop)?** Add `data-telemetry-mask` (redact value) or
+   `data-telemetry-block` (drop element) — these gate both PostHog and Sentry replay (§6).
+7. **Never hardcode a release/version string** — derive from `package.json` /
+   `CARGO_PKG_VERSION` / `server_version()` (§5).
+
+Corollary — **every server log line already carries tenant/user identity as soon as it is
+known**, via the `CorrelationLogFilter` reading contextvars (the same pattern as onyx's
+`CURRENT_TENANT_ID_CONTEXTVAR`, but as structured JSON fields rather than a `[t:xxx]`
+message prefix). `user_id` binds in the auth dependency; `organization_id` binds when the
+endpoint resolves owner scope (org isn't part of auth — a user may be multi-org or
+personal). Rules 3 and 4 exist to keep that invariant true off the HTTP path.
+
+## 8.5. Querying logs during an investigation (agents + humans)
+
+The "an exception fired — show me the logs for that user right before it" workflow is two
+CloudWatch Logs Insights calls (the `aws` CLI, or the Grafana API with a service-account
+token). All correlation fields are filterable:
+
+```bash
+# Every log line for one user in the 10 minutes before an exception, newest first:
+QID=$(aws logs start-query \
+  --log-group-name /ecs/proliferate-prod \
+  --start-time  <exception_epoch - 600> \
+  --end-time    <exception_epoch> \
+  --query-string 'fields @timestamp, level, message, request_id, version, git_sha
+    | filter user_id = "USER_UUID"
+    | sort @timestamp desc | limit 200' \
+  --query queryId --output text)
+sleep 5 && aws logs get-query-results --query-id "$QID"
+```
+
+Swap `user_id` → `organization_id` for a whole tenant, or `request_id` to pull every line
+of the exact failing request. Multi-group queries work (pass repeated `--log-group-name`).
+This is exactly the investigation step the issue-autofix fix workflow performs
+(`specs/tbd/issue-autofix-system-v1.md` §5.2).
+
+Caveats: (a) identity fields exist only where context is bound — HTTP always, background
+work after these PRs deploy (rules 3–4); (b) 30-day retention; (c) **E2B sandbox logs are
+NOT in CloudWatch by decision** — attach to the live sandbox instead (`anyharness.log`),
+keyed by the `sandbox_id` Sentry tag; (d) autofix agents will need their own IAM principal
+scoped to `logs:StartQuery`/`GetQueryResults`/`FilterLogEvents` on `/ecs/proliferate-*` —
+today this capability rides on human CLI creds (tracked in §9 + the autofix build list).
+
+## 9. End-to-end: what happens when something breaks
 
 **Server request throws:**
 ```
@@ -612,10 +687,20 @@ sentry panic hook / sentry_anyhow::capture_anyhow
 Celery/background latency; streaming-turn latency (long-lived SSE/websocket turns appear
 as one opaque transaction).
 
-## 9. Deferred / follow-ups
+## 10. Deferred / follow-ups
 
 - `organization_id` column on `cloud_sandbox` (fixes the multi-org first-membership wart, §4.2).
 - Desktop-native org tag (needs Tauri IPC, §4.4).
+- **Org-context audit** — sweep all routers for endpoints that resolve org-owned
+  resources without going through the `permissions.py` owner helpers; those log `user_id`
+  but miss `organization_id` (rule 4, §8). Small follow-up PR + a lint rule.
+- **Autofix IAM principal** — the log-query capability (§8.5) rides on human CLI creds
+  today; the issue-autofix service needs a scoped principal
+  (`logs:StartQuery`/`GetQueryResults`/`FilterLogEvents` on `/ecs/proliferate-*`). Belongs
+  in the autofix build list.
+- **Deploy** — instrumentation is merged but only lights up in prod after the next
+  server + desktop deploys ship (this is what activates the `CRITICAL_FAILURE` panel,
+  `version`/`git_sha` on log lines, and background-work correlation).
 - AMG service-account token rotation: the provisioning token expires after 7 days by
   design; mint fresh ones via `aws grafana create-workspace-service-account-token` as
   needed.
