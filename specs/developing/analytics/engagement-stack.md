@@ -301,11 +301,23 @@ Untouched, superseded. Delete after campaigns 3+4 are activated.
 
 ### Other objects
 
-- Changelog template: id `f61066f2-96fc-41e3-9d80-...` (reusable newsletter
-  shell with content placeholder + unsubscribe tag).
-- Sender identity 3: Pablo <pablo@proliferate.com>.
+- Changelog broadcast: newsletter id 3 "Changelog broadcast (template -- clone
+  per release)" (template 12), DRAFT. From identity 2 (hello@), topic 1, segment
+  6, layout 2. Structure: title + one-line summary + one hero image (placeholder
+  swapped per release), a "New" section only (top 4-5 bold-led bullets), then
+  "See the full changelog" + "Download for Mac" links. Distilled from the landing
+  /changelog (~/landing/content/changelog/*.mdx); Improvements/Fixes stay on the
+  web page. (An earlier bare template f61066f2-... was superseded by this.)
+- Layouts: id 1 "Empty Layout" (appends its own unsubscribe -- used by the live
+  transactional welcome); id 2 "Campaign -- no footer" (just `{{ content }}`, no
+  unsubscribe). The 6 campaign templates (7/8/9/10/11/4) and the changelog
+  newsletter all use layout 2, because their bodies carry a styled unsubscribe
+  footer -- pairing them with layout 1 double-renders the unsubscribe link (a bug
+  found + fixed 2026-07-06; see Render gotchas).
+- Sender identities: 2 = Proliferate <hello@proliferate.com> (changelog); 3 =
+  Pablo <pablo@proliferate.com> (all campaign emails).
 - Frequency cap: Email -- 5 per 7 days.
-- Topics: 1 Product updates, 2 Onboarding, 3 Founder updates.
+- Topics: 1 Product updates, 2 Onboarding & getting started, 3 Check-ins & feedback.
 
 ---
 
@@ -350,14 +362,46 @@ query -- changelog credit falls out of data that system already has.
 
 Zero server code. Operator workflow per release:
 
-1. Write the changelog entry.
-2. Create a newsletter from the changelog template (target segment 6, topic 1
-   Product updates).
-3. Test-send to pablo@proliferate.com.
-4. Approve and send.
+1. Write the release's changelog entry (the source of truth is the landing
+   /changelog, ~/landing/content/changelog/*.mdx).
+2. Clone newsletter 3 "Changelog broadcast (template -- clone per release)".
+3. Edit the clone: swap title, one-line summary, hero image src (host a
+   screenshot), and the top 4-5 "New" bullets. Keep segment 6 + topic 1.
+4. Test-send to pablo@proliferate.com (real Track API send, see Render gotchas --
+   not /emails/test).
+5. Approve and send.
 
 A sent newsletter cannot be re-sent -- clone it. (This bit the 2026-06-16
 blast.)
+
+---
+
+## Render gotchas (learned the hard way, 2026-07-05/06)
+
+Test-sending in Customer.io is a minefield; three separate endpoints look like
+they send and do not.
+
+- **`/verify/email` validates, it does not deliver.** It returns 204 and creates
+  no delivery record. Two agent runs reported "5 sent" against it while the inbox
+  stayed empty. Same trap for the UI-oriented `/emails/test`.
+- **The only reliable delivering path is the Track API** `POST /v1/send/email`
+  (CLI: `cio send email --environment-id 219585 --to ... --from ... --subject ...
+  --body ...`). It returns a `delivery_id`.
+- **Deliveries endpoint is the only ground truth.** After any send, confirm with
+  `GET /v1/environments/219585/deliveries` filtered to the recipient and check
+  for a new record in state sent/delivered. Do not trust the dashboard state
+  field (it called the live transactional welcome "draft") or the metrics
+  endpoint (it lags badly).
+- **Liquid only renders against an identified profile.** A transactional send
+  with anonymous sample data prints `{{customer.first_name | default: "there"}}`
+  literally. Bind the send to a real profile (identifiers `{"email": ...}` on a
+  profile that has the attribute) so `customer.*` resolves. This is a
+  test-harness artifact only -- live campaigns always target real profiles.
+- **Double unsubscribe.** A template body with its own unsubscribe footer, paired
+  with a layout that also appends one, renders two links. Fixed by pairing
+  footer-carrying templates with the footer-less layout 2. Always confirm exactly
+  one `{% unsubscribe_url %}` in the final (body + layout) render, and always use
+  the Liquid TAG form `{% unsubscribe_url %}`, never the variable `{{ ... }}`.
 
 ---
 
