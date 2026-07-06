@@ -1,4 +1,4 @@
-s# Contract Crate
+# Contract Crate
 
 `anyharness-contract` is the transport schema crate for AnyHarness.
 
