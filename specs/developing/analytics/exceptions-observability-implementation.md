@@ -513,21 +513,45 @@ therefore requires a hosted build — steps documented in the PR body.
   `/ecs/proliferate-web`, `/ecs/proliferate-staging` — 30-day retention, ECS Container
   Insights on (`server/infra/main.tf`).
 
-### Pending (human login required — blocks issue-autofix ingestion)
+- **AWS Managed Grafana** (decided 2026-07-06, replacing an aborted Grafana Cloud
+  attempt that landed on a personal Gmail): workspace **`proliferate-ops`**
+  (`g-e532d030d8`, us-east-1, Grafana 10.4, SERVICE_MANAGED, workspace role
+  `proliferate-grafana-workspace` with `CloudWatchReadOnlyAccess`). Provisioned 100%
+  headless via `aws grafana` CLI + workspace service-account token against the Grafana
+  HTTP API — no browser, no non-AWS account:
+  - CloudWatch data source (uid `cfrbuwtvlfsowb`, default region us-east-1).
+  - Dashboard **"Proliferate Ops"**
+    (`/d/proliferate-ops/proliferate-ops`, folder "Ops"), 6 panels: error-log rate by
+    service, `CRITICAL_FAILURE` count, p95 ALB latency, 5xx rate, ECS CPU/mem, live
+    error tail (org/user fields). Verified against live prod data at provision time
+    (p95 ~21ms, 72 datapoints; log panels execute clean).
+  - Discovered prod infra: ALB `proliferate-prod-alb`
+    (`app/proliferate-prod-alb/785b2edd521cc351`); ECS `proliferate-production`
+    (service `proliferate-server`) + `proliferate-prod` (`proliferate-prod-server`,
+    `proliferate-prod-litellm`).
+  - Alerting: contact point `slack-alerts` (uid `bfrbv7kxb1hxcd`) → #alerts webhook,
+    set as default notification policy route; rules: ALB 5xx>10/5m (`bfrbv8roir474e`),
+    p95>5s/10m (`ffrbv99mqhgjkc`), ECS CPU>90%/15m (`bfrbv9r4945xcd`). Slack test
+    delivered via the alertmanager test API.
 
-- **Grafana Cloud**: free-tier stack `https://pablosfsanchez.grafana.net` created via
-  Google SSO on the personal Gmail (the proliferate.com Workspace blocks third-party
-  OAuth). First login gated by reCAPTCHA. Remaining once through: CloudWatch data
-  source → "Proliferate Ops" dashboard (6 panels: error rate by service,
-  `CRITICAL_FAILURE` count, p95 latency, 5xx rate, ECS CPU/mem, live error tail
-  filterable by org/user) → `slack-alerts` contact point → alert rules (5xx>10/5m,
-  p95>5s/10m blanket, ECS CPU>90%/15m).
-- **Sentry**: needs a real login to org `proliferate` (browser had a non-member account).
-  Remaining: recon whether a `proliferate-server` project exists at all — repo variables
-  carry DSNs only for desktop/anyharness/web, and `.env.production.example` ships
-  `SENTRY_DSN=` empty, so **prod server events may currently go nowhere**; create the
-  project + wire DSN if missing (see `sentry-setup-runbook.md`); alert rules: new fatal
-  (`critical_failure=true`) issue → Slack, blanket p95>5s transaction alert → Slack.
+### Pending (blocks issue-autofix ingestion)
+
+- **Sentry** — needs auth from Pablo (org token with `project:admin` + `alerts:write`,
+  or a browser login; note `sentry-cli` does not create projects/alert rules — this is
+  plain REST API work once a token exists). Then: recon whether a `proliferate-server`
+  project exists at all — repo variables carry DSNs only for desktop/anyharness/web, and
+  `.env.production.example` ships `SENTRY_DSN=` empty, so **prod server events may
+  currently go nowhere**; create the project + wire DSN if missing (see
+  `sentry-setup-runbook.md`); alert rules: new fatal (`critical_failure=true`) issue →
+  Slack, blanket p95>5s transaction alert → Slack.
+- **AMG UI login** — headless provisioning/alerting needs no login, but viewing the
+  dashboard in a browser requires IAM Identity Center (AWS Org `o-g9dbwbi9up` created
+  2026-07-06; the first Identity Center instance must be enabled once in the console —
+  the management account cannot `create-instance` via CLI) or SAML.
+- **Cleanup owed** — delete the abandoned Grafana Cloud stack `pablosfsanchez`
+  (grafana.com portal, Google SSO on the personal Gmail; nothing was ever configured in
+  it). The interim IAM user `grafana-cloudwatch-readonly` and its keys are already
+  deleted.
 
 ## 8. End-to-end: what happens when something breaks
 
@@ -571,8 +595,9 @@ as one opaque transaction).
 
 - `organization_id` column on `cloud_sandbox` (fixes the multi-org first-membership wart, §4.2).
 - Desktop-native org tag (needs Tauri IPC, §4.4).
-- Grafana stack ownership: currently on a personal Gmail account — migrate to an
-  org-owned account before using it as a design-partner reference.
+- AMG service-account token rotation: the provisioning token expires after 7 days by
+  design; mint fresh ones via `aws grafana create-workspace-service-account-token` as
+  needed.
 - Latency instrumentation for the accepted blind spots, if/when they bite.
 - E2B log shipping — explicitly not built; revisit only if live-attach investigation
   (issue-autofix §5.2) proves insufficient for post-mortem debugging of dead sandboxes.
