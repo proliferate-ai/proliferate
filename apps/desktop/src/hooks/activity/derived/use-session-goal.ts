@@ -92,6 +92,7 @@ export function useSessionGoalBarModel(): SessionGoalBarModel | null {
   if (
     barState.kind === "result"
     && goal
+    && !composing
     && dismissedResultKey === goalResultDismissKey(goal.status, goal.updatedAtMs)
   ) {
     return null;
