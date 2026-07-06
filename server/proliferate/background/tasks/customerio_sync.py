@@ -102,11 +102,7 @@ async def _run_engagement_sync() -> None:
 
     while True:
         async with async_session_factory() as db:
-            query = (
-                select(User.id, User.email)
-                .order_by(User.id)
-                .limit(PAGE_SIZE)
-            )
+            query = select(User.id, User.email).order_by(User.id).limit(PAGE_SIZE)
             if last_id is not None:
                 query = query.where(User.id > last_id)
 

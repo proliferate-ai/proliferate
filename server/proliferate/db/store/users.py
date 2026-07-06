@@ -114,8 +114,6 @@ async def update_user_github_profile(
     return user
 
 
-
-
 async def load_user_with_oauth_accounts_by_id(
     db: AsyncSession,
     user_id: UUID,
