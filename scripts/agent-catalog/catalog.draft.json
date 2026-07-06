@@ -479,7 +479,7 @@
                 "anthropic-oauth"
               ]
             },
-            "defaultVisible": false,
+            "defaultVisible": true,
             "controls": {
               "mode": {
                 "values": [

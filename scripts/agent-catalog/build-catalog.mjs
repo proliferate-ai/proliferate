@@ -139,10 +139,13 @@ const CONTROL_MAPPINGS = {
 // the probe can prove a model launches.
 const MODEL_VISIBILITY_OPT_OUTS = {
   claude: [
-    // bare-direct current-gen duplicates of us.anthropic.* Bedrock entries
-    "claude-fable-5",
-    "claude-opus-4-8",
-    // global-region duplicate of us.anthropic.claude-fable-5 (bedrock)
+    // Only opt out GENUINE same-context duplicates. The bare current-gen ids
+    // (claude-fable-5, claude-opus-4-8) are oauth/api-only — never gateway-
+    // reachable — so they are NOT duplicates of the us.anthropic.* Bedrock
+    // entries and must stay visible on the native/api surfaces (that's the
+    // only form of those models an OAuth/API login can use). Only the
+    // global-region id duplicates its us.anthropic.* sibling WITHIN the
+    // bedrock context, so it alone stays opted out.
     "global.anthropic.claude-fable-5",
   ],
   grok: [
