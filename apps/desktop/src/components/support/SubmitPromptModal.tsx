@@ -3,7 +3,6 @@ import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useSupportModalState } from "@/hooks/support/facade/use-support-modal-state";
 import { useSupportOutreachEmail } from "@/hooks/support/facade/use-support-outreach-email";
-import { SupportCheckboxRow } from "./SupportCheckboxRow";
 import { SupportCreditField } from "./SupportCreditField";
 import { SupportModalFooter } from "./SupportModalFooter";
 
@@ -20,11 +19,9 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
     handleSend,
     isSubmitting,
     message,
-    notifyMe,
     setCreditConsent,
     setCreditName,
     setMessage,
-    setNotifyMe,
     stagingError,
   } = useSupportModalState({ kind: "feature", onClose });
   const outreach = useSupportOutreachEmail();
@@ -60,11 +57,6 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
             setCreditConsent={setCreditConsent}
             creditName={creditName}
             setCreditName={setCreditName}
-          />
-          <SupportCheckboxRow
-            checked={notifyMe}
-            onCheckedChange={setNotifyMe}
-            label="Let me know when you merge this"
           />
         </div>
 

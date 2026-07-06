@@ -82,6 +82,16 @@ async def notify_support_report(
 ) -> None:
     webhook_url = settings.support_slack_webhook_url.strip()
     if not webhook_url:
+        # Fail loudly: a completed report that no one gets pinged about is a
+        # silent hole in the support loop. This is a misconfiguration, not a
+        # normal state — surface it (ERROR → Sentry via LoggingIntegration)
+        # rather than returning quietly.
+        logger.error(
+            "Support report %s completed but SUPPORT_SLACK_WEBHOOK_URL is unset — "
+            "no Slack notification sent. Set the webhook secret in this environment.",
+            report_id,
+            extra={"support_report_id": report_id, "urgent": urgent},
+        )
         return
 
     plan = build_support_report_plan(
@@ -114,7 +124,18 @@ async def notify_support_report(
             blocks=blocks,
         )
     except SlackWebhookError as exc:
-        logger.warning("Support report Slack notification failed: %s", exc)
+        # Fail loudly to US, not to the reporter: their report is already
+        # persisted + uploaded and this runs before the request's commit, so
+        # re-raising would roll back a successful submission and 500 the user.
+        # Log at ERROR with exc_info so it reaches Sentry (LoggingIntegration)
+        # — never downgrade to warning — but let the request succeed.
+        logger.error(
+            "Support report %s Slack notification failed to deliver: %s",
+            report_id,
+            exc,
+            exc_info=True,
+            extra={"support_report_id": report_id, "urgent": urgent},
+        )
 
 
 def _support_report_internal_url(report_id: str) -> str | None:

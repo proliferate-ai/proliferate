@@ -92,7 +92,6 @@ export function SendFeedbackModal({ onClose }: SendFeedbackModalProps) {
             checked={notifyMe}
             onCheckedChange={setNotifyMe}
             label="Let me know when you fix this"
-            helper="We'll send you an update within a day."
           />
           <SupportCreditField
             label="Credit me"
