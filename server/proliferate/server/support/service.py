@@ -177,9 +177,9 @@ async def create_support_report(
             public_content_consent=False,
             kind=body.kind,
             credit_consent=body.credit_consent,
-            credit_name=(
-                body.credit_name if body.kind == "feature" and body.credit_consent else None
-            ),
+            # Credit consent is available on both the bug and prompt modals
+            # (previously prompt-only); gate on consent alone.
+            credit_name=(body.credit_name if body.credit_consent else None),
             urgent=body.urgent,
             notify_me=body.notify_me,
             request_id=get_request_id(),

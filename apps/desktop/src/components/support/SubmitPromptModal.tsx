@@ -1,10 +1,11 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Checkbox } from "@proliferate/ui/primitives/Checkbox";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { useSupportModalState } from "@/hooks/support/facade/use-support-modal-state";
+import { useSupportOutreachEmail } from "@/hooks/support/facade/use-support-outreach-email";
+import { SupportCheckboxRow } from "./SupportCheckboxRow";
+import { SupportCreditField } from "./SupportCreditField";
+import { SupportModalFooter } from "./SupportModalFooter";
 
 interface SubmitPromptModalProps {
   onClose: () => void;
@@ -19,11 +20,14 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
     handleSend,
     isSubmitting,
     message,
+    notifyMe,
     setCreditConsent,
     setCreditName,
     setMessage,
+    setNotifyMe,
     stagingError,
   } = useSupportModalState({ kind: "feature", onClose });
+  const outreach = useSupportOutreachEmail();
 
   return (
     <ModalShell
@@ -49,34 +53,26 @@ export function SubmitPromptModal({ onClose }: SubmitPromptModalProps) {
           />
         </section>
 
-        <div className="space-y-2">
-          <Label className="mb-0 flex cursor-pointer items-center gap-3 rounded-lg border border-border/70 bg-surface-control/60 px-3 py-2.5 text-ui text-foreground">
-            <Checkbox
-              checked={creditConsent}
-              onCheckedChange={(checked) => setCreditConsent(checked === true)}
-            />
-            <span className="font-medium text-ui">Credit me if this merges</span>
-          </Label>
-
-          <div
-            className="grid transition-[grid-template-rows] duration-200 ease-out"
-            style={{ gridTemplateRows: creditConsent ? "1fr" : "0fr" }}
-          >
-            <div className="overflow-hidden p-px">
-              <Input
-                value={creditName}
-                onChange={(event) => setCreditName(event.target.value)}
-                placeholder="Your name or @handle"
-                aria-label="Name to credit"
-                className="mt-1"
-              />
-            </div>
-          </div>
+        <div className="space-y-0.5">
+          <SupportCreditField
+            label="Credit me if this merges"
+            creditConsent={creditConsent}
+            setCreditConsent={setCreditConsent}
+            creditName={creditName}
+            setCreditName={setCreditName}
+          />
+          <SupportCheckboxRow
+            checked={notifyMe}
+            onCheckedChange={setNotifyMe}
+            label="Let me know when you merge this"
+          />
         </div>
 
         {stagingError ? (
           <p className="text-ui-sm text-destructive">{stagingError}</p>
         ) : null}
+
+        <SupportModalFooter outreach={outreach} />
 
         <div className="flex items-center justify-end gap-2 pt-1">
           <Button type="button" variant="ghost" onClick={handleCancel}>

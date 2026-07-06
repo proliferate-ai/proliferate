@@ -5,6 +5,10 @@ import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import { CloudUpload, FileText, X } from "@proliferate/ui/icons";
 import { useSupportModalState, type StagedAttachment } from "@/hooks/support/facade/use-support-modal-state";
+import { useSupportOutreachEmail } from "@/hooks/support/facade/use-support-outreach-email";
+import { SupportCheckboxRow } from "./SupportCheckboxRow";
+import { SupportCreditField } from "./SupportCreditField";
+import { SupportModalFooter } from "./SupportModalFooter";
 
 interface SendFeedbackModalProps {
   onClose: () => void;
@@ -15,18 +19,29 @@ export function SendFeedbackModal({ onClose }: SendFeedbackModalProps) {
   const {
     attachments,
     canSend,
+    creditConsent,
+    creditName,
     handleAttachmentDragOver,
     handleAttachmentDrop,
     handleAttachmentInputChange,
     handleAttachmentPaste,
     handleCancel,
     handleSend,
+    includeLogs,
     isSubmitting,
     message,
+    notifyMe,
     removeAttachment,
+    setCreditConsent,
+    setCreditName,
+    setIncludeLogs,
     setMessage,
+    setNotifyMe,
+    setUrgent,
     stagingError,
+    urgent,
   } = useSupportModalState({ kind: "bug", onClose });
+  const outreach = useSupportOutreachEmail();
 
   return (
     <ModalShell
@@ -66,23 +81,47 @@ export function SendFeedbackModal({ onClose }: SendFeedbackModalProps) {
           onInputChange={handleAttachmentInputChange}
         />
 
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <p className="text-ui text-muted-foreground">
-            We'll get back to you on this by tomorrow.
-          </p>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="ghost" onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={!canSend}
-              loading={isSubmitting}
-              onClick={() => { void handleSend(); }}
-            >
-              Send
-            </Button>
-          </div>
+        <div className="space-y-0.5">
+          <SupportCheckboxRow
+            checked={urgent}
+            onCheckedChange={setUrgent}
+            label="This is urgent"
+            helper="We'll send you an email by tomorrow."
+          />
+          <SupportCheckboxRow
+            checked={notifyMe}
+            onCheckedChange={setNotifyMe}
+            label="Let me know when you fix this"
+            helper="We'll send you an update within a day."
+          />
+          <SupportCreditField
+            label="Credit me"
+            creditConsent={creditConsent}
+            setCreditConsent={setCreditConsent}
+            creditName={creditName}
+            setCreditName={setCreditName}
+          />
+          <SupportCheckboxRow
+            checked={includeLogs}
+            onCheckedChange={setIncludeLogs}
+            label="Include app logs"
+          />
+        </div>
+
+        <SupportModalFooter outreach={outreach} />
+
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <Button type="button" variant="ghost" onClick={handleCancel}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!canSend}
+            loading={isSubmitting}
+            onClick={() => { void handleSend(); }}
+          >
+            Send
+          </Button>
         </div>
       </div>
     </ModalShell>
