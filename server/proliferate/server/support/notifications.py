@@ -49,7 +49,7 @@ async def send_support_message_notification(
         request_id=get_request_id(),
     )
     blocks = build_mrkdwn_message_blocks(
-        title="*New support message*",
+        title=plan.title,
         body=plan.message,
         fields=tuple(SlackMessageField(field.label, field.value) for field in plan.fields),
     )
@@ -76,6 +76,8 @@ async def notify_support_report(
     kind: str = "bug",
     credit_consent: bool = False,
     credit_name: str | None = None,
+    urgent: bool = False,
+    notify_me: bool = False,
     correlation: dict[str, object] | None,
 ) -> None:
     webhook_url = settings.support_slack_webhook_url.strip()
@@ -93,12 +95,14 @@ async def notify_support_report(
         kind=kind,
         credit_consent=credit_consent,
         credit_name=credit_name,
+        urgent=urgent,
+        notify_me=notify_me,
         context=context,
         correlation=correlation,
         request_id=get_request_id(),
     )
     blocks = build_mrkdwn_message_blocks(
-        title="*New support report*",
+        title=plan.title,
         body=plan.message,
         fields=tuple(SlackMessageField(field.label, field.value) for field in plan.fields),
     )

@@ -30,6 +30,8 @@ class SupportReportLike(Protocol):
     object_manifest: dict[str, object]
     expected_uploads: dict[str, object]
     public_content_consent: bool
+    urgent: bool
+    notify_me: bool
 
 
 class AuthorizedCloudRefLike(Protocol):
@@ -239,6 +241,8 @@ def support_request_record(
         },
         "message": message.strip(),
         "publicContentConsent": report.public_content_consent,
+        "urgent": report.urgent,
+        "notifyMe": report.notify_me,
         "context": report.source_context,
         "scope": scope,
         "workspaceRefs": list(report.workspace_refs),
