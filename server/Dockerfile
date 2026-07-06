@@ -9,6 +9,10 @@ COPY server/pyproject.toml ./
 COPY server/proliferate/ proliferate/
 COPY server/alembic/ alembic/
 COPY server/alembic.ini .
+# Operational scripts (e.g. the analytics ingestion job run by the
+# proliferate-analytics-ingest ECS scheduled task). Not part of the installed
+# package; invoked directly as `python /app/scripts/<name>.py`.
+COPY server/scripts/ scripts/
 COPY catalogs/ catalogs/
 # Copied so the server can report a real version even when built without the
 # version build args below (the app walks up to find a VERSION file).

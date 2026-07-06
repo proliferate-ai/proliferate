@@ -18,7 +18,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Users:Update Current User */
+        patch: operations["users_update_current_user_users_me_patch"];
         trace?: never;
     };
     "/auth/desktop/methods": {
@@ -1931,6 +1932,91 @@ export interface paths {
         put?: never;
         /** Generate Workspace Name Endpoint */
         post: operations["generate_workspace_name_endpoint_v1_ai_magic_workspace_names_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Support Message Endpoint */
+        post: operations["send_support_message_endpoint_v1_support_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/report-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Upload Endpoint */
+        post: operations["create_support_report_upload_endpoint_v1_support_report_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Endpoint */
+        post: operations["create_support_report_endpoint_v1_support_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports/{report_id}/upload-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Upload Targets Endpoint */
+        post: operations["create_support_report_upload_targets_endpoint_v1_support_reports__report_id__upload_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports/{report_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Support Report Upload Endpoint */
+        post: operations["complete_support_report_upload_endpoint_v1_support_reports__report_id__complete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4697,6 +4783,18 @@ export interface components {
             /** Probillingenabled */
             proBillingEnabled: boolean;
         };
+        /**
+         * ProfileUpdateRequest
+         * @description Editable fields on the authenticated user's own profile.
+         *
+         *     ``outreach_email`` is an optional override address for support/outreach
+         *     follow-up. Sending ``null`` or an empty/whitespace string clears it (falls
+         *     back to the account email); any other value must look like an email.
+         */
+        ProfileUpdateRequest: {
+            /** Outreach Email */
+            outreach_email?: string | null;
+        };
         /** PutCloudSecretEnvVarRequest */
         PutCloudSecretEnvVarRequest: {
             /** Value */
@@ -4962,6 +5060,323 @@ export interface components {
             /** Livemode */
             livemode?: boolean | null;
         };
+        /** SupportMessageContext */
+        SupportMessageContext: {
+            /**
+             * Source
+             * @default sidebar
+             * @enum {string}
+             */
+            source: "sidebar" | "home" | "settings" | "cloud_gated";
+            /**
+             * Intent
+             * @default general
+             * @enum {string}
+             */
+            intent: "general" | "unlimited_cloud" | "team_features";
+            /** Pathname */
+            pathname?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Workspacename */
+            workspaceName?: string | null;
+            /** Workspacelocation */
+            workspaceLocation?: ("local" | "cloud") | null;
+        };
+        /** SupportMessageRequest */
+        SupportMessageRequest: {
+            /** Message */
+            message: string;
+            context?: components["schemas"]["SupportMessageContext"] | null;
+        };
+        /** SupportMessageResponse */
+        SupportMessageResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
+        /** SupportReportAttachmentUploadTarget */
+        SupportReportAttachmentUploadTarget: {
+            /** Objectkey */
+            objectKey: string;
+            /** Puturl */
+            putUrl: string;
+            /** Contenttype */
+            contentType: string;
+            /** Maxsizebytes */
+            maxSizeBytes: number;
+            /** Expiresinseconds */
+            expiresInSeconds: number;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Clientfileid */
+            clientFileId: string;
+        };
+        /** SupportReportCompleteRequest */
+        SupportReportCompleteRequest: {
+            diagnostics?: components["schemas"]["SupportReportCompletedObject"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportCompletedObject"][];
+            /** Packagemanifest */
+            packageManifest?: {
+                [key: string]: unknown;
+            };
+        };
+        /** SupportReportCompleteResponse */
+        SupportReportCompleteResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Reportid */
+            reportId: string;
+        };
+        /** SupportReportCompletedObject */
+        SupportReportCompletedObject: {
+            /** Objectkey */
+            objectKey: string;
+            /** Sha256 */
+            sha256: string;
+            /** Sizebytes */
+            sizeBytes: number;
+        };
+        /** SupportReportCreateRequest */
+        SupportReportCreateRequest: {
+            /** Clientjobid */
+            clientJobId: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Sourcesurface
+             * @default desktop
+             * @enum {string}
+             */
+            sourceSurface: "desktop" | "web" | "mobile" | "cloud_api";
+            context?: components["schemas"]["SupportMessageContext"] | null;
+            scope: components["schemas"]["SupportReportWorkspaceScope"];
+            /** Workspacerefs */
+            workspaceRefs?: components["schemas"]["SupportReportWorkspaceReference"][];
+            telemetryRefs?: components["schemas"]["SupportReportTelemetryReferences"] | null;
+            expectedClientUploads?: components["schemas"]["SupportReportExpectedClientUploads"];
+            /** Publiccontentconsent */
+            publicContentConsent?: boolean | null;
+            /**
+             * Kind
+             * @default bug
+             * @enum {string}
+             */
+            kind: "bug" | "feature";
+            /**
+             * Creditconsent
+             * @default false
+             */
+            creditConsent: boolean;
+            /** Creditname */
+            creditName?: string | null;
+            /**
+             * Urgent
+             * @default false
+             */
+            urgent: boolean;
+            /**
+             * Notifyme
+             * @default false
+             */
+            notifyMe: boolean;
+        };
+        /** SupportReportCreateResponse */
+        SupportReportCreateResponse: {
+            /** Reportid */
+            reportId: string;
+            /** Clientjobid */
+            clientJobId: string;
+            /** Status */
+            status: string;
+            serverCorrelation: components["schemas"]["SupportReportServerCorrelation"];
+            /** Clouddiagnosticsstatus */
+            cloudDiagnosticsStatus: string;
+        };
+        /** SupportReportDiagnosticsUpload */
+        SupportReportDiagnosticsUpload: {
+            /**
+             * Contenttype
+             * @default application/json
+             */
+            contentType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** SupportReportExpectedClientUploads */
+        SupportReportExpectedClientUploads: {
+            /**
+             * Diagnostics
+             * @default true
+             */
+            diagnostics: boolean;
+            /**
+             * Attachmentcount
+             * @default 0
+             */
+            attachmentCount: number;
+        };
+        /** SupportReportServerCorrelation */
+        SupportReportServerCorrelation: {
+            /** Reportid */
+            reportId: string;
+            /** Requestid */
+            requestId?: string | null;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Primaryorganizationid */
+            primaryOrganizationId?: string | null;
+            /** Primarytenantid */
+            primaryTenantId: string;
+            /** Tenantids */
+            tenantIds?: string[];
+            /** Cloudworkspaceids */
+            cloudWorkspaceIds?: string[];
+            /** Cloudtargetids */
+            cloudTargetIds?: string[];
+            /** Anyharnessworkspaceids */
+            anyharnessWorkspaceIds?: string[];
+            /** Sessionids */
+            sessionIds?: string[];
+        };
+        /** SupportReportTelemetryReferences */
+        SupportReportTelemetryReferences: {
+            /** Posthogdistinctid */
+            posthogDistinctId?: string | null;
+            /** Posthogsessionid */
+            posthogSessionId?: string | null;
+            /** Sentryeventids */
+            sentryEventIds?: string[];
+        };
+        /** SupportReportUploadFile */
+        SupportReportUploadFile: {
+            /** Clientfileid */
+            clientFileId: string;
+            /** Filename */
+            fileName: string;
+            /**
+             * Contenttype
+             * @default application/octet-stream
+             */
+            contentType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** SupportReportUploadRequest */
+        SupportReportUploadRequest: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            context?: components["schemas"]["SupportMessageContext"] | null;
+            scope: components["schemas"]["SupportReportWorkspaceScope"];
+            diagnostics?: components["schemas"]["SupportReportDiagnosticsUpload"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportUploadFile"][];
+            /** Publiccontentconsent */
+            publicContentConsent?: boolean | null;
+            /**
+             * Kind
+             * @default bug
+             * @enum {string}
+             */
+            kind: "bug" | "feature";
+            /**
+             * Creditconsent
+             * @default false
+             */
+            creditConsent: boolean;
+            /** Creditname */
+            creditName?: string | null;
+        };
+        /** SupportReportUploadResponse */
+        SupportReportUploadResponse: {
+            /** Reportid */
+            reportId: string;
+            diagnostics?: components["schemas"]["SupportReportUploadTarget"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportAttachmentUploadTarget"][];
+        };
+        /** SupportReportUploadTarget */
+        SupportReportUploadTarget: {
+            /** Objectkey */
+            objectKey: string;
+            /** Puturl */
+            putUrl: string;
+            /** Contenttype */
+            contentType: string;
+            /** Maxsizebytes */
+            maxSizeBytes: number;
+            /** Expiresinseconds */
+            expiresInSeconds: number;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+        };
+        /** SupportReportUploadTargetsRequest */
+        SupportReportUploadTargetsRequest: {
+            diagnostics?: components["schemas"]["SupportReportDiagnosticsUpload"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportUploadFile"][];
+        };
+        /** SupportReportWorkspaceReference */
+        SupportReportWorkspaceReference: {
+            /** Id */
+            id: string;
+            /**
+             * Location
+             * @enum {string}
+             */
+            location: "local" | "cloud";
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Cloudtargetid */
+            cloudTargetId?: string | null;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Exposureid */
+            exposureId?: string | null;
+            /** Materializationid */
+            materializationId?: string | null;
+            /** Sessionids */
+            sessionIds?: string[];
+            /** Status */
+            status?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+            /** Sandboxtype */
+            sandboxType?: string | null;
+        };
+        /** SupportReportWorkspaceScope */
+        SupportReportWorkspaceScope: {
+            /**
+             * Kind
+             * @default most_recent_workspace
+             * @enum {string}
+             */
+            kind: "most_recent_workspace" | "choose_workspace" | "app_only";
+            /** Workspaceids */
+            workspaceIds?: string[];
+        };
         /** TeamCheckoutIntentResponse */
         TeamCheckoutIntentResponse: {
             /** Id */
@@ -5084,6 +5499,8 @@ export interface components {
             github_login?: string | null;
             /** Avatar Url */
             avatar_url?: string | null;
+            /** Outreach Email */
+            outreach_email?: string | null;
             /** @default user */
             role: components["schemas"]["UserRole"];
         };
@@ -5464,6 +5881,44 @@ export interface operations {
             };
             /** @description Missing token or inactive user. */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    users_update_current_user_users_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Missing token or inactive user. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description outreach_email is not a valid email address. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9415,6 +9870,175 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerateWorkspaceNameResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_support_message_endpoint_v1_support_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_upload_endpoint_v1_support_report_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_endpoint_v1_support_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_upload_targets_endpoint_v1_support_reports__report_id__upload_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportUploadTargetsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_support_report_upload_endpoint_v1_support_reports__report_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportCompleteResponse"];
                 };
             };
             /** @description Validation Error */

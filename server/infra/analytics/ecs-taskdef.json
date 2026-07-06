@@ -1,0 +1,32 @@
+{
+  "family": "proliferate-analytics-ingest",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::157466816238:role/proliferate-prod-ecs-execution",
+  "taskRoleArn": "arn:aws:iam::157466816238:role/proliferate-prod-analytics-ingest-task",
+  "containerDefinitions": [
+    {
+      "name": "ingest",
+      "image": "157466816238.dkr.ecr.us-east-1.amazonaws.com/proliferate-server:latest",
+      "essential": true,
+      "command": ["python", "/app/scripts/analytics_ingest.py"],
+      "secrets": [
+        {"name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/database-5plrjD:DATABASE_URL::"},
+        {"name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/server-app-Qv4HKH:JWT_SECRET::"},
+        {"name": "STRIPE_SECRET_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/server-app-Qv4HKH:STRIPE_SECRET_KEY::"},
+        {"name": "E2B_SESSION_COOKIE", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/analytics-ingest-lTDQSk:E2B_SESSION_COOKIE::"},
+        {"name": "E2B_TEAM_SLUG", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/analytics-ingest-lTDQSk:E2B_TEAM_SLUG::"}
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/proliferate-analytics-ingest",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ingest"
+        }
+      }
+    }
+  ]
+}

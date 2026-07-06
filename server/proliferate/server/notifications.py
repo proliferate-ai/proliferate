@@ -340,12 +340,14 @@ def _send_slack_task_to_celery(
     task_id: str | None,
 ) -> None:
     from proliferate.background.celery_app import celery_app
+    from proliferate.middleware.request_context import capture_correlation_context
 
     celery_app.send_task(
         NOTIFICATIONS_SEND_SLACK_TASK,
         args=(payload,),
         queue=NOTIFICATIONS_QUEUE,
         task_id=task_id,
+        headers=capture_correlation_context() or None,
     )
 
 

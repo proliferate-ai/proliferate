@@ -35,13 +35,15 @@ export function buildCreateReportRequest(
     workspaceRefs: workspaceRefsForJob(job),
     telemetryRefs: getSupportReportTelemetryRefs(),
     expectedClientUploads: {
-      diagnostics: true,
+      diagnostics: job.includeLogs !== false,
       attachmentCount,
     },
     publicContentConsent: false,
     kind: job.kind ?? "bug",
     creditConsent: job.creditConsent ?? false,
     creditName: job.creditName ?? null,
+    urgent: job.urgent ?? false,
+    notifyMe: job.notifyMe ?? false,
   };
 }
 
@@ -88,7 +90,7 @@ export function trackSupportReportSubmitted(
     source_surface: "desktop",
     scope_kind: job.scope.kind,
     public_content_consent: job.publicContentConsent !== false,
-    diagnostics_included: true,
+    diagnostics_included: job.includeLogs !== false,
     attachment_count: attachmentCount,
     workspace_count: workspaceIds.length,
     cloud_workspace_count: correlation.cloudWorkspaceIds.length,
@@ -157,26 +159,35 @@ export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
 export function completeRequestForUpload(input: {
   job: SupportReportJob;
   reportId: string;
-  diagnosticsObjectKey: string;
-  diagnosticsSha256: string;
-  diagnosticsBytes: number;
+  /**
+   * Diagnostics object metadata. Omitted (undefined) when the submitter turned
+   * off "Include app logs" so no diagnostics.json was uploaded for this report.
+   */
+  diagnostics?: {
+    objectKey: string;
+    sha256: string;
+    sizeBytes: number;
+  };
   generatedAt: string;
   cloudDiagnosticsStatus: unknown;
   attachments: NonNullable<SupportReportCompleteRequest["attachments"]>;
 }): SupportReportCompleteRequest {
   return {
-    diagnostics: {
-      objectKey: input.diagnosticsObjectKey,
-      sha256: input.diagnosticsSha256,
-      sizeBytes: input.diagnosticsBytes,
-    },
+    diagnostics: input.diagnostics
+      ? {
+          objectKey: input.diagnostics.objectKey,
+          sha256: input.diagnostics.sha256,
+          sizeBytes: input.diagnostics.sizeBytes,
+        }
+      : null,
     attachments: input.attachments,
     packageManifest: {
       schemaVersion: 2,
       jobId: input.job.jobId,
       reportId: input.reportId,
       generatedAt: input.generatedAt,
-      diagnosticsBytes: input.diagnosticsBytes,
+      diagnosticsBytes: input.diagnostics?.sizeBytes ?? 0,
+      diagnosticsIncluded: input.diagnostics != null,
       attachmentCount: input.attachments.length,
       cloudDiagnosticsStatus: input.cloudDiagnosticsStatus,
     },

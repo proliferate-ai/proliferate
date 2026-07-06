@@ -17,6 +17,7 @@ class UserRead(schemas.BaseUser[uuid.UUID]):
     display_name: str | None = None
     github_login: str | None = None
     avatar_url: str | None = None
+    outreach_email: str | None = None
     role: UserRole = UserRole.USER
 
 

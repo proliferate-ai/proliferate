@@ -98,6 +98,8 @@ class SupportReport(Base):
     kind: Mapped[str] = mapped_column(String(32), server_default="bug", default="bug")
     credit_consent: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
     credit_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    urgent: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    notify_me: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
     request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     complete_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     request_object_written_at: Mapped[datetime | None] = mapped_column(
