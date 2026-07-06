@@ -396,7 +396,7 @@ mod tests {
                 .native
                 .as_ref()
                 .map(|pin| pin.version.as_str()),
-            Some("2.1.181")
+            Some("2.1.201")
         );
         assert_eq!(
             claude

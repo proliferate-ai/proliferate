@@ -39,7 +39,7 @@ fn pins_surface_catalog_harness_versions() {
     assert_eq!(claude.agent_process.version, "0.44.0");
     assert_eq!(
         claude.native.as_ref().map(|pin| pin.version.as_str()),
-        Some("2.1.181")
+        Some("2.1.201")
     );
 
     // Cursor has no native pin; unknown kinds have no pins at all.
@@ -150,14 +150,15 @@ fn baseline_counts_as_a_context_when_active() {
 fn visible_models_are_the_default_visible_subset_of_available() {
     let catalog = draft_catalog();
 
-    // claude-opus-4-8 is available under oauth (trial-proven) but not
-    // defaultVisible: in models(), out of visible_models(). Fable 5 is the
-    // counter-case — trial-proven AND curation-advertised.
+    // claude-opus-4-8 and claude-fable-5 are both available under oauth
+    // (trial-proven) AND defaultVisible (curation-advertised after #955 fix).
+    // They are oauth/api-only (never gateway-reachable), so hiding them would
+    // make them inaccessible on native/api surfaces.
     let available = model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"])));
     assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
         model_ids(catalog.visible_models("claude", &contexts(&["anthropic-oauth"]))),
-        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5"]
+        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5", "claude-opus-4-8"]
     );
 }
 
