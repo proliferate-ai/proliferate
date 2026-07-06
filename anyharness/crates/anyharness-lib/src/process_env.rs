@@ -7,6 +7,9 @@ const RUNTIME_PRIVATE_ENV: &[&str] = &[
     "PROLIFERATE_TARGET_SENTRY_ENVIRONMENT",
     "PROLIFERATE_TARGET_SENTRY_RELEASE",
     "PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE",
+    "PROLIFERATE_ORG_ID",
+    "PROLIFERATE_SANDBOX_ID",
+    "PROLIFERATE_RUNTIME_ENV",
 ];
 
 pub(crate) fn remove_runtime_private_env(command: &mut tokio::process::Command) {

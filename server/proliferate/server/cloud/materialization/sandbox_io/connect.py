@@ -172,6 +172,8 @@ async def _launch_anyharness_runtime(
             build_runtime_env(
                 runtime_token,
                 anyharness_data_key=anyharness_data_key,
+                organization_id=sandbox_record.organization_id,
+                sandbox_id=provider_sandbox_id,
             ),
         ),
     )
