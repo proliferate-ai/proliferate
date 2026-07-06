@@ -35,10 +35,24 @@ from proliferate.server.automations.worker.cloud_executor_config import (
     CloudExecutorConfig,
     build_cloud_executor_config,
 )
+from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     validate_config_execution_scope,
 )
 from proliferate.utils.time import utcnow
+
+
+def _claim_correlation_fields(claim: AutomationRunClaimValue) -> dict[str, object | None]:
+    """Correlation identity for a single automation run's unit of work."""
+    return {
+        "organization_id": claim.organization_id,
+        "user_id": claim.user_id,
+        "session_id": claim.anyharness_session_id,
+        "sandbox_profile_id": claim.sandbox_profile_id,
+        "cloud_workspace_id": claim.cloud_workspace_id,
+        "cloud_target_id": claim.cloud_target_id_snapshot,
+        "anyharness_workspace_id": claim.anyharness_workspace_id,
+    }
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +95,8 @@ async def execute_cloud_automation_run(
             )
         logger.info("automation cloud executor run not claimable run_id=%s", run_id)
         return False
-    await process_cloud_automation_run(claim, config=resolved)
+    with with_correlation_context(**_claim_correlation_fields(claim)):
+        await process_cloud_automation_run(claim, config=resolved)
     return True
 
 

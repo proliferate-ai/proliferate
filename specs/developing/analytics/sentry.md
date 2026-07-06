@@ -69,6 +69,20 @@ as `id` only. Do not send email, display name, prompt text, transcript content,
 terminal output, repo names, raw file paths, request bodies, cookies, auth
 headers, or environment values.
 
+## Structured server logs
+
+`JsonLogFormatter` (`server/proliferate/utils/logging.py`) stamps two build
+identity fields on every JSON log record, computed once at
+`configure_server_logging()` time (never per-record):
+
+- `version` — from `server_version()`
+  (`server/proliferate/server/version.py`): stamped `SERVER_VERSION`, else the
+  repo `VERSION` file, else a dev sentinel.
+- `git_sha` — from the `SERVER_GIT_SHA` env when set; omitted otherwise.
+
+These are stable contract fields referenced by the Grafana dashboard and Sentry
+alert rules — do not rename. The debug/plain log format is unchanged.
+
 ## Support Correlation
 
 Server requests install a scrubbed correlation context for Sentry. The context
@@ -77,11 +91,43 @@ support report ID, cloud workspace ID, cloud target ID, sandbox IDs,
 AnyHarness workspace ID, session ID, interaction ID, command ID, worker ID, and
 slot generation when those values are known.
 
+Background work binds the same correlation context so its logs and Sentry
+events carry identity like API requests do:
+
+- Automation cloud executor binds organization / user / session / sandbox /
+  workspace / target IDs from the run claim at the start of each run
+  (`process` boundary in
+  `server/proliferate/server/automations/worker/cloud_executor.py`); the
+  scheduler loop binds `worker_id`.
+- Celery tasks use the `CorrelatedTask` base
+  (`server/proliferate/background/correlation.py`), which restores correlation
+  fields from task headers. Producers propagate them via
+  `headers=capture_correlation_context()`.
+
 `tenant_id`, `support_report_id`, and normalized cloud/runtime IDs are allowed
 as diagnostic tags for support flows even though they can be high-cardinality.
 Do not add free-form messages, raw URLs, prompts, transcript bodies, command
 payloads, provider responses, auth headers, cookies, tokens, or file contents
 to tags or context.
+
+## Critical-failure severity
+
+`report_critical(error, *, tags=None, extras=None, **context)`
+(`server/proliferate/integrations/sentry.py`) marks a clearly page-worthy
+failure. It captures to Sentry at `level="fatal"` with tag
+`critical_failure=true`, and emits `logger.exception` carrying
+`extra={"critical_failure": True, ...}` plus a `CRITICAL_FAILURE` marker in the
+message for log-based alerting. `critical_failure` is a stable contract field.
+
+Adopt it only at page-worthy sites (not ambient errors, which stay a plain
+`logger.exception`). Current call sites:
+
+- automation scheduler loop failure escalation (`automations/worker/scheduler.py`)
+- billing reconciler loop (`server/billing/reconciler.py`)
+- agent-gateway worker loops: enrollment backfill, usage import, LLM top-up
+  (`server/cloud/agent_gateway/worker.py`)
+- cloud materialization after-commit / fresh-session task failures
+  (`server/cloud/materialization/runner.py`)
 
 ## Alerts
 
