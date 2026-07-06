@@ -51,6 +51,50 @@ Development builds may keep the old manual debug exports available behind the
 legacy support dialog. Production UI must not expose raw export names such as
 active session JSON, workspace JSON, debug bundle, or investigation JSON.
 
+### In-app feedback and prompt modals
+
+Desktop also exposes two lightweight in-app modals that submit through the same
+report lifecycle: a bug modal ("Send feedback") and a prompt modal ("Submit a
+prompt"). Both share one modal-state hook, build the same `SupportReportJob`,
+and reuse the upload queue.
+
+The bug modal, below the message textarea and attachment zone, shows in order:
+
+- `This is urgent` — sets the report's `urgent` capture flag. When checked it
+  reveals the helper line "We'll send you an email by tomorrow."
+- `Let me know when you fix this` — sets `notifyMe`. When checked it reveals
+  "We'll send you an update within a day."
+- `Credit me` — reveals a name input; when consented the name is sent as
+  `creditName` (same interaction as the prompt modal's credit field).
+- `Include app logs` — defaults ON. When turned OFF, the report's
+  `expectedClientUploads.diagnostics` is `false` and the upload pipeline skips
+  collecting and uploading `diagnostics.json` for that job. If logs are off and
+  there are no attachments, the client completes the report directly with no
+  upload-target manifest (the diagnostics=false / attachmentCount=0 path).
+
+The prompt modal keeps its `Credit me if this merges` field and adds
+`Let me know when you merge this`, which sets `notifyMe`. Prompt submissions
+never set `urgent` and always include diagnostics (there is no logs toggle on
+that surface).
+
+Both modals render a muted footer above the action buttons reading
+"Updates go to {email} · change", where `{email}` is the user's
+`outreach_email` override when set, otherwise their account email (from
+`GET /v1/users/me`). "change" swaps to an inline email editor whose save
+PATCHes `/v1/users/me` `outreach_email` (account-wide, not per-report); an empty
+value clears the override and an invalid address surfaces the server's 422 as an
+inline error.
+
+`urgent`, `notifyMe`, and the logs choice flow from the modal state through the
+`SupportReportJob` into `buildCreateReportRequest`. They are optional on the
+persisted job with defaults (`urgent`/`notifyMe` false, logs included) so jobs
+queued before this change still upload unchanged.
+
+Server-side, `credit_name` is persisted whenever `credit_consent` is true,
+regardless of report `kind` — the bug modal's `Credit me` field needed the
+same persistence the prompt modal already had (previously gated to
+`kind == "feature"` only).
+
 ## Diagnostics
 
 Desktop diagnostics are collected outside the support webview so closing the

@@ -18,6 +18,7 @@ export * from "./client/organizations.js";
 export * from "./client/repositories.js";
 export * from "./client/repos.js";
 export * from "./client/support.js";
+export * from "./client/users.js";
 export * from "./client/timing.js";
 export * from "./client/workspaces.js";
 export * from "./client/worktree-policy.js";

@@ -38,6 +38,9 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
   const [message, setMessage] = useState("");
   const [creditConsent, setCreditConsentRaw] = useState(false);
   const [creditName, setCreditName] = useState("");
+  const [urgent, setUrgent] = useState(false);
+  const [notifyMe, setNotifyMe] = useState(false);
+  const [includeLogs, setIncludeLogs] = useState(true);
   const [attachments, setAttachments] = useState<StagedAttachment[]>([]);
 
   function setCreditConsent(next: boolean) {
@@ -148,8 +151,14 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
       },
       publicContentConsent: false,
       kind,
-      creditConsent: kind === "feature" ? creditConsent : false,
-      creditName: kind === "feature" && creditConsent ? creditName.trim() || null : null,
+      creditConsent,
+      creditName: creditConsent ? creditName.trim() || null : null,
+      // `urgent` is a bug-only signal; prompt submissions never mark urgent.
+      urgent: kind === "bug" ? urgent : false,
+      notifyMe,
+      // App-log inclusion is a bug-modal toggle; prompt submissions always
+      // include diagnostics (there is no toggle on that surface).
+      includeLogs: kind === "bug" ? includeLogs : true,
       snapshot: {
         ...snapshot,
         openedAt: openedAtRef.current,
@@ -205,7 +214,13 @@ export function useSupportModalState({ kind, onClose }: UseSupportModalStateOpti
     removeAttachment,
     setCreditConsent,
     setCreditName,
+    setIncludeLogs,
     setMessage,
+    setNotifyMe,
+    setUrgent,
+    includeLogs,
+    notifyMe,
+    urgent,
     stagingError,
   };
 }

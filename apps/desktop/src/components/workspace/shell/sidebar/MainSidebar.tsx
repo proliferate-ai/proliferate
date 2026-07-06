@@ -59,7 +59,7 @@ export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
-  const handleOpenSupport = useOpenSupportReportWindow({ source: "sidebar" });
+  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
