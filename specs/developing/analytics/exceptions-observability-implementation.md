@@ -534,24 +534,45 @@ therefore requires a hosted build — steps documented in the PR body.
     p95>5s/10m (`ffrbv99mqhgjkc`), ECS CPU>90%/15m (`bfrbv9r4945xcd`). Slack test
     delivered via the alertmanager test API.
 
-### Pending (blocks issue-autofix ingestion)
+- **Sentry** (completed 2026-07-06, headless via org-token REST API — note `sentry-cli`
+  cannot create projects/alert rules):
+  - All 8 projects already existed, including `proliferate-server` (python-fastapi).
+  - **Server DSN was already wired in prod** — the earlier "may report nowhere" fear was
+    wrong. DSNs (server / cloud_runtime / cloud_target) flow through **Terraform
+    variables** (`var.sentry_dsn` etc. in `server/infra/main.tf`, `sensitive = true`)
+    into the ECS task definition — NOT through GitHub vars/secrets (the deploy workflow
+    only overrides `*_ENVIRONMENT` / `*_RELEASE`). The `ANYHARNESS_SENTRY_DSN` repo var
+    is desktop-build-only. Live events confirmed (issues PROLIFERATE-SERVER-17..19).
+  - Slack integration installed (id 419544, workspace `proliferate-workspace.slack.com`).
+  - Pre-existing rules left untouched: "prod errors → #sentry-channel" (17080536),
+    "prod burst >25/hr" (17080544), high-priority email (16835853).
+  - New issue alert **17267915**: new OR regressed, level=fatal OR tag
+    `critical_failure=true`, env production → Slack `#sentry-channel`.
+  - New metric alert **442367**: `p95(span.duration) > 5000ms` over 10min,
+    `is_transaction:true`, env production → Slack `#sentry-channel` (dataset
+    `events_analytics_platform` — Sentry deprecated the `transactions` dataset).
+  - End-to-end verified: test event `c36eecddde124078a87df3c1cccc5f14` (fatal,
+    `critical_failure=true`) → created issue PROLIFERATE-SERVER-19, matching the new
+    rule's conditions.
+  - **Channel caveat:** Sentry's bot has no access to `#alerts` ("resource does not
+    exist or has not been granted access"), so both rules route to `#sentry-channel`.
+    To consolidate on #alerts: invite the Sentry app to #alerts in Slack, then PUT the
+    two rules. (Grafana/AMG alerts use the #alerts incoming webhook and are unaffected.)
 
-- **Sentry** — needs auth from Pablo (org token with `project:admin` + `alerts:write`,
-  or a browser login; note `sentry-cli` does not create projects/alert rules — this is
-  plain REST API work once a token exists). Then: recon whether a `proliferate-server`
-  project exists at all — repo variables carry DSNs only for desktop/anyharness/web, and
-  `.env.production.example` ships `SENTRY_DSN=` empty, so **prod server events may
-  currently go nowhere**; create the project + wire DSN if missing (see
-  `sentry-setup-runbook.md`); alert rules: new fatal (`critical_failure=true`) issue →
-  Slack, blanket p95>5s transaction alert → Slack.
+### Pending
+
 - **AMG UI login** — headless provisioning/alerting needs no login, but viewing the
   dashboard in a browser requires IAM Identity Center (AWS Org `o-g9dbwbi9up` created
   2026-07-06; the first Identity Center instance must be enabled once in the console —
-  the management account cannot `create-instance` via CLI) or SAML.
+  the management account cannot `create-instance` via CLI) or SAML. After enablement:
+  create the Identity Center user + `aws grafana update-permissions` ADMIN assignment
+  via CLI.
 - **Cleanup owed** — delete the abandoned Grafana Cloud stack `pablosfsanchez`
   (grafana.com portal, Google SSO on the personal Gmail; nothing was ever configured in
   it). The interim IAM user `grafana-cloudwatch-readonly` and its keys are already
   deleted.
+- **Alert-channel consolidation (optional)** — invite the Sentry Slack app to `#alerts`
+  and repoint rules 17267915 + 442367, so Sentry and Grafana alerts land in one channel.
 
 ## 8. End-to-end: what happens when something breaks
 
