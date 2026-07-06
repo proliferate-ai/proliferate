@@ -139,7 +139,9 @@ export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNo
     // "met" renders at the end of the turn it occurred in. Turn 2 below is the
     // regression case from the bug screenshot — a follow-up turn after the
     // goal was armed — proving its content renders entirely below (never
-    // above) the turn-1 "Goal set" row.
+    // above) the turn-1 "Goal set" row. Turn 3 includes a "blocked" outcome
+    // to verify left-aligned system events contrast with the right-aligned
+    // user-initiated set/edited chips.
     case "goal-transcript-lifecycle":
       return (
         <TranscriptPreviewShell>
@@ -157,6 +159,12 @@ export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNo
           <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_EDITED} />
           <AssistantMessage content="Narrowed the objective to the exact contents (no trailing newline) and rewrote the file." />
           <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_MET} />
+          <UserMessage
+            sessionId={null}
+            content="Now block on tests passing before ending the turn."
+          />
+          <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_BLOCKED} />
+          <AssistantMessage content="The tests failed on the last run — I'll diagnose and fix the failing case." />
         </TranscriptPreviewShell>
       );
     default:
@@ -197,6 +205,15 @@ const GOAL_TRANSCRIPT_EVENT_MET: GoalTranscriptEvent = {
   kind: "met",
   objective: "DONE.txt exists in the repo root and contains exactly \"done\" (trailing newline optional)",
   detail: "DONE.txt exists in the repo root and its contents are exactly \"done\"",
+};
+
+const GOAL_TRANSCRIPT_EVENT_BLOCKED: GoalTranscriptEvent = {
+  id: "4",
+  seq: 21,
+  turnId: "turn-3",
+  kind: "blocked",
+  objective: "Tests pass before ending the turn",
+  detail: "Test suite exited with code 1: 3 passed, 1 failed",
 };
 
 const LIVE_STREAM_TEXT = `Totally. I'll re-ground this with actual repo checks rather than just memory, and then I'll give you the distilled version with the parts that matter for the design.

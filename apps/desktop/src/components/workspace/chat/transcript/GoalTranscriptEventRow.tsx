@@ -11,21 +11,47 @@ import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/g
 const ROW_PREVIEW_MAX_CHARS = 88;
 
 /**
- * A quiet, single-line system row for a goal lifecycle transition
- * (goal_updated/goal_met/goal_cleared), interleaved into the transcript by
- * seq alongside turn content — client-side composition only (see
+ * A goal lifecycle transition row (goal_updated/goal_met/goal_cleared),
+ * interleaved into the transcript by seq — client-side composition only (see
  * `deriveGoalTranscriptEvents`; the runtime keeps these chunks out of stored
- * transcript content). Styled like the transcript's other quiet system rows
- * (`ModeTransitionDivider`): small muted icon, single line, no card chrome.
- * A long `goal_met` reason discloses on click, matching `SessionErrorItem`'s
- * "Details" toggle.
+ * transcript content). User-initiated events (set/edited) render as a
+ * right-aligned compact chip (matching the "user placed this marker"
+ * affordance); system outcomes (met/failed/blocked/cleared) render as quiet
+ * left-aligned system rows. A long `goal_met` reason discloses on click,
+ * matching `SessionErrorItem`'s "Details" toggle.
  */
 export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }) {
   const [expanded, setExpanded] = useState(false);
   const presentation = presentGoalTranscriptEvent(event);
   const canExpand = presentation.fullDetail !== null
     && presentation.fullDetail !== presentation.detailPreview;
+  const isUserInitiated = event.kind === "set" || event.kind === "edited";
 
+  if (isUserInitiated) {
+    // User-initiated SET/EDIT events: right-aligned compact chip
+    return (
+      <div data-goal-transcript-event={event.kind} className="flex justify-end py-1">
+        <button
+          type="button"
+          disabled
+          className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-ui-sm text-muted-foreground disabled:cursor-default"
+        >
+          <presentation.Icon
+            aria-hidden="true"
+            className={`size-3 shrink-0 ${presentation.iconClassName}`}
+          />
+          <span className="truncate">
+            {presentation.label}
+            {presentation.detailPreview && (
+              <span className="text-faint"> — {presentation.detailPreview}</span>
+            )}
+          </span>
+        </button>
+      </div>
+    );
+  }
+
+  // System outcome events: left-aligned quiet row
   return (
     <div data-goal-transcript-event={event.kind} className="py-1">
       <button
