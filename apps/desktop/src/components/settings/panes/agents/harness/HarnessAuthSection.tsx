@@ -41,12 +41,36 @@ export function deriveSelectedMethod(editor: HarnessAuthEditorApi): AuthMethod {
  * opencode's native providers coexist with injected sources — the render plane
  * no longer isolates XDG_DATA_HOME, so `opencode auth login` providers are
  * always reachable alongside gateway/api_key sources.
+ *
+ * api_key lights when a row is enabled (a wired key is truly active) OR while
+ * the user is mid-configuration (pendingMethod === "api_key"): clicking the
+ * card seeds a draft row that is not yet enabled, so a plain rows.some(enabled)
+ * check would leave the card dark and the deadlock in place. Turning api_key
+ * off clears pendingMethod, so "off" darkens the card even though disabled rows
+ * linger for re-enabling.
  */
 export function deriveSelectedMethods(editor: HarnessAuthEditorApi): Set<AuthMethod> {
   const methods = new Set<AuthMethod>(["cli"]);
   if (editor.editorState.gatewayEnabled) methods.add("gateway");
-  if (editor.editorState.rows.some((row) => row.enabled)) methods.add("api_key");
+  if (isMultiSourceApiKeyActive(editor)) methods.add("api_key");
   return methods;
+}
+
+/** api_key is "on or being configured" for a multi-source harness. */
+export function isMultiSourceApiKeyActive(editor: HarnessAuthEditorApi): boolean {
+  return (
+    editor.editorState.rows.some((row) => row.enabled)
+    || editor.pendingMethod === "api_key"
+  );
+}
+
+/**
+ * Whether the api_key row editor should be surfaced for a multi-source harness.
+ * Broader than the highlight: any row present (draft OR persisted-but-disabled)
+ * or a pending click keeps the editor open so the user can wire/re-enable keys.
+ */
+export function isMultiSourceApiKeyConfigVisible(editor: HarnessAuthEditorApi): boolean {
+  return editor.editorState.rows.length > 0 || editor.pendingMethod === "api_key";
 }
 
 const CURSOR_HARNESS = "cursor";
@@ -212,14 +236,23 @@ function handleMultiSourceSelect(method: AuthMethod, editor: HarnessAuthEditorAp
       editor.handleGatewayToggle(!editor.editorState.gatewayEnabled);
       break;
     case "api_key": {
-      const hasEnabled = editor.editorState.rows.some((row) => row.enabled);
-      if (hasEnabled) {
-        // Toggle off all api key rows.
+      if (isMultiSourceApiKeyActive(editor)) {
+        // Toggle OFF: disable every row, but keep the ones that carry a wired
+        // key (apiKeyId != null) so the user can re-enable them; drop bare draft
+        // rows so nothing lingers. Clearing pendingMethod darkens the card, so
+        // "off" reads as off even though wired-but-disabled rows remain.
         editor.commit({
           gatewayEnabled: editor.editorState.gatewayEnabled,
-          rows: editor.editorState.rows.map((row) => ({ ...row, enabled: false })),
+          rows: editor.editorState.rows
+            .filter((row) => row.apiKeyId !== null)
+            .map((row) => ({ ...row, enabled: false })),
         });
+        editor.setPendingMethod(null);
       } else {
+        // Toggle ON: enable the first wired row if one exists, otherwise seed a
+        // draft row so the row editor appears. Mark api_key pending so the card
+        // lights immediately even before a key is wired (presence of a draft row
+        // is the deadlock-free signal, but pending keeps the highlight honest).
         const firstComplete = editor.editorState.rows.find(
           (row) => row.apiKeyId !== null,
         );
@@ -228,6 +261,7 @@ function handleMultiSourceSelect(method: AuthMethod, editor: HarnessAuthEditorAp
         } else if (editor.editorState.rows.length === 0) {
           editor.handleAddVariable();
         }
+        editor.setPendingMethod("api_key");
       }
       break;
     }
