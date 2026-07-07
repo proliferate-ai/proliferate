@@ -2,8 +2,8 @@ import {
   Check,
   ChevronDownUp,
   ChevronUpDown,
-  Filter,
   FolderPlus,
+  ListFilter,
 } from "@proliferate/ui/icons";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -66,7 +66,7 @@ export function SidebarRepositoriesHeader({
                 active={filtersActive}
                 variant="section"
               >
-                <Filter className="size-3" />
+                <ListFilter className="size-3" />
               </SidebarActionButton>
             }
           >
