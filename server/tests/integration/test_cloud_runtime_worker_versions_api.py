@@ -79,7 +79,33 @@ class TestRuntimeWorkerVersionConvergence:
             json={},
         )
         assert heartbeat.status_code == 200, heartbeat.text
-        assert heartbeat.json()["desiredVersions"] == {"worker": "9.9.9", "anyharness": "8.8.8"}
+        desired = heartbeat.json()["desiredVersions"]
+        assert desired["worker"] == "9.9.9"
+        assert desired["anyharness"] == "8.8.8"
+        assert "catalogVersion" in desired
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_includes_catalog_version(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        auth = await _authed_user(client, db_session, prefix="worker-catalog")
+        token = await _desktop_enrollment_token(client, auth, install_id="install-catalog")
+        enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+        worker_token = enroll.json()["workerToken"]
+
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={},
+        )
+        assert heartbeat.status_code == 200, heartbeat.text
+        desired = heartbeat.json()["desiredVersions"]
+        assert "catalogVersion" in desired
+        # The catalog version should be present and a non-empty string
+        assert isinstance(desired["catalogVersion"], str)
+        assert len(desired["catalogVersion"]) > 0
 
     @pytest.mark.asyncio
     async def test_heartbeat_omits_worker_pin_when_unstamped(
