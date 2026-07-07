@@ -82,6 +82,12 @@ pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
 /// family — so they stay unbridged by design (no guessy displayName matching).
 pub fn normalize_model_family(model_id: &str) -> String {
     let mut s = model_id.trim();
+    // (a) Strip a leading models.dev-style provider prefix (e.g.
+    // `anthropic/claude-sonnet-4-5` → `claude-sonnet-4-5`). Must run BEFORE
+    // the us.anthropic./global.anthropic. prefix handling.
+    if let Some(slash_idx) = s.find('/') {
+        s = &s[slash_idx + 1..];
+    }
     for prefix in ["us.anthropic.", "global.anthropic."] {
         if let Some(rest) = s.strip_prefix(prefix) {
             s = rest;
@@ -97,30 +103,70 @@ pub fn normalize_model_family(model_id: &str) -> String {
     s
 }
 
-/// Strip a trailing bedrock `-vN:M` version suffix (e.g. `-v1:0`). A bare `-vN`
-/// (no colon) is left intact — the catalog uses `claude-opus-4-6-v1` as a
-/// distinct family from `claude-opus-4-6`.
+/// Strip a trailing bedrock version suffix. Handles two forms:
+/// - `-vN:M` (e.g. `-v1:0`) — the classic Bedrock versioned id.
+/// - bare `-N:M` (e.g. `-1:0`, no `v`) — newer Bedrock ids like
+///   `openai.gpt-oss-120b-1:0`.
+/// A bare `-vN` (no colon) is left intact — the catalog uses
+/// `claude-opus-4-6-v1` as a distinct family from `claude-opus-4-6`.
 fn strip_bedrock_version_suffix(s: &str) -> String {
-    let Some(idx) = s.rfind("-v") else {
-        return s.to_string();
-    };
-    let tail = &s[idx + 2..];
-    let Some((n, m)) = tail.split_once(':') else {
-        return s.to_string();
-    };
-    if !n.is_empty()
-        && n.bytes().all(|b| b.is_ascii_digit())
-        && !m.is_empty()
-        && m.bytes().all(|b| b.is_ascii_digit())
-    {
-        s[..idx].to_string()
-    } else {
-        s.to_string()
+    // Try `-vN:M` first (colon-bearing with v).
+    if let Some(idx) = s.rfind("-v") {
+        let tail = &s[idx + 2..];
+        if let Some((n, m)) = tail.split_once(':') {
+            if !n.is_empty()
+                && n.bytes().all(|b| b.is_ascii_digit())
+                && !m.is_empty()
+                && m.bytes().all(|b| b.is_ascii_digit())
+            {
+                return s[..idx].to_string();
+            }
+        }
     }
+    // Try bare `-N:M` (no `v`, dash + digits + colon + digits at end).
+    if let Some(colon_idx) = s.rfind(':') {
+        let after_colon = &s[colon_idx + 1..];
+        if !after_colon.is_empty() && after_colon.bytes().all(|b| b.is_ascii_digit()) {
+            // Walk backwards from the colon to find the dash that starts `-N:M`.
+            let before_colon = &s[..colon_idx];
+            if let Some(dash_idx) = before_colon.rfind('-') {
+                let n_part = &before_colon[dash_idx + 1..];
+                if !n_part.is_empty()
+                    && n_part.bytes().all(|b| b.is_ascii_digit())
+                    // Ensure this isn't a `-vN:M` that we already checked (the
+                    // char before the digits after the dash would be 'v').
+                    && !before_colon[..dash_idx + 1].ends_with("-v")
+                {
+                    return s[..dash_idx].to_string();
+                }
+            }
+        }
+    }
+    s.to_string()
 }
 
-/// Strip a trailing `-YYYYMMDD` release date (dash + exactly 8 ASCII digits).
+/// Strip a trailing release date suffix. Handles two forms (checked in order):
+/// - ISO-8601 `-YYYY-MM-DD` (e.g. `-2025-12-11`) — three dash-separated groups.
+/// - Compact `-YYYYMMDD` (e.g. `-20250929`) — dash + exactly 8 ASCII digits.
 fn strip_release_date_suffix(s: &str) -> String {
+    // Try ISO-8601 form first: `-YYYY-MM-DD` (4+2+2 digits with dashes).
+    // Look for the pattern by finding a suffix that matches `-\d{4}-\d{2}-\d{2}`.
+    if s.len() >= 11 {
+        let candidate = &s[s.len() - 10..]; // "YYYY-MM-DD"
+        if candidate.as_bytes()[4] == b'-'
+            && candidate.as_bytes()[7] == b'-'
+            && candidate[..4].bytes().all(|b| b.is_ascii_digit())
+            && candidate[5..7].bytes().all(|b| b.is_ascii_digit())
+            && candidate[8..10].bytes().all(|b| b.is_ascii_digit())
+        {
+            // Verify the character before the date is a dash.
+            let prefix = &s[..s.len() - 10];
+            if prefix.ends_with('-') && prefix.len() > 1 {
+                return prefix[..prefix.len() - 1].to_string();
+            }
+        }
+    }
+    // Compact form: `-YYYYMMDD` (dash + exactly 8 ASCII digits).
     let Some(idx) = s.rfind('-') else {
         return s.to_string();
     };
@@ -189,6 +235,21 @@ impl GatewayModelResolver {
             .find(|agent| agent.kind == harness_kind)
             .map(|agent| agent.session.models.clone())
             .unwrap_or_default()
+    }
+
+    /// All agents' model rows across the entire catalog document (union of
+    /// every harness's `session.models`). Used for the cross-harness fallback
+    /// enrichment join — gateway model IDENTITY is provider-truth, so when the
+    /// own-harness catalog misses, any other harness's catalog entry can supply
+    /// displayName/description (identity-only enrichment).
+    pub fn catalog_models_all(&self) -> Vec<AgentCatalogModel> {
+        self.catalog_sync
+            .active()
+            .document
+            .agents
+            .iter()
+            .flat_map(|agent| agent.session.models.clone())
+            .collect()
     }
 
     /// The catalog's gateway policy + default model for a harness, if the
@@ -516,5 +577,128 @@ mod tests {
             normalize_model_family("claude-opus-4-8-20260101"),
             normalize_model_family("us.anthropic.claude-opus-4-8[1m]")
         );
+    }
+
+    // --- (a) Provider-prefix stripping (models.dev style `provider/model`) ---
+
+    #[test]
+    fn strip_provider_prefix_anthropic() {
+        assert_eq!(
+            normalize_model_family("anthropic/claude-sonnet-4-5"),
+            "claude-sonnet-4-5"
+        );
+        // Bridges to the plain gateway id.
+        assert_eq!(
+            normalize_model_family("anthropic/claude-sonnet-4-5"),
+            normalize_model_family("claude-sonnet-4-5")
+        );
+    }
+
+    #[test]
+    fn strip_provider_prefix_openai() {
+        assert_eq!(
+            normalize_model_family("openai/gpt-5.2"),
+            "gpt-5.2"
+        );
+        assert_eq!(
+            normalize_model_family("openai/gpt-5.2"),
+            normalize_model_family("gpt-5.2")
+        );
+    }
+
+    #[test]
+    fn strip_provider_prefix_combined_with_date() {
+        // `anthropic/claude-sonnet-4-5-20250929` should strip both the prefix
+        // and the trailing date.
+        assert_eq!(
+            normalize_model_family("anthropic/claude-sonnet-4-5-20250929"),
+            "claude-sonnet-4-5"
+        );
+    }
+
+    #[test]
+    fn provider_prefix_does_not_affect_dotted_vendor() {
+        // If the id has BOTH a slash AND us.anthropic., the slash strips first,
+        // leaving the us.anthropic. prefix for the next step.
+        assert_eq!(
+            normalize_model_family("bedrock/us.anthropic.claude-opus-4-8[1m]"),
+            "claude-opus-4-8"
+        );
+    }
+
+    // --- (b) ISO-8601 date stripping (`-YYYY-MM-DD`) ---
+
+    #[test]
+    fn strip_iso_date_suffix() {
+        assert_eq!(
+            normalize_model_family("gpt-5.2-2025-12-11"),
+            "gpt-5.2"
+        );
+        assert_eq!(
+            normalize_model_family("gpt-5-mini-2025-08-07"),
+            "gpt-5-mini"
+        );
+    }
+
+    #[test]
+    fn iso_date_bridges_to_bare_id() {
+        assert_eq!(
+            normalize_model_family("gpt-5.2-2025-12-11"),
+            normalize_model_family("gpt-5.2")
+        );
+    }
+
+    #[test]
+    fn compact_date_still_works() {
+        // Regression: existing compact date stripping preserved.
+        assert_eq!(
+            normalize_model_family("claude-sonnet-4-5-20250929"),
+            "claude-sonnet-4-5"
+        );
+    }
+
+    // --- (c) Bare bedrock version `-N:M` (no `v`) ---
+
+    #[test]
+    fn strip_bare_bedrock_version_no_v() {
+        assert_eq!(
+            normalize_model_family("openai.gpt-oss-120b-1:0"),
+            "openai.gpt-oss-120b"
+        );
+    }
+
+    #[test]
+    fn bare_bedrock_version_bridges() {
+        assert_eq!(
+            normalize_model_family("openai.gpt-oss-120b-1:0"),
+            normalize_model_family("openai.gpt-oss-120b")
+        );
+    }
+
+    #[test]
+    fn dash_v_colon_still_stripped() {
+        // Regression: `-vN:M` form still works.
+        assert_eq!(
+            normalize_model_family("us.anthropic.claude-haiku-4-5-20251001-v1:0"),
+            "claude-haiku-4-5"
+        );
+    }
+
+    #[test]
+    fn bare_dash_v_still_not_stripped() {
+        // Regression: bare `-vN` (no colon) stays as a distinct family.
+        assert_eq!(
+            normalize_model_family("claude-opus-4-6-v1"),
+            "claude-opus-4-6-v1"
+        );
+    }
+
+    #[test]
+    fn selectors_normalize_to_themselves() {
+        // Regression: pure CLI selectors.
+        assert_eq!(normalize_model_family("sonnet"), "sonnet");
+        assert_eq!(normalize_model_family("haiku"), "haiku");
+        assert_eq!(normalize_model_family("opus"), "opus");
+        assert_eq!(normalize_model_family("default"), "default");
     }
 }

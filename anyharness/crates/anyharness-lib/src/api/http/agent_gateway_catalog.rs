@@ -122,12 +122,24 @@ fn resolve_catalog_match<'a>(
         })
 }
 
-/// Enrich a resolved gateway model id by joining the bundled catalog row.
-/// Catalog-known → full object; probe-only → `{ id, provider? }`.
-fn enrich_model(id: String, catalog: Option<&AgentCatalogModel>) -> GatewayModelEntry {
+/// Enrich a resolved gateway model id by joining the bundled catalog row(s).
+///
+/// - `own_match`: from the requesting harness's own catalog — contributes FULL
+///   enrichment (identity + behavioral controls: effort, modes, fast_mode, status).
+/// - `foreign_match`: from any other harness's catalog (cross-harness fallback) —
+///   contributes IDENTITY ONLY (displayName + description). Behavioral controls
+///   are harness-specific (e.g. codex users should not see claude-CLI thinking
+///   controls) so they are never bridged from a foreign harness.
+/// - Neither: probe-only sparse row `{ id, provider? }`.
+fn enrich_model(
+    id: String,
+    own_match: Option<&AgentCatalogModel>,
+    foreign_match: Option<&AgentCatalogModel>,
+) -> GatewayModelEntry {
     let provider = provider_for_model(&id).map(str::to_string);
-    match catalog {
-        Some(model) => GatewayModelEntry {
+    if let Some(model) = own_match {
+        // Full enrichment from own-harness catalog.
+        GatewayModelEntry {
             id,
             display_name: Some(model.display_name.clone()),
             description: model.description.clone(),
@@ -136,8 +148,22 @@ fn enrich_model(id: String, catalog: Option<&AgentCatalogModel>) -> GatewayModel
             effort: model_effort(model),
             fast_mode: Some(model.controls.contains_key("fast_mode")),
             modes: model_modes(model),
-        },
-        None => GatewayModelEntry {
+        }
+    } else if let Some(model) = foreign_match {
+        // Identity-only enrichment from foreign-harness catalog.
+        GatewayModelEntry {
+            id,
+            display_name: Some(model.display_name.clone()),
+            description: model.description.clone(),
+            provider,
+            status: None,
+            effort: None,
+            fast_mode: None,
+            modes: None,
+        }
+    } else {
+        // Probe-only: no catalog entry anywhere.
+        GatewayModelEntry {
             id,
             display_name: None,
             description: None,
@@ -146,7 +172,7 @@ fn enrich_model(id: String, catalog: Option<&AgentCatalogModel>) -> GatewayModel
             effort: None,
             fast_mode: None,
             modes: None,
-        },
+        }
     }
 }
 
@@ -205,12 +231,18 @@ pub async fn get_gateway_models(
         GatewayModelSource::Probe { probed_at } => ("probe".to_string(), Some(probed_at)),
     };
     let catalog_models = state.gateway_model_resolver.catalog_models(&kind);
+    let all_catalog_models = state.gateway_model_resolver.catalog_models_all();
     let models = plan
         .models
         .into_iter()
         .map(|id| {
-            let catalog = resolve_catalog_match(&id, &catalog_models);
-            enrich_model(id, catalog)
+            let own_match = resolve_catalog_match(&id, &catalog_models);
+            let foreign_match = if own_match.is_none() {
+                resolve_catalog_match(&id, &all_catalog_models)
+            } else {
+                None
+            };
+            enrich_model(id, own_match, foreign_match)
         })
         .collect();
     Ok(Json(GatewayModelsResponse {
@@ -357,7 +389,7 @@ mod tests {
     #[test]
     fn catalog_known_model_is_fully_enriched() {
         let model = catalog_model("claude-sonnet-4-5");
-        let entry = enrich_model("claude-sonnet-4-5".to_string(), Some(&model));
+        let entry = enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
 
         assert_eq!(entry.id, "claude-sonnet-4-5");
         assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
@@ -382,7 +414,7 @@ mod tests {
     fn model_without_effort_or_fast_mode_omits_them() {
         let mut model = catalog_model("claude-sonnet-4-5");
         model.controls.clear();
-        let entry = enrich_model("claude-sonnet-4-5".to_string(), Some(&model));
+        let entry = enrich_model("claude-sonnet-4-5".to_string(), Some(&model), None);
 
         assert!(entry.effort.is_none());
         assert_eq!(entry.fast_mode, Some(false));
@@ -395,7 +427,7 @@ mod tests {
     #[test]
     fn probe_only_matched_id_is_sparse_with_provider() {
         // Not in the catalog (proxy serves it, catalog doesn't know it).
-        let entry = enrich_model("claude-future-9".to_string(), None);
+        let entry = enrich_model("claude-future-9".to_string(), None, None);
 
         assert_eq!(entry.id, "claude-future-9");
         assert_eq!(entry.provider.as_deref(), Some("anthropic"));
@@ -408,7 +440,7 @@ mod tests {
 
     #[test]
     fn probe_only_unmatched_id_omits_provider() {
-        let entry = enrich_model("mystery-model".to_string(), None);
+        let entry = enrich_model("mystery-model".to_string(), None, None);
 
         assert_eq!(entry.id, "mystery-model");
         assert!(entry.provider.is_none());
@@ -501,7 +533,7 @@ mod tests {
         assert_eq!(effort.default.as_deref(), Some("medium"));
 
         // Also test enrichment via enrich_model
-        let entry = enrich_model("codex-model".to_string(), Some(&model));
+        let entry = enrich_model("codex-model".to_string(), Some(&model), None);
         assert!(entry.effort.is_some());
         assert_eq!(entry.effort.unwrap().values, vec!["low", "medium", "high", "xhigh"]);
     }
@@ -513,5 +545,88 @@ mod tests {
         let effort = model_effort(&model).expect("effort should be present");
         assert_eq!(effort.values, vec!["low", "medium", "high"]);
         assert_eq!(effort.default.as_deref(), Some("medium"));
+    }
+
+    // --- Cross-harness fallback enrichment (identity-only from foreign harness) ---
+
+    #[test]
+    fn foreign_match_yields_identity_only() {
+        // Simulates: codex requesting `claude-sonnet-4-5`; own catalog has no
+        // match, but the opencode catalog has `anthropic/claude-sonnet-4-5`.
+        let foreign_model = catalog_model("anthropic/claude-sonnet-4-5");
+        let entry = enrich_model(
+            "claude-sonnet-4-5".to_string(),
+            None,
+            Some(&foreign_model),
+        );
+
+        // Identity fields bridged.
+        assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
+        assert_eq!(entry.description.as_deref(), Some("Balanced coding model"));
+        assert_eq!(entry.provider.as_deref(), Some("anthropic"));
+        // Behavioral controls NOT bridged (harness-specific).
+        assert!(entry.status.is_none());
+        assert!(entry.effort.is_none());
+        assert!(entry.fast_mode.is_none());
+        assert!(entry.modes.is_none());
+    }
+
+    #[test]
+    fn own_match_takes_priority_over_foreign() {
+        // When both own and foreign match, own wins with full enrichment.
+        let own_model = catalog_model("claude-sonnet-4-5");
+        let foreign_model = catalog_model("anthropic/claude-sonnet-4-5");
+        let entry = enrich_model(
+            "claude-sonnet-4-5".to_string(),
+            Some(&own_model),
+            Some(&foreign_model),
+        );
+
+        // Full enrichment from own (status, effort, modes present).
+        assert!(entry.status.is_some());
+        assert!(entry.effort.is_some());
+        assert_eq!(entry.fast_mode, Some(true));
+        assert!(entry.modes.is_some());
+    }
+
+    #[test]
+    fn no_match_anywhere_stays_sparse() {
+        let entry = enrich_model("totally-unknown-model".to_string(), None, None);
+
+        assert_eq!(entry.id, "totally-unknown-model");
+        assert!(entry.display_name.is_none());
+        assert!(entry.description.is_none());
+        assert!(entry.provider.is_none());
+        assert!(entry.status.is_none());
+        assert!(entry.effort.is_none());
+        assert!(entry.fast_mode.is_none());
+        assert!(entry.modes.is_none());
+    }
+
+    #[test]
+    fn codex_requesting_claude_bridges_via_opencode_catalog_entry() {
+        // The real scenario: codex harness requests `claude-sonnet-4-5` via
+        // gateway; codex's own catalog doesn't know it, but opencode's catalog
+        // has `anthropic/claude-sonnet-4-5`. The normalizer strips the provider
+        // prefix, enabling the family-key bridge.
+        let opencode_catalog = vec![catalog_model("anthropic/claude-sonnet-4-5")];
+        let codex_catalog: Vec<AgentCatalogModel> = vec![];
+
+        // Own-harness miss.
+        let own = resolve_catalog_match("claude-sonnet-4-5", &codex_catalog);
+        assert!(own.is_none());
+
+        // Foreign-harness hit (family key: both normalize to `claude-sonnet-4-5`).
+        let foreign = resolve_catalog_match("claude-sonnet-4-5", &opencode_catalog);
+        assert!(foreign.is_some());
+        assert_eq!(foreign.unwrap().id, "anthropic/claude-sonnet-4-5");
+
+        // Enrichment is identity-only.
+        let entry = enrich_model("claude-sonnet-4-5".to_string(), own, foreign);
+        assert_eq!(entry.display_name.as_deref(), Some("Claude Sonnet 4.5"));
+        assert!(entry.status.is_none());
+        assert!(entry.effort.is_none());
+        assert!(entry.fast_mode.is_none());
+        assert!(entry.modes.is_none());
     }
 }
