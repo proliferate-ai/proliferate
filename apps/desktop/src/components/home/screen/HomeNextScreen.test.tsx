@@ -48,6 +48,8 @@ const screenMocks = vi.hoisted(() => {
     homeNext,
     homeNextStateArgs: null as any,
     targetPickerProps: null as any,
+    leadingControlsProps: null as any,
+    trailingControlsProps: null as any,
   };
 });
 
@@ -119,12 +121,15 @@ vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
   },
 }));
 
-vi.mock("@/components/workspace/chat/input/ComposerModelConfigSelector", () => ({
-  ComposerModelConfigSelector: () => <div data-testid="model-picker" />,
-}));
-
-vi.mock("@/components/workspace/chat/input/SessionModeControl", () => ({
-  SessionModeControl: () => <div data-testid="mode-picker" />,
+vi.mock("@/components/workspace/chat/input/ChatInputControlRow", () => ({
+  ComposerLeadingControls: (props: any) => {
+    screenMocks.leadingControlsProps = props;
+    return <div data-testid="composer-leading-controls" />;
+  },
+  ComposerTrailingControls: (props: any) => {
+    screenMocks.trailingControlsProps = props;
+    return <div data-testid="composer-trailing-controls" />;
+  },
 }));
 
 vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
@@ -192,6 +197,8 @@ function resetHomeNext() {
   screenMocks.homeNext.sshTargetsLoading = false;
   screenMocks.homeNextStateArgs = null;
   screenMocks.targetPickerProps = null;
+  screenMocks.leadingControlsProps = null;
+  screenMocks.trailingControlsProps = null;
 }
 
 describe("HomeNextScreen model availability notices", () => {
@@ -331,6 +338,52 @@ describe("HomeNextScreen model availability notices", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Configure default harnesses" }));
     expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-defaults");
+  });
+});
+
+describe("HomeNextScreen composer control-row parity", () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    resetHomeNext();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders the shared leading and trailing composer control clusters", () => {
+    render(<HomeNextScreen />);
+
+    expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
+    expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
+  });
+
+  it("feeds the clusters sessionless chat-equivalent props", () => {
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.leadingControlsProps).toMatchObject({
+      runtimeControlsDisabled: false,
+      agentKind: "codex",
+      activeSessionId: null,
+    });
+    expect(screenMocks.leadingControlsProps.modelSelectorProps).toMatchObject({
+      connectionState: "healthy",
+      hasAgents: false,
+      isLoading: false,
+    });
+    expect(screenMocks.trailingControlsProps).toMatchObject({
+      runtimeControlsDisabled: false,
+      agentKind: "codex",
+      activeSessionId: null,
+      isEditingQueuedPrompt: false,
+      chatDisabled: false,
+      isSubmitting: false,
+      // Home has no attachments infra pre-session; the shared cluster shows
+      // chat's exact pre-session disabled state for these.
+      supportsAttachments: false,
+      canAttachFiles: false,
+    });
   });
 });
 
