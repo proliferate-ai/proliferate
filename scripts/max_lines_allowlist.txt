@@ -10,7 +10,9 @@
 anyharness/crates/anyharness-contract/src/v1/events.rs 1129 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 787 existing AnyHarness contract oversized file
 anyharness/crates/anyharness-lib/src/api/openapi.rs 874 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1)
-anyharness/crates/anyharness-lib/src/api/router_tests.rs 1277 existing AnyHarness oversized test file (+hosting PR-status route tests)
+anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
+anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
+anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1895 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1520 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
@@ -37,13 +39,13 @@ server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read 
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
 server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
 server/tests/integration/test_agent_gateway_store.py 673 P1 auth rebuild rewrote store coverage for titled-key + agent_auth_selection model
-server/tests/integration/test_auth_flow.py 2118 existing server oversized integration test plus session-token-revocation coverage
+server/tests/integration/test_auth_flow.py 2130 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
 apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx 492 existing markdown transcript renderer pending split
 apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pending split
-anyharness/crates/anyharness-lib/src/api/router.rs 606 AnyHarness router (+goals/loops/activity/feed routes)
+anyharness/crates/anyharness-lib/src/api/router.rs 610 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route)
 anyharness/crates/anyharness-lib/src/app/mod.rs 608 AnyHarness app wiring (+goal/loop/activity/feed services)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 861 loops runtime — native write path + emulated Codex scheduler
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 739 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
