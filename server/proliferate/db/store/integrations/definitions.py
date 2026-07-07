@@ -153,6 +153,32 @@ async def set_definition_archived(
     return _record(row)
 
 
+async def archive_seed_definitions_not_in(
+    db: AsyncSession, namespaces: frozenset[str]
+) -> tuple[str, ...]:
+    """Archive seed definitions whose namespaces are not in ``namespaces``.
+
+    Sets ``archived_at`` on all ``source='seed'`` rows where ``namespace NOT IN
+    namespaces`` and ``archived_at IS NULL``. Returns the archived namespaces
+    (for logging). Never touches org-custom rows.
+    """
+    result = await db.scalars(
+        select(CloudIntegrationDefinition).where(
+            CloudIntegrationDefinition.source == "seed",
+            CloudIntegrationDefinition.namespace.not_in(namespaces),
+            CloudIntegrationDefinition.archived_at.is_(None),
+        )
+    )
+    rows = result.all()
+    archived_namespaces = []
+    now = utcnow()
+    for row in rows:
+        row.archived_at = now
+        archived_namespaces.append(row.namespace)
+    await db.flush()
+    return tuple(archived_namespaces)
+
+
 async def upsert_seed_definition(
     db: AsyncSession,
     *,

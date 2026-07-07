@@ -27,6 +27,11 @@ from proliferate.integrations.integration_oauth.models import (
     ProtectedResourceMetadata,
     RegisteredOAuthClient,
 )
+from proliferate.server.cloud.integrations.config import (
+    IntegrationConfig,
+    StaticUrl,
+    serialize_definition_config,
+)
 from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
 from proliferate.server.cloud.integrations.oauth import service as oauth_service
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
@@ -96,8 +101,24 @@ class TestAuthenticateIntegration:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         auth = await _authed_user(client, db_session, prefix="int-none")
-        await _seed_definitions(db_session)
-        definition_id = await _definition_id(db_session, "cloudflare_docs")
+        # Create a test definition with auth_kind="none" since no seed has that anymore.
+        test_config = IntegrationConfig(
+            transport="http",
+            url=StaticUrl("https://test.example.com/mcp"),
+            display_url="https://test.example.com/mcp",
+        )
+        definition = await definitions_store.upsert_seed_definition(
+            db_session,
+            namespace="test_none_provider",
+            display_name="Test None Provider",
+            description="Test provider for none auth flow",
+            auth_kind="none",
+            oauth_client_mode=None,
+            config_json=serialize_definition_config(test_config),
+            enabled_by_default=True,
+        )
+        await db_session.commit()
+        definition_id = str(definition.id)
 
         response = await client.post(
             "/v1/cloud/integrations/authentications",
@@ -110,7 +131,7 @@ class TestAuthenticateIntegration:
         account = body["account"]
         assert account["status"] == "ready"
         assert account["authKind"] == "none"
-        assert account["namespace"] == "cloudflare_docs"
+        assert account["namespace"] == "test_none_provider"
 
     @pytest.mark.asyncio
     async def test_authenticate_api_key_stores_credential(
@@ -249,8 +270,24 @@ class TestRemoveAccount:
     @pytest.mark.asyncio
     async def test_remove_account(self, client: AsyncClient, db_session: AsyncSession) -> None:
         auth = await _authed_user(client, db_session, prefix="int-remove")
-        await _seed_definitions(db_session)
-        definition_id = await _definition_id(db_session, "cloudflare_docs")
+        # Create a test definition with auth_kind="none" for account removal test.
+        test_config = IntegrationConfig(
+            transport="http",
+            url=StaticUrl("https://test.example.com/mcp"),
+            display_url="https://test.example.com/mcp",
+        )
+        definition = await definitions_store.upsert_seed_definition(
+            db_session,
+            namespace="test_remove_provider",
+            display_name="Test Remove Provider",
+            description="Test provider for account removal",
+            auth_kind="none",
+            oauth_client_mode=None,
+            config_json=serialize_definition_config(test_config),
+            enabled_by_default=True,
+        )
+        await db_session.commit()
+        definition_id = str(definition.id)
 
         created = await client.post(
             "/v1/cloud/integrations/authentications",
