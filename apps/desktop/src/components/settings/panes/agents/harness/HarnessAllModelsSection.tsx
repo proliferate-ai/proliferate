@@ -250,17 +250,20 @@ export function HarnessAllModelsSection({
         </div>
 
         {rows.length > 0 ? (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          // Canonical picker-search treatment (PopoverSearchField recipe): muted
+          // magnifier + borderless transparent input — no boxed field — with a
+          // hairline divider between the row and the table below.
+          <div className="flex items-center gap-2 border-b border-border px-2.5 py-[7px]">
+            <Search className="size-3.5 shrink-0 text-muted-foreground/75" />
             <Input
               aria-label="Filter models"
               placeholder="Filter models..."
               value={filterText}
-              className="h-8 pl-9 pr-14 text-xs"
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
               onChange={(event) => setFilterText(event.target.value)}
             />
             {filterText ? (
-              <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
                 {filteredRows.length} of {rows.length}
                 <button
                   type="button"
