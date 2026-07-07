@@ -1,12 +1,14 @@
 import type React from "react";
+import type { ReactNode } from "react";
+import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import {
   isMultiSourceHarness,
   type AuthMethod,
 } from "@/lib/domain/settings/harness-auth-sources";
+import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
 import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
 
 export type { AuthMethod };
@@ -14,7 +16,9 @@ export type { AuthMethod };
 interface HarnessAuthSectionProps {
   harnessKind: string;
   displayName: string;
+  surface: AgentAuthSurface;
   editor: HarnessAuthEditorApi;
+  variant?: HarnessBlockVariant;
 }
 
 /**
@@ -49,33 +53,61 @@ const CURSOR_HARNESS = "cursor";
 export function HarnessAuthSection({
   harnessKind,
   displayName,
+  surface,
   editor,
+  variant = "section",
 }: HarnessAuthSectionProps) {
   if (harnessKind === CURSOR_HARNESS) {
     return (
-      <SettingsSection title={HARNESS_PANE_COPY.authenticationTitle}>
+      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
         <p className="py-3 text-sm text-muted-foreground">
           {HARNESS_PANE_COPY.cursorNativeDescription(displayName)}
         </p>
-      </SettingsSection>
+      </HarnessPanelBlock>
     );
   }
 
-  if (!editor.cloudActive) {
+  // Cloud surface gating is now handled at the pane level by wrapping the
+  // entire cloud surface content in CloudGuard. Local surface keeps its
+  // lighter inline sign-in prompt so nothing changes when running fully offline.
+  if (surface === "local" && !editor.cloudActive) {
     return (
-      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
+      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.signInTitle}>
         <p className="py-3 text-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
-      </SettingsSection>
+      </HarnessPanelBlock>
     );
   }
 
+  return (
+    <HarnessAuthMethods
+      harnessKind={harnessKind}
+      displayName={displayName}
+      editor={editor}
+      variant={variant}
+    />
+  );
+}
+
+interface HarnessAuthMethodsProps {
+  harnessKind: string;
+  displayName: string;
+  editor: HarnessAuthEditorApi;
+  variant: HarnessBlockVariant;
+}
+
+function HarnessAuthMethods({
+  harnessKind,
+  displayName,
+  editor,
+  variant,
+}: HarnessAuthMethodsProps): ReactNode {
   if (editor.selectionsQuery.isLoading) {
     return (
-      <SettingsSection title={HARNESS_PANE_COPY.authenticationTitle}>
+      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
         <p className="py-3 text-sm text-muted-foreground">Loading authentication...</p>
-      </SettingsSection>
+      </HarnessPanelBlock>
     );
   }
 
@@ -97,7 +129,8 @@ export function HarnessAuthSection({
   }
 
   return (
-    <SettingsSection
+    <HarnessPanelBlock
+      variant={variant}
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
@@ -125,7 +158,7 @@ export function HarnessAuthSection({
           onClick={() => selectMethod("cli")}
         />
       </div>
-    </SettingsSection>
+    </HarnessPanelBlock>
   );
 }
 
