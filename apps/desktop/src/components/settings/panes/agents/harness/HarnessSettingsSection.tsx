@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import {
   usePutAuthSelections,
   useAgentAuthState,
@@ -60,29 +61,23 @@ export function HarnessSettingsSection({
     return null;
   }
 
-  // When rendering as a standalone section (not inside a parent panel), wrap in
-  // a card with a title header to visually separate from the Authentication card.
+  // When rendering as a standalone section (not inside a parent panel), the
+  // title sits ABOVE the card as a section heading (matching SettingsSection /
+  // the All Models section), and the bordered panel starts directly with rows.
   if (variant === "section") {
     return (
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
-        <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-medium text-foreground">
-            {HARNESS_PANE_COPY.harnessSettingsTitle}
-          </h3>
+      <SettingsSection title={HARNESS_PANE_COPY.harnessSettingsTitle}>
+        <div className="overflow-hidden rounded-lg border border-border bg-foreground/[0.02] px-4 py-1">
+          {settings.map((setting) => (
+            <HarnessSettingRow
+              key={setting.key}
+              harnessKind={harnessKind}
+              surface={surface}
+              setting={setting}
+            />
+          ))}
         </div>
-        <div className="px-4 py-3.5">
-          <div className="flex flex-col">
-            {settings.map((setting) => (
-              <HarnessSettingRow
-                key={setting.key}
-                harnessKind={harnessKind}
-                surface={surface}
-                setting={setting}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
+      </SettingsSection>
     );
   }
 
