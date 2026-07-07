@@ -476,6 +476,55 @@ fn pending_marker_is_thin_and_cleared_by_ingest() {
 }
 
 #[test]
+fn accounting_identical_update_while_pending_does_not_bump_revision() {
+    // Regression: a codex accounting-only goal_updated tick arriving while
+    // pending_op=Set must NOT bump revision or emit an event. The pending_op
+    // should be cleared (the ingest confirmation proves native state matches).
+    let service = test_service();
+    service
+        .ingest_native_event(
+            context(1),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest goal");
+
+    // Simulate: user issues a set (mark pending) but the confirmation hasn't
+    // landed yet. Meanwhile an accounting tick arrives with identical content.
+    service
+        .mark_pending("session-1", GoalPendingOp::Set)
+        .expect("mark pending set");
+    let pending = service
+        .current_goal("session-1")
+        .expect("load current")
+        .expect("current goal");
+    assert_eq!(pending.pending_op, Some(GoalPendingOp::Set));
+    assert_eq!(pending.revision, 1);
+
+    // Ingest an identical update (same objective, same status, same counters).
+    let batch = service
+        .ingest_native_event(
+            context(2),
+            GoalNativeEventKind::Updated,
+            Some(wire("make CI green", GoalWireStatus::Active)),
+        )
+        .expect("ingest identical while pending");
+
+    // Must NOT bump revision or emit events.
+    assert!(batch.envelopes.is_empty(), "no event emitted");
+    let goal = batch.goal.expect("goal returned");
+    assert_eq!(goal.revision, 1, "revision unchanged");
+
+    // But pending_op must be cleared (the confirmation resolves the pending state).
+    let reloaded = service
+        .current_goal("session-1")
+        .expect("load current")
+        .expect("current goal");
+    assert_eq!(reloaded.pending_op, None, "pending_op cleared");
+    assert_eq!(reloaded.revision, 1, "revision still 1 after reload");
+}
+
+#[test]
 fn missing_wire_payload_on_update_is_an_error() {
     let service = test_service();
     let error = service

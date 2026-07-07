@@ -212,6 +212,13 @@ impl GoalService {
                         ..existing.clone()
                     };
                     if goal_content_unchanged(&existing, &next) {
+                        // Content is identical — no revision bump or event.
+                        // However, if a pending_op marker is outstanding, clear
+                        // it: the ingest confirmation proves the native state
+                        // matches, so the pending op is resolved.
+                        if existing.pending_op.is_some() {
+                            GoalStore::clear_pending_op_tx(tx, &existing.id)?;
+                        }
                         return Ok(GoalEventBatch::unchanged(Some(existing)));
                     }
                     let next = GoalRecord {
@@ -346,7 +353,9 @@ fn classify_goal_transition(
 }
 
 /// Content equality for idempotent ingest: everything the wire can move,
-/// excluding the bookkeeping fields (`revision`, timestamps, raw json).
+/// excluding the bookkeeping fields (`revision`, timestamps, raw json) and the
+/// local-only `pending_op` marker (which tracks in-flight mutations and must
+/// not trigger spurious revision bumps when it is the only difference).
 fn goal_content_unchanged(existing: &GoalRecord, next: &GoalRecord) -> bool {
     existing.objective == next.objective
         && existing.status == next.status
@@ -357,7 +366,6 @@ fn goal_content_unchanged(existing: &GoalRecord, next: &GoalRecord) -> bool {
         && existing.met_reason == next.met_reason
         && existing.iterations == next.iterations
         && existing.native == next.native
-        && existing.pending_op == next.pending_op
 }
 
 pub fn goal_to_contract(goal: &GoalRecord) -> Goal {
