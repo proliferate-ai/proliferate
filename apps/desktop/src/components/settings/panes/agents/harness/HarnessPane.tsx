@@ -1,4 +1,5 @@
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { CloudGuard } from "@/components/cloud/CloudGuard";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
@@ -50,30 +51,26 @@ function HarnessSurfaceCloud({
 
   return (
     <CloudGuard>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
-        <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-medium text-foreground">
-            {HARNESS_PANE_COPY.signInTitle}
-          </h3>
+      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+          <HarnessAuthSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="cloud"
+            editor={editor}
+            variant="panel"
+          />
+
+          <HarnessAuthDetailsSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="cloud"
+            selectedMethod={selectedMethod}
+            editor={editor}
+            variant="panel"
+          />
         </div>
-
-        <HarnessAuthSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface="cloud"
-          editor={editor}
-          variant="panel"
-        />
-
-        <HarnessAuthDetailsSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface="cloud"
-          selectedMethod={selectedMethod}
-          editor={editor}
-          variant="panel"
-        />
-      </div>
+      </SettingsSection>
 
       <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="section" />
 
@@ -98,30 +95,26 @@ function HarnessSurfaceLocal({
 
   return (
     <>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
-        <div className="border-b border-border px-4 py-3">
-          <h3 className="text-sm font-medium text-foreground">
-            {HARNESS_PANE_COPY.signInTitle}
-          </h3>
+      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+          <HarnessAuthSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="local"
+            editor={editor}
+            variant="panel"
+          />
+
+          <HarnessAuthDetailsSection
+            harnessKind={harnessKind}
+            displayName={displayName}
+            surface="local"
+            selectedMethod={selectedMethod}
+            editor={editor}
+            variant="panel"
+          />
         </div>
-
-        <HarnessAuthSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface="local"
-          editor={editor}
-          variant="panel"
-        />
-
-        <HarnessAuthDetailsSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface="local"
-          selectedMethod={selectedMethod}
-          editor={editor}
-          variant="panel"
-        />
-      </div>
+      </SettingsSection>
 
       <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="section" />
 
