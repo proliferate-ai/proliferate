@@ -29,7 +29,7 @@ function DropdownItem({
       role="menuitem"
       onClick={onClick}
       icon={icon}
-      iconClassName="size-4 opacity-100"
+      iconClassName="size-4 text-current"
       label={label}
       trailing={shortcut ? (
         <span className="inline-flex shrink-0 items-center pl-1">
@@ -38,7 +38,7 @@ function DropdownItem({
           </span>
         </span>
       ) : null}
-      trailingClassName="ml-0 size-auto opacity-100"
+      trailingClassName="ml-0 size-auto"
     />
   );
 }

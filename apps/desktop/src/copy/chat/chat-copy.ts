@@ -33,10 +33,5 @@ export const CHAT_PRE_MESSAGE_LABELS = {
 export const CHAT_MODEL_SELECTOR_LABELS = {
   empty: "Select model",
   unknownModel: "Unknown model",
-  newChatBadge: "New chat",
-  newChatHint: "Opens a new chat in this workspace",
-  searchPlaceholder: "Search models",
-  noMatchPrefix: "No models matching",
   noProviders: "No harnesses yet. Add one to get started.",
-  addHarness: "Add harness",
 } as const;

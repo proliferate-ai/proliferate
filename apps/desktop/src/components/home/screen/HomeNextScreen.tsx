@@ -3,15 +3,16 @@ import { HomeComposerForm } from "@/components/home/screen/HomeComposerForm";
 import { HomeOnboardingCards } from "@/components/home/screen/HomeOnboardingCards";
 import { HomeProjectMenu } from "@/components/home/screen/HomeProjectMenu";
 import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
-import { ComposerModelConfigSelector } from "@/components/workspace/chat/input/ComposerModelConfigSelector";
-import { SessionModeControl } from "@/components/workspace/chat/input/SessionModeControl";
+import {
+  ComposerLeadingControls,
+  ComposerTrailingControls,
+} from "@/components/workspace/chat/input/ChatInputControlRow";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { useHomeNextLaunchControls } from "@/hooks/home/derived/use-home-next-launch-controls";
 import { useHomeCloudRepoSettingsNavigation } from "@/hooks/home/workflows/use-home-cloud-repo-settings-navigation";
 import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-target-selection-state";
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
-import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import {
   buildHomeModeControlDescriptor,
   buildHomeModelSelectorProps,
@@ -61,18 +62,25 @@ export function HomeNextScreen() {
     },
   });
   const configureCloud = useHomeCloudRepoSettingsNavigation(homeNext.cloudRepoTarget);
-  // Unified composer (owner rev 2026-07-01): home renders the SAME control-row
-  // components as the chat input (SessionModeControl + ComposerModelConfigSelector),
-  // fed by launch-time adapters instead of live-session state.
+  // Unified composer (owner rev 2026-07-01, extended 2026-07-07): home renders
+  // the SAME control clusters as the chat input (ComposerLeadingControls +
+  // ComposerTrailingControls from ChatInputControlRow), fed by launch-time
+  // adapters instead of live-session state. Session-only controls degrade via
+  // their own gating (goal needs activeSessionId; attachments read
+  // supportsAttachments=false → chat's exact pre-session detail).
   const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
-  const launchControlGroups = buildComposerSessionControlGroups(homeLaunchControls.controls);
   // Mode always comes from the home adapter: useHomeNextLaunchControls filters
-  // mode keys out of `controls`, so launchControlGroups.modeControl never fires.
+  // mode keys out of `controls`, so the mode descriptor must be prepended for
+  // buildComposerSessionControlGroups to pick it up (same key-based gating as
+  // chat).
   const homeModeControl = buildHomeModeControlDescriptor({
     modes: homeNext.modeOptions,
     selectedModeId: homeNext.effectiveMode?.value ?? null,
     onSelect: setModeOverrideId,
   });
+  const homeSessionConfigControls = homeModeControl
+    ? [homeModeControl, ...homeLaunchControls.controls]
+    : homeLaunchControls.controls;
   const homeModelSelectorProps = buildHomeModelSelectorProps({
     groups: homeNext.modelGroups,
     selectedModel: homeNext.selectedModel,
@@ -174,18 +182,27 @@ export function HomeNextScreen() {
             modeId={homeNext.effectiveModeId}
             launchControlValues={homeLaunchControls.launchControlValues}
             launchTarget={homeNext.launchTarget}
-            controlsSlot={homeModeControl ? (
-              <SessionModeControl
-                agentKind={homeAgentKind}
-                control={homeModeControl}
-                triggerStyle="value"
-              />
-            ) : null}
-            controlsTrailingSlot={(
-              <ComposerModelConfigSelector
+            controlsSlot={(
+              <ComposerLeadingControls
+                runtimeControlsDisabled={false}
                 modelSelectorProps={homeModelSelectorProps}
                 agentKind={homeAgentKind}
-                controls={launchControlGroups.modelConfigControls}
+                sessionConfigControls={homeSessionConfigControls}
+                activeSessionId={null}
+              />
+            )}
+            controlsTrailingSlot={(
+              <ComposerTrailingControls
+                runtimeControlsDisabled={false}
+                agentKind={homeAgentKind}
+                sessionConfigControls={homeSessionConfigControls}
+                isEditingQueuedPrompt={false}
+                chatDisabled={false}
+                isSubmitting={false}
+                supportsAttachments={false}
+                canAttachFiles={false}
+                activeSessionId={null}
+                onAttachFile={() => {}}
               />
             )}
             targetPickerSlot={(

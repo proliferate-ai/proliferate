@@ -1,12 +1,3 @@
-import {
-  resolveReasoningEffortPresentation,
-} from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
-import {
-  resolveConfiguredSessionControlValue,
-} from "@/lib/domain/chat/session-controls/session-mode-control";
-import {
-  resolveSessionToggleControlStateLabel,
-} from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type {
   LiveSessionControlDescriptor,
   SupportedLiveControlKey,
@@ -34,47 +25,6 @@ export function buildComposerSessionControlGroups(
     modeControl,
     modelConfigControls: uniqueControls.filter((control) => control !== modeControl),
   };
-}
-
-export function summarizeComposerModelConfigControls(
-  agentKind: string | null,
-  controls: LiveSessionControlDescriptor[],
-): string | null {
-  const labels = controls.flatMap((control) => {
-    const selectedOption = control.options.find((option) => option.selected) ?? null;
-
-    if (control.key === "effort") {
-      const presentation = resolveReasoningEffortPresentation(
-        selectedOption?.value ?? null,
-        selectedOption?.label,
-      );
-      return presentation.shortLabel ? [presentation.shortLabel] : [];
-    }
-
-    if (control.key === "fast_mode" || control.key === "reasoning") {
-      if (!control.isEnabled) {
-        return [];
-      }
-      return [resolveSessionToggleControlStateLabel(control.key, true)];
-    }
-
-    if (control.key === "mode" || control.key === "collaboration_mode") {
-      const presentation = resolveConfiguredSessionControlValue(
-        agentKind,
-        control.key,
-        selectedOption?.value ?? null,
-      );
-      return [presentation?.shortLabel ?? selectedOption?.label ?? control.detail].filter(
-        (label): label is string => Boolean(label),
-      );
-    }
-
-    return [selectedOption?.label ?? control.detail].filter(
-      (label): label is string => Boolean(label),
-    );
-  });
-
-  return labels.length > 0 ? labels.slice(0, 3).join(" · ") : null;
 }
 
 export function uniqueSessionControls(

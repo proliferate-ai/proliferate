@@ -125,10 +125,14 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       source: "model_selector",
       targetWorkspaceId: selectedWorkspaceId,
     });
+    // Pass the current session as replacesSessionId: the creation workflow
+    // cleans up the old empty session synchronously after activating the new
+    // optimistic record, so the tab swap is instant (no ghost tab).
     void createEmptySessionWithResolvedConfig({
       agentKind: launchSelection.kind,
       modelId: launchSelection.modelId,
       latencyFlowId,
+      replacesSessionId: scopedActiveSessionId ?? null,
     })
       .then(() => {
         setWorkspaceArrivalEvent(null);

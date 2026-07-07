@@ -201,7 +201,7 @@ export function SidebarAccountFooter() {
                           className="size-5"
                         />
                       )}
-                      iconClassName="opacity-100"
+                      iconClassName="text-current"
                       trailing={
                         organization.id === activeOrganizationId
                           ? <Check className="size-3.5" />

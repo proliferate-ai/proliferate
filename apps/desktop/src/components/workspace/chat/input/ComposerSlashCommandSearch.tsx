@@ -107,8 +107,10 @@ function SlashCommandRow({
         }}
         onClick={() => onSelect(command)}
         className={twMerge(
-          "flex w-full shrink-0 cursor-pointer justify-start overflow-hidden whitespace-normal rounded-lg px-3 py-2 text-left text-sm text-popover-foreground opacity-75 outline-none hover:bg-accent hover:opacity-100 focus:bg-accent",
-          selected && "bg-accent opacity-100",
+          // Color-token hover promotion, not row opacity — opacity flips
+          // re-rasterize the glyphs and read as shimmer (styling.md).
+          "flex w-full shrink-0 cursor-pointer justify-start overflow-hidden whitespace-normal rounded-lg px-3 py-2 text-left text-sm text-popover-foreground/75 outline-none hover:bg-accent hover:text-popover-foreground focus:bg-accent",
+          selected && "bg-accent text-popover-foreground",
         )}
       >
         <div className="flex w-full min-w-0 items-center gap-2">
