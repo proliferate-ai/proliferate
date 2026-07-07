@@ -20,7 +20,7 @@ export const HARNESS_PANE_COPY = {
   newApiKeySubmit: "Save key",
   addApiKeyError: "Could not add the API key.",
   removeVariable: "Remove variable",
-  runLogin: "Run login",
+  runLogin: "Authenticate",
   runLoginOpening: "Opening...",
   harnessSettingsTitle: "Harness settings",
   harnessSettingsPlaceholderLabel: "Harness-specific settings",
