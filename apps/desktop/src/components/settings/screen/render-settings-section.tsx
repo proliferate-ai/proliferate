@@ -16,6 +16,7 @@ import { OrganizationSecretsPane } from "@/components/settings/panes/Organizatio
 import { OrganizationSsoPane } from "@/components/settings/panes/OrganizationSsoPane";
 import { PersonalSecretsPane } from "@/components/settings/panes/PersonalSecretsPane";
 import { UserIntegrationsPane } from "@/components/settings/panes/UserIntegrationsPane";
+import { OrganizationModelPolicyPane } from "@/components/settings/panes/OrganizationModelPolicyPane";
 import { SettingsScaffoldPane } from "@/components/settings/panes/SettingsScaffoldPane";
 import { BillingPane } from "@/components/settings/panes/BillingPane";
 import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
@@ -160,6 +161,9 @@ export function renderSettingsSection(
   // }
   if (activeSection === "organization-sso") {
     return renderCloudGatedPane(cloudGate, () => <OrganizationSsoPane />);
+  }
+  if (activeSection === "organization-model-policy") {
+    return renderCloudGatedPane(cloudGate, () => <OrganizationModelPolicyPane />);
   }
   if (isSettingsScaffoldPageId(activeSection)) {
     return <SettingsScaffoldPane pageId={activeSection} />;

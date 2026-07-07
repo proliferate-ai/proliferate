@@ -6,7 +6,6 @@ import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialo
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Select } from "@proliferate/ui/primitives/Select";
 import { SettingsSection } from "./SettingsSection";
-import { SettingsRow } from "./SettingsRow";
 import { SettingsPageHeader } from "./SettingsPageHeader";
 
 export interface OrganizationSsoConnectionView {
@@ -92,118 +91,160 @@ export function OrganizationSsoSettingsSurface({
           </Button>
         )}
       />
+
       {error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-ui-sm leading-[1.45] text-destructive">
           {error}
         </div>
       ) : null}
-      <SettingsSection>
-        <SettingsRow
-          label="Connection"
-          description={connection ? connection.displayName : "No SSO connection has been saved."}
-        >
-          <div className="flex items-center gap-2">
-            <Badge tone={statusTone(connection?.status)}>
-              {connection ? statusLabel(connection.status) : "Not saved"}
-            </Badge>
-            {connection?.testedAt ? <Badge tone="info">Tested</Badge> : null}
+
+      {/* Connection status */}
+      <SettingsSection title="Connection">
+        <div className="overflow-clip rounded-lg bg-foreground/5">
+          <div className="flex min-h-[3.5rem] flex-col gap-2 px-3.5 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <ShieldCheckFilled className="size-5 shrink-0 text-muted-foreground" />
+              <div className="min-w-0">
+                <div className="font-medium text-foreground">
+                  {connection?.displayName || "OIDC connection"}
+                </div>
+                <div className="truncate text-muted-foreground">
+                  {connection ? issuerHost(form.oidcIssuerUrl) : "Not configured"}
+                </div>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Badge tone="neutral">
+                {connection ? statusLabel(connection.status, connection.testedAt) : "Not configured"}
+              </Badge>
+              {connection ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  loading={testing}
+                  disabled={statusActionDisabled}
+                  onClick={onTest}
+                >
+                  Test
+                </Button>
+              ) : null}
+              {connection?.status === "enabled" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  loading={disabling}
+                  disabled={busy}
+                  onClick={onDisable}
+                >
+                  Disable
+                </Button>
+              ) : connection ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={enabling}
+                  disabled={statusActionDisabled}
+                  onClick={onEnable}
+                >
+                  Enable
+                </Button>
+              ) : null}
+            </div>
           </div>
-        </SettingsRow>
-        <SettingsRow label="Display name">
-          <Input
-            className="w-full sm:w-[22rem]"
-            value={form.displayName}
-            onChange={(event) => updateForm(onFormChange, form, "displayName", event.target.value)}
-            disabled={busy}
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="Allowed domains"
-          description="Comma-separated email domains."
-        >
-          <Input
-            className="w-full sm:w-[22rem]"
-            value={form.allowedDomains}
-            onChange={(event) =>
-              updateForm(onFormChange, form, "allowedDomains", event.target.value)
-            }
-            placeholder="company.com"
-            disabled={busy}
-          />
-        </SettingsRow>
-        <SettingsRow label="OIDC issuer URL">
-          <Input
-            className="w-full sm:w-[22rem]"
-            value={form.oidcIssuerUrl}
-            onChange={(event) =>
-              updateForm(onFormChange, form, "oidcIssuerUrl", event.target.value)
-            }
-            placeholder="https://idp.example.com"
-            disabled={busy}
-          />
-        </SettingsRow>
-        <SettingsRow label="OIDC client ID">
-          <Input
-            className="w-full sm:w-[22rem]"
-            value={form.oidcClientId}
-            onChange={(event) =>
-              updateForm(onFormChange, form, "oidcClientId", event.target.value)
-            }
-            disabled={busy}
-            data-telemetry-mask
-          />
-        </SettingsRow>
-        <SettingsRow
-          label="OIDC client secret"
-          description={connection?.oidcClientSecretConfigured ? "Leave blank to keep saved secret." : undefined}
-        >
-          <Input
-            className="w-full sm:w-[22rem]"
-            type="password"
-            value={form.oidcClientSecret}
-            onChange={(event) =>
-              updateForm(onFormChange, form, "oidcClientSecret", event.target.value)
-            }
-            disabled={busy}
-            data-telemetry-mask
-          />
-        </SettingsRow>
-        <SettingsRow label="OIDC scopes">
-          <Input
-            className="w-full sm:w-[22rem]"
-            value={form.oidcScopes}
-            onChange={(event) =>
-              updateForm(onFormChange, form, "oidcScopes", event.target.value)
-            }
-            disabled={busy}
-          />
-        </SettingsRow>
-        <SettingsRow label="Token auth method">
-          <Select
-            className="w-full sm:w-[22rem]"
-            value={form.oidcTokenEndpointAuthMethod}
-            onChange={(event) =>
-              updateForm(
-                onFormChange,
-                form,
-                "oidcTokenEndpointAuthMethod",
-                event.target.value as OrganizationSsoFormState["oidcTokenEndpointAuthMethod"],
-              )
-            }
-            disabled={busy}
-          >
-            <option value="client_secret_basic">Client secret basic</option>
-            <option value="client_secret_post">Client secret post</option>
-            <option value="none">None</option>
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="Redirect URI">
-          <div className="flex w-full min-w-0 gap-2 sm:w-[22rem]">
-            <Input
-              className="min-w-0 flex-1 font-mono text-xs"
-              value={connection?.oidcRedirectUri ?? ""}
-              readOnly
-            />
+        </div>
+        {connection?.lastError ? (
+          <div className="mt-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-ui-sm leading-[1.45] text-warning">
+            {connection.lastError}
+          </div>
+        ) : null}
+      </SettingsSection>
+
+      {/* Identity provider configuration */}
+      <SettingsSection
+        title="Identity provider"
+        description="OIDC provider details from your identity platform."
+      >
+        <div className="overflow-clip rounded-lg bg-foreground/5">
+          <div className="grid gap-4 px-3.5 py-4 sm:grid-cols-2">
+            <FormField label="Display name">
+              <Input
+                value={form.displayName}
+                onChange={(e) => updateForm(onFormChange, form, "displayName", e.target.value)}
+                disabled={busy}
+              />
+            </FormField>
+            <FormField label="Allowed domains" hint="Comma-separated email domains.">
+              <Input
+                value={form.allowedDomains}
+                onChange={(e) => updateForm(onFormChange, form, "allowedDomains", e.target.value)}
+                placeholder="company.com"
+                disabled={busy}
+              />
+            </FormField>
+            <FormField label="Issuer URL" className="sm:col-span-2">
+              <Input
+                value={form.oidcIssuerUrl}
+                onChange={(e) => updateForm(onFormChange, form, "oidcIssuerUrl", e.target.value)}
+                placeholder="https://idp.example.com"
+                disabled={busy}
+              />
+            </FormField>
+            <FormField label="Client ID">
+              <Input
+                value={form.oidcClientId}
+                onChange={(e) => updateForm(onFormChange, form, "oidcClientId", e.target.value)}
+                disabled={busy}
+                data-telemetry-mask
+              />
+            </FormField>
+            <FormField
+              label="Client secret"
+              hint={connection?.oidcClientSecretConfigured ? "Leave blank to keep saved secret." : undefined}
+            >
+              <Input
+                type="password"
+                value={form.oidcClientSecret}
+                onChange={(e) => updateForm(onFormChange, form, "oidcClientSecret", e.target.value)}
+                disabled={busy}
+                data-telemetry-mask
+              />
+            </FormField>
+            <FormField label="Scopes">
+              <Input
+                value={form.oidcScopes}
+                onChange={(e) => updateForm(onFormChange, form, "oidcScopes", e.target.value)}
+                disabled={busy}
+              />
+            </FormField>
+            <FormField label="Token auth method">
+              <Select
+                value={form.oidcTokenEndpointAuthMethod}
+                onChange={(e) =>
+                  updateForm(
+                    onFormChange,
+                    form,
+                    "oidcTokenEndpointAuthMethod",
+                    e.target.value as OrganizationSsoFormState["oidcTokenEndpointAuthMethod"],
+                  )
+                }
+                disabled={busy}
+              >
+                <option value="client_secret_basic">Client secret basic</option>
+                <option value="client_secret_post">Client secret post</option>
+                <option value="none">None</option>
+              </Select>
+            </FormField>
+          </div>
+        </div>
+      </SettingsSection>
+
+      {/* Redirect URI */}
+      <SettingsSection title="Redirect URI">
+        <div className="overflow-clip rounded-lg bg-foreground/5">
+          <div className="flex items-center gap-2 px-3.5 py-3.5">
+            <span className="min-w-0 flex-1 truncate font-mono text-ui-sm text-muted-foreground">
+              {connection?.oidcRedirectUri ?? "Save a connection to generate the redirect URI."}
+            </span>
             <Button
               type="button"
               variant="outline"
@@ -215,54 +256,26 @@ export function OrganizationSsoSettingsSurface({
               <Copy className="size-3.5" />
             </Button>
           </div>
-        </SettingsRow>
+        </div>
       </SettingsSection>
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {connection ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            loading={deleting}
-            disabled={busy}
-            onClick={() => setDeleteConfirmOpen(true)}
-          >
-            <Trash className="size-3.5" />
-            Delete
-          </Button>
-        ) : null}
-        {connection ? (
-          <Button
-            variant="outline"
-            size="sm"
-            loading={testing}
-            disabled={statusActionDisabled}
-            onClick={onTest}
-          >
-            Test
-          </Button>
-        ) : null}
-        {connection?.status === "enabled" ? (
-          <Button
-            variant="outline"
-            size="sm"
-            loading={disabling}
-            disabled={busy}
-            onClick={onDisable}
-          >
-            Disable
-          </Button>
-        ) : connection ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={enabling}
-            disabled={statusActionDisabled}
-            onClick={onEnable}
-          >
-            <ShieldCheckFilled className="size-3.5" />
-            Enable
-          </Button>
-        ) : null}
+
+      {/* Save + Delete footer */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          {connection ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={deleting}
+              disabled={busy}
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteConfirmOpen(true)}
+            >
+              <Trash className="size-3.5" />
+              Delete connection
+            </Button>
+          ) : null}
+        </div>
         <Button
           variant="primary"
           size="sm"
@@ -273,11 +286,7 @@ export function OrganizationSsoSettingsSurface({
           Save
         </Button>
       </div>
-      {connection?.lastError ? (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-ui-sm leading-[1.45] text-warning">
-          {connection.lastError}
-        </div>
-      ) : null}
+
       <ConfirmationDialog
         open={deleteConfirmOpen}
         title={connection ? `Delete ${connection.displayName}?` : "Delete SSO connection?"}
@@ -294,6 +303,34 @@ export function OrganizationSsoSettingsSurface({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Internal components
+// ---------------------------------------------------------------------------
+
+function FormField({
+  label,
+  hint,
+  className = "",
+  children,
+}: {
+  label: string;
+  hint?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`flex flex-col gap-1.5 ${className}`}>
+      <span className="text-ui-sm font-medium text-foreground">{label}</span>
+      {children}
+      {hint ? <span className="text-ui-xs text-muted-foreground">{hint}</span> : null}
+    </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function updateForm<K extends keyof OrganizationSsoFormState>(
   onFormChange: (form: OrganizationSsoFormState) => void,
   form: OrganizationSsoFormState,
@@ -303,22 +340,21 @@ function updateForm<K extends keyof OrganizationSsoFormState>(
   onFormChange({ ...form, [key]: value });
 }
 
-function statusTone(status: OrganizationSsoConnectionView["status"] | undefined) {
-  if (status === "enabled") {
-    return "success";
+function issuerHost(url: string): string {
+  if (!url.trim()) return "No issuer configured";
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
   }
-  if (status === "disabled") {
-    return "warning";
-  }
-  return "neutral";
 }
 
-function statusLabel(status: OrganizationSsoConnectionView["status"]) {
-  if (status === "enabled") {
-    return "Enabled";
-  }
-  if (status === "disabled") {
-    return "Disabled";
-  }
+function statusLabel(
+  status: OrganizationSsoConnectionView["status"],
+  testedAt?: string | null,
+): string {
+  if (status === "enabled") return "Enabled";
+  if (status === "disabled") return "Disabled";
+  if (testedAt) return "Tested";
   return "Draft";
 }
