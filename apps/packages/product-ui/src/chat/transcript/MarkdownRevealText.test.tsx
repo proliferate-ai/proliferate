@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { AssistantMessage } from "./AssistantMessage";
 import { MarkdownBody } from "./MarkdownBody";
 
 describe("MarkdownRevealText blip prevention", () => {
@@ -101,5 +102,28 @@ describe("MarkdownRevealText blip prevention", () => {
     const spans = container.querySelectorAll("span");
     // No word spans at all — children rendered as plain text.
     expect(spans.length).toBe(0);
+  });
+
+  // The actual regression shape: stream two batches through AssistantMessage
+  // (which derives revealedUpTo from the previous render's content length) and
+  // assert the structure change does not re-animate already-seen words.
+  it("streaming rerender with completing bold does not re-animate seen words", () => {
+    const { container, rerender } = render(
+      <AssistantMessage content="Check this **bo" isStreaming />,
+    );
+    // First batch: all words are new and animate.
+    expect(
+      Array.from(container.querySelectorAll(".stream-word")).map((el) => el.textContent),
+    ).toContain("Check");
+
+    // Second batch completes the bold and appends — hast restructures the
+    // paragraph, remounting spans. Seen words must render static.
+    rerender(<AssistantMessage content="Check this **bold** end" isStreaming />);
+    const animated = Array.from(container.querySelectorAll(".stream-word")).map(
+      (el) => el.textContent,
+    );
+    expect(animated).not.toContain("Check");
+    expect(animated).not.toContain("this");
+    expect(animated).toContain("end");
   });
 });

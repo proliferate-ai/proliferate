@@ -122,7 +122,11 @@ function wrapStraddling(
         return result;
       }
       // Non-string child (React element): advance accumulator by its source
-      // extent if available, else estimate via textContent.
+      // extent if available, else estimate via textContent. The textContent
+      // fallback UNDERcounts source length (markdown syntax chars, entities),
+      // which keeps drift on the safe side of the `< revealedUpTo` bias: too-low
+      // offsets can only classify new words as settled (a skipped fade, invisible)
+      // — never make an already-seen word look new and re-blip.
       const childNode = getHastNodeFromElement(child);
       if (childNode?.position?.end?.offset !== undefined) {
         charAccumulator = childNode.position.end.offset;

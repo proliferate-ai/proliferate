@@ -329,10 +329,13 @@ export const MarkdownBody = memo(function MarkdownBody({
     ),
   }), [renderCodeBlock, renderInlineCode, renderLink, taskListItems]);
 
-  // Build reveal context value. Use a stable reference for the disabled case.
-  const revealState: MarkdownRevealState | null = revealText
-    ? { enabled: true, revealedUpTo }
-    : REVEAL_DISABLED;
+  // Build reveal context value. Memoized so a re-render that changes neither
+  // flag nor offset doesn't push a fresh object through context; the disabled
+  // case shares one module-level reference.
+  const revealState: MarkdownRevealState | null = useMemo(
+    () => (revealText ? { enabled: true, revealedUpTo } : REVEAL_DISABLED),
+    [revealText, revealedUpTo],
+  );
 
   return (
     <MarkdownRevealContext.Provider value={revealState}>
