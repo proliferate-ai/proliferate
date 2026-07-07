@@ -17,6 +17,9 @@ export function Toaster({ toastOptions, ...props }: ComponentProps<typeof Sonner
       theme="dark"
       position="bottom-right"
       richColors={false}
+      // Always expanded: prevents the hover-enter resize animation that sonner
+      // applies when transitioning stacked toasts from collapsed to expanded.
+      expand
       {...props}
       toastOptions={{
         ...toastOptions,

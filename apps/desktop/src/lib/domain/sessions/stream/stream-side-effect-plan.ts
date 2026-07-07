@@ -314,19 +314,18 @@ function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {
   }
 }
 
+/**
+ * Gates the sidebar recency sort and displayed relative date. Only turn
+ * boundaries count — never mid-turn item ticks — so concurrent runs don't
+ * leapfrog each other in the sidebar while agents are working.
+ */
 function shouldTrackWorkspaceWorkActivity(eventType: string): boolean {
   switch (eventType) {
     case "turn_started":
-    case "item_started":
-    case "item_completed":
-    case "interaction_requested":
-    case "interaction_resolved":
     case "turn_ended":
     case "error":
     case "session_ended":
-    case "subagent_turn_completed":
-    case "session_link_turn_completed":
-    case "review_run_updated":
+    case "interaction_requested":
       return true;
     default:
       return false;

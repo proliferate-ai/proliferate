@@ -136,6 +136,24 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   }),
 }));
 
+vi.mock("@/hooks/support/workflows/use-open-support-report-window", () => ({
+  useOpenSupportReportWindow: () => ({
+    openBug: vi.fn(() => {
+      useSupportModalStore.getState().openFeedback();
+    }),
+    openFeature: vi.fn(),
+    canSubmit: true,
+    disabledReason: null,
+  }),
+}));
+
+vi.mock("@/hooks/support/facade/use-support-availability", () => ({
+  useSupportAvailability: () => ({
+    canSubmit: true,
+    disabledReason: null,
+  }),
+}));
+
 vi.mock("@/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { pendingWorkspaceEntry: null }) => unknown) =>
     selector({ pendingWorkspaceEntry: null }),

@@ -28,6 +28,7 @@ import {
   sidebarGitGlyphForStatus,
 } from "@/lib/domain/workspaces/git-status/pr-status-presentation";
 import type { WorkspaceGitStatus } from "@/lib/domain/workspaces/git-status/workspace-git-status-model";
+import { formatSidebarRelativeTime } from "@/lib/domain/workspaces/display/workspace-display";
 import {
   SidebarDetailIndicatorsView,
   SidebarStatusIndicatorView,
@@ -64,6 +65,12 @@ interface WorkspaceItemProps {
   shortcutRevealVisible?: boolean;
   /** Current git branch, shown read-only in the three-dot menu git section. */
   branchName?: string | null;
+  /**
+   * Last interaction timestamp for this workspace. Rendered as a relative
+   * timestamp in the trailing label cell; trumped by trailingStatus
+   * (spinner/error) and unreadDot per ProductSidebarWorkspaceRow's precedence.
+   */
+  lastInteracted?: string | null;
   /**
    * Composed git/PR status (§3.2/§3.3). Drives the leading PR glyph, the PR
    * status dot, tooltips, and the "Open pull request" menu item. The well is
@@ -106,6 +113,7 @@ export function WorkspaceItem({
   shortcutLabel = null,
   shortcutRevealVisible = false,
   branchName = null,
+  lastInteracted = null,
   gitStatus = null,
   needsReview = false,
   onSelect,
@@ -200,11 +208,14 @@ export function WorkspaceItem({
 
   // Leading well (§3.2): PR glyph + dot for real PR states only — rows with
   // no PR (null/unknown or authoritative "none") leave the well empty.
-  // Activity indicators live in the row's RIGHT slot (trailingStatus), where
-  // the relative timestamp used to sit.
+  // Activity indicators live in the row's RIGHT slot (trailingStatus).
+  // Relative timestamp (trailingLabel) is also in the RIGHT slot, with lower
+  // precedence than trailingStatus and unreadDot.
   const gitGlyph = sidebarGitGlyphForStatus(gitStatus);
   const prStatusView = gitGlyph ? prStatusViewFromGitStatus(gitStatus) : null;
   const leadingGlyph = gitGlyph ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} /> : null;
+
+  const timestampLabel = lastInteracted ? formatSidebarRelativeTime(lastInteracted) : null;
 
   const row = (
     <ProductSidebarWorkspaceRow
@@ -216,6 +227,7 @@ export function WorkspaceItem({
           onAction={onIndicatorAction}
         />
       ) : null}
+      trailingLabel={timestampLabel}
       leadingGlyph={leadingGlyph}
       label={name}
       detail={detail}

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
-import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Globe, Settings, SquarePlus, Trash } from "@proliferate/ui/icons";
+import { ChevronRight, CloudIcon, FolderClosedFilled, FolderFilled, Globe, Plus, Settings, Trash } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -119,7 +119,7 @@ export function RepoGroup({
               alwaysVisible
               className="absolute inset-0 rounded-md opacity-0 group-hover/folder-row:opacity-100 focus-visible:opacity-100"
             >
-              <SquarePlus className="size-3" />
+              <Plus className="size-3" />
             </SidebarActionButton>
           }
           side="right"
