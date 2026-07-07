@@ -204,21 +204,42 @@ impl LoopRuntime {
             .call_agent_ext_method(LOOP_SET_EXT_METHOD.to_string(), params)
             .await
             .map_err(map_ext_call_error)?;
-        // The response confirms the NATIVE write landed; the mirror still
-        // transitions only via the observed notification.
-        if serde_json::from_value::<super::wire::LoopWireEnvelope>(response).is_err() {
+        // The response envelope carries the loop_id of the loop that was
+        // actually written — use it to correlate the confirmation event so we
+        // return the correct record even when multiple native loops exist.
+        let target_loop_id = serde_json::from_value::<super::wire::LoopWireEnvelope>(response)
+            .ok()
+            .map(|envelope| envelope.r#loop.loop_id);
+        if target_loop_id.is_none() {
             tracing::warn!(session_id, "loop/set returned an unexpected result shape");
         }
-        if !wait_for_loop_event(&mut events, &["loop_upserted", "loop_fired"]).await {
+        if !wait_for_loop_event(
+            &mut events,
+            &["loop_upserted", "loop_fired"],
+            target_loop_id.as_deref(),
+        )
+        .await
+        {
             return Err(LoopOpError::NotConfirmed);
         }
-        // Return the most-recently-updated native loop as the confirmation.
-        self.loop_service
-            .current_loops(session_id)?
-            .into_iter()
-            .find(|record| record.native)
-            .map(|record| record.to_contract())
-            .ok_or(LoopOpError::NotConfirmed)
+        // Return the mirror record matching the loop_id from the response.
+        match target_loop_id {
+            Some(ref loop_id) => self
+                .loop_service
+                .store()
+                .find_one(session_id, loop_id)?
+                .map(|record| record.to_contract())
+                .ok_or(LoopOpError::NotConfirmed),
+            None => {
+                // Fallback: no loop_id from response — return the first native loop.
+                self.loop_service
+                    .current_loops(session_id)?
+                    .into_iter()
+                    .find(|record| record.native)
+                    .map(|record| record.to_contract())
+                    .ok_or(LoopOpError::NotConfirmed)
+            }
+        }
     }
 
     async fn arm_emulated_loop(
@@ -686,15 +707,18 @@ fn map_domain_op_error(error: LiveSessionCommandError<std::convert::Infallible>)
 }
 
 /// Waits for the observer-ingested confirmation of a native loop mutation.
+/// When `expected_loop_id` is set, only an envelope whose loop carries that id
+/// confirms — so an unrelated native loop's event cannot resolve the wait.
 async fn wait_for_loop_event(
     events: &mut broadcast::Receiver<SessionEventEnvelope>,
     event_types: &[&str],
+    expected_loop_id: Option<&str>,
 ) -> bool {
     let deadline = tokio::time::Instant::now() + LOOP_CONFIRMATION_TIMEOUT;
     loop {
         match tokio::time::timeout_at(deadline, events.recv()).await {
             Ok(Ok(envelope)) => {
-                if event_types.contains(&envelope.event.event_type()) {
+                if loop_event_matches(&envelope, event_types, expected_loop_id) {
                     return true;
                 }
             }
@@ -702,5 +726,136 @@ async fn wait_for_loop_event(
             Ok(Err(broadcast::error::RecvError::Closed)) => return false,
             Err(_) => return false,
         }
+    }
+}
+
+/// The confirming envelope must be one of the accepted loop event types and,
+/// when correlating a set with a known loop_id, carry that loop_id.
+fn loop_event_matches(
+    envelope: &SessionEventEnvelope,
+    event_types: &[&str],
+    expected_loop_id: Option<&str>,
+) -> bool {
+    if !event_types.contains(&envelope.event.event_type()) {
+        return false;
+    }
+    match expected_loop_id {
+        None => true,
+        Some(loop_id) => loop_event_loop_id(&envelope.event) == Some(loop_id),
+    }
+}
+
+fn loop_event_loop_id(event: &anyharness_contract::v1::SessionEvent) -> Option<&str> {
+    use anyharness_contract::v1::SessionEvent;
+    match event {
+        SessionEvent::LoopUpserted(payload) => Some(payload.r#loop.loop_id.as_str()),
+        SessionEvent::LoopFired(payload) => Some(payload.r#loop.loop_id.as_str()),
+        SessionEvent::LoopRemoved(payload) => Some(payload.loop_id.as_str()),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyharness_contract::v1::{
+        Loop, LoopFiredPayload, LoopSchedule, LoopScheduleKind, LoopStatus, LoopUpsertedPayload,
+        SessionEvent,
+    };
+
+    const LOOP_EVENT_TYPES: &[&str] = &["loop_upserted", "loop_fired"];
+
+    fn loop_upserted_envelope(loop_id: &str) -> SessionEventEnvelope {
+        SessionEventEnvelope {
+            session_id: "session-1".to_string(),
+            seq: 1,
+            timestamp: "now".to_string(),
+            turn_id: None,
+            item_id: None,
+            event: SessionEvent::LoopUpserted(LoopUpsertedPayload {
+                r#loop: Loop {
+                    loop_id: loop_id.to_string(),
+                    prompt: "ping".to_string(),
+                    schedule: LoopSchedule {
+                        kind: LoopScheduleKind::Cron,
+                        expr: "*/1 * * * *".to_string(),
+                    },
+                    recurring: true,
+                    status: LoopStatus::Active,
+                    native: true,
+                    last_fired_at_ms: None,
+                    fire_count: 0,
+                    updated_at_ms: 1,
+                },
+            }),
+        }
+    }
+
+    fn loop_fired_envelope(loop_id: &str) -> SessionEventEnvelope {
+        SessionEventEnvelope {
+            session_id: "session-1".to_string(),
+            seq: 2,
+            timestamp: "now".to_string(),
+            turn_id: None,
+            item_id: None,
+            event: SessionEvent::LoopFired(LoopFiredPayload {
+                r#loop: Loop {
+                    loop_id: loop_id.to_string(),
+                    prompt: "ping".to_string(),
+                    schedule: LoopSchedule {
+                        kind: LoopScheduleKind::Cron,
+                        expr: "*/1 * * * *".to_string(),
+                    },
+                    recurring: true,
+                    status: LoopStatus::Active,
+                    native: true,
+                    last_fired_at_ms: Some(2),
+                    fire_count: 1,
+                    updated_at_ms: 2,
+                },
+                fired_at_ms: 2,
+                turn_id: None,
+            }),
+        }
+    }
+
+    #[test]
+    fn uncorrelated_match_accepts_any_loop_event_type() {
+        let envelope = loop_upserted_envelope("loop-A");
+        assert!(loop_event_matches(&envelope, LOOP_EVENT_TYPES, None));
+        assert!(!loop_event_matches(&envelope, &["loop_removed"], None));
+    }
+
+    #[test]
+    fn loop_id_correlation_skips_unrelated_loop_events() {
+        // Two native loops on the same session: setting loop-B must not be
+        // confirmed by loop-A's event (the bug this fix addresses).
+        let loop_a_event = loop_upserted_envelope("loop-A");
+        let loop_b_event = loop_upserted_envelope("loop-B");
+        // A stale accounting echo for loop-A must NOT confirm a set of loop-B.
+        assert!(!loop_event_matches(
+            &loop_a_event,
+            LOOP_EVENT_TYPES,
+            Some("loop-B")
+        ));
+        // Only loop-B's own echo confirms.
+        assert!(loop_event_matches(
+            &loop_b_event,
+            LOOP_EVENT_TYPES,
+            Some("loop-B")
+        ));
+    }
+
+    #[test]
+    fn loop_id_correlation_works_across_event_types() {
+        // A loop_fired event for loop-B also confirms if we are waiting for
+        // loop-B (the set can trigger an immediate fire on the native side).
+        let fired = loop_fired_envelope("loop-B");
+        assert!(loop_event_matches(&fired, LOOP_EVENT_TYPES, Some("loop-B")));
+        assert!(!loop_event_matches(
+            &fired,
+            LOOP_EVENT_TYPES,
+            Some("loop-A")
+        ));
     }
 }
