@@ -2,8 +2,10 @@
 
 **What this doc is.** The complete as-it-will-be picture of the workflows system
 after the five blessed build items land. It is the alignment surface: every
-design point is tagged, and Pablo rules on the open ones by annotating this doc
-in one pass. **Do not build past PR A's prep until the [OPEN-n] rulings land.**
+design point is tagged. **All eight [OPEN-n] questions were ruled by Pablo on
+2026-07-07** — each ruling is recorded inline as **RULED** at its section and in
+the §9 table. This doc is now the design of record for the arc: PRs A–E, plus a
+UX PR F that is gated on its own design pass (§8.3).
 
 **Companion docs — cross-linked, not duplicated:**
 - [`workflows-deep-dive.md`](workflows-deep-dive.md) — the **current-state**
@@ -23,9 +25,10 @@ in one pass. **Do not build past PR A's prep until the [OPEN-n] rulings land.**
 - **LOCKED** — decided; provenance in parentheses (spec section, merged PR, or
   dated Pablo ruling). Not up for annotation.
 - **PLANNED(A..E)** — designed here, ships in that PR. Veto/edit freely.
-- **[OPEN-n]** — needs Pablo's ruling. Each has options, a recommendation, and
-  one paragraph of tradeoff. The decision log (§9) collects all of them with a
-  blank ruling column.
+- **[OPEN-n]** — was open for Pablo's ruling; each had options, a
+  recommendation, and one paragraph of tradeoff. All eight were ruled
+  2026-07-07; the tags remain for traceability, with the ruling recorded
+  inline and in §9.
 
 **The five build items** (LOCKED — Pablo ruling 2026-07-06, "your load-bearing
 set is blessed, with one amendment"; build order A→B→C→D→E):
@@ -575,9 +578,11 @@ workflow's own id (direct self-spawn); the spawner enforces a chain-depth cap
 the effect as `failed` with `error_message="chain_depth_exceeded"`, visible in
 the parent's run view.
 
-### 3.6 [OPEN-7] Child-run provenance
+### 3.6 [OPEN-7] Child-run provenance — RULED (a) (Pablo, 2026-07-07)
 
-When the observer spawns a child, three identity questions need one ruling:
+**Ruling: new `'workflow'` trigger_kind (CHECK widened in the PR D migration);
+child inherits the parent's workspace; executor = owner.** Original options,
+for the record:
 
 - **`trigger_kind`** — options: (a) reuse `'agent'` (in the CHECK today,
   currently unused), (b) **add `'workflow'` to the CHECK (recommended)** so run
@@ -696,13 +701,26 @@ async def _poll_one_trigger(session_factory, *, trigger_id: UUID, now: datetime)
                                               status="invalid", error_message=error)
                 continue                                         # surfaced, never dropped, never spawned
             args = map_item_args(item.data, trigger)             # §7.1 — dot-path mapping over static args
-            run = await service.start_run(
-                db, _SchedulerActor(id=trigger.workflow_owner_user_id),
-                trigger.workflow_id, args=args,
-                target_mode=trigger.target_mode,                 # OPEN-4 decides what this is
-                trigger_kind="poll",                             # new CHECK member (PR B migration)
-                target_workspace_id=trigger.target_workspace_id,
-                trigger_id=trigger_id)
+            # Savepoint per item (Pablo amendment 2026-07-07, mirroring the
+            # schedule scheduler's begin_nested around start_run): a start_run
+            # failure rolls back ONLY this item's insert — without it, one
+            # raising item would roll back the whole transaction (cursor, seen-
+            # set, and all) and re-wedge the feed on every poll. The failure is
+            # recorded as status='error' and the loop continues.
+            try:
+                async with db.begin_nested():
+                    run = await service.start_run(
+                        db, _SchedulerActor(id=trigger.workflow_owner_user_id),
+                        trigger.workflow_id, args=args,
+                        target_mode=trigger.target_mode,             # pinned cloud workspace (OPEN-4 ruling)
+                        trigger_kind="poll",                         # new CHECK member (PR B migration)
+                        target_workspace_id=trigger.target_workspace_id,
+                        trigger_id=trigger_id)
+            except CloudApiError as exc:
+                await trigger_store.mark_item(db, trigger_id, item.id,
+                                              status="error",
+                                              error_message=f"{exc.code}: {exc.message}")
+                continue
             await trigger_store.mark_item(db, trigger_id, item.id,
                                           status="spawned", run_id=run.id)
             spawned += 1
@@ -754,9 +772,24 @@ and it is why no ack callback exists anywhere.
 | gateway dotfile (`integration-gateway.json`) | **cloud only** | written solely by `proliferate-worker` at enroll ([integration_gateway.rs:21-45](../anyharness/crates/proliferate-worker/src/integration_gateway.rs)); nothing in the desktop lane writes it (verified — see OPEN-5) |
 | manual + chat-triggered runs | both | client-initiated; the desktop delivers locally itself |
 
-### 5.2 [OPEN-4] Poll-trigger run target
+### 5.2 [OPEN-4] Poll-trigger run target — RULED (a) (Pablo, 2026-07-07)
 
-Where does a poll-fired run execute? Options:
+**Ruling: pinned cloud workspace per trigger + `queue` concurrency, with (c)'s
+door left open in the schema** (the §1.3 columns already accommodate a future
+per-item target mode without migration). Two conditions attached to the
+ruling:
+
+- **Shared-tree hygiene is the workflow's job, by convention:** the fix
+  workflow's definition opens with a hygiene step —
+  `shell.run: git checkout main && git pull && git clean -fd` — since fix runs
+  share the pinned tree. Seeded/template definitions that mutate a shared
+  workspace must carry the same step.
+- **Throughput ceiling, stated honestly:** fix runs are 30–90 min each, so one
+  pinned workspace processes ~16–48 fixes/day serially — fine at current issue
+  volume, but a real ceiling. **Revisit the target mode when volume grows**;
+  that is what (c)'s open door is for.
+
+Original options, for the record:
 
 **(a) Pinned cloud workspace per trigger (recommended).** Reuses the exact
 shape schedule triggers already enforce — `ck_workflow_trigger_target_workspace`
@@ -788,7 +821,12 @@ but a customer workflow that edits code in a pinned workspace must handle its
 own hygiene (`shell.run` git-clean step, or declare fresh-tree-needed — a v2
 definition flag).
 
-### 5.3 [OPEN-5] Local-lane scope for gateway functions
+### 5.3 [OPEN-5] Local-lane scope for gateway functions — RULED (a) (Pablo, 2026-07-07)
+
+**Ruling: cloud-only v1. The "functions require cloud runs" caption must be
+LOUD — surfaced at definition save (editor warns when a `functions` block is
+saved) AND at local launch (the run-args modal warns before StartRun), never
+discovered at runtime.**
 
 Verified: the local desktop runtime home has **no** `integration-gateway.json`
 writer — only `proliferate-worker` (cloud sandbox enroll) writes it; the
@@ -879,7 +917,11 @@ depth). Scoping example from the mission (LOCKED — issues-service-v1 §5):
 triage workflow → `claim, get_issue, search_issues, update_status,
 mark_duplicate, mark_dismissed`; fix workflow → all tools.
 
-### 6.4 [OPEN-3] The scoping key: how the gateway learns "who is calling"
+### 6.4 [OPEN-3] The scoping key — RULED (a) (Pablo, 2026-07-07)
+
+**Ruling: per-run gateway token minted at StartRun; scope frozen at mint;
+expires at terminal status.** Option (b) is recorded below for the tradeoff
+history only.
 
 **Option (a) — per-run gateway token, minted at StartRun (recommended).**
 
@@ -1035,7 +1077,9 @@ affected, PR link") all expressible today-shaped. A workflow's "completion
 event with schema" is, by construction, its last `agent.emit` — no separate
 concept exists.
 
-### 7.4 [OPEN-2] The emit mechanism
+### 7.4 [OPEN-2] The emit mechanism — RULED (a) (Pablo, 2026-07-07)
+
+**Ruling: file-drop + validate + reprompt.**
 
 **(a) File-drop (recommended).** `EMIT_INSTRUCTION` appended to the prompt:
 *"Write ONLY the JSON object to `<workspace>/.proliferate/emit-<run>-<step>.json`.
@@ -1059,7 +1103,10 @@ failure with a corrective message; (b)'s failure mode (wrong block extracted,
 silently valid-but-unintended JSON) is worse because it can *succeed wrongly*.
 Recommendation: **(a)**.
 
-### 7.5 [OPEN-6] Named step-output references
+### 7.5 [OPEN-6] Named step-output references — RULED (a) (Pablo, 2026-07-07)
+
+**Ruling: optional per-step `name` + `{{steps.<name>.output.*}}` grammar,
+inside PR C. `shell.run`'s `output_name` is deprecated into `name`.**
 
 Today refs are index-based: `{{steps[3].output.pr_url}}` — brittle under step
 reorder (the editor renumbers, references don't follow). Options: **(a) add an
@@ -1100,17 +1147,31 @@ Open-session deep link, local-lane approve/deny), playground fixtures. Routes:
 | D | step panel: workflow picker (owner's non-archived workflows) + args editor with `{{steps…}}` autocomplete; run view: "Spawned run →" link on the step row, "Started by <parent> step N ↗" banner on the child |
 | E | editor: Functions section (provider + tool multi-select from the gateway's tool cache); local-launch caption per OPEN-5 |
 
-### 8.3 Concept-doc intents → disposition ([OPEN-8] for the unscheduled ones)
+### 8.3 Concept-doc intents → disposition ([OPEN-8] — RULED (a), Pablo 2026-07-07)
+
+**Ruling: a separate UX PR F after E**, bundling: in-chat trigger modal,
+new-chat recommended strip, tab-grouped run sessions, session input-lockout
+during runs, seeded read-only templates, Stop/cancel button (including the
+missing server-side cancel endpoint — deep-dive drift #8), **and seeded
+workspaces** (new item, not in the original concept doc): a pre-provisioned
+cloud workspace per seeded workflow, so a fresh user can trigger a template
+without any setup — provisioning happens at seed time, and the template's
+trigger/StartRun defaults point at it.
+
+**Gate on PR F (Pablo, verbatim intent): before building F, write a
+§8-equivalent design section for it at engine-section depth and bring it for
+annotation like this doc — one-line intents don't get built.** The table below
+is the intent inventory that design pass expands from:
 
 | intent (Pablo's words) | disposition |
 |---|---|
 | "clean list of workflows with agent provider icons and clear use cases" | exists (cards + glyph strip); provider icon on the card = small Δ, fold into any A–E UI pass |
-| "pre-constructed workflows seeded in app" | templates gallery exists (5 starters); *seeded org/global read-only templates instantiated on use* = post-E product work, [OPEN-8] |
-| "recommended workflows in the main part of the new-chat page" | NOT built. Home composer is [HomeNextScreen.tsx](../apps/desktop/src/components/home/screen/HomeNextScreen.tsx); a recommended-workflows strip is a contained addition. [OPEN-8]: schedule it? |
-| "in every chat, place to trigger workflow (clean modal)" | NOT built; `trigger_kind='chat'` is in the run CHECK and the client label map ([model.ts:23](../apps/packages/product-domain/src/workflows/model.ts)) — enum-ready, composer binding unwired. [OPEN-8] |
+| "pre-constructed workflows seeded in app" | templates gallery exists (5 starters); *seeded org/global read-only templates instantiated on use* = **PR F** (OPEN-8 ruling), incl. seeded workspaces (below) |
+| "recommended workflows in the main part of the new-chat page" | NOT built. Home composer is [HomeNextScreen.tsx](../apps/desktop/src/components/home/screen/HomeNextScreen.tsx); a recommended-workflows strip is a contained addition. **PR F** (OPEN-8 ruling) |
+| "in every chat, place to trigger workflow (clean modal)" | NOT built; `trigger_kind='chat'` is in the run CHECK and the client label map ([model.ts:23](../apps/packages/product-domain/src/workflows/model.ts)) — enum-ready, composer binding unwired. **PR F** (OPEN-8 ruling) |
 | "new workflows run in new session in the workspace; same provider may offer continue-or-new" | matches shipped session semantics (harness switch ⇒ new session at next agent step; same harness reuses). The continue-current-chat variant needs the chat trigger first. |
-| "when running: see steps + stream but CANNOT touch ANYTHING; clean view" | matches the shipped run view (read-only timeline; sessions reachable via deep link). Enforcing read-only on the *deep-linked session while the run drives it* is real work (input lockout + banner) — [OPEN-8] |
-| "group tabs run by the workflow in a tab group" | tab-group machinery exists ([use-tab-group-actions.ts](../apps/desktop/src/hooks/workspaces/workflows/tabs/use-tab-group-actions.ts), TabGroupPill) — binding run-opened sessions into a group is contained. [OPEN-8] |
+| "when running: see steps + stream but CANNOT touch ANYTHING; clean view" | matches the shipped run view (read-only timeline; sessions reachable via deep link). Enforcing read-only on the *deep-linked session while the run drives it* is real work (input lockout + banner) — **PR F** (OPEN-8 ruling) |
+| "group tabs run by the workflow in a tab group" | tab-group machinery exists ([use-tab-group-actions.ts](../apps/desktop/src/hooks/workspaces/workflows/tabs/use-tab-group-actions.ts), TabGroupPill) — binding run-opened sessions into a group is contained. **PR F** (OPEN-8 ruling) |
 | "can pause but is destructive — no resume" | **Naming correction (recommended):** the engine *has* durable resume (cursor + crash-resume, §3.4) — don't ship an action called "pause" that destroys. Ship **Stop (cancel)**: exists runtime-side (`POST /v1/workflow-runs/{id}/cancel`); the server-side desired-state cancel endpoint is still missing (deep-dive drift #8) and should ride the first UX PR that needs it. Long-lived "pause and pick up later" is intentionally not a state — the P2 pattern (nothing waits inside a workflow; the service state machine holds position) covers the real need. |
 
 ### 8.4 Run-view honesty rule (LOCKED — Pablo, gallery round 2: "we shouldn't be
@@ -1144,18 +1205,18 @@ client-derived status (from real cursor + goal-armed fact).
 | L14 | Run view renders only real observed data (no mocked states) | Pablo, UI gallery round 2 |
 | L15 | Schedule (and by inheritance poll) triggers are cloud-only until a server→desktop claim protocol exists | shipped `_validate_trigger_target_mode` |
 
-### OPEN — Pablo annotates the ruling column
+### OPEN — all ruled by Pablo, 2026-07-07
 
 | # | question | options (rec. first) | ruling |
 |---|---|---|---|
-| OPEN-1 | PR #966 disposition — it now conflicts with `workflows/v1` tip; its residual change is only the Setup-summary session label. Also: do you still want that label ("Fresh (visible)/Headless") out of the collapsed summary? | (a) close #966 as superseded; I land the label one-liner on `workflows/v1` if wanted · (b) I rebase #966 for you to merge | — |
-| OPEN-2 | `agent.emit` mechanism (§7.4) | (a) file-drop + validate + reprompt · (b) parse final assistant message | — |
-| OPEN-3 | Gateway scoping key (§6.4) | (a) per-run token minted at StartRun, scope frozen, expires at terminal · (b) per-worker token + `X-Run-Id` header cross-check | — |
-| OPEN-4 | Poll-trigger run target (§5.2) | (a) pinned cloud workspace per trigger + queue (schedule-trigger shape reused) · (b) fresh headless workspace per item · (c) configurable, (a) default | — |
-| OPEN-5 | Local-lane gateway functions (§5.3) | (a) cloud-only v1, loud UI caption · (b) local parity (dotfile/token on laptop) | — |
-| OPEN-6 | Named step-output refs (§7.5) | (a) optional step `name` + `{{steps.<name>.output.*}}`, inside PR C · (b) index-only, editor rewrites on reorder | — |
-| OPEN-7 | Child-run provenance (§3.6) | trigger_kind: (a) new `'workflow'` · (b) reuse `'agent'`; workspace: inherit parent's (rec.); executor = owner (stated) | — |
-| OPEN-8 | UX-surface sequencing (§8.3): new-chat recommended strip, in-chat trigger modal, tab-grouped run sessions, session input-lockout during runs, seeded org templates | (a) separate UX PR F after E · (b) fold selected items into A–E · (c) later | — |
+| OPEN-1 | PR #966 disposition — it now conflicts with `workflows/v1` tip; its residual change is only the Setup-summary session label. Also: do you still want that label ("Fresh (visible)/Headless") out of the collapsed summary? | (a) close #966 as superseded; I land the label one-liner on `workflows/v1` if wanted · (b) I rebase #966 for you to merge | **(a)** — close #966 as superseded; land the session-label one-liner on `workflows/v1` |
+| OPEN-2 | `agent.emit` mechanism (§7.4) | (a) file-drop + validate + reprompt · (b) parse final assistant message | **(a)** file-drop + validate + reprompt |
+| OPEN-3 | Gateway scoping key (§6.4) | (a) per-run token minted at StartRun, scope frozen, expires at terminal · (b) per-worker token + `X-Run-Id` header cross-check | **(a)** per-run token minted at StartRun; scope frozen; expires at terminal |
+| OPEN-4 | Poll-trigger run target (§5.2) | (a) pinned cloud workspace per trigger + queue (schedule-trigger shape reused) · (b) fresh headless workspace per item · (c) configurable, (a) default | **(a)** pinned workspace + queue, (c)'s door open in schema; fix workflow opens with a git-hygiene step; throughput ceiling noted — revisit at volume |
+| OPEN-5 | Local-lane gateway functions (§5.3) | (a) cloud-only v1, loud UI caption · (b) local parity (dotfile/token on laptop) | **(a)** cloud-only v1; loud caption at definition save AND local launch |
+| OPEN-6 | Named step-output refs (§7.5) | (a) optional step `name` + `{{steps.<name>.output.*}}`, inside PR C · (b) index-only, editor rewrites on reorder | **(a)** named refs inside PR C; `output_name` deprecated into `name` |
+| OPEN-7 | Child-run provenance (§3.6) | trigger_kind: (a) new `'workflow'` · (b) reuse `'agent'`; workspace: inherit parent's (rec.); executor = owner (stated) | **(a)** new `'workflow'` trigger_kind; inherit parent workspace; executor = owner |
+| OPEN-8 | UX-surface sequencing (§8.3): new-chat recommended strip, in-chat trigger modal, tab-grouped run sessions, session input-lockout during runs, seeded org templates, seeded workspaces | (a) separate UX PR F after E · (b) fold selected items into A–E · (c) later | **(a)** separate UX PR F after E — full bundle incl. Stop/cancel (+ server-side cancel endpoint) and NEW seeded-workspaces item; F gated on its own engine-depth design doc |
 
 ---
 
