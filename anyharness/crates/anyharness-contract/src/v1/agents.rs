@@ -21,6 +21,15 @@ pub enum AgentCredentialState {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
+pub enum AgentCliAuthState {
+    Authenticated,
+    Expired,
+    Absent,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentReadinessState {
     Ready,
     InstallRequired,
@@ -67,6 +76,8 @@ pub struct AgentSummary {
     pub docs_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cli_auth_state: Option<AgentCliAuthState>,
 }
 
 // --- Launch options ---
