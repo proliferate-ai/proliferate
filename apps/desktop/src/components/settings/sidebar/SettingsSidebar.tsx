@@ -188,7 +188,7 @@ export function SettingsSidebar({
   updateActionState,
 }: SettingsSidebarProps) {
   const appVersion = useAppVersion().data?.trim();
-  const handleOpenSupport = useOpenSupportReportWindow({ source: "settings" });
+  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const visibleNavGroups = useMemo(() =>
     getSettingsScopeNav(activeScope).groups.map((group) => ({

@@ -56,7 +56,7 @@ from proliferate.integrations.sandbox import (
     SandboxProvider,
     get_configured_sandbox_provider,
 )
-from proliferate.integrations.sentry import capture_server_sentry_exception
+from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
 from proliferate.server.billing.models import BillingSnapshot
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
@@ -430,14 +430,13 @@ async def _billing_reconciler_loop() -> None:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            capture_server_sentry_exception(
+            report_critical(
                 exc,
                 tags={
                     "domain": "billing",
                     "action": "reconcile_loop",
                 },
             )
-            logger.exception("billing reconciler pass failed")
         await asyncio.sleep(max(BILLING_RECONCILE_INTERVAL_SECONDS, 30))
 
 

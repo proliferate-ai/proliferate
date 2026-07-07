@@ -13,6 +13,7 @@ from proliferate.integrations.sentry import (
     flush_server_sentry,
     init_server_sentry,
 )
+from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.automations.worker.scheduler import run_scheduler_loop
 from proliferate.utils.logging import configure_server_logging
 
@@ -41,15 +42,16 @@ async def _amain(args: argparse.Namespace) -> None:
     init_server_sentry()
     stop_event = asyncio.Event()
     _install_signal_handlers(stop_event)
-    try:
-        await run_scheduler_loop(
-            interval_seconds=args.interval_seconds,
-            batch_size=args.batch_size,
-            stop_event=stop_event,
-            validate_schema=_validate_schema,
-        )
-    finally:
-        flush_server_sentry()
+    with with_correlation_context(worker_id=f"automation-{args.role}"):
+        try:
+            await run_scheduler_loop(
+                interval_seconds=args.interval_seconds,
+                batch_size=args.batch_size,
+                stop_event=stop_event,
+                validate_schema=_validate_schema,
+            )
+        finally:
+            flush_server_sentry()
 
 
 def _positive_float(value: str) -> float:

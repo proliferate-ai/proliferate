@@ -615,6 +615,8 @@ export type GenerateSessionTitleRequest = Schema<"GenerateSessionTitleRequest">;
 export type GenerateSessionTitleResponse = Schema<"GenerateSessionTitleResponse">;
 export type GenerateWorkspaceNameRequest = Schema<"GenerateWorkspaceNameRequest">;
 export type GenerateWorkspaceNameResponse = Schema<"GenerateWorkspaceNameResponse">;
+export type UserRead              = Schema<"UserRead">;
+export type ProfileUpdateRequest  = Schema<"ProfileUpdateRequest">;
 export type SupportMessageContext     = Schema<"SupportMessageContext">;
 export type SendSupportMessageRequest = Schema<"SupportMessageRequest">;
 export type SupportReportCompleteRequest =
@@ -651,11 +653,11 @@ export interface SupportReportUploadResponse {
   attachments?: SupportReportUploadTarget[];
 }
 export interface SupportReportUploadTargetsRequest {
-  diagnostics: {
+  diagnostics?: {
     contentType: string;
     sizeBytes: number;
     sha256: string;
-  };
+  } | null;
   attachments?: Array<{
     clientFileId: string;
     fileName: string;

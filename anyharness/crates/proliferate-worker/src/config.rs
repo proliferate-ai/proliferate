@@ -24,8 +24,22 @@ pub struct WorkerConfig {
     /// off.
     #[serde(default)]
     pub self_update_enabled: bool,
+    /// Base URL of the co-located AnyHarness runtime HTTP API. Required for
+    /// catalog sync (pushing fetched catalogs to the runtime). Defaults to
+    /// `http://127.0.0.1:8457` when absent — the standard runtime port on
+    /// the same host.
+    #[serde(default = "default_runtime_base_url")]
+    pub runtime_base_url: String,
+    /// Bearer token for authenticating to the runtime's HTTP API. Read from
+    /// `ANYHARNESS_BEARER_TOKEN` env at startup when not set in config.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_bearer_token: Option<String>,
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
+}
+
+fn default_runtime_base_url() -> String {
+    "http://127.0.0.1:8457".to_string()
 }
 
 fn default_heartbeat_interval_seconds() -> u64 {
@@ -174,5 +188,22 @@ worker_db_path = "/tmp/worker.sqlite3"
         let contents = format!("{MINIMAL_CONFIG}self_update_enabled = true\n");
         let config: WorkerConfig = toml::from_str(&contents).expect("opt-in config");
         assert!(config.self_update_enabled);
+    }
+
+    #[test]
+    fn runtime_base_url_defaults_to_localhost() {
+        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
+        assert_eq!(config.runtime_base_url, "http://127.0.0.1:8457");
+        assert_eq!(config.runtime_bearer_token, None);
+    }
+
+    #[test]
+    fn runtime_base_url_overridable() {
+        let contents = format!(
+            "{MINIMAL_CONFIG}runtime_base_url = \"http://10.0.0.5:9000\"\nruntime_bearer_token = \"secret\"\n"
+        );
+        let config: WorkerConfig = toml::from_str(&contents).expect("config with runtime url");
+        assert_eq!(config.runtime_base_url, "http://10.0.0.5:9000");
+        assert_eq!(config.runtime_bearer_token.as_deref(), Some("secret"));
     }
 }

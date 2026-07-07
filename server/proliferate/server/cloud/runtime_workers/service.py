@@ -26,6 +26,7 @@ from proliferate.integrations.desktop_downloads import (
     downloads_base_url,
     versioned_manifest_exists,
 )
+from proliferate.server.catalogs.service import served_agent_catalog_version
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.runtime_workers.models import (
     DesktopWorkerEnrollmentResponse,
@@ -250,6 +251,7 @@ async def record_heartbeat(
         desired_versions=WorkerDesiredVersions(
             worker=pinned_worker_version(),
             anyharness=pinned_runtime_version(),
+            catalog_version=served_agent_catalog_version(),
         ),
     )
 

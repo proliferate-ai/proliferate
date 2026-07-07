@@ -4,7 +4,7 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
-import { useSupportModalStore } from "@/stores/support/support-modal-store";
+import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import type { AppCommandActions } from "./app-command-action-types";
@@ -45,10 +45,10 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
       showToast("Failed to open the web app.");
     });
   }, [openExternal, showToast]);
-  const openFeedback = useSupportModalStore((state) => state.openFeedback);
-  const openSupport = useCallback(() => {
-    openFeedback();
-  }, [openFeedback]);
+  const {
+    openBug: openSupport,
+    disabledReason: supportDisabledReason,
+  } = useOpenSupportReportWindow({ source: "sidebar" });
 
   return useMemo<AppNavigationCommandActions>(() => ({
     openSettings: {
@@ -73,13 +73,14 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     },
     openSupport: {
       execute: openSupport,
-      disabledReason: null,
+      disabledReason: supportDisabledReason,
     },
   }), [
     goHome,
     goWorkflows,
     openSettings,
     openSupport,
+    supportDisabledReason,
     openWebApp,
     showKeyboardShortcuts,
   ]);

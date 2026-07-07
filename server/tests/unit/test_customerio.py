@@ -101,6 +101,7 @@ async def test_identify_customerio_user_sends_expected_payload(
         "desktop_authenticated": True,
         "desktop_auth_provider": "github",
         "product_ready": True,
+        "email_type": "company",
         "github_login": "octocat",
         "github_avatar_url": "https://avatars.githubusercontent.com/u/583231?v=4",
         "created_at": int(created_at.timestamp()),
@@ -133,6 +134,7 @@ async def test_identify_customerio_user_omits_optional_fields_when_missing(
         "desktop_authenticated": True,
         "desktop_auth_provider": "github",
         "product_ready": True,
+        "email_type": "company",
     }
 
 
@@ -162,112 +164,77 @@ async def test_track_customerio_desktop_authenticated_sends_expected_payload(
     }
 
 
-@pytest.mark.asyncio
-async def test_customerio_welcome_email_enabled_reports_missing_config(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings, "customerio_app_api_key", "")
-    monkeypatch.setattr(settings, "customerio_from_email", "hello@proliferate.com")
-    monkeypatch.setattr(settings, "customerio_welcome_transactional_message_id", "msg-id")
-
-    assert customerio.customerio_welcome_email_enabled() is False
-
-    monkeypatch.setattr(settings, "customerio_app_api_key", "app-api-key")
-    assert customerio.customerio_welcome_email_enabled() is True
+def test_derive_email_type_personal_domains() -> None:
+    assert customerio.derive_email_type("user@gmail.com") == "personal"
+    assert customerio.derive_email_type("user@hotmail.com") == "personal"
+    assert customerio.derive_email_type("user@yahoo.com") == "personal"
 
 
-@pytest.mark.asyncio
-async def test_send_customerio_welcome_email_asserts_when_unconfigured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Callers must gate on customerio_welcome_email_enabled() first; calling
-    send_customerio_welcome_email without config is a programming error."""
-    monkeypatch.setattr(settings, "customerio_app_api_key", "")
-    monkeypatch.setattr(settings, "customerio_from_email", "hello@proliferate.com")
-    monkeypatch.setattr(settings, "customerio_welcome_transactional_message_id", "msg-id")
+def test_derive_email_type_company_domains() -> None:
+    assert customerio.derive_email_type("user@acme.com") == "company"
+    assert customerio.derive_email_type("ceo@stripe.com") == "company"
 
-    with pytest.raises(AssertionError):
-        await customerio.send_customerio_welcome_email(
-            user_id="user-1",
-            email="user@example.com",
-            display_name="Display Name",
-            github_login="octocat",
-        )
+
+def test_derive_email_type_missing_or_malformed() -> None:
+    assert customerio.derive_email_type(None) == "personal"
+    assert customerio.derive_email_type("") == "personal"
+    assert customerio.derive_email_type("nodomain") == "personal"
 
 
 @pytest.mark.asyncio
-async def test_send_customerio_welcome_email_sends_expected_payload(
+async def test_push_user_attributes_sends_expected_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "customerio_app_api_key", "app-api-key")
-    monkeypatch.setattr(settings, "customerio_from_email", "hello@proliferate.com")
-    monkeypatch.setattr(
-        settings,
-        "customerio_welcome_transactional_message_id",
-        "welcome-msg-id",
-    )
+    monkeypatch.setattr(settings, "customerio_site_id", "site-id")
+    monkeypatch.setattr(settings, "customerio_api_key", "api-key")
     client = _FakeAsyncClient()
-    monkeypatch.setattr(
-        customerio.httpx,
-        "AsyncClient",
-        lambda **_kwargs: client,
-    )
+    monkeypatch.setattr(customerio.httpx, "AsyncClient", lambda **_kwargs: client)
 
-    sent = await customerio.send_customerio_welcome_email(
+    ok = await customerio.push_user_attributes(
         user_id="user-1",
-        email="user@example.com",
-        display_name="Display Name",
-        github_login="octocat",
+        attributes={"workspace_count": 3, "email_type": "company"},
     )
 
-    assert sent is True
-    assert len(client.post_calls) == 1
-    url, kwargs = client.post_calls[0]
-    assert url.endswith("/send/email")
-    assert kwargs["headers"] == {"Authorization": "Bearer app-api-key"}
-    assert kwargs["json"] == {
-        "transactional_message_id": "welcome-msg-id",
-        "to": "user@example.com",
-        "from": "hello@proliferate.com",
-        "identifiers": {"id": "user-1"},
-        "message_data": {
-            "display_name": "Display Name",
-            "github_login": "octocat",
-        },
-    }
+    assert ok is True
+    assert len(client.put_calls) == 1
+    url, kwargs = client.put_calls[0]
+    assert url.endswith("/customers/user-1")
+    assert kwargs["auth"] == ("site-id", "api-key")
+    assert kwargs["json"] == {"workspace_count": 3, "email_type": "company"}
 
 
 @pytest.mark.asyncio
-async def test_send_customerio_welcome_email_swallows_http_failure(
+async def test_push_user_attributes_noop_without_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings, "customerio_app_api_key", "app-api-key")
-    monkeypatch.setattr(settings, "customerio_from_email", "hello@proliferate.com")
-    monkeypatch.setattr(
-        settings,
-        "customerio_welcome_transactional_message_id",
-        "welcome-msg-id",
+    monkeypatch.setattr(settings, "customerio_site_id", "")
+    monkeypatch.setattr(settings, "customerio_api_key", "")
+
+    ok = await customerio.push_user_attributes(
+        user_id="user-1",
+        attributes={"workspace_count": 1},
     )
-    client = _FakeAsyncClient(error=RuntimeError("customerio app api down"))
-    monkeypatch.setattr(
-        customerio.httpx,
-        "AsyncClient",
-        lambda **_kwargs: client,
-    )
+    assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_push_user_attributes_swallows_http_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "customerio_site_id", "site-id")
+    monkeypatch.setattr(settings, "customerio_api_key", "api-key")
+    client = _FakeAsyncClient(error=RuntimeError("cio down"))
+    monkeypatch.setattr(customerio.httpx, "AsyncClient", lambda **_kwargs: client)
     warning_mock = Mock()
     monkeypatch.setattr(customerio.logger, "warning", warning_mock)
 
-    sent = await customerio.send_customerio_welcome_email(
+    ok = await customerio.push_user_attributes(
         user_id="user-1",
-        email="user@example.com",
-        display_name=None,
-        github_login=None,
+        attributes={"workspace_count": 0},
     )
 
-    assert sent is False
+    assert ok is False
     warning_mock.assert_called_once()
-    # Static prefix only; no PII / no request object / no auth header.
-    assert warning_mock.call_args.args[1] == "Failed to send Customer.io welcome email"
 
 
 @pytest.mark.asyncio

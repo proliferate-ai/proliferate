@@ -233,9 +233,6 @@ class Settings(BaseSettings):
     # Customer.io (optional)
     customerio_site_id: str = ""
     customerio_api_key: str = ""
-    customerio_app_api_key: str = ""
-    customerio_from_email: str = "hello@proliferate.com"
-    customerio_welcome_transactional_message_id: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""
@@ -257,7 +254,7 @@ class Settings(BaseSettings):
     # Observability
     sentry_dsn: str = ""
     sentry_environment: str = "trusted-beta"
-    sentry_release: str = "proliferate-server@0.1.0"
+    sentry_release: str = ""
     sentry_traces_sample_rate: float = 1.0
 
     # Secondary LLM flows
@@ -281,6 +278,7 @@ class Settings(BaseSettings):
     support_report_diagnostics_max_bytes: int = 25 * 1024 * 1024
     support_report_attachment_max_bytes: int = 25 * 1024 * 1024
     support_report_total_attachment_max_bytes: int = 100 * 1024 * 1024
+    support_report_internal_base_url: str = ""
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""

@@ -47,6 +47,7 @@ async def launch_worker_sidecar(
     provider_sandbox: object,
     sandbox_record: CloudSandboxValue,
     runtime_context: SandboxRuntimeContext,
+    runtime_bearer_token: str | None = None,
 ) -> None:
     owner_user_id = sandbox_record.owner_user_id
     if owner_user_id is None:
@@ -79,6 +80,7 @@ async def launch_worker_sidecar(
                 cloud_base_url=cloud_base_url,
                 enrollment_token=enrollment_token,
                 runtime_context=runtime_context,
+                runtime_bearer_token=runtime_bearer_token,
             ),
         )
         await run_sandbox_command_logged(
