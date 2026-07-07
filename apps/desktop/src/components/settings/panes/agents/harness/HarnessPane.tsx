@@ -1,48 +1,30 @@
-import { useState } from "react";
-import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { CloudIcon, Monitor } from "@proliferate/ui/icons";
-import {
-  SegmentedControl,
-  type SegmentedControlItem,
-} from "@proliferate/ui/primitives/SegmentedControl";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { CloudGuard } from "@/components/cloud/CloudGuard";
-import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
+import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
 import { HarnessAuthDetailsSection } from "./HarnessAuthDetailsSection";
 import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
+import { HarnessConfigIssueBanner } from "./HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
 import { useHarnessAuthEditor } from "./use-harness-auth-editor";
-
-const SURFACE_ITEMS: readonly SegmentedControlItem<AgentAuthSurface>[] = [
-  { id: "cloud", label: HARNESS_PANE_COPY.surfaceCloud, icon: <CloudIcon /> },
-  { id: "local", label: HARNESS_PANE_COPY.surfaceLocal, icon: <Monitor /> },
-];
 
 interface HarnessPaneProps {
   harnessKind: string;
 }
 
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
-  const [surface, setSurface] = useState<AgentAuthSurface>("local");
-  const { agentsByKind } = useAgentCatalog();
+  const surface = useAgentSurfaceStore((state) => state.surface);
+  const { agentsByKind, agentsNeedingSetup } = useAgentCatalog();
 
   const displayName =
     agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
+  const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
 
   return (
     <section className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <SettingsPageHeader title={displayName} />
-        <SegmentedControl
-          ariaLabel="Agent authentication surface"
-          items={SURFACE_ITEMS}
-          value={surface}
-          onChange={setSurface}
-        />
-      </div>
+      <SettingsPageHeader title={displayName} />
 
       {issueAgent ? <HarnessConfigIssueBanner agent={issueAgent} /> : null}
 

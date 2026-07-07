@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Cloud, Laptop } from "lucide-react";
+import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
 import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
+import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
 
 type ScenarioId =
   | "claude-unconfigured"
@@ -167,6 +170,13 @@ function buildMockQueryClient(scenario: ScenarioId): QueryClient {
 export function AgentsPlaygroundPage() {
   const [activeScenario, setActiveScenario] = useState<ScenarioId>("claude-unconfigured");
   const [queryClient, setQueryClient] = useState(() => buildMockQueryClient(activeScenario));
+  const surface = useAgentSurfaceStore((state) => state.surface);
+  const setSurface = useAgentSurfaceStore((state) => state.setSurface);
+
+  // Reset surface to local on mount for predictable playground state
+  useEffect(() => {
+    setSurface("local");
+  }, [setSurface]);
 
   function handleScenarioChange(id: ScenarioId) {
     setActiveScenario(id);
@@ -196,6 +206,17 @@ export function AgentsPlaygroundPage() {
               {s.label}
             </button>
           ))}
+        </div>
+        <div className="ml-auto">
+          <SegmentedControl
+            ariaLabel="Agent authentication surface"
+            value={surface}
+            items={[
+              { id: "cloud", label: "Cloud", icon: <Cloud /> },
+              { id: "local", label: "Local", icon: <Laptop /> },
+            ]}
+            onChange={setSurface}
+          />
         </div>
       </header>
 
