@@ -1,8 +1,6 @@
 export const HARNESS_PANE_COPY = {
   surfaceCloud: "Cloud",
   surfaceLocal: "Local",
-  tabAuthentication: "Authentication",
-  tabAllModels: "All Models",
   authenticationTitle: "Authentication",
   signInTitle: "Authentication",
   gatewayLabel: "Proliferate gateway",
@@ -17,16 +15,31 @@ export const HARNESS_PANE_COPY = {
   harnessSettingsPlaceholderLabel: "Harness-specific settings",
   harnessSettingsPlaceholderDescription:
     "Options unique to this harness will appear here.",
+  // Section title for the inline all-models panel.
+  tabAllModels: "All Models",
   allModelsRefresh: "Refresh",
   allModelsRefreshing: "Refreshing...",
   allModelsEmpty: "No models in the catalog for this surface yet.",
   allModelsLoading: "Loading model catalog...",
+  // Shown while an empty catalog auto-probes the runtime for models.
+  allModelsProbing: "Probing…",
   // Runtime-resolved gateway models (contract §5): freshness reads "seed" (the
   // catalog's fallback list, no probe yet) or "probed <time>" (a live probe).
   allModelsFreshnessSeed: "seed",
   allModelsFreshnessProbed: (time: string) => `probed ${time}`,
   getApiKey: "Get an API key",
   recommendedBadge: "Recommended",
+  // Method card labels.
+  methodGateway: "Proliferate gateway",
+  methodApiKey: "API key",
+  methodCli: "CLI login",
+  // Detail section titles.
+  detailsGateway: "Gateway",
+  detailsApiKey: "API keys",
+  detailsCli: "CLI login",
+  // CLI detail status.
+  cliNotAuthenticated: "CLI not authenticated",
+  cliAuthenticated: "Authenticated",
   // Native == the implicit empty state (contract §7): zero enabled sources.
   nativeStateLocal: "No auth configured — the CLI's own login is used.",
   nativeStateCloud: "No auth configured — cloud runs stay disabled for this harness.",

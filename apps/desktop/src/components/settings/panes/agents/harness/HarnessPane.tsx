@@ -5,42 +5,37 @@ import {
   SegmentedControl,
   type SegmentedControlItem,
 } from "@proliferate/ui/primitives/SegmentedControl";
-import { Tabs, type TabItem } from "@proliferate/ui/primitives/Tabs";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
-import { HarnessAuthSection } from "./HarnessAuthSection";
+import { HarnessAuthDetailsSection } from "./HarnessAuthDetailsSection";
+import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
+import { useHarnessAuthEditor } from "./use-harness-auth-editor";
 
 const SURFACE_ITEMS: readonly SegmentedControlItem<AgentAuthSurface>[] = [
   { id: "cloud", label: HARNESS_PANE_COPY.surfaceCloud, icon: <CloudIcon /> },
   { id: "local", label: HARNESS_PANE_COPY.surfaceLocal, icon: <Monitor /> },
 ];
 
-const SUBTABS = [
-  { id: "authentication", label: HARNESS_PANE_COPY.tabAuthentication },
-  { id: "models", label: HARNESS_PANE_COPY.tabAllModels },
-] as const satisfies readonly TabItem[];
-
-type HarnessSubtab = (typeof SUBTABS)[number]["id"];
-
 interface HarnessPaneProps {
   harnessKind: string;
 }
 
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
-  // The surface axis: every section below reads/writes the selected surface.
   const [surface, setSurface] = useState<AgentAuthSurface>("local");
-  const [subtab, setSubtab] = useState<HarnessSubtab>("authentication");
   const { agentsByKind } = useAgentCatalog();
 
   const displayName =
     agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
 
+  const editor = useHarnessAuthEditor(harnessKind, displayName, surface);
+  const selectedMethod = deriveSelectedMethod(editor);
+
   return (
-    <section className="space-y-5">
+    <section className="max-w-4xl space-y-6">
       <SettingsPageHeader
         title={displayName}
         action={
@@ -52,28 +47,26 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
         }
       />
 
-      <Tabs
-        items={SUBTABS}
-        activeId={subtab}
-        onChange={(id) => setSubtab(id === "models" ? "models" : "authentication")}
+      <HarnessAuthSection
+        harnessKind={harnessKind}
+        displayName={displayName}
+        editor={editor}
       />
 
-      {subtab === "authentication" ? (
-        <>
-          <HarnessAuthSection
-            harnessKind={harnessKind}
-            displayName={displayName}
-            surface={surface}
-          />
-          <HarnessSettingsSection harnessKind={harnessKind} />
-        </>
-      ) : (
-        <HarnessAllModelsSection
-          harnessKind={harnessKind}
-          displayName={displayName}
-          surface={surface}
-        />
-      )}
+      <HarnessAuthDetailsSection
+        displayName={displayName}
+        surface={surface}
+        selectedMethod={selectedMethod}
+        editor={editor}
+      />
+
+      <HarnessSettingsSection harnessKind={harnessKind} />
+
+      <HarnessAllModelsSection
+        harnessKind={harnessKind}
+        displayName={displayName}
+        surface={surface}
+      />
     </section>
   );
 }

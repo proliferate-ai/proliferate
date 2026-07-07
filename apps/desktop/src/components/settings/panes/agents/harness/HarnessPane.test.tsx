@@ -186,8 +186,8 @@ function renderPane(harnessKind = "claude") {
   return render(<HarnessPane harnessKind={harnessKind} />);
 }
 
-function gatewaySwitch() {
-  return screen.getByRole("switch", { name: "Proliferate gateway" }) as HTMLButtonElement;
+function gatewayCard() {
+  return screen.getByRole("button", { name: "Proliferate gateway" }) as HTMLButtonElement;
 }
 
 afterEach(() => {
@@ -217,8 +217,8 @@ describe("HarnessPane authentication", () => {
   it("persists an enabled gateway source when the toggle is switched on", () => {
     renderPane("claude");
 
-    const gateway = gatewaySwitch();
-    expect(gateway.getAttribute("aria-checked")).toBe("false");
+    const gateway = gatewayCard();
+    expect(gateway.getAttribute("aria-pressed")).toBe("false");
 
     fireEvent.click(gateway);
 
@@ -236,7 +236,7 @@ describe("HarnessPane authentication", () => {
     renderPane("claude");
 
     fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
-    fireEvent.click(gatewaySwitch());
+    fireEvent.click(gatewayCard());
 
     expect(putMutate).toHaveBeenCalledWith(
       expect.objectContaining({ surface: "cloud" }),
@@ -254,7 +254,8 @@ describe("HarnessPane authentication", () => {
     }];
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("button", { name: /Add variable/ }));
+    // Clicking the API key card seeds a draft row via env-var suggestions.
+    fireEvent.click(screen.getByRole("button", { name: "API key" }));
     expect(screen.getByDisplayValue("ANTHROPIC_API_KEY")).toBeTruthy();
     // No PUT until the row names a key.
     expect(putMutate).not.toHaveBeenCalled();
@@ -299,7 +300,7 @@ describe("HarnessPane authentication", () => {
     );
   });
 
-  it("turns the gateway off when an api-key row is enabled on a single-source harness", () => {
+  it("turns the gateway off when the API key card is selected on a single-source harness", () => {
     state.apiKeys.data = [{
       id: "key-1",
       title: "Work key",
@@ -322,12 +323,11 @@ describe("HarnessPane authentication", () => {
     }];
     renderPane("claude");
 
-    expect(gatewaySwitch().getAttribute("aria-checked")).toBe("true");
+    expect(gatewayCard().getAttribute("aria-pressed")).toBe("true");
 
-    fireEvent.click(screen.getByRole("button", { name: /Add variable/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Select an API key/ }));
-    fireEvent.click(screen.getByText("Work key"));
-    fireEvent.click(screen.getByRole("switch", { name: "Enable ANTHROPIC_API_KEY" }));
+    // Clicking "API key" card disables gateway (radio semantics) and seeds a
+    // draft row via env-var suggestions.
+    fireEvent.click(screen.getByRole("button", { name: "API key" }));
 
     // The gateway is dropped from the desired set (radio semantics).
     expect(putMutate).toHaveBeenLastCalledWith(
@@ -335,17 +335,33 @@ describe("HarnessPane authentication", () => {
         harnessKind: "claude",
         surface: "local",
         body: {
-          sources: [{
-            sourceKind: "api_key",
-            apiKeyId: "key-1",
-            envVarName: "ANTHROPIC_API_KEY",
-            providerHint: "anthropic",
-            enabled: true,
-          }],
+          sources: [],
         },
       },
       expect.anything(),
     );
+  });
+
+  it("selects exactly one method for a single-source harness: API key then CLI ends on CLI", () => {
+    renderPane("claude");
+
+    const gateway = () =>
+      screen.getByRole("button", { name: "Proliferate gateway" });
+    const apiKey = () => screen.getByRole("button", { name: "API key" });
+    const cli = () => screen.getByRole("button", { name: "CLI login" });
+
+    // Clicking API key seeds a draft row and highlights ONLY the API key card —
+    // gateway and api_key are never selected together on a single-source harness.
+    fireEvent.click(apiKey());
+    expect(apiKey().getAttribute("aria-pressed")).toBe("true");
+    expect(gateway().getAttribute("aria-pressed")).toBe("false");
+    expect(cli().getAttribute("aria-pressed")).toBe("false");
+
+    // Clicking CLI drops the incomplete draft and sticks on CLI.
+    fireEvent.click(cli());
+    expect(cli().getAttribute("aria-pressed")).toBe("true");
+    expect(apiKey().getAttribute("aria-pressed")).toBe("false");
+    expect(gateway().getAttribute("aria-pressed")).toBe("false");
   });
 
   it("shows the native empty-state copy when nothing is enabled", () => {
@@ -361,21 +377,63 @@ describe("HarnessPane authentication", () => {
     expect(
       screen.queryByText(/authenticates with its own sign-in/),
     ).not.toBeNull();
-    expect(screen.queryByRole("switch", { name: "Proliferate gateway" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Proliferate gateway" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Add variable/ })).toBeNull();
   });
 
-  it("offers Add provider only for opencode", () => {
+  it("offers Add provider only for opencode when API key method is active", () => {
+    // Seed an api_key selection so the API key detail section is visible.
+    state.selections.data = [{
+      id: "sel-key",
+      harnessKind: "opencode",
+      surface: "local",
+      sourceKind: "api_key",
+      apiKeyId: "key-1",
+      keyTitle: null,
+      envVarName: "OPENROUTER_API_KEY",
+      providerHint: "openrouter",
+      enabled: true,
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+    }];
     renderPane("opencode");
     expect(screen.queryByRole("button", { name: /Add provider/ })).not.toBeNull();
   });
 
   it("does not offer Add provider for single-source harnesses", () => {
+    // Seed an api_key selection so the API key detail section is visible.
+    state.selections.data = [{
+      id: "sel-key",
+      harnessKind: "claude",
+      surface: "local",
+      sourceKind: "api_key",
+      apiKeyId: "key-1",
+      keyTitle: null,
+      envVarName: "ANTHROPIC_API_KEY",
+      providerHint: "anthropic",
+      enabled: true,
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+    }];
     renderPane("claude");
     expect(screen.queryByRole("button", { name: /Add provider/ })).toBeNull();
   });
 
   it("prefills a new row from the opencode provider picker", () => {
+    // Seed an api_key selection so the API key detail section is visible.
+    state.selections.data = [{
+      id: "sel-key",
+      harnessKind: "opencode",
+      surface: "local",
+      sourceKind: "api_key",
+      apiKeyId: "key-1",
+      keyTitle: null,
+      envVarName: "OPENAI_API_KEY",
+      providerHint: "openai",
+      enabled: true,
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+    }];
     renderPane("opencode");
 
     fireEvent.click(screen.getByRole("button", { name: /Add provider/ }));
@@ -392,10 +450,10 @@ describe("HarnessPane authentication", () => {
     };
     renderPane("claude");
 
-    expect(gatewaySwitch().disabled).toBe(true);
+    expect(gatewayCard().disabled).toBe(true);
     expect(screen.queryByText("Unavailable for your account")).not.toBeNull();
 
-    fireEvent.click(gatewaySwitch());
+    fireEvent.click(gatewayCard());
     expect(putMutate).not.toHaveBeenCalled();
   });
 
@@ -403,7 +461,7 @@ describe("HarnessPane authentication", () => {
     state.enrollment.data = { syncStatus: "pending", lastErrorCode: null };
     renderPane("claude");
 
-    expect(gatewaySwitch().disabled).toBe(true);
+    expect(gatewayCard().disabled).toBe(true);
     expect(screen.queryByText("Enrollment pending")).not.toBeNull();
   });
 
@@ -431,13 +489,13 @@ describe("HarnessPane authentication", () => {
     state.cloudActive = false;
     renderPane("claude");
 
-    expect(screen.queryByText(/Sign in to Proliferate Cloud/)).not.toBeNull();
-    expect(screen.queryByRole("switch", { name: "Proliferate gateway" })).toBeNull();
+    expect(screen.queryAllByText(/Sign in to Proliferate Cloud/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Proliferate gateway" })).toBeNull();
   });
 });
 
 describe("HarnessPane all models", () => {
-  it("renders the layered catalog grid on the All Models subtab", () => {
+  it("renders the layered catalog grid in the All Models section", () => {
     state.catalog.data = {
       harnessKind: "claude",
       surface: "local",
@@ -453,7 +511,7 @@ describe("HarnessPane all models", () => {
     };
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
 
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     expect(screen.getAllByRole("switch")).toHaveLength(2);
@@ -482,7 +540,7 @@ describe("HarnessPane all models", () => {
     };
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
     fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
 
     expect(refreshMutate).toHaveBeenCalledWith(
@@ -514,7 +572,7 @@ describe("HarnessPane all models", () => {
     // unreachable, or one with no ready models for this harness yet.
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
     fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
 
     expect(refreshMutate).not.toHaveBeenCalled();
@@ -539,7 +597,7 @@ describe("HarnessPane all models", () => {
     };
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
     const [sonnetSwitch] = screen.getAllByRole("switch");
     fireEvent.click(sonnetSwitch);
 
@@ -584,7 +642,7 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
     };
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
 
     expect(screen.queryByText("Sonnet 4.6")).not.toBeNull();
     expect(screen.queryByText("seed")).not.toBeNull();
@@ -604,7 +662,7 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
     };
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
 
     expect(
       screen.queryByText(`probed ${new Date("2026-07-02T20:00:00Z").toLocaleString()}`),
@@ -616,7 +674,7 @@ describe("HarnessPane all models (local + gateway runtime)", () => {
     state.gatewayModels.data = { models: [], source: "seed" };
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("tab", { name: "All Models" }));
+
     fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
 
     expect(refreshGatewayModelsMutate).toHaveBeenCalledWith("claude", expect.anything());
