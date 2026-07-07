@@ -312,7 +312,7 @@ describe("HarnessPane authentication", () => {
     );
   });
 
-  it("opens the add-key modal when the API key card is clicked with no rows", () => {
+  it("shows empty state when API key card is clicked with no rows", () => {
     state.apiKeys.data = [{
       id: "key-1",
       title: "Work key",
@@ -322,8 +322,18 @@ describe("HarnessPane authentication", () => {
     }];
     renderPane("claude");
 
-    // Clicking the API key card opens the create+bind modal (not an inline draft).
-    fireEvent.click(screen.getByRole("button", { name: "API key" }));
+    const apiKey = screen.getByRole("button", { name: "API key" });
+
+    // Clicking the API key card only selects it, does NOT open the modal.
+    fireEvent.click(apiKey);
+    expect(apiKey.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByTestId("add-key-modal")).toBeNull();
+
+    // The empty state is shown with an "Add API key" button.
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
+
+    // Clicking the "Add API key" button in the empty state opens the modal.
+    fireEvent.click(screen.getByRole("button", { name: /Add API key/ }));
     expect(screen.getByTestId("add-key-modal")).toBeTruthy();
 
     // Submitting the modal creates and binds the key in one step.
@@ -363,8 +373,8 @@ describe("HarnessPane authentication", () => {
 
     expect(gatewayCard().getAttribute("aria-pressed")).toBe("true");
 
-    // Clicking "API key" card disables gateway (radio semantics) and opens the
-    // add-key modal (no existing rows).
+    // Clicking "API key" card disables gateway (radio semantics) and shows the
+    // empty state (no existing rows).
     fireEvent.click(screen.getByRole("button", { name: "API key" }));
 
     // The gateway is dropped from the desired set (radio semantics).
@@ -378,8 +388,9 @@ describe("HarnessPane authentication", () => {
       },
       expect.anything(),
     );
-    // The modal is open for create+bind.
-    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
+    // The modal is NOT open yet; the empty state is shown instead.
+    expect(screen.queryByTestId("add-key-modal")).toBeNull();
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
   });
 
   it("selects exactly one method for a single-source harness: API key then CLI ends on CLI", () => {
@@ -390,16 +401,17 @@ describe("HarnessPane authentication", () => {
     const apiKey = () => screen.getByRole("button", { name: "API key" });
     const cli = () => screen.getByRole("button", { name: "CLI login" });
 
-    // Clicking API key opens the modal and highlights ONLY the API key card —
+    // Clicking API key highlights ONLY the API key card and shows empty state —
     // gateway and api_key are never selected together on a single-source harness.
     fireEvent.click(apiKey());
     expect(apiKey().getAttribute("aria-pressed")).toBe("true");
     expect(gateway().getAttribute("aria-pressed")).toBe("false");
     expect(cli().getAttribute("aria-pressed")).toBe("false");
-    // The add-key modal opens.
-    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
+    // The modal does NOT open; empty state is shown.
+    expect(screen.queryByTestId("add-key-modal")).toBeNull();
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
 
-    // Clicking CLI cancels the modal intent and sticks on CLI.
+    // Clicking CLI sticks on CLI.
     fireEvent.click(cli());
     expect(cli().getAttribute("aria-pressed")).toBe("true");
     expect(apiKey().getAttribute("aria-pressed")).toBe("false");
@@ -489,7 +501,7 @@ describe("HarnessPane authentication", () => {
     expect(screen.queryByText("Native logins always apply alongside other sources.")).not.toBeNull();
   });
 
-  it("opencode: clicking API key opens the add-key modal and reflects the in-progress state", () => {
+  it("opencode: clicking API key shows empty state and reflects the in-progress state", () => {
     renderPane("opencode");
 
     const apiKey = () => screen.getByRole("button", { name: "API key" });
@@ -499,9 +511,10 @@ describe("HarnessPane authentication", () => {
 
     fireEvent.click(apiKey());
 
-    // The card lights immediately (pending) and the add-key modal is open.
+    // The card lights immediately (pending) and the empty state is shown.
     expect(apiKey().getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
+    expect(screen.queryByTestId("add-key-modal")).toBeNull();
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
     // Nothing is PUT yet (no key wired).
     expect(putMutate).not.toHaveBeenCalled();
 
@@ -511,20 +524,20 @@ describe("HarnessPane authentication", () => {
     expect(cli.disabled).toBe(true);
   });
 
-  it("opencode: toggling API key off darkens the card and closes the modal", () => {
+  it("opencode: toggling API key off darkens the card and hides the empty state", () => {
     renderPane("opencode");
 
     const apiKey = () => screen.getByRole("button", { name: "API key" });
 
     fireEvent.click(apiKey());
     expect(apiKey().getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByTestId("add-key-modal")).toBeTruthy();
+    expect(screen.getByText("No API key configured.")).toBeTruthy();
 
-    // Clicking again turns api_key off: the modal closes and the highlight
+    // Clicking again turns api_key off: the empty state is hidden and the highlight
     // clears, so "off" visibly means off.
     fireEvent.click(apiKey());
     expect(apiKey().getAttribute("aria-pressed")).toBe("false");
-    expect(screen.queryByTestId("add-key-modal")).toBeNull();
+    expect(screen.queryByText("No API key configured.")).toBeNull();
   });
 
   it("opencode: enabling a wired api key lights it alongside the gateway", () => {
