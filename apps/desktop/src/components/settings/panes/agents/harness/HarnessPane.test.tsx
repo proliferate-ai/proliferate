@@ -19,6 +19,7 @@ type LocalAgent = {
 
 const state = vi.hoisted(() => ({
   cloudActive: true,
+  agentSurface: "local" as "cloud" | "local",
   capabilities: {
     data: {
       gatewayEnabled: true,
@@ -238,6 +239,16 @@ vi.mock("@/components/agents/AgentLoginTerminalPanel", () => ({
   AgentLoginTerminalPanel: () => <div data-testid="login-terminal" />,
 }));
 
+vi.mock("@/stores/ui/agent-surface-store", () => ({
+  useAgentSurfaceStore: (selector: (s: { surface: "cloud" | "local"; setSurface: (v: "cloud" | "local") => void }) => unknown) =>
+    selector({
+      surface: state.agentSurface,
+      setSurface: (value: "cloud" | "local") => {
+        state.agentSurface = value;
+      },
+    }),
+}));
+
 function renderPane(harnessKind = "claude") {
   return render(<HarnessPane harnessKind={harnessKind} />);
 }
@@ -250,6 +261,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   state.cloudActive = true;
+  state.agentSurface = "local";
   state.capabilities.data = {
     gatewayEnabled: true,
     publicBaseUrl: "https://gateway.example",
@@ -289,9 +301,9 @@ describe("HarnessPane authentication", () => {
   });
 
   it("persists to the selected surface", () => {
+    state.agentSurface = "cloud";
     renderPane("claude");
 
-    fireEvent.click(screen.getByRole("radio", { name: "Cloud" }));
     fireEvent.click(gatewayCard());
 
     expect(putMutate).toHaveBeenCalledWith(

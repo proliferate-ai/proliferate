@@ -22,8 +22,10 @@ import {
   getFirstSectionForScope,
   getSettingsScopeForSection,
   isSettingsAdminOnlySection,
+  isSettingsHarnessSection,
 } from "@/lib/domain/settings/navigation-presentation";
 import { RepoScopeHeaderControls } from "@/components/settings/screen/RepoScopeHeaderControls";
+import { AgentScopeHeaderControls } from "@/components/settings/screen/AgentScopeHeaderControls";
 import { SettingsSidebar } from "@/components/settings/sidebar/SettingsSidebar";
 import { SettingsScopeTabs } from "@proliferate/product-ui/settings/SettingsScopeTabs";
 import { ArrowLeft } from "lucide-react";
@@ -141,6 +143,8 @@ export function SettingsScreen({
                 onSelectRepoContext={onSelectRepoContext}
                 onSelectCloudEnvironment={onSelectCloudEnvironment}
               />
+            ) : activeScope === "agents" && (isSettingsHarnessSection(effectiveActiveSection) || effectiveActiveSection === "agent-api-keys") ? (
+              <AgentScopeHeaderControls />
             ) : null}
           </div>
         </div>
