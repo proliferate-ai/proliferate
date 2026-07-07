@@ -10,7 +10,10 @@ use crate::{config::WorkerConfig, error::WorkerError};
 
 #[derive(Clone)]
 pub struct CloudClient {
+    /// Authenticated requests: never follows redirects (prevents token leak).
     http: Client,
+    /// Unauthenticated artifact downloads: follows redirects to CDN.
+    http_download: Client,
     base_url: String,
 }
 
@@ -97,13 +100,24 @@ pub struct HeartbeatResponse {
 
 impl CloudClient {
     pub fn new(config: &WorkerConfig) -> Result<Self, WorkerError> {
+        // Authenticated client: never follows redirects to prevent leaking the
+        // Bearer token to a redirect target on a different origin.
         let http = Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(WorkerError::BuildHttpClient)?;
+        // Unauthenticated download client: follows redirects (artifact
+        // downloads are public CDN URLs behind a server-issued 302).
+        let http_download = Client::builder()
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(30))
             .build()
             .map_err(WorkerError::BuildHttpClient)?;
         Ok(Self {
             http,
+            http_download,
             base_url: config.cloud_base_url.trim_end_matches('/').to_string(),
         })
     }
@@ -153,7 +167,7 @@ impl CloudClient {
         asset: &str,
     ) -> Result<DownloadedArtifact, WorkerError> {
         let response = self
-            .http
+            .http_download
             .get(format!(
                 "{}/v1/cloud/worker/download/{target}/{asset}",
                 self.base_url
@@ -178,7 +192,7 @@ impl CloudClient {
     /// No server redirect, hence no second version-path resolution.
     pub async fn download_from_url(&self, url: &str) -> Result<Vec<u8>, WorkerError> {
         let response = self
-            .http
+            .http_download
             .get(url)
             .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
             .send()

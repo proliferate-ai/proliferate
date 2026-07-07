@@ -1306,3 +1306,59 @@ async fn get_agent_catalog_version_returns_active_version_and_source() {
     assert_eq!(payload["catalogVersion"], json!(expected_version));
     assert_eq!(payload["source"], json!("bundled"));
 }
+
+#[tokio::test]
+async fn get_agent_catalog_version_requires_bearer_auth_when_configured() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let state = test_state(false);
+    let app = build_router(state);
+
+    // Request without Authorization header should be rejected.
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/catalogs/agents/version")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn get_agent_catalog_version_succeeds_with_valid_bearer_auth() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(Some("secret-token"));
+    let state = test_state(false);
+    let expected_version = state.catalog_sync_service.catalog_version();
+    let app = build_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/catalogs/agents/version")
+                .header(header::AUTHORIZATION, "Bearer secret-token")
+                .body(Body::empty())
+                .expect("expected request"),
+        )
+        .await
+        .expect("expected response");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("read response body");
+    let payload: Value = serde_json::from_slice(&body).expect("parse response json");
+    assert_eq!(payload["catalogVersion"], json!(expected_version));
+}

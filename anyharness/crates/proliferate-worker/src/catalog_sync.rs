@@ -91,6 +91,12 @@ pub async fn maybe_sync(
     let runtime_version = match query_runtime_version(runtime_base, runtime_bearer.as_deref()).await
     {
         Ok(v) => v,
+        Err(WorkerError::Cloud { status, .. })
+            if status == reqwest::StatusCode::NOT_FOUND =>
+        {
+            info!("catalog sync: runtime does not support catalog sync (old version)");
+            return;
+        }
         Err(error) => {
             warn!(?error, "catalog sync: failed to query runtime catalog version");
             return;
@@ -275,5 +281,71 @@ mod tests {
     #[test]
     fn needs_sync_returns_false_when_equal() {
         assert!(!needs_sync("2026-07-06.1", "2026-07-06.1"));
+    }
+
+    #[test]
+    fn resolve_runtime_bearer_token_prefers_config_over_env() {
+        let config = WorkerConfig {
+            cloud_base_url: "https://cloud.test".to_string(),
+            enrollment_token: None,
+            worker_db_path: "/tmp/worker.sqlite3".into(),
+            integration_gateway_home: None,
+            heartbeat_interval_seconds: 30,
+            self_update_enabled: false,
+            runtime_base_url: "http://127.0.0.1:8457".to_string(),
+            runtime_bearer_token: Some("from-config".to_string()),
+            config_path: None,
+        };
+        assert_eq!(
+            resolve_runtime_bearer_token(&config),
+            Some("from-config".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_runtime_bearer_token_falls_back_to_env() {
+        let config = WorkerConfig {
+            cloud_base_url: "https://cloud.test".to_string(),
+            enrollment_token: None,
+            worker_db_path: "/tmp/worker.sqlite3".into(),
+            integration_gateway_home: None,
+            heartbeat_interval_seconds: 30,
+            self_update_enabled: false,
+            runtime_base_url: "http://127.0.0.1:8457".to_string(),
+            runtime_bearer_token: None,
+            config_path: None,
+        };
+        // Without the env var set, returns None.
+        std::env::remove_var("ANYHARNESS_BEARER_TOKEN");
+        assert_eq!(resolve_runtime_bearer_token(&config), None);
+    }
+
+    /// Verify that a 404 from the runtime (old version without the endpoint)
+    /// is distinguishable from other errors via the WorkerError::Cloud variant.
+    #[test]
+    fn cloud_error_404_is_matchable() {
+        let err = WorkerError::Cloud {
+            status: reqwest::StatusCode::NOT_FOUND,
+            body: "not found".to_string(),
+        };
+        let is_not_found = matches!(
+            &err,
+            WorkerError::Cloud { status, .. } if *status == reqwest::StatusCode::NOT_FOUND
+        );
+        assert!(is_not_found);
+    }
+
+    /// Verify that a 500 error does NOT match the 404 pattern.
+    #[test]
+    fn cloud_error_500_is_not_404() {
+        let err = WorkerError::Cloud {
+            status: reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+            body: "internal".to_string(),
+        };
+        let is_not_found = matches!(
+            &err,
+            WorkerError::Cloud { status, .. } if *status == reqwest::StatusCode::NOT_FOUND
+        );
+        assert!(!is_not_found);
     }
 }

@@ -170,9 +170,10 @@ def build_worker_config(
     cloud_base_url: str,
     enrollment_token: str,
     runtime_context: SandboxRuntimeContext,
+    runtime_bearer_token: str | None = None,
 ) -> str:
     worker_dir = f"{runtime_context.home_dir}/.proliferate/worker"
-    values = {
+    values: dict[str, str | int | bool] = {
         "cloud_base_url": cloud_base_url,
         "enrollment_token": enrollment_token,
         "worker_db_path": f"{worker_dir}/worker.sqlite3",
@@ -183,6 +184,8 @@ def build_worker_config(
         # Desktop workers must never set this: the app bundle owns updates.
         "self_update_enabled": True,
     }
+    if runtime_bearer_token:
+        values["runtime_bearer_token"] = runtime_bearer_token
     lines = []
     for key, value in values.items():
         if isinstance(value, bool):
