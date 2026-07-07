@@ -4,6 +4,8 @@
 
 *Provenance: all design decisions here were made explicitly with Pablo across 2026-07-06 alignment rounds. Items marked **[elaboration]** are mechanical detail derived from those decisions — veto freely. Items marked **[OPEN]** need Pablo's call before building that part. Do NOT make new design decisions beyond this doc without asking him.*
 
+*Facts verified against merged `main` 2026-07-07 (post #968–971/#972/#976/#973): Grafana source corrected (no CloudWatch alarms exist — AMG alerting API is the source, §7.2), Sentry org/projects/severity-marker pinned (§7.1), support field shapes pinned incl. camelCase `sentryEventIds` and user-level `outreach_email` (§6.3), release format pinned (§8).*
+
 ---
 
 ## 0. What this service is
@@ -66,7 +68,7 @@ issues/
 │   │   │   └── release_watch.py  # phase 2 (§8) — plus email_sender.py, phase 2
 │   │   └── clients/
 │   │       ├── sentry.py         # org-token httpx: list issues, get event, list users-by-tag
-│   │       ├── cloudwatch.py     # boto3 describe_alarms; grafana.py when native rules exist
+│   │       ├── grafana.py        # AMG alerting API httpx: firing rule states (§7.2; no CW alarms exist)
 │   │       ├── github.py         # PR state by URL
 │   │       ├── proliferate.py    # SupportReport poll client (server endpoint, §6.3)
 │   │       └── customerio.py     # phase 2: transactional send + deliveries check
@@ -308,7 +310,9 @@ Phase 2: GET /v1/emails?status=drafted · POST /v1/emails/{id}/approve
 
 ### 6.3 Upstream dependency: the server's SupportReport endpoint
 
-`sync_support` consumes `GET {server}/v1/support/reports?cursor=&limit=` — a NEW cursor-based endpoint on the main proliferate server (owned by the support workspace lane, not this service; it deliberately conforms to the same poll contract). It surfaces `owner_user_id`, `kind`, description, `github_issue_id`/`linear_issue_id`, and `telemetry_refs_json.sentry_event_ids` **parsed** (it's a TEXT blob in the server DB). If the endpoint isn't live yet when this service builds, stub `clients/proliferate.py` against the contract and proceed — do not read the server's DB or S3 directly.
+`sync_support` consumes `GET {server}/v1/support/reports?cursor=&limit=` — a NEW cursor-based endpoint on the main proliferate server (owned by the support workspace lane, not this service; it deliberately conforms to the same poll contract). If the endpoint isn't live yet when this service builds, stub `clients/proliferate.py` against the contract and proceed — do not read the server's DB or S3 directly.
+
+Verified source shapes (merged #972/#976, table `support_report`): `urgent` and `notify_me` are NOT NULL booleans; `credit_consent`/`credit_name` (persisted for any kind); `telemetry_refs_json` is TEXT whose parsed shape is `{posthogDistinctId?, posthogSessionId?, sentryEventIds?: string[]}` — **camelCase keys** (the endpoint must parse and surface `sentryEventIds`). The outreach email is NOT on the report — it's `user.outreach_email` (nullable String(320); fall back to account email when null). Existing routes are all POST + `current_active_user`; the server has no admin/service-token support routes yet, so the new endpoint defines that auth pattern. Reporter contact resolution: `owner_user_id` → user's `outreach_email ?? email`.
 
 ## 7. Background jobs — exact mechanics (Celery, in-service)
 
@@ -329,8 +333,10 @@ Every job idempotent; every run logs one summary line (scanned / inserted / upda
 
 ### 7.1 `sync_sentry`
 
+Verified environment (merged 2026-07-06): org slug `proliferate`; projects `proliferate-server`, `proliferate-desktop`, `proliferate-desktop-native`, `anyharness`, `proliferate-target`, `proliferate-web`, `proliferate-mobile`. Identity tags available for the ship-time affected-user query: `org_id`/`user_id`/`sandbox_id`/`runtime_env` on server + E2B Rust surfaces; desktop renderer sets `organization_id` tag + `user.id` via `setUser` (query `user.id`, not a tag, there); **desktop-native events carry NO identity** (known gap, Tauri IPC deferred) — affected-user enumeration silently undercounts that project. Page-worthy vs ambient: filter `level:fatal` OR tag `critical_failure:true` (the `report_critical` contract, 7 call sites).
+
 1. Read `sync_cursors['sentry']` → `{"last_seen": "<iso>"}`.
-2. `GET /api/0/organizations/{org}/issues/?query=is:unresolved&sort=date`, paginate until items older than `last_seen`.
+2. `GET /api/0/organizations/proliferate/issues/?query=is:unresolved&sort=date`, paginate until items older than `last_seen`.
 3. Per Sentry issue, upsert on `(source='sentry', fingerprint=<sentry issue id>)`:
    - exists → update `occurrence_count` (Sentry's count) + `last_seen`; NO state change, NO event.
    - new → insert `status='new'` (title, deeplink, first/last_seen), compute `embedding`, `append_event('issue.created')`.
@@ -338,7 +344,7 @@ Every job idempotent; every run logs one summary line (scanned / inserted / upda
 
 ### 7.2 `sync_grafana`
 
-v1 ingests **alert-rule-fired errors only**: CloudWatch alarms via boto3 `describe_alarms(StateValue='ALARM')` (+ Grafana-native rules when they exist). Fingerprint = alarm ARN. Upsert identical to §7.1. "Detect novel patterns from raw logs" is explicitly OUT (that's a log-clustering system, not a sync job).
+v1 ingests **alert-rule-fired errors only**. Verified reality (merged 2026-07-06): there are **no CloudWatch alarms** — alerting is AWS Managed Grafana, workspace `proliferate-ops` (`g-e532d030d8`, us-east-1), three provisioned rules (ALB 5xx>10/5m `bfrbv8roir474e`, p95>5s/10m `ffrbv99mqhgjkc`, ECS CPU>90%/15m `bfrbv9r4945xcd`), contact point → `#alerts`. So this job polls the **AMG alerting API** (service-account token) for rules in `firing` state; fingerprint = rule UID + window start. Sentry's two alert rules (`17267915` new/regressed-fatal, `442367` p95) don't need separate ingestion — their issues arrive via §7.1. Upsert identical to §7.1. "Detect novel patterns from raw logs" is explicitly OUT (that's a log-clustering system, not a sync job).
 
 ### 7.3 `sync_support`
 
@@ -363,7 +369,7 @@ Claims older than 2h with no terminal transition = dead run. Clear `claimed_by`;
 
 ## 8. Phase 2 — release watcher + emails (schema day one, build later; Pablo-pinned sequencing)
 
-- `release_watch` (hourly): for each `merged` issue with `fix_commit_sha` ∈ some `release.commit_shas` → `shipped`; enumerate affected users by querying **Sentry's user tag at ship time**; materialize `emails` drafts from `issue_reporters` — `submitted` → `thank-you` (+ changelog credit), `affected` → `affected-fixed` courtesy. Severity for the affected tier uses conservative hard thresholds (error/user counts), never agent judgment alone.
+- `release_watch` (hourly): for each `merged` issue with `fix_commit_sha` ∈ some `release.commit_shas` → `shipped`; enumerate affected users by querying **Sentry's user tag at ship time**; materialize `emails` drafts from `issue_reporters` — `submitted` → `thank-you` (+ changelog credit), `affected` → `affected-fixed` courtesy. Severity for the affected tier uses conservative hard thresholds (error/user counts), never agent judgment alone. Verified release facts (#968): Sentry release format is `<component>@<VERSION>+<short_sha>` with a **12-char** sha (e.g. `proliferate-server@0.3.6+9affc0f0d489`); version source is the root `VERSION` file; `hotfix-production.yml` bumps VERSION + tags `proliferate-v*` — so `releases.commit_shas` matching must compare against 12-char short shas, and the release feed's natural hook is the promote/hotfix workflow (which already computes `${GIT_SHA:0:12}`).
 - `email_sender` (1-min, drains `approved`): fires **Customer.io transactional** (`/v1/send/email`), records `cio_delivery_id`. Ground truth for delivery is the CIO **deliveries endpoint** — never the dashboard state field, never the metrics endpoint (twice-proven lesson). No Resend, no SES — bypassing CIO's topics/frequency caps is exactly why the old transactional welcome path was killed.
 - Approval is a row-level state machine (`drafted → approved → sent`); the web email queue flips `approved`. Auto-send graduates later, thank-you tier first. (This table + flow is the engagement stack's deferred L4 `fix_notification_queue`, absorbed — see umbrella spec.)
 
@@ -382,7 +388,8 @@ DATABASE_URL=                    # RDS Postgres w/ pgvector
 REDIS_URL=
 SENTRY_ORG_TOKEN=                # minted ONCE, shared with the dashboards' Errors panel (org:read,
                                  #   project:read, event:read)
-AWS_*(role/creds)                # CloudWatch describe_alarms
+GRAFANA_URL=                     # AMG workspace proliferate-ops (g-e532d030d8, us-east-1)
+GRAFANA_TOKEN=                   # AMG service-account token (same provisioning path as §7.2 rules)
 GITHUB_TOKEN=                    # PR state reads
 PROLIFERATE_SUPPORT_TOKEN=       # server's /v1/support/reports
 SERVICE_TOKENS=                  # comma-sep bearer tokens for machine callers
