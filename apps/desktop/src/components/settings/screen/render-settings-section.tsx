@@ -65,7 +65,7 @@ export function renderSettingsSection(
   cloudSignInChecking: boolean,
   cloudSignInAvailable: boolean,
   focus: SettingsFocus,
-  onSelectSection: (section: SettingsSection) => void,
+  _onSelectSection: (section: SettingsSection) => void,
   onSelectRepo: (sourceRoot: string) => void,
   onSelectRepoContext: (context: RepoSettingsContext) => void,
   onSelectCloudEnvironment: (gitOwner: string, gitRepoName: string) => void,
