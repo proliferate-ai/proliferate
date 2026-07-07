@@ -148,13 +148,15 @@ function LoopRow({
           </span>
           <span aria-hidden>·</span>
           {onOpenFireHistory && loop.fireCount > 0 ? (
-            <button
+            <Button
+              variant="unstyled"
+              size="unstyled"
               type="button"
               className="underline decoration-dotted underline-offset-2 hover:text-foreground"
               onClick={() => onOpenFireHistory(loop.loopId)}
             >
               {fireCountLabel}
-            </button>
+            </Button>
           ) : (
             <span>{fireCountLabel}</span>
           )}
@@ -232,8 +234,10 @@ function LoopComposer({
       <div className="flex items-center gap-1.5">
         <div className="flex shrink-0 rounded-md border border-input p-0.5">
           {SCHEDULE_KIND_OPTIONS.map((option) => (
-            <button
+            <Button
               key={option.value}
+              variant="unstyled"
+              size="unstyled"
               type="button"
               className={twMerge(
                 "rounded px-1.5 py-0.5 text-xs",
@@ -247,7 +251,7 @@ function LoopComposer({
               }}
             >
               {option.label}
-            </button>
+            </Button>
           ))}
         </div>
         <Input

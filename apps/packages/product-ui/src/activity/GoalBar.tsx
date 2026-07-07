@@ -16,6 +16,7 @@ import {
   type GoalCapabilities,
   type GoalWire,
 } from "@proliferate/product-domain/activity/goal";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
@@ -198,7 +199,9 @@ export function GoalBar({
       <>
         <PopoverButton
           trigger={(
-            <button
+            <Button
+              variant="unstyled"
+              size="unstyled"
               type="button"
               className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left"
               aria-label={`${state.headline} — show details`}
@@ -214,7 +217,7 @@ export function GoalBar({
                 — {state.goal.objective}
               </span>
               <ChevronUp className="size-3.5 shrink-0 text-faint" aria-hidden />
-            </button>
+            </Button>
           )}
           side="top"
           align="start"

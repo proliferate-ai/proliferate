@@ -7,6 +7,7 @@ import {
   type ActivitySubagentWire,
   type SubagentTone,
 } from "@proliferate/product-domain/activity/subagent";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 const TONE_CLASSNAME: Record<SubagentTone, string> = {
@@ -85,7 +86,9 @@ export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRow
   }
 
   return (
-    <button
+    <Button
+      variant="unstyled"
+      size="unstyled"
       type="button"
       className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-muted/40"
       onClick={() => onOpen(subagent.id)}
@@ -93,6 +96,6 @@ export function SubagentRosterRow({ subagent, nowMs, onOpen }: SubagentRosterRow
       data-subagent-id={subagent.id}
     >
       {content}
-    </button>
+    </Button>
   );
 }

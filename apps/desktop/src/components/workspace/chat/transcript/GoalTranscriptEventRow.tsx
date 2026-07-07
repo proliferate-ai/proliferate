@@ -5,6 +5,7 @@ import { useState } from "react";
 import { CircleAlert, CircleCheck, Target } from "lucide-react";
 import { truncateGoalObjective } from "@proliferate/product-domain/activity/goal";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 // Compact row preview cap — the row also CSS-truncates to one line, but this
 // keeps the label text itself short for the disclosure toggle's threshold.
@@ -31,7 +32,9 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
     // User-initiated SET/EDIT events: right-aligned compact chip
     return (
       <div data-goal-transcript-event={event.kind} className="flex justify-end py-1">
-        <button
+        <Button
+          variant="unstyled"
+          size="unstyled"
           type="button"
           disabled
           className="inline-flex items-start gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-ui-sm text-muted-foreground disabled:cursor-default"
@@ -49,7 +52,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
               <span className="text-faint"> — {presentation.detailPreview}</span>
             )}
           </span>
-        </button>
+        </Button>
       </div>
     );
   }
@@ -57,7 +60,9 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
   // System outcome events: left-aligned quiet row
   return (
     <div data-goal-transcript-event={event.kind} className="py-1">
-      <button
+      <Button
+        variant="unstyled"
+        size="unstyled"
         type="button"
         disabled={!canExpand}
         onClick={canExpand ? () => setExpanded((value) => !value) : undefined}
@@ -79,7 +84,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
             {expanded ? "Hide" : "Details"}
           </span>
         )}
-      </button>
+      </Button>
       {expanded && presentation.fullDetail && (
         <div className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 text-ui-sm leading-[1.65] tracking-[-0.01em] text-muted-foreground select-text">
           {presentation.fullDetail}

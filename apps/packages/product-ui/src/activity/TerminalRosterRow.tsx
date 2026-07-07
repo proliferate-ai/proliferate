@@ -6,6 +6,7 @@ import {
   type ActivityProcessWire,
   type ProcessTone,
 } from "@proliferate/product-domain/activity/process";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 const TONE_CLASSNAME: Record<ProcessTone, string> = {
@@ -74,7 +75,9 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
   }
 
   return (
-    <button
+    <Button
+      variant="unstyled"
+      size="unstyled"
       type="button"
       className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-muted/40"
       onClick={() => onOpen(process.id)}
@@ -82,6 +85,6 @@ export function TerminalRosterRow({ process, nowMs, onOpen }: TerminalRosterRowP
       data-process-id={process.id}
     >
       {content}
-    </button>
+    </Button>
   );
 }

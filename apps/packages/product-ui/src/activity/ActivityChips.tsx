@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { GitFork, RotateCw, SquareTerminal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import type {
@@ -81,13 +82,15 @@ function ActivityChip({
   return (
     <PopoverButton
       trigger={(
-        <button
+        <Button
+          variant="unstyled"
+          size="unstyled"
           type="button"
           aria-label={chip.label}
           className="flex items-center gap-1 rounded-md text-ui text-muted-foreground transition-colors hover:text-foreground"
         >
           {label}
-        </button>
+        </Button>
       )}
       side="top"
       align="end"
