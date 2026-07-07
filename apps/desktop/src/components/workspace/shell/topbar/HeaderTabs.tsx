@@ -2,6 +2,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
@@ -10,7 +11,7 @@ import {
   type ManualChatGroupEditorAnchorRect,
 } from "@/components/workspace/shell/tabs/ManualChatGroupEditorPopover";
 import { WorkspaceTabStrip } from "@/components/workspace/shell/tabs/WorkspaceTabStrip";
-import { HeaderTabsActions } from "@/components/workspace/shell/topbar/HeaderTabsActions";
+import { NewChatButton, ClosedSessionsTrigger } from "@/components/workspace/shell/topbar/HeaderTabsActions";
 import { HeaderTabsStripRows } from "@/components/workspace/shell/topbar/HeaderTabsStripRows";
 import { useShortcutHandler } from "@/hooks/shortcuts/lifecycle/use-shortcut-handler";
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
@@ -43,6 +44,11 @@ import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 type HeaderTabsViewModel = NonNullable<
   ReturnType<typeof useOptionalWorkspaceHeaderTabsViewModelContext>
 >;
+
+// reservedWidth calculation: "+" button + its gap + flex-1 spacer gap + history button when visible + its gap.
+// The 28px button size mirrors --workspace-shell-action-size (1.75rem) in apps/packages/design/src/css/desktop.css — if that token changes, these must change.
+const PLUS_BUTTON_RESERVED = 28 + 6 + 6;
+const HISTORY_BUTTON_RESERVED = 28 + 6;
 
 export const HeaderTabs = memo(function HeaderTabs() {
   const viewModel = useOptionalWorkspaceHeaderTabsViewModelContext();
@@ -79,7 +85,10 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
   const closeTarget = useWorkspaceViewerTabsStore((state) => state.closeTarget);
 
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
-  const shellStrip = useResizeObserverWidth<HTMLDivElement>();
+  const outerMeasure = useResizeObserverWidth<HTMLDivElement>();
+  const stripScrollRef = useRef<HTMLDivElement | null>(null);
+  const closedCount = viewModel.closedChatTabs.length;
+  const reservedWidth = PLUS_BUTTON_RESERVED + (closedCount > 0 ? HISTORY_BUTTON_RESERVED : 0);
   const shellTabOrderActions = useShellTabOrderActions({
     workspaceId: viewModel.workspaceUiKey,
   });
@@ -114,8 +123,9 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     dragRows,
     dragUnitsBySourceId,
   } = useHeaderTabsLayout({
-    width: shellStrip.width,
+    width: outerMeasure.width,
     shellRows: viewModel.shellRows,
+    reservedWidth,
   });
   const contentWidth = layout.widths.length > 0
     ? (layout.positions[layout.positions.length - 1] ?? 0)
@@ -129,7 +139,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
   );
 
   useEffect(() => {
-    const strip = shellStrip.ref.current;
+    const strip = stripScrollRef.current;
     if (!strip || activeTabIndex < 0) {
       return;
     }
@@ -143,7 +153,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
     } else if (tabRight > viewRight) {
       strip.scrollTo({ left: tabRight - strip.clientWidth, behavior: "smooth" });
     }
-  }, [activeTabIndex, layout.positions, layout.widths, shellStrip.ref]);
+  }, [activeTabIndex, layout.positions, layout.widths]);
 
   const dismissChatSession = useCallback((sessionId: string) => {
     void dismissSession(sessionId).then(() => {
@@ -179,7 +189,7 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
   });
 
   const shellDrag = useShellTabDrag({
-    stripRef: shellStrip.ref,
+    stripRef: stripScrollRef,
     rows: dragRows,
     orderedIds: viewModel.orderedShellTabKeys,
     unitsBySourceId: dragUnitsBySourceId,
@@ -277,13 +287,17 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
 
   return (
     <DebugProfiler id="header-tabs">
-      <div className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden pl-1">
+      <div
+        ref={outerMeasure.ref}
+        className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden pl-1"
+      >
         <DebugProfiler id="header-tabs-strip">
           <WorkspaceTabStrip
             label="Workspace tabs"
-            stripRef={shellStrip.ref}
+            stripRef={stripScrollRef}
             contentWidth={contentWidth}
-            className="h-7 min-w-0 flex-1"
+            className="h-7 min-w-0 shrink"
+            style={{ maxWidth: contentWidth }}
             {...shellDrag.stripDragProps}
           >
             {chatGroupUnderlines.map((range) => (
@@ -334,18 +348,21 @@ const HeaderTabsInner = memo(function HeaderTabsInner({
           </WorkspaceTabStrip>
         </DebugProfiler>
 
-        <DebugProfiler id="header-tabs-actions">
-          <HeaderTabsActions
-            closedChatTabs={viewModel.closedChatTabs}
-            canOpenNewSessionTab={tabActions.canOpenNewSessionTab}
-            newSessionDisabledReason={tabActions.newSessionDisabledReason}
-            onRestoreSession={(sessionId) => {
-              chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
-            }}
-            onDeleteSession={dismissChatSession}
-            onOpenNewSessionTab={() => tabActions.openNewSessionTab()}
-          />
-        </DebugProfiler>
+        <NewChatButton
+          canOpenNewSessionTab={tabActions.canOpenNewSessionTab}
+          newSessionDisabledReason={tabActions.newSessionDisabledReason}
+          onOpenNewSessionTab={() => tabActions.openNewSessionTab()}
+        />
+
+        <div className="min-w-0 flex-1" />
+
+        <ClosedSessionsTrigger
+          closedChatTabs={viewModel.closedChatTabs}
+          onRestoreSession={(sessionId) => {
+            chatVisibilityActions.showChatSessionTab(sessionId, { select: true });
+          }}
+          onDeleteSession={dismissChatSession}
+        />
 
         {groupEditorWorkflow.groupEditor && (
           <ManualChatGroupEditorPopover

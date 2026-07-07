@@ -215,6 +215,16 @@ export function getKnownSessionCanFork(known: KnownHeaderSession): boolean {
   return Boolean(known.session.actionCapabilities.fork);
 }
 
+export function getKnownSessionClosedAt(known: KnownHeaderSession): string | null {
+  if (known.kind === "placeholder") {
+    return null;
+  }
+  if (known.kind === "slot") {
+    return known.session?.dismissedAt ?? known.session?.updatedAt ?? null;
+  }
+  return known.session.dismissedAt ?? known.session.updatedAt;
+}
+
 export function getLinkedChildViewState(child: HeaderHierarchyChildRow): SessionViewState {
   switch (child.statusLabel) {
     case "Starting":
