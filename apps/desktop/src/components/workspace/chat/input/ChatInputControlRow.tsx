@@ -71,6 +71,9 @@ export function ComposerLeadingControls({
     && deriveGoalBarState(sessionGoal.goal).kind !== "live";
 
   const effortControl = controlGroups.modelConfigControls.find((c) => c.key === "effort") ?? null;
+  const fastModeControl = controlGroups.modelConfigControls.find(
+    (c) => c.key === "fast_mode" && c.kind === "toggle",
+  ) ?? null;
 
   return (
     <>
@@ -82,6 +85,18 @@ export function ComposerLeadingControls({
       >
         <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
       </div>
+
+      {/* 2a. Fast mode toggle — sits before the reasoning bars so speed and
+          effort read as one model-tuning cluster */}
+      {fastModeControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerFastModeToggle control={fastModeControl} />
+        </span>
+      )}
 
       {/* 2. Reasoning effort bars */}
       {effortControl && (
@@ -144,8 +159,8 @@ export interface ComposerTrailingControlsProps {
 }
 
 /**
- * The trailing control cluster (attach, runtime pressure, overflow, fast
- * mode) — shared between chat and home like ComposerLeadingControls. Home
+ * The trailing control cluster (attach, runtime pressure, overflow) —
+ * shared between chat and home like ComposerLeadingControls. Home
  * passes supportsAttachments/canAttachFiles=false and gets the exact
  * disabled plus-button + "available after a session starts" detail that
  * chat's pre-session state shows.
@@ -173,10 +188,6 @@ export function ComposerTrailingControls({
         ? "Attachments are not supported by this agent"
         : "Attachments are available after a session starts"
       : "Chat is unavailable right now";
-
-  const fastModeControl = controlGroups.modelConfigControls.find(
-    (c) => c.key === "fast_mode" && c.kind === "toggle",
-  ) ?? null;
 
   return (
     <>
@@ -207,17 +218,6 @@ export function ComposerTrailingControls({
           controls={controlGroups.modelConfigControls}
         />
       </span>
-
-      {/* 9. Fast mode toggle */}
-      {fastModeControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerFastModeToggle control={fastModeControl} />
-        </span>
-      )}
     </>
   );
 }
