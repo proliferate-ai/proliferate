@@ -5,7 +5,6 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 
-import { SettingsSection } from "../settings/SettingsSection";
 import { ProviderBrandIcon } from "../auth/ProviderBrandIcon";
 
 export interface AccountPasswordCredentialSubmit {
@@ -21,7 +20,11 @@ export interface AccountPasswordCredentialView {
   onSubmit?: (input: AccountPasswordCredentialSubmit) => void | Promise<void>;
 }
 
-export function AccountPasswordCredentialCard({
+/**
+ * Inline row variant for use inside the sign-in methods card.
+ * Renders as a row with expand-in-place form below.
+ */
+export function AccountPasswordCredentialRow({
   credential,
 }: {
   credential: AccountPasswordCredentialView;
@@ -77,127 +80,144 @@ export function AccountPasswordCredentialCard({
     }
   }
 
-  return (
-    <SettingsSection>
-      <div className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <ProviderBrandIcon provider="password" className="size-4 shrink-0 text-muted-foreground" />
-              <span>Email/password</span>
-            </div>
-            <p className="max-w-xl text-sm leading-6 text-muted-foreground">
-              {credential.enabled
-                ? "Email sign-in is enabled for this account."
-                : credential.loading
-                  ? "Checking email sign-in for this account."
-                : "Add a password to sign in with email on web and mobile."}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Badge tone={credential.enabled ? "success" : "neutral"}>
-              {credential.loading ? "Checking" : credential.enabled ? "Enabled" : "Not set"}
-            </Badge>
-            {credential.onSubmit ? (
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={actionDisabled || submitting}
-                onClick={() => {
-                  setError(null);
-                  if (editing) {
-                    setCurrentPassword("");
-                    setNewPassword("");
-                    setConfirmPassword("");
-                    setEditing(false);
-                  } else {
-                    setEditing(true);
-                  }
-                }}
-              >
-                {editing ? "Cancel" : credential.enabled ? "Change password" : "Set password"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
+  const statusLabel = credential.loading
+    ? "Checking"
+    : credential.enabled
+      ? "Enabled"
+      : "Not set";
 
-        {editing ? (
-          <form className="grid gap-3 sm:max-w-md" onSubmit={submit}>
-            {needsCurrentPassword ? (
-              <div className="space-y-1.5">
-                <Label htmlFor={currentPasswordId}>Current password</Label>
-                <Input
-                  id={currentPasswordId}
-                  type="password"
-                  value={currentPassword}
-                  disabled={submitting}
-                  autoComplete="current-password"
-                  data-telemetry-mask
-                  onChange={(event) => setCurrentPassword(event.currentTarget.value)}
-                />
-              </div>
-            ) : null}
-            <div className="space-y-1.5">
-              <Label htmlFor={newPasswordId}>New password</Label>
-              <Input
-                id={newPasswordId}
-                type="password"
-                value={newPassword}
-                disabled={submitting}
-                autoComplete="new-password"
-                data-telemetry-mask
-                onChange={(event) => setNewPassword(event.currentTarget.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={confirmPasswordId}>Confirm new password</Label>
-              <Input
-                id={confirmPasswordId}
-                type="password"
-                value={confirmPassword}
-                disabled={submitting}
-                autoComplete="new-password"
-                data-telemetry-mask
-                onChange={(event) => setConfirmPassword(event.currentTarget.value)}
-              />
-            </div>
-            {passwordMismatch ? (
-              <p className="text-sm text-destructive" role="alert">
-                New passwords do not match.
-              </p>
-            ) : null}
-            <div className="flex items-center gap-2">
-              <Button
-                type="submit"
-                variant="primary"
-                loading={submitting}
-                disabled={!canSubmit}
-              >
-                {submitting ? "Saving" : credential.enabled ? "Save password" : "Set password"}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={submitting}
-                onClick={() => {
+  const detailText = credential.enabled
+    ? "Email sign-in is enabled for this account."
+    : credential.loading
+      ? "Checking email sign-in for this account."
+      : "Add a password to sign in with email";
+
+  return (
+    <div className="border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0">
+      <div className="flex min-h-[2.75rem] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 font-medium text-foreground">
+            <ProviderBrandIcon provider="password" className="size-4 shrink-0 text-muted-foreground" />
+            <span>Email &amp; password</span>
+          </div>
+          <div className="truncate text-muted-foreground">{detailText}</div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge tone={credential.enabled ? "success" : "neutral"}>
+            {statusLabel}
+          </Badge>
+          {credential.onSubmit ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={actionDisabled || submitting}
+              onClick={() => {
+                setError(null);
+                if (editing) {
                   setCurrentPassword("");
                   setNewPassword("");
                   setConfirmPassword("");
-                  setError(null);
                   setEditing(false);
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
-            ) : null}
-          </form>
-        ) : null}
+                } else {
+                  setEditing(true);
+                }
+              }}
+            >
+              {editing ? "Cancel" : credential.enabled ? "Change password" : "Set password"}
+            </Button>
+          ) : null}
+        </div>
       </div>
-    </SettingsSection>
+
+      {editing ? (
+        <form className="mt-3 grid gap-3 sm:max-w-md" onSubmit={submit}>
+          {needsCurrentPassword ? (
+            <div className="space-y-1.5">
+              <Label htmlFor={currentPasswordId}>Current password</Label>
+              <Input
+                id={currentPasswordId}
+                type="password"
+                value={currentPassword}
+                disabled={submitting}
+                autoComplete="current-password"
+                data-telemetry-mask
+                onChange={(event) => setCurrentPassword(event.currentTarget.value)}
+              />
+            </div>
+          ) : null}
+          <div className="space-y-1.5">
+            <Label htmlFor={newPasswordId}>New password</Label>
+            <Input
+              id={newPasswordId}
+              type="password"
+              value={newPassword}
+              disabled={submitting}
+              autoComplete="new-password"
+              data-telemetry-mask
+              onChange={(event) => setNewPassword(event.currentTarget.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={confirmPasswordId}>Confirm new password</Label>
+            <Input
+              id={confirmPasswordId}
+              type="password"
+              value={confirmPassword}
+              disabled={submitting}
+              autoComplete="new-password"
+              data-telemetry-mask
+              onChange={(event) => setConfirmPassword(event.currentTarget.value)}
+            />
+          </div>
+          {passwordMismatch ? (
+            <p className="text-sm text-destructive" role="alert">
+              New passwords do not match.
+            </p>
+          ) : null}
+          <div className="flex items-center gap-2">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={submitting}
+              disabled={!canSubmit}
+            >
+              {submitting ? "Saving" : credential.enabled ? "Save password" : "Set password"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={submitting}
+              onClick={() => {
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmPassword("");
+                setError(null);
+                setEditing(false);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </form>
+      ) : null}
+    </div>
   );
+}
+
+/**
+ * Legacy standalone card export — kept for API compatibility.
+ * The pane now uses AccountPasswordCredentialRow inline.
+ */
+export function AccountPasswordCredentialCard({
+  credential,
+}: {
+  credential: AccountPasswordCredentialView;
+}) {
+  return <AccountPasswordCredentialRow credential={credential} />;
 }

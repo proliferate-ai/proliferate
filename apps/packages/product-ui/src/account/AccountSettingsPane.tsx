@@ -4,9 +4,8 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 import { SettingsSection } from "../settings/SettingsSection";
-import { SettingsRow } from "../settings/SettingsRow";
 import {
-  AccountPasswordCredentialCard,
+  AccountPasswordCredentialRow,
   type AccountPasswordCredentialView,
 } from "./AccountPasswordCredentialCard";
 import { ProviderBrandIcon } from "../auth/ProviderBrandIcon";
@@ -82,66 +81,64 @@ export function AccountSettingsPane({
   githubLabel,
   providers,
   actions,
-  accessTitle = "Account access",
-  accessDescription = "Sign in and link providers so web, mobile, and desktop resolve to the same Proliferate account.",
-  providersTitle = "Connected providers",
-  providersDescription = "GitHub is required for repository access. Add Google and Apple identities to sign in across devices without creating a separate account.",
+  accessDescription,
+  providersTitle = "Sign-in methods",
+  providersDescription = "How you sign in to this account across desktop, web, and mobile.",
   connectedServicesTitle = "Connected services",
   connectedServicesDescription = "Authorize services Proliferate uses inside managed cloud sandboxes.",
   connectedServices = [],
   passwordCredential,
   error,
 }: AccountSettingsPaneProps) {
+  // Resolve the sign-in methods section description: accessDescription overrides
+  // providersDescription when present (desktop passes contextual state copy here).
+  const signInMethodsDescription = accessDescription ?? providersDescription;
+
+  // Build the effective provider rows, synthesizing apple/google if only an action exists
+  const effectiveProviders = buildEffectiveProviders(providers, actions);
+
+  // Determine sign-in section action (signIn for signed-out state)
+  const sectionAction = actions.signIn ? (
+    <AccountAction action={actions.signIn} variant="secondary" />
+  ) : null;
+
   return (
     <div className="space-y-6">
+      {/* 1. Profile header */}
       <SettingsSection>
         <AccountProfileHeader
           avatarUrl={avatarUrl ?? null}
           displayName={displayName}
           email={email}
-          githubLabel={githubLabel}
           profileSummary={profileSummary}
         />
       </SettingsSection>
 
-      <SettingsSection>
-        <SettingsRow label={accessTitle} description={accessDescription}>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {actions.signIn ? <AccountAction action={actions.signIn} /> : null}
-            {actions.connectGitHub ? <AccountAction action={actions.connectGitHub} /> : null}
-            {actions.reconnectGitHub ? <AccountAction action={actions.reconnectGitHub} /> : null}
-            {actions.manageGitHubAccess ? (
-              <AccountAction action={actions.manageGitHubAccess} variant="ghost" />
-            ) : null}
-            {actions.signOut ? <AccountAction action={actions.signOut} variant="ghost" /> : null}
-          </div>
-        </SettingsRow>
-      </SettingsSection>
-
-      <SettingsSection title={providersTitle} description={providersDescription}>
-        <div className="space-y-3">
-          {actions.connectGoogle || actions.connectApple ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {actions.connectGoogle ? (
-                <AccountAction action={actions.connectGoogle} variant="secondary" />
-              ) : null}
-              {actions.connectApple ? (
-                <AccountAction action={actions.connectApple} variant="secondary" />
-              ) : null}
-            </div>
+      {/* 2. Sign-in methods */}
+      <SettingsSection
+        title={providersTitle}
+        description={signInMethodsDescription}
+        action={sectionAction}
+      >
+        <div className="overflow-clip rounded-lg bg-foreground/5">
+          {effectiveProviders.map((row) => (
+            <SignInMethodRow
+              key={`${row.provider.provider}-${row.provider.accountLabel ?? row.provider.label}`}
+              provider={row.provider}
+              actions={row.actions}
+              githubLabel={githubLabel}
+            />
+          ))}
+          {passwordCredential ? (
+            <AccountPasswordCredentialRow credential={passwordCredential} />
           ) : null}
-
-          <div className="flex flex-col">
-            {providers.map((provider) => (
-              <ProviderRow key={`${provider.provider}-${provider.accountLabel ?? provider.label}`} provider={provider} />
-            ))}
-          </div>
         </div>
       </SettingsSection>
 
+      {/* 3. Connected services */}
       {connectedServices.length > 0 ? (
         <SettingsSection title={connectedServicesTitle} description={connectedServicesDescription}>
-          <div className="flex flex-col">
+          <div className="overflow-clip rounded-lg bg-foreground/5">
             {connectedServices.map((service) => (
               <ConnectedServiceRow key={service.id} service={service} />
             ))}
@@ -149,26 +146,107 @@ export function AccountSettingsPane({
         </SettingsSection>
       ) : null}
 
-      {passwordCredential ? (
-        <AccountPasswordCredentialCard credential={passwordCredential} />
-      ) : null}
-
+      {/* 4. Footer */}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {actions.signOut ? (
+        <div className="flex">
+          <AccountAction action={actions.signOut} variant="ghost" />
+        </div>
+      ) : null}
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Internal: build effective provider rows with their matched actions
+// ---------------------------------------------------------------------------
+
+interface ProviderRowData {
+  provider: AccountProviderView;
+  actions: AccountActionView[];
+}
+
+function buildEffectiveProviders(
+  providers: AccountProviderView[],
+  actions: AccountSettingsPaneProps["actions"],
+): ProviderRowData[] {
+  const rows: ProviderRowData[] = providers.map((provider) => ({
+    provider,
+    actions: getActionsForProvider(provider, actions),
+  }));
+
+  // Synthesize apple row if connectApple action exists but no apple provider row
+  const hasAppleRow = providers.some((p) => p.provider === "apple");
+  if (!hasAppleRow && actions.connectApple) {
+    rows.push({
+      provider: {
+        provider: "apple",
+        label: "Apple",
+        accountLabel: "Not connected",
+        connected: false,
+      },
+      actions: [actions.connectApple],
+    });
+  }
+
+  // Synthesize google row if connectGoogle action exists but no google provider row
+  const hasGoogleRow = providers.some((p) => p.provider === "google");
+  if (!hasGoogleRow && actions.connectGoogle) {
+    rows.push({
+      provider: {
+        provider: "google",
+        label: "Google",
+        accountLabel: "Not connected",
+        connected: false,
+      },
+      actions: [actions.connectGoogle],
+    });
+  }
+
+  return rows;
+}
+
+function getActionsForProvider(
+  provider: AccountProviderView,
+  actions: AccountSettingsPaneProps["actions"],
+): AccountActionView[] {
+  const result: AccountActionView[] = [];
+
+  if (provider.provider === "github") {
+    if (actions.connectGitHub) result.push(actions.connectGitHub);
+    if (actions.reconnectGitHub) result.push(actions.reconnectGitHub);
+    if (actions.manageGitHubAccess) result.push(actions.manageGitHubAccess);
+  }
+
+  if (provider.provider === "google" && actions.connectGoogle && !provider.connected) {
+    result.push(actions.connectGoogle);
+  }
+
+  if (provider.provider === "apple" && actions.connectApple && !provider.connected) {
+    result.push(actions.connectApple);
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Internal components
+// ---------------------------------------------------------------------------
+
 function AccountAction({
   action,
   variant = "secondary",
+  size = "sm",
 }: {
   action: AccountActionView;
   variant?: "secondary" | "ghost";
+  size?: "sm" | "md";
 }) {
   return (
     <Button
       type="button"
       variant={action.destructive ? "ghost" : variant}
+      size={size}
       disabled={action.disabled}
       loading={action.loading}
       onClick={action.onClick}
@@ -180,13 +258,68 @@ function AccountAction({
   );
 }
 
+function SignInMethodRow({
+  provider,
+  actions: rowActions,
+  githubLabel,
+}: {
+  provider: AccountProviderView;
+  actions: AccountActionView[];
+  githubLabel: string;
+}) {
+  const statusLabel = provider.connected
+    ? provider.status === "needs_reauth"
+      ? "Reconnect"
+      : provider.status === "expired"
+        ? "Expired"
+        : "Connected"
+    : "Not connected";
+
+  // Use githubLabel as detail fallback for GitHub row when no accountLabel
+  const detail = provider.provider === "github" && !provider.accountLabel
+    ? githubLabel
+    : provider.accountLabel;
+
+  return (
+    <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 font-medium text-foreground">
+          <ProviderBrandIcon
+            provider={provider.provider}
+            label={provider.brandLabel ?? provider.label}
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+          <span>{provider.label}</span>
+          {provider.primary && provider.connected ? <Badge tone="neutral">Primary</Badge> : null}
+        </div>
+        <div className="truncate text-muted-foreground">
+          {detail || (provider.connected ? "Connected" : "Not connected")}
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Badge tone={providerStatusTone(provider)} className="shrink-0">
+          {statusLabel}
+        </Badge>
+        {rowActions.map((action, idx) => (
+          <AccountAction
+            key={idx}
+            action={action}
+            variant={idx === 0 ? "secondary" : "ghost"}
+            size="sm"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ConnectedServiceRow({
   service,
 }: {
   service: AccountConnectedServiceView;
 }) {
   return (
-    <div className="flex flex-col gap-3 border-b border-border-light px-3 py-2.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-h-[3.5rem] flex-col gap-3 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
           <span>{service.label}</span>
@@ -212,13 +345,11 @@ function AccountProfileHeader({
   avatarUrl,
   displayName,
   email,
-  githubLabel,
   profileSummary,
 }: {
   avatarUrl: string | null;
   displayName: string;
   email: string;
-  githubLabel: string;
   profileSummary: string;
 }) {
   return (
@@ -228,15 +359,10 @@ function AccountProfileHeader({
         avatarUrl={avatarUrl}
         displayName={displayName}
       />
-      <div className="min-w-0 flex-1 space-y-3">
-        <div className="min-w-0 space-y-1">
-          <div className="truncate text-lg font-medium text-foreground">{displayName}</div>
-          <p className="text-sm leading-6 text-muted-foreground">{profileSummary}</p>
-        </div>
-        <div className="grid gap-2">
-          <AccountProfileRow label="Email" value={email} />
-          <AccountProfileRow label="GitHub" value={githubLabel} />
-        </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="truncate text-lg font-medium text-foreground">{displayName}</div>
+        <div className="truncate text-sm text-muted-foreground">{email}</div>
+        <p className="text-sm leading-6 text-muted-foreground">{profileSummary}</p>
       </div>
     </div>
   );
@@ -265,53 +391,6 @@ function AccountAvatar({
       ) : (
         <span>{initialsForName(displayName)}</span>
       )}
-    </div>
-  );
-}
-
-function AccountProfileRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function ProviderRow({ provider }: { provider: AccountProviderView }) {
-  const statusLabel = provider.connected
-    ? provider.status === "needs_reauth"
-      ? "Reconnect"
-      : provider.status === "expired"
-        ? "Expired"
-        : "Connected"
-    : "Not connected";
-
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-border-light px-3 py-2.5 text-sm last:border-b-0">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 font-medium text-foreground">
-          <ProviderBrandIcon
-            provider={provider.provider}
-            label={provider.brandLabel ?? provider.label}
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-          <span>{provider.label}</span>
-          {provider.primary && provider.connected ? <Badge tone="neutral">Primary</Badge> : null}
-        </div>
-        <div className="truncate text-muted-foreground">
-          {provider.accountLabel || (provider.connected ? "Connected" : "Not connected")}
-        </div>
-      </div>
-      <Badge tone={providerStatusTone(provider)} className="shrink-0">
-        {statusLabel}
-      </Badge>
     </div>
   );
 }
