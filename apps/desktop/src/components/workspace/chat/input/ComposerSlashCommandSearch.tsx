@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Keyboard } from "@proliferate/ui/icons";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type {
   SessionSlashCommandGroup,
   SessionSlashCommandViewModel,
@@ -83,51 +83,56 @@ function SlashCommandRow({
   setRowRef: (index: number, element: HTMLButtonElement | null) => void;
 }) {
   const detail = command.description || command.inputHint;
+  // Rows truncate aggressively; the hover tooltip carries the full details.
+  const tooltipContent = [command.displayName, command.description, command.inputHint]
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <>
       {showGroupLabel ? (
         <>
           <div data-slash-command-group-label-marker="" />
-          <div className="px-2 py-1 text-xs text-muted-foreground">
+          <div className="px-2.5 py-1 text-xs text-muted-foreground">
             {command.group}
           </div>
         </>
       ) : null}
-      <Button
-        ref={(element) => setRowRef(index, element)}
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        data-list-navigation-item
-        aria-selected={selected}
-        onMouseEnter={() => onRowMouseEnter(index)}
-        onMouseDown={(event) => {
-          event.preventDefault();
-        }}
-        onClick={() => onSelect(command)}
-        className={twMerge(
-          // Color-token hover promotion, not row opacity — opacity flips
-          // re-rasterize the glyphs and read as shimmer (styling.md).
-          "flex w-full shrink-0 cursor-pointer items-center gap-2 overflow-hidden whitespace-normal rounded-lg px-2 py-[5px] text-left text-composer text-popover-foreground/75 outline-none hover:bg-accent hover:text-popover-foreground focus:bg-accent",
-          selected && "bg-accent text-popover-foreground",
-        )}
-      >
-        <Keyboard className="size-4 shrink-0 text-muted-foreground" />
-        <span className="flex-none truncate">
-          {command.displayName}
-        </span>
-        {detail ? (
-          <span className="min-w-0 flex-1 truncate text-muted-foreground">
-            {detail}
+      <Tooltip content={tooltipContent} className="flex w-full">
+        <Button
+          ref={(element) => setRowRef(index, element)}
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          data-list-navigation-item
+          aria-selected={selected}
+          onMouseEnter={() => onRowMouseEnter(index)}
+          onMouseDown={(event) => {
+            event.preventDefault();
+          }}
+          onClick={() => onSelect(command)}
+          className={twMerge(
+            // Color-token hover promotion, not row opacity — opacity flips
+            // re-rasterize the glyphs and read as shimmer (styling.md).
+            "flex w-full shrink-0 cursor-pointer items-baseline gap-2 overflow-hidden whitespace-normal rounded-lg px-2.5 py-[5px] text-left text-composer outline-none hover:bg-accent focus:bg-accent",
+            selected && "bg-accent",
+          )}
+        >
+          <span className="flex-none truncate text-popover-foreground">
+            {command.displayName}
           </span>
-        ) : null}
-        {command.inputHint && command.description ? (
-          <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
-            {command.inputHint}
-          </span>
-        ) : null}
-      </Button>
+          {detail ? (
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">
+              {detail}
+            </span>
+          ) : null}
+          {command.inputHint && command.description ? (
+            <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
+              {command.inputHint}
+            </span>
+          ) : null}
+        </Button>
+      </Tooltip>
     </>
   );
 }
