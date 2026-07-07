@@ -40,9 +40,9 @@ export interface ModelTableProps {
 // header on `accent`, 11px hairline-divided body rows (dense reference table),
 // first row un-bordered.
 const TH_CLASS =
-  "border-b border-border bg-accent px-3 py-1.5 text-left text-[10px] font-medium whitespace-nowrap text-faint";
+  "border-b border-border bg-accent px-4 py-1.5 text-left text-[10px] font-medium whitespace-nowrap text-faint";
 const TD_CLASS =
-  "border-t border-border px-3 py-2 align-top text-[11px] whitespace-nowrap";
+  "border-t border-border px-4 py-2 align-top text-[11px] whitespace-nowrap";
 
 function Dash() {
   return <span className="text-[11px] text-faint">—</span>;
