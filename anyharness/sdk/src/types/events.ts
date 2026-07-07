@@ -29,6 +29,13 @@ type UsageUpdatePayload = components["schemas"]["UsageUpdatePayload"];
 type GoalUpdatedPayload = components["schemas"]["GoalUpdatedPayload"];
 type GoalMetPayload = components["schemas"]["GoalMetPayload"];
 type GoalClearedPayload = components["schemas"]["GoalClearedPayload"];
+type LoopUpsertedPayload = components["schemas"]["LoopUpsertedPayload"];
+type LoopRemovedPayload = components["schemas"]["LoopRemovedPayload"];
+type LoopFiredPayload = components["schemas"]["LoopFiredPayload"];
+type ActivityProcessUpsertedPayload =
+  components["schemas"]["ActivityProcessUpsertedPayload"];
+type ActivitySubagentUpsertedPayload =
+  components["schemas"]["ActivitySubagentUpsertedPayload"];
 type PendingPromptAddedPayload =
   components["schemas"]["PendingPromptAddedPayload"];
 type PendingPromptUpdatedPayload =
@@ -113,6 +120,21 @@ export type GoalMetEvent = GoalMetPayload & {
 };
 export type GoalClearedEvent = GoalClearedPayload & {
   type: "goal_cleared";
+};
+export type LoopUpsertedEvent = LoopUpsertedPayload & {
+  type: "loop_upserted";
+};
+export type LoopRemovedEvent = LoopRemovedPayload & {
+  type: "loop_removed";
+};
+export type LoopFiredEvent = LoopFiredPayload & {
+  type: "loop_fired";
+};
+export type ActivityProcessUpsertedEvent = ActivityProcessUpsertedPayload & {
+  type: "process_upserted";
+};
+export type ActivitySubagentUpsertedEvent = ActivitySubagentUpsertedPayload & {
+  type: "subagent_upserted";
 };
 export type PendingPromptAddedEvent = PendingPromptAddedPayload & {
   type: "pending_prompt_added";
@@ -209,6 +231,11 @@ export type SessionEvent =
   | GoalUpdatedEvent
   | GoalMetEvent
   | GoalClearedEvent
+  | LoopUpsertedEvent
+  | LoopRemovedEvent
+  | LoopFiredEvent
+  | ActivityProcessUpsertedEvent
+  | ActivitySubagentUpsertedEvent
   | PendingPromptAddedEvent
   | PendingPromptUpdatedEvent
   | PendingPromptRemovedEvent

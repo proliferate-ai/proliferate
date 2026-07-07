@@ -12,6 +12,13 @@ use crate::domains::sessions::model::SessionEventRecord;
 
 pub const MAX_LOOP_PROMPT_BYTES: usize = 16 * 1024;
 
+/// Per-session cap on active runtime-emulated loops. Each arm mints a fresh
+/// `loop_id` and an always-on scheduler timer, so without a cap N unbounded
+/// arms accumulate N scheduler entries that each queue a prompt when the
+/// session next goes idle. Only new arms count against it — editing an
+/// existing loop by id does not.
+pub const MAX_ACTIVE_EMULATED_LOOPS: usize = 20;
+
 /// The tagged-chunk kinds the sidecars (and, on Codex, the runtime-emulated
 /// `LoopSchedulerExtension`) emit — `loop_upserted | loop_removed |
 /// loop_fired` (session-activity-architecture up-path vocabulary).
@@ -54,6 +61,8 @@ pub enum LoopIngestError {
     MissingLoopId,
     #[error("loop prompt exceeds {MAX_LOOP_PROMPT_BYTES} bytes")]
     PromptTooLarge,
+    #[error("session already holds the maximum number of active loops")]
+    TooManyActiveLoops,
     #[error(transparent)]
     Store(#[from] anyhow::Error),
 }
@@ -150,6 +159,10 @@ impl LoopService {
                 last_fired_at_ms: wire.last_fired_at_ms,
                 fire_count: wire.fire_count,
                 native_state_json,
+                // Native crons own their own cadence — the emulated scheduler
+                // fields never apply to them.
+                max_fires: existing.as_ref().and_then(|existing| existing.max_fires),
+                next_fire_at_ms: existing.as_ref().and_then(|existing| existing.next_fire_at_ms),
                 created_at: existing
                     .as_ref()
                     .map(|existing| existing.created_at.clone())
@@ -201,6 +214,7 @@ impl LoopService {
             }
             let removed = LoopRecord {
                 status: LoopStatus::Cleared,
+                next_fire_at_ms: None,
                 updated_at_ms: now_ms(),
                 ..existing
             };
@@ -218,6 +232,275 @@ impl LoopService {
                 envelopes: vec![envelope],
             })
         })
+    }
+}
+
+/// The arm/edit payload for a runtime-emulated loop (`native = false`).
+/// `next_fire_at_ms` is precomputed by the runtime (it owns "now" and
+/// schedule validation) so the service stays IO-only over sqlite.
+#[derive(Debug, Clone)]
+pub struct EmulatedLoopSpec {
+    pub loop_id: String,
+    pub prompt: String,
+    pub schedule: anyharness_contract::v1::LoopSchedule,
+    pub recurring: bool,
+    pub max_fires: Option<i64>,
+    pub next_fire_at_ms: i64,
+}
+
+/// Outcome of recording one emulated fire.
+#[derive(Debug, Clone)]
+pub struct EmulatedFireOutcome {
+    pub batch: LoopEventBatch,
+    /// Whether the loop remains armed after this fire (false once a
+    /// non-recurring loop fires or a capped loop reaches `max_fires`).
+    pub still_armed: bool,
+    pub next_fire_at_ms: Option<i64>,
+}
+
+impl LoopService {
+    /// Active emulated (`native = false`) loops for a session — the set the
+    /// [`super::scheduler::LoopScheduler`] re-arms on attach.
+    pub fn active_emulated_loops(&self, session_id: &str) -> anyhow::Result<Vec<LoopRecord>> {
+        self.store.list_active_emulated(session_id)
+    }
+
+    /// Arm-or-edit a runtime-emulated loop. Creates the mirror row
+    /// (`native = false`) or edits an existing one in place, persists the
+    /// `LoopUpserted` event, and returns the committed envelopes. Idempotent:
+    /// an edit that changes nothing commits nothing.
+    pub fn arm_emulated_loop(
+        &self,
+        context: LoopEventContext,
+        spec: EmulatedLoopSpec,
+    ) -> Result<LoopEventBatch, LoopIngestError> {
+        if spec.prompt.len() > MAX_LOOP_PROMPT_BYTES {
+            return Err(LoopIngestError::PromptTooLarge);
+        }
+        // Cap active emulated loops per session. Only a NEW loop counts — an
+        // edit reuses an existing loop_id and must always be allowed through.
+        if self.store.find_one(&context.session_id, &spec.loop_id)?.is_none()
+            && self.store.list_active_emulated(&context.session_id)?.len()
+                >= MAX_ACTIVE_EMULATED_LOOPS
+        {
+            return Err(LoopIngestError::TooManyActiveLoops);
+        }
+        self.store
+            .with_tx_anyhow(|tx| {
+                let now = now_ms();
+                let existing = LoopStore::find_one_tx(tx, &context.session_id, &spec.loop_id)?;
+                let next = LoopRecord {
+                    session_id: context.session_id.clone(),
+                    workspace_id: context.workspace_id.clone(),
+                    loop_id: spec.loop_id.clone(),
+                    prompt: spec.prompt.clone(),
+                    schedule_kind: spec.schedule.kind,
+                    schedule_expr: spec.schedule.expr.clone(),
+                    recurring: spec.recurring,
+                    status: LoopStatus::Active,
+                    native: false,
+                    last_fired_at_ms: existing.as_ref().and_then(|e| e.last_fired_at_ms),
+                    fire_count: existing.as_ref().map(|e| e.fire_count).unwrap_or(0),
+                    native_state_json: None,
+                    max_fires: spec.max_fires,
+                    next_fire_at_ms: Some(spec.next_fire_at_ms),
+                    created_at: existing
+                        .as_ref()
+                        .map(|e| e.created_at.clone())
+                        .unwrap_or_else(|| chrono::Utc::now().to_rfc3339()),
+                    updated_at_ms: now,
+                };
+                if let Some(existing) = existing.as_ref() {
+                    if loop_content_unchanged(existing, &next)
+                        && existing.next_fire_at_ms == next.next_fire_at_ms
+                        && existing.max_fires == next.max_fires
+                    {
+                        return Ok(LoopEventBatch::unchanged(Some(existing.clone())));
+                    }
+                }
+                LoopStore::upsert_loop(tx, &next)?;
+                let envelope = envelope(
+                    &context,
+                    context.next_seq,
+                    SessionEvent::LoopUpserted(LoopUpsertedPayload {
+                        r#loop: next.to_contract(),
+                    }),
+                );
+                LoopStore::insert_event(tx, &event_record(&envelope)?)?;
+                Ok(LoopEventBatch {
+                    r#loop: Some(next),
+                    envelopes: vec![envelope],
+                })
+            })
+            .map_err(LoopIngestError::Store)
+    }
+
+    /// Clear one loop by id (mark `cleared`, emit `LoopRemoved`). Shared by the
+    /// emulated clear path and the native-reconcile "missing means gone" rule.
+    /// Idempotent: an already-cleared or unknown loop commits nothing.
+    pub fn clear_loop(
+        &self,
+        context: LoopEventContext,
+        loop_id: String,
+    ) -> Result<LoopEventBatch, LoopIngestError> {
+        self.apply_removed(context, loop_id)
+            .map_err(LoopIngestError::Store)
+    }
+
+    /// Clear every active loop for the session, returning the count and all
+    /// committed envelopes across the batch.
+    pub fn clear_all_loops(
+        &self,
+        context: LoopEventContext,
+    ) -> Result<(u32, Vec<SessionEventEnvelope>), LoopIngestError> {
+        let active = self.store.list_active(&context.session_id)?;
+        let mut cleared = 0u32;
+        let mut envelopes = Vec::new();
+        let mut seq = context.next_seq;
+        for record in active {
+            let mut ctx = context.clone();
+            ctx.next_seq = seq;
+            let batch = self
+                .apply_removed(ctx, record.loop_id)
+                .map_err(LoopIngestError::Store)?;
+            if !batch.envelopes.is_empty() {
+                cleared += 1;
+                seq += batch.envelopes.len() as i64;
+                envelopes.extend(batch.envelopes);
+            }
+        }
+        Ok((cleared, envelopes))
+    }
+
+    /// Record one emulated fire: bump `fire_count` / `last_fired_at`, advance
+    /// `next_fire_at` (recomputed from the schedule), and honor `max_fires`
+    /// (clearing the loop once the cap is hit or a non-recurring loop fires).
+    /// Emits `LoopFired` plus, when the fire retires the loop, `LoopRemoved`.
+    pub fn record_emulated_fire(
+        &self,
+        context: LoopEventContext,
+        loop_id: String,
+        fired_at_ms: i64,
+    ) -> Result<Option<EmulatedFireOutcome>, LoopIngestError> {
+        self.store
+            .with_tx_anyhow(|tx| {
+                let Some(existing) = LoopStore::find_one_tx(tx, &context.session_id, &loop_id)?
+                else {
+                    return Ok(None);
+                };
+                if existing.status != LoopStatus::Active || existing.native {
+                    return Ok(None);
+                }
+                let fire_count = existing.fire_count + 1;
+                let capped = existing
+                    .max_fires
+                    .map(|cap| fire_count >= cap)
+                    .unwrap_or(false);
+                let retire = capped || !existing.recurring;
+
+                let next_fire_at_ms = if retire {
+                    None
+                } else {
+                    super::schedule::next_fire_at_ms(
+                        &existing.to_contract().schedule,
+                        fired_at_ms,
+                    )
+                    .ok()
+                };
+                let status = if retire {
+                    LoopStatus::Cleared
+                } else {
+                    LoopStatus::Active
+                };
+                let updated = LoopRecord {
+                    status,
+                    last_fired_at_ms: Some(fired_at_ms),
+                    fire_count,
+                    next_fire_at_ms,
+                    updated_at_ms: now_ms(),
+                    ..existing
+                };
+                LoopStore::upsert_loop(tx, &updated)?;
+
+                let mut envelopes = Vec::new();
+                let fired_event = envelope(
+                    &context,
+                    context.next_seq,
+                    SessionEvent::LoopFired(LoopFiredPayload {
+                        r#loop: updated.to_contract(),
+                        fired_at_ms,
+                        turn_id: context.turn_id.clone(),
+                    }),
+                );
+                LoopStore::insert_event(tx, &event_record(&fired_event)?)?;
+                envelopes.push(fired_event);
+
+                if retire {
+                    let removed_event = envelope(
+                        &context,
+                        context.next_seq + 1,
+                        SessionEvent::LoopRemoved(LoopRemovedPayload {
+                            loop_id: updated.loop_id.clone(),
+                        }),
+                    );
+                    LoopStore::insert_event(tx, &event_record(&removed_event)?)?;
+                    envelopes.push(removed_event);
+                }
+
+                Ok(Some(EmulatedFireOutcome {
+                    batch: LoopEventBatch {
+                        r#loop: Some(updated),
+                        envelopes,
+                    },
+                    still_armed: !retire,
+                    next_fire_at_ms,
+                }))
+            })
+            .map_err(LoopIngestError::Store)
+    }
+
+    /// Reconcile the native loop mirror against an authoritative `loop/list`
+    /// pull on attach: upsert every listed loop and mark any active native
+    /// mirror row the harness no longer reports as `cleared`. Emulated
+    /// (`native = false`) rows are never touched by native reconcile.
+    pub fn reconcile_native_loops(
+        &self,
+        context: LoopEventContext,
+        wires: Vec<LoopWire>,
+    ) -> Result<Vec<SessionEventEnvelope>, LoopIngestError> {
+        for wire in wires.iter() {
+            if wire.prompt.len() > MAX_LOOP_PROMPT_BYTES {
+                return Err(LoopIngestError::PromptTooLarge);
+            }
+        }
+        let mut envelopes = Vec::new();
+        let mut seq = context.next_seq;
+        let listed_ids: std::collections::HashSet<String> =
+            wires.iter().map(|wire| wire.loop_id.clone()).collect();
+
+        for wire in wires {
+            let mut ctx = context.clone();
+            ctx.next_seq = seq;
+            let batch = self.apply_upsert(ctx, wire, false).map_err(LoopIngestError::Store)?;
+            seq += batch.envelopes.len() as i64;
+            envelopes.extend(batch.envelopes);
+        }
+
+        // Any active native loop the harness no longer lists is gone.
+        let active = self.store.list_active(&context.session_id)?;
+        for record in active {
+            if !record.native || listed_ids.contains(&record.loop_id) {
+                continue;
+            }
+            let mut ctx = context.clone();
+            ctx.next_seq = seq;
+            let batch = self
+                .apply_removed(ctx, record.loop_id)
+                .map_err(LoopIngestError::Store)?;
+            seq += batch.envelopes.len() as i64;
+            envelopes.extend(batch.envelopes);
+        }
+        Ok(envelopes)
     }
 }
 

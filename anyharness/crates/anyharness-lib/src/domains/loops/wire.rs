@@ -12,6 +12,32 @@ pub const LOOP_UPSERTED_TRANSCRIPT_EVENT: &str = "loop_upserted";
 pub const LOOP_REMOVED_TRANSCRIPT_EVENT: &str = "loop_removed";
 pub const LOOP_FIRED_TRANSCRIPT_EVENT: &str = "loop_fired";
 
+/// Wire method names for the native LoopPort ext methods (ACP 0.14 strips the
+/// leading `_` before dispatch; the client sends the underscored form).
+pub const LOOP_SET_EXT_METHOD: &str = "_anyharness/loop/set";
+pub const LOOP_CLEAR_EXT_METHOD: &str = "_anyharness/loop/clear";
+pub const LOOP_LIST_EXT_METHOD: &str = "_anyharness/loop/list";
+
+/// `_anyharness/loop/set` result: `{ loop: LoopWire }`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoopWireEnvelope {
+    pub r#loop: LoopWire,
+}
+
+/// `_anyharness/loop/list` result: `{ loops: LoopWire[] }`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoopListWireResult {
+    #[serde(default)]
+    pub loops: Vec<LoopWire>,
+}
+
+/// `_anyharness/loop/clear` result: `{ cleared: number }`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoopClearedWireResult {
+    #[serde(default)]
+    pub cleared: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoopWire {

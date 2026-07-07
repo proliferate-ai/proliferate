@@ -242,6 +242,23 @@ export type {
   SetSessionGoalRequest,
   SessionGoalResponse,
   ClearSessionGoalResponse,
+  Loop,
+  LoopSchedule,
+  LoopScheduleKind,
+  LoopStatus,
+  SetSessionLoopRequest,
+  SessionLoopResponse,
+  SessionLoopsResponse,
+  ClearSessionLoopsResponse,
+  SessionActivity,
+  TurnState,
+  ActivityProcess,
+  ProcessStatus,
+  ActivitySubagent,
+  SubagentStatus,
+  ActivityUsage,
+  FeedRef,
+  FeedKind,
 } from "./types/sessions.js";
 
 export type {
@@ -328,6 +345,11 @@ export type {
   GoalUpdatedEvent,
   GoalMetEvent,
   GoalClearedEvent,
+  LoopUpsertedEvent,
+  LoopRemovedEvent,
+  LoopFiredEvent,
+  ActivityProcessUpsertedEvent,
+  ActivitySubagentUpsertedEvent,
   PendingPromptAddedEvent,
   PendingPromptUpdatedEvent,
   PendingPromptRemovedEvent,
@@ -511,3 +533,13 @@ export type {
 
 export { streamSession } from "./streams/sessions.js";
 export type { SessionStreamOptions, SessionStreamHandle } from "./streams/sessions.js";
+
+export { connectFeed } from "./streams/feeds.js";
+export type {
+  FeedStreamOptions,
+  FeedStreamHandle,
+  FeedFrame,
+  FeedBytesFrame,
+  FeedTextFrame,
+  FeedWebSocketAuthTransport,
+} from "./streams/feeds.js";

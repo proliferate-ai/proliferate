@@ -54,6 +54,23 @@ impl ActivityStore {
         })
     }
 
+    /// Still-`running` processes for a session — the attach reset target
+    /// (Claude process-bound children die with the harness).
+    pub fn list_running_processes_tx(
+        tx: &Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<Vec<ActivityProcessRecord>> {
+        let mut statement = tx.prepare(
+            "SELECT * FROM activity_processes
+             WHERE session_id = ?1 AND status = 'running'
+             ORDER BY started_at ASC",
+        )?;
+        let rows = statement
+            .query_map([session_id], map_process)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     pub fn upsert_process(tx: &Connection, record: &ActivityProcessRecord) -> rusqlite::Result<()> {
         tx.execute(
             "INSERT INTO activity_processes (
@@ -113,6 +130,24 @@ impl ActivityStore {
                 .collect::<rusqlite::Result<Vec<_>>>()?;
             Ok(rows)
         })
+    }
+
+    /// Still-`running` subagents for a session — the attach reset target.
+    /// Claude Task agents are process-bound and die with the harness; codex
+    /// re-lists its resumable children right after via `activity/list`.
+    pub fn list_running_subagents_tx(
+        tx: &Connection,
+        session_id: &str,
+    ) -> rusqlite::Result<Vec<ActivitySubagentRecord>> {
+        let mut statement = tx.prepare(
+            "SELECT * FROM activity_subagents
+             WHERE session_id = ?1 AND status = 'running'
+             ORDER BY updated_at ASC",
+        )?;
+        let rows = statement
+            .query_map([session_id], map_subagent)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
     }
 
     pub fn upsert_subagent(
@@ -175,6 +210,23 @@ impl ActivityStore {
             map_feed_binding,
         )
         .optional()
+    }
+
+    /// Resolve one feed by its opaque id — the FeedService's registry lookup
+    /// when a `/v1/feeds/{feed_id}` watcher connects.
+    pub fn find_feed_binding_by_id(
+        &self,
+        feed_id: &str,
+    ) -> anyhow::Result<Option<FeedBindingRecord>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT * FROM feed_bindings WHERE feed_id = ?1",
+                params![feed_id],
+                map_feed_binding,
+            )
+            .optional()
+            .map_err(Into::into)
+        })
     }
 
     pub fn upsert_feed_binding(tx: &Connection, record: &FeedBindingRecord) -> rusqlite::Result<()> {

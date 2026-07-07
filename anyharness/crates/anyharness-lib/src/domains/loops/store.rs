@@ -85,14 +85,30 @@ impl LoopStore {
         Ok(grouped)
     }
 
+    /// Active emulated (`native = 0`) loops for one session — the set the
+    /// runtime [`super::scheduler::LoopScheduler`] re-arms on session attach.
+    pub fn list_active_emulated(&self, session_id: &str) -> anyhow::Result<Vec<LoopRecord>> {
+        self.db.with_conn(|conn| {
+            let mut statement = conn.prepare(
+                "SELECT * FROM loops
+                 WHERE session_id = ?1 AND status = 'active' AND native = 0
+                 ORDER BY updated_at_ms DESC",
+            )?;
+            let rows = statement
+                .query_map([session_id], map_loop)?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok(rows)
+        })
+    }
+
     pub fn upsert_loop(tx: &Connection, record: &LoopRecord) -> rusqlite::Result<()> {
         tx.execute(
             "INSERT INTO loops (
                 session_id, workspace_id, loop_id, prompt, schedule_kind, schedule_expr,
                 recurring, status, native, last_fired_at_ms, fire_count, native_state_json,
-                created_at, updated_at_ms
+                max_fires, next_fire_at_ms, created_at, updated_at_ms
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
              ON CONFLICT(session_id, loop_id) DO UPDATE SET
                 prompt = excluded.prompt,
                 schedule_kind = excluded.schedule_kind,
@@ -103,6 +119,8 @@ impl LoopStore {
                 last_fired_at_ms = excluded.last_fired_at_ms,
                 fire_count = excluded.fire_count,
                 native_state_json = excluded.native_state_json,
+                max_fires = excluded.max_fires,
+                next_fire_at_ms = excluded.next_fire_at_ms,
                 updated_at_ms = excluded.updated_at_ms",
             params![
                 record.session_id,
@@ -117,6 +135,8 @@ impl LoopStore {
                 record.last_fired_at_ms,
                 record.fire_count,
                 record.native_state_json,
+                record.max_fires,
+                record.next_fire_at_ms,
                 record.created_at,
                 record.updated_at_ms,
             ],
@@ -194,6 +214,8 @@ fn map_loop(row: &Row<'_>) -> rusqlite::Result<LoopRecord> {
         last_fired_at_ms: row.get("last_fired_at_ms")?,
         fire_count: row.get("fire_count")?,
         native_state_json: row.get("native_state_json")?,
+        max_fires: row.get("max_fires")?,
+        next_fire_at_ms: row.get("next_fire_at_ms")?,
         created_at: row.get("created_at")?,
         updated_at_ms: row.get("updated_at_ms")?,
     })

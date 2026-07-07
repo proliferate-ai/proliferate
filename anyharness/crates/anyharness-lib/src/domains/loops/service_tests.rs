@@ -428,3 +428,158 @@ fn observer_ignores_unrelated_and_malformed_chunks() {
         .expect("load current")
         .is_empty());
 }
+
+fn emulated_spec(loop_id: &str, max_fires: Option<i64>, next_fire_at_ms: i64) -> super::service::EmulatedLoopSpec {
+    super::service::EmulatedLoopSpec {
+        loop_id: loop_id.to_string(),
+        prompt: "ping".to_string(),
+        schedule: anyharness_contract::v1::LoopSchedule {
+            kind: LoopScheduleKind::Interval,
+            expr: "1m".to_string(),
+        },
+        recurring: true,
+        max_fires,
+        next_fire_at_ms,
+    }
+}
+
+#[test]
+fn arm_emulated_loop_creates_native_false_record_and_emits_upserted() {
+    let service = test_service();
+    let batch = service
+        .arm_emulated_loop(context(1), emulated_spec("loop-1", Some(2), 1_000))
+        .expect("arm");
+    let record = batch.r#loop.expect("record");
+    assert!(!record.native);
+    assert_eq!(record.status, LoopStatus::Active);
+    assert_eq!(record.next_fire_at_ms, Some(1_000));
+    assert_eq!(batch.envelopes.len(), 1);
+    assert!(matches!(
+        batch.envelopes[0].event,
+        SessionEvent::LoopUpserted(_)
+    ));
+    // The scheduler re-arm read sees it.
+    assert_eq!(
+        service.active_emulated_loops("session-1").expect("list").len(),
+        1
+    );
+}
+
+#[test]
+fn arm_emulated_loop_caps_active_loops_per_session_but_allows_edits() {
+    use super::service::{LoopIngestError, MAX_ACTIVE_EMULATED_LOOPS};
+    let service = test_service();
+    for i in 0..MAX_ACTIVE_EMULATED_LOOPS {
+        // Distinct next_seq per arm (session_events.seq is unique per session).
+        service
+            .arm_emulated_loop(context(i as i64 + 1), emulated_spec(&format!("loop-{i}"), None, 1_000))
+            .expect("arm within cap");
+    }
+    assert_eq!(
+        service.active_emulated_loops("session-1").expect("list").len(),
+        MAX_ACTIVE_EMULATED_LOOPS
+    );
+
+    // One more NEW loop is rejected once the cap is hit (no event inserted).
+    let err = service
+        .arm_emulated_loop(context(1_000), emulated_spec("loop-overflow", None, 1_000))
+        .expect_err("cap exceeded");
+    assert!(matches!(err, LoopIngestError::TooManyActiveLoops));
+
+    // Editing an EXISTING loop by id is still allowed at the cap.
+    service
+        .arm_emulated_loop(context(1_001), emulated_spec("loop-0", None, 2_000))
+        .expect("edit existing at cap");
+}
+
+#[test]
+fn record_emulated_fire_reschedules_then_caps_at_max_fires() {
+    let service = test_service();
+    service
+        .arm_emulated_loop(context(1), emulated_spec("loop-1", Some(2), 1_000))
+        .expect("arm");
+
+    // Fire 1: still armed, next fire advanced, LoopFired only.
+    let out1 = service
+        .record_emulated_fire(context(2), "loop-1".to_string(), 10_000)
+        .expect("fire1")
+        .expect("outcome1");
+    assert!(out1.still_armed);
+    assert!(out1.next_fire_at_ms.is_some());
+    assert_eq!(out1.batch.envelopes.len(), 1);
+    assert!(matches!(
+        out1.batch.envelopes[0].event,
+        SessionEvent::LoopFired(_)
+    ));
+
+    // Fire 2: hits the cap -> retired (LoopFired + LoopRemoved), disarmed.
+    let out2 = service
+        .record_emulated_fire(context(3), "loop-1".to_string(), 20_000)
+        .expect("fire2")
+        .expect("outcome2");
+    assert!(!out2.still_armed);
+    assert!(out2.next_fire_at_ms.is_none());
+    assert_eq!(out2.batch.envelopes.len(), 2);
+    assert!(matches!(
+        out2.batch.envelopes[1].event,
+        SessionEvent::LoopRemoved(_)
+    ));
+    assert!(service
+        .active_emulated_loops("session-1")
+        .expect("list")
+        .is_empty());
+}
+
+#[test]
+fn record_emulated_fire_ignores_native_loops() {
+    let service = test_service();
+    // A native loop must never be fired by the emulated scheduler.
+    service
+        .ingest_native_event(
+            context(1),
+            LoopNativeEventKind::Upserted,
+            Some(wire("cron-1", "ping", LoopWireStatus::Active)),
+            None,
+        )
+        .expect("ingest native");
+    let outcome = service
+        .record_emulated_fire(context(2), "cron-1".to_string(), 10_000)
+        .expect("call");
+    assert!(outcome.is_none());
+}
+
+#[test]
+fn reconcile_native_loops_marks_missing_as_cleared() {
+    let service = test_service();
+    service
+        .ingest_native_event(
+            context(1),
+            LoopNativeEventKind::Upserted,
+            Some(wire("cron-1", "ping", LoopWireStatus::Active)),
+            None,
+        )
+        .expect("c1");
+    service
+        .ingest_native_event(
+            context(2),
+            LoopNativeEventKind::Upserted,
+            Some(wire("cron-2", "pong", LoopWireStatus::Active)),
+            None,
+        )
+        .expect("c2");
+    assert_eq!(service.current_loops("session-1").expect("list").len(), 2);
+
+    // The harness now only lists cron-1 -> cron-2 is gone.
+    let envelopes = service
+        .reconcile_native_loops(
+            context(3),
+            vec![wire("cron-1", "ping", LoopWireStatus::Active)],
+        )
+        .expect("reconcile");
+    assert!(envelopes
+        .iter()
+        .any(|envelope| matches!(envelope.event, SessionEvent::LoopRemoved(_))));
+    let active = service.current_loops("session-1").expect("list");
+    assert_eq!(active.len(), 1);
+    assert_eq!(active[0].loop_id, "cron-1");
+}

@@ -47,8 +47,8 @@ fn process_wire(id: &str, status: ActivityProcessStatusWire) -> ActivityProcessW
         status,
         exit_code: None,
         pid: None,
-        started_at: "2026-07-02T00:00:00Z".to_string(),
-        ended_at: None,
+        started_at_ms: Some(1_782_000_000_000),
+        ended_at_ms: None,
         feed: None,
     }
 }
@@ -82,7 +82,7 @@ fn ingest_process_upserted_transitions_running_to_exited() {
 
     let mut exited = process_wire("proc-1", ActivityProcessStatusWire::Exited);
     exited.exit_code = Some(0);
-    exited.ended_at = Some("2026-07-02T00:00:30Z".to_string());
+    exited.ended_at_ms = Some(1_782_000_030_000);
     service
         .ingest_process_upserted(context(2), exited)
         .expect("ingest exited");
@@ -190,7 +190,7 @@ fn observer_ingests_process_upserted_chunk() {
                 "id": "proc-1",
                 "command": "sleep 30 && echo OK > out.txt",
                 "status": "running",
-                "startedAt": "2026-07-02T00:00:00Z",
+                "startedAtMs": 1_782_000_000_000_i64,
                 "feed": { "kind": "tail_file", "path": "/tmp/out.txt" }
             }
         }
@@ -205,6 +205,12 @@ fn observer_ingests_process_upserted_chunk() {
     let processes = service.current_processes("session-1").expect("load processes");
     assert_eq!(processes.len(), 1);
     assert!(processes[0].feed.is_some());
+    // The fork emits `startedAtMs` (epoch-ms); the contract carries RFC3339.
+    assert!(
+        processes[0].started_at.starts_with("2026-"),
+        "startedAtMs must convert to an RFC3339 started_at, got {:?}",
+        processes[0].started_at
+    );
 }
 
 #[test]
@@ -216,7 +222,7 @@ fn observer_ingests_subagent_upserted_chunk() {
         "anyharness": {
             "schemaVersion": 1,
             "transcriptEvent": "subagent_upserted",
-            "agent": {
+            "subagent": {
                 "id": "agent-1",
                 "background": false,
                 "status": "completed",
@@ -274,4 +280,92 @@ fn observer_ignores_unrelated_and_malformed_chunks() {
         .current_processes("session-1")
         .expect("load processes")
         .is_empty());
+}
+
+fn subagent_wire(id: &str, status: ActivitySubagentStatusWire) -> ActivitySubagentWire {
+    ActivitySubagentWire {
+        id: id.to_string(),
+        agent_type: None,
+        description: None,
+        model: None,
+        background: true,
+        status,
+        summary: None,
+        tokens_used: None,
+        tool_calls: None,
+        duration_seconds: None,
+        feed: None,
+    }
+}
+
+#[test]
+fn reset_running_processes_marks_running_exited_and_is_idempotent() {
+    let service = test_service();
+    service
+        .ingest_process_upserted(
+            context(1),
+            process_wire("proc-1", ActivityProcessStatusWire::Running),
+        )
+        .expect("ingest running");
+
+    // Reattach reset (Claude): running process is process-bound and died with
+    // the harness -> marked exited/stale, emitting one upsert.
+    let batch = service.reset_running_processes(context(2)).expect("reset");
+    assert_eq!(batch.envelopes.len(), 1);
+    assert_eq!(batch.envelopes[0].event.event_type(), "process_upserted");
+    let processes = service.current_processes("session-1").expect("load");
+    assert_eq!(processes.len(), 1);
+    assert!(matches!(
+        processes[0].status,
+        ProcessStatus::Exited { exit_code: None }
+    ));
+
+    // Idempotent: nothing left running -> no further events.
+    let again = service.reset_running_processes(context(3)).expect("reset2");
+    assert!(again.envelopes.is_empty());
+}
+
+#[test]
+fn reset_running_subagents_marks_running_failed_and_is_idempotent() {
+    let service = test_service();
+    service
+        .ingest_subagent_upserted(
+            context(1),
+            subagent_wire("agent-1", ActivitySubagentStatusWire::Running),
+        )
+        .expect("ingest running subagent");
+
+    // Reattach reset: a subagent left running by a dead harness is stale and
+    // must be marked failed (else it stays a phantom running agent forever).
+    let batch = service.reset_running_subagents(context(2)).expect("reset");
+    assert_eq!(batch.envelopes.len(), 1);
+    assert_eq!(batch.envelopes[0].event.event_type(), "subagent_upserted");
+    let agents = service.current_agents("session-1").expect("load");
+    assert_eq!(agents.len(), 1);
+    assert!(matches!(agents[0].status, SubagentStatus::Failed));
+
+    // Idempotent: nothing left running -> no further events.
+    let again = service.reset_running_subagents(context(3)).expect("reset2");
+    assert!(again.envelopes.is_empty());
+}
+
+#[test]
+fn reconcile_roster_upserts_listed_processes_and_agents_with_increasing_seq() {
+    let service = test_service();
+    let batch = service
+        .reconcile_roster(
+            context(5),
+            vec![process_wire("proc-1", ActivityProcessStatusWire::Running)],
+            vec![subagent_wire("agent-1", ActivitySubagentStatusWire::Running)],
+        )
+        .expect("reconcile");
+
+    assert_eq!(batch.envelopes.len(), 2);
+    // Seqs increment from the context's next_seq.
+    assert_eq!(batch.envelopes[0].seq, 5);
+    assert_eq!(batch.envelopes[1].seq, 6);
+    assert_eq!(batch.envelopes[0].event.event_type(), "process_upserted");
+    assert_eq!(batch.envelopes[1].event.event_type(), "subagent_upserted");
+    assert_eq!(service.current_processes("session-1").expect("p").len(), 1);
+    assert_eq!(service.current_agents("session-1").expect("a").len(), 1);
 }

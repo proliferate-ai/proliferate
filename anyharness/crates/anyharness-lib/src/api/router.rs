@@ -12,14 +12,16 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth, agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git,
-    goals, health, hosting, mobility, plans, processes, product_mcp, replay, repo_roots, reviews,
-    sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
+    goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots,
+    reviews, sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
     sessions_lifecycle,
     sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
     workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
+use super::ws::activity as ws_activity;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
+use super::ws::feeds as ws_feeds;
 use super::ws::terminals as ws_terminals;
 use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
@@ -442,6 +444,24 @@ pub fn build_router(state: AppState) -> Router {
             "/sessions/{session_id}/goal",
             put(goals::set_session_goal).delete(goals::clear_session_goal),
         )
+        // Loops (native crons + emulated scheduler)
+        .route(
+            "/sessions/{session_id}/loops",
+            get(loops::list_session_loops)
+                .put(loops::set_session_loop)
+                .delete(loops::clear_session_loops),
+        )
+        .route(
+            "/sessions/{session_id}/loops/{loop_id}",
+            put(loops::edit_session_loop).delete(loops::clear_session_loop),
+        )
+        // Activity watch (live SessionActivity)
+        .route(
+            "/sessions/{session_id}/activity/watch",
+            get(ws_activity::activity_watch_ws),
+        )
+        // Feeds (lazy live content for roster elements)
+        .route("/feeds/{feed_id}", get(ws_feeds::feed_ws))
         .route(
             "/sessions/{session_id}/resume",
             post(sessions_resume::resume_session),

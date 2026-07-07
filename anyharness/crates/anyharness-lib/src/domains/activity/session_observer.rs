@@ -4,7 +4,7 @@
 //! state as zero-length `AgentMessageChunk` updates tagged
 //! `meta.anyharness.transcriptEvent = process_upserted | subagent_upserted`
 //! with the normalized wire payload in `meta.anyharness.process` /
-//! `meta.anyharness.agent`. The dispatcher keeps these chunks out of the
+//! `meta.anyharness.subagent`. The dispatcher keeps these chunks out of the
 //! transcript (`NON_TRANSCRIPT_CHUNK_EVENTS`) and surfaces them here as
 //! [`SessionObservation::NonTranscriptChunk`].
 //!
@@ -89,7 +89,7 @@ impl ActivitySessionObserver {
                 }
             }
             Some(SUBAGENT_UPSERTED_TRANSCRIPT_EVENT) => {
-                let Some(value) = anyharness_meta.agent else {
+                let Some(value) = anyharness_meta.subagent else {
                     return ObserverEffects::default();
                 };
                 let wire = match serde_json::from_value::<ActivitySubagentWire>(value) {
@@ -148,8 +148,12 @@ struct ActivityChunkAnyHarnessMeta {
     /// of silently voiding the whole meta parse.
     #[serde(default)]
     process: Option<serde_json::Value>,
-    #[serde(default)]
-    agent: Option<serde_json::Value>,
+    /// Both forks nest the subagent payload under `subagent`
+    /// (claude-agent-acp `{ subagent }`, codex-acp `json!({ "subagent": .. })`),
+    /// NOT `agent` — reading `agent` dropped every subagent_upserted. `alias`
+    /// keeps any legacy emitter working.
+    #[serde(default, alias = "agent")]
+    subagent: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -178,7 +182,7 @@ mod tests {
                     "id": "proc-1",
                     "command": "sleep 30",
                     "status": "running",
-                    "startedAt": "2026-07-02T00:00:00Z"
+                    "startedAtMs": 1_782_000_000_000_i64
                 }
             }
         })));
@@ -194,12 +198,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_activity_chunk_meta_reads_agent_payload() {
+    fn parse_activity_chunk_meta_reads_subagent_payload() {
+        // Both forks nest the payload under `subagent`.
         let meta = parse_activity_chunk_meta(Some(&json!({
             "anyharness": {
                 "schemaVersion": 1,
                 "transcriptEvent": "subagent_upserted",
-                "agent": {
+                "subagent": {
                     "id": "agent-1",
                     "background": true,
                     "status": "running"
@@ -211,7 +216,19 @@ mod tests {
             anyharness.transcript_event.as_deref(),
             Some("subagent_upserted")
         );
-        assert!(anyharness.agent.is_some());
+        assert!(anyharness.subagent.is_some());
+    }
+
+    #[test]
+    fn parse_activity_chunk_meta_accepts_legacy_agent_key_alias() {
+        let meta = parse_activity_chunk_meta(Some(&json!({
+            "anyharness": {
+                "schemaVersion": 1,
+                "transcriptEvent": "subagent_upserted",
+                "agent": { "id": "agent-1", "background": true, "status": "running" }
+            }
+        })));
+        assert!(meta.anyharness.expect("anyharness meta").subagent.is_some());
     }
 
     #[test]

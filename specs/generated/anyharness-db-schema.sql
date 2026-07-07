@@ -150,7 +150,7 @@ CREATE TABLE loops (
     fire_count INTEGER NOT NULL DEFAULT 0,
     native_state_json TEXT,
     created_at TEXT NOT NULL,
-    updated_at_ms INTEGER NOT NULL,
+    updated_at_ms INTEGER NOT NULL, max_fires INTEGER, next_fire_at_ms INTEGER,
     PRIMARY KEY (session_id, loop_id)
 );
 

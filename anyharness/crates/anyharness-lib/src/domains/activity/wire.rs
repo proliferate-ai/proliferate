@@ -13,6 +13,27 @@ use serde::Deserialize;
 pub const PROCESS_UPSERTED_TRANSCRIPT_EVENT: &str = "process_upserted";
 pub const SUBAGENT_UPSERTED_TRANSCRIPT_EVENT: &str = "subagent_upserted";
 
+/// The attach-time roster reconcile pull (`_anyharness/activity/list`). ACP
+/// 0.14 strips the leading `_` before dispatch; the client sends the
+/// underscored form.
+pub const ACTIVITY_LIST_EXT_METHOD: &str = "_anyharness/activity/list";
+
+/// `_anyharness/activity/list` result: the harness's current roster snapshot.
+/// For Codex this re-lists child threads on reattach; harnesses that don't
+/// implement it simply return an error and the reset-only path applies.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityListWireResult {
+    #[serde(default)]
+    pub processes: Vec<ActivityProcessWire>,
+    /// Both forks return the roster under `subagents` (claude-agent-acp's
+    /// `activity/list`), not `agents`; the old key silently degraded the
+    /// reconcile pull to an empty agent list. `alias` keeps any legacy
+    /// emitter working.
+    #[serde(default, alias = "agents")]
+    pub subagents: Vec<ActivitySubagentWire>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivityProcessWire {
@@ -25,10 +46,16 @@ pub struct ActivityProcessWire {
     pub exit_code: Option<i32>,
     #[serde(default)]
     pub pid: Option<u32>,
-    pub started_at: String,
+    /// Epoch-ms process start — both harness forks emit `startedAtMs` (claude
+    /// `startedAtMs: number`, codex `started_at_ms: Option<i64>`), NOT an
+    /// RFC3339 `startedAt` string. Optional + defaulted so a codex `None`
+    /// degrades to the ingest clock instead of failing the whole chunk;
+    /// converted to the contract's RFC3339 `started_at` on ingest.
     #[serde(default)]
-    pub ended_at: Option<String>,
+    pub started_at_ms: Option<i64>,
     #[serde(default)]
+    pub ended_at_ms: Option<i64>,
+    #[serde(default, deserialize_with = "deserialize_feed_transport")]
     pub feed: Option<FeedTransportWire>,
 }
 
@@ -54,14 +81,39 @@ pub struct ActivitySubagentWire {
     pub status: ActivitySubagentStatusWire,
     #[serde(default)]
     pub summary: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub tokens_used: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub tool_calls: Option<i64>,
-    #[serde(default)]
+    // claude-agent-acp derives `durationSeconds` from a millisecond duration
+    // (`duration_ms / 1000`), so it arrives as a FRACTIONAL JSON number (e.g.
+    // `3.207`). A plain `Option<i64>` deserialize rejects the float and — since
+    // it fails the whole struct — dropped every task_progress / task_notification
+    // subagent chunk, freezing the roster at `running` with no usage. Round to
+    // whole seconds here (the contract stays `i64`), mirroring the GoalWire
+    // `opt_i64_lenient` precedent.
+    #[serde(default, deserialize_with = "opt_i64_lenient")]
     pub duration_seconds: Option<i64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_feed_transport")]
     pub feed: Option<FeedTransportWire>,
+}
+
+/// Numeric usage wire fields tolerate fractional JSON numbers (claude-agent-acp
+/// derives `durationSeconds` from a millisecond duration); anything non-numeric
+/// still fails the parse loudly. Mirrors the GoalWire `opt_i64_lenient` helper.
+fn opt_i64_lenient<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Number>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(number) => number
+            .as_i64()
+            .or_else(|| number.as_f64().map(|value| value.round() as i64))
+            .map(Some)
+            .ok_or_else(|| serde::de::Error::custom("activity wire number is out of range")),
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -87,6 +139,47 @@ pub enum FeedTransportWire {
     HttpSse { url: String },
 }
 
+/// Lenient feed-transport parse. The two forks disagree on the `feed` object's
+/// discriminator key — claude-agent-acp sends `feed: { transport: <kind>, .. }`
+/// while the runtime's canonical form is `feed: { kind: <kind>, .. }` — and an
+/// unrecognized/malformed transport must degrade the FEED to `None` rather than
+/// fail the whole `process_upserted`/`subagent_upserted` deserialize (which
+/// would drop the entire roster element). Accepts either discriminator key.
+///
+/// Codex's flat top-level `feedTransport` string is a separate fork-side
+/// divergence (a different field, not `feed`) and still needs a fork change to
+/// bind — it is intentionally not resolved here.
+fn deserialize_feed_transport<'de, D>(
+    deserializer: D,
+) -> Result<Option<FeedTransportWire>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(parse_feed_transport_value))
+}
+
+fn parse_feed_transport_value(value: serde_json::Value) -> Option<FeedTransportWire> {
+    let object = value.as_object()?;
+    let tag = object
+        .get("kind")
+        .or_else(|| object.get("transport"))
+        .and_then(|value| value.as_str())?;
+    let field = |name: &str| object.get(name).and_then(|value| value.as_str());
+    match tag {
+        "tail_file" => field("path").map(|path| FeedTransportWire::TailFile {
+            path: path.to_string(),
+        }),
+        "acp_child_demux" => field("threadId").map(|thread_id| FeedTransportWire::AcpChildDemux {
+            thread_id: thread_id.to_string(),
+        }),
+        "http_sse" => field("url").map(|url| FeedTransportWire::HttpSse {
+            url: url.to_string(),
+        }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,10 +190,11 @@ mod tests {
             "id": "proc-1",
             "command": "sleep 30 && echo OK > out.txt",
             "status": "running",
-            "startedAt": "2026-07-02T00:00:00Z"
+            "startedAtMs": 1_782_000_000_000_i64
         }))
         .expect("parse running process wire");
         assert_eq!(running.status, ActivityProcessStatusWire::Running);
+        assert_eq!(running.started_at_ms, Some(1_782_000_000_000));
         assert!(running.feed.is_none());
 
         let exited: ActivityProcessWire = serde_json::from_value(serde_json::json!({
@@ -109,13 +203,14 @@ mod tests {
             "status": "exited",
             "exitCode": 0,
             "pid": 4242,
-            "startedAt": "2026-07-02T00:00:00Z",
-            "endedAt": "2026-07-02T00:00:30Z",
+            "startedAtMs": 1_782_000_000_000_i64,
+            "endedAtMs": 1_782_000_030_000_i64,
             "feed": { "kind": "tail_file", "path": "/tmp/out.txt" }
         }))
         .expect("parse exited process wire");
         assert_eq!(exited.status, ActivityProcessStatusWire::Exited);
         assert_eq!(exited.exit_code, Some(0));
+        assert_eq!(exited.ended_at_ms, Some(1_782_000_030_000));
         assert_eq!(
             exited.feed,
             Some(FeedTransportWire::TailFile {
@@ -156,5 +251,87 @@ mod tests {
                 url: "http://127.0.0.1:9000/session/child-2/events".to_string()
             })
         );
+    }
+
+    #[test]
+    fn activity_subagent_wire_accepts_fractional_duration_seconds() {
+        // claude-agent-acp sends `durationSeconds` as `duration_ms / 1000`, i.e. a
+        // fractional number. A strict `i64` deserialize rejected it and dropped the
+        // WHOLE subagent chunk (status + usage), freezing the roster at `running`.
+        let wire: ActivitySubagentWire = serde_json::from_value(serde_json::json!({
+            "id": "agent-1",
+            "background": true,
+            "status": "completed",
+            "summary": "done",
+            "tokensUsed": 1234,
+            "toolCalls": 5,
+            "durationSeconds": 3.207
+        }))
+        .expect("fractional durationSeconds must parse, not drop the chunk");
+        assert_eq!(wire.status, ActivitySubagentStatusWire::Completed);
+        assert_eq!(wire.tokens_used, Some(1234));
+        assert_eq!(wire.tool_calls, Some(5));
+        // Rounded to whole seconds (contract stays i64).
+        assert_eq!(wire.duration_seconds, Some(3));
+
+        // Larger fraction rounds up.
+        let wire2: ActivitySubagentWire = serde_json::from_value(serde_json::json!({
+            "id": "agent-2",
+            "background": true,
+            "status": "running",
+            "durationSeconds": 7.751
+        }))
+        .expect("fractional durationSeconds must parse");
+        assert_eq!(wire2.duration_seconds, Some(8));
+    }
+
+    #[test]
+    fn activity_list_wire_reads_subagents_key_and_agents_alias() {
+        // Forks return the roster under `subagents`.
+        let via_subagents: ActivityListWireResult = serde_json::from_value(serde_json::json!({
+            "processes": [],
+            "subagents": [{ "id": "child-1", "background": true, "status": "running" }]
+        }))
+        .expect("parse subagents");
+        assert_eq!(via_subagents.subagents.len(), 1);
+
+        // Legacy `agents` key still accepted via alias.
+        let via_alias: ActivityListWireResult = serde_json::from_value(serde_json::json!({
+            "agents": [{ "id": "child-1", "background": true, "status": "running" }]
+        }))
+        .expect("parse agents alias");
+        assert_eq!(via_alias.subagents.len(), 1);
+    }
+
+    #[test]
+    fn feed_transport_accepts_claude_transport_key_and_degrades_unknown_to_none() {
+        // claude-agent-acp uses `transport` as the discriminator, not `kind`.
+        let claude: ActivityProcessWire = serde_json::from_value(serde_json::json!({
+            "id": "proc-1",
+            "command": "npm test",
+            "status": "running",
+            "startedAtMs": 1_782_000_000_000_i64,
+            "feed": { "transport": "tail_file", "path": "/tmp/out.txt" }
+        }))
+        .expect("claude transport-key feed parses");
+        assert_eq!(
+            claude.feed,
+            Some(FeedTransportWire::TailFile {
+                path: "/tmp/out.txt".to_string()
+            })
+        );
+
+        // An unrecognized/malformed feed must degrade to None WITHOUT failing
+        // the whole roster element (the roster matters more than the feed).
+        let unknown: ActivityProcessWire = serde_json::from_value(serde_json::json!({
+            "id": "proc-1",
+            "command": "npm test",
+            "status": "running",
+            "startedAtMs": 1_782_000_000_000_i64,
+            "feed": { "feedTransport": "acp_child_demux:child-1" }
+        }))
+        .expect("unknown feed degrades; element still parses");
+        assert_eq!(unknown.status, ActivityProcessStatusWire::Running);
+        assert!(unknown.feed.is_none());
     }
 }

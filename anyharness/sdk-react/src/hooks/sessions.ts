@@ -10,6 +10,7 @@ import type {
   ResumeSessionRequest,
   SetSessionConfigOptionRequest,
   SetSessionGoalRequest,
+  SetSessionLoopRequest,
   UpdateSessionTitleRequest,
 } from "@anyharness/sdk";
 import {
@@ -526,6 +527,72 @@ export function useClearSessionGoalMutation(options?: { workspaceId?: string | n
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
       const client = getAnyHarnessClient(resolved.connection);
       return client.sessions.clearGoal(input.sessionId, input.requestOptions);
+    },
+    onSuccess: async (_response, variables) => {
+      const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
+    },
+  });
+}
+
+export function useSetSessionLoopMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        sessionId: string;
+        // Editing an emulated loop targets its id; arming a new loop omits it.
+        loopId?: string;
+        request: SetSessionLoopRequest;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return input.loopId
+        ? client.sessions.editLoop(
+            input.sessionId,
+            input.loopId,
+            input.request,
+            input.requestOptions,
+          )
+        : client.sessions.setLoop(input.sessionId, input.request, input.requestOptions);
+    },
+    onSuccess: async (_response, variables) => {
+      const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
+    },
+  });
+}
+
+export function useClearSessionLoopMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        sessionId: string;
+        // Clearing a single loop targets its id; omitting it clears all loops.
+        loopId?: string;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return input.loopId
+        ? client.sessions.clearLoop(input.sessionId, input.loopId, input.requestOptions)
+        : client.sessions.clearLoops(input.sessionId, input.requestOptions);
     },
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
