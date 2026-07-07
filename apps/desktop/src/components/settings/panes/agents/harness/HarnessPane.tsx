@@ -8,7 +8,6 @@ import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
 import { HarnessAuthDetailsSection } from "./HarnessAuthDetailsSection";
 import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
-import { HarnessConfigIssueBanner } from "./HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
 import { useHarnessAuthEditor } from "./use-harness-auth-editor";
 
@@ -18,17 +17,14 @@ interface HarnessPaneProps {
 
 export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const surface = useAgentSurfaceStore((state) => state.surface);
-  const { agentsByKind, agentsNeedingSetup } = useAgentCatalog();
+  const { agentsByKind } = useAgentCatalog();
 
   const displayName =
     agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
-  const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader title={displayName} />
-
-      {issueAgent ? <HarnessConfigIssueBanner agent={issueAgent} /> : null}
 
       {surface === "cloud" ? (
         <HarnessSurfaceCloud harnessKind={harnessKind} displayName={displayName} />
