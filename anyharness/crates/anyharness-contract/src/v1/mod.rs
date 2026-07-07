@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod agent_auth;
 pub mod agents;
 pub mod auth;
@@ -11,6 +12,7 @@ pub mod goals;
 pub mod health;
 pub mod hosting;
 pub mod interactions;
+pub mod loops;
 pub mod mcp;
 pub mod mobility;
 pub mod origin;
@@ -25,6 +27,7 @@ pub mod terminals;
 pub mod workspaces;
 pub mod worktrees;
 
+pub use activity::*;
 pub use agent_auth::*;
 pub use agents::*;
 pub use auth::*;
@@ -38,6 +41,7 @@ pub use goals::*;
 pub use health::*;
 pub use hosting::*;
 pub use interactions::*;
+pub use loops::*;
 pub use mcp::*;
 pub use mobility::*;
 pub use origin::*;

@@ -37,6 +37,13 @@ use crate::live::sessions::{
 /// adapter's transcript tail, which can lag the ext-method response).
 const GOAL_CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// `nativeStatus` the sidecar stamps on a `goal/set` response it has DEFERRED
+/// to the streaming turn boundary (claude-agent-acp: a `/goal` issued mid-turn
+/// is queued and only arms — emitting its `goal_updated` — once the turn ends).
+/// A deferred set therefore has no notification within the confirmation window
+/// and must not be blocked on / cleared like a normal synchronous set.
+const GOAL_PENDING_INJECTION_NATIVE_STATUS: &str = "pending_injection";
+
 #[derive(Debug, thiserror::Error)]
 pub enum GoalOpError {
     #[error("session not found")]
@@ -139,12 +146,30 @@ impl GoalRuntime {
         };
         // The response is the sidecar's confirmation that the NATIVE write
         // landed; the mirror still transitions only via the notification.
-        if let Err(error) = serde_json::from_value::<GoalWireEnvelope>(response) {
-            tracing::warn!(
-                session_id,
-                error = %error,
-                "goal/set returned an unexpected result shape"
-            );
+        let response_goal = match serde_json::from_value::<GoalWireEnvelope>(response) {
+            Ok(envelope) => envelope.goal,
+            Err(error) => {
+                tracing::warn!(
+                    session_id,
+                    error = %error,
+                    "goal/set returned an unexpected result shape"
+                );
+                None
+            }
+        };
+
+        // A DEFERRED set (`nativeStatus == pending_injection`) has not armed
+        // yet — the sidecar queued it to the turn boundary and will emit its
+        // `goal_updated` only after the streaming turn ends, which routinely
+        // outlasts GOAL_CONFIRMATION_TIMEOUT. Blocking here would time out,
+        // clear the pending(Set) marker, and make the late notification
+        // classify as a Drop against a cleared mirror (permanently invisible
+        // goal). Instead: keep the pending(Set) marker so the eventual
+        // notification is an Insert, and hand the caller the provisional
+        // pending goal now. The async notification drives the mirror — no
+        // optimistic local transition, preserving the strict mirror.
+        if let Some(pending) = deferred_pending_injection(response_goal.as_ref()) {
+            return Ok(provisional_goal_from_wire(pending));
         }
 
         // Correlate the confirmation to THIS write by objective (when one was
@@ -377,6 +402,36 @@ fn goal_event_objective(event: &SessionEvent) -> Option<&str> {
     }
 }
 
+/// Returns the response goal iff the sidecar deferred the set to the turn
+/// boundary (`nativeStatus == pending_injection`), meaning no confirming
+/// notification will arrive within the confirmation window.
+fn deferred_pending_injection(response_goal: Option<&GoalWire>) -> Option<&GoalWire> {
+    response_goal.filter(|goal| {
+        goal.native_status.as_deref() == Some(GOAL_PENDING_INJECTION_NATIVE_STATUS)
+    })
+}
+
+/// A transient contract goal for a deferred set — returned to the caller so it
+/// sees the pending goal immediately. Never persisted: the mirror is still
+/// written only by the eventual `goal_updated` notification.
+fn provisional_goal_from_wire(wire: &GoalWire) -> Goal {
+    let now = chrono::Utc::now().to_rfc3339();
+    Goal {
+        objective: wire.objective.clone(),
+        status: wire.status.to_contract(),
+        native_status: wire.native_status.clone(),
+        token_budget: wire.token_budget,
+        tokens_used: wire.tokens_used,
+        time_used_seconds: wire.time_used_seconds,
+        met_reason: wire.met_reason.clone(),
+        iterations: wire.iterations,
+        native: wire.native,
+        revision: 0,
+        created_at: now.clone(),
+        updated_at: now,
+    }
+}
+
 /// The `Box<dyn Any + Send>` produced by [`GoalReconcileOp`] downcasts to
 /// this.
 struct GoalReconcileOpOutput {
@@ -424,6 +479,7 @@ fn goal_event_context(ctx: &SessionObserverContext) -> GoalEventContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::goals::wire::GoalWireStatus;
     use anyharness_contract::v1::{Goal, GoalStatus, GoalUpdatedPayload};
 
     const GOAL_EVENT_TYPES: &[&str] = &["goal_updated", "goal_met", "goal_cleared"];
@@ -469,5 +525,52 @@ mod tests {
         // edit to a new objective; only the edit's own echo does.
         assert!(!goal_event_matches(&stale, GOAL_EVENT_TYPES, Some("new objective")));
         assert!(goal_event_matches(&fresh, GOAL_EVENT_TYPES, Some("new objective")));
+    }
+
+    fn pending_injection_wire(objective: &str) -> GoalWire {
+        GoalWire {
+            objective: objective.to_string(),
+            status: GoalWireStatus::Active,
+            native_status: Some(GOAL_PENDING_INJECTION_NATIVE_STATUS.to_string()),
+            token_budget: None,
+            tokens_used: None,
+            time_used_seconds: None,
+            met_reason: None,
+            iterations: None,
+            native: true,
+            updated_at_ms: None,
+        }
+    }
+
+    #[test]
+    fn deferred_pending_injection_detects_only_the_deferred_native_status() {
+        let deferred = pending_injection_wire("ship it");
+        assert!(deferred_pending_injection(Some(&deferred)).is_some());
+
+        let armed = GoalWire {
+            native_status: Some("active".to_string()),
+            ..pending_injection_wire("ship it")
+        };
+        assert!(deferred_pending_injection(Some(&armed)).is_none());
+
+        let no_native = GoalWire {
+            native_status: None,
+            ..pending_injection_wire("ship it")
+        };
+        assert!(deferred_pending_injection(Some(&no_native)).is_none());
+
+        assert!(deferred_pending_injection(None).is_none());
+    }
+
+    #[test]
+    fn provisional_goal_from_wire_carries_pending_status_without_revision() {
+        let goal = provisional_goal_from_wire(&pending_injection_wire("ship it"));
+        assert_eq!(goal.objective, "ship it");
+        assert_eq!(goal.status, GoalStatus::Active);
+        assert_eq!(goal.native_status.as_deref(), Some("pending_injection"));
+        // Provisional (never persisted): revision starts at 0 and the real
+        // revision is minted by the eventual notification-driven insert.
+        assert_eq!(goal.revision, 0);
+        assert!(goal.native);
     }
 }

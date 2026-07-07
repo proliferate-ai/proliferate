@@ -194,6 +194,8 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         include_str!("sql/0051_gateway_model_probe.sql"),
     ),
     ("0052_goals", include_str!("sql/0052_goals.sql")),
+    ("0053_loops", include_str!("sql/0053_loops.sql")),
+    ("0054_activity", include_str!("sql/0054_activity.sql")),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

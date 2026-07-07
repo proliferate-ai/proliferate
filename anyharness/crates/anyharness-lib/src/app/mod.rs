@@ -15,6 +15,8 @@ use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::runtime::AgentRuntime;
+use crate::domains::activity::service::ActivityService;
+use crate::domains::activity::store::ActivityStore;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
@@ -27,6 +29,8 @@ use crate::domains::goals::hooks::GoalSessionHooks;
 use crate::domains::goals::runtime::GoalRuntime;
 use crate::domains::goals::service::GoalService;
 use crate::domains::goals::store::GoalStore;
+use crate::domains::loops::service::LoopService;
+use crate::domains::loops::store::LoopStore;
 use crate::domains::mobility::service::MobilityService;
 use crate::domains::mobility::store::MobilityStore;
 use crate::domains::plans::runtime::PlanRuntime;
@@ -136,6 +140,8 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
+    pub loop_service: Arc<LoopService>,
+    pub activity_service: Arc<ActivityService>,
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
@@ -219,6 +225,8 @@ impl AppState {
         ));
         let plan_service = Arc::new(PlanService::new(PlanStore::new(db.clone())));
         let goal_service = Arc::new(GoalService::new(GoalStore::new(db.clone())));
+        let loop_service = Arc::new(LoopService::new(LoopStore::new(db.clone())));
+        let activity_service = Arc::new(ActivityService::new(ActivityStore::new(db.clone())));
         let terminal_service = Arc::new(TerminalService::new(
             TerminalStore::new(db.clone()),
             runtime_home.clone(),
@@ -259,6 +267,8 @@ impl AppState {
             plan_service: plan_service.clone(),
             review_service: review_service.clone(),
             goal_service: goal_service.clone(),
+            loop_service: loop_service.clone(),
+            activity_service: activity_service.clone(),
         });
         let cowork_delegation_service = CoworkDelegationService::new(
             (*cowork_service).clone(),
@@ -333,6 +343,8 @@ impl AppState {
             plan_service.clone(),
             gateway_model_resolver.clone(),
             goal_service.clone(),
+            loop_service.clone(),
+            activity_service.clone(),
         ));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
@@ -472,6 +484,8 @@ impl AppState {
             plan_runtime,
             goal_service,
             goal_runtime,
+            loop_service,
+            activity_service,
             acp_manager,
             terminal_service,
             agent_login_terminal_service,

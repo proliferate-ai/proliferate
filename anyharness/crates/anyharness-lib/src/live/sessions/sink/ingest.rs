@@ -235,9 +235,11 @@ const NON_TRANSCRIPT_CHUNK_EVENTS: &[&str] = &[
     "goal_updated",
     "goal_met",
     "goal_cleared",
-    "loop_updated",
+    "loop_upserted",
+    "loop_removed",
     "loop_fired",
-    "loop_cleared",
+    "process_upserted",
+    "subagent_upserted",
 ];
 
 fn is_non_transcript_chunk(meta: Option<&serde_json::Value>) -> bool {
