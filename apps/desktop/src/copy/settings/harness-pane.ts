@@ -1,7 +1,7 @@
 export const HARNESS_PANE_COPY = {
   surfaceCloud: "Cloud",
   surfaceLocal: "Local",
-  authenticationTitle: "Authentication",
+  authenticationTitle: "Method",
   signInTitle: "Authentication",
   gatewayLabel: "Proliferate gateway",
   apiKeysTitle: "API keys",
