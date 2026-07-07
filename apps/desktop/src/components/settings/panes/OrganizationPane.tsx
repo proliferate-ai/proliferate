@@ -11,7 +11,6 @@ import {
   useStartGitHubAppInstallation,
 } from "@proliferate/cloud-sdk-react";
 import { UpgradeGateDialog } from "@/components/billing/UpgradeGateDialog";
-import { OrganizationAgentPolicySection } from "@/components/settings/panes/organization/OrganizationAgentPolicySection";
 import { OrganizationBillingLinkSection } from "@/components/settings/panes/organization/OrganizationBillingLinkSection";
 import { OrganizationSettingsCard } from "@/components/settings/panes/organization/OrganizationSettingsCard";
 import {
@@ -309,10 +308,6 @@ export function OrganizationPane() {
             onInstall={handleInstallGitHubApp}
             onManage={handleManageGitHubAppInstallation}
           />
-
-          {isOrgAdmin ? (
-            <OrganizationAgentPolicySection organizationId={activeOrganizationId} />
-          ) : null}
 
           <OrganizationBillingLinkSection />
         </>

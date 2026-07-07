@@ -1,5 +1,6 @@
 import {
   SETTINGS_SCAFFOLD_COPY,
+  type SettingsScaffoldPageCopy,
   type SettingsScaffoldPageId,
 } from "@/copy/settings/settings-scaffold-copy";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
@@ -11,7 +12,10 @@ interface SettingsScaffoldPaneProps {
 }
 
 export function SettingsScaffoldPane({ pageId }: SettingsScaffoldPaneProps) {
-  const copy = SETTINGS_SCAFFOLD_COPY[pageId];
+  const copy = (SETTINGS_SCAFFOLD_COPY as Record<string, SettingsScaffoldPageCopy>)[pageId];
+  if (!copy) {
+    return null;
+  }
 
   return (
     <section className="space-y-6">
