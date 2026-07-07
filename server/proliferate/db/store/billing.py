@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from proliferate.constants.billing import (
     BILLING_USAGE_EXPORT_STATUS_FAILED_RETRYABLE,
@@ -17,6 +20,7 @@ from proliferate.constants.billing import (
 )
 from proliferate.constants.cloud import RepoEnvironmentKind
 from proliferate.db.models.billing import (
+    BillingBudgetLimit,
     BillingEntitlement,
     BillingGrant,
     BillingSubject,
@@ -283,3 +287,179 @@ async def sum_meter_quantity_cents_for_subject(
         )
     )
     return int(result or 0)
+
+
+def _clipped_segment_seconds(now: datetime) -> ColumnElement[float]:
+    """Segment duration in seconds, clipping still-open segments at ``now``.
+
+    NOTE (rollup seam): each segment's full duration is attributed to the
+    bucket of its ``started_at`` rather than being split across bucket
+    boundaries. This is exact for closed same-bucket segments and good enough
+    at current volumes; revisit with a rollup/materialized table if a segment
+    routinely straddles many buckets.
+    """
+    clipped_now = coerce_utc(now) or now
+    return func.extract(
+        "epoch",
+        func.coalesce(UsageSegment.ended_at, clipped_now) - UsageSegment.started_at,
+    )
+
+
+async def compute_usage_seconds_timeseries(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    granularity: str,
+    start: datetime,
+    end: datetime,
+    now: datetime,
+    user_id: UUID | None = None,
+) -> list[tuple[datetime, float]]:
+    """Billable compute seconds bucketed by ``date_trunc(granularity, started_at)``.
+
+    Buckets are attributed by ``started_at`` (see ``_clipped_segment_seconds``).
+    Missing buckets are not zero-filled here — the caller fills gaps.
+    """
+    bucket = func.date_trunc(granularity, UsageSegment.started_at)
+    window_start = coerce_utc(start) or start
+    window_end = coerce_utc(end) or end
+    conditions = [
+        UsageSegment.billing_subject_id == billing_subject_id,
+        UsageSegment.is_billable.is_(True),
+        UsageSegment.started_at >= window_start,
+        UsageSegment.started_at < window_end,
+    ]
+    if user_id is not None:
+        conditions.append(UsageSegment.user_id == user_id)
+    rows = (
+        await db.execute(
+            select(
+                bucket.label("bucket"),
+                func.coalesce(func.sum(_clipped_segment_seconds(now)), 0.0),
+            )
+            .where(*conditions)
+            .group_by(bucket)
+            .order_by(bucket)
+        )
+    ).all()
+    return [
+        ((coerce_utc(bucket_start) or bucket_start), float(seconds or 0.0))
+        for bucket_start, seconds in rows
+    ]
+
+
+async def compute_usage_seconds_by_user(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    start: datetime,
+    end: datetime,
+    now: datetime,
+) -> dict[UUID, float]:
+    """Billable compute seconds per user over ``[start, end)`` for a subject."""
+    window_start = coerce_utc(start) or start
+    window_end = coerce_utc(end) or end
+    rows = (
+        await db.execute(
+            select(
+                UsageSegment.user_id,
+                func.coalesce(func.sum(_clipped_segment_seconds(now)), 0.0),
+            )
+            .where(
+                UsageSegment.billing_subject_id == billing_subject_id,
+                UsageSegment.is_billable.is_(True),
+                UsageSegment.started_at >= window_start,
+                UsageSegment.started_at < window_end,
+            )
+            .group_by(UsageSegment.user_id)
+        )
+    ).all()
+    return {user_id: float(seconds or 0.0) for user_id, seconds in rows}
+
+
+async def compute_usage_seconds_in_window(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    start: datetime,
+    end: datetime,
+    now: datetime,
+    user_id: UUID | None = None,
+) -> float:
+    """Total billable compute seconds over ``[start, end)`` for enforcement.
+
+    ``user_id=None`` sums the whole subject (org-wide); otherwise it filters to
+    that user. Segment attribution uses ``started_at`` (see the timeseries note).
+    """
+    window_start = coerce_utc(start) or start
+    window_end = coerce_utc(end) or end
+    conditions = [
+        UsageSegment.billing_subject_id == billing_subject_id,
+        UsageSegment.is_billable.is_(True),
+        UsageSegment.started_at >= window_start,
+        UsageSegment.started_at < window_end,
+    ]
+    if user_id is not None:
+        conditions.append(UsageSegment.user_id == user_id)
+    result = await db.scalar(
+        select(func.coalesce(func.sum(_clipped_segment_seconds(now)), 0.0)).where(*conditions)
+    )
+    return float(result or 0.0)
+
+
+@dataclass(frozen=True)
+class BudgetLimitInput:
+    """A single limit in a full-replace limit set."""
+
+    user_id: UUID | None
+    kind: str
+    window: str
+    cap_value: Decimal
+    enabled: bool
+
+
+async def list_budget_limits(
+    db: AsyncSession,
+    organization_id: UUID,
+) -> list[BillingBudgetLimit]:
+    return list(
+        (
+            await db.execute(
+                select(BillingBudgetLimit)
+                .where(BillingBudgetLimit.organization_id == organization_id)
+                .order_by(
+                    BillingBudgetLimit.user_id.is_(None).desc(),
+                    BillingBudgetLimit.kind.asc(),
+                    BillingBudgetLimit.window.asc(),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def replace_budget_limits(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    limits: list[BudgetLimitInput],
+) -> list[BillingBudgetLimit]:
+    """Full-replace the org's limit set (delete existing, insert the new set)."""
+    await db.execute(
+        delete(BillingBudgetLimit).where(BillingBudgetLimit.organization_id == organization_id)
+    )
+    await db.flush()
+    db.add_all(
+        BillingBudgetLimit(
+            organization_id=organization_id,
+            user_id=limit.user_id,
+            kind=limit.kind,
+            window=limit.window,
+            cap_value=limit.cap_value,
+            enabled=limit.enabled,
+        )
+        for limit in limits
+    )
+    await db.flush()
+    return await list_budget_limits(db, organization_id)
