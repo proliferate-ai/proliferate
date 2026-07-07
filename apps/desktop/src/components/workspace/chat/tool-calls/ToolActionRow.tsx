@@ -125,7 +125,8 @@ function ToolActionRowContent({
         <div className="min-w-0 shrink-0 text-inherit">{label}</div>
         {renderInlineHint(hint)}
         {duration && (
-          <span className="ml-auto shrink-0 text-sm text-faint">
+          // Inherits the row's text-chat size so status suffixes match the label.
+          <span className="ml-auto shrink-0 text-faint">
             {duration}
           </span>
         )}
@@ -168,12 +169,13 @@ function renderInlineHint(hint?: ReactNode) {
   if (typeof hint === "string" || typeof hint === "number") {
     // Codex parity: commands/paths render as flat muted mono text in the row —
     // no chip/pill chrome (codex mono = `--codex-chat-code-font-size`, one step
-    // under chat text; ours = 11px `--text-base` per UX spec §6). Color
-    // inherits so hover brightens the command together with the label.
+    // under chat text; ours = `--text-chat-meta`, which tracks the transcript's
+    // chat size minus 2px). Color inherits so hover brightens the command
+    // together with the label.
     return (
       <span
         title={String(hint)}
-        className="max-w-[280px] min-w-0 shrink truncate text-base leading-none text-current"
+        className="max-w-[280px] min-w-0 shrink truncate text-[length:var(--text-chat-meta,11px)] leading-none text-current"
       >
         {hint}
       </span>

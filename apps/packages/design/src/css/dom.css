@@ -222,16 +222,39 @@ body {
   }
 }
 
+/* ---- Stream word reveal ----
+   Word-level opacity fade for the live streaming tail. Each word mounts at
+   near-invisible and fades to full over 200ms. Opacity-only: cannot cause
+   layout shift, preserving the anchor invariant (newest content occupies its
+   final position instantly). Starts at 0.05 (not 0) so the bottom-most line
+   never looks empty while animating. */
+@keyframes stream-word-in {
+  from { opacity: 0.05; }
+  to { opacity: 1; }
+}
+
+.stream-word {
+  animation: stream-word-in 0.2s cubic-bezier(0.37, 0.55, 0.86, 0.88) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-word {
+    animation: none;
+  }
+}
+
 /* Thinking indicator — a light left→right gleam, compositor-only.
    The "agent is working" label sits at a dim muted base; a brighter highlight
-   sweeps across it left→right, momentarily lifting the passing slice to full
-   foreground — a light gleam, never a dark band. A masked band window
-   (.thinking-text-band) translates across while its glyph copy inside
-   counter-translates in lockstep, so the bright copy stays glyph-aligned; both
-   transforms run on the compositor and the soft-edge mask is static, so there
-   is no per-frame paint to jitter and no layout to bump. The gleam color is
-   --color-foreground, so it reads as "brighten to full" in either theme (light
-   on dark, dark on light). Reduced motion renders a static muted label. */
+   sweeps across it left→right with a comet-like trailing edge, momentarily
+   lifting the passing slice to full foreground — a light gleam, never a dark
+   band. A masked band window (.thinking-text-band) translates across while its
+   glyph copy inside counter-translates in lockstep, so the bright copy stays
+   glyph-aligned; both transforms run on the compositor and the soft-edge mask
+   is static, so there is no per-frame paint to jitter and no layout to bump.
+   The gleam color is --color-foreground, so it reads as "brighten to full" in
+   either theme (light on dark, dark on light). 1.8s duration + ease-in-out
+   keeps it alive without feeling frantic. Reduced motion renders a static
+   muted label. */
 @keyframes thinking-band-sweep {
   from {
     transform: translateX(-50%);
@@ -262,26 +285,25 @@ body {
   width: 100%;
   overflow: hidden;
   pointer-events: none;
-  /* A NARROW soft-edged highlight (~4% solid core) so the eye reads a distinct
-     bright spot travelling left→right, not the whole short word brightening at
-     once (which reads as a pulse). */
+  /* A wider trailing-edge tail so the sweep reads as a comet, not a thin line.
+     The solid core is ~10% wide, but the long fade-out behind it lingers. */
   -webkit-mask-image: linear-gradient(
     90deg,
-    transparent 8%,
-    black 18%,
-    black 22%,
-    transparent 32%
+    transparent 2%,
+    black 14%,
+    black 24%,
+    transparent 42%
   );
   mask-image: linear-gradient(
     90deg,
-    transparent 8%,
-    black 18%,
-    black 22%,
-    transparent 32%
+    transparent 2%,
+    black 14%,
+    black 24%,
+    transparent 42%
   );
   will-change: transform;
-  animation: thinking-band-sweep var(--thinking-text-duration, 2.4s)
-    var(--thinking-text-easing, linear) infinite;
+  animation: thinking-band-sweep var(--thinking-text-duration, 1.8s)
+    var(--thinking-text-easing, cubic-bezier(0.45, 0.05, 0.55, 0.95)) infinite;
 }
 
 .thinking-text-band-glyphs {
@@ -295,8 +317,8 @@ body {
   /* The gleam: the passing slice reaches full foreground contrast. */
   color: var(--color-foreground);
   will-change: transform;
-  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 2.4s)
-    var(--thinking-text-easing, linear) infinite;
+  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 1.8s)
+    var(--thinking-text-easing, cubic-bezier(0.45, 0.05, 0.55, 0.95)) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

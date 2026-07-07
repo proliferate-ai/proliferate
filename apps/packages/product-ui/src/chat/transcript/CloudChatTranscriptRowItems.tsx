@@ -135,7 +135,7 @@ export function CloudChatToolGroupRow({
         onClick={() => setExpanded((value) => !value)}
       />
       {row.status ? (
-        <div className="mt-0.5 text-center text-xs text-muted-foreground">
+        <div className="mt-0.5 text-center text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
           {row.status}
         </div>
       ) : null}
@@ -260,7 +260,7 @@ export function CloudChatSystemRow({
             setExpanded((value) => !value);
           }
         }}
-        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-xs text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
+        className="flex h-auto w-full justify-start gap-2 rounded-none bg-transparent px-3 py-1.5 text-left font-sans text-chat leading-[var(--text-chat--line-height)] text-muted-foreground transition-colors hover:bg-transparent hover:text-foreground"
         aria-expanded={expanded}
       >
         <ChevronRight
@@ -316,7 +316,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
       {row.status || hasDetails ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 pl-6">
           {row.status ? (
-            <span className="text-xs text-muted-foreground">{row.status}</span>
+            <span className="text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">{row.status}</span>
           ) : null}
           {hasDetails ? (
             <Button
@@ -325,7 +325,7 @@ export function CloudChatErrorRow({ row }: { row: CloudChatTranscriptRowView }) 
               size="sm"
               data-chat-transcript-ignore
               onClick={() => setDetailsExpanded((value) => !value)}
-              className="gap-1 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+              className="gap-1 px-1.5 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground hover:text-foreground"
               aria-expanded={detailsExpanded}
             >
               <ChevronRight

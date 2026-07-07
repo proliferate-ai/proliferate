@@ -116,14 +116,13 @@ describe("resolveTurnTrailingStatus", () => {
 });
 
 describe("resolvePendingPromptTrailingStatus", () => {
-  it("says 'Sending…' — not 'Thinking' — while a prompt is dispatching", () => {
+  it("says 'Thinking' while a prompt is dispatching (same voice as agent work)", () => {
     const { container } = render(
       <>{resolvePendingPromptTrailingStatus(STARTED_AT, "working", true)}</>,
     );
 
     expect(container.querySelector("[data-trailing-status='sending']")).not.toBeNull();
-    expect(container.textContent).toContain("Sending…");
-    expect(container.textContent).not.toContain("Thinking");
+    expect(container.textContent).toContain("Thinking");
   });
 
   it("shows the awaiting-response marker when the outbox is waiting on input", () => {
