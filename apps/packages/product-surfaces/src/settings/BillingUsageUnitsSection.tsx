@@ -1,6 +1,7 @@
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
 
 export type BillingUnitKind = "compute" | "llm";
 
@@ -14,6 +15,7 @@ export interface BillingUnitBalancePresentation {
   availablePercent: number | null;
   topUpLabel: string;
   lowBalanceCopy: string;
+  loading?: boolean;
 }
 
 export function BillingUsageUnitsSection({
@@ -52,6 +54,17 @@ function BillingUnitPoolRow({
   addCreditsDisabled: boolean;
 }) {
   const percent = balance.availablePercent ?? 0;
+
+  if (balance.loading) {
+    return (
+      <SettingsRow label={balance.title} description={balance.description}>
+        <div className="flex flex-col gap-1.5" role="status" aria-label={`Loading ${balance.title}`}>
+          <SkeletonBlock className="h-3 w-32" style={shimmerDelay(0)} />
+          <SkeletonBlock className="h-1 w-24 rounded-full" style={shimmerDelay(1)} />
+        </div>
+      </SettingsRow>
+    );
+  }
 
   return (
     <SettingsRow
