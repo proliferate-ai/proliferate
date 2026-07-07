@@ -8,7 +8,9 @@ use super::artifacts::{
 use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
 use super::status::compute_readiness;
-use crate::domains::agents::auth::credentials::{detect_auth_slots, detect_auth_slots_with_env};
+use crate::domains::agents::auth::credentials::{
+    detect_auth_slots, detect_auth_slots_with_env, detect_cli_auth_state,
+};
 use crate::domains::agents::model::*;
 
 #[cfg(test)]
@@ -77,6 +79,8 @@ pub fn resolve_agent_with_env(
         detect_auth_slots_with_env(&descriptor.auth, &home_dir, additional_env)
     };
 
+    let cli_auth_state = detect_cli_auth_state(&descriptor.auth, &home_dir);
+
     let status = compute_readiness(
         &native,
         &agent_process,
@@ -102,6 +106,7 @@ pub fn resolve_agent_with_env(
         status,
         credential_state,
         auth_slots,
+        cli_auth_state,
         native,
         agent_process,
         spawn,

@@ -294,11 +294,29 @@ function CliDetails({
     );
   }
 
-  const canRunLogin =
+  // Prefer cliAuthState for CLI status (env-unmasked); fall back to readiness
+  // for older runtimes that don't yet expose it.
+  const cliAuthState = localAgent?.cliAuthState;
+  const cliIsAuthenticated = cliAuthState === "authenticated";
+  const cliIsExpired = cliAuthState === "expired";
+  const cliIsAbsent = cliAuthState === "absent";
+
+  // Fallback: when cliAuthState is missing/unsupported, derive from readiness
+  const fallbackCanRunLogin =
     localAgent != null
     && !isReadyAgent(localAgent)
     && localAgent.readiness === "login_required"
     && localAgent.supportsLogin;
+  const fallbackIsAuthenticated = localAgent != null && isReadyAgent(localAgent);
+
+  // If cliAuthState is present, use it; otherwise fall back to readiness-based logic
+  const canRunLogin = cliAuthState
+    ? (cliIsExpired || cliIsAbsent) && localAgent?.supportsLogin
+    : fallbackCanRunLogin;
+
+  const isAuthenticated = cliAuthState
+    ? cliIsAuthenticated
+    : fallbackIsAuthenticated;
 
   const showLoginTerminal =
     loginSession != null
@@ -306,13 +324,15 @@ function CliDetails({
       || loginSession.terminal !== null
       || loginSession.errorMessage !== null);
 
-  const isAuthenticated = localAgent != null && isReadyAgent(localAgent);
-
   return (
     <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsCli}>
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          {canRunLogin ? (
+          {cliIsExpired ? (
+            <p className="text-sm font-medium text-destructive">
+              CLI credentials expired
+            </p>
+          ) : cliIsAbsent || (canRunLogin && !cliAuthState) ? (
             <p className="text-sm font-medium text-destructive">
               {HARNESS_PANE_COPY.cliNotAuthenticated}
             </p>
