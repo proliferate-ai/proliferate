@@ -25,15 +25,24 @@ function seedSessionDirectory(activeGoal: any) {
   });
 }
 
-function seedGoalBarStore(composing: boolean, dismissedResultKey: string | null) {
+function seedGoalBarStore(
+  composing: boolean,
+  dismissedResultKey: string | null,
+  pendingGoal: { objective: string; submittedAtMs: number } | null = null,
+) {
   useGoalBarStore.setState({
     composingBySessionId: composing ? { "test-session-id": true } : {},
     dismissedResultKeyBySessionId: dismissedResultKey
       ? { "test-session-id": dismissedResultKey }
       : {},
+    pendingGoalBySessionId: pendingGoal
+      ? { "test-session-id": pendingGoal }
+      : {},
     beginComposing: vi.fn(),
     endComposing: vi.fn(),
     dismissResult: vi.fn(),
+    setPendingGoal: vi.fn(),
+    clearPendingGoal: vi.fn(),
   });
 }
 
@@ -44,9 +53,12 @@ describe("useSessionGoalBarModel", () => {
     useGoalBarStore.setState({
       composingBySessionId: {},
       dismissedResultKeyBySessionId: {},
+      pendingGoalBySessionId: {},
       beginComposing: vi.fn(),
       endComposing: vi.fn(),
       dismissResult: vi.fn(),
+      setPendingGoal: vi.fn(),
+      clearPendingGoal: vi.fn(),
     });
   });
 
@@ -66,6 +78,7 @@ describe("useSessionGoalBarModel", () => {
     expect(result.current).not.toBeNull();
     expect(result.current?.composing).toBe(true);
     expect(result.current?.goal).toBeNull();
+    expect(result.current?.provisional).toBe(false);
   });
 
   it("returns model for live goal", () => {
@@ -81,6 +94,7 @@ describe("useSessionGoalBarModel", () => {
     expect(result.current).not.toBeNull();
     expect(result.current?.goal?.status).toBe("active");
     expect(result.current?.composing).toBe(false);
+    expect(result.current?.provisional).toBe(false);
   });
 
   it("returns model for terminal goal result when not dismissed", () => {
@@ -197,5 +211,60 @@ describe("useSessionGoalBarModel", () => {
     expect(result.current).not.toBeNull();
     expect(result.current?.composing).toBe(true);
     expect(result.current?.goal?.status).toBe("active");
+    expect(result.current?.provisional).toBe(false);
+  });
+
+  it("returns provisional live model when pending goal exists and mirror is empty", () => {
+    seedSessionDirectory(null);
+    seedGoalBarStore(false, null, { objective: "Build the feature", submittedAtMs: 9000 });
+
+    const { result } = renderHook(() => useSessionGoalBarModel());
+    expect(result.current).not.toBeNull();
+    expect(result.current?.provisional).toBe(true);
+    expect(result.current?.goal?.objective).toBe("Build the feature");
+    expect(result.current?.goal?.status).toBe("active");
+    expect(result.current?.goal?.nativeStatus).toBe("pending_injection");
+    expect(result.current?.composing).toBe(false);
+  });
+
+  it("mirror live goal supersedes pending entry (lazy-ignore)", () => {
+    const liveGoal = {
+      objective: "Build the feature",
+      status: "active",
+      updatedAt: new Date(10000).toISOString(),
+    };
+    seedSessionDirectory(liveGoal);
+    // Pending entry still present from a previous submit — should be ignored.
+    seedGoalBarStore(false, null, { objective: "Build the feature", submittedAtMs: 9000 });
+
+    const { result } = renderHook(() => useSessionGoalBarModel());
+    expect(result.current).not.toBeNull();
+    expect(result.current?.provisional).toBe(false);
+    expect(result.current?.goal?.status).toBe("active");
+  });
+
+  it("pending goal shows provisional model even with dismissed result in mirror", () => {
+    const failedGoal = {
+      objective: "Old failed goal",
+      status: "failed",
+      updatedAt: new Date(11000).toISOString(),
+      reason: "Gave up",
+    };
+    const dismissKey = goalResultDismissKey("failed", 11000);
+    seedSessionDirectory(failedGoal);
+    seedGoalBarStore(false, dismissKey, { objective: "New attempt", submittedAtMs: 12000 });
+
+    const { result } = renderHook(() => useSessionGoalBarModel());
+    expect(result.current).not.toBeNull();
+    expect(result.current?.provisional).toBe(true);
+    expect(result.current?.goal?.objective).toBe("New attempt");
+  });
+
+  it("no pending entry and no live goal returns null (cancel-compose scenario)", () => {
+    seedSessionDirectory(null);
+    seedGoalBarStore(false, null, null);
+
+    const { result } = renderHook(() => useSessionGoalBarModel());
+    expect(result.current).toBeNull();
   });
 });

@@ -1,5 +1,10 @@
 import { create } from "zustand";
 
+export interface PendingGoalEntry {
+  objective: string;
+  submittedAtMs: number;
+}
+
 interface GoalBarState {
   /**
    * Per-session compose flag: the composer's "Set a goal" affordance opened
@@ -14,14 +19,25 @@ interface GoalBarState {
    * suppress another session's result.
    */
   dismissedResultKeyBySessionId: Record<string, string | null>;
+  /**
+   * Per-session provisional pending goal: set immediately on submit (before
+   * the native round-trip) so the bar can render a provisional live row while
+   * the mirror is still null. Cleared when the mirror's live goal arrives
+   * (lazy-ignore in the bar model) or on mutation failure. This is client-only
+   * UI state — it never writes to the session directory slot / mirror stores.
+   */
+  pendingGoalBySessionId: Record<string, PendingGoalEntry | null>;
   beginComposing: (sessionId: string) => void;
   endComposing: (sessionId: string) => void;
   dismissResult: (sessionId: string, key: string) => void;
+  setPendingGoal: (sessionId: string, objective: string) => void;
+  clearPendingGoal: (sessionId: string) => void;
 }
 
 export const useGoalBarStore = create<GoalBarState>((set) => ({
   composingBySessionId: {},
   dismissedResultKeyBySessionId: {},
+  pendingGoalBySessionId: {},
 
   beginComposing: (sessionId) =>
     set((state) => ({
@@ -38,6 +54,22 @@ export const useGoalBarStore = create<GoalBarState>((set) => ({
       dismissedResultKeyBySessionId: {
         ...state.dismissedResultKeyBySessionId,
         [sessionId]: key,
+      },
+    })),
+
+  setPendingGoal: (sessionId, objective) =>
+    set((state) => ({
+      pendingGoalBySessionId: {
+        ...state.pendingGoalBySessionId,
+        [sessionId]: { objective, submittedAtMs: Date.now() },
+      },
+    })),
+
+  clearPendingGoal: (sessionId) =>
+    set((state) => ({
+      pendingGoalBySessionId: {
+        ...state.pendingGoalBySessionId,
+        [sessionId]: null,
       },
     })),
 }));
@@ -57,4 +89,12 @@ export function selectDismissedResultKey(
 
 export function goalResultDismissKey(status: string, updatedAtMs: number): string {
   return `${status}:${updatedAtMs}`;
+}
+
+/** The pending provisional goal for the given session, if any. */
+export function selectPendingGoal(
+  state: GoalBarState,
+  sessionId: string | null,
+): PendingGoalEntry | null {
+  return sessionId ? state.pendingGoalBySessionId[sessionId] ?? null : null;
 }

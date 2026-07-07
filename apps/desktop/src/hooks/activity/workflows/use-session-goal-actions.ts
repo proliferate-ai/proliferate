@@ -40,6 +40,8 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
   const beginComposingInStore = useGoalBarStore((state) => state.beginComposing);
   const endComposingInStore = useGoalBarStore((state) => state.endComposing);
   const dismissResultInStore = useGoalBarStore((state) => state.dismissResult);
+  const setPendingGoalInStore = useGoalBarStore((state) => state.setPendingGoal);
+  const clearPendingGoalInStore = useGoalBarStore((state) => state.clearPendingGoal);
 
   const beginComposing = useCallback(() => {
     if (activeSessionId) {
@@ -75,23 +77,23 @@ export function useSessionGoalActions(goal: GoalWire | null): SessionGoalActions
       endComposing();
       return;
     }
+    // Close the editor and install the provisional pending goal immediately —
+    // the bar transitions from editor → provisional live row with no gap.
+    endComposingInStore(target.clientSessionId);
+    setPendingGoalInStore(target.clientSessionId, trimmed);
     void setGoalMutation
       .mutateAsync({
         sessionId: target.sessionId,
         workspaceId: target.workspaceId,
         request: { objective: trimmed },
       })
-      .then(() => {
-        // The confirmed goal reaches the slot mirror via the goal_updated
-        // stream event; the response is used only to close the editor.
-        endComposingInStore(target.clientSessionId);
-      })
       .catch((error) => {
+        clearPendingGoalInStore(target.clientSessionId);
         const message = error instanceof Error ? error.message : String(error);
         logLatency("session.goal.set.failed", { sessionId: target.sessionId, message });
         showToast(`Failed to set goal: ${message}`);
       });
-  }, [endComposing, endComposingInStore, resolveGoalTarget, setGoalMutation, showToast]);
+  }, [clearPendingGoalInStore, endComposing, endComposingInStore, resolveGoalTarget, setPendingGoalInStore, setGoalMutation, showToast]);
 
   const setArmState = useCallback((status: GoalArmState) => {
     const target = resolveGoalTarget();
