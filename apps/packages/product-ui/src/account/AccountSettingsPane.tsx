@@ -150,7 +150,7 @@ export function AccountSettingsPane({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
       {actions.signOut ? (
         <div className="flex">
-          <AccountAction action={actions.signOut} variant="ghost" />
+          <AccountAction action={actions.signOut} variant="secondary" />
         </div>
       ) : null}
     </div>
@@ -215,7 +215,6 @@ function getActionsForProvider(
   if (provider.provider === "github") {
     if (actions.connectGitHub) result.push(actions.connectGitHub);
     if (actions.reconnectGitHub) result.push(actions.reconnectGitHub);
-    if (actions.manageGitHubAccess) result.push(actions.manageGitHubAccess);
   }
 
   if (provider.provider === "google" && actions.connectGoogle && !provider.connected) {
@@ -245,12 +244,12 @@ function AccountAction({
   return (
     <Button
       type="button"
-      variant={action.destructive ? "ghost" : variant}
+      variant={variant}
       size={size}
       disabled={action.disabled}
       loading={action.loading}
       onClick={action.onClick}
-      className={action.destructive ? "text-destructive hover:text-destructive" : ""}
+      className={action.destructive && variant === "ghost" ? "text-destructive hover:text-destructive" : ""}
     >
       {!action.loading && action.icon ? action.icon : null}
       {action.label}
@@ -282,22 +281,24 @@ function SignInMethodRow({
 
   return (
     <div className="flex min-h-[3.5rem] flex-col gap-2 border-b border-border-light px-3.5 py-3.5 text-sm last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 font-medium text-foreground">
-          <ProviderBrandIcon
-            provider={provider.provider}
-            label={provider.brandLabel ?? provider.label}
-            className="size-4 shrink-0 text-muted-foreground"
-          />
-          <span>{provider.label}</span>
-          {provider.primary && provider.connected ? <Badge tone="neutral">Primary</Badge> : null}
-        </div>
-        <div className="truncate text-muted-foreground">
-          {detail || (provider.connected ? "Connected" : "Not connected")}
+      <div className="flex min-w-0 items-center gap-3">
+        <ProviderBrandIcon
+          provider={provider.provider}
+          label={provider.brandLabel ?? provider.label}
+          className="size-5 shrink-0 text-muted-foreground"
+        />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 font-medium text-foreground">
+            <span>{provider.label}</span>
+            {provider.primary && provider.connected ? <Badge tone="neutral">Primary</Badge> : null}
+          </div>
+          <div className="truncate text-muted-foreground">
+            {detail || (provider.connected ? "Connected" : "Not connected")}
+          </div>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <Badge tone={providerStatusTone(provider)} className="shrink-0">
+        <Badge tone="neutral" className="shrink-0">
           {statusLabel}
         </Badge>
         {rowActions.map((action, idx) => (
@@ -323,7 +324,7 @@ function ConnectedServiceRow({
       <div className="min-w-0 space-y-1">
         <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
           <span>{service.label}</span>
-          <Badge tone={service.tone ?? "neutral"} className="shrink-0">
+          <Badge tone="neutral" className="shrink-0">
             {service.statusLabel}
           </Badge>
         </div>
@@ -353,7 +354,7 @@ function AccountProfileHeader({
   profileSummary: string;
 }) {
   return (
-    <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
       <AccountAvatar
         key={avatarUrl ?? "account-avatar"}
         avatarUrl={avatarUrl}
@@ -393,19 +394,6 @@ function AccountAvatar({
       )}
     </div>
   );
-}
-
-function providerStatusTone(provider: AccountProviderView): "neutral" | "success" | "warning" | "destructive" {
-  if (!provider.connected) {
-    return "neutral";
-  }
-  if (provider.status === "expired") {
-    return "destructive";
-  }
-  if (provider.status === "needs_reauth") {
-    return "warning";
-  }
-  return "success";
 }
 
 function initialsForName(name: string): string {
