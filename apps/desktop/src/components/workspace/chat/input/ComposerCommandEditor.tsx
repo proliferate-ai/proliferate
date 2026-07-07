@@ -73,6 +73,10 @@ export function ComposerCommandEditor({
   const text = serializeChatDraftToPrompt(draft);
   const [selectionOffset, setSelectionOffset] = useState(text.length);
   const [searchSuppressed, setSearchSuppressed] = useState(false);
+  // IME composition renders in-progress glyphs inside the textarea itself; a
+  // transparent text color would hide them, so the highlight yields while
+  // composing.
+  const [isComposing, setIsComposing] = useState(false);
   const trigger = useMemo(() => {
     if (searchSuppressed || disabled) {
       return null;
@@ -186,7 +190,7 @@ export function ComposerCommandEditor({
   // Highlight a recognized command only when the popup is NOT open (the popup
   // handles the active-typing state; the highlight is for the settled state).
   const recognition = useSlashCommandHighlight(
-    !trigger ? text : "",
+    !trigger && !isComposing ? text : "",
     runnableCommands,
   );
 
@@ -270,13 +274,6 @@ export function ComposerCommandEditor({
         : searchTray}
       <ComposerTextareaFrame topInset={topInset}>
         <div className="relative">
-          {recognition ? (
-            <ComposerSlashHighlight
-              recognition={recognition}
-              text={text}
-              textareaRef={textareaRef}
-            />
-          ) : null}
           <ComposerTextarea
             data-chat-composer-editor
             data-telemetry-mask
@@ -288,6 +285,8 @@ export function ComposerCommandEditor({
             onSelect={updateSelection}
             onClick={updateSelection}
             onKeyUp={updateSelection}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
             placeholder={placeholder}
             readOnly={disabled}
             aria-disabled={disabled}
@@ -297,6 +296,15 @@ export function ComposerCommandEditor({
             autoCapitalize="off"
             className={`${disabled ? "opacity-60" : ""} ${recognition ? "text-transparent caret-foreground" : ""}`}
           />
+          {/* Rendered after the textarea so it paints on top — the layer is
+              pointer-events-none except the command span (tooltip hover). */}
+          {recognition ? (
+            <ComposerSlashHighlight
+              recognition={recognition}
+              text={text}
+              textareaRef={textareaRef}
+            />
+          ) : null}
         </div>
       </ComposerTextareaFrame>
     </>

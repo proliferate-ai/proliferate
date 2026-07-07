@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { RecognizedSlashCommand } from "@/lib/domain/chat/composer/slash-command-recognition";
 
@@ -41,6 +41,12 @@ export function ComposerSlashHighlight({
     textarea.addEventListener("scroll", syncScroll, { passive: true });
     return () => textarea.removeEventListener("scroll", syncScroll);
   }, [syncScroll, textareaRef]);
+
+  // Programmatic value changes (command replacement) and autosize height
+  // changes move scrollTop without firing a scroll event — re-sync on text.
+  useLayoutEffect(() => {
+    syncScroll();
+  }, [syncScroll, text]);
 
   const { command, start, end } = recognition;
   // Render the literal draft slice (not displayName): the overlay must mirror
