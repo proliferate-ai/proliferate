@@ -1,0 +1,11 @@
+import { attach, shot } from './helper.mjs';
+const { browser, ctx } = await attach();
+const page = ctx.pages().find(p => p.url().includes('sentry.io') && p.url().includes('projects'));
+await page.bringToFront();
+await page.getByText('Switch Organization', { exact: true }).click();
+await page.waitForTimeout(1500);
+await shot(page, 'org-list');
+const orgs = await page.locator('[role="menuitem"], a[href*="/organizations/"]').allTextContents();
+console.log('ORGS:', JSON.stringify(orgs.filter(t=>t.trim()).slice(0,30)));
+await browser.close();
+process.exit(0);

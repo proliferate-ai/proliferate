@@ -1,0 +1,10 @@
+import { attach, shot } from './helper.mjs';
+const { browser, ctx } = await attach();
+const page = ctx.pages().find(p => p.url().includes('api.slack.com/apps/A0BFD1Z5GV7'));
+await page.bringToFront();
+await page.goto('https://api.slack.com/apps/A0BFD1Z5GV7/incoming-webhooks', { waitUntil: 'domcontentloaded', timeout: 45000 });
+await page.waitForTimeout(3500);
+await shot(page, 'webhooks-page');
+console.log('URL:', page.url());
+await browser.close();
+process.exit(0);

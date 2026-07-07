@@ -6533,6 +6533,15 @@
           }
         }
       },
+      "AgentCliAuthState": {
+        "type": "string",
+        "enum": [
+          "authenticated",
+          "expired",
+          "absent",
+          "unsupported"
+        ]
+      },
       "AgentCredentialState": {
         "type": "string",
         "enum": [
@@ -6920,6 +6929,16 @@
         "properties": {
           "agentProcess": {
             "$ref": "#/components/schemas/ArtifactStatus"
+          },
+          "cliAuthState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentCliAuthState"
+              }
+            ]
           },
           "credentialState": {
             "$ref": "#/components/schemas/AgentCredentialState"

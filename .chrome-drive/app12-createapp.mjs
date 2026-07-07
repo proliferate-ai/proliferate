@@ -1,0 +1,10 @@
+import { attach, shot } from './helper.mjs';
+const { browser, ctx } = await attach();
+const page = ctx.pages().find(p => p.url().startsWith('https://api.slack.com'));
+await page.bringToFront();
+await page.getByRole('button', { name: 'Create App' }).click();
+await page.waitForTimeout(4000);
+await shot(page, 'app-created');
+console.log('URL:', page.url());
+await browser.close();
+process.exit(0);

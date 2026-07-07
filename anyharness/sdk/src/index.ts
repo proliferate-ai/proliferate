@@ -52,6 +52,7 @@ export type {
 export type {
   AgentInstallState,
   AgentCredentialState,
+  AgentCliAuthState,
   AgentReadinessState,
   AgentLaunchOptionsResponse,
   ArtifactStatus,

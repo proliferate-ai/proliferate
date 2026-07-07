@@ -53,6 +53,7 @@ from proliferate.server.cloud.agent_gateway.enrollment import (
     enrollment_key_metadata,
     enrollment_subject_label,
 )
+from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +244,10 @@ async def _remint_virtual_key(
         virtual_key=minted.key,
         sync_fingerprint=enrollment.sync_fingerprint,
     )
+    if enrollment.user_id is not None:
+        await materialization_service.schedule_materialize_agent_auth(
+            db, user_id=enrollment.user_id
+        )
     return minted.token_id or None
 
 

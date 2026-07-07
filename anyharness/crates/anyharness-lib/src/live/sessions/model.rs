@@ -101,6 +101,9 @@ pub struct LaunchEnv {
     /// Env keys the route-auth render plane requires ABSENT in the spawned
     /// process (ambient Bedrock/Vertex reroutes, stale provider keys).
     pub route_auth_remove: Vec<String>,
+    /// Extra CLI args appended to the harness command line, derived from
+    /// catalog settings (e.g. `--chrome` when the chrome setting is true).
+    pub settings_extra_args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]

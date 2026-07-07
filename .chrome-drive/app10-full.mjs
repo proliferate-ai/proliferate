@@ -1,0 +1,26 @@
+import { attach, shot } from './helper.mjs';
+const { browser, ctx } = await attach();
+const page = ctx.pages().find(p => p.url().startsWith('https://api.slack.com/apps'));
+await page.bringToFront();
+
+await page.getByText('Create New App', { exact: true }).click();
+await page.waitForTimeout(1500);
+await page.getByText('From scratch', { exact: true }).click();
+await page.waitForTimeout(1800);
+
+// Name
+await page.locator('#app_name').fill('Proliferate Alerts');
+await page.waitForTimeout(400);
+
+// Workspace dropdown
+await page.getByText('Select a workspace', { exact: true }).click();
+await page.waitForTimeout(900);
+await page.getByText('Team Proliferate', { exact: true }).click();
+await page.waitForTimeout(800);
+
+// verify name still correct
+const nm = await page.locator('#app_name').inputValue();
+console.log('NAME:', nm);
+await shot(page, 'full-ready');
+await browser.close();
+process.exit(0);

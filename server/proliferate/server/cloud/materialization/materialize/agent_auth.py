@@ -103,6 +103,7 @@ class AgentAuthStateInputs:
     enrollment_sync_status: str | None
     gateway_virtual_key: str | None
     gateway_base_url: str | None
+    harness_settings: Mapping[str, dict[str, object]]  # keyed by harness_kind
 
 
 def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, object], str]:
@@ -129,9 +130,14 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     harnesses: list[dict[str, object]] = []
     for harness_kind in sorted(by_harness):
         ordered = sorted(by_harness[harness_kind], key=lambda item: item[0])
-        harnesses.append(
-            {"harness_kind": harness_kind, "sources": [source for _, source in ordered]}
-        )
+        harness_entry: dict[str, object] = {
+            "harness_kind": harness_kind,
+            "sources": [source for _, source in ordered],
+        }
+        harness_settings = inputs.harness_settings.get(harness_kind)
+        if harness_settings:
+            harness_entry["settings"] = harness_settings
+        harnesses.append(harness_entry)
 
     state: dict[str, object] = {
         "version": AGENT_AUTH_STATE_VERSION,
@@ -273,6 +279,12 @@ async def _load_state_inputs(
                     )
                 )
 
+    harness_settings = await agent_gateway_store.list_harness_settings_for_surface(
+        db,
+        user_id=user_id,
+        surface=surface,
+    )
+
     return AgentAuthStateInputs(
         user_id=user_id,
         revision=revision,
@@ -281,6 +293,7 @@ async def _load_state_inputs(
         enrollment_sync_status=enrollment_sync_status,
         gateway_virtual_key=gateway_virtual_key,
         gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
+        harness_settings=harness_settings,
     )
 
 

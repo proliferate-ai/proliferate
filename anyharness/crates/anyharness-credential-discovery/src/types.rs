@@ -10,6 +10,8 @@ pub enum ProviderId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalAuthState {
     Present(LocalAuthSource),
+    /// Credentials exist but have expired (OAuth token past its `expiresAt`).
+    Expired(LocalAuthSource),
     Absent,
 }
 

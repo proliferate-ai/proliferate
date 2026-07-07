@@ -145,6 +145,45 @@ class AgentAuthSelection(Base):
     )
 
 
+class AgentAuthHarnessSettings(Base):
+    """Per-(user, harness, surface) advanced settings (catalog-declared toggles).
+
+    Settings are independent of auth source selections: a user can toggle
+    --chrome for their Claude harness regardless of which auth source is wired.
+    The ``settings_json`` column is a JSON object mapping setting keys to their
+    persisted values (booleans for v1).
+    """
+
+    __tablename__ = "agent_auth_harness_settings"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "harness_kind",
+            "surface",
+            name="uq_agent_auth_harness_settings_scope",
+        ),
+        CheckConstraint(
+            "surface IN ('local', 'cloud')",
+            name="ck_agent_auth_harness_settings_surface",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
+    harness_kind: Mapped[str] = mapped_column(String(64))
+    surface: Mapped[str] = mapped_column(Text)
+    settings_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
 class AgentGatewayEnrollment(Base):
     """LiteLLM enrollment state per billing subject (team + user + virtual key)."""
 

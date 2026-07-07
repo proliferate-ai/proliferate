@@ -51,6 +51,10 @@ pub struct AgentCatalogAgent {
     #[serde(default)]
     pub auth_contexts: Vec<AgentCatalogAuthContext>,
     pub session: AgentCatalogSession,
+    /// Per-harness advanced settings (v1: boolean toggles mapped to CLI flags or
+    /// env vars). Absent when a harness declares no settings.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub settings: Vec<AgentCatalogSetting>,
     pub provenance: AgentCatalogAgentProvenance,
 }
 
@@ -362,6 +366,41 @@ pub struct AgentCatalogProbeRun {
     pub id: String,
     #[serde(default)]
     pub snapshot_path: Option<String>,
+}
+
+/// A declared per-harness setting (v1: boolean toggles). Applied at spawn
+/// according to the mapping kind: `cli_flag` appends the flag to argv when
+/// the value is `true`; `env` sets an env var to the string form of the value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogSetting {
+    pub key: String,
+    /// v1: only `"boolean"` is supported.
+    #[serde(rename = "type")]
+    pub setting_type: String,
+    pub label: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    /// The default value for this setting (JSON-typed: bool for boolean settings).
+    #[serde(default)]
+    pub default: serde_json::Value,
+    /// Which delivery surfaces this setting is relevant to (subset of `{local, cloud}`).
+    #[serde(default)]
+    pub surfaces: Vec<String>,
+    pub mapping: AgentCatalogSettingMapping,
+}
+
+/// How a setting value maps to the harness spawn. Externally tagged by `kind`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogSettingMapping {
+    pub kind: String,
+    /// For `cli_flag`: the flag to append (e.g. `"--chrome"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flag: Option<String>,
+    /// For `env`: the env var name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<String>,
 }
 
 #[cfg(test)]

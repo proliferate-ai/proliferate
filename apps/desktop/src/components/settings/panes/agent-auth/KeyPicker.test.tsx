@@ -2,14 +2,28 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KeyPicker } from "./KeyPicker";
 
 const createKeyMutate = vi.hoisted(() => vi.fn());
+const showToast = vi.hoisted(() => vi.fn());
 
 vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
 }));
+
+vi.mock("@/stores/toast/toast-store", () => ({
+  useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
+    selector({ show: showToast }),
+}));
+
+// The "New API key…" option opens ApiKeyCreatorModal (Radix Dialog / ModalShell)
+// which touches DOM APIs jsdom doesn't implement.
+beforeEach(() => {
+  Element.prototype.scrollIntoView = () => {};
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.releasePointerCapture = () => {};
+});
 
 function key(overrides: Partial<AgentApiKey> = {}): AgentApiKey {
   return {
@@ -69,7 +83,7 @@ describe("KeyPicker", () => {
     ).not.toBeNull();
   });
 
-  it("creates a new key inline from title + value and attaches it", () => {
+  it("creates a new key from the modal (title + value, no env var) and attaches it", () => {
     const onSelect = vi.fn();
     createKeyMutate.mockImplementation((input, callbacks) => {
       callbacks.onSuccess({ ...key({ id: "key-new" }), ...input });
@@ -79,7 +93,10 @@ describe("KeyPicker", () => {
     fireEvent.click(screen.getByRole("button", { name: /Select an API key/ }));
     fireEvent.click(screen.getByText("New API key…"));
 
-    fireEvent.change(screen.getByLabelText("Key title"), {
+    // Create-only modal: title + value, and NO env-var field (that binding lives
+    // on the row that owns this picker).
+    expect(screen.queryByLabelText("Environment variable")).toBeNull();
+    fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "Fresh key" },
     });
     fireEvent.change(screen.getByLabelText("Value"), {

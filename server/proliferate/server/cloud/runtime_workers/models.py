@@ -54,6 +54,7 @@ class WorkerDesiredVersions(_CamelModel):
     # server pins nothing.
     worker: str | None = None
     anyharness: str
+    catalog_version: str | None = None
 
 
 class WorkerHeartbeatResponse(_CamelModel):

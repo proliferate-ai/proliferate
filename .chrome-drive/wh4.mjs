@@ -1,0 +1,10 @@
+import { attach, shot } from './helper.mjs';
+const { browser, ctx } = await attach();
+const page = ctx.pages().find(p => p.url().includes('api.slack.com/apps/A0BFD1Z5GV7'));
+await page.bringToFront();
+await page.getByText('Add New Webhook', { exact: true }).click();
+await page.waitForTimeout(4000);
+await shot(page, 'authorize');
+console.log('URL:', page.url());
+await browser.close();
+process.exit(0);

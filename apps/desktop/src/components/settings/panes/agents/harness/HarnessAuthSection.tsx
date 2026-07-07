@@ -1,41 +1,76 @@
-import { useEffect, useRef, useState } from "react";
+import type React from "react";
+import type { ReactNode } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import {
-  useAgentApiKeys,
-  useAgentGatewayCapabilities,
-  useAgentGatewayEnrollment,
-  useAuthSelections,
-  usePutAuthSelections,
-} from "@proliferate/cloud-sdk-react";
-import { Plus } from "@proliferate/ui/icons";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Switch } from "@proliferate/ui/primitives/Switch";
-import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
-import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
-import { AgentLoginTerminalPanel } from "@/components/agents/AgentLoginTerminalPanel";
-import { HarnessAuthApiKeyRow } from "./HarnessAuthApiKeyRow";
-import { ProviderPickerModal } from "./ProviderPickerModal";
-import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
+import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
-import { getHarnessEnvVarSuggestions } from "@/config/harness-env-vars";
-import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
-import { useAgentLoginTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
-import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
-import { isReadyAgent } from "@/lib/domain/agents/status";
-import { useToastStore } from "@/stores/toast/toast-store";
+import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import {
-  buildDesiredSources,
-  deriveEditorState,
   isMultiSourceHarness,
-  isNativeState,
-  type EditableApiKeyRow,
-  type HarnessAuthEditorState,
+  type AuthMethod,
 } from "@/lib/domain/settings/harness-auth-sources";
+import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
+import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
+
+export type { AuthMethod };
 
 interface HarnessAuthSectionProps {
   harnessKind: string;
   displayName: string;
   surface: AgentAuthSurface;
+  editor: HarnessAuthEditorApi;
+  variant?: HarnessBlockVariant;
+}
+
+/**
+ * Single-source radio selection (claude/codex/grok/…): exactly one method is
+ * active. An enabled source wins; otherwise the user's last click (pendingMethod)
+ * highlights the card even before a key is wired; the implicit fallback is CLI.
+ * Never infers from a draft/disabled row's mere presence (that lit up api_key
+ * while gateway was on).
+ */
+export function deriveSelectedMethod(editor: HarnessAuthEditorApi): AuthMethod {
+  if (editor.editorState.gatewayEnabled) return "gateway";
+  if (editor.editorState.rows.some((row) => row.enabled)) return "api_key";
+  if (editor.pendingMethod) return editor.pendingMethod;
+  return "cli";
+}
+
+/**
+ * Multi-source selection (opencode only): gateway and api_key are independent
+ * toggles that may both be active. CLI (native auth) is ALWAYS selected because
+ * opencode's native providers coexist with injected sources — the render plane
+ * no longer isolates XDG_DATA_HOME, so `opencode auth login` providers are
+ * always reachable alongside gateway/api_key sources.
+ *
+ * api_key lights when a row is enabled (a wired key is truly active) OR while
+ * the user is mid-configuration (pendingMethod === "api_key"): clicking the
+ * card seeds a draft row that is not yet enabled, so a plain rows.some(enabled)
+ * check would leave the card dark and the deadlock in place. Turning api_key
+ * off clears pendingMethod, so "off" darkens the card even though disabled rows
+ * linger for re-enabling.
+ */
+export function deriveSelectedMethods(editor: HarnessAuthEditorApi): Set<AuthMethod> {
+  const methods = new Set<AuthMethod>(["cli"]);
+  if (editor.editorState.gatewayEnabled) methods.add("gateway");
+  if (isMultiSourceApiKeyActive(editor)) methods.add("api_key");
+  return methods;
+}
+
+/** api_key is "on or being configured" for a multi-source harness. */
+export function isMultiSourceApiKeyActive(editor: HarnessAuthEditorApi): boolean {
+  return (
+    editor.editorState.rows.some((row) => row.enabled)
+    || editor.pendingMethod === "api_key"
+  );
+}
+
+/**
+ * Whether the api_key row editor should be surfaced for a multi-source harness.
+ * Broader than the highlight: any row present (draft OR persisted-but-disabled)
+ * or a pending click keeps the editor open so the user can wire/re-enable keys.
+ */
+export function isMultiSourceApiKeyConfigVisible(editor: HarnessAuthEditorApi): boolean {
+  return editor.editorState.rows.length > 0 || editor.pendingMethod === "api_key";
 }
 
 const CURSOR_HARNESS = "cursor";
@@ -44,318 +79,240 @@ export function HarnessAuthSection({
   harnessKind,
   displayName,
   surface,
+  editor,
+  variant = "section",
 }: HarnessAuthSectionProps) {
-  const { cloudActive } = useCloudAvailabilityState();
-  const showToast = useToastStore((state) => state.show);
-
-  const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
-  const enrollmentQuery = useAgentGatewayEnrollment(cloudActive);
-  const selectionsQuery = useAuthSelections(null, cloudActive);
-  const apiKeysQuery = useAgentApiKeys(cloudActive);
-  const putSelections = usePutAuthSelections();
-  const { agentsByKind } = useAgentCatalog();
-  const loginWorkflow = useAgentLoginTerminalWorkflow();
-
-  // Local-authoritative editor: seeded once per (harness, surface) scope, then
-  // every edit PUTs the full desired source list (contract §5). We never reseed
-  // from a later refetch of the same scope, so a PUT never clobbers the draft.
-  const [gatewayEnabled, setGatewayEnabled] = useState(false);
-  const [rows, setRows] = useState<EditableApiKeyRow[]>([]);
-  const [providerModalOpen, setProviderModalOpen] = useState(false);
-  const seededScopeRef = useRef<string | null>(null);
-  const lastPutSigRef = useRef<string>("");
-  const draftCounterRef = useRef(0);
-
-  const scopeKey = `${harnessKind}:${surface}`;
-  const selections = selectionsQuery.data;
-
-  useEffect(() => {
-    if (selections === undefined || seededScopeRef.current === scopeKey) {
-      return;
-    }
-    seededScopeRef.current = scopeKey;
-    const derived = deriveEditorState(selections, harnessKind, surface);
-    setGatewayEnabled(derived.gatewayEnabled);
-    setRows(derived.rows);
-    lastPutSigRef.current = JSON.stringify(buildDesiredSources(derived));
-  }, [selections, scopeKey, harnessKind, surface]);
-
-  const localAgent = agentsByKind.get(harnessKind) ?? null;
-  const loginSession = loginWorkflow.sessionsByKind[harnessKind] ?? null;
-
-  // Close the auth terminal once the login round-trip made the agent ready.
-  useEffect(() => {
-    if (!loginSession?.terminal || !localAgent || !isReadyAgent(localAgent)) {
-      return;
-    }
-    showToast(HARNESS_PANE_COPY.readyToast(displayName));
-    void loginWorkflow.closeAuthTerminal(harnessKind);
-  }, [
-    displayName,
-    harnessKind,
-    localAgent,
-    loginSession,
-    loginWorkflow.closeAuthTerminal,
-    showToast,
-  ]);
-
   if (harnessKind === CURSOR_HARNESS) {
     return (
-      <SettingsSection title={HARNESS_PANE_COPY.authenticationTitle}>
+      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
         <p className="py-3 text-sm text-muted-foreground">
           {HARNESS_PANE_COPY.cursorNativeDescription(displayName)}
         </p>
-      </SettingsSection>
+      </HarnessPanelBlock>
     );
   }
 
-  if (!cloudActive) {
+  // Cloud surface gating is now handled at the pane level by wrapping the
+  // entire cloud surface content in CloudGuard. Local surface keeps its
+  // lighter inline sign-in prompt so nothing changes when running fully offline.
+  if (surface === "local" && !editor.cloudActive) {
     return (
-      <SettingsSection title={HARNESS_PANE_COPY.signInTitle}>
+      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.signInTitle}>
         <p className="py-3 text-sm text-muted-foreground">
           {HARNESS_PANE_COPY.signInDescription(displayName)}
         </p>
-      </SettingsSection>
+      </HarnessPanelBlock>
     );
   }
-
-  const capabilities = capabilitiesQuery.data;
-  const enrollment = enrollmentQuery.data;
-  // Undefined capabilities means "not yet known" (still loading or errored), not
-  // "gateway enabled" — treat it as disabled so a user can never persist a
-  // gateway source on a gateway-disabled account before capabilities resolve. A
-  // known-unsynced enrollment locks the gateway the same way.
-  const gatewayLocked =
-    !capabilities?.gatewayEnabled
-    || (enrollment !== undefined && enrollment.syncStatus !== "synced");
-  const apiKeys = apiKeysQuery.data ?? [];
-  const multiSource = isMultiSourceHarness(harnessKind);
-  const busy = putSelections.isPending;
-  const editorState: HarnessAuthEditorState = { gatewayEnabled, rows };
-  const native = isNativeState(editorState);
-
-  function commit(next: HarnessAuthEditorState) {
-    setGatewayEnabled(next.gatewayEnabled);
-    setRows(next.rows);
-    const sources = buildDesiredSources(next);
-    const signature = JSON.stringify(sources);
-    // De-dupe redundant PUTs (e.g. blur with no effective change).
-    if (signature === lastPutSigRef.current) {
-      return;
-    }
-    lastPutSigRef.current = signature;
-    putSelections.mutate(
-      { harnessKind, surface, body: { sources } },
-      {
-        onError: (error) => {
-          showToast(
-            error.message || HARNESS_PANE_COPY.selectionUpdateError(displayName),
-          );
-        },
-      },
-    );
-  }
-
-  function handleGatewayToggle(next: boolean) {
-    // Single-source harnesses hold at most one enabled source: turning the
-    // gateway on turns every api-key row off (radio semantics via switches).
-    const nextRows =
-      next && !multiSource ? rows.map((row) => ({ ...row, enabled: false })) : rows;
-    commit({ gatewayEnabled: next, rows: nextRows });
-  }
-
-  function handleRowEnabledToggle(uid: string, next: boolean) {
-    const nextRows = rows.map((row) => {
-      if (row.uid === uid) {
-        return { ...row, enabled: next };
-      }
-      return next && !multiSource ? { ...row, enabled: false } : row;
-    });
-    const nextGateway = next && !multiSource ? false : gatewayEnabled;
-    commit({ gatewayEnabled: nextGateway, rows: nextRows });
-  }
-
-  function handleRowKeySelect(uid: string, keyId: string) {
-    commit({
-      gatewayEnabled,
-      rows: rows.map((row) => (row.uid === uid ? { ...row, apiKeyId: keyId } : row)),
-    });
-  }
-
-  function handleRowEnvVarChange(uid: string, envVarName: string) {
-    // Free-form editing stays local; the PUT lands on blur (or another action).
-    setRows((current) =>
-      current.map((row) => (row.uid === uid ? { ...row, envVarName } : row)),
-    );
-  }
-
-  function handleRowEnvVarBlur() {
-    commit(editorState);
-  }
-
-  function handleRemoveRow(uid: string) {
-    commit({ gatewayEnabled, rows: rows.filter((row) => row.uid !== uid) });
-  }
-
-  function addRow(envVarName: string, providerHint: string | null) {
-    draftCounterRef.current += 1;
-    const newRow: EditableApiKeyRow = {
-      uid: `draft-${draftCounterRef.current}`,
-      envVarName,
-      apiKeyId: null,
-      providerHint,
-      enabled: false,
-    };
-    // New rows are incomplete (no key yet) so nothing is PUT until wired.
-    setRows((current) => [...current, newRow]);
-  }
-
-  function handleAddVariable() {
-    const used = new Set(rows.map((row) => row.envVarName));
-    const suggestion = getHarnessEnvVarSuggestions(harnessKind).find(
-      (candidate) => !used.has(candidate.envVarName),
-    );
-    addRow(suggestion?.envVarName ?? "", suggestion?.providerHint ?? null);
-  }
-
-  const canRunLogin =
-    surface === "local"
-    && native
-    && localAgent !== null
-    && !isReadyAgent(localAgent)
-    && localAgent.readiness === "login_required"
-    && localAgent.supportsLogin;
-  const showLoginTerminal =
-    surface === "local"
-    && native
-    && loginSession !== null
-    && (loginSession.isStarting
-      || loginSession.terminal !== null
-      || loginSession.errorMessage !== null);
 
   return (
-    <SettingsSection
+    <HarnessAuthMethods
+      harnessKind={harnessKind}
+      displayName={displayName}
+      editor={editor}
+      variant={variant}
+    />
+  );
+}
+
+interface HarnessAuthMethodsProps {
+  harnessKind: string;
+  displayName: string;
+  editor: HarnessAuthEditorApi;
+  variant: HarnessBlockVariant;
+}
+
+function HarnessAuthMethods({
+  harnessKind,
+  displayName,
+  editor,
+  variant,
+}: HarnessAuthMethodsProps): ReactNode {
+  if (editor.selectionsQuery.isLoading) {
+    return (
+      <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.authenticationTitle}>
+        <p className="py-3 text-sm text-muted-foreground">Loading authentication...</p>
+      </HarnessPanelBlock>
+    );
+  }
+
+  const multiSource = isMultiSourceHarness(harnessKind);
+  // Single-source harnesses are a radio (exactly one active method); only
+  // opencode keeps the independent multi-select set.
+  const selectedMethods = multiSource
+    ? deriveSelectedMethods(editor)
+    : new Set<AuthMethod>([deriveSelectedMethod(editor)]);
+  const capabilities = editor.capabilitiesQuery.data;
+  const enrollment = editor.enrollmentQuery.data;
+
+  function selectMethod(method: AuthMethod) {
+    if (multiSource) {
+      handleMultiSourceSelect(method, editor);
+    } else {
+      handleSingleSourceSelect(method, editor);
+    }
+  }
+
+  return (
+    <HarnessPanelBlock
+      variant={variant}
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
-      {selectionsQuery.isLoading ? (
-        <p className="py-3 text-sm text-muted-foreground">Loading authentication...</p>
-      ) : (
-        <div className="space-y-3">
-          <SettingsRow
-            label={HARNESS_PANE_COPY.gatewayLabel}
-            description={gatewaySubtitle(capabilities, enrollment)}
-          >
-            <Switch
-              aria-label={HARNESS_PANE_COPY.gatewayLabel}
-              checked={gatewayEnabled}
-              disabled={gatewayLocked || busy}
-              onChange={handleGatewayToggle}
-            />
-          </SettingsRow>
-
-          <div>
-            <div className="flex flex-col">
-              {rows.map((row) => (
-                <HarnessAuthApiKeyRow
-                  key={row.uid}
-                  row={row}
-                  apiKeys={apiKeys}
-                  busy={busy}
-                  onEnvVarChange={handleRowEnvVarChange}
-                  onEnvVarBlur={handleRowEnvVarBlur}
-                  onKeySelect={handleRowKeySelect}
-                  onEnabledToggle={handleRowEnabledToggle}
-                  onRemove={handleRemoveRow}
-                />
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2 pt-2">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="gap-1.5"
-                disabled={busy}
-                onClick={handleAddVariable}
-              >
-                <Plus className="size-3.5" />
-                {HARNESS_PANE_COPY.addVariable}
-              </Button>
-              {multiSource ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5"
-                  disabled={busy}
-                  onClick={() => setProviderModalOpen(true)}
-                >
-                  <Plus className="size-3.5" />
-                  {HARNESS_PANE_COPY.addProvider}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          {native ? (
-            <p className="text-sm text-muted-foreground">
-              {surface === "local"
-                ? HARNESS_PANE_COPY.nativeStateLocal
-                : HARNESS_PANE_COPY.nativeStateCloud}
-            </p>
-          ) : null}
-
-          {canRunLogin ? (
-            <div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={loginSession?.isStarting ?? false}
-                onClick={() => {
-                  void loginWorkflow.openAuthTerminal(localAgent, {
-                    restart: Boolean(loginSession),
-                  });
-                }}
-              >
-                {loginSession?.isStarting
-                  ? HARNESS_PANE_COPY.runLoginOpening
-                  : HARNESS_PANE_COPY.runLogin}
-              </Button>
-            </div>
-          ) : null}
-
-          {showLoginTerminal && loginSession ? (
-            <AgentLoginTerminalPanel
-              session={loginSession}
-              baseUrl={loginWorkflow.runtimeConnection.baseUrl}
-              authToken={loginWorkflow.runtimeConnection.authToken}
-              onClose={(kind) => {
-                void loginWorkflow.closeAuthTerminal(kind);
-              }}
-              onExit={(kind, code) => {
-                void loginWorkflow.handleTerminalExit(kind, code);
-              }}
-              onRestart={() => {
-                if (localAgent) {
-                  void loginWorkflow.openAuthTerminal(localAgent, { restart: true });
-                }
-              }}
-            />
-          ) : null}
-        </div>
-      )}
-
-      {multiSource ? (
-        <ProviderPickerModal
-          open={providerModalOpen}
-          onClose={() => setProviderModalOpen(false)}
-          onSelect={(provider) =>
-            addRow(provider.envVarNames[0] ?? "", provider.id)}
+      <div className="grid grid-cols-3 gap-3">
+        <MethodCard
+          label={HARNESS_PANE_COPY.methodGateway}
+          icon={<CloudIcon className="size-5" />}
+          selected={selectedMethods.has("gateway")}
+          disabled={editor.gatewayLocked || editor.busy}
+          disabledReason={editor.gatewayLocked ? gatewaySubtitle(capabilities, enrollment) : undefined}
+          onClick={() => selectMethod("gateway")}
         />
+        <MethodCard
+          label={HARNESS_PANE_COPY.methodApiKey}
+          icon={<KeyRound className="size-5" />}
+          selected={selectedMethods.has("api_key")}
+          disabled={editor.busy}
+          onClick={() => selectMethod("api_key")}
+        />
+        <MethodCard
+          label={HARNESS_PANE_COPY.methodCli}
+          icon={<SquareTerminal className="size-5" />}
+          selected={selectedMethods.has("cli")}
+          disabled={multiSource || editor.busy}
+          disabledReason={multiSource ? HARNESS_PANE_COPY.cliAlwaysActive : undefined}
+          onClick={() => selectMethod("cli")}
+        />
+      </div>
+    </HarnessPanelBlock>
+  );
+}
+
+function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuthEditorApi) {
+  switch (method) {
+    case "gateway":
+      // handleGatewayToggle already turns every api-key row off (radio
+      // semantics); an enabled gateway makes deriveSelectedMethod return
+      // "gateway" so no pending marker is needed.
+      editor.handleGatewayToggle(true);
+      editor.setPendingMethod("gateway");
+      break;
+    case "api_key": {
+      // Disable gateway; enable first complete row if one exists. Mark api_key
+      // pending so the card highlights immediately even before a key is wired.
+      // If no rows exist, the details section will show an empty state with an
+      // "Add API key" button; clicking the card itself never opens the modal.
+      if (editor.editorState.gatewayEnabled) {
+        editor.handleGatewayToggle(false);
+      }
+      const firstComplete = editor.editorState.rows.find(
+        (row) => row.apiKeyId !== null,
+      );
+      if (firstComplete && !firstComplete.enabled) {
+        editor.handleRowEnabledToggle(firstComplete.uid, true);
+      }
+      editor.setPendingMethod("api_key");
+      break;
+    }
+    case "cli":
+      // Native state: drop gateway and any incomplete draft rows (so nothing
+      // keeps api_key "active"), and disable the rest. Marking cli pending makes
+      // the card stick even though complete rows may linger disabled.
+      editor.commit({
+        gatewayEnabled: false,
+        rows: editor.editorState.rows
+          .filter((row) => row.apiKeyId !== null)
+          .map((row) => ({ ...row, enabled: false })),
+      });
+      editor.setPendingMethod("cli");
+      break;
+  }
+}
+
+function handleMultiSourceSelect(method: AuthMethod, editor: HarnessAuthEditorApi) {
+  switch (method) {
+    case "gateway":
+      editor.handleGatewayToggle(!editor.editorState.gatewayEnabled);
+      break;
+    case "api_key": {
+      if (isMultiSourceApiKeyActive(editor)) {
+        // Toggle OFF: disable every row, but keep the ones that carry a wired
+        // key (apiKeyId != null) so the user can re-enable them; drop bare draft
+        // rows so nothing lingers. Clearing pendingMethod darkens the card, so
+        // "off" reads as off even though wired-but-disabled rows remain.
+        editor.commit({
+          gatewayEnabled: editor.editorState.gatewayEnabled,
+          rows: editor.editorState.rows
+            .filter((row) => row.apiKeyId !== null)
+            .map((row) => ({ ...row, enabled: false })),
+        });
+        editor.setPendingMethod(null);
+      } else {
+        // Toggle ON: enable the first wired row if one exists. Mark api_key
+        // pending so the card lights immediately even before a key is wired.
+        // If no rows exist, the details section will show an empty state with an
+        // "Add API key" button; clicking the card itself never opens the modal.
+        const firstComplete = editor.editorState.rows.find(
+          (row) => row.apiKeyId !== null,
+        );
+        if (firstComplete) {
+          editor.handleRowEnabledToggle(firstComplete.uid, true);
+        }
+        editor.setPendingMethod("api_key");
+      }
+      break;
+    }
+    case "cli":
+      // No-op: native auth always participates for multi-source harnesses
+      // (opencode's own providers coexist with gateway/api_key sources).
+      // The CLI card is permanently selected and not a toggle.
+      break;
+  }
+}
+
+interface MethodCardProps {
+  label: string;
+  icon: React.ReactNode;
+  selected: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
+  onClick: () => void;
+}
+
+function MethodCard({
+  label,
+  icon,
+  selected,
+  disabled,
+  disabledReason,
+  onClick,
+}: MethodCardProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        aria-pressed={selected}
+        disabled={disabled}
+        className={[
+          "relative flex flex-col items-center gap-2 rounded-lg border px-4 py-5 transition-colors",
+          selected
+            ? "border-foreground/20 bg-foreground/5 text-foreground"
+            : "border-border bg-background text-muted-foreground hover:border-foreground/10 hover:bg-foreground/[0.02]",
+          disabled ? "pointer-events-none opacity-50" : "",
+        ].join(" ")}
+        onClick={onClick}
+      >
+        {selected ? (
+          <Check className="absolute right-2.5 top-2.5 size-4 text-foreground" />
+        ) : null}
+        {icon}
+        <span className="text-xs font-medium">{label}</span>
+      </button>
+      {disabled && disabledReason ? (
+        <p className="px-1 text-[11px] leading-tight text-muted-foreground">
+          {disabledReason}
+        </p>
       ) : null}
-    </SettingsSection>
+    </div>
   );
 }

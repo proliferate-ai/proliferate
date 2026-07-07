@@ -243,6 +243,7 @@ async def _launch_anyharness_runtime(
         provider_sandbox=provider_sandbox,
         sandbox_record=sandbox_record,
         runtime_context=runtime_context,
+        runtime_bearer_token=runtime_token,
     )
     await cloud_sandboxes_store.mark_cloud_sandbox_ready(
         db,
