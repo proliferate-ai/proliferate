@@ -302,6 +302,9 @@ pub fn user_route_allowed(
         ["sessions", session_id, "config-options"] if method == Method::POST => {
             require_session_permission(claim, session_id, Permission::Write)
         }
+        ["sessions", session_id, "goal"] if method == Method::PUT || method == Method::DELETE => {
+            require_session_permission(claim, session_id, Permission::Write)
+        }
         ["sessions", session_id, "pending-prompts", _]
             if method == Method::PATCH || method == Method::DELETE =>
         {

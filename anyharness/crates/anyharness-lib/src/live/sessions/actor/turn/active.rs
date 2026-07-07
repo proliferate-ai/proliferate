@@ -184,6 +184,15 @@ impl SessionActor {
                                 let result = self.run_domain_op_cmd(op).await;
                                 let _ = respond_to.send(result);
                             }
+                            Some(SessionCommand::CallAgentExtMethod { method, params, respond_to }) => {
+                                // Dispatched off the actor loop (see
+                                // `spawn_agent_ext_method`): awaiting a sidecar
+                                // confirmation inline here would freeze the
+                                // streaming turn, notifications, Cancel, and the
+                                // ResolveInteraction that must answer a pending
+                                // permission before the goal write can land.
+                                self.spawn_agent_ext_method(method, params, respond_to);
+                            }
                             Some(SessionCommand::VerifyForkReady { respond_to }) => {
                                 let _ = respond_to.send(Err(ForkSessionCommandError::Busy));
                             }

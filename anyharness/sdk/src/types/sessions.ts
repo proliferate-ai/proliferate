@@ -109,6 +109,14 @@ export type ForkSessionResponse = Omit<
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
 export type EditPendingPromptRequest =
   components["schemas"]["EditPendingPromptRequest"];
+export type Goal = components["schemas"]["Goal"];
+export type GoalStatus = components["schemas"]["GoalStatus"];
+export type GoalArmState = components["schemas"]["GoalArmState"];
+export type SetSessionGoalRequest =
+  components["schemas"]["SetSessionGoalRequest"];
+export type SessionGoalResponse = components["schemas"]["SessionGoalResponse"];
+export type ClearSessionGoalResponse =
+  components["schemas"]["ClearSessionGoalResponse"];
 export type SessionSubagentsResponse =
   components["schemas"]["SessionSubagentsResponse"];
 export type ScheduleSubagentWakeRequest =

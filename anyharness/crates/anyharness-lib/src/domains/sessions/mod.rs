@@ -1,3 +1,4 @@
+pub mod active_goals;
 pub mod attachment_storage;
 pub mod delegation;
 pub mod deletion;

@@ -11,6 +11,7 @@ import {
 } from "./transcript-presentation";
 import { turnHasRenderableTranscriptContent } from "../pending-prompts/pending-prompts";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
+import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
 
 export const TURN_CONTENT_BLOCK_KEY = "content";
 export const TURN_COMPLETED_HISTORY_BLOCK_KEY = "completed-history";
@@ -36,6 +37,11 @@ export type TranscriptRow =
     kind: "outbox_prompt";
     key: `prompt:${string}`;
     clientPromptId: string;
+  }
+  | {
+    kind: "goal_event";
+    key: `goal-event:${string}`;
+    event: GoalTranscriptEvent;
   };
 
 export interface BuildTranscriptRowModelInput {
@@ -45,6 +51,18 @@ export interface BuildTranscriptRowModelInput {
   visibleOutboxEntries?: readonly PromptOutboxEntry[];
   latestTurnId: string | null;
   latestTurnHasAssistantRenderableContent: boolean;
+  /**
+   * Goal lifecycle rows composed client-side from the raw session event
+   * stream (the runtime keeps goal chunks out of stored transcript
+   * content — see `deriveGoalTranscriptEvents`). Positioned purely by
+   * `event.seq` against each turn's earliest item `startedSeq` (both ride
+   * the same global per-session sequence space) — not by the event's
+   * `turnId`, which is informational only and not required to be set. An
+   * event lands right after the last turn whose content had already started
+   * by that seq; events with no such turn (session start, or a goal set
+   * before any turn ever ran) lead the row list.
+   */
+  goalEvents?: readonly GoalTranscriptEvent[];
 }
 
 export interface TranscriptRowModelCache {
@@ -70,9 +88,13 @@ export function buildTranscriptRowModel({
   visibleOutboxEntries = [],
   latestTurnId,
   latestTurnHasAssistantRenderableContent,
+  goalEvents = EMPTY_GOAL_EVENTS,
 }: BuildTranscriptRowModelInput, cache?: TranscriptRowModelCache): TranscriptRow[] {
   const rows: TranscriptRow[] = [];
   const seenTurnIds = new Set<string>();
+  const goalRows = bucketGoalEventRows(goalEvents, transcript);
+
+  rows.push(...goalRows.beforeFirstTurn);
 
   for (const turnId of transcript.turnOrder) {
     const turn = transcript.turnsById[turnId];
@@ -95,6 +117,10 @@ export function buildTranscriptRowModel({
 
     seenTurnIds.add(turnId);
     rows.push(...buildTurnRows(turn, transcript, cache));
+    const turnGoalRows = goalRows.byTurnId.get(turnId);
+    if (turnGoalRows) {
+      rows.push(...turnGoalRows);
+    }
   }
 
   if (visibleOptimisticPrompt) {
@@ -121,6 +147,85 @@ export function buildTranscriptRowModel({
   }
 
   return rows;
+}
+
+const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
+
+type GoalEventRow = Extract<TranscriptRow, { kind: "goal_event" }>;
+
+export function buildGoalEventRowKey(eventId: string): `goal-event:${string}` {
+  return `goal-event:${eventId}`;
+}
+
+/**
+ * Buckets goal lifecycle rows against the transcript's turns purely by seq:
+ * a turn's "boundary" is the earliest `startedSeq` among its items (both
+ * ride the same global per-session sequence space as the goal event's own
+ * seq), and each goal event lands with the last turn whose boundary is at
+ * or before it. Events earlier than every turn's boundary (including when
+ * there are no turns yet) lead the row list.
+ */
+function bucketGoalEventRows(
+  goalEvents: readonly GoalTranscriptEvent[],
+  transcript: TranscriptState,
+): {
+  beforeFirstTurn: GoalEventRow[];
+  byTurnId: Map<string, GoalEventRow[]>;
+} {
+  const beforeFirstTurn: GoalEventRow[] = [];
+  const byTurnId = new Map<string, GoalEventRow[]>();
+  if (goalEvents.length === 0) {
+    return { beforeFirstTurn, byTurnId };
+  }
+
+  const orderedTurnBoundaries = transcript.turnOrder
+    .map((turnId) => ({ turnId, boundarySeq: turnBoundarySeq(transcript, turnId) }))
+    .filter((entry): entry is { turnId: string; boundarySeq: number } =>
+      entry.boundarySeq !== null
+    );
+
+  const sortedEvents = [...goalEvents].sort((left, right) => left.seq - right.seq);
+  for (const event of sortedEvents) {
+    const row: GoalEventRow = {
+      kind: "goal_event",
+      key: buildGoalEventRowKey(event.id),
+      event,
+    };
+    let hostTurnId: string | null = null;
+    for (const { turnId, boundarySeq } of orderedTurnBoundaries) {
+      if (boundarySeq > event.seq) {
+        break;
+      }
+      hostTurnId = turnId;
+    }
+    if (hostTurnId === null) {
+      beforeFirstTurn.push(row);
+      continue;
+    }
+    const bucket = byTurnId.get(hostTurnId);
+    if (bucket) {
+      bucket.push(row);
+    } else {
+      byTurnId.set(hostTurnId, [row]);
+    }
+  }
+
+  return { beforeFirstTurn, byTurnId };
+}
+
+function turnBoundarySeq(transcript: TranscriptState, turnId: string): number | null {
+  const turn = transcript.turnsById[turnId];
+  if (!turn) {
+    return null;
+  }
+  let minSeq: number | null = null;
+  for (const itemId of turn.itemOrder) {
+    const item = transcript.itemsById[itemId];
+    if (item && (minSeq === null || item.startedSeq < minSeq)) {
+      minSeq = item.startedSeq;
+    }
+  }
+  return minSeq;
 }
 
 export function buildTurnContentRowKey(

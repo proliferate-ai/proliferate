@@ -8,6 +8,8 @@ import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/M
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
+import { SessionGoalBar } from "@/components/workspace/activity/SessionGoalBar";
+import { useSessionGoalBarModel } from "@/hooks/activity/derived/use-session-goal";
 import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
@@ -34,6 +36,7 @@ export function useComposerDockSlots(options?: {
   const pendingPrompts = useActivePendingPrompts();
   const activeTodoTracker = useActiveTodoTracker();
   const delegatedWorkComposer = useDelegatedWorkComposer();
+  const sessionGoalBarModel = useSessionGoalBarModel();
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const hasCloudRuntimePanel = !!selectedCloudRuntime.state
@@ -45,6 +48,7 @@ export function useComposerDockSlots(options?: {
     primaryPendingInteractionKind: primaryPendingInteraction?.kind ?? null,
     hasActiveTodoTracker: !!activeTodoTracker,
     hasDelegatedWork: !!delegatedWorkComposer,
+    hasSessionGoal: !!sessionGoalBarModel,
     hasWorkspaceStatusPanel: !!workspaceStatusPanel,
     hasCloudRuntimePanel,
   }), [
@@ -53,6 +57,7 @@ export function useComposerDockSlots(options?: {
     hasCloudRuntimePanel,
     pendingPrompts.length,
     primaryPendingInteraction?.kind,
+    sessionGoalBarModel,
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
     workspaceStatusPanel,
@@ -114,16 +119,24 @@ export function useComposerDockSlots(options?: {
       )
       : null
   ), [delegatedWorkComposer, dockSlotResolution.attachedSlot?.delegatedWork]);
+  // The goal bar renders last so it docks directly against the composer
+  // surface — it is the ever-present element while goal state is live.
+  const sessionGoalSlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.attachedSlot?.sessionGoal
+      ? <SessionGoalBar />
+      : null
+  ), [dockSlotResolution.attachedSlot?.sessionGoal]);
   const attachedSlot = useMemo<ReactNode | null>(() => (
-    ambientContextSlot || delegatedWorkSlot
+    ambientContextSlot || delegatedWorkSlot || sessionGoalSlot
       ? (
       <>
         {ambientContextSlot}
         {delegatedWorkSlot}
+        {sessionGoalSlot}
       </>
       )
       : null
-  ), [ambientContextSlot, delegatedWorkSlot]);
+  ), [ambientContextSlot, delegatedWorkSlot, sessionGoalSlot]);
 
   return useMemo(() => ({
     // Queued prompts now render IN THE TRANSCRIPT (renderableOutboxEntriesFor-

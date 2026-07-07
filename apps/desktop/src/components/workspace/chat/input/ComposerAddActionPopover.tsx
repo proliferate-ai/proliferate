@@ -1,40 +1,24 @@
-import { useState, type MouseEvent, type ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { Button } from "@proliferate/ui/primitives/Button";
 import {
-  ArrowLeft,
-  ClipboardList,
   FilePlus,
   Plus,
 } from "@proliferate/ui/icons";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
-import { PlanPickerContentBody } from "./PlanPickerContentBody";
 
 interface ComposerAddActionPopoverProps {
   canAttachFile: boolean;
   attachFileDetail: string;
-  canAttachPlan: boolean;
-  attachPlanDetail: string;
-  workspaceUiKey: string | null;
-  sdkWorkspaceId: string | null;
   onAttachFile: () => void;
 }
-
-type AddActionView = "menu" | "plans";
 
 export function ComposerAddActionPopover({
   canAttachFile,
   attachFileDetail,
-  canAttachPlan,
-  attachPlanDetail,
-  workspaceUiKey,
-  sdkWorkspaceId,
   onAttachFile,
 }: ComposerAddActionPopoverProps) {
-  const [view, setView] = useState<AddActionView>("menu");
-
   return (
     <PopoverButton
       trigger={(
@@ -42,72 +26,29 @@ export function ComposerAddActionPopover({
           iconOnly
           icon={<Plus className="size-4" />}
           label="Add"
-          title="Add file or plan"
-          aria-label="Add file or plan"
+          title="Add file"
+          aria-label="Add file"
         />
       )}
       align="end"
       side="top"
       offset={8}
       className="w-auto border-0 bg-transparent p-0 shadow-none"
-      onOpenChange={(open) => {
-        if (!open) {
-          setView("menu");
-        }
-      }}
     >
       {(close) => (
-        <ComposerPopoverSurface
-          className={view === "plans" ? "w-[min(24rem,calc(100vw-2rem))] p-0" : "w-72 p-1.5"}
-          data-telemetry-mask={view === "plans" ? true : undefined}
-        >
-          {view === "plans" ? (
-            <>
-              <div className="flex items-center gap-2 border-b border-border px-2 py-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setView("menu")}
-                  className="h-7 rounded-lg px-2 text-xs"
-                >
-                  <ArrowLeft className="size-3.5" />
-                  Back
-                </Button>
-                <span className="min-w-0 truncate text-sm font-medium text-foreground">
-                  Attach plan
-                </span>
-              </div>
-              <PlanPickerContentBody
-                workspaceUiKey={workspaceUiKey}
-                sdkWorkspaceId={sdkWorkspaceId}
-                onClose={() => {
-                  setView("menu");
-                  close();
-                }}
-              />
-            </>
-          ) : (
-            <div className="space-y-1">
-              <ComposerActionRow
-                icon={<FilePlus className="size-4 text-muted-foreground" />}
-                label="Add file"
-                detail={attachFileDetail}
-                disabled={!canAttachFile}
-                onClick={() => {
-                  onAttachFile();
-                  close();
-                }}
-              />
-              <ComposerActionRow
-                icon={<ClipboardList className="size-4 text-muted-foreground" />}
-                label="Add plan"
-                detail={attachPlanDetail}
-                disabled={!canAttachPlan}
-                onClick={() => setView("plans")}
-              />
-            </div>
-          )}
+        <ComposerPopoverSurface className="w-72 p-1.5">
+          <div className="space-y-1">
+            <ComposerActionRow
+              icon={<FilePlus className="size-4 text-muted-foreground" />}
+              label="Add file"
+              detail={attachFileDetail}
+              disabled={!canAttachFile}
+              onClick={() => {
+                onAttachFile();
+                close();
+              }}
+            />
+          </div>
         </ComposerPopoverSurface>
       )}
     </PopoverButton>

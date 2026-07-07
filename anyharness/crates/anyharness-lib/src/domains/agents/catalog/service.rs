@@ -178,6 +178,24 @@ impl ActiveCatalog {
         self.agent(kind).map(|agent| agent.auth_contexts.as_slice())
     }
 
+    /// Version-level goal support declared for the pinned harness. The live
+    /// session capability stays ACP-advertised (initialize `_meta`); this is
+    /// the catalog-declared flag for surfaces without a live handshake.
+    ///
+    /// MUST NOT gate a live goal mutation: that authority is solely the
+    /// session's `_meta.anyharness.goals.supported` initialize advertisement
+    /// (see `domains::goals::runtime` + `supports_goals_from_init_meta`). This
+    /// flag can legitimately drift ahead
+    /// of the pinned sidecar binary (declared before the fork ships the ext
+    /// methods), so trusting it to drive a mutation would try to set goals on a
+    /// sidecar that cannot service them. It exists only for pre-session
+    /// surfaces (e.g. an agent picker) that have no live handshake to consult.
+    pub fn supports_goals(&self, kind: &str) -> bool {
+        self.agent(kind)
+            .map(|agent| agent.session.supports_goals)
+            .unwrap_or(false)
+    }
+
     /// Models available under the active contexts: `availability.anyOf`
     /// intersected with the active ids (`"baseline"` counts when active).
     pub fn models(&self, kind: &str, contexts: &ActiveAuthContexts) -> Vec<&AgentCatalogModel> {

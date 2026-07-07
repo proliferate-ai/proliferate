@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::goals::Goal;
 use super::interactions::{InteractionRequestedEvent, InteractionResolvedEvent};
 use super::SessionLiveConfigSnapshot;
 
@@ -55,6 +56,9 @@ pub enum SessionEvent {
     SessionLinkTurnCompleted(SessionLinkTurnCompletedPayload),
     ReviewRunUpdated(ReviewRunUpdatedPayload),
     UsageUpdate(UsageUpdatePayload),
+    GoalUpdated(GoalUpdatedPayload),
+    GoalMet(GoalMetPayload),
+    GoalCleared(GoalClearedPayload),
 
     PendingPromptAdded(PendingPromptAddedPayload),
     PendingPromptUpdated(PendingPromptUpdatedPayload),
@@ -86,6 +90,9 @@ impl SessionEvent {
             Self::SessionLinkTurnCompleted(_) => "session_link_turn_completed",
             Self::ReviewRunUpdated(_) => "review_run_updated",
             Self::UsageUpdate(_) => "usage_update",
+            Self::GoalUpdated(_) => "goal_updated",
+            Self::GoalMet(_) => "goal_met",
+            Self::GoalCleared(_) => "goal_cleared",
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
             Self::PendingPromptRemoved(_) => "pending_prompt_removed",
@@ -680,6 +687,24 @@ pub struct ReviewRunUpdatedPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub active_round_id: Option<String>,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalUpdatedPayload {
+    pub goal: Goal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalMetPayload {
+    pub goal: Goal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GoalClearedPayload {
+    pub goal: Goal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

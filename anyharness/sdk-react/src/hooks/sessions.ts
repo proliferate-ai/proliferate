@@ -9,6 +9,7 @@ import type {
   ResolveInteractionRequest,
   ResumeSessionRequest,
   SetSessionConfigOptionRequest,
+  SetSessionGoalRequest,
   UpdateSessionTitleRequest,
 } from "@anyharness/sdk";
 import {
@@ -478,6 +479,59 @@ export function useUpdateSessionTitleMutation(options?: { workspaceId?: string |
           queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
         }),
       ]);
+    },
+  });
+}
+
+export function useSetSessionGoalMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        sessionId: string;
+        request: SetSessionGoalRequest;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.setGoal(input.sessionId, input.request, input.requestOptions);
+    },
+    onSuccess: async (_response, variables) => {
+      const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
+    },
+  });
+}
+
+export function useClearSessionGoalMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        sessionId: string;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.clearGoal(input.sessionId, input.requestOptions);
+    },
+    onSuccess: async (_response, variables) => {
+      const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
     },
   });
 }

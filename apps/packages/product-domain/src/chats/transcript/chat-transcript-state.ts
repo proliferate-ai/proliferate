@@ -4,6 +4,7 @@ import type {
 } from "@anyharness/sdk";
 import type { SessionViewState } from "../../sessions/activity";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
+import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
 
 export type {
   PendingPromptEntry,
@@ -20,6 +21,12 @@ export interface ChatTranscriptState {
   outboxEntries?: readonly PromptOutboxEntry[];
   history?: ChatTranscriptHistoryState;
   layout?: ChatTranscriptLayoutState;
+  /**
+   * Goal lifecycle rows composed client-side from the raw session event
+   * stream (see `deriveGoalTranscriptEvents`). Omitted/empty for surfaces
+   * that don't render goal state (e.g. the cloud preview transcript).
+   */
+  goalEvents?: readonly GoalTranscriptEvent[];
 }
 
 export interface ChatTranscriptHistoryState {

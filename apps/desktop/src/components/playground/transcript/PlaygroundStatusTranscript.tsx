@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CircleAlert } from "@proliferate/ui/icons";
+import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import { AssistantMessage } from "@/components/workspace/chat/transcript/AssistantMessage";
+import { GoalTranscriptEventRow } from "@/components/workspace/chat/transcript/GoalTranscriptEventRow";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { PendingInteractionMarkerView } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
 import type { ScenarioKey } from "@/config/playground";
@@ -125,10 +127,52 @@ export function renderPlaygroundStatusTranscript(scenario: ScenarioKey): ReactNo
           <TransientStatusRow text="Awaiting permission to run this MCP tool." />
         </TranscriptPreviewShell>
       );
+    // Goal lifecycle rows are client-side composition (deriveGoalTranscriptEvents)
+    // interleaved into the real transcript by seq; this preview hardcodes the
+    // set -> edited -> met sequence around static assistant turns instead of
+    // driving the full row model, matching this file's other static previews.
+    case "goal-transcript-lifecycle":
+      return (
+        <TranscriptPreviewShell>
+          <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_SET} />
+          <AssistantMessage content={'Setting a goal so I can track this end-to-end: DONE.txt exists in the repo root and contains exactly "done".'} />
+          <AssistantMessage content="First pass didn't quite match the acceptance check — narrowing the objective to the exact contents." />
+          <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_EDITED} />
+          <AssistantMessage content="DONE.txt now exists with the exact contents the goal expects." />
+          <GoalTranscriptEventRow event={GOAL_TRANSCRIPT_EVENT_MET} />
+        </TranscriptPreviewShell>
+      );
     default:
       return null;
   }
 }
+
+const GOAL_TRANSCRIPT_EVENT_SET: GoalTranscriptEvent = {
+  id: "1",
+  seq: 1,
+  turnId: null,
+  kind: "set",
+  objective: "DONE.txt exists in the repo root and contains exactly \"done\"",
+  detail: null,
+};
+
+const GOAL_TRANSCRIPT_EVENT_EDITED: GoalTranscriptEvent = {
+  id: "2",
+  seq: 8,
+  turnId: "turn-1",
+  kind: "edited",
+  objective: "DONE.txt exists in the repo root and contains exactly \"done\" (trailing newline optional)",
+  detail: null,
+};
+
+const GOAL_TRANSCRIPT_EVENT_MET: GoalTranscriptEvent = {
+  id: "3",
+  seq: 15,
+  turnId: "turn-2",
+  kind: "met",
+  objective: "DONE.txt exists in the repo root and contains exactly \"done\" (trailing newline optional)",
+  detail: "DONE.txt exists in the repo root and its contents are exactly \"done\"",
+};
 
 const LIVE_STREAM_TEXT = `Totally. I'll re-ground this with actual repo checks rather than just memory, and then I'll give you the distilled version with the parts that matter for the design.
 

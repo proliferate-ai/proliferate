@@ -9,6 +9,7 @@ import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/int
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 
 export interface ChatTranscriptOutboxActions {
   retryPrompt: (clientPromptId: string) => void;
@@ -50,6 +51,12 @@ export interface ChatTranscriptTurnStatusInput {
   transientStatusText: string | null;
 }
 
+export interface ChatTranscriptGoalEventRenderInput {
+  row: Extract<TranscriptVirtualRow, { kind: "goal_event" }>;
+  rowIndex: number;
+  event: GoalTranscriptEvent;
+}
+
 export interface ChatTranscriptViewProps {
   state: ChatTranscriptState;
   outboxActions?: ChatTranscriptOutboxActions;
@@ -58,4 +65,6 @@ export interface ChatTranscriptViewProps {
   renderTurnRow: (input: ChatTranscriptTurnRowRenderInput) => ReactNode;
   renderPendingPromptTrailingStatus?: (input: ChatTranscriptPendingStatusInput) => ReactNode;
   renderTurnTrailingStatus?: (input: ChatTranscriptTurnStatusInput) => ReactNode;
+  /** Omitted surfaces (e.g. the cloud preview transcript) render no goal rows. */
+  renderGoalEventRow?: (input: ChatTranscriptGoalEventRenderInput) => ReactNode;
 }

@@ -12,8 +12,9 @@ use url::form_urlencoded;
 
 use super::http::{
     agent_auth, agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git,
-    health, hosting, mobility, plans, processes, product_mcp, replay, repo_roots, reviews, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
+    goals, health, hosting, mobility, plans, processes, product_mcp, replay, repo_roots, reviews,
+    sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
+    sessions_lifecycle,
     sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
     workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
 };
@@ -436,6 +437,10 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/sessions/{session_id}/prompt-attachments/{attachment_id}",
             get(sessions_pending::get_prompt_attachment),
+        )
+        .route(
+            "/sessions/{session_id}/goal",
+            put(goals::set_session_goal).delete(goals::clear_session_goal),
         )
         .route(
             "/sessions/{session_id}/resume",

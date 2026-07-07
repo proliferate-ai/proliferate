@@ -256,6 +256,13 @@ export function reduceEvent(
       };
       break;
 
+    // Goal mirror transitions are session-level state, not transcript
+    // content; the directory layer consumes them.
+    case "goal_updated":
+    case "goal_met":
+    case "goal_cleared":
+      break;
+
     case "pending_prompt_added":
       s.pendingPrompts = upsertPendingPrompt(s.pendingPrompts, {
         seq: evt.seq,

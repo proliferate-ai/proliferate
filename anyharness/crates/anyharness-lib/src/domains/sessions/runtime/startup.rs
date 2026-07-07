@@ -5,7 +5,7 @@ use std::time::Instant;
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
-use crate::domains::sessions::extensions::SessionTurnFinishedContext;
+use crate::domains::sessions::extensions::{SessionStartedContext, SessionTurnFinishedContext};
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
     assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
@@ -412,6 +412,13 @@ impl SessionRuntime {
             total_elapsed_ms = started.elapsed().as_millis(),
             "[workspace-latency] session.runtime.start_live_session.acp_started"
         );
+
+        for extension in &self.session_extensions {
+            extension.on_session_started(SessionStartedContext {
+                session_id: record.id.clone(),
+                agent_kind: record.agent_kind.clone(),
+            });
+        }
 
         Ok((handle, ready.native_session_id))
     }

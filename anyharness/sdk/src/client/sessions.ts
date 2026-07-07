@@ -3,6 +3,7 @@ import type {
   SessionRawNotificationEnvelope,
 } from "../types/events.js";
 import type {
+  ClearSessionGoalResponse,
   CreateSessionRequest,
   EditPendingPromptRequest,
   ForkSessionRequest,
@@ -18,7 +19,9 @@ import type {
   ScheduleSubagentWakeResponse,
   SetSessionConfigOptionRequest,
   SetSessionConfigOptionResponse,
+  SetSessionGoalRequest,
   Session,
+  SessionGoalResponse,
   SessionSubagentsResponse,
   UpdateSessionTitleRequest,
 } from "../types/sessions.js";
@@ -101,6 +104,28 @@ export class SessionsClient {
       input,
       withTimingCategory(options, "session.title.update"),
     ));
+  }
+
+  async setGoal(
+    sessionId: string,
+    input: SetSessionGoalRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<SessionGoalResponse> {
+    return this.transport.put<SessionGoalResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/goal`,
+      input,
+      withTimingCategory(options, "session.goal.set"),
+    );
+  }
+
+  async clearGoal(
+    sessionId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<ClearSessionGoalResponse> {
+    return this.transport.deleteJson<ClearSessionGoalResponse>(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/goal`,
+      withTimingCategory(options, "session.goal.clear"),
+    );
   }
 
   async getLiveConfig(

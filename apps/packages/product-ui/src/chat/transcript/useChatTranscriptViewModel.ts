@@ -14,6 +14,7 @@ import {
 import { renderableOutboxEntriesForTranscript } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import type { TurnDisplayBlock } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import type {
   ChatTranscriptPendingStatusInput,
   ChatTranscriptTurnStatusInput,
@@ -25,6 +26,7 @@ import { useSharedTranscriptRowModel } from "./useSharedTranscriptRowModel";
 
 const noop = () => {};
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
+const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
 
 export interface ChatTranscriptViewModel {
   activeSessionId: string;
@@ -67,6 +69,7 @@ export function useChatTranscriptViewModel({
     sessionViewState,
     history,
     layout,
+    goalEvents = EMPTY_GOAL_EVENTS,
   } = state;
   const hasOlderHistory = history?.hasOlderHistory ?? false;
   const isLoadingOlderHistory = history?.isLoadingOlderHistory ?? false;
@@ -119,6 +122,7 @@ export function useChatTranscriptViewModel({
     visibleOutboxEntries,
     latestTurnId,
     latestTurnHasAssistantRenderableContent,
+    goalEvents,
   });
   const visibleTurnIds = useMemo(
     () => collectVisibleTurnIds(virtualRows),

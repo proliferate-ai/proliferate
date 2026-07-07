@@ -58,6 +58,13 @@ function validateCatalog(catalog) {
       }
     }
 
+    if (
+      agent.session?.supportsGoals !== undefined &&
+      typeof agent.session.supportsGoals !== "boolean"
+    ) {
+      fail(`${kind}: session.supportsGoals must be boolean when present`);
+    }
+
     const models = agent.session?.models;
     if (!Array.isArray(models) || models.length === 0) {
       fail(`${kind}: session.models must be a non-empty array`);

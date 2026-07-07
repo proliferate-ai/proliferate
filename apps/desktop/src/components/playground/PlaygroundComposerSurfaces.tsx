@@ -142,9 +142,6 @@ function PlaygroundComposerControlRow() {
       supportsAttachments
       canAttachFiles
       activeSessionId="playground-session"
-      workspaceUiKey="playground-workspace"
-      sdkWorkspaceId="playground-workspace"
-      hasUnresolvedPlans={false}
       onAttachFile={noop}
       isRunning={false}
       isEmpty

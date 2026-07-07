@@ -13,6 +13,7 @@ from proliferate.constants.cloud import SUPPORTED_CLOUD_AGENTS
 from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_agent_run_config as run_config_store
 from proliferate.db.store.automation_run_claim_values import AutomationRunClaimValue
+from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.automations.domain.claim_lifecycle import (
     ACTIVE_CLAIM_STATUSES,
     RECLAIMABLE_STATUSES,
@@ -35,7 +36,6 @@ from proliferate.server.automations.worker.cloud_executor_config import (
     CloudExecutorConfig,
     build_cloud_executor_config,
 )
-from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.cloud.agent_run_config.domain.resolve import (
     validate_config_execution_scope,
 )
@@ -53,6 +53,7 @@ def _claim_correlation_fields(claim: AutomationRunClaimValue) -> dict[str, objec
         "cloud_target_id": claim.cloud_target_id_snapshot,
         "anyharness_workspace_id": claim.anyharness_workspace_id,
     }
+
 
 logger = logging.getLogger(__name__)
 
