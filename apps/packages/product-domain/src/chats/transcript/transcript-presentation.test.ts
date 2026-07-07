@@ -8,6 +8,7 @@ import {
 import {
   buildTranscriptDisplayBlocks,
   buildTurnPresentation,
+  computeMessageBoundaryItemIds,
 } from "./transcript-presentation";
 import {
   assistantItem,
@@ -801,6 +802,94 @@ describe("buildTurnPresentation", () => {
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["sqlite", "ps", "read"], transcript),
     )).toBe("Explored 1 file, ran 2 commands");
+  });
+});
+
+describe("computeMessageBoundaryItemIds", () => {
+  it("marks a later top-level assistant prose block but not the first", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      first: assistantItem("first", "turn-1", 1),
+      second: assistantItem("second", "turn-1", 2),
+    };
+    const turn = turnRecord(["first", "second"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect([...presentation.messageBoundaryItemIds]).toEqual(["second"]);
+  });
+
+  it("does not divide across intervening tool/reasoning within one message", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      prose: assistantItem("prose", "turn-1", 1),
+      thought: thoughtItem("thought", "turn-1", 2, false),
+      tool: toolItem("tool", "turn-1", 3, "terminal"),
+    };
+    const turn = turnRecord(["prose", "thought", "tool"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    // Only one prose message → no boundary anywhere.
+    expect(presentation.messageBoundaryItemIds.size).toBe(0);
+  });
+
+  it("marks the second prose message when tool activity sits between two messages", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      msg1: assistantItem("msg1", "turn-1", 1),
+      tool: toolItem("tool", "turn-1", 2, "terminal"),
+      msg2: assistantItem("msg2", "turn-1", 3),
+    };
+    const turn = turnRecord(["msg1", "tool", "msg2"]);
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect([...presentation.messageBoundaryItemIds]).toEqual(["msg2"]);
+  });
+
+  it("excludes work-history-collapsed prose from boundary tracking", () => {
+    // A completed turn: msg1 → tool → final. msg1 + tool collapse into the
+    // Work history summary; only `final` is a top-level prose block, so it must
+    // NOT receive a boundary (it is the first live top-level prose).
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      user: userItem("user", "turn-1", 1),
+      msg1: assistantItem("msg1", "turn-1", 2),
+      tool: toolItem("tool", "turn-1", 3, "terminal"),
+      final: assistantItem("final", "turn-1", 4),
+    };
+    const turn = turnRecord(
+      ["user", "msg1", "tool", "final"],
+      "2026-04-04T00:00:10Z",
+    );
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.completedHistorySummary).not.toBeNull();
+    expect(presentation.completedHistoryRootIds).toContain("msg1");
+    expect(presentation.messageBoundaryItemIds.size).toBe(0);
+  });
+
+  it("standalone helper agrees with builder output", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      first: assistantItem("first", "turn-1", 1),
+      second: assistantItem("second", "turn-1", 2),
+      third: assistantItem("third", "turn-1", 3),
+    };
+    const turn = turnRecord(["first", "second", "third"]);
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    const direct = computeMessageBoundaryItemIds({
+      displayBlocks: presentation.displayBlocks,
+      transcript,
+      completedHistoryRootIds: new Set(presentation.completedHistoryRootIds),
+      hasCompletedHistorySummary: presentation.completedHistorySummary !== null,
+    });
+
+    expect([...direct].sort()).toEqual(["second", "third"]);
+    expect([...presentation.messageBoundaryItemIds].sort()).toEqual(["second", "third"]);
   });
 });
 

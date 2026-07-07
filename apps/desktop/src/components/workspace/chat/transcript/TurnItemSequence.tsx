@@ -23,6 +23,8 @@ import {
   buildCollapsedSummaryIcons,
   formatCollapsedSummary,
 } from "./TranscriptToolGroupUtils";
+import { MessageBoundary } from "./MessageBoundary";
+import { Fragment } from "react";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -110,26 +112,32 @@ export function TurnItemSequence({
           );
         }
 
+        const showMessageBoundary =
+          block.kind === "item"
+          && presentation.messageBoundaryItemIds.has(block.itemId);
+
         return (
-          <TurnDisplayBlockNode
-            key={getTurnDisplayBlockKey(block)}
-            block={block}
-            transcript={transcript}
-            autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
-            renderItem={(itemId) => (
-              <FragmentWithArtifacts
-                itemId={itemId}
-                transcript={transcript}
-                childrenByParentId={presentation.childrenByParentId}
-                artifactToolCalls={
-                  itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
-                }
-                workspaceId={workspaceId}
-                onOpenArtifact={onOpenArtifact}
-                onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-              />
-            )}
-          />
+          <Fragment key={getTurnDisplayBlockKey(block)}>
+            {showMessageBoundary && <MessageBoundary />}
+            <TurnDisplayBlockNode
+              block={block}
+              transcript={transcript}
+              autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+              renderItem={(itemId) => (
+                <FragmentWithArtifacts
+                  itemId={itemId}
+                  transcript={transcript}
+                  childrenByParentId={presentation.childrenByParentId}
+                  artifactToolCalls={
+                    itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
+                  }
+                  workspaceId={workspaceId}
+                  onOpenArtifact={onOpenArtifact}
+                  onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+                />
+              )}
+            />
+          </Fragment>
         );
       })}
       {showCompletedArtifactFallback && tailAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (

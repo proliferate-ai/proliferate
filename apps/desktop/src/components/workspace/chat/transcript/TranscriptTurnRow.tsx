@@ -9,9 +9,12 @@ import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
 import {
   TRAILING_STATUS_MIN_HEIGHT,
   TurnAssistantActionRow,
+  TurnGoalMetMarker,
   TurnShell,
   resolveTurnTrailingStatus,
 } from "./TranscriptTurnChrome";
+import { goalMetMarkerLabel } from "@proliferate/product-domain/activity/goal";
+import { useSessionGoal } from "@/hooks/activity/derived/use-session-goal";
 import { TurnItemSequence } from "./TurnItemSequence";
 import {
   findTailAssistantProseRootId,
@@ -87,6 +90,16 @@ export function TranscriptTurnRow({
     hasFileBadges: turn.fileBadges.length > 0,
   });
   const isLatestCompletedTurnRow = diffPanelKind === "current";
+  // Fix 2/3: the transcript's single final completed AI message. Its action
+  // row is sticky (not hover-gated) and hosts the inline goal-met marker.
+  const isFinalCompletedTurn = row.isLastTurnRow
+    && !!turn.completedAt
+    && turn.turnId === latestCompletedTurnId;
+  const sessionGoal = useSessionGoal();
+  const metMarker = isFinalCompletedTurn
+    && sessionGoal?.goal?.status === "met"
+    ? <TurnGoalMetMarker label={goalMetMarkerLabel(sessionGoal.goal)} />
+    : null;
   const presentation = row.presentation;
   const renderPresentation = row.renderPresentation;
   const liveExplorationBlock = isLatestTurn ? latestLiveExplorationBlock : null;
@@ -233,6 +246,8 @@ export function TranscriptTurnRow({
           showCopyButton={row.isLastTurnRow && !!turn.completedAt}
           reserveSlot={false}
           timestampLabel={tailAssistantActionTime}
+          alwaysVisible={isFinalCompletedTurn}
+          metMarker={metMarker}
         />
         {showFixedTailSlot ? (
           <div className="flex h-6 items-center" data-turn-tail-slot>

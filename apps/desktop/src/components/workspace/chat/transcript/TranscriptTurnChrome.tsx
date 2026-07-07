@@ -1,4 +1,7 @@
 import type { ReactNode } from "react";
+// CircleCheck isn't in the curated @proliferate/ui/icons set — the goal bar
+// and goal transcript rows source it directly from lucide-react too.
+import { CircleCheck } from "lucide-react";
 import {
   CircleQuestion,
   MessageCircleQuestion,
@@ -50,29 +53,72 @@ export function TurnAssistantActionRow({
   showCopyButton = false,
   reserveSlot = false,
   timestampLabel = null,
+  alwaysVisible = false,
+  metMarker = null,
 }: {
   content: string | null;
   showCopyButton?: boolean;
   reserveSlot?: boolean;
   timestampLabel?: string | null;
+  /**
+   * When true the copy/action row is persistently visible (opacity-100)
+   * instead of hover-gated. Set only for the transcript's final completed AI
+   * message; every earlier message keeps hover-to-reveal.
+   */
+  alwaysVisible?: boolean;
+  /**
+   * Inline "✓ Goal achieved in Xs" marker rendered between the copy button
+   * and the timestamp — only on the final completed message when the active
+   * session's goal is currently met.
+   */
+  metMarker?: ReactNode;
 }) {
   if (!content || (!showCopyButton && !reserveSlot)) {
     return null;
   }
 
+  const visibilityClassName = alwaysVisible
+    ? "opacity-100"
+    : "opacity-0 group-hover/turn:opacity-100";
+
   return (
     <div className="flex justify-start relative">
-      <div className={`pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
+      <div className={`flex items-center gap-2 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
         {showCopyButton && (
           <CopyMessageButton
             content={content}
-            timestampLabel={timestampLabel}
+            timestampLabel={metMarker ? null : timestampLabel}
             timestampPosition="after"
-            visibilityClassName="opacity-0 group-hover/turn:opacity-100"
+            visibilityClassName={visibilityClassName}
           />
+        )}
+        {metMarker && (
+          <>
+            <span aria-hidden className="h-3 w-px bg-border/60" />
+            {metMarker}
+            {timestampLabel && (
+              <span className="text-[length:var(--text-chat-meta,11px)] text-muted-foreground tabular-nums">
+                {timestampLabel}
+              </span>
+            )}
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Inline "✓ Goal achieved in Xs" marker for the final completed message's
+ * action footer (Fix 3). Matches the action-row typography (text-chat-meta,
+ * muted-foreground) with a small neutral check glyph.
+ */
+export function TurnGoalMetMarker({ label }: { label: string }): ReactNode {
+  return (
+    <span className="inline-flex items-center gap-1 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
+      <CircleCheck className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+      {label}
+    </span>
   );
 }
 

@@ -4,6 +4,8 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   PendingInteractionMarkerView,
+  TurnAssistantActionRow,
+  TurnGoalMetMarker,
   TurnShell,
   pendingInteractionMarkerKind,
   resolvePendingPromptTrailingStatus,
@@ -35,6 +37,47 @@ describe("TurnShell", () => {
 
     expect(container.innerHTML).toContain("pt-0");
     expect(container.innerHTML).toContain("pb-2");
+  });
+});
+
+describe("TurnAssistantActionRow", () => {
+  it("hover-gates the copy button by default (earlier messages)", () => {
+    const { container } = render(
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
+    );
+    expect(container.innerHTML).toContain("opacity-0 group-hover/turn:opacity-100");
+  });
+
+  it("keeps the copy button persistently visible when alwaysVisible (final message)", () => {
+    const { container } = render(
+      <TurnAssistantActionRow content="reply" showCopyButton alwaysVisible timestampLabel="5:02pm" />,
+    );
+    expect(container.innerHTML).toContain("opacity-100");
+    expect(container.innerHTML).not.toContain("opacity-0 group-hover/turn");
+  });
+
+  it("renders the goal-met marker between the copy button and the timestamp", () => {
+    const { container } = render(
+      <TurnAssistantActionRow
+        content="reply"
+        showCopyButton
+        alwaysVisible
+        timestampLabel="5:02pm"
+        metMarker={<TurnGoalMetMarker label="Goal achieved in 40s" />}
+      />,
+    );
+    expect(container.textContent).toContain("Goal achieved in 40s");
+    expect(container.textContent).toContain("5:02pm");
+  });
+});
+
+describe("TurnGoalMetMarker", () => {
+  it("renders the achieved label with a neutral check glyph", () => {
+    const { container } = render(<TurnGoalMetMarker label="Goal achieved in 40s" />);
+    expect(container.textContent).toContain("Goal achieved in 40s");
+    // Neutral, not green: the check glyph uses muted-foreground.
+    expect(container.querySelector("svg.text-muted-foreground")).not.toBeNull();
+    expect(container.querySelector(".text-success")).toBeNull();
   });
 });
 
