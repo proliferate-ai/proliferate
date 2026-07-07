@@ -247,16 +247,20 @@ fn opencode_gateway_writes_config_with_static_models() {
     let providers: Vec<&String> = config["provider"].as_object().unwrap().keys().collect();
     assert_eq!(providers, vec!["proliferate"]);
 
-    // XDG isolation: opencode must not reach the user's global config/auth.
+    // XDG_CONFIG_HOME is isolated (our injected provider config stays
+    // revision-keyed and deterministic). XDG_DATA_HOME is NOT overridden —
+    // opencode resolves auth at the real ~/.local/share/opencode/auth.json so
+    // natively-logged-in providers coexist with the gateway provider.
     let xdg_config = rendered
         .set
         .get("XDG_CONFIG_HOME")
         .expect("XDG_CONFIG_HOME");
-    let xdg_data = rendered.set.get("XDG_DATA_HOME").expect("XDG_DATA_HOME");
     assert!(std::path::Path::new(xdg_config).is_dir());
-    assert!(std::path::Path::new(xdg_data).is_dir());
     assert!(xdg_config.contains("opencode-config"));
-    assert!(xdg_data.contains("opencode-config"));
+    assert!(
+        !rendered.set.contains_key("XDG_DATA_HOME"),
+        "XDG_DATA_HOME must NOT be overridden — native auth coexistence"
+    );
 }
 
 #[test]

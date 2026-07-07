@@ -76,6 +76,7 @@ function HarnessSurfaceCloud({
         />
 
         <HarnessAuthDetailsSection
+          harnessKind={harnessKind}
           displayName={displayName}
           surface="cloud"
           selectedMethod={selectedMethod}
@@ -117,6 +118,7 @@ function HarnessSurfaceLocal({
         />
 
         <HarnessAuthDetailsSection
+          harnessKind={harnessKind}
           displayName={displayName}
           surface="local"
           selectedMethod={selectedMethod}
