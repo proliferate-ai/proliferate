@@ -136,7 +136,8 @@ export function resolvePendingPromptTrailingStatus(
   }
 
   if (forceWorking || sessionViewState === "working") {
-    // Outbox / launch dispatch — the truthful voice is "Sending…", not "Thinking".
+    // Outbox / launch dispatch — same "Thinking" voice as agent work (the
+    // send/queue distinction is plumbing, not something the user tracks).
     return (
       <TrailingStatusCrossfade statusKey="sending">
         <StreamingIndicator startedAt={queuedAt} label={CHAT_STREAMING_STATUS_LABELS.sending} />

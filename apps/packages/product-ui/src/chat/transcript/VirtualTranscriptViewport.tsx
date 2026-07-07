@@ -15,6 +15,7 @@ import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/c
 
 export function VirtualTranscriptViewport({
   bottomSpacerHeight,
+  contentRef,
   measureElement,
   onViewportScroll,
   renderableRows,
@@ -29,6 +30,7 @@ export function VirtualTranscriptViewport({
 }: {
   bottomSpacerHeight: number;
   columnClassName?: string;
+  contentRef?: RefObject<HTMLDivElement | null>;
   gutterClassName?: string;
   measureElement: (element: Element | null) => void;
   onViewportScroll: (viewport: HTMLDivElement) => void;
@@ -47,6 +49,7 @@ export function VirtualTranscriptViewport({
       onViewportScroll={onViewportScroll}
     >
       <div
+        ref={contentRef}
         className={`${gutterClassName} min-h-full`}
         data-transcript-virtualization-mode="virtual"
         data-transcript-virtualization-setting={virtualizationMode}
