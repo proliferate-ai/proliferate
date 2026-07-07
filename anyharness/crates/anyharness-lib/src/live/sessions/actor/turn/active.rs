@@ -241,6 +241,16 @@ impl SessionActor {
                                     self.handle_delete_pending_prompt(seq).await,
                                 );
                             }
+                            Some(SessionCommand::ReorderPendingPrompts { ordered_seqs, respond_to }) => {
+                                let _ = respond_to.send(
+                                    self.handle_reorder_pending_prompts(ordered_seqs).await,
+                                );
+                            }
+                            Some(SessionCommand::SteerPendingPrompt { seq, respond_to }) => {
+                                let _ = respond_to.send(
+                                    self.handle_steer_pending_prompt(seq, true).await,
+                                );
+                            }
                             Some(SessionCommand::ReplayAdvance { respond_to }) => {
                                 let _ = respond_to.send(Err(anyhow::anyhow!("session is not a replay session")));
                             }

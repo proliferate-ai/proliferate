@@ -355,7 +355,9 @@ async fn handle_non_replay_command(
             None
         }
         SessionCommand::EditPendingPrompt { respond_to, .. }
-        | SessionCommand::DeletePendingPrompt { respond_to, .. } => {
+        | SessionCommand::DeletePendingPrompt { respond_to, .. }
+        | SessionCommand::ReorderPendingPrompts { respond_to, .. }
+        | SessionCommand::SteerPendingPrompt { respond_to, .. } => {
             let _ = respond_to.send(Err(QueueMutationError::NotFound));
             None
         }

@@ -6,7 +6,9 @@ use crate::domains::sessions::prompt::prepare::prepare_prompt;
 use crate::domains::sessions::prompt::PromptPrepareContext;
 use crate::live::sessions::{LiveSessionCommandError, QueueMutationError};
 
-use super::{PendingPromptMutationError, SessionLifecycleError, SessionRuntime};
+use super::{
+    PendingPromptMutationError, PendingPromptQueueError, SessionLifecycleError, SessionRuntime,
+};
 
 impl SessionRuntime {
     pub async fn edit_pending_prompt(
@@ -87,6 +89,11 @@ impl SessionRuntime {
                     );
                     PendingPromptMutationError::NotFound
                 }
+                LiveSessionCommandError::Rejected(QueueMutationError::InvalidReorder(_)) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(
+                        "unexpected reorder error in edit path"
+                    ))
+                }
             })?;
 
         self.session_service
@@ -137,11 +144,122 @@ impl SessionRuntime {
                 LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
                     PendingPromptMutationError::NotFound
                 }
+                LiveSessionCommandError::Rejected(QueueMutationError::InvalidReorder(_)) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(
+                        "unexpected reorder error in delete path"
+                    ))
+                }
             })?;
 
         self.session_service
             .get_session(session_id)
             .map_err(PendingPromptMutationError::Internal)?
             .ok_or_else(|| PendingPromptMutationError::SessionNotFound(session_id.to_string()))
+    }
+
+    pub async fn reorder_pending_prompts(
+        &self,
+        session_id: &str,
+        ordered_seqs: Vec<i64>,
+    ) -> Result<SessionRecord, PendingPromptQueueError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(id) => {
+                    PendingPromptQueueError::SessionNotFound(id)
+                }
+                SessionLifecycleError::Internal(error) => {
+                    PendingPromptQueueError::Internal(error)
+                }
+            })?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(
+                    "failed to ensure live session handle: {error:?}"
+                ))
+            })?;
+
+        handle
+            .reorder_pending_prompts(ordered_seqs)
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => PendingPromptQueueError::Internal(
+                    anyhow::anyhow!("session actor channel closed"),
+                ),
+                LiveSessionCommandError::ResponseDropped => PendingPromptQueueError::Internal(
+                    anyhow::anyhow!("session actor dropped reorder response"),
+                ),
+                LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
+                    PendingPromptQueueError::NotFound
+                }
+                LiveSessionCommandError::Rejected(QueueMutationError::InvalidReorder(msg)) => {
+                    PendingPromptQueueError::InvalidReorder(msg)
+                }
+            })?;
+
+        self.session_service
+            .get_session(session_id)
+            .map_err(PendingPromptQueueError::Internal)?
+            .ok_or_else(|| PendingPromptQueueError::SessionNotFound(session_id.to_string()))
+    }
+
+    pub async fn steer_pending_prompt(
+        &self,
+        session_id: &str,
+        seq: i64,
+    ) -> Result<SessionRecord, PendingPromptQueueError> {
+        self.access_gate
+            .assert_can_mutate_for_session(session_id)
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(error.to_string()))
+            })?;
+        let record = self
+            .get_session_or_not_found(session_id)
+            .map_err(|error| match error {
+                SessionLifecycleError::SessionNotFound(id) => {
+                    PendingPromptQueueError::SessionNotFound(id)
+                }
+                SessionLifecycleError::Internal(error) => {
+                    PendingPromptQueueError::Internal(error)
+                }
+            })?;
+        let handle = self
+            .ensure_live_session_handle(&record, None)
+            .await
+            .map_err(|error| {
+                PendingPromptQueueError::Internal(anyhow::anyhow!(
+                    "failed to ensure live session handle: {error:?}"
+                ))
+            })?;
+
+        handle
+            .steer_pending_prompt(seq)
+            .await
+            .map_err(|error| match error {
+                LiveSessionCommandError::ActorUnavailable => PendingPromptQueueError::Internal(
+                    anyhow::anyhow!("session actor channel closed"),
+                ),
+                LiveSessionCommandError::ResponseDropped => PendingPromptQueueError::Internal(
+                    anyhow::anyhow!("session actor dropped steer response"),
+                ),
+                LiveSessionCommandError::Rejected(QueueMutationError::NotFound) => {
+                    PendingPromptQueueError::NotFound
+                }
+                LiveSessionCommandError::Rejected(QueueMutationError::InvalidReorder(msg)) => {
+                    PendingPromptQueueError::InvalidReorder(msg)
+                }
+            })?;
+
+        self.session_service
+            .get_session(session_id)
+            .map_err(PendingPromptQueueError::Internal)?
+            .ok_or_else(|| PendingPromptQueueError::SessionNotFound(session_id.to_string()))
     }
 }

@@ -436,9 +436,17 @@ pub fn build_router(state: AppState) -> Router {
             post(sessions_fork::fork_session),
         )
         .route(
+            "/sessions/{session_id}/pending-prompts/order",
+            put(sessions_pending::reorder_pending_prompts),
+        )
+        .route(
             "/sessions/{session_id}/pending-prompts/{seq}",
             patch(sessions_pending::edit_pending_prompt)
                 .delete(sessions_pending::delete_pending_prompt),
+        )
+        .route(
+            "/sessions/{session_id}/pending-prompts/{seq}/steer",
+            post(sessions_pending::steer_pending_prompt),
         )
         .route(
             "/sessions/{session_id}/prompt-attachments/{attachment_id}",

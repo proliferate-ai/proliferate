@@ -32,6 +32,12 @@ export interface UseTranscriptStickToBottomOptions {
   onScrollSample: (sample?: TranscriptScrollSample) => void;
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
+  /**
+   * Bottom inset (spacer height). The engine tracks changes to suppress snaps
+   * when the inset grows (permission cards, etc.) while keeping the viewport
+   * stable, then restores pinning when the inset shrinks back.
+   */
+  bottomInsetPx?: number;
 }
 
 export interface TranscriptStickToBottom {
@@ -64,12 +70,18 @@ export function useTranscriptStickToBottom({
   scrollRef,
   onScrollSample,
   repinThresholdPx = REPIN_BOTTOM_THRESHOLD_PX,
+  bottomInsetPx = 0,
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
   const programmaticRef = useRef<{ expectedTop: number; frame: number } | null>(null);
   const glueFrameRef = useRef<number | null>(null);
+
+  // Suppressed-pin tracking: when the inset grows while pinned, we suppress
+  // snapping but remember we were pinned so we can restore on shrink.
+  const lastInsetRef = useRef(bottomInsetPx);
+  const suppressedPinRef = useRef(false);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -136,6 +148,11 @@ export function useTranscriptStickToBottom({
       return;
     }
 
+    // User scroll: clear suppression so shrink won't re-pin (they moved away).
+    if (suppressedPinRef.current) {
+      suppressedPinRef.current = false;
+    }
+
     const distance = resolveVirtualBottomDistance({
       scrollOffset: top,
       viewportSize: viewport.clientHeight,
@@ -166,8 +183,9 @@ export function useTranscriptStickToBottom({
     let totalFrames = 0;
     const tick = () => {
       const viewport = scrollRef.current;
-      // Bail the moment the user reclaims control (an intent listener unpins).
-      if (!viewport || !pinnedRef.current) {
+      // Bail the moment the user reclaims control (an intent listener unpins)
+      // or we enter suppressed state (inset grew).
+      if (!viewport || !pinnedRef.current || suppressedPinRef.current) {
         glueFrameRef.current = null;
         return;
       }
@@ -201,10 +219,37 @@ export function useTranscriptStickToBottom({
     }
     programmaticRef.current = null;
     lastScrollTopRef.current = 0;
+    suppressedPinRef.current = false;
+    lastInsetRef.current = bottomInsetPx;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
-  }, [scrollToBottom, setPinned, startGlueLoop]);
+  }, [bottomInsetPx, scrollToBottom, setPinned, startGlueLoop]);
+
+  // Inset tracking: when the inset grows while pinned, suppress the snap and
+  // remember we were pinned. When it shrinks back and we're still suppressed
+  // (user didn't scroll away), restore pinning with a snap.
+  useEffect(() => {
+    const previous = lastInsetRef.current;
+    const current = bottomInsetPx;
+    lastInsetRef.current = current;
+
+    if (current === previous) {
+      return;
+    }
+
+    const delta = current - previous;
+    if (delta > 0 && pinnedRef.current) {
+      // Inset grew while pinned: suppress (freeze viewport, no snap).
+      suppressedPinRef.current = true;
+      setPinned(false);
+    } else if (delta < 0 && suppressedPinRef.current) {
+      // Inset shrank while suppressed: restore pinning and snap back to bottom.
+      suppressedPinRef.current = false;
+      setPinned(true);
+      scrollToBottom();
+    }
+  }, [bottomInsetPx, scrollToBottom, setPinned]);
 
   // Pre-emptive intent-to-leave: flip the pin ref synchronously when the user
   // acts, BEFORE the next per-frame snap effect reads it, so the snap bails and
@@ -221,6 +266,8 @@ export function useTranscriptStickToBottom({
     // would strand the engine unpinned (no scroll event follows to re-pin).
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY < 0 && viewportCanScroll(viewport)) {
+        // User scrolling up: clear suppression and unpin.
+        suppressedPinRef.current = false;
         setPinned(false);
       }
     };
@@ -229,6 +276,7 @@ export function useTranscriptStickToBottom({
         (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") &&
         viewportCanScroll(viewport)
       ) {
+        suppressedPinRef.current = false;
         setPinned(false);
       }
     };
@@ -239,6 +287,7 @@ export function useTranscriptStickToBottom({
       const y = event.touches[0]?.clientY ?? touchStartY;
       // Finger dragging down reveals content above (scrolls toward history).
       if (y - touchStartY > DIRECTION_EPSILON_PX && viewportCanScroll(viewport)) {
+        suppressedPinRef.current = false;
         setPinned(false);
       }
     };

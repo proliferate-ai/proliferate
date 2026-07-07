@@ -15,6 +15,7 @@ interface UseChatComposerKeyboardArgs {
   modeControl: LiveSessionControlDescriptor | null;
   isEditingQueuedPrompt?: boolean;
   onCancelEdit?: () => void;
+  onEditLastQueued?: () => void;
 }
 
 export function useChatComposerKeyboard({
@@ -25,6 +26,7 @@ export function useChatComposerKeyboard({
   modeControl,
   isEditingQueuedPrompt = false,
   onCancelEdit,
+  onEditLastQueued,
 }: UseChatComposerKeyboardArgs) {
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
@@ -68,6 +70,27 @@ export function useChatComposerKeyboard({
       }
     }
 
+    if (
+      event.key === COMPOSER_SHORTCUTS.editLastQueued.key
+      && !event.shiftKey
+      && !event.altKey
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.nativeEvent.isComposing
+      && !isEditingQueuedPrompt
+      && onEditLastQueued
+    ) {
+      const textarea = event.currentTarget;
+      const hasSelection = textarea.selectionStart !== textarea.selectionEnd;
+      const caretAtStart = textarea.selectionStart === 0 && textarea.selectionEnd === 0;
+      const isEmpty = textarea.value.length === 0;
+      if (!hasSelection && (caretAtStart || isEmpty)) {
+        event.preventDefault();
+        onEditLastQueued();
+        return;
+      }
+    }
+
     if (isRepeatedComposerSubmitKey(event)) {
       event.preventDefault();
       return;
@@ -77,7 +100,7 @@ export function useChatComposerKeyboard({
       event.preventDefault();
       void handleSubmit();
     }
-  }, [canSubmit, handleCancel, handleSubmit, isEditingQueuedPrompt, isRunning, modeControl, onCancelEdit]);
+  }, [canSubmit, handleCancel, handleSubmit, isEditingQueuedPrompt, isRunning, modeControl, onCancelEdit, onEditLastQueued]);
 
   return {
     handleKeyDown,

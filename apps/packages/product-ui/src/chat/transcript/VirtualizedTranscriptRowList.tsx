@@ -79,7 +79,7 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+  } = useTranscriptStickToBottom({ scrollRef, onScrollSample, bottomInsetPx });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],

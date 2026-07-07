@@ -196,6 +196,67 @@ impl SessionStore {
             Ok(record)
         })
     }
+
+    /// Reorder existing pending prompts so their `seq` values match the given
+    /// order. `ordered_seqs` must contain exactly the set of seq values that
+    /// currently exist for this session (no duplicates, no extras, no missing).
+    /// Returns the full list of records in the new order.
+    pub fn reorder_pending_prompts(
+        &self,
+        session_id: &str,
+        ordered_seqs: &[i64],
+    ) -> anyhow::Result<Vec<PendingPromptRecord>> {
+        self.db.with_tx_anyhow(|tx| {
+            // Fetch all current seqs for validation.
+            let mut stmt = tx.prepare(
+                "SELECT seq FROM session_pending_prompts WHERE session_id = ?1 ORDER BY seq ASC",
+            )?;
+            let existing: Vec<i64> = stmt
+                .query_map([session_id], |row| row.get(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+
+            // Validate: same set (no duplicates, no extras, no missing).
+            let mut sorted_requested = ordered_seqs.to_vec();
+            sorted_requested.sort_unstable();
+            sorted_requested.dedup();
+            let mut sorted_existing = existing.clone();
+            sorted_existing.sort_unstable();
+            if sorted_requested != sorted_existing {
+                anyhow::bail!(
+                    "reorder seqs mismatch: expected {:?}, got {:?}",
+                    sorted_existing,
+                    sorted_requested
+                );
+            }
+
+            // Renumber: assign fresh seq values starting from 1, in the order
+            // specified by `ordered_seqs`. Use a temp negative offset to avoid
+            // UNIQUE constraint violations during reassignment.
+            for (idx, &old_seq) in ordered_seqs.iter().enumerate() {
+                let temp_seq = -(idx as i64 + 1);
+                tx.execute(
+                    "UPDATE session_pending_prompts SET seq = ?3 WHERE session_id = ?1 AND seq = ?2",
+                    params![session_id, old_seq, temp_seq],
+                )?;
+            }
+            for idx in 0..ordered_seqs.len() {
+                let temp_seq = -(idx as i64 + 1);
+                let new_seq = idx as i64 + 1;
+                tx.execute(
+                    "UPDATE session_pending_prompts SET seq = ?3 WHERE session_id = ?1 AND seq = ?2",
+                    params![session_id, temp_seq, new_seq],
+                )?;
+            }
+
+            // Return the records in new order.
+            let mut load_stmt = tx.prepare(
+                "SELECT * FROM session_pending_prompts WHERE session_id = ?1 ORDER BY seq ASC",
+            )?;
+            let rows = load_stmt.query_map([session_id], map_pending_prompt)?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(Into::into)
+        })
+    }
 }
 
 fn map_pending_prompt(row: &rusqlite::Row) -> rusqlite::Result<PendingPromptRecord> {

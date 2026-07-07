@@ -164,6 +164,10 @@ pub trait QueueDurable: Send + Sync {
         payload: &PromptPayload,
         prompt_id: Option<&str>,
     ) -> anyhow::Result<PendingPromptRecord>;
+    fn list_pending_prompts(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<PendingPromptRecord>>;
     fn peek_head_pending_prompt(
         &self,
         session_id: &str,
@@ -185,6 +189,11 @@ pub trait QueueDurable: Send + Sync {
         session_id: &str,
         seq: i64,
     ) -> anyhow::Result<Option<PendingPromptRecord>>;
+    fn reorder_pending_prompts(
+        &self,
+        session_id: &str,
+        ordered_seqs: &[i64],
+    ) -> anyhow::Result<Vec<PendingPromptRecord>>;
 }
 
 /// Durable background-work tracker rows.

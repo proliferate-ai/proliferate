@@ -3296,7 +3296,7 @@ export interface components {
             text: string;
         };
         /** @enum {string} */
-        PendingPromptRemovalReason: "executed" | "deleted";
+        PendingPromptRemovalReason: "executed" | "deleted" | "steered";
         PendingPromptRemovedPayload: {
             promptId?: string | null;
             reason: components["schemas"]["PendingPromptRemovalReason"];
@@ -3319,6 +3319,9 @@ export interface components {
             /** Format: int64 */
             seq: number;
             text: string;
+        };
+        PendingPromptsReorderedPayload: {
+            pendingPrompts: components["schemas"]["PendingPromptSummary"][];
         };
         PermissionInteractionContext: {
             agentId?: string | null;
@@ -4043,6 +4046,9 @@ export interface components {
         }) | (components["schemas"]["PendingPromptRemovedPayload"] & {
             /** @enum {string} */
             type: "pending_prompt_removed";
+        }) | (components["schemas"]["PendingPromptsReorderedPayload"] & {
+            /** @enum {string} */
+            type: "pending_prompts_reordered";
         }) | (components["schemas"]["InteractionRequestedEvent"] & {
             /** @enum {string} */
             type: "interaction_requested";

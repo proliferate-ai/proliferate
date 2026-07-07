@@ -78,6 +78,13 @@ impl QueueDurable for SessionStore {
         SessionStore::insert_pending_prompt_payload(self, session_id, payload, prompt_id)
     }
 
+    fn list_pending_prompts(
+        &self,
+        session_id: &str,
+    ) -> anyhow::Result<Vec<PendingPromptRecord>> {
+        SessionStore::list_pending_prompts(self, session_id)
+    }
+
     fn peek_head_pending_prompt(
         &self,
         session_id: &str,
@@ -112,6 +119,14 @@ impl QueueDurable for SessionStore {
         seq: i64,
     ) -> anyhow::Result<Option<PendingPromptRecord>> {
         SessionStore::delete_pending_prompt_record(self, session_id, seq)
+    }
+
+    fn reorder_pending_prompts(
+        &self,
+        session_id: &str,
+        ordered_seqs: &[i64],
+    ) -> anyhow::Result<Vec<PendingPromptRecord>> {
+        SessionStore::reorder_pending_prompts(self, session_id, ordered_seqs)
     }
 }
 

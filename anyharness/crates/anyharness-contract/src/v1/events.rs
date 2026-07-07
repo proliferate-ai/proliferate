@@ -76,6 +76,7 @@ pub enum SessionEvent {
     PendingPromptAdded(PendingPromptAddedPayload),
     PendingPromptUpdated(PendingPromptUpdatedPayload),
     PendingPromptRemoved(PendingPromptRemovedPayload),
+    PendingPromptsReordered(PendingPromptsReorderedPayload),
 
     #[serde(alias = "permission_requested")]
     InteractionRequested(InteractionRequestedEvent),
@@ -114,6 +115,7 @@ impl SessionEvent {
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
             Self::PendingPromptRemoved(_) => "pending_prompt_removed",
+            Self::PendingPromptsReordered(_) => "pending_prompts_reordered",
             Self::InteractionRequested(_) => "interaction_requested",
             Self::InteractionResolved(_) => "interaction_resolved",
             Self::Error(_) => "error",
@@ -814,6 +816,13 @@ pub struct PendingPromptRemovedPayload {
 pub enum PendingPromptRemovalReason {
     Executed,
     Deleted,
+    Steered,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingPromptsReorderedPayload {
+    pub pending_prompts: Vec<super::PendingPromptSummary>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

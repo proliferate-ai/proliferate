@@ -1,6 +1,7 @@
+use agent_client_protocol as acp;
 use anyharness_contract::v1::{
     PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
-    PendingPromptUpdatedPayload,
+    PendingPromptUpdatedPayload, PendingPromptsReorderedPayload,
 };
 
 use crate::domains::sessions::model::{PromptAttachmentRecord, PromptAttachmentState};
@@ -223,6 +224,121 @@ impl SessionActor {
                 Err(QueueMutationError::NotFound)
             }
         }
+    }
+
+    pub(in crate::live::sessions::actor) async fn handle_reorder_pending_prompts(
+        &self,
+        ordered_seqs: Vec<i64>,
+    ) -> Result<(), QueueMutationError> {
+        match self
+            .caps
+            .queue
+            .reorder_pending_prompts(&self.session_id, &ordered_seqs)
+        {
+            Ok(records) => {
+                let summaries = records.iter().map(|r| r.to_contract()).collect();
+                let mut sink = self.event_sink.lock().await;
+                sink.pending_prompts_reordered(PendingPromptsReorderedPayload {
+                    pending_prompts: summaries,
+                });
+                Ok(())
+            }
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    error = %error,
+                    "failed to reorder pending prompts",
+                );
+                Err(QueueMutationError::InvalidReorder(error.to_string()))
+            }
+        }
+    }
+
+    /// Steer: promote a queued prompt to immediate execution.
+    ///
+    /// Since native injection (sending a second session/prompt on an active ACP
+    /// connection) requires significant restructuring of the actor select loop
+    /// and careful management of a second prompt future, this implementation
+    /// uses the interrupt-based approach for all agents:
+    /// - Move the target prompt to queue head (reorder so it becomes seq 1).
+    /// - Send a CancelNotification to interrupt the current turn.
+    /// - The existing drain loop will pick up the promoted prompt after the
+    ///   cancelled turn finishes.
+    ///
+    /// When idle, just reorder to head; the next drain or prompt dispatch picks
+    /// it up.
+    pub(in crate::live::sessions::actor) async fn handle_steer_pending_prompt(
+        &self,
+        seq: i64,
+        is_busy: bool,
+    ) -> Result<(), QueueMutationError> {
+        // Verify the target prompt exists.
+        match self.caps.queue.find_pending_prompt(&self.session_id, seq) {
+            Ok(Some(_)) => {}
+            Ok(None) => return Err(QueueMutationError::NotFound),
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    seq,
+                    error = %error,
+                    "failed to find pending prompt for steer",
+                );
+                return Err(QueueMutationError::NotFound);
+            }
+        }
+
+        // List all current prompts and reorder so target is first.
+        let current = match self.caps.queue.list_pending_prompts(&self.session_id) {
+            Ok(list) => list,
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    error = %error,
+                    "failed to list pending prompts for steer",
+                );
+                return Err(QueueMutationError::NotFound);
+            }
+        };
+
+        let current_seqs: Vec<i64> = current.iter().map(|r| r.seq).collect();
+        // Build new order: target first, then rest in original order.
+        let mut new_order = vec![seq];
+        for &s in &current_seqs {
+            if s != seq {
+                new_order.push(s);
+            }
+        }
+
+        match self
+            .caps
+            .queue
+            .reorder_pending_prompts(&self.session_id, &new_order)
+        {
+            Ok(records) => {
+                let summaries = records.iter().map(|r| r.to_contract()).collect();
+                let mut sink = self.event_sink.lock().await;
+                sink.pending_prompts_reordered(PendingPromptsReorderedPayload {
+                    pending_prompts: summaries,
+                });
+            }
+            Err(error) => {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    error = %error,
+                    "failed to reorder for steer",
+                );
+                return Err(QueueMutationError::InvalidReorder(error.to_string()));
+            }
+        }
+
+        // If busy, cancel the current turn so drain picks up the promoted head.
+        if is_busy {
+            let _ = self.conn.send_notification(
+                acp::schema::CancelNotification::new(self.native_session_id.clone()),
+            );
+        }
+
+        Ok(())
     }
 }
 

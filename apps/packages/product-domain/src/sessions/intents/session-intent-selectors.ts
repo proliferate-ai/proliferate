@@ -89,12 +89,13 @@ export function renderableOutboxEntriesForTranscript(
       renderableEntries.push(entry);
       continue;
     }
-    // A submitted message must NEVER be invisible: queue-placed entries
-    // (sends while the session is busy) render in the transcript exactly like
-    // transcript-placed ones, in outbox order, until the real user_message
-    // echo replaces them. Placement still controls DELIVERY semantics (when
-    // the prompt dispatches) — previously queue-placed sends vanished from
-    // the conversation until the current turn finished.
+    // Queue-placed entries render in the dock's pending-prompt list, NOT in
+    // the transcript — showing them here would double-render. Only
+    // transcript-placed entries (immediate sends, in-flight prompts) and
+    // failed-before-dispatch entries render in-thread.
+    if (entry.placement === "queue") {
+      continue;
+    }
     if (!isTerminal && !isEchoed) {
       renderableEntries.push(entry);
     }

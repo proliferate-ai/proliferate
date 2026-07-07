@@ -96,6 +96,15 @@ export interface DesktopProductEventMap {
     agent_kind: string;
     workspace_kind: DesktopWorkspaceKind;
   };
+  chat_pending_prompts_reordered: {
+    agent_kind: string;
+    workspace_kind: DesktopWorkspaceKind;
+    count: number;
+  };
+  chat_pending_prompt_steered: {
+    agent_kind: string;
+    workspace_kind: DesktopWorkspaceKind;
+  };
   chat_prompt_submitted: {
     agent_kind: string;
     reuse_session: boolean;

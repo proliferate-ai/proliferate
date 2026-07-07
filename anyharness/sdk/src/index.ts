@@ -353,6 +353,7 @@ export type {
   PendingPromptAddedEvent,
   PendingPromptUpdatedEvent,
   PendingPromptRemovedEvent,
+  PendingPromptsReorderedEvent,
   PendingPromptRemovalReason,
   InteractionKind,
   InteractionSource,

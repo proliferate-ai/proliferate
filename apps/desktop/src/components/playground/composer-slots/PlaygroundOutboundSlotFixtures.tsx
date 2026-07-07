@@ -22,24 +22,36 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
       return (
         <PendingPromptList
           entries={pendingQueueRows(PENDING_PROMPTS_SINGLE)}
+          steeringSeq={null}
+          sessionMaterialized={true}
           onBeginEdit={noop}
           onDelete={noop}
+          onSteer={noop}
+          onReorder={noop}
         />
       );
     case "pending-prompts-multi":
       return (
         <PendingPromptList
           entries={pendingQueueRows(PENDING_PROMPTS_MULTI)}
+          steeringSeq={null}
+          sessionMaterialized={true}
           onBeginEdit={noop}
           onDelete={noop}
+          onSteer={noop}
+          onReorder={noop}
         />
       );
     case "pending-prompts-editing":
       return (
         <PendingPromptList
           entries={pendingQueueRows(PENDING_PROMPTS_WITH_EDITING)}
+          steeringSeq={null}
+          sessionMaterialized={true}
           onBeginEdit={noop}
           onDelete={noop}
+          onSteer={noop}
+          onReorder={noop}
         />
       );
     case "subagents-queued-wake":
@@ -47,8 +59,12 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
       return (
         <PendingPromptList
           entries={pendingQueueRows(PLAYGROUND_SUBAGENT_WAKE_QUEUE)}
+          steeringSeq={null}
+          sessionMaterialized={true}
           onBeginEdit={noop}
           onDelete={noop}
+          onSteer={noop}
+          onReorder={noop}
         />
       );
     default:

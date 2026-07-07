@@ -426,6 +426,46 @@ export function useDeletePendingPromptMutation(options?: { workspaceId?: string 
   });
 }
 
+export function useReorderPendingPromptsMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; seqs: number[] }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.reorderPendingPrompts(input.sessionId, input.seqs);
+    },
+    onSuccess: async (_response, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
+    },
+  });
+}
+
+export function useSteerPendingPromptMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+  const workspaceId = options?.workspaceId ?? workspace.workspaceId;
+
+  return useMutation({
+    mutationFn: async (input: { sessionId: string; seq: number }) => {
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.steerPendingPrompt(input.sessionId, input.seq);
+    },
+    onSuccess: async (_response, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+      });
+    },
+  });
+}
+
 export function useResumeSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();

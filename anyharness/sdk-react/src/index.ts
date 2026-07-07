@@ -159,6 +159,8 @@ export {
   useForkSessionMutation,
   useEditPendingPromptMutation,
   useDeletePendingPromptMutation,
+  useReorderPendingPromptsMutation,
+  useSteerPendingPromptMutation,
   useResumeSessionMutation,
   useUpdateSessionTitleMutation,
   useSetSessionGoalMutation,

@@ -108,6 +108,14 @@ impl SessionActor {
                 let _ = respond_to.send(self.handle_delete_pending_prompt(seq).await);
                 None
             }
+            SessionCommand::ReorderPendingPrompts { ordered_seqs, respond_to } => {
+                let _ = respond_to.send(self.handle_reorder_pending_prompts(ordered_seqs).await);
+                None
+            }
+            SessionCommand::SteerPendingPrompt { seq, respond_to } => {
+                let _ = respond_to.send(self.handle_steer_pending_prompt(seq, false).await);
+                None
+            }
             SessionCommand::ResolveInteraction {
                 request_id,
                 resolution,

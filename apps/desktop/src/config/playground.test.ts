@@ -136,11 +136,10 @@ describe("playground scenarios", () => {
     expect(html).not.toContain('aria-label="Edit queued message"');
   });
 
-  it("keeps queued rows single-line and hides edit on the active edit row", () => {
+  it("keeps queued rows compact and hides edit on the active edit row", () => {
     const plainHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-multi"));
-    expect(plainHtml).toContain("truncate");
+    expect(plainHtml).toContain("line-clamp-2");
     expect(plainHtml).toContain("min-w-0");
-    expect(plainHtml).not.toContain("whitespace-pre-wrap");
     // Head-of-queue entry is dispatching: it shows the "Sending…" shimmer
     // state hint and drops the edit affordance while in flight.
     expect(plainHtml).toContain("Sending…");

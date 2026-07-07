@@ -145,6 +145,10 @@ export type PendingPromptUpdatedEvent = PendingPromptUpdatedPayload & {
 export type PendingPromptRemovedEvent = PendingPromptRemovedPayload & {
   type: "pending_prompt_removed";
 };
+export type PendingPromptsReorderedEvent = {
+  type: "pending_prompts_reordered";
+  pendingPrompts: PendingPromptSummary[];
+};
 export type PendingPromptRemovalReason =
   components["schemas"]["PendingPromptRemovalReason"];
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
@@ -239,6 +243,7 @@ export type SessionEvent =
   | PendingPromptAddedEvent
   | PendingPromptUpdatedEvent
   | PendingPromptRemovedEvent
+  | PendingPromptsReorderedEvent
   | InteractionRequestedEvent
   | InteractionResolvedEvent
   | ErrorEvent;

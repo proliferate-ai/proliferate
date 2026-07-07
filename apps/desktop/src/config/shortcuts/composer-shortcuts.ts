@@ -17,6 +17,11 @@ export const COMPOSER_SHORTCUTS = {
     label: "Esc",
     description: "Stop running session",
   },
+  editLastQueued: {
+    key: "ArrowUp",
+    label: "↑",
+    description: "Edit last queued message",
+  },
 } as const satisfies Record<string, ComposerShortcutDef>;
 
 export type ComposerShortcutKey = keyof typeof COMPOSER_SHORTCUTS;

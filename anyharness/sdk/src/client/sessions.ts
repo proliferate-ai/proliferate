@@ -309,6 +309,34 @@ export class SessionsClient {
     );
   }
 
+  async reorderPendingPrompts(
+    sessionId: string,
+    seqs: number[],
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.put<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/order`,
+        { seqs },
+        options,
+      ),
+    );
+  }
+
+  async steerPendingPrompt(
+    sessionId: string,
+    seq: number,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.post<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/${encodeURIComponent(String(seq))}/steer`,
+        {},
+        options,
+      ),
+    );
+  }
+
   async resume(sessionId: string): Promise<Session>;
   async resume(sessionId: string, options?: AnyHarnessRequestOptions): Promise<Session>;
   async resume(

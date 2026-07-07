@@ -12213,7 +12213,8 @@
         "type": "string",
         "enum": [
           "executed",
-          "deleted"
+          "deleted",
+          "steered"
         ]
       },
       "PendingPromptRemovedPayload": {
@@ -12315,6 +12316,20 @@
           },
           "text": {
             "type": "string"
+          }
+        }
+      },
+      "PendingPromptsReorderedPayload": {
+        "type": "object",
+        "required": [
+          "pendingPrompts"
+        ],
+        "properties": {
+          "pendingPrompts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingPromptSummary"
+            }
           }
         }
       },
@@ -15533,6 +15548,27 @@
                     "type": "string",
                     "enum": [
                       "pending_prompt_removed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PendingPromptsReorderedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pending_prompts_reordered"
                     ]
                   }
                 }

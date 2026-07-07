@@ -67,7 +67,7 @@ export function FullTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+  } = useTranscriptStickToBottom({ scrollRef, onScrollSample, bottomInsetPx });
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,

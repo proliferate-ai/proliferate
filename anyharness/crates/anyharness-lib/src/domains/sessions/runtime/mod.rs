@@ -166,6 +166,14 @@ pub enum PendingPromptMutationError {
 }
 
 #[derive(Debug)]
+pub enum PendingPromptQueueError {
+    SessionNotFound(String),
+    NotFound,
+    InvalidReorder(String),
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
 pub enum SessionLifecycleError {
     SessionNotFound(String),
     Internal(anyhow::Error),

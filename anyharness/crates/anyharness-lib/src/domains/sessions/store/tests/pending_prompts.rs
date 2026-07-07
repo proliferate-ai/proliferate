@@ -2,6 +2,73 @@ use super::*;
 use crate::domains::sessions::model::SessionLiveConfigSnapshotRecord;
 use crate::domains::sessions::prompt::{provenance::PromptProvenance, PromptPayload};
 
+#[test]
+fn reorder_pending_prompts_renumbers_seq_values() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+    store.insert(&session_record()).expect("insert session");
+
+    // Insert three prompts: seq 1, 2, 3
+    store
+        .insert_pending_prompt("session-1", "first", Some("p1"))
+        .expect("insert");
+    store
+        .insert_pending_prompt("session-1", "second", Some("p2"))
+        .expect("insert");
+    store
+        .insert_pending_prompt("session-1", "third", Some("p3"))
+        .expect("insert");
+
+    // Reorder: [3, 1, 2] → "third" becomes seq 1, "first" becomes seq 2, "second" becomes seq 3
+    let reordered = store
+        .reorder_pending_prompts("session-1", &[3, 1, 2])
+        .expect("reorder");
+
+    assert_eq!(reordered.len(), 3);
+    assert_eq!(reordered[0].seq, 1);
+    assert_eq!(reordered[0].text, "third");
+    assert_eq!(reordered[1].seq, 2);
+    assert_eq!(reordered[1].text, "first");
+    assert_eq!(reordered[2].seq, 3);
+    assert_eq!(reordered[2].text, "second");
+
+    // Verify list also returns the reordered result
+    let listed = store
+        .list_pending_prompts("session-1")
+        .expect("list");
+    assert_eq!(listed[0].text, "third");
+    assert_eq!(listed[1].text, "first");
+    assert_eq!(listed[2].text, "second");
+}
+
+#[test]
+fn reorder_pending_prompts_rejects_mismatched_seqs() {
+    let db = Db::open_in_memory().expect("open db");
+    seed_workspace(&db);
+    let store = SessionStore::new(db);
+    store.insert(&session_record()).expect("insert session");
+
+    store
+        .insert_pending_prompt("session-1", "first", None)
+        .expect("insert");
+    store
+        .insert_pending_prompt("session-1", "second", None)
+        .expect("insert");
+
+    // Missing seq 2
+    let result = store.reorder_pending_prompts("session-1", &[1]);
+    assert!(result.is_err());
+
+    // Extra seq 99
+    let result = store.reorder_pending_prompts("session-1", &[1, 2, 99]);
+    assert!(result.is_err());
+
+    // Duplicate
+    let result = store.reorder_pending_prompts("session-1", &[1, 1]);
+    assert!(result.is_err());
+}
+
 /// Equality proof for the batched list-page queries: the bulk forms must
 /// return exactly what the per-session queries return, so the list endpoint's
 /// switch from N+1 to batched fetching cannot change the response.

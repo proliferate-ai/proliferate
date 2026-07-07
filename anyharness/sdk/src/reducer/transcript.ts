@@ -304,6 +304,17 @@ export function reduceEvent(
       );
       break;
 
+    case "pending_prompts_reordered":
+      s.pendingPrompts = (evt.pendingPrompts ?? []).map((summary) => ({
+        seq: summary.seq,
+        promptId: summary.promptId ?? null,
+        text: summary.text,
+        contentParts: normalizeContentParts(summary.contentParts ?? []),
+        queuedAt: summary.queuedAt,
+        promptProvenance: summary.promptProvenance ?? null,
+      }));
+      break;
+
     case "interaction_requested":
       applyInteractionRequested(s, evt);
       break;

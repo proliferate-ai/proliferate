@@ -5531,6 +5531,8 @@ export interface components {
             worker?: string | null;
             /** Anyharness */
             anyharness: string;
+            /** Catalogversion */
+            catalogVersion?: string | null;
         };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
