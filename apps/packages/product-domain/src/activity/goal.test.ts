@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   deriveGoalBarState,
   goalFailureDetail,
+  goalMetMarkerLabel,
+  goalResultStats,
+  goalResultWhyLabel,
   goalStatusLabel,
   goalStatusTone,
+  humanizeGoalDurationSeconds,
   parseGoalWire,
   truncateGoalObjective,
   type GoalWire,
@@ -155,5 +159,61 @@ describe("display reducers", () => {
     expect(preview.endsWith("…")).toBe(true);
     expect(truncateGoalObjective("exact", 5)).toBe("exact");
     expect(truncateGoalObjective("sixsix", 5)).toBe("sixs…");
+  });
+
+  it("labels the expand popover's why-section per outcome", () => {
+    expect(goalResultWhyLabel("met")).toBe("Why it's met");
+    expect(goalResultWhyLabel("blocked")).toBe("Why it's blocked");
+    expect(goalResultWhyLabel("failed")).toBe("Why it stopped");
+  });
+});
+
+describe("humanizeGoalDurationSeconds", () => {
+  it("formats sub-minute durations as bare seconds", () => {
+    expect(humanizeGoalDurationSeconds(0)).toBe("0s");
+    expect(humanizeGoalDurationSeconds(45)).toBe("45s");
+  });
+
+  it("formats minute-scale durations, dropping a zero seconds remainder", () => {
+    expect(humanizeGoalDurationSeconds(312)).toBe("5m 12s");
+    expect(humanizeGoalDurationSeconds(300)).toBe("5m");
+  });
+
+  it("formats hour-scale durations, dropping a zero minutes remainder", () => {
+    expect(humanizeGoalDurationSeconds(4_320)).toBe("1h 12m");
+    expect(humanizeGoalDurationSeconds(7_200)).toBe("2h");
+  });
+
+  it("clamps negative input to zero", () => {
+    expect(humanizeGoalDurationSeconds(-5)).toBe("0s");
+  });
+});
+
+describe("goalResultStats", () => {
+  it("returns an empty row when the goal carries no usage data", () => {
+    expect(goalResultStats(goal())).toEqual([]);
+  });
+
+  it("includes only the fields the harness reported, each humanized", () => {
+    expect(goalResultStats(goal({ iterations: 4, tokensUsed: 41_872, timeUsedSeconds: 312 }))).toEqual([
+      { key: "iterations", text: "4 iterations" },
+      { key: "tokensUsed", text: "41,872 tokens" },
+      { key: "timeUsedSeconds", text: "5m 12s" },
+    ]);
+    expect(goalResultStats(goal({ iterations: 1 }))).toEqual([
+      { key: "iterations", text: "1 iteration" },
+    ]);
+  });
+});
+
+describe("goalMetMarkerLabel", () => {
+  it("appends the humanized elapsed time when timeUsedSeconds is reported", () => {
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: 40 }))).toBe("Goal achieved in 40s");
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: 312 }))).toBe("Goal achieved in 5m 12s");
+  });
+
+  it("falls back to a bare 'Goal achieved' when no time is available", () => {
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: null }))).toBe("Goal achieved");
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: 0 }))).toBe("Goal achieved");
   });
 });

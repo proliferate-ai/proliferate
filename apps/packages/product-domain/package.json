@@ -15,6 +15,22 @@
       "types": "./dist/activity/goal-transcript-events.d.ts",
       "import": "./dist/activity/goal-transcript-events.js"
     },
+    "./activity/loop": {
+      "types": "./dist/activity/loop.d.ts",
+      "import": "./dist/activity/loop.js"
+    },
+    "./activity/process": {
+      "types": "./dist/activity/process.d.ts",
+      "import": "./dist/activity/process.js"
+    },
+    "./activity/subagent": {
+      "types": "./dist/activity/subagent.d.ts",
+      "import": "./dist/activity/subagent.js"
+    },
+    "./activity/chips": {
+      "types": "./dist/activity/chips.d.ts",
+      "import": "./dist/activity/chips.js"
+    },
     "./auth/model": {
       "types": "./dist/auth/model.d.ts",
       "import": "./dist/auth/model.js"

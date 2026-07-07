@@ -4,6 +4,7 @@ import {
   type PendingPromptEntry,
   type Session,
   type SessionActionCapabilities,
+  type SessionActivity,
   type SessionExecutionSummary,
   type SessionLiveConfigSnapshot,
   type SessionMcpBindingSummary,
@@ -43,6 +44,7 @@ export function createEmptySessionRecord(
     executionSummary?: SessionExecutionSummary | null;
     mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
     activeGoal?: Goal | null;
+    sessionActivity?: SessionActivity | null;
     lastPromptAt?: string | null;
     hasAttemptedPrompt?: boolean;
     optimisticPrompt?: PendingPromptEntry | null;
@@ -78,6 +80,7 @@ export function createEmptySessionRecord(
     executionSummary: config?.executionSummary ?? null,
     mcpBindingSummaries: config?.mcpBindingSummaries ?? null,
     activeGoal: config?.activeGoal ?? null,
+    sessionActivity: config?.sessionActivity ?? null,
     pendingConfigChanges: config?.pendingConfigChanges ?? {},
     lastPromptAt: config?.lastPromptAt ?? null,
     hasAttemptedPrompt: config?.hasAttemptedPrompt ?? false,
@@ -119,6 +122,7 @@ export function createSessionRecordFromSummary(
     executionSummary: session.executionSummary ?? null,
     mcpBindingSummaries: session.mcpBindingSummaries ?? null,
     activeGoal: session.activeGoal ?? null,
+    sessionActivity: session.activity ?? null,
     lastPromptAt: session.lastPromptAt ?? null,
     sessionRelationship: options?.sessionRelationship ?? { kind: "pending" },
   });
@@ -177,6 +181,9 @@ export function patchSessionRecord(
     }
     if ("activeGoal" in patch) {
       directoryPatch.activeGoal = patch.activeGoal ?? null;
+    }
+    if ("sessionActivity" in patch) {
+      directoryPatch.sessionActivity = patch.sessionActivity ?? null;
     }
     if ("pendingConfigChanges" in patch && patch.pendingConfigChanges) {
       directoryPatch.pendingConfigChanges = patch.pendingConfigChanges;

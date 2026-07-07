@@ -48,9 +48,34 @@ const GOAL_EVENT_TYPES = new Set(["goal_updated", "goal_met", "goal_cleared"]);
  * text changes, the status changes, or a terminal event (met/cleared)
  * fires.
  */
+export interface DeriveGoalTranscriptEventsOptions {
+  /**
+   * Whether to emit `set`/`edited` rows. False on harnesses where a goal
+   * edit steers the running turn live with no discrete "applied" moment
+   * (codex), where such a row would misrepresent what happened. All other
+   * kinds (paused/resumed/blocked/failed/cleared) are always emitted —
+   * terminal/status rows show for every harness. Gated on the caller's
+   * `GoalCapabilities.setEditTranscriptRows` flag, never a harness name.
+   */
+  includeSetEdit: boolean;
+  /**
+   * Whether to emit a standalone `met` row. False for the transcript row
+   * model, where the "goal met" outcome is surfaced inline in the final
+   * completed message's action footer (a codex-style "✓ Goal achieved in
+   * Xs" marker) instead of a standalone system row. Failed/blocked/cleared
+   * always keep their standalone rows. Defaults to true so non-transcript
+   * callers (playground fixtures, tests) still see the met row.
+   */
+  includeMet?: boolean;
+}
+
+const DEFAULT_OPTIONS: DeriveGoalTranscriptEventsOptions = { includeSetEdit: true };
+
 export function deriveGoalTranscriptEvents(
   envelopes: readonly SessionEventEnvelope[],
+  options: DeriveGoalTranscriptEventsOptions = DEFAULT_OPTIONS,
 ): readonly GoalTranscriptEvent[] {
+  const { includeSetEdit, includeMet = true } = options;
   const sorted = [...envelopes].sort((left, right) => left.seq - right.seq);
   const results: GoalTranscriptEvent[] = [];
 
@@ -82,14 +107,19 @@ export function deriveGoalTranscriptEvents(
     }
 
     if (event.type === "goal_met") {
-      results.push({
-        id: goalTranscriptEventId(envelope.seq),
-        seq: envelope.seq,
-        turnId,
-        kind: "met",
-        objective: goal.objective,
-        detail: goal.metReason ?? null,
-      });
+      // The met outcome is surfaced inline in the final message's action
+      // footer, not as a standalone row (see `includeMet`). Lifecycle
+      // tracking still advances so a later set/edit classifies correctly.
+      if (includeMet) {
+        results.push({
+          id: goalTranscriptEventId(envelope.seq),
+          seq: envelope.seq,
+          turnId,
+          kind: "met",
+          objective: goal.objective,
+          detail: goal.metReason ?? null,
+        });
+      }
       priorObjective = goal.objective;
       priorStatus = goal.status;
       continue;
@@ -103,7 +133,8 @@ export function deriveGoalTranscriptEvents(
       priorObjective,
       priorStatus,
     });
-    if (kind) {
+    const suppressed = !includeSetEdit && (kind === "set" || kind === "edited");
+    if (kind && !suppressed) {
       results.push({
         id: goalTranscriptEventId(envelope.seq),
         seq: envelope.seq,

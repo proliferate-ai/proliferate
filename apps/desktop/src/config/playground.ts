@@ -83,11 +83,24 @@ export type ScenarioKey =
   | "goal-editing-multiline"
   | "goal-composing"
   | "goal-met-sticky"
+  | "goal-met-long-objective"
+  | "goal-met-expanded"
   | "goal-blocked-sticky"
+  | "goal-blocked-expanded"
   | "goal-failed-budget"
   | "goal-pending-write"
   | "goal-empty"
   | "goal-transcript-lifecycle"
+  | "activity-loops-native"
+  | "activity-loops-many"
+  | "activity-loops-emulated"
+  | "activity-loops-fired-sequence"
+  | "activity-terminals-running"
+  | "activity-terminals-mixed"
+  | "activity-agents-mixed"
+  | "activity-all-kinds"
+  | "activity-with-goal"
+  | "activity-empty"
   | "loading-states";
 
 interface Scenario {
@@ -179,11 +192,24 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "goal-editing-multiline": { label: "Goal editing (multi-line)" },
   "goal-composing": { label: "Goal composing" },
   "goal-met-sticky": { label: "Goal met" },
+  "goal-met-long-objective": { label: "Goal met (long objective)" },
+  "goal-met-expanded": { label: "Goal met (expanded)" },
   "goal-blocked-sticky": { label: "Goal blocked" },
+  "goal-blocked-expanded": { label: "Goal blocked (expanded)" },
   "goal-failed-budget": { label: "Goal failed (budget)" },
   "goal-pending-write": { label: "Goal pending write" },
   "goal-empty": { label: "Goal empty" },
   "goal-transcript-lifecycle": { label: "Goal lifecycle in transcript" },
+  "activity-loops-native": { label: "Loops (native)" },
+  "activity-loops-many": { label: "Loops (many)" },
+  "activity-loops-emulated": { label: "Loops (emulated)" },
+  "activity-loops-fired-sequence": { label: "Loops (fired sequence)" },
+  "activity-terminals-running": { label: "Terminals (running)" },
+  "activity-terminals-mixed": { label: "Terminals (mixed exit)" },
+  "activity-agents-mixed": { label: "Agents (mixed status)" },
+  "activity-all-kinds": { label: "Activity chips (all kinds)" },
+  "activity-with-goal": { label: "Activity chips + goal" },
+  "activity-empty": { label: "Activity chips empty" },
   "loading-states": { label: "Loading states" },
 };
 

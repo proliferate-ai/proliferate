@@ -249,6 +249,9 @@ export function applySessionStreamFlushBatch(
       activeGoal: streamPatch.activeGoal !== undefined
         ? streamPatch.activeGoal
         : slotState.activeGoal,
+      sessionActivity: streamPatch.sessionActivity !== undefined
+        ? streamPatch.sessionActivity
+        : slotState.sessionActivity,
       pendingConfigChanges: {},
       activity: activityFromTranscript(streamPatch.transcript, {
         status: streamPatch.status !== undefined ? streamPatch.status : slotState.status,

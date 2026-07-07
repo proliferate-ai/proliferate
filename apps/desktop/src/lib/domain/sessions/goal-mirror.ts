@@ -13,6 +13,19 @@ const NATIVE_GOAL_PAUSE_BY_AGENT_KIND: Readonly<Record<string, boolean>> = {
   codex: true,
 };
 
+/**
+ * Whether a goal set/edit applies at a discrete turn boundary for this
+ * harness (so it reads honestly as a standalone transcript row). Claude
+ * defers a `/goal` edit to the turn boundary, firing a discrete
+ * `goal_updated` — an honest "goal set/edited" moment. Codex steers the
+ * running turn live with no discrete apply, so a set/edit row would mislead;
+ * everything else defaults off. Gated on the flag downstream, never a
+ * harness name.
+ */
+const SET_EDIT_TRANSCRIPT_ROWS_BY_AGENT_KIND: Readonly<Record<string, boolean>> = {
+  claude: true,
+};
+
 export function goalCapabilitiesForSession(
   actionCapabilities: SessionActionCapabilities,
   agentKind: string,
@@ -22,6 +35,8 @@ export function goalCapabilitiesForSession(
     supported,
     native: supported,
     pause: supported && (NATIVE_GOAL_PAUSE_BY_AGENT_KIND[agentKind] ?? false),
+    setEditTranscriptRows:
+      supported && (SET_EDIT_TRANSCRIPT_ROWS_BY_AGENT_KIND[agentKind] ?? false),
   };
 }
 

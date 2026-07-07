@@ -32,6 +32,13 @@ export interface ComposerDockAttachedSlot {
    * live, rendered last so it docks directly against the composer surface.
    */
   sessionGoal: boolean;
+  /**
+   * Compact activity chips (loops/terminals/agents) that stack on the same
+   * bar row as the goal (session-activity-architecture §Locked decisions
+   * #5). Independent from `sessionGoal` — activity can be live with no goal
+   * set, so the bar must still mount.
+   */
+  sessionActivity: boolean;
 }
 
 export interface ComposerDockSlotResolution {
@@ -49,6 +56,7 @@ export interface ResolveComposerDockSlotsInput {
   hasActiveTodoTracker: boolean;
   hasDelegatedWork: boolean;
   hasSessionGoal: boolean;
+  hasSessionActivity?: boolean;
   hasWorkspaceStatusPanel: boolean;
   hasCloudRuntimePanel: boolean;
 }
@@ -61,6 +69,7 @@ export function resolveComposerDockSlots({
   hasActiveTodoTracker,
   hasDelegatedWork,
   hasSessionGoal,
+  hasSessionActivity = false,
   hasWorkspaceStatusPanel,
   hasCloudRuntimePanel,
 }: ResolveComposerDockSlotsInput): ComposerDockSlotResolution {
@@ -80,12 +89,14 @@ export function resolveComposerDockSlots({
     : null;
   const attachedDelegatedWork = !suppressSessionSlots && hasDelegatedWork;
   const attachedSessionGoal = !suppressSessionSlots && hasSessionGoal;
+  const attachedSessionActivity = !suppressSessionSlots && hasSessionActivity;
   const attachedSlot =
-    ambientSlot || attachedDelegatedWork || attachedSessionGoal
+    ambientSlot || attachedDelegatedWork || attachedSessionGoal || attachedSessionActivity
       ? {
         ambientSlot,
         delegatedWork: attachedDelegatedWork,
         sessionGoal: attachedSessionGoal,
+        sessionActivity: attachedSessionActivity,
       }
       : null;
 

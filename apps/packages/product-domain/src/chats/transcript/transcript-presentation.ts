@@ -4,6 +4,7 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
+import { isSubagentWorkComplete } from "../subagents/subagent-launch";
 import { isKnownModeSwitchToolCall } from "../tools/mode-switch-display";
 
 export type TurnDisplayBlock =
@@ -26,6 +27,12 @@ export interface TurnPresentation {
   finalAssistantItemId: string | null;
   completedHistoryRootIds: string[];
   completedHistorySummary: CompletedHistorySummary | null;
+  /**
+   * Top-level assistant-prose item ids that begin a NEW assistant message and
+   * should render a message-boundary divider immediately before them (see
+   * `computeMessageBoundaryItemIds`).
+   */
+  messageBoundaryItemIds: Set<string>;
 }
 
 export function buildTranscriptDisplayBlocks({
@@ -72,7 +79,21 @@ export function buildTranscriptDisplayBlocks({
     const item = transcript.itemsById[itemId];
     if (!item) continue;
 
+    // Route finished subagents (both MCP create_subagent and native Agent) to
+    // subagent_creations blocks. Running native subagents are hidden by the
+    // renderer (TranscriptAgentGroupBlock returns null), so they never reach
+    // this classification path.
     if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
+      flushActions();
+      pendingSubagentCreationIds.push(itemId);
+      continue;
+    }
+
+    if (
+      item.kind === "tool_call"
+      && isFinishedNativeAgentSubagent(item)
+      && isSubagentWorkComplete(item)
+    ) {
       flushActions();
       pendingSubagentCreationIds.push(itemId);
       continue;
@@ -138,23 +159,84 @@ export function buildTurnPresentation(
     finalAssistantItemId,
   );
 
+  const displayBlocks = buildTranscriptDisplayBlocks({
+    rootIds,
+    transcript,
+    childrenByParentId,
+    isComplete: !!turn.completedAt,
+  });
+  const completedHistorySummary = summarizeCompletedHistory(
+    completedHistoryRootIds,
+    transcript,
+    childrenByParentId,
+  );
+
   return {
     rootIds,
     childrenByParentId,
-    displayBlocks: buildTranscriptDisplayBlocks({
-      rootIds,
-      transcript,
-      childrenByParentId,
-      isComplete: !!turn.completedAt,
-    }),
+    displayBlocks,
     finalAssistantItemId,
     completedHistoryRootIds,
-    completedHistorySummary: summarizeCompletedHistory(
-      completedHistoryRootIds,
+    completedHistorySummary,
+    messageBoundaryItemIds: computeMessageBoundaryItemIds({
+      displayBlocks,
       transcript,
-      childrenByParentId,
-    ),
+      completedHistoryRootIds: new Set(completedHistoryRootIds),
+      hasCompletedHistorySummary: completedHistorySummary !== null,
+    }),
   };
+}
+
+/**
+ * Compute the set of top-level assistant-prose item ids that begin a NEW
+ * assistant message and therefore need a leading message-boundary divider.
+ *
+ * A boundary is inserted before a top-level `assistant_prose` `item` block when
+ * an earlier top-level `assistant_prose` block has already rendered in the same
+ * turn's displayed sequence. Blocks in between (tool activity, reasoning, plans)
+ * belong to whichever message and never reset the tracking — the divider marks
+ * the transition from one prose message to a later prose message.
+ *
+ * Blocks collapsed into the "Work history" summary are excluded: they render as
+ * a single group with its own "Final message" separator, so they must not count
+ * as top-level prose nor receive a boundary.
+ */
+export function computeMessageBoundaryItemIds({
+  displayBlocks,
+  transcript,
+  completedHistoryRootIds,
+  hasCompletedHistorySummary,
+}: {
+  displayBlocks: readonly TurnDisplayBlock[];
+  transcript: TranscriptState;
+  completedHistoryRootIds: ReadonlySet<string>;
+  hasCompletedHistorySummary: boolean;
+}): Set<string> {
+  const boundaryItemIds = new Set<string>();
+  let hasRenderedAssistantProse = false;
+
+  for (const block of displayBlocks) {
+    if (
+      hasCompletedHistorySummary
+      && block.kind === "item"
+      && completedHistoryRootIds.has(block.itemId)
+    ) {
+      // Collapsed into the Work history summary — not a top-level block.
+      continue;
+    }
+
+    if (
+      block.kind === "item"
+      && transcript.itemsById[block.itemId]?.kind === "assistant_prose"
+    ) {
+      if (hasRenderedAssistantProse) {
+        boundaryItemIds.add(block.itemId);
+      }
+      hasRenderedAssistantProse = true;
+    }
+  }
+
+  return boundaryItemIds;
 }
 
 export function isTransientTranscriptItem(item: TranscriptItem | undefined): boolean {
@@ -217,7 +299,7 @@ function buildCompletedHistoryRootIds(
   );
 }
 
-function summarizeCompletedHistory(
+export function summarizeCompletedHistory(
   rootIds: readonly string[],
   transcript: TranscriptState,
   childrenByParentId: Map<string, string[]>,
@@ -284,4 +366,14 @@ function isCollapsibleAction(
     && item.semanticKind !== "cowork_artifact_create"
     && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";
+}
+
+function isFinishedNativeAgentSubagent(
+  item: Extract<TranscriptItem, { kind: "tool_call" }>,
+): boolean {
+  // Only native Agent tool calls. MCP subagent communication tools
+  // (send_subagent_message, get_subagent_status, etc.) have semanticKind
+  // "subagent" but are NOT creation actions — they render via their own
+  // blocks (TranscriptMcpSubagentActionBlock).
+  return item.nativeToolName === "Agent";
 }
