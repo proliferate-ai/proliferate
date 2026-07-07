@@ -4,8 +4,7 @@ import { SETTINGS_CONTROL_WIDTH_CLASS, SettingsRow } from "@proliferate/product-
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { DiffViewer } from "@/components/content/ui/DiffViewer";
-import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
+import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
 import { Minus, Monitor, Moon, Plus, Sun } from "@proliferate/ui/icons";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import {
@@ -35,12 +34,16 @@ const MODE_ICONS: Record<ColorMode, FC<{ className?: string }>> = {
   system: Monitor,
 };
 
-const PREVIEW_DIFF = `@@ -1,5 +1,5 @@
- export const environment = {
--  branch: "develop",
-+  branch: "main",
-   command: "pnpm dev",
- };`;
+const PREVIEW_CODE = `// Environment configuration
+export const environment = {
+  apiUrl: "https://api.example.com",
+  maxRetries: 3,
+  timeout: 5000,
+} as const;
+
+export function buildEndpoint(path: string): string {
+  return \`\${environment.apiUrl}/\${path}\`;
+}`;
 
 export function AppearancePane() {
   const [mode, setMode] = useColorMode();
@@ -57,8 +60,6 @@ export function AppearancePane() {
       <SettingsPageHeader title="Appearance" />
 
       <SettingsSection title="Preferences">
-          <AppearancePreview />
-
           <SettingsRow
             label="Mode"
             description="Light, dark, or follow the system setting"
@@ -170,39 +171,16 @@ export function AppearancePane() {
             />
           </SettingsRow>
       </SettingsSection>
-    </section>
-  );
-}
 
-function AppearancePreview() {
-  return (
-    <div className="space-y-2 p-2.5">
-      <div className="flex items-center justify-between gap-3 px-0.5">
-        <div className="min-w-0 text-xs font-medium text-muted-foreground">
-          Preview
-        </div>
-        <div className="shrink-0 text-xs text-muted-foreground">
-          Git diff
-        </div>
-      </div>
-      <div className="overflow-hidden rounded-lg border border-border/70">
-        <FileDiffCard
-          filePath="src/environment.ts"
-          additions={1}
-          deletions={1}
-          isExpanded
-          embedded
-          collapsible={false}
-        >
-          <DiffViewer
-            patch={PREVIEW_DIFF}
-            filePath="src/environment.ts"
-            className="w-full"
-            viewportClassName="max-h-[calc(var(--diffs-line-height)*5)]"
-            variant="chat"
-          />
-        </FileDiffCard>
-      </div>
-    </div>
+      <SettingsSection title="Preview">
+        <HighlightedCodeBlock
+          code={PREVIEW_CODE}
+          language="typescript"
+          showLanguageLabel={false}
+          showCopyButton={false}
+          showLineNumbers
+        />
+      </SettingsSection>
+    </section>
   );
 }
