@@ -37,7 +37,7 @@ impl GatewayModelResolve for HarnessPlanResolver {
                 ..Default::default()
             },
             "codex" => GatewayModelPlan {
-                default_model: Some("claude-sonnet-4-5-20250929".to_string()),
+                default_model: Some("gpt-5.2".to_string()),
                 ..Default::default()
             },
             "opencode" => GatewayModelPlan {
@@ -186,7 +186,7 @@ fn codex_gateway_materializes_config_toml_and_sets_env() {
     // Explicit default model line: codex otherwise falls back to a codex-native
     // model id the gateway cannot serve (HARNESS-MATRIX codex recipe).
     assert!(
-        config.contains("model = \"claude-sonnet-4-5-20250929\""),
+        config.contains("model = \"gpt-5.2\""),
         "config.toml must pin a gateway-served default model, got:\n{config}"
     );
     assert!(config.contains("base_url = \"https://llm.proliferate.ai/v1\""));
