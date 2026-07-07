@@ -49,6 +49,11 @@ export interface HarnessAuthEditorApi {
   >["sessionsByKind"][string] | undefined;
   loginWorkflow: ReturnType<typeof useAgentLoginTerminalWorkflow>;
 
+  // Add-key modal state: the "Add API key" button and method-card clicks open
+  // the modal instead of seeding an inline draft row.
+  addKeyModalOpen: boolean;
+  setAddKeyModalOpen: (open: boolean) => void;
+
   // Handlers
   commit: (next: HarnessAuthEditorState) => void;
   handleGatewayToggle: (next: boolean) => void;
@@ -58,6 +63,7 @@ export interface HarnessAuthEditorApi {
   handleRowEnvVarBlur: () => void;
   handleRemoveRow: (uid: string) => void;
   addRow: (envVarName: string, providerHint: string | null) => void;
+  addBoundApiKey: (envVarName: string, providerHint: string | null, apiKeyId: string) => void;
   handleAddVariable: () => void;
 }
 
@@ -83,6 +89,7 @@ export function useHarnessAuthEditor(
   const [gatewayEnabled, setGatewayEnabled] = useState(false);
   const [rows, setRows] = useState<EditableApiKeyRow[]>([]);
   const [pendingMethod, setPendingMethod] = useState<AuthMethod | null>(null);
+  const [addKeyModalOpen, setAddKeyModalOpen] = useState(false);
   const seededScopeRef = useRef<string | null>(null);
   const lastPutSigRef = useRef<string>("");
   const draftCounterRef = useRef(0);
@@ -213,6 +220,23 @@ export function useHarnessAuthEditor(
     setRows((current) => [...current, newRow]);
   }
 
+  function addBoundApiKey(envVarName: string, providerHint: string | null, apiKeyId: string) {
+    draftCounterRef.current += 1;
+    const newRow: EditableApiKeyRow = {
+      uid: `draft-${draftCounterRef.current}`,
+      envVarName,
+      apiKeyId,
+      providerHint,
+      enabled: true,
+    };
+    // Single-source: enabling a new bound row disables everything else.
+    const nextRows = multiSource
+      ? [...rows, newRow]
+      : [...rows.map((row) => ({ ...row, enabled: false })), newRow];
+    const nextGateway = multiSource ? gatewayEnabled : false;
+    commit({ gatewayEnabled: nextGateway, rows: nextRows });
+  }
+
   function handleAddVariable() {
     const used = new Set(rows.map((row) => row.envVarName));
     const suggestion = getHarnessEnvVarSuggestions(harnessKind).find(
@@ -237,6 +261,8 @@ export function useHarnessAuthEditor(
     localAgent,
     loginSession,
     loginWorkflow,
+    addKeyModalOpen,
+    setAddKeyModalOpen,
     commit,
     handleGatewayToggle,
     handleRowEnabledToggle,
@@ -245,6 +271,7 @@ export function useHarnessAuthEditor(
     handleRowEnvVarBlur,
     handleRemoveRow,
     addRow,
+    addBoundApiKey,
     handleAddVariable,
   };
 }
