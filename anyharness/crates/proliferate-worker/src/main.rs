@@ -1,3 +1,4 @@
+mod catalog_sync;
 mod cloud_client;
 mod config;
 mod error;
