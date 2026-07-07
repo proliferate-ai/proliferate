@@ -8,6 +8,7 @@ managed-sandbox stack, so we do not invent a start-side call chain here.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
@@ -54,8 +55,45 @@ def window_bounds(window: str, now: datetime) -> tuple[datetime, datetime]:
     raise ValueError(f"Unsupported budget window: {window!r}")
 
 
+def bucket_starts(granularity: str, start: datetime, end: datetime) -> list[datetime]:
+    """Calendar bucket boundaries covering ``[start, end)``, UTC.
+
+    Mirrors Postgres ``date_trunc(granularity, ...)`` semantics so this can
+    zero-fill the buckets the store's ``date_trunc``-grouped queries return:
+    ``day`` buckets at UTC midnight, ``week`` at UTC Monday midnight (ISO week,
+    same as ``date_trunc('week', ...)``), ``month`` at the first of the UTC
+    calendar month.
+    """
+    at_start = start.astimezone(UTC) if start.tzinfo is not None else start.replace(tzinfo=UTC)
+    at_end = end.astimezone(UTC) if end.tzinfo is not None else end.replace(tzinfo=UTC)
+
+    if granularity == "day":
+        cursor = at_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        step = timedelta(days=1)
+    elif granularity == "week":
+        day_start = at_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        cursor = day_start - timedelta(days=day_start.weekday())
+        step = timedelta(weeks=1)
+    elif granularity == "month":
+        cursor = at_start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        step = None
+    else:
+        raise ValueError(f"Unsupported bucket granularity: {granularity!r}")
+
+    buckets: list[datetime] = []
+    while cursor < at_end:
+        buckets.append(cursor)
+        if step is not None:
+            cursor = cursor + step
+        elif cursor.month == 12:
+            cursor = cursor.replace(year=cursor.year + 1, month=1)
+        else:
+            cursor = cursor.replace(month=cursor.month + 1)
+    return buckets
+
+
 def resolve_effective_limit(
-    limits: list[_LimitLike],
+    limits: Sequence[_LimitLike],
     *,
     user_id: UUID,
     kind: str,

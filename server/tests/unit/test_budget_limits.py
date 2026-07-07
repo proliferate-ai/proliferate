@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from proliferate.server.billing.budget_limits import (
+    bucket_starts,
     resolve_effective_limit,
     window_bounds,
 )
@@ -103,6 +104,48 @@ def test_resolve_org_wide_wins_when_tighter_than_per_user() -> None:
     assert effective is not None
     assert effective.user_id is None
     assert effective.cap_value == 100.0
+
+
+def test_bucket_starts_day_covers_range_inclusive_of_partial_final_day() -> None:
+    start = datetime(2026, 7, 1, 3, 0, tzinfo=UTC)
+    end = datetime(2026, 7, 4, 15, 0, tzinfo=UTC)
+    buckets = bucket_starts("day", start, end)
+    assert buckets == [
+        datetime(2026, 7, 1, tzinfo=UTC),
+        datetime(2026, 7, 2, tzinfo=UTC),
+        datetime(2026, 7, 3, tzinfo=UTC),
+        datetime(2026, 7, 4, tzinfo=UTC),
+    ]
+
+
+def test_bucket_starts_week_aligns_to_utc_monday() -> None:
+    # 2026-07-07 is a Tuesday; the week bucket should start Monday 2026-07-06.
+    start = datetime(2026, 7, 7, tzinfo=UTC)
+    end = datetime(2026, 7, 21, tzinfo=UTC)
+    buckets = bucket_starts("week", start, end)
+    assert buckets == [
+        datetime(2026, 7, 6, tzinfo=UTC),
+        datetime(2026, 7, 13, tzinfo=UTC),
+        datetime(2026, 7, 20, tzinfo=UTC),
+    ]
+
+
+def test_bucket_starts_month_rolls_over_year() -> None:
+    start = datetime(2026, 11, 15, tzinfo=UTC)
+    end = datetime(2027, 1, 15, tzinfo=UTC)
+    buckets = bucket_starts("month", start, end)
+    assert buckets == [
+        datetime(2026, 11, 1, tzinfo=UTC),
+        datetime(2026, 12, 1, tzinfo=UTC),
+        datetime(2027, 1, 1, tzinfo=UTC),
+    ]
+
+
+def test_bucket_starts_rejects_unknown_granularity() -> None:
+    start = datetime(2026, 7, 1, tzinfo=UTC)
+    end = datetime(2026, 7, 8, tzinfo=UTC)
+    with pytest.raises(ValueError):
+        bucket_starts("quarter", start, end)
 
 
 def test_resolve_picks_tightest_among_same_scope() -> None:

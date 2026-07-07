@@ -42,6 +42,14 @@ AGENT_GATEWAY_SYNC_STATUS_FAILED = "failed"
 
 AGENT_GATEWAY_BUDGET_STATUS_OK = "ok"
 AGENT_GATEWAY_BUDGET_STATUS_EXHAUSTED = "exhausted"
+# Distinct from ``exhausted`` (credit ran out) so credit-driven reactivation
+# (top-ups) never clears an org budget-limit block, and vice versa.
+AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED = "limit_reached"
+AGENT_GATEWAY_BUDGET_STATUSES = (
+    AGENT_GATEWAY_BUDGET_STATUS_OK,
+    AGENT_GATEWAY_BUDGET_STATUS_EXHAUSTED,
+    AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
+)
 
 LLM_CREDIT_SOURCE_FREE_SIGNUP = "free_signup"
 LLM_CREDIT_SOURCE_TOPUP = "topup"
