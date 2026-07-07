@@ -2,9 +2,16 @@ use tokio::time::sleep;
 use tracing::{info, warn};
 
 use crate::{
-    cloud_client::CloudClient, config::WorkerConfig, error::WorkerError, identity,
-    identity::credentials::WorkerIdentity, integration_gateway, lifecycle,
-    process_lock::WorkerProcessLock, self_update, store::WorkerStore,
+    catalog_sync::{self, CatalogSyncState},
+    cloud_client::CloudClient,
+    config::WorkerConfig,
+    error::WorkerError,
+    identity,
+    identity::credentials::WorkerIdentity,
+    integration_gateway, lifecycle,
+    process_lock::WorkerProcessLock,
+    self_update,
+    store::WorkerStore,
 };
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
@@ -24,13 +31,14 @@ pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
         );
     }
 
-    heartbeat_and_converge(&config, &cloud, &identity, once).await;
+    let catalog_state = CatalogSyncState::new();
+    heartbeat_and_converge(&config, &cloud, &identity, &catalog_state, once).await;
     if once {
         return Ok(());
     }
     loop {
         sleep(lifecycle::heartbeat::interval(&config)).await;
-        heartbeat_and_converge(&config, &cloud, &identity, false).await;
+        heartbeat_and_converge(&config, &cloud, &identity, &catalog_state, false).await;
     }
 }
 
@@ -42,6 +50,7 @@ async fn heartbeat_and_converge(
     config: &WorkerConfig,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
+    catalog_state: &CatalogSyncState,
     dry_run: bool,
 ) {
     let response = match lifecycle::heartbeat::send_once(cloud, identity).await {
@@ -51,6 +60,12 @@ async fn heartbeat_and_converge(
             return;
         }
     };
+
+    // Catalog sync: non-fatal, runs before self-update because a binary swap
+    // exec's and never returns.
+    catalog_sync::maybe_sync(config, cloud, &identity.worker_token, &response, catalog_state)
+        .await;
+
     let Some(update) = self_update::plan(config, &response) else {
         return;
     };

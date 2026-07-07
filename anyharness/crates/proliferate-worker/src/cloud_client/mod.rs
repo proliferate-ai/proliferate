@@ -10,7 +10,10 @@ use crate::{config::WorkerConfig, error::WorkerError};
 
 #[derive(Clone)]
 pub struct CloudClient {
+    /// Authenticated requests: never follows redirects (prevents token leak).
     http: Client,
+    /// Unauthenticated artifact downloads: follows redirects to CDN.
+    http_download: Client,
     base_url: String,
 }
 
@@ -73,6 +76,11 @@ pub struct DesiredVersions {
     #[allow(dead_code)]
     #[serde(default)]
     pub anyharness: Option<String>,
+    /// The `catalogVersion` string the server currently serves. When this
+    /// differs from the runtime's active catalog the worker fetches and
+    /// pushes the new document.
+    #[serde(default)]
+    pub catalog_version: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -92,13 +100,24 @@ pub struct HeartbeatResponse {
 
 impl CloudClient {
     pub fn new(config: &WorkerConfig) -> Result<Self, WorkerError> {
+        // Authenticated client: never follows redirects to prevent leaking the
+        // Bearer token to a redirect target on a different origin.
         let http = Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(WorkerError::BuildHttpClient)?;
+        // Unauthenticated download client: follows redirects (artifact
+        // downloads are public CDN URLs behind a server-issued 302).
+        let http_download = Client::builder()
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(30))
             .build()
             .map_err(WorkerError::BuildHttpClient)?;
         Ok(Self {
             http,
+            http_download,
             base_url: config.cloud_base_url.trim_end_matches('/').to_string(),
         })
     }
@@ -148,7 +167,7 @@ impl CloudClient {
         asset: &str,
     ) -> Result<DownloadedArtifact, WorkerError> {
         let response = self
-            .http
+            .http_download
             .get(format!(
                 "{}/v1/cloud/worker/download/{target}/{asset}",
                 self.base_url
@@ -173,7 +192,7 @@ impl CloudClient {
     /// No server redirect, hence no second version-path resolution.
     pub async fn download_from_url(&self, url: &str) -> Result<Vec<u8>, WorkerError> {
         let response = self
-            .http
+            .http_download
             .get(url)
             .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
             .send()
@@ -185,6 +204,49 @@ impl CloudClient {
         }
         Ok(response.bytes().await?.to_vec())
     }
+
+    /// Fetch the agent catalog document from the cloud server. Sends the
+    /// stored ETag (if any) as `If-None-Match`; a 304 means the cached
+    /// document is current. Returns `None` on 304, `Some((bytes, etag))` on
+    /// 200.
+    pub async fn fetch_agent_catalog(
+        &self,
+        worker_token: &str,
+        cached_etag: Option<&str>,
+    ) -> Result<Option<CatalogFetchResult>, WorkerError> {
+        let mut request = self
+            .http
+            .get(format!("{}/v1/catalogs/agents", self.base_url))
+            .header(
+                reqwest::header::AUTHORIZATION,
+                auth::bearer_header(worker_token),
+            );
+        if let Some(etag) = cached_etag {
+            request = request.header(reqwest::header::IF_NONE_MATCH, etag);
+        }
+        let response = request.send().await?;
+        let status = response.status();
+        if status == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(None);
+        }
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud { status, body });
+        }
+        let etag = response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned);
+        let bytes = response.bytes().await?.to_vec();
+        Ok(Some(CatalogFetchResult { bytes, etag }))
+    }
+}
+
+/// Result of a successful (non-304) catalog fetch from the cloud.
+pub struct CatalogFetchResult {
+    pub bytes: Vec<u8>,
+    pub etag: Option<String>,
 }
 
 /// A downloaded worker artifact plus the CDN URL the server's redirect
@@ -267,6 +329,7 @@ mod tests {
         let desired = response.desired_versions.expect("desiredVersions present");
         assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
         assert_eq!(desired.anyharness.as_deref(), Some("0.2.16"));
+        assert_eq!(desired.catalog_version, None);
     }
 
     #[test]
@@ -281,6 +344,39 @@ mod tests {
         let desired = response.desired_versions.expect("desiredVersions present");
         assert_eq!(desired.worker.as_deref(), Some("0.2.16"));
         assert_eq!(desired.anyharness, None);
+        assert_eq!(desired.catalog_version, None);
+    }
+
+    #[test]
+    fn heartbeat_response_parses_catalog_version() {
+        let payload = br#"{
+            "workerId": "worker",
+            "desiredVersions": {
+                "worker": "0.2.16",
+                "anyharness": "0.2.16",
+                "catalogVersion": "2026-07-06.1"
+            }
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("heartbeat ack with catalogVersion");
+        let desired = response.desired_versions.expect("desiredVersions present");
+        assert_eq!(
+            desired.catalog_version.as_deref(),
+            Some("2026-07-06.1")
+        );
+    }
+
+    #[test]
+    fn heartbeat_response_tolerates_absent_catalog_version() {
+        // Servers that predate catalog convergence omit the field.
+        let payload = br#"{
+            "workerId": "worker",
+            "desiredVersions": {"worker": "0.2.16", "anyharness": "0.2.16"}
+        }"#;
+        let response = serde_json::from_slice::<HeartbeatResponse>(payload)
+            .expect("heartbeat ack without catalogVersion");
+        let desired = response.desired_versions.expect("desiredVersions present");
+        assert_eq!(desired.catalog_version, None);
     }
 
     #[test]

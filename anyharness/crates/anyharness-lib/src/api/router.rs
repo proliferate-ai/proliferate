@@ -70,6 +70,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/agent-auth/state", put(agent_auth::put_agent_auth_state))
         // Catalogs (worker-pushed agent catalog document)
         .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
+        .route(
+            "/catalogs/agents/version",
+            get(catalogs::get_agent_catalog_version),
+        )
         // Workspaces
         .route(
             "/workspaces",
