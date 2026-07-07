@@ -13,6 +13,7 @@ import type {
   SessionIntent,
 } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import { useSessionHistoryHydration } from "@/hooks/sessions/lifecycle/use-session-history-hydration";
+import { useSteerPendingPrompt } from "@/hooks/sessions/workflows/use-steer-pending-prompt";
 import { useSessionSummaryActions } from "@/hooks/sessions/workflows/use-session-summary-actions";
 import { useSessionTitleActions } from "@/hooks/sessions/workflows/use-session-title-actions";
 import { useWorkspaceNameActions } from "@/hooks/workspaces/workflows/use-workspace-name-actions";
@@ -44,6 +45,7 @@ export function useSessionIntentDispatcher(): void {
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
   const promptSessionMutation = usePromptSessionMutation();
+  const steerPendingPrompt = useSteerPendingPrompt();
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
   const resolveInteractionMutation = useResolveSessionInteractionMutation();
   const editPendingPromptMutation = useEditPendingPromptMutation();
@@ -74,6 +76,7 @@ export function useSessionIntentDispatcher(): void {
           maybeGenerateSessionTitle,
           maybeGenerateWorkspaceName,
           promptSessionMutation,
+          steerPendingPrompt,
           rehydrateSessionSlotFromHistory,
           upsertWorkspaceSessionRecord,
         });
@@ -103,6 +106,7 @@ export function useSessionIntentDispatcher(): void {
     maybeGenerateSessionTitle,
     maybeGenerateWorkspaceName,
     promptSessionMutation,
+    steerPendingPrompt,
     rehydrateSessionSlotFromHistory,
     resolveInteractionMutation,
     setSessionConfigOptionMutation,

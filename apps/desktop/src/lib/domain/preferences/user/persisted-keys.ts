@@ -14,6 +14,7 @@ const USER_PREFERENCE_KEYS = [
   "defaultOpenInTargetId",
   "branchPrefixType",
   "defaultNewWorkspaceMode",
+  "busySendBehavior",
   "turnEndSoundEnabled",
   "turnEndSoundId",
   "transparentChromeEnabled",

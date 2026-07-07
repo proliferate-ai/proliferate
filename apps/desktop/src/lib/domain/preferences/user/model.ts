@@ -18,6 +18,12 @@ import { DEFAULT_OPEN_IN_TARGET_ID } from "@/config/open-target-defaults";
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
 export type TurnEndSoundId = "ding";
 export type DefaultNewWorkspaceMode = "worktree" | "local";
+/**
+ * What sending a message does while the agent is mid-turn:
+ * - "queue": append it to the pending-prompt queue (delivered after the turn).
+ * - "interrupt": steer it to the head and cancel the running turn so it runs next.
+ */
+export type BusySendBehavior = "queue" | "interrupt";
 
 /**
  * The app ships a single Mono theme. The persisted key survives (pinned to
@@ -40,6 +46,7 @@ export interface UserPreferences {
   defaultOpenInTargetId: string;
   branchPrefixType: BranchPrefixType;
   defaultNewWorkspaceMode: DefaultNewWorkspaceMode;
+  busySendBehavior: BusySendBehavior;
   turnEndSoundEnabled: boolean;
   turnEndSoundId: TurnEndSoundId;
   transparentChromeEnabled: boolean;
@@ -65,6 +72,7 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   defaultOpenInTargetId: DEFAULT_OPEN_IN_TARGET_ID,
   branchPrefixType: "none",
   defaultNewWorkspaceMode: "worktree",
+  busySendBehavior: "queue",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   transparentChromeEnabled: false,
@@ -90,6 +98,7 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   defaultOpenInTargetId: DEFAULT_OPEN_IN_TARGET_ID,
   branchPrefixType: "none",
   defaultNewWorkspaceMode: "worktree",
+  busySendBehavior: "queue",
   turnEndSoundEnabled: false,
   turnEndSoundId: "ding",
   // Existing persisted records keep the legacy transparent chrome default;

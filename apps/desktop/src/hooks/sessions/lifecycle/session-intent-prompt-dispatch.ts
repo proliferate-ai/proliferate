@@ -52,6 +52,12 @@ export interface PromptIntentDispatchDeps {
     firstUserMessage: string;
   }) => Promise<void> | void;
   promptSessionMutation: PromptSessionMutation;
+  /**
+   * Steers a queued prompt to the head of the queue (cancelling the running
+   * turn). Used to honour the "Interrupt & send" busy-send preference; resolves
+   * the materialized session id and no-ops when the session isn't materialized.
+   */
+  steerPendingPrompt: (clientSessionId: string, seq: number) => Promise<void>;
   rehydrateSessionSlotFromHistory: (
     sessionId: string,
     options?: {
@@ -183,6 +189,16 @@ export async function dispatchPromptIntent(
         clientPromptId: entry.clientPromptId,
         requestHeaders,
         rehydrateSessionSlotFromHistory: deps.rehydrateSessionSlotFromHistory,
+      });
+    } else if (entry.autoSteerOnQueue && typeof response.queuedSeq === "number" && response.queuedSeq > 0) {
+      // Busy-send preference = "Interrupt & send": the server queued this prompt,
+      // so steer it to the head to cancel the running turn and run it next.
+      // Fire-and-forget (matching the manual Steer button); the drain loop
+      // delivers the promoted prompt. Eligibility (empty queue at submit time)
+      // was decided at enqueue — see use-session-intent-actions.
+      void deps.steerPendingPrompt(entry.clientSessionId, response.queuedSeq).catch(() => {
+        // Swallowed: a lost steer race just leaves the prompt queued (its manual
+        // Steer button still works), which is the safe fallback.
       });
     }
 

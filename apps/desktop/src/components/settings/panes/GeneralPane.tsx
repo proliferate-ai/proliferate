@@ -10,7 +10,7 @@ import { OpenTargetIcon } from "@/components/workspace/open-target/OpenTargetIco
 import { useAvailableEditors } from "@/hooks/access/tauri/shell/use-available-editors";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { emitTurnEnd } from "@/lib/infra/events/turn-end-events";
-import type { DefaultNewWorkspaceMode } from "@/lib/domain/preferences/user/model";
+import type { BusySendBehavior, DefaultNewWorkspaceMode } from "@/lib/domain/preferences/user/model";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 
 type SettingsOpenTargetIconId =
@@ -40,12 +40,17 @@ const NEW_WORKSPACE_MODE_OPTIONS: { id: DefaultNewWorkspaceMode; label: string }
   { id: "worktree", label: "Worktree" },
   { id: "local", label: "Local" },
 ];
+const BUSY_SEND_BEHAVIOR_OPTIONS: { id: BusySendBehavior; label: string }[] = [
+  { id: "queue", label: "Queue message" },
+  { id: "interrupt", label: "Interrupt & send" },
+];
 export function GeneralPane() {
   const { data: editors = EMPTY_EDITORS } = useAvailableEditors();
   const preferences = useUserPreferencesStore(useShallow((state) => ({
     defaultOpenInTargetId: state.defaultOpenInTargetId,
     branchPrefixType: state.branchPrefixType,
     defaultNewWorkspaceMode: state.defaultNewWorkspaceMode,
+    busySendBehavior: state.busySendBehavior,
     turnEndSoundEnabled: state.turnEndSoundEnabled,
     subagentsEnabled: state.subagentsEnabled,
     coworkWorkspaceDelegationEnabled: state.coworkWorkspaceDelegationEnabled,
@@ -74,6 +79,9 @@ export function GeneralPane() {
   const currentNewWorkspaceModeLabel = NEW_WORKSPACE_MODE_OPTIONS.find(
     (option) => option.id === preferences.defaultNewWorkspaceMode,
   )?.label ?? "Worktree";
+  const currentBusySendBehaviorLabel = BUSY_SEND_BEHAVIOR_OPTIONS.find(
+    (option) => option.id === preferences.busySendBehavior,
+  )?.label ?? "Queue message";
 
   return (
     <section className="space-y-6">
@@ -137,6 +145,26 @@ export function GeneralPane() {
                   label: option.label,
                   selected: preferences.defaultNewWorkspaceMode === option.id,
                   onSelect: () => preferences.set("defaultNewWorkspaceMode", option.id),
+                })),
+              }]}
+            />
+          </SettingsRow>
+
+          <SettingsRow
+            label="When the agent is busy"
+            description="What sending a message does mid-turn"
+          >
+            <SettingsMenu
+              label={currentBusySendBehaviorLabel}
+              className={SETTINGS_CONTROL_WIDTH_CLASS}
+              menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
+              groups={[{
+                id: "busy-send-behavior",
+                options: BUSY_SEND_BEHAVIOR_OPTIONS.map((option) => ({
+                  id: option.id,
+                  label: option.label,
+                  selected: preferences.busySendBehavior === option.id,
+                  onSelect: () => preferences.set("busySendBehavior", option.id),
                 })),
               }]}
             />

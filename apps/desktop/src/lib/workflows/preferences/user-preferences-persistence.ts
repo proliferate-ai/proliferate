@@ -98,6 +98,7 @@ async function readLegacyUserPreferences(): Promise<LegacyUserPreferencesInput> 
       defaults.defaultLiveSessionControlValuesByAgentKind,
     defaultOpenInTargetId: legacyDefaultOpenInTargetId ?? defaults.defaultOpenInTargetId,
     branchPrefixType: legacyBranchPrefixType ?? defaults.branchPrefixType,
+    busySendBehavior: defaults.busySendBehavior,
     turnEndSoundEnabled: defaults.turnEndSoundEnabled,
     turnEndSoundId: defaults.turnEndSoundId,
     transparentChromeEnabled: defaults.transparentChromeEnabled,

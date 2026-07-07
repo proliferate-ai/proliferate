@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   patchSessionRecord: vi.fn(),
   promptAttachmentSnapshotsToBlocks: vi.fn(),
   rehydrateSessionSlotFromHistory: vi.fn(),
+  steerPendingPrompt: vi.fn(),
   waitForSessionMaterialization: vi.fn(),
 }));
 
@@ -66,6 +67,7 @@ describe("dispatchPromptIntent", () => {
     });
     mocks.getSessionRecord.mockReturnValue({ lastPromptAt: "2026-06-04T09:00:00Z" });
     mocks.waitForSessionMaterialization.mockResolvedValue("session-1");
+    mocks.steerPendingPrompt.mockResolvedValue(undefined);
   });
 
   it("marks the prompt attempt on the session record before dispatching the request", async () => {
@@ -171,6 +173,47 @@ describe("dispatchPromptIntent", () => {
     expect(deps.maybeGenerateWorkspaceName).not.toHaveBeenCalled();
   });
 
+  it("auto-steers a queued prompt flagged autoSteerOnQueue", async () => {
+    const entry = useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "client-session-1",
+      workspaceId: "workspace-1",
+      text: "Interrupt please",
+      blocks: [{ type: "text", text: "Interrupt please" }],
+      placement: "queue",
+      autoSteerOnQueue: true,
+    });
+    mocks.mutateAsync.mockResolvedValue({
+      session: { id: "session-1" },
+      status: "queued",
+      queuedSeq: 7,
+    });
+
+    await dispatchPromptIntent(entry, createDeps());
+
+    expect(mocks.steerPendingPrompt).toHaveBeenCalledWith("client-session-1", 7);
+  });
+
+  it("does not auto-steer when the queued prompt is not flagged", async () => {
+    const entry = useSessionIntentStore.getState().enqueuePrompt({
+      clientPromptId: "prompt-1",
+      clientSessionId: "client-session-1",
+      workspaceId: "workspace-1",
+      text: "Just queue",
+      blocks: [{ type: "text", text: "Just queue" }],
+      placement: "queue",
+    });
+    mocks.mutateAsync.mockResolvedValue({
+      session: { id: "session-1" },
+      status: "queued",
+      queuedSeq: 7,
+    });
+
+    await dispatchPromptIntent(entry, createDeps());
+
+    expect(mocks.steerPendingPrompt).not.toHaveBeenCalled();
+  });
+
   it("dispatches cloud sandbox gateway prompts through AnyHarness", async () => {
     mocks.getSessionClientAndWorkspace.mockResolvedValue({
       connection: {
@@ -225,6 +268,7 @@ function createDeps(): PromptIntentDispatchDeps {
     promptSessionMutation: {
       mutateAsync: mocks.mutateAsync,
     } as unknown as PromptIntentDispatchDeps["promptSessionMutation"],
+    steerPendingPrompt: mocks.steerPendingPrompt,
     rehydrateSessionSlotFromHistory: mocks.rehydrateSessionSlotFromHistory,
     upsertWorkspaceSessionRecord: vi.fn(),
   };

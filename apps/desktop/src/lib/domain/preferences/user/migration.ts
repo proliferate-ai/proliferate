@@ -106,6 +106,14 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     changed = true;
   }
 
+  if (
+    next.busySendBehavior !== "queue"
+    && next.busySendBehavior !== "interrupt"
+  ) {
+    next.busySendBehavior = PERSISTED_RECORD_BACKFILL.busySendBehavior;
+    changed = true;
+  }
+
   const sanitizedDefaultOpenInTargetId = typeof next.defaultOpenInTargetId === "string"
     ? next.defaultOpenInTargetId.trim()
     : "";

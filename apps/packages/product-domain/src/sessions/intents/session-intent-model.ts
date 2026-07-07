@@ -68,6 +68,13 @@ export interface SessionSendPromptIntent extends SessionIntentBase {
   deliveryState: PromptOutboxDeliveryState;
   latencyFlowId: string | null;
   echoedAt: string | null;
+  /**
+   * When true, the dispatcher steers this prompt to the head of the queue
+   * (cancelling the running turn) the moment the server acks it as queued.
+   * Set only for the first message submitted into an empty queue while the
+   * "Interrupt & send" busy-send preference is on — see the submit path.
+   */
+  autoSteerOnQueue: boolean;
 }
 
 export type PromptOutboxEntry = SessionSendPromptIntent;
@@ -125,6 +132,7 @@ export interface PromptOutboxCreateInput {
   contentParts?: readonly ContentPart[];
   promptProvenance?: PromptProvenance | null;
   placement?: PromptOutboxPlacement;
+  autoSteerOnQueue?: boolean;
   latencyFlowId?: string | null;
   now?: string;
 }
@@ -148,6 +156,7 @@ export function createSendPromptIntent(input: PromptOutboxCreateInput): SessionS
     promptProvenance: input.promptProvenance ?? null,
     queuedSeq: null,
     placement: input.placement ?? "transcript",
+    autoSteerOnQueue: input.autoSteerOnQueue ?? false,
     status: "queued",
     deliveryState: "waiting_for_session",
     latencyFlowId: input.latencyFlowId ?? null,

@@ -6,8 +6,10 @@ import type { PromptAttachmentSnapshot } from "@proliferate/product-domain/chats
 import { createPromptId } from "@/lib/domain/chat/composer/prompt-id";
 import {
   isPromptOutboxPlacementBusy,
+  queuedOutboxEntriesForSession,
   resolvePromptOutboxPlacement,
 } from "@proliferate/product-domain/sessions/intents/session-intent-selectors";
+import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import {
   promptIntentsForSession,
 } from "@proliferate/product-domain/sessions/intents/session-intent-state";
@@ -89,6 +91,21 @@ export function useSessionIntentActions() {
       isSessionMaterialized: Boolean(slot?.materializedSessionId),
       existingEntries: existingPromptIntents,
     });
+    // Auto-steer rule (busy-send preference = "Interrupt & send"): steer this
+    // prompt to the head + cancel the running turn only when it lands in an
+    // *empty* queue at submit time — i.e. no runtime pending prompts and no
+    // other in-flight/queued outbox prompts for this session. This is the
+    // cleanest correct rule for bursts: firing 3 messages fast auto-steers only
+    // the first (the 2nd/3rd see a non-empty queue and stay queued), which
+    // avoids cancel storms and steering while another steer is already in
+    // flight. Only meaningful when the prompt is actually queued (busy session).
+    const queueEmptyAtSubmit =
+      (slot?.transcript?.pendingPrompts?.length ?? 0) === 0
+      && queuedOutboxEntriesForSession(existingPromptIntents).length === 0;
+    const autoSteerOnQueue =
+      outboxPlacement === "queue"
+      && queueEmptyAtSubmit
+      && useUserPreferencesStore.getState().busySendBehavior === "interrupt";
     const enqueuePrompt = () => {
       intentStore.enqueuePrompt({
         clientPromptId,
@@ -100,6 +117,7 @@ export function useSessionIntentActions() {
         attachmentSnapshots,
         contentParts: optimisticContentParts,
         placement: outboxPlacement,
+        autoSteerOnQueue,
         latencyFlowId,
       });
     };
