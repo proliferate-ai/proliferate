@@ -11,7 +11,7 @@ import {
   useAgentLaunchOptionsQuery,
   useRefreshAgentGatewayModelsMutation,
 } from "@anyharness/sdk-react";
-import { RefreshCw, X } from "@proliferate/ui/icons";
+import { RefreshCw, Search, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/settings/ModelTable";
@@ -251,11 +251,12 @@ export function HarnessAllModelsSection({
 
         {rows.length > 0 ? (
           <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               aria-label="Filter models"
               placeholder="Filter models..."
               value={filterText}
-              className="h-8 pr-14 text-xs"
+              className="h-8 pl-9 pr-14 text-xs"
               onChange={(event) => setFilterText(event.target.value)}
             />
             {filterText ? (

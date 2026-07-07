@@ -3,6 +3,7 @@ import { CloudGuard } from "@/components/cloud/CloudGuard";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { getProviderDisplayName } from "@/lib/domain/agents/provider-display";
 import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
+import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
 import { HarnessAuthDetailsSection } from "./HarnessAuthDetailsSection";
 import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
@@ -50,6 +51,12 @@ function HarnessSurfaceCloud({
   return (
     <CloudGuard>
       <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+        <div className="border-b border-border px-4 py-3">
+          <h3 className="text-sm font-medium text-foreground">
+            {HARNESS_PANE_COPY.signInTitle}
+          </h3>
+        </div>
+
         <HarnessAuthSection
           harnessKind={harnessKind}
           displayName={displayName}
@@ -66,9 +73,9 @@ function HarnessSurfaceCloud({
           editor={editor}
           variant="panel"
         />
-
-        <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="panel" />
       </div>
+
+      <HarnessSettingsSection harnessKind={harnessKind} surface="cloud" variant="section" />
 
       <HarnessAllModelsSection
         harnessKind={harnessKind}
@@ -92,6 +99,12 @@ function HarnessSurfaceLocal({
   return (
     <>
       <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+        <div className="border-b border-border px-4 py-3">
+          <h3 className="text-sm font-medium text-foreground">
+            {HARNESS_PANE_COPY.signInTitle}
+          </h3>
+        </div>
+
         <HarnessAuthSection
           harnessKind={harnessKind}
           displayName={displayName}
@@ -108,9 +121,9 @@ function HarnessSurfaceLocal({
           editor={editor}
           variant="panel"
         />
-
-        <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="panel" />
       </div>
+
+      <HarnessSettingsSection harnessKind={harnessKind} surface="local" variant="section" />
 
       <HarnessAllModelsSection
         harnessKind={harnessKind}
