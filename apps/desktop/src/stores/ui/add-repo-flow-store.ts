@@ -2,8 +2,7 @@ import { create } from "zustand";
 
 export type AddRepoFlowStoreStep =
   | { kind: "entry" }
-  | { kind: "cloud" }
-  | { kind: "confirm-local"; path: string };
+  | { kind: "cloud" };
 
 /** What the unified flow produced, for callers that select the new repo. */
 export type AddRepoFlowCompletion =

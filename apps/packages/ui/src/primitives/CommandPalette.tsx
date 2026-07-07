@@ -138,7 +138,7 @@ export function CommandPaletteRoot({
           role="dialog"
           aria-modal="true"
           aria-label={label}
-          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[calc(100vw-16px)] max-w-[580px] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-popover/90 text-popover-foreground shadow-floating-dark ring-[0.5px] ring-popover-ring backdrop-blur-[16px]"
+          className="fixed left-1/2 top-[20vh] flex max-h-[calc(100vh-1rem)] w-[min(520px,92vw)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl bg-popover/95 p-1 text-popover-foreground shadow-[0_16px_32px_-8px_rgba(0,0,0,0.19)] ring-[0.5px] ring-popover-ring"
           onKeyDown={onKeyDown}
         >
           <Command
@@ -164,7 +164,7 @@ export function CommandPaletteInput({
 }: CommandPaletteInputProps) {
   return (
     <Command.Input
-      className={`h-11 w-full min-w-0 bg-transparent text-ui text-foreground outline-none placeholder:text-muted-foreground ${className ?? ""}`}
+      className={`w-full min-w-0 bg-transparent text-composer text-foreground outline-none placeholder:text-muted-foreground ${className ?? ""}`}
       data-telemetry-mask
       {...props}
     />
@@ -179,7 +179,7 @@ export function CommandPaletteList({
 }: CommandPaletteListProps) {
   return (
     <Command.List
-      className={`max-h-[400px] min-h-0 overflow-y-auto px-1.5 py-1.5 ${className ?? ""}`}
+      className={`max-h-[400px] min-h-0 overflow-y-auto px-1 py-1 ${className ?? ""}`}
       data-telemetry-mask
       {...props}
     />
@@ -194,7 +194,7 @@ export function CommandPaletteGroup({
 }: CommandPaletteGroupProps) {
   return (
     <Command.Group
-      className={`py-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-1.5 [&_[cmdk-group-heading]]:text-ui-sm [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground ${className ?? ""}`}
+      className={`py-1 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-2 [&_[cmdk-group-heading]]:text-ui-sm [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground ${className ?? ""}`}
       {...props}
     />
   );
@@ -208,7 +208,7 @@ export function CommandPaletteItem({
 }: CommandPaletteItemProps) {
   return (
     <Command.Item
-      className={`flex h-9 cursor-default select-none items-center gap-2 rounded-lg px-2.5 text-ui text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-list-hover ${className ?? ""}`}
+      className={`flex cursor-default select-none items-center gap-2 rounded-lg px-2 py-[5px] text-composer text-foreground outline-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-45 data-[selected=true]:bg-list-hover ${className ?? ""}`}
       {...props}
     />
   );

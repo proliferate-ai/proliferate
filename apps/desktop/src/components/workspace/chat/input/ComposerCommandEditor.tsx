@@ -13,7 +13,9 @@ import {
   WORKSPACE_CHAT_COMPOSER_INPUT,
 } from "@/config/chat";
 import { useChatSlashCommandMenu } from "@/hooks/chat/ui/use-chat-slash-command-menu";
+import { useSlashCommandHighlight } from "@/hooks/chat/ui/use-slash-command-highlight";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
+import { useRunnableSlashCommands } from "@/hooks/chat/ui/use-runnable-slash-commands";
 import {
   isComposerOverlaySelectKey,
   isRawComposerSubmitKey,
@@ -38,6 +40,7 @@ import { recordTypingKeystrokeLatency } from "@/lib/infra/measurement/typing-lat
 import { markTypingActivity } from "@/lib/infra/interaction/typing-activity-store";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { ComposerSlashCommandSearch } from "./ComposerSlashCommandSearch";
+import { ComposerSlashHighlight } from "./ComposerSlashHighlight";
 import { ComposerTextarea } from "@proliferate/ui/primitives/ComposerTextarea";
 import { ComposerTextareaFrame, type ComposerTextareaFrameTopInset } from "@proliferate/ui/primitives/ComposerTextareaFrame";
 
@@ -179,6 +182,14 @@ export function ComposerCommandEditor({
     textareaRef.current?.focus({ preventScroll: true });
   }, [replaceText, text, trigger]);
 
+  const runnableCommands = useRunnableSlashCommands();
+  // Highlight a recognized command only when the popup is NOT open (the popup
+  // handles the active-typing state; the highlight is for the settled state).
+  const recognition = useSlashCommandHighlight(
+    !trigger ? text : "",
+    runnableCommands,
+  );
+
   const search = useChatSlashCommandMenu({
     open: !!trigger,
     query: trigger?.query ?? "",
@@ -249,7 +260,6 @@ export function ComposerCommandEditor({
       onSelect={handleSelectSearchResult}
       onRowMouseEnter={search.handleRowMouseEnter}
       setRowRef={search.setRowRef}
-      className={overlayHostElement ? "mx-0" : undefined}
     />
   ) : null;
 
@@ -259,26 +269,35 @@ export function ComposerCommandEditor({
         ? createPortal(searchTray, overlayHostElement)
         : searchTray}
       <ComposerTextareaFrame topInset={topInset}>
-        <ComposerTextarea
-          data-chat-composer-editor
-          data-telemetry-mask
-          ref={textareaRef}
-          rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
-          value={text}
-          onChange={(event) => handleChange(event.target.value, event.timeStamp)}
-          onKeyDown={handleKeyDown}
-          onSelect={updateSelection}
-          onClick={updateSelection}
-          onKeyUp={updateSelection}
-          placeholder={placeholder}
-          readOnly={disabled}
-          aria-disabled={disabled}
-          spellCheck={false}
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          className={disabled ? "opacity-60" : ""}
-        />
+        <div className="relative">
+          {recognition ? (
+            <ComposerSlashHighlight
+              recognition={recognition}
+              text={text}
+              textareaRef={textareaRef}
+            />
+          ) : null}
+          <ComposerTextarea
+            data-chat-composer-editor
+            data-telemetry-mask
+            ref={textareaRef}
+            rows={WORKSPACE_CHAT_COMPOSER_INPUT.minRows}
+            value={text}
+            onChange={(event) => handleChange(event.target.value, event.timeStamp)}
+            onKeyDown={handleKeyDown}
+            onSelect={updateSelection}
+            onClick={updateSelection}
+            onKeyUp={updateSelection}
+            placeholder={placeholder}
+            readOnly={disabled}
+            aria-disabled={disabled}
+            spellCheck={false}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            className={`${disabled ? "opacity-60" : ""} ${recognition ? "text-transparent caret-foreground" : ""}`}
+          />
+        </div>
       </ComposerTextareaFrame>
     </>
   );
