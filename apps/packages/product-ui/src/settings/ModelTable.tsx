@@ -132,7 +132,7 @@ export function ModelTable({ models, onToggle, className }: ModelTableProps) {
   return (
     <div
       className={twMerge(
-        "overflow-x-auto rounded-[var(--radius)] border border-border",
+        "overflow-x-auto overscroll-contain rounded-[var(--radius)] border border-border",
         className,
       )}
     >
