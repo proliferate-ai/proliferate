@@ -1,13 +1,16 @@
 import { useState } from "react";
-import type { WorkflowArgSpec } from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
+// v2 (D17): args → inputs; the card consumes the workflow's declared inputs.
 import type {
   WorkflowTriggerCreateRequest,
+  WorkflowTriggerItemResponse,
   WorkflowTriggerResponse,
 } from "@/lib/access/cloud/workflows";
 import {
   useWorkflowTriggers,
   useWorkflowTriggerMutations,
 } from "@/hooks/access/cloud/workflows/use-workflow-triggers";
+import { useWorkflowTriggerItems } from "@/hooks/access/cloud/workflows/use-workflow-trigger-items";
 import {
   defaultAutomationTimezone,
   formatAutomationTimestamp,
@@ -21,7 +24,8 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { Switch } from "@proliferate/ui/primitives/Switch";
-import { Clock, Play, Plus, Trash } from "@proliferate/ui/icons";
+import { Badge, type BadgeTone } from "@proliferate/ui/primitives/Badge";
+import { ArrowUpRight, ChevronDown, ChevronRight, CircleAlert, Clock, Play, Plus, RefreshCw, Trash } from "@proliferate/ui/icons";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { WorkflowSelect } from "./WorkflowSelect";
 
@@ -30,33 +34,52 @@ export type { WorkflowTriggerResponse };
 
 type ArgValue = string | number | boolean;
 type Concurrency = "skip" | "queue";
+export type TriggerKind = "schedule" | "poll";
 
 export interface WorkflowTriggersCardProps {
   workflowId: string;
-  /** The workflow's declared args — a scheduled run fires with fixed values. */
-  args: readonly WorkflowArgSpec[];
-  /** The owner's ready cloud workspaces (scheduled runs are cloud-only in v1). */
+  /** The workflow's declared args — a scheduled/poll run fires with fixed/mapped values. */
+  args: readonly WorkflowInputSpec[];
+  /** The owner's ready cloud workspaces (schedule + poll runs are cloud-only in v1). */
   cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  /** Deep-link a poll item's spawned run (spec 8.2 row B). Omit to hide the link. */
+  onOpenRun?: (runId: string) => void;
 }
 
 const DEFAULT_RRULE = "RRULE:FREQ=DAILY;INTERVAL=1;BYHOUR=9;BYMINUTE=0";
+// Mirrors WORKFLOW_POLL_MIN_INTERVAL_SECONDS (server/proliferate/constants/workflows.py).
+const POLL_MIN_INTERVAL_SECS = 60;
 
-function initialArgValue(arg: WorkflowArgSpec): ArgValue {
+function initialArgValue(arg: WorkflowInputSpec): ArgValue {
   if (arg.default !== undefined) return arg.default;
   switch (arg.type) {
     case "boolean":
       return false;
-    case "enum":
-      return arg.enum?.[0] ?? "";
+    case "choice":
+      return arg.choices?.[0] ?? "";
     default:
       return "";
   }
 }
 
 export interface TriggerDraft {
+  kind: TriggerKind;
+  // schedule fields
   rrule: string;
   timezone: string;
   preset: AutomationSchedulePresetOrCustom;
+  // poll fields
+  pollUrl: string;
+  pollAuthHeader: string;
+  /** Whether the stored trigger already has an encrypted secret (server-reported). */
+  pollHasAuth: boolean;
+  /** True once the user opts to type a new secret over an existing one. */
+  pollReplaceAuth: boolean;
+  pollAuthValue: string;
+  pollIntervalSecs: number;
+  // The poll item schema is DERIVED server-side from the workflow inputs (D17):
+  // no item-schema or args-mapping authoring surface here.
+  // common
   concurrency: Concurrency;
   enabled: boolean;
   workspaceId: string;
@@ -65,9 +88,11 @@ export interface TriggerDraft {
 
 function draftFromTrigger(
   trigger: WorkflowTriggerResponse | null,
-  args: readonly WorkflowArgSpec[],
+  args: readonly WorkflowInputSpec[],
   cloudWorkspaces: readonly WorkflowRunTargetOption[],
+  fallbackKind: TriggerKind,
 ): TriggerDraft {
+  const kind: TriggerKind = (trigger?.kind as TriggerKind | undefined) ?? fallbackKind;
   const rrule = trigger?.schedule?.rrule ?? DEFAULT_RRULE;
   const argValues: Record<string, ArgValue> = {};
   for (const arg of args) {
@@ -75,9 +100,16 @@ function draftFromTrigger(
     argValues[arg.name] = stored ?? initialArgValue(arg);
   }
   return {
+    kind,
     rrule,
     timezone: trigger?.schedule?.timezone ?? defaultAutomationTimezone(),
     preset: presetForRrule(rrule),
+    pollUrl: trigger?.poll?.url ?? "",
+    pollAuthHeader: trigger?.poll?.authHeader ?? "",
+    pollHasAuth: trigger?.poll?.hasAuth ?? false,
+    pollReplaceAuth: !(trigger?.poll?.hasAuth ?? false),
+    pollAuthValue: "",
+    pollIntervalSecs: trigger?.poll?.intervalSecs ?? POLL_MIN_INTERVAL_SECS,
     concurrency: (trigger?.concurrencyPolicy as Concurrency) ?? "skip",
     enabled: trigger?.enabled ?? true,
     workspaceId: trigger?.targetWorkspaceId ?? cloudWorkspaces[0]?.id ?? "",
@@ -85,40 +117,43 @@ function draftFromTrigger(
   };
 }
 
-function coerceArg(arg: WorkflowArgSpec, value: ArgValue): ArgValue {
+function coerceArg(arg: WorkflowInputSpec, value: ArgValue): ArgValue {
   if (arg.type === "number") return value === "" ? "" : Number(value);
   return value;
 }
 
 /**
- * Triggers card (spec 3.5/3.6, Ona parity). Manual is an always-on chip;
- * schedules render as quiet chips (summary + next-run) in the same badge row,
- * with `Webhook`/`API` shown as disabled "soon" chips. Clicking a schedule chip
- * (or `+ Add schedule`) opens the inline schedule editor. Scheduled runs are
- * cloud-only in v1 — the picker offers cloud workspaces and the card explains
- * when none exist. Concurrency (`skip | queue`), enable/disable, next-run, and
- * the last-skip reason are all persisted per trigger.
+ * Triggers card (spec 3.5/3.6, Ona parity; poll config spec 1.3/4.2/8.2 row B).
+ * Manual is an always-on chip; schedule + poll triggers render as quiet chips
+ * (summary + status) in the same badge row, with `Webhook`/`API` shown as
+ * disabled "soon" chips. Clicking a trigger chip (or an `+ Add` button) opens
+ * the inline editor for that kind. Both trigger kinds are cloud-only in v1 —
+ * the picker offers cloud workspaces and the card explains when none exist.
+ * Poll triggers additionally surface `last_poll_at`/`last_poll_error` and an
+ * expandable per-item seen-set (spawned/invalid/error).
  */
 export function WorkflowTriggersCard({
   workflowId,
   args,
   cloudWorkspaces,
+  onOpenRun,
 }: WorkflowTriggersCardProps) {
   const triggersQuery = useWorkflowTriggers(workflowId);
   const { createMutation, updateMutation, deleteMutation } =
     useWorkflowTriggerMutations(workflowId);
 
   const triggers = triggersQuery.data ?? [];
+  const pollTriggers = triggers.filter((t) => t.kind === "poll");
   const cloudAvailable = cloudWorkspaces.length > 0;
 
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
   const [draft, setDraft] = useState<TriggerDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const openForm = (trigger: WorkflowTriggerResponse | null) => {
+  const openForm = (trigger: WorkflowTriggerResponse | null, kind: TriggerKind = "schedule") => {
     setError(null);
     setEditing({ id: trigger?.id ?? null });
-    setDraft(draftFromTrigger(trigger, args, cloudWorkspaces));
+    setDraft(draftFromTrigger(trigger, args, cloudWorkspaces, kind));
   };
 
   const closeForm = () => {
@@ -135,9 +170,61 @@ export function WorkflowTriggersCard({
   const submit = () => {
     if (!draft) return;
     if (!draft.workspaceId) {
-      setError("Choose a cloud workspace for the scheduled run.");
+      setError(`Choose a cloud workspace for the ${draft.kind === "poll" ? "polled" : "scheduled"} run.`);
       return;
     }
+
+    if (draft.kind === "poll") {
+      const url = draft.pollUrl.trim();
+      if (!url || !(url.startsWith("http://") || url.startsWith("https://"))) {
+        setError("Enter a valid poll URL (http:// or https://).");
+        return;
+      }
+      if (draft.pollIntervalSecs < POLL_MIN_INTERVAL_SECS) {
+        setError(`Poll interval must be at least ${POLL_MIN_INTERVAL_SECS} seconds.`);
+        return;
+      }
+      const authHeader = draft.pollAuthHeader.trim();
+      const isCreate = editing?.id === null;
+      if (authHeader && !draft.pollAuthValue && (isCreate || draft.pollReplaceAuth)) {
+        setError("Provide a value for the auth header, or leave the header name blank.");
+        return;
+      }
+      // Required inputs not supplied as a static preset are expected to arrive
+      // per-item in the poll item's `data` (matched by name, D17), so there is no
+      // author-time "required arg" gate for poll triggers.
+      const staticArgs: Record<string, ArgValue> = {};
+      for (const arg of args) {
+        const value = coerceArg(arg, draft.argValues[arg.name] ?? "");
+        if (value !== "") staticArgs[arg.name] = value;
+      }
+
+      const body: WorkflowTriggerCreateRequest = {
+        kind: "poll",
+        enabled: draft.enabled,
+        concurrencyPolicy: draft.concurrency,
+        targetMode: "personal_cloud",
+        targetWorkspaceId: draft.workspaceId,
+        poll: {
+          url,
+          authHeader: authHeader || null,
+          authValue:
+            !authHeader || (!isCreate && !draft.pollReplaceAuth)
+              ? undefined
+              : draft.pollAuthValue,
+          intervalSecs: draft.pollIntervalSecs,
+        },
+        args: staticArgs,
+      };
+      const onDone = { onSuccess: closeForm, onError: (e: Error) => setError(e.message) };
+      if (editing?.id) {
+        updateMutation.mutate({ triggerId: editing.id, body }, onDone);
+      } else {
+        createMutation.mutate(body, onDone);
+      }
+      return;
+    }
+
     const missing = args.find(
       (arg) => arg.required && (draft.argValues[arg.name] === "" || draft.argValues[arg.name] === undefined),
     );
@@ -180,23 +267,31 @@ export function WorkflowTriggersCard({
         triggers={triggers}
         cloudWorkspaces={cloudWorkspaces}
         activeId={editing?.id ?? undefined}
-        addActive={editing !== null && editing.id === null}
+        addingKind={editing !== null && editing.id === null ? draft?.kind ?? null : null}
         addDisabled={!cloudAvailable}
-        onAddSchedule={() => openForm(null)}
-        onEditSchedule={(trigger) => openForm(trigger)}
+        onAdd={(kind) => openForm(null, kind)}
+        onEditTrigger={(trigger) => openForm(trigger)}
       />
 
       {!cloudAvailable ? (
         <p className="text-xs text-faint">
-          Scheduled runs execute in the cloud. Create a cloud workspace to schedule this workflow;
-          local schedules are coming — run it manually for now.
+          Scheduled and poll runs execute in the cloud. Create a cloud workspace to trigger this
+          workflow that way; local triggers are coming — run it manually for now.
         </p>
       ) : (
-        <p className="text-xs text-faint">Runs manually from here or the runs list; schedules fire in the cloud.</p>
+        <p className="text-xs text-faint">Runs manually from here or the runs list; schedules and polls fire in the cloud.</p>
       )}
 
+      {pollTriggers.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          {pollTriggers.map((trigger) => (
+            <PollTriggerStatusRow key={trigger.id} trigger={trigger} onOpenRun={onOpenRun} />
+          ))}
+        </div>
+      ) : null}
+
       {editing && draft ? (
-        <TriggerScheduleForm
+        <TriggerForm
           draft={draft}
           args={args}
           cloudWorkspaces={cloudWorkspaces}
@@ -219,21 +314,22 @@ interface TriggerBadgeRowProps {
   triggers: readonly WorkflowTriggerResponse[];
   cloudWorkspaces: readonly WorkflowRunTargetOption[];
   activeId?: string | null;
-  addActive: boolean;
+  /** The kind currently being added via the inline "+ Add" form, if any. */
+  addingKind: TriggerKind | null;
   addDisabled: boolean;
-  onAddSchedule: () => void;
-  onEditSchedule: (trigger: WorkflowTriggerResponse) => void;
+  onAdd: (kind: TriggerKind) => void;
+  onEditTrigger: (trigger: WorkflowTriggerResponse) => void;
 }
 
-/** The Ona-style chip row: Manual + schedule chips + disabled "soon" chips + add. */
+/** The Ona-style chip row: Manual + schedule/poll chips + disabled "soon" chips + add buttons. */
 export function TriggerBadgeRow({
   triggers,
   cloudWorkspaces,
   activeId,
-  addActive,
+  addingKind,
   addDisabled,
-  onAddSchedule,
-  onEditSchedule,
+  onAdd,
+  onEditTrigger,
 }: TriggerBadgeRowProps) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -243,30 +339,29 @@ export function TriggerBadgeRow({
       </span>
 
       {triggers.map((trigger) => (
-        <ScheduleChip
+        <TriggerChip
           key={trigger.id}
           trigger={trigger}
           workspaceLabel={
             cloudWorkspaces.find((w) => w.id === trigger.targetWorkspaceId)?.label ?? "cloud workspace"
           }
           active={trigger.id === activeId}
-          onClick={() => onEditSchedule(trigger)}
+          onClick={() => onEditTrigger(trigger)}
         />
       ))}
 
-      <button
-        type="button"
+      <AddTriggerButton
+        label="Add schedule"
+        active={addingKind === "schedule"}
         disabled={addDisabled}
-        title={addDisabled ? "Scheduled runs need a cloud workspace" : undefined}
-        onClick={onAddSchedule}
-        className={twMerge(
-          "inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:border-border-heavy hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground",
-          addActive ? "border-solid border-border-heavy text-foreground" : "",
-        )}
-      >
-        <Plus className="size-3.5" aria-hidden />
-        Add schedule
-      </button>
+        onClick={() => onAdd("schedule")}
+      />
+      <AddTriggerButton
+        label="Add poll"
+        active={addingKind === "poll"}
+        disabled={addDisabled}
+        onClick={() => onAdd("poll")}
+      />
 
       <span className="inline-flex items-center rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-faint">
         Webhook · soon
@@ -278,7 +373,35 @@ export function TriggerBadgeRow({
   );
 }
 
-function ScheduleChip({
+function AddTriggerButton({
+  label,
+  active,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      title={disabled ? "Scheduled and poll runs need a cloud workspace" : undefined}
+      onClick={onClick}
+      className={twMerge(
+        "inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:border-border-heavy hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground",
+        active ? "border-solid border-border-heavy text-foreground" : "",
+      )}
+    >
+      <Plus className="size-3.5" aria-hidden />
+      {label}
+    </button>
+  );
+}
+
+function TriggerChip({
   trigger,
   workspaceLabel,
   active,
@@ -289,31 +412,151 @@ function ScheduleChip({
   active: boolean;
   onClick: () => void;
 }) {
-  const summary = trigger.schedule?.summary ?? "Schedule";
-  const nextRun = trigger.enabled
+  const isPoll = trigger.kind === "poll";
+  const summary = isPoll
+    ? `Poll · every ${Math.round((trigger.poll?.intervalSecs ?? POLL_MIN_INTERVAL_SECS) / 60)}m`
+    : trigger.schedule?.summary ?? "Schedule";
+  const nextRun = trigger.enabled && !isPoll
     ? formatAutomationTimestamp(trigger.nextRunAt ?? null, trigger.schedule?.timezone)
     : null;
+  const title = isPoll
+    ? `${workspaceLabel}${trigger.poll?.lastPollError ? ` · last error: ${trigger.poll.lastPollError}` : ""}`
+    : `${workspaceLabel}${trigger.lastSkipReason ? ` · last skipped: ${trigger.lastSkipReason}` : ""}`;
   return (
     <button
       type="button"
       onClick={onClick}
-      title={`${workspaceLabel}${trigger.lastSkipReason ? ` · last skipped: ${trigger.lastSkipReason}` : ""}`}
+      title={title}
       className={twMerge(
         "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors",
         active ? "border-border-heavy bg-list-hover text-foreground" : "border-border bg-accent text-foreground hover:border-border-heavy",
         trigger.enabled ? "" : "opacity-55",
       )}
     >
-      <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      {isPoll ? (
+        <RefreshCw className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      ) : (
+        <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+      )}
       <span className="truncate">{summary}</span>
-      <span className="text-xs text-faint">{trigger.enabled ? (nextRun ? `· ${nextRun}` : "") : "· off"}</span>
+      {isPoll ? (
+        trigger.enabled ? (
+          trigger.poll?.lastPollError ? (
+            <CircleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden />
+          ) : null
+        ) : (
+          <span className="text-xs text-faint">· off</span>
+        )
+      ) : (
+        <span className="text-xs text-faint">{trigger.enabled ? (nextRun ? `· ${nextRun}` : "") : "· off"}</span>
+      )}
     </button>
   );
 }
 
-interface TriggerScheduleFormProps {
+function PollTriggerStatusRow({
+  trigger,
+  onOpenRun,
+}: {
+  trigger: WorkflowTriggerResponse;
+  onOpenRun?: (runId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const itemsQuery = useWorkflowTriggerItems(trigger.workflowId, trigger.id, expanded);
+  const poll = trigger.poll;
+  if (!poll) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-surface-elevated-secondary/40 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="min-w-0 truncate font-mono">{poll.url}</span>
+          <span className="shrink-0 text-faint">
+            · {poll.lastPollAt ? `last polled ${formatAutomationTimestamp(poll.lastPollAt)}` : "not polled yet"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
+        >
+          {expanded ? <ChevronDown className="size-3.5" aria-hidden /> : <ChevronRight className="size-3.5" aria-hidden />}
+          Items
+        </button>
+      </div>
+
+      {poll.lastPollError ? (
+        <p className="flex items-start gap-1.5 text-xs text-destructive">
+          <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          {poll.lastPollError}
+        </p>
+      ) : null}
+
+      {expanded ? (
+        <TriggerItemsList
+          items={itemsQuery.data ?? []}
+          loading={itemsQuery.isPending}
+          onOpenRun={onOpenRun}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+const ITEM_STATUS_TONE: Record<string, BadgeTone> = {
+  spawned: "success",
+  invalid: "warning",
+  error: "destructive",
+};
+
+function TriggerItemsList({
+  items,
+  loading,
+  onOpenRun,
+}: {
+  items: readonly WorkflowTriggerItemResponse[];
+  loading: boolean;
+  onOpenRun?: (runId: string) => void;
+}) {
+  if (loading) {
+    return <p className="px-1 py-1 text-xs text-faint">Loading items…</p>;
+  }
+  if (items.length === 0) {
+    return <p className="px-1 py-1 text-xs text-faint">No items seen yet.</p>;
+  }
+  return (
+    <div className="flex flex-col gap-1 border-t border-border/60 pt-1.5">
+      {items.map((item) => (
+        <div key={item.itemId} className="flex items-start justify-between gap-2 px-1 py-0.5 text-xs">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <Badge tone={ITEM_STATUS_TONE[item.status] ?? "neutral"} className="text-[11px]">
+                {item.status}
+              </Badge>
+              <span className="min-w-0 truncate font-mono text-faint">{item.itemId}</span>
+              <span className="shrink-0 text-faint">· {formatAutomationTimestamp(item.receivedAt)}</span>
+            </div>
+            {item.errorMessage ? <p className="text-destructive">{item.errorMessage}</p> : null}
+          </div>
+          {item.status === "spawned" && item.runId && onOpenRun ? (
+            <button
+              type="button"
+              onClick={() => onOpenRun(item.runId!)}
+              className="flex shrink-0 items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Open run
+              <ArrowUpRight className="size-3" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface TriggerFormProps {
   draft: TriggerDraft;
-  args: readonly WorkflowArgSpec[];
+  args: readonly WorkflowInputSpec[];
   cloudWorkspaces: readonly WorkflowRunTargetOption[];
   error: string | null;
   busy: boolean;
@@ -326,8 +569,9 @@ interface TriggerScheduleFormProps {
   onDelete: () => void;
 }
 
-/** The inline schedule editor — shared form rhythm, aligned rows, one size. */
-export function TriggerScheduleForm({
+/** The inline trigger editor — shared form rhythm, aligned rows, one size. Renders
+ * the schedule or poll field group depending on `draft.kind`. */
+export function TriggerForm({
   draft,
   args,
   cloudWorkspaces,
@@ -340,7 +584,7 @@ export function TriggerScheduleForm({
   onSubmit,
   onCancel,
   onDelete,
-}: TriggerScheduleFormProps) {
+}: TriggerFormProps) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-elevated-secondary/40 p-3">
       {error ? (
@@ -349,66 +593,23 @@ export function TriggerScheduleForm({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <Label>Schedule</Label>
-          <AutomationSchedulePopover
-            schedulePreset={draft.preset}
-            rrule={draft.rrule}
-            timezone={draft.timezone}
-            onSchedulePresetChange={(preset) => onPatch({ preset })}
-            onRruleChange={(rrule) => onPatch({ rrule })}
-            onTimezoneChange={(timezone) => onPatch({ timezone })}
-            onRruleBlur={() => onPatch({ preset: presetForRrule(draft.rrule) })}
-          />
-          <span className="text-xs text-faint">
-            Fires at {timeForRrule(draft.rrule)} · {draft.timezone}
-          </span>
-        </div>
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <Label>Cloud workspace</Label>
-          <WorkflowSelect
-            ariaLabel="Cloud workspace"
-            value={draft.workspaceId}
-            options={cloudWorkspaces.map((workspace) => ({ value: workspace.id, label: workspace.label }))}
-            onChange={(value) => onPatch({ workspaceId: value })}
-          />
-        </div>
-      </div>
+      {draft.kind === "poll" ? (
+        <PollFields draft={draft} cloudWorkspaces={cloudWorkspaces} isEdit={isEdit} onPatch={onPatch} />
+      ) : (
+        <ScheduleFields draft={draft} cloudWorkspaces={cloudWorkspaces} onPatch={onPatch} />
+      )}
 
       {args.length > 0 ? (
         <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
-          <Label className="mb-0">Arguments</Label>
+          <Label className="mb-0">{draft.kind === "poll" ? "Input presets" : "Arguments"}</Label>
+          {draft.kind === "poll" ? (
+            <p className="text-xs text-faint">
+              Optional static presets. Any input a poll item&apos;s data supplies (by name)
+              overrides its preset.
+            </p>
+          ) : null}
           {args.map((arg) => (
-            <div key={arg.name} className="grid grid-cols-[10rem_1fr] items-center gap-2">
-              <span className="flex min-w-0 items-center gap-1 truncate font-mono text-sm text-foreground">
-                {arg.name}
-                {arg.required ? <span className="text-destructive">*</span> : null}
-                <span className="font-sans text-xs text-faint">· {arg.type}</span>
-              </span>
-              {arg.type === "boolean" ? (
-                <div className="flex items-center">
-                  <Switch
-                    checked={Boolean(draft.argValues[arg.name])}
-                    onChange={(checked) => onPatch({ argValues: { ...draft.argValues, [arg.name]: checked } })}
-                  />
-                </div>
-              ) : arg.type === "enum" ? (
-                <WorkflowSelect
-                  ariaLabel={`${arg.name} value`}
-                  value={String(draft.argValues[arg.name] ?? "")}
-                  options={(arg.enum ?? []).map((option) => ({ value: option, label: option }))}
-                  onChange={(value) => onPatch({ argValues: { ...draft.argValues, [arg.name]: value } })}
-                />
-              ) : (
-                <Input
-                  type={arg.type === "number" ? "number" : "text"}
-                  value={String(draft.argValues[arg.name] ?? "")}
-                  onChange={(event) => onPatch({ argValues: { ...draft.argValues, [arg.name]: event.target.value } })}
-                  placeholder={arg.required ? "Required" : "Optional"}
-                />
-              )}
-            </div>
+            <ScheduleArgRow key={arg.name} arg={arg} draft={draft} onPatch={onPatch} />
           ))}
         </div>
       ) : null}
@@ -449,10 +650,201 @@ export function TriggerScheduleForm({
             Cancel
           </Button>
           <Button size="sm" onClick={onSubmit} loading={busy}>
-            {isEdit ? "Save schedule" : "Add schedule"}
+            {isEdit ? "Save trigger" : draft.kind === "poll" ? "Add poll" : "Add schedule"}
           </Button>
         </div>
       </div>
     </div>
+  );
+}
+
+function ScheduleFields({
+  draft,
+  cloudWorkspaces,
+  onPatch,
+}: {
+  draft: TriggerDraft;
+  cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  onPatch: (patch: Partial<TriggerDraft>) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <Label>Schedule</Label>
+        <AutomationSchedulePopover
+          schedulePreset={draft.preset}
+          rrule={draft.rrule}
+          timezone={draft.timezone}
+          onSchedulePresetChange={(preset) => onPatch({ preset })}
+          onRruleChange={(rrule) => onPatch({ rrule })}
+          onTimezoneChange={(timezone) => onPatch({ timezone })}
+          onRruleBlur={() => onPatch({ preset: presetForRrule(draft.rrule) })}
+        />
+        <span className="text-xs text-faint">
+          Fires at {timeForRrule(draft.rrule)} · {draft.timezone}
+        </span>
+      </div>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <Label>Cloud workspace</Label>
+        <WorkflowSelect
+          ariaLabel="Cloud workspace"
+          value={draft.workspaceId}
+          options={cloudWorkspaces.map((workspace) => ({ value: workspace.id, label: workspace.label }))}
+          onChange={(value) => onPatch({ workspaceId: value })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PollFields({
+  draft,
+  cloudWorkspaces,
+  isEdit,
+  onPatch,
+}: {
+  draft: TriggerDraft;
+  cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  isEdit: boolean;
+  onPatch: (patch: Partial<TriggerDraft>) => void;
+}) {
+  const showAuthValueInput = draft.pollReplaceAuth || !isEdit;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Label>Poll URL</Label>
+          <Input
+            type="url"
+            value={draft.pollUrl}
+            onChange={(event) => onPatch({ pollUrl: event.target.value })}
+            placeholder="https://issues.example.com/poll"
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Label>Cloud workspace</Label>
+          <WorkflowSelect
+            ariaLabel="Cloud workspace"
+            value={draft.workspaceId}
+            options={cloudWorkspaces.map((workspace) => ({ value: workspace.id, label: workspace.label }))}
+            onChange={(value) => onPatch({ workspaceId: value })}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Label>Auth header name</Label>
+          <Input
+            value={draft.pollAuthHeader}
+            onChange={(event) => onPatch({ pollAuthHeader: event.target.value })}
+            placeholder="Authorization"
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Label>Auth header value</Label>
+          {showAuthValueInput ? (
+            <div className="flex items-center gap-2">
+              <Input
+                type="password"
+                value={draft.pollAuthValue}
+                onChange={(event) => onPatch({ pollAuthValue: event.target.value })}
+                placeholder={draft.pollAuthHeader ? "Header value" : "No auth header set"}
+                disabled={!draft.pollAuthHeader.trim()}
+              />
+              {draft.pollHasAuth ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onPatch({ pollReplaceAuth: false, pollAuthValue: "" })}
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex h-9 items-center gap-2 rounded-md border border-border bg-surface-elevated-secondary px-3 text-sm text-muted-foreground">
+              <span className="flex-1 truncate">Configured — value hidden</span>
+              <Button variant="ghost" size="sm" onClick={() => onPatch({ pollReplaceAuth: true })}>
+                Replace
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <Label>Poll interval (seconds)</Label>
+        <Input
+          type="number"
+          min={POLL_MIN_INTERVAL_SECS}
+          value={draft.pollIntervalSecs}
+          onChange={(event) => onPatch({ pollIntervalSecs: Number(event.target.value) || 0 })}
+        />
+        <span className="text-xs text-faint">Minimum {POLL_MIN_INTERVAL_SECS} seconds.</span>
+      </div>
+
+      <p className="text-xs text-faint">
+        The endpoint&apos;s items must return a <code>data</code> object whose fields match this
+        workflow&apos;s inputs by name and type — verified once when you save.
+      </p>
+    </div>
+  );
+}
+
+function ScheduleArgRow({
+  arg,
+  draft,
+  onPatch,
+}: {
+  arg: WorkflowInputSpec;
+  draft: TriggerDraft;
+  onPatch: (patch: Partial<TriggerDraft>) => void;
+}) {
+  return (
+    <div className="grid grid-cols-[10rem_1fr] items-center gap-2">
+      <span className="flex min-w-0 items-center gap-1 truncate font-mono text-sm text-foreground">
+        {arg.name}
+        {arg.required ? <span className="text-destructive">*</span> : null}
+        <span className="font-sans text-xs text-faint">· {arg.type}</span>
+      </span>
+      <ArgValueInput arg={arg} value={draft.argValues[arg.name]} onChange={(value) => onPatch({ argValues: { ...draft.argValues, [arg.name]: value } })} />
+    </div>
+  );
+}
+
+function ArgValueInput({
+  arg,
+  value,
+  onChange,
+}: {
+  arg: WorkflowInputSpec;
+  value: ArgValue;
+  onChange: (value: ArgValue) => void;
+}) {
+  if (arg.type === "boolean") {
+    return (
+      <div className="flex h-9 items-center">
+        <Switch checked={Boolean(value)} onChange={(checked) => onChange(checked)} />
+      </div>
+    );
+  }
+  if (arg.type === "choice") {
+    return (
+      <WorkflowSelect
+        ariaLabel={`${arg.name} value`}
+        value={String(value ?? "")}
+        options={(arg.choices ?? []).map((option) => ({ value: option, label: option }))}
+        onChange={(next) => onChange(next)}
+      />
+    );
+  }
+  return (
+    <Input
+      type={arg.type === "number" ? "number" : "text"}
+      value={String(value ?? "")}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={arg.required ? "Required" : "Optional"}
+    />
   );
 }

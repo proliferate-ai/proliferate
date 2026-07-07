@@ -9,6 +9,7 @@ a ``pending_delivery`` run whose id is the delivery idempotency key.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
@@ -23,6 +24,7 @@ from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_TARGET_MODES,
     SUPPORTED_WORKFLOW_TRIGGER_KINDS,
     SUPPORTED_WORKFLOW_TRIGGER_TYPES,
+    WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
     WORKFLOW_RUN_OBSERVABLE_STATUSES,
     WORKFLOW_RUN_STATUS_DELIVERED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
@@ -34,6 +36,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
     WORKFLOW_TRIGGER_CHAT,
+    WORKFLOW_TRIGGER_KIND_POLL,
     WORKFLOW_TRIGGER_KIND_SCHEDULE,
     WORKFLOW_TRIGGER_MANUAL,
 )
@@ -62,6 +65,10 @@ from proliferate.server.cloud.workflows.domain.interpolation import (
     coerce_arguments,
     resolve_value,
 )
+from proliferate.server.cloud.workflows.domain.poll_contract import (
+    derive_item_schema,
+    validate_item_data,
+)
 from proliferate.server.cloud.workflows.domain.policy import (
     free_plan_workflow_limit,
     workflow_create_allowed,
@@ -73,17 +80,22 @@ from proliferate.server.cloud.workflows.domain.run_status import (
 )
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
+    TriggerPollRequest,
     TriggerScheduleRequest,
     WorkflowCreateRequest,
     WorkflowTriggerCreateRequest,
     WorkflowTriggerUpdateRequest,
     WorkflowUpdateRequest,
 )
+from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
 _TRIGGER_LOCAL_UNSUPPORTED_MESSAGE = (
     "Scheduled local runs are coming; run this workflow manually, or schedule it "
     "on a cloud workspace."
+)
+_POLL_LOCAL_UNSUPPORTED_MESSAGE = (
+    "Poll triggers run in the cloud; point this trigger at a cloud workspace."
 )
 
 
@@ -595,16 +607,25 @@ def _validate_concurrency(policy: str) -> None:
         )
 
 
-def _validate_trigger_target_mode(mode: str) -> None:
+def _validate_trigger_target_mode(
+    mode: str, *, kind: str = WORKFLOW_TRIGGER_KIND_SCHEDULE
+) -> None:
+    # Locked v1 decision (spec 5.1/5.3): schedule AND poll triggers are cloud-only
+    # (no server→desktop claim protocol exists). Reject local cleanly rather than
+    # record a run nobody delivers.
+    is_poll = kind == WORKFLOW_TRIGGER_KIND_POLL
     if mode == WORKFLOW_TARGET_MODE_LOCAL:
-        # Locked v1 decision — reject cleanly rather than record a run nobody delivers.
         raise CloudApiError(
-            "schedule_local_unsupported", _TRIGGER_LOCAL_UNSUPPORTED_MESSAGE, status_code=400
+            "poll_local_unsupported" if is_poll else "schedule_local_unsupported",
+            _POLL_LOCAL_UNSUPPORTED_MESSAGE if is_poll else _TRIGGER_LOCAL_UNSUPPORTED_MESSAGE,
+            status_code=400,
         )
     if mode != WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
         raise CloudApiError(
             "invalid_target_mode",
-            "target_mode must be 'personal_cloud' for scheduled triggers.",
+            "target_mode must be 'personal_cloud' for "
+            + ("poll" if is_poll else "scheduled")
+            + " triggers.",
             status_code=400,
         )
 
@@ -638,6 +659,164 @@ async def _coerce_trigger_args(
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
 
+async def _workflow_arg_specs_or_raise(
+    db: AsyncSession, *, workflow_current_version_id: UUID | None
+) -> list[ArgSpec]:
+    if workflow_current_version_id is None:
+        raise CloudApiError(
+            "workflow_no_version",
+            "Add at least one step before adding a trigger to this workflow.",
+            status_code=409,
+        )
+    version = await store.get_version(db, workflow_current_version_id)
+    if version is None:
+        raise CloudApiError(
+            "workflow_version_not_found", "Workflow version not found.", status_code=404
+        )
+    return workflow_arg_specs(version)
+
+
+@dataclass(frozen=True)
+class _ValidatedPollConfig:
+    url: str
+    auth_header: str | None
+    interval_secs: int
+    # None + update_auth False => keep existing; otherwise write this ciphertext.
+    auth_ciphertext: str | None
+    update_auth: bool
+    # The plaintext auth value, kept only in-process for the init-time endpoint
+    # probe (never returned to a caller, never stored plaintext). None on an
+    # update that keeps the existing secret — the probe decrypts it instead.
+    auth_value_plaintext: str | None
+
+
+def _validate_poll_config(poll: TriggerPollRequest, *, is_update: bool) -> _ValidatedPollConfig:
+    """Validate + normalize the poll endpoint config. Encrypts the auth value at
+    write (never stored plaintext). ``is_update`` allows omitting the auth value to
+    keep the existing stored secret."""
+
+    url = poll.url.strip()
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        raise CloudApiError(
+            "invalid_poll_config", "poll url must be an http(s) URL.", status_code=400
+        )
+    if poll.interval_secs < WORKFLOW_POLL_MIN_INTERVAL_SECONDS:
+        raise CloudApiError(
+            "invalid_poll_interval",
+            f"poll interval must be at least {WORKFLOW_POLL_MIN_INTERVAL_SECONDS} seconds.",
+            status_code=400,
+        )
+
+    auth_header = poll.auth_header.strip() if poll.auth_header else None
+    if auth_header is None:
+        # No auth header: any supplied value is meaningless; clear the secret.
+        if poll.auth_value:
+            raise CloudApiError(
+                "invalid_poll_config",
+                "an auth value requires an auth header name.",
+                status_code=400,
+            )
+        return _ValidatedPollConfig(
+            url=url,
+            auth_header=None,
+            interval_secs=poll.interval_secs,
+            auth_ciphertext=None,
+            update_auth=True,  # explicit "no auth"
+            auth_value_plaintext=None,
+        )
+    if poll.auth_value:
+        return _ValidatedPollConfig(
+            url=url,
+            auth_header=auth_header,
+            interval_secs=poll.interval_secs,
+            auth_ciphertext=encrypt_text(poll.auth_value),
+            update_auth=True,
+            auth_value_plaintext=poll.auth_value,
+        )
+    # Header named but no value supplied. On create this means "no secret"; on
+    # update it means "keep the stored secret".
+    if not is_update:
+        raise CloudApiError(
+            "invalid_poll_config",
+            "an auth header requires an auth value on create.",
+            status_code=400,
+        )
+    return _ValidatedPollConfig(
+        url=url,
+        auth_header=auth_header,
+        interval_secs=poll.interval_secs,
+        auth_ciphertext=None,
+        update_auth=False,
+        auth_value_plaintext=None,
+    )
+
+
+def _validate_poll_static_inputs(
+    arg_specs: list[ArgSpec], *, static_inputs: dict[str, object]
+) -> dict[str, object]:
+    """Coerce a poll trigger's static input presets against the workflow inputs.
+
+    Only the presets provided are coerced (strict: unknown keys and bad types
+    fail at write, not at poll time). Required inputs NOT covered by a preset or a
+    default are expected to arrive per-item in ``item.data`` — the derived item
+    schema (D17) marks them required so the poller records a missing/mistyped item
+    ``invalid``. The merged per-item inputs are re-coerced inside ``start_run``.
+    """
+
+    try:
+        return coerce_arguments(
+            [spec for spec in arg_specs if spec.name in static_inputs], static_inputs
+        )
+    except ArgumentError as exc:
+        raise CloudApiError(exc.code, exc.message, status_code=400) from exc
+
+
+async def _probe_poll_signature(
+    config: _ValidatedPollConfig,
+    *,
+    item_schema: dict[str, object],
+    existing_ciphertext: str | None = None,
+) -> None:
+    """Init-time inputs-signature check (contract §2.2, amending L33a).
+
+    GET the endpoint once and validate that returned items' ``data`` carries
+    fields named and typed exactly like the workflow's declared inputs (the
+    derived ``item_schema``). A shape mismatch fails the trigger create/update so
+    a misconfigured endpoint is caught before the poller ever fires. An endpoint
+    with no items to sample passes (nothing to contradict the signature).
+    """
+
+    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+
+    if config.auth_value_plaintext is not None:
+        auth_value: str | None = config.auth_value_plaintext
+    elif config.auth_header is not None and existing_ciphertext is not None:
+        auth_value = decrypt_text(existing_ciphertext)
+    else:
+        auth_value = None
+    try:
+        page = await fetch_poll_page(
+            url=config.url,
+            auth_header=config.auth_header,
+            auth_value=auth_value,
+            cursor=None,
+        )
+    except Exception as exc:
+        raise CloudApiError(
+            "poll_probe_failed",
+            f"Could not reach the poll endpoint to verify its item shape: {exc}",
+            status_code=400,
+        ) from exc
+    for item in page.items:
+        error = validate_item_data(item.data, item_schema)
+        if error is not None:
+            raise CloudApiError(
+                "poll_signature_mismatch",
+                f"Poll item '{item.id}' does not match the workflow's declared inputs: {error}",
+                status_code=400,
+            )
+
+
 async def _visible_trigger(
     db: AsyncSession, *, user: ActorIdentity, workflow_id: UUID, trigger_id: UUID
 ) -> WorkflowTriggerRecord:
@@ -661,9 +840,13 @@ async def create_trigger(
         )
     _validate_trigger_kind(body.kind)
     _validate_concurrency(body.concurrency_policy)
-    _validate_trigger_target_mode(body.target_mode)
+    _validate_trigger_target_mode(body.target_mode, kind=body.kind)
     await ensure_cloud_workspace_owned(db, user=user, target_workspace_id=body.target_workspace_id)
-    parsed = _normalize_trigger_schedule(body.schedule)
+
+    if body.kind == WORKFLOW_TRIGGER_KIND_POLL:
+        return await _create_poll_trigger(db, user, workflow, body)
+
+    parsed = _normalize_trigger_schedule(_require_schedule(body.schedule))
     coerced_args = await _coerce_trigger_args(
         db, workflow_current_version_id=workflow.current_version_id, args=body.args
     )
@@ -680,6 +863,51 @@ async def create_trigger(
         schedule_summary=parsed.summary,
         next_run_at=parsed.next_run_at,
         args_json=coerced_args,
+        enabled=body.enabled,
+    )
+
+
+def _require_schedule(schedule: TriggerScheduleRequest | None) -> TriggerScheduleRequest:
+    if schedule is None:
+        raise CloudApiError(
+            "invalid_schedule", "A schedule is required for a schedule trigger.", status_code=400
+        )
+    return schedule
+
+
+async def _create_poll_trigger(
+    db: AsyncSession,
+    user: ActorIdentity,
+    workflow: WorkflowRecord,
+    body: WorkflowTriggerCreateRequest,
+) -> WorkflowTriggerRecord:
+    if body.poll is None:
+        raise CloudApiError(
+            "invalid_poll_config", "A poll config is required for a poll trigger.", status_code=400
+        )
+    config = _validate_poll_config(body.poll, is_update=False)
+    arg_specs = await _workflow_arg_specs_or_raise(
+        db, workflow_current_version_id=workflow.current_version_id
+    )
+    coerced_static = _validate_poll_static_inputs(arg_specs, static_inputs=body.args)
+    # The item schema is DERIVED from the inputs (D17): inputs already covered by a
+    # static preset need not appear per-item, so they are not required on the item.
+    item_schema = derive_item_schema(arg_specs, covered_names=coerced_static.keys())
+    await _probe_poll_signature(config, item_schema=item_schema)
+    return await trigger_store.create_trigger(
+        db,
+        workflow_id=workflow.id,
+        created_by_user_id=user.id,
+        kind=WORKFLOW_TRIGGER_KIND_POLL,
+        concurrency_policy=body.concurrency_policy,
+        target_mode=body.target_mode,
+        target_workspace_id=body.target_workspace_id,
+        poll_url=config.url,
+        poll_auth_header=config.auth_header,
+        poll_auth_ciphertext=config.auth_ciphertext,
+        poll_interval_secs=config.interval_secs,
+        poll_item_schema_json=item_schema,
+        args_json=coerced_static,
         enabled=body.enabled,
     )
 
@@ -718,7 +946,7 @@ async def update_trigger(
     )
     enabled = body.enabled if body.enabled is not None else existing.enabled
     _validate_concurrency(concurrency)
-    _validate_trigger_target_mode(target_mode)
+    _validate_trigger_target_mode(target_mode, kind=existing.kind)
 
     # Cloud target needs an owned workspace (new one if supplied, else the pinned one).
     target_workspace_id = (
@@ -727,6 +955,22 @@ async def update_trigger(
         else existing.target_workspace_id
     )
     await ensure_cloud_workspace_owned(db, user=user, target_workspace_id=target_workspace_id)
+
+    if existing.kind == WORKFLOW_TRIGGER_KIND_POLL:
+        return await _update_poll_trigger(
+            db,
+            workflow=workflow,
+            existing=existing,
+            body=body,
+            enabled=enabled,
+            concurrency=concurrency,
+            target_mode=target_mode,
+            target_workspace_id=target_workspace_id,
+        )
+    if body.poll is not None:
+        raise CloudApiError(
+            "invalid_poll_config", "This trigger is not a poll trigger.", status_code=400
+        )
 
     # Schedule: recompute the cursor only when it would otherwise be stale — the
     # RRULE/timezone changed, or the trigger is (re-)entering the due scan. An
@@ -766,8 +1010,89 @@ async def update_trigger(
     return updated
 
 
+async def _update_poll_trigger(
+    db: AsyncSession,
+    *,
+    workflow: WorkflowRecord,
+    existing: WorkflowTriggerRecord,
+    body: WorkflowTriggerUpdateRequest,
+    enabled: bool,
+    concurrency: str,
+    target_mode: str,
+    target_workspace_id: UUID | None,
+) -> WorkflowTriggerRecord:
+    if body.schedule is not None:
+        raise CloudApiError(
+            "invalid_schedule", "A poll trigger has no schedule.", status_code=400
+        )
+
+    # Poll config: a supplied ``poll`` block fully replaces the endpoint config
+    # (auth value stays write-only — omitting it keeps the stored secret). Absent,
+    # the existing config stands and only enabled/concurrency/target/args change.
+    config = _validate_poll_config(body.poll, is_update=True) if body.poll is not None else None
+
+    arg_specs = await _workflow_arg_specs_or_raise(
+        db, workflow_current_version_id=workflow.current_version_id
+    )
+    static_args = body.args if body.args is not None else existing.args_json
+    coerced_static = _validate_poll_static_inputs(arg_specs, static_inputs=static_args)
+    # Re-derive the item schema whenever the inputs' static coverage may have moved.
+    item_schema = derive_item_schema(arg_specs, covered_names=coerced_static.keys())
+
+    # Re-probe the endpoint on any poll-block edit (config could reshape auth/url).
+    # An inputs/preset edit that reshapes the derived schema is still persisted, but
+    # the endpoint the poller hits is unchanged so no fresh probe is warranted.
+    if config is not None:
+        await _probe_poll_signature(
+            config, item_schema=item_schema, existing_ciphertext=existing.poll_auth_ciphertext
+        )
+
+    # Always rewrite the derived item schema (inputs may have changed); pass the
+    # existing endpoint fields through when no poll block was supplied so they are
+    # never nulled.
+    updated = await trigger_store.update_trigger(
+        db,
+        trigger_id=existing.id,
+        enabled=enabled,
+        concurrency_policy=concurrency,
+        target_mode=target_mode,
+        target_workspace_id=target_workspace_id,
+        args_json=coerced_static,
+        write_poll_config=True,
+        poll_url=config.url if config is not None else existing.poll_url,
+        poll_auth_header=(config.auth_header if config is not None else existing.poll_auth_header),
+        poll_interval_secs=(
+            config.interval_secs if config is not None else existing.poll_interval_secs
+        ),
+        poll_item_schema_json=item_schema,
+        update_poll_auth=config.update_auth if config is not None else False,
+        poll_auth_ciphertext=config.auth_ciphertext if config is not None else None,
+    )
+    assert updated is not None
+    return updated
+
+
 async def delete_trigger(
     db: AsyncSession, user: ActorIdentity, workflow_id: UUID, trigger_id: UUID
 ) -> None:
     await _visible_trigger(db, user=user, workflow_id=workflow_id, trigger_id=trigger_id)
     await trigger_store.delete_trigger(db, trigger_id)
+
+
+async def list_trigger_items(
+    db: AsyncSession,
+    user: ActorIdentity,
+    workflow_id: UUID,
+    trigger_id: UUID,
+    *,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[trigger_store.WorkflowTriggerItemRecord]:
+    """A poll trigger's seen-set items, newest first (the per-item trigger UI)."""
+
+    await _visible_trigger(db, user=user, workflow_id=workflow_id, trigger_id=trigger_id)
+    return list(
+        await trigger_store.list_trigger_items(
+            db, trigger_id=trigger_id, limit=limit, offset=offset
+        )
+    )

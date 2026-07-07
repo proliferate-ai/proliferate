@@ -115,6 +115,7 @@ module = [
     "proliferate.server.cloud.managed_sandboxes.models",
     "proliferate.server.cloud.repos.models",
     "proliferate.server.cloud.workflows.models",
+    "proliferate.server.cloud.workflows.domain.poll_contract",
     "proliferate.server.support.models",
     "proliferate.config",
 ]

@@ -187,10 +187,11 @@ server/proliferate/
 └── alembic/versions/
     ├── e4f7a2b9c6d1_workflow_entities.py   # workflow + version + run tables (down_rev c9b8a7d6e5f4)
     ├── b2d4f6a8c0e1_workflow_trigger.py    # workflow_trigger + trigger_id/scheduled_for on run (down_rev e4f7a2b9c6d1)
-    └── c3a5e7f9d1b2_workflow_step_action.py # workflow_step_action table (down_rev b2d4f6a8c0e1) — PR A
+    ├── c3a5e7f9d1b2_workflow_step_action.py # workflow_step_action table (down_rev b2d4f6a8c0e1) — PR A
+    └── f1c3d5b7a9e2_workflow_poll_trigger.py # poll columns + workflow_trigger_item (down_rev c3a5e7f9d1b2) — PR B
 ```
 
-All three migrations are idempotent (guarded `_has_table`/`_has_index`/`_has_column`).
+All four migrations are idempotent (guarded `_has_table`/`_has_index`/`_has_column`/`_has_check`).
 
 **Tables** ([db/models/cloud/workflows.py](../server/proliferate/db/models/cloud/workflows.py)):
 
@@ -205,14 +206,14 @@ All three migrations are idempotent (guarded `_has_table`/`_has_index`/`_has_col
   idempotency key** and travels inside the plan. CHECK constraints verbatim:
 
 ```python
-CheckConstraint("trigger_kind IN ('manual', 'schedule', 'chat', 'agent', 'api')", name="ck_workflow_run_trigger_kind"),
+CheckConstraint("trigger_kind IN ('manual', 'schedule', 'poll', 'chat', 'agent', 'api')", name="ck_workflow_run_trigger_kind"),
 CheckConstraint("target_mode IN ('local', 'personal_cloud')", name="ck_workflow_run_target_mode"),
 CheckConstraint(
     "status IN ('pending_delivery', 'delivered', 'running', 'waiting_approval', "
     "'completed', 'failed', 'cancelled')",
     name="ck_workflow_run_status"),
 ```
-<sub>[db/models/cloud/workflows.py:102-120](../server/proliferate/db/models/cloud/workflows.py#L102)</sub>
+<sub>[db/models/cloud/workflows.py:102-121](../server/proliferate/db/models/cloud/workflows.py#L102)</sub> — `trigger_kind` widened to include `'poll'` (PR B).
 
 Key columns: `workflow_version_id` FK **RESTRICT** (can't delete a version with runs);
 `trigger_id` FK **SET NULL** (set only for scheduled runs); `scheduled_for` (RRULE slot —
@@ -227,19 +228,35 @@ Index("uq_workflow_run_trigger_slot", "trigger_id", "scheduled_for", unique=True
 ```
 <sub>[db/models/cloud/workflows.py:141-147](../server/proliferate/db/models/cloud/workflows.py#L141)</sub>
 
-- **`workflow_trigger`** (line 200) — *only* a trigger (pins target + schedule +
-  concurrency, funnels to the same `StartRun`). CHECKs: `kind IN ('schedule')`,
-  `concurrency_policy IN ('skip','queue')`, `target_mode IN ('local','personal_cloud')`,
-  a cloud⇒workspace / local⇒null constraint (line 225), and `ck_workflow_trigger_schedule_fields`
-  (line 231 — a `schedule` must carry rrule + timezone + next_run_at). Scheduler
-  due-scan index `ix_workflow_trigger_scheduler_due` (line 242).
-- **`workflow_step_action`** (line 299, PR A) — the step-actions ledger: server-side
+- **`workflow_trigger`** (line 200) — *only* a trigger (pins target + schedule/poll
+  + concurrency, funnels to the same `StartRun`). CHECKs: `kind IN ('schedule',
+  'poll')` (widened PR B), `concurrency_policy IN ('skip','queue')`,
+  `target_mode IN ('local','personal_cloud')`, a cloud⇒workspace / local⇒null
+  constraint (line 225), `ck_workflow_trigger_schedule_fields` (line 237 — a
+  `schedule` must carry rrule + timezone + next_run_at), and — PR B —
+  `ck_workflow_trigger_poll_fields` (line 242 — a `poll` must carry `poll_url` +
+  `poll_interval_secs`). Scheduler due-scan index `ix_workflow_trigger_scheduler_due`
+  (line 248). Poll columns (line 305) — endpoint, auth header *name*,
+  Fernet-encrypted auth header *value* (`poll_auth_ciphertext`, house crypto
+  helpers, never surfaced on reads), interval, item JSON Schema *derived from the
+  workflow inputs* (D17 — no `poll_args_mapping_json`, dropped in-migration),
+  opaque server-issued cursor, `last_poll_at`/`last_poll_error`
+  — plus the poller's own due-scan index `ix_workflow_trigger_poller_due` (line
+  257, partial on `enabled = true AND kind = 'poll'`).
+- **`workflow_trigger_item`** (line 329, PR B) — the per-trigger seen-set: composite
+  PK `(trigger_id, item_id)` on the poll item's endpoint-supplied `id` **is** the
+  at-most-one-spawn-per-item guarantee (`insert_trigger_item`'s `INSERT ... ON
+  CONFLICT DO NOTHING` is the CAS). `status` CHECK `spawned|invalid|error` (line
+  341) doubles as the trigger-error surface: schema-invalid items and StartRun
+  failures are recorded, never silently dropped. `run_id` FK **SET NULL** (item
+  history survives a deleted run).
+- **`workflow_step_action`** (line 364, PR A) — the step-actions ledger: server-side
   actions (Slack sends today) claimed off *observed* step completions. An action
   performs the side effect of a step the runtime already executed; it never decides
   what runs next (L19). `UniqueConstraint(run_id, step_key, action_kind)` (B5)
   **is** the claim — whichever observer's `INSERT ... ON CONFLICT DO NOTHING` lands
-  owns performing the action. `status` CHECK `pending|done|failed` (line 324); partial
-  index `ix_workflow_step_action_sweep … WHERE status = 'pending'` (line 328) drives
+  owns performing the action. `status` CHECK `pending|done|failed` (line 395); partial
+  index `ix_workflow_step_action_sweep … WHERE status = 'pending'` (line 398) drives
   the sweeper. Honest guarantee (stated in the model docstring): **exactly-once
   claim, at-least-once completion** — a crash between a successful Slack POST and
   the `status='done'` commit can duplicate a send, the same class as any
@@ -295,15 +312,17 @@ File tree — [server/proliferate/server/cloud/workflows/](../server/proliferate
 cloud/workflows/
 ├── api.py          # FastAPI router, mounted at /v1/cloud/workflows; owner-scoped
 ├── models.py       # Pydantic request/response (populate_by_name, camelCase wire aliases)
-├── service.py      # workflow/version CRUD, trigger CRUD, StartRun + _resolve_plan
+├── service.py      # workflow/version CRUD, trigger CRUD (schedule + poll), StartRun + _resolve_plan
 ├── delivery.py     # cloud lane: deliver_cloud_run, refresh_cloud_run
-├── scheduler.py    # second beat: fire due triggers + deliver eligible cloud runs + refresh/sweep (PR A phase 3)
+├── scheduler.py    # second beat: fire due triggers + poll pass + deliver eligible cloud runs + refresh/sweep
 ├── actions.py      # PR A: step-actions ledger — claim_step_action, apply_step_actions, sweep_pending_actions
+├── poller.py       # PR B: poll-trigger primitive — _poll_one_trigger, run_poll_pass, overlay_item_inputs
 └── domain/         # pure, unit-tested, no DB
     ├── definition.py     # strict validator: raw dict → canonical dict
     ├── interpolation.py  # template grammar + arg coercion + injection guard
     ├── run_status.py     # transition guard (is_terminal / transition_allowed / check_transition)
-    └── policy.py         # free-plan cap (workflow_create_allowed / free_plan_workflow_limit)
+    ├── policy.py         # free-plan cap (workflow_create_allowed / free_plan_workflow_limit)
+    └── poll_contract.py  # PR B: PollItem/PollPage models + validate_item_data + derive_item_schema (inputs → JSON Schema, D17)
 ```
 Integration boundary (raw HTTP to anyharness, kept out of the product domain):
 [integrations/anyharness/workflow_runs.py](../server/proliferate/integrations/anyharness/workflow_runs.py)
@@ -351,11 +370,13 @@ first-segments: `inputs`, `steps`, `fields`.
 
 ### 3.3 Service — [service.py](../server/proliferate/server/cloud/workflows/service.py)
 
-`start_run(...)` (line 305): validate target_mode/trigger_kind → owner-scoped 404 →
+`start_run(...)` (line 316): validate target_mode/trigger_kind → owner-scoped 404 →
 cloud target must be materialized (`target_workspace_not_ready` 409 before any row)
 → pin version → `parse_definition` strict → `coerce_arguments` → `_resolve_plan`
-(line 251) → `store.create_run(status=pending_delivery)`. The run id is
-pre-generated so it is inside the payload before insert.
+(line 262) → `store.create_run(status=pending_delivery)`. The run id is
+pre-generated so it is inside the payload before insert. `trigger_kind` accepts
+`'poll'` (PR B) exactly like `'schedule'` — from `start_run` onward a poll-fired
+run is indistinguishable from a manual one (below, and [poller.py](../server/proliferate/server/cloud/workflows/poller.py)).
 
 **Resolved-plan shape** (verbatim):
 ```python
@@ -377,13 +398,37 @@ return {
 StartRun wire (B9): `args`→`inputs`, `target` = `workspace_id` XOR `trigger_id`,
 optional `session_bindings:{slot:session_id}`.
 
-Also here: `report_run_status` (line 434; locks run, enforces `check_transition`,
+Also here: `report_run_status` (line 442; locks run, enforces `check_transition`,
 stamps started/finished, writes cursor/outputs/session ids/cost, then — after the
 status write commits — calls `actions.apply_step_actions` in a try/except so an
-action failure never breaks status ingestion, line 475), `mark_run_delivered`
-(idempotent), owner-scoped `list_runs`/`get_run`, and trigger CRUD. **Local schedule
-triggers are rejected at create** (`_validate_trigger_target_mode` →
-`schedule_local_unsupported`) — there's no server→desktop claim protocol.
+action failure never breaks status ingestion, line 486), `mark_run_delivered`
+(idempotent), owner-scoped `list_runs`/`get_run`, and trigger CRUD (schedule +
+poll, `create_trigger`/`update_trigger` branch on `body.kind`/`existing.kind`,
+line 768/880). **Local schedule *and* poll triggers are both rejected at create/update**
+(`_validate_trigger_target_mode`, line 541 — same helper, `is_poll` picks the
+error code: `schedule_local_unsupported` / `poll_local_unsupported`) — there's no
+server→desktop claim protocol for either.
+
+**Poll trigger validation** (PR B, same file): `_validate_poll_config` (line 622)
+normalizes + checks the endpoint config — url must be `http(s)://`,
+`interval_secs >= WORKFLOW_POLL_MIN_INTERVAL_SECONDS` (60s floor) — and encrypts
+a supplied `auth_value` via `encrypt_text` (never stored plaintext; omitting it on
+an update keeps the existing ciphertext, supplying an `auth_header` with no value
+on *create* is rejected). There is **no authoring surface for the item schema or
+an args mapping** (D17): `_validate_poll_static_inputs` coerces just the static
+input presets strict via `coerce_arguments` (a bad preset fails at write), and
+`derive_item_schema` (`domain/poll_contract.py`) projects the workflow's declared
+inputs into the item JSON Schema — each input a typed property (choice → enum),
+required unless a preset/default already covers it. `_probe_poll_signature` then
+does the **init-time inputs-signature check** (contract §2.2, amending L33a): it
+GETs the endpoint once and validates every returned item's `data` against the
+derived schema, so a `poll_signature_mismatch` (or unreachable-endpoint
+`poll_probe_failed`) is caught at trigger create/update, not at poll time.
+`_create_poll_trigger`/`_update_poll_trigger` wire these into the
+same `create_trigger`/`update_trigger` entry points schedule triggers use — one
+CRUD surface, kind-branched. `list_trigger_items` (line 996) is the read side of
+the per-trigger seen-set (owner-scoped, delegates to
+`trigger_store.list_trigger_items`).
 
 ### 3.4 Delivery — [delivery.py](../server/proliferate/server/cloud/workflows/delivery.py) (cloud lane)
 
@@ -410,37 +455,69 @@ wake the sandbox in-request). No outbox/Celery.
 A second beat beside the automations scheduler, launched in
 [automations/worker/main.py](../server/proliferate/server/automations/worker/main.py)
 `_amain` via `asyncio.gather(run_scheduler_loop(...), run_workflow_scheduler_loop(...))`
-(lines 50–57). Three phases per tick:
+(lines 50–57). `run_workflow_scheduler_tick` (line 283) runs, in order: Phase 1 →
+the poll pass (PR B) → Phase 2 → Phase 3.
 
-- **Phase 1 — fire due triggers.** `_fire_due_triggers` (line 181) →
-  `_fire_one_trigger` (line 97): `claim_due_schedule_trigger` (`FOR UPDATE SKIP LOCKED`,
-  [cloud_workflow_triggers.py:235](../server/proliferate/db/store/cloud_workflow_triggers.py#L235))
+- **Phase 1 — fire due triggers.** `_fire_due_triggers` (line 184) →
+  `_fire_one_trigger` (line 100): `claim_due_schedule_trigger` (`FOR UPDATE SKIP LOCKED`,
+  [cloud_workflow_triggers.py:344](../server/proliferate/db/store/cloud_workflow_triggers.py#L344))
   → archived-workflow guard → concurrency (`skip` drops + records reason + advances
   cursor; `queue` always creates) → `start_run` wrapped in `db.begin_nested()` so a
   StartRun error rolls back just the run insert.
-- **Phase 2 — deliver eligible cloud runs.** `_deliver_pending_runs` (line 221) →
-  `_deliver_one_run` (line 201): delivers **only the FIFO-first non-terminal run per
+- **Poll pass (PR B)** — [poller.py](../server/proliferate/server/cloud/workflows/poller.py)
+  `run_poll_pass` (line 290), called from the tick (line 296) right after Phase 1,
+  before delivery, so a freshly-spawned poll run is eligible for delivery the same
+  tick. Runs in the same gathered process (spec 4.1: "one worker to run and
+  monitor"), exception-isolated from the tick like Phase 3 — one trigger blowing
+  up never stalls firing or delivery. Per due trigger, `_poll_one_trigger` (line
+  159), one transaction: `claim_due_poll_trigger` (`FOR UPDATE SKIP LOCKED`,
+  [cloud_workflow_triggers.py:485](../server/proliferate/db/store/cloud_workflow_triggers.py#L485),
+  due = `last_poll_at` null or `last_poll_at + poll_interval_secs <= now`) →
+  `fetch_poll_page` (httpx GET, 10s timeout, decrypted auth header) — an HTTP/shape
+  error records `last_poll_error`, advances `last_poll_at`, and **keeps the old
+  cursor** (never advance past unread items) → per item: `insert_trigger_item`
+  (line 535, `INSERT ... ON CONFLICT DO NOTHING` on the `(trigger_id, item_id)`
+  PK — the seen-set CAS; a `False` return means a replay, skip it) →
+  `validate_item_data` against the derived `poll_item_schema_json` (a missing
+  required field or wrong type marks the item `invalid`, not `error` — the shape
+  is the endpoint's fault, not the run's) → `overlay_item_inputs` (D17: static
+  `args_json` presets overlaid by the item's own fields, **taken directly by
+  name** — the declared input names are the derived schema's `properties` keys;
+  undeclared `data` fields are ignored, no dot-path mapping) →
+  `start_run(inputs=…)` under a **savepoint per item** (`db.begin_nested()`,
+  Pablo amendment 2026-07-07 mirroring Phase 1's per-trigger savepoint): a
+  `start_run` failure rolls back only this item's run insert, never the whole
+  transaction — without it one raising item would roll back the cursor + seen-set
+  together and re-wedge the feed every poll. `mark_item` (line 560) finalizes
+  `spawned`/`invalid`/`error`; `persist_poll_cursor` (line 580) advances the
+  opaque cursor **in the same transaction** as the item rows, so a crash anywhere
+  mid-loop re-polls the old cursor and the seen-set PK absorbs the replay.
+- **Phase 2 — deliver eligible cloud runs.** `_deliver_pending_runs` (line 227) →
+  `_deliver_one_run` (line 204): delivers **only the FIFO-first non-terminal run per
   trigger** (`earliest_non_terminal_run_id_for_trigger`,
-  [cloud_workflows.py:435](../server/proliferate/db/store/cloud_workflows.py#L435)) —
-  one rule expresses both the immediate case and `queue` deferral. Capped per tick
-  (each wakes a sandbox).
-- **Phase 3 — refresh in-flight + sweep actions** (line 245, PR A). Added so
+  [cloud_workflows.py:440](../server/proliferate/db/store/cloud_workflows.py#L440)) —
+  one rule expresses both the immediate case and `queue` deferral. Gated on
+  `WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS = {schedule, poll}` (widened PR B — a
+  poll-spawned run carries `trigger_kind='poll'` and must ride this same phase, or
+  it would never deliver; `store.list_pending_scheduled_cloud_runs` is widened the
+  same way). Capped per tick (each wakes a sandbox).
+- **Phase 3 — refresh in-flight + sweep actions** (line 246, PR A). Added so
   Slack actions still fire for a triggered cloud run with nobody watching the run
   view (the UI's own `/refresh` poll is what drives `apply_step_actions` the rest
-  of the time). `_refresh_in_flight_runs` (line 245) →
+  of the time). `_refresh_in_flight_runs` (line 251) →
   `store.list_in_flight_triggered_cloud_runs`
-  ([cloud_workflows.py:561](../server/proliferate/db/store/cloud_workflows.py#L561);
+  ([cloud_workflows.py:565](../server/proliferate/db/store/cloud_workflows.py#L565);
   `delivered|running|waiting_approval`, target_mode=personal_cloud, trigger_id not
-  null) capped at
+  null — schedule *and* poll both qualify) capped at
   `_MAX_REFRESHES_PER_TICK=10` and filtered to `delivered_before=tick_start` (skips
   a run this same tick just delivered — it needs time to execute before a refresh
   is useful) → `refresh_cloud_run` per run, which reconciles the ledger and calls
-  `apply_step_actions`. `_sweep_actions` (line 269) → `actions.sweep_pending_actions`.
-  Both sub-phases are exception-isolated from Phase 1/2 and from each other
-  (`run_workflow_scheduler_tick`, line 288–295) — an actions bug never stalls
-  trigger firing or delivery.
+  `apply_step_actions`. `_sweep_actions` (line 275) → `actions.sweep_pending_actions`.
+  Both sub-phases are exception-isolated from Phase 1/poll/2 and from each other
+  (`run_workflow_scheduler_tick`, line 283–314) — an actions bug never stalls
+  trigger firing, polling, or delivery.
 
-`run_workflow_scheduler_loop` (line 300): exponential backoff (×2, cap 300s), Sentry
+`run_workflow_scheduler_loop` (line 317): exponential backoff (×2, cap 300s), Sentry
 after 3 consecutive failures.
 
 ### 3.6 API — [api.py](../server/proliferate/server/cloud/workflows/api.py)
@@ -465,7 +542,8 @@ after 3 consecutive failures.
 | GET | `/workflows/slack/channels` | PR A — `{channels:[{id,name}], connected}`; `connected:false` + empty list when the actor has no ready Slack account ([integrations accounts store](../server/proliferate/db/store/integrations/accounts.py)) |
 | GET/PATCH/DELETE | `/workflows/{workflow_id}` | detail / update (append version) / archive |
 | POST | `/workflows/{workflow_id}/runs` | **StartRun**; personal_cloud also calls `deliver_cloud_run` in-request |
-| GET/POST · GET/PATCH/DELETE | `/workflows/{workflow_id}/triggers[/{trigger_id}]` | trigger CRUD |
+| GET/POST · GET/PATCH/DELETE | `/workflows/{workflow_id}/triggers[/{trigger_id}]` | trigger CRUD — `kind:"schedule"\|"poll"`; a `poll` body carries `poll:{url, authHeader?, authValue?(write-only), intervalSecs}` (no item-schema/args-mapping authoring — D17), reads return `poll:{..., hasAuth, itemSchema(derived, read-only), lastPollAt, lastPollError}` (never the secret) |
+| GET | `/workflows/{workflow_id}/triggers/{trigger_id}/items` | PR B — a poll trigger's seen-set, paginated (`limit`/`offset`), newest first: `{items:[{itemId, runId, status, errorMessage, receivedAt}]}` |
 
 **No server-side cancel/pause endpoint** — cancel is a runtime concern
 ([§4.5](#45-local-http-surface), `POST /v1/workflow-runs/{id}/cancel`).
@@ -909,8 +987,9 @@ editor/run UI of its own (drift note #7).
 - **Always-bypass, no modes.** Goal turns verifiably stall on permission prompts;
   workflows must be unattended-safe by construction. `human.approval` is the explicit
   human-in-the-loop. (`exec_policy.rs`.)
-- **Schedule cloud-only.** Local scheduling needs a server→desktop claim protocol +
-  repo/workspace binding that doesn't exist. (`service._validate_trigger_target_mode`.)
+- **Schedule *and* poll are cloud-only.** Both need a server→desktop claim protocol
+  that doesn't exist; poll inherits the restriction for the same reason (PR B).
+  (`service._validate_trigger_target_mode`.)
 - **Zero-step drafts.** `require_steps=False` on save, `True` on StartRun.
 - **`agent.config` as a step (not Setup-only).** Config changes are ordered events
   (Claude fixes → Codex reviews), folded into the active config; harness switch opens
@@ -931,7 +1010,11 @@ editor/run UI of its own (drift note #7).
 1. **No `agent.goal` step kind** — goal is an attachment on `agent.prompt`.
 2. **`agent.config` added; `tool.call`/`workflow.call`/`agent.compact` not built.**
 3. **Target modes `local | personal_cloud`** (spec said `local | cloud`).
-4. **Trigger-kind enum `manual|schedule|chat|agent|api`** (spec listed webhook/parent — absent).
+4. ~~**Trigger-kind enum `manual|schedule|chat|agent|api`** (spec listed webhook/parent — absent).~~
+   **`poll` landed (PR B):** `WorkflowRun.trigger_kind` and `WorkflowTrigger.kind`
+   both widened to include `poll` (`manual|schedule|poll|chat|agent|api` /
+   `schedule|poll`); webhook and parent-run provenance (`workflow.run`, PR D) are
+   still absent.
 5. **Session bindings `fresh | headless`** (spec's `current_session`/`no_session` not modelled as Setup bindings).
 6. **Single `status` column, not `desired_state`/`observed_state`** — the split is enforced by the transition guard + the `OBSERVABLE_STATUSES` gate, not two columns.
 7. **No workflow-`scope` column, no Automation→trigger migration** — web `/workflows` still routes to automations.

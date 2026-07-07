@@ -12,11 +12,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.workflows import WORKFLOW_TRIGGER_KIND_SCHEDULE
-from proliferate.db.models.cloud.workflows import Workflow, WorkflowTrigger
+from proliferate.constants.workflows import (
+    WORKFLOW_TRIGGER_KIND_POLL,
+    WORKFLOW_TRIGGER_KIND_SCHEDULE,
+)
+from proliferate.db.models.cloud.workflows import (
+    Workflow,
+    WorkflowTrigger,
+    WorkflowTriggerItem,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -37,6 +45,15 @@ class WorkflowTriggerRecord:
     last_skipped_at: datetime | None
     last_skip_reason: str | None
     args_json: dict[str, object]
+    # poll config (kind == 'poll'). poll_auth_ciphertext is intentionally NOT
+    # surfaced on the record — the secret never leaves the DB except to the poller.
+    poll_url: str | None
+    poll_auth_header: str | None
+    poll_has_auth: bool
+    poll_interval_secs: int | None
+    poll_item_schema_json: dict[str, object] | None
+    last_poll_at: datetime | None
+    last_poll_error: str | None
     created_by_user_id: UUID
     created_at: datetime
     updated_at: datetime
@@ -58,6 +75,39 @@ class DueScheduleTrigger:
     args_json: dict[str, object]
 
 
+@dataclass(frozen=True)
+class DuePollTrigger:
+    """A row-locked, due poll trigger plus the owner context the poller needs.
+
+    ``poll_auth_ciphertext`` IS carried here — the poller decrypts it to build the
+    request auth header. It never leaves this process boundary (never on the API).
+    """
+
+    id: UUID
+    workflow_id: UUID
+    workflow_owner_user_id: UUID
+    workflow_archived: bool
+    target_mode: str
+    target_workspace_id: UUID | None
+    poll_url: str
+    poll_auth_header: str | None
+    poll_auth_ciphertext: str | None
+    poll_interval_secs: int
+    poll_item_schema_json: dict[str, object] | None
+    poll_cursor: str | None
+    args_json: dict[str, object]
+
+
+@dataclass(frozen=True)
+class WorkflowTriggerItemRecord:
+    trigger_id: UUID
+    item_id: str
+    run_id: UUID | None
+    status: str
+    error_message: str | None
+    received_at: datetime
+
+
 def _record(row: WorkflowTrigger) -> WorkflowTriggerRecord:
     return WorkflowTriggerRecord(
         id=row.id,
@@ -75,9 +125,29 @@ def _record(row: WorkflowTrigger) -> WorkflowTriggerRecord:
         last_skipped_at=row.last_skipped_at,
         last_skip_reason=row.last_skip_reason,
         args_json=dict(row.args_json or {}),
+        poll_url=row.poll_url,
+        poll_auth_header=row.poll_auth_header,
+        poll_has_auth=row.poll_auth_ciphertext is not None,
+        poll_interval_secs=row.poll_interval_secs,
+        poll_item_schema_json=(
+            dict(row.poll_item_schema_json) if row.poll_item_schema_json is not None else None
+        ),
+        last_poll_at=row.last_poll_at,
+        last_poll_error=row.last_poll_error,
         created_by_user_id=row.created_by_user_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+def _item_record(row: WorkflowTriggerItem) -> WorkflowTriggerItemRecord:
+    return WorkflowTriggerItemRecord(
+        trigger_id=row.trigger_id,
+        item_id=row.item_id,
+        run_id=row.run_id,
+        status=row.status,
+        error_message=row.error_message,
+        received_at=row.received_at,
     )
 
 
@@ -93,10 +163,15 @@ async def create_trigger(
     concurrency_policy: str,
     target_mode: str,
     target_workspace_id: UUID | None,
-    schedule_rrule: str | None,
-    schedule_timezone: str | None,
-    schedule_summary: str | None,
-    next_run_at: datetime | None,
+    schedule_rrule: str | None = None,
+    schedule_timezone: str | None = None,
+    schedule_summary: str | None = None,
+    next_run_at: datetime | None = None,
+    poll_url: str | None = None,
+    poll_auth_header: str | None = None,
+    poll_auth_ciphertext: str | None = None,
+    poll_interval_secs: int | None = None,
+    poll_item_schema_json: dict[str, object] | None = None,
     args_json: dict[str, object],
     enabled: bool = True,
 ) -> WorkflowTriggerRecord:
@@ -113,6 +188,11 @@ async def create_trigger(
         schedule_timezone=schedule_timezone,
         schedule_summary=schedule_summary,
         next_run_at=next_run_at,
+        poll_url=poll_url,
+        poll_auth_header=poll_auth_header,
+        poll_auth_ciphertext=poll_auth_ciphertext,
+        poll_interval_secs=poll_interval_secs,
+        poll_item_schema_json=poll_item_schema_json,
         args_json=args_json,
         created_by_user_id=created_by_user_id,
         created_at=now,
@@ -159,12 +239,25 @@ async def update_trigger(
     schedule_summary: str | None = None,
     next_run_at: datetime | None = None,
     args_json: dict[str, object] | None = None,
+    write_poll_config: bool = False,
+    poll_url: str | None = None,
+    poll_auth_header: str | None = None,
+    poll_interval_secs: int | None = None,
+    poll_item_schema_json: dict[str, object] | None = None,
+    update_poll_auth: bool = False,
+    poll_auth_ciphertext: str | None = None,
 ) -> WorkflowTriggerRecord | None:
     """Apply a trigger update. Only provided fields are written.
 
     ``clear_target_workspace`` lets a switch to a local target null the workspace
     (the plain ``target_workspace_id=None`` default is indistinguishable from "no
     change" otherwise).
+
+    Poll config is written as a unit when ``write_poll_config`` is set (the
+    service re-validates the whole merged config): the item schema / auth
+    header may be nulled by passing ``None``. The encrypted auth value is
+    written separately, gated on ``update_poll_auth`` — a poll edit that does not
+    touch the secret must keep the stored ciphertext (never re-supplied on reads).
     """
 
     row = await db.get(WorkflowTrigger, trigger_id)
@@ -190,6 +283,13 @@ async def update_trigger(
         row.next_run_at = next_run_at
     if args_json is not None:
         row.args_json = args_json
+    if write_poll_config:
+        row.poll_url = poll_url
+        row.poll_auth_header = poll_auth_header
+        row.poll_interval_secs = poll_interval_secs
+        row.poll_item_schema_json = poll_item_schema_json
+    if update_poll_auth:
+        row.poll_auth_ciphertext = poll_auth_ciphertext
     row.updated_at = utcnow()
     await db.flush()
     return _record(row)
@@ -327,3 +427,182 @@ async def disable_trigger_with_reason(
     row.last_skip_reason = reason
     row.updated_at = utcnow()
     await db.flush()
+
+
+# --- poller lane ---------------------------------------------------------------
+
+
+def _poll_due_clause(now: datetime) -> ColumnElement[bool]:
+    """Due = never polled, or elapsed seconds since last poll >= the interval.
+
+    Uses ``extract(epoch from (now - last_poll_at))`` so the per-row interval is
+    applied without fragile interval-literal arithmetic."""
+
+    elapsed_secs = func.extract("epoch", now - WorkflowTrigger.last_poll_at)
+    return or_(
+        WorkflowTrigger.last_poll_at.is_(None),
+        elapsed_secs >= WorkflowTrigger.poll_interval_secs,
+    )
+
+
+async def list_due_poll_trigger_ids(
+    db: AsyncSession, *, now: datetime, limit: int
+) -> list[UUID]:
+    """Enabled poll triggers whose next poll is due.
+
+    Due = never polled (``last_poll_at IS NULL``) or ``last_poll_at + interval``
+    has passed. Never-polled triggers sort first (NULL orders before timestamps).
+    """
+
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowTrigger.id)
+                .where(
+                    WorkflowTrigger.kind == WORKFLOW_TRIGGER_KIND_POLL,
+                    WorkflowTrigger.enabled.is_(True),
+                    _poll_due_clause(now),
+                )
+                .order_by(WorkflowTrigger.last_poll_at.asc().nullsfirst())
+                .limit(max(1, limit))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return list(rows)
+
+
+async def claim_due_poll_trigger(
+    db: AsyncSession, *, trigger_id: UUID, now: datetime
+) -> DuePollTrigger | None:
+    """Row-lock one due poll trigger for polling. Requires an open transaction.
+
+    ``SKIP LOCKED`` means a beat racing another poller simply moves on. Returns
+    ``None`` if the trigger was taken, disabled, or is no longer due. The interval
+    gate is re-checked under the lock (the id list may be stale by the time we
+    claim), so a just-polled trigger is not polled again the same beat.
+    """
+
+    row = (
+        await db.execute(
+            select(WorkflowTrigger)
+            .where(
+                WorkflowTrigger.id == trigger_id,
+                WorkflowTrigger.kind == WORKFLOW_TRIGGER_KIND_POLL,
+                WorkflowTrigger.enabled.is_(True),
+                _poll_due_clause(now),
+            )
+            .with_for_update(skip_locked=True)
+        )
+    ).scalar_one_or_none()
+    if row is None or row.poll_url is None or row.poll_interval_secs is None:
+        return None
+    workflow = await db.get(Workflow, row.workflow_id)
+    if workflow is None:
+        return None
+    return DuePollTrigger(
+        id=row.id,
+        workflow_id=row.workflow_id,
+        workflow_owner_user_id=workflow.owner_user_id,
+        workflow_archived=workflow.archived_at is not None,
+        target_mode=row.target_mode,
+        target_workspace_id=row.target_workspace_id,
+        poll_url=row.poll_url,
+        poll_auth_header=row.poll_auth_header,
+        poll_auth_ciphertext=row.poll_auth_ciphertext,
+        poll_interval_secs=row.poll_interval_secs,
+        poll_item_schema_json=(
+            dict(row.poll_item_schema_json) if row.poll_item_schema_json is not None else None
+        ),
+        poll_cursor=row.poll_cursor,
+        args_json=dict(row.args_json or {}),
+    )
+
+
+async def insert_trigger_item(
+    db: AsyncSession, *, trigger_id: UUID, item_id: str, status: str
+) -> bool:
+    """The seen-set CAS: INSERT ... ON CONFLICT DO NOTHING on the PK.
+
+    Returns ``True`` when this call inserted the row (first sighting of the item
+    for this trigger), ``False`` when the item was already recorded (a replay).
+    The row is inserted with a provisional ``status`` the caller finalizes via
+    ``mark_item`` once the item's fate is known.
+    """
+
+    stmt = (
+        pg_insert(WorkflowTriggerItem)
+        .values(
+            trigger_id=trigger_id,
+            item_id=item_id,
+            status=status,
+            received_at=utcnow(),
+        )
+        .on_conflict_do_nothing(index_elements=["trigger_id", "item_id"])
+        .returning(WorkflowTriggerItem.item_id)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None
+
+
+async def mark_item(
+    db: AsyncSession,
+    *,
+    trigger_id: UUID,
+    item_id: str,
+    status: str,
+    error_message: str | None = None,
+    run_id: UUID | None = None,
+) -> None:
+    """Finalize a seen-set item's outcome (spawned / invalid / error)."""
+
+    row = await db.get(WorkflowTriggerItem, (trigger_id, item_id))
+    if row is None:
+        return
+    row.status = status
+    row.error_message = error_message
+    row.run_id = run_id
+    await db.flush()
+
+
+async def persist_poll_cursor(
+    db: AsyncSession,
+    *,
+    trigger_id: UUID,
+    cursor: str | None,
+    polled_at: datetime,
+    error: str | None = None,
+) -> None:
+    """Advance the opaque cursor + last_poll_at in the SAME transaction as the
+    item rows. A clean poll clears ``last_poll_error``; an HTTP/shape failure
+    passes ``error`` (and leaves the cursor untouched by passing the old value)."""
+
+    row = await db.get(WorkflowTrigger, trigger_id)
+    if row is None:
+        return
+    row.poll_cursor = cursor
+    row.last_poll_at = polled_at
+    row.last_poll_error = error
+    row.updated_at = utcnow()
+    await db.flush()
+
+
+async def list_trigger_items(
+    db: AsyncSession, *, trigger_id: UUID, limit: int = 100, offset: int = 0
+) -> tuple[WorkflowTriggerItemRecord, ...]:
+    """A trigger's seen-set items, newest first (for the per-item trigger UI)."""
+
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowTriggerItem)
+                .where(WorkflowTriggerItem.trigger_id == trigger_id)
+                .order_by(WorkflowTriggerItem.received_at.desc())
+                .limit(max(1, limit))
+                .offset(max(0, offset))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_item_record(row) for row in rows)

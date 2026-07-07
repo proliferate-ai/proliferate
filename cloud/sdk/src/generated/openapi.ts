@@ -1783,6 +1783,26 @@ export interface paths {
         patch: operations["update_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__patch"];
         trace?: never;
     };
+    "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trigger Items Endpoint
+         * @description A poll trigger's per-item seen-set (spawned/invalid/error), newest first.
+         */
+        get: operations["list_trigger_items_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workers/desktop/enrollment": {
         parameters: {
             query?: never;
@@ -5231,6 +5251,46 @@ export interface components {
             avatar_url?: string | null;
         };
         /**
+         * TriggerPollRequest
+         * @description Poll trigger config (spec 4.2/4.3). ``auth_value`` is the header VALUE and is
+         *     WRITE-ONLY: it is encrypted at rest (house crypto) and never echoed back on a
+         *     read. Omitting it on an update keeps the stored secret; setting ``auth_header``
+         *     to null clears the auth entirely.
+         */
+        TriggerPollRequest: {
+            /** Url */
+            url: string;
+            /** Authheader */
+            authHeader?: string | null;
+            /** Authvalue */
+            authValue?: string | null;
+            /** Intervalsecs */
+            intervalSecs: number;
+        };
+        /**
+         * TriggerPollResponse
+         * @description Poll config on a read — the secret is never echoed; ``has_auth`` reports
+         *     whether an encrypted auth value is stored, and ``auth_header`` its name.
+         */
+        TriggerPollResponse: {
+            /** Url */
+            url: string;
+            /** Authheader */
+            authHeader: string | null;
+            /** Hasauth */
+            hasAuth: boolean;
+            /** Intervalsecs */
+            intervalSecs: number;
+            /** Itemschema */
+            itemSchema: {
+                [key: string]: unknown;
+            } | null;
+            /** Lastpollat */
+            lastPollAt: string | null;
+            /** Lastpollerror */
+            lastPollError: string | null;
+        };
+        /**
          * TriggerScheduleRequest
          * @description The RRULE + IANA timezone a schedule trigger fires on (house RRULE rules).
          */
@@ -5477,9 +5537,9 @@ export interface components {
             /**
              * Kind
              * @default schedule
-             * @constant
+             * @enum {string}
              */
-            kind: "schedule";
+            kind: "schedule" | "poll";
             /**
              * Enabled
              * @default true
@@ -5497,11 +5557,33 @@ export interface components {
             targetMode: "local" | "personal_cloud";
             /** Targetworkspaceid */
             targetWorkspaceId?: string | null;
-            schedule: components["schemas"]["TriggerScheduleRequest"];
+            schedule?: components["schemas"]["TriggerScheduleRequest"] | null;
+            poll?: components["schemas"]["TriggerPollRequest"] | null;
             /** Args */
             args?: {
                 [key: string]: unknown;
             };
+        };
+        /** WorkflowTriggerItemListResponse */
+        WorkflowTriggerItemListResponse: {
+            /** Items */
+            items: components["schemas"]["WorkflowTriggerItemResponse"][];
+        };
+        /**
+         * WorkflowTriggerItemResponse
+         * @description One seen-set item for a poll trigger's per-item table (spec 8.2 row B).
+         */
+        WorkflowTriggerItemResponse: {
+            /** Itemid */
+            itemId: string;
+            /** Runid */
+            runId: string | null;
+            /** Status */
+            status: string;
+            /** Errormessage */
+            errorMessage: string | null;
+            /** Receivedat */
+            receivedAt: string;
         };
         /** WorkflowTriggerListResponse */
         WorkflowTriggerListResponse: {
@@ -5525,6 +5607,7 @@ export interface components {
             /** Targetworkspaceid */
             targetWorkspaceId: string | null;
             schedule: components["schemas"]["TriggerScheduleResponse"] | null;
+            poll?: components["schemas"]["TriggerPollResponse"] | null;
             /** Nextrunat */
             nextRunAt: string | null;
             /** Lastscheduledat */
@@ -5545,7 +5628,7 @@ export interface components {
         /**
          * WorkflowTriggerUpdateRequest
          * @description Partial update: only supplied fields change, then the whole trigger is
-         *     re-validated as a unit (schedule ⋈ target ⋈ args are interdependent).
+         *     re-validated as a unit (schedule/poll ⋈ target ⋈ args are interdependent).
          */
         WorkflowTriggerUpdateRequest: {
             /** Enabled */
@@ -5557,6 +5640,7 @@ export interface components {
             /** Targetworkspaceid */
             targetWorkspaceId?: string | null;
             schedule?: components["schemas"]["TriggerScheduleRequest"] | null;
+            poll?: components["schemas"]["TriggerPollRequest"] | null;
             /** Args */
             args?: {
                 [key: string]: unknown;
@@ -9705,6 +9789,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trigger_items_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__items_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerItemListResponse"];
                 };
             };
             /** @description Validation Error */

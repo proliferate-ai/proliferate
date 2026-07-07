@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.workflows import (
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_TERMINAL_STATUSES,
+    WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
-    WORKFLOW_TRIGGER_SCHEDULE,
 )
 from proliferate.db.models.cloud.workflows import (
     Workflow,
@@ -458,7 +458,8 @@ async def earliest_non_terminal_run_id_for_trigger(
 async def list_pending_scheduled_cloud_runs(
     db: AsyncSession, *, limit: int
 ) -> tuple[WorkflowRunRecord, ...]:
-    """Scheduled cloud runs still awaiting delivery, FIFO-ordered.
+    """Server-delivered (schedule + poll) cloud runs still awaiting delivery,
+    FIFO-ordered.
 
     The scheduler tick delivers only those whose trigger has no earlier
     non-terminal run (see ``earliest_non_terminal_run_id_for_trigger``), which is
@@ -471,7 +472,7 @@ async def list_pending_scheduled_cloud_runs(
                 select(WorkflowRun)
                 .where(
                     WorkflowRun.status == WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
-                    WorkflowRun.trigger_kind == WORKFLOW_TRIGGER_SCHEDULE,
+                    WorkflowRun.trigger_kind.in_(tuple(WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS)),
                     WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
                     WorkflowRun.trigger_id.is_not(None),
                 )

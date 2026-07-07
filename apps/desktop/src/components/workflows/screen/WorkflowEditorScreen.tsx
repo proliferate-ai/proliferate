@@ -344,6 +344,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 workflowId={workflowId}
                 args={definition.args}
                 cloudWorkspaces={cloudWorkspaceOptions}
+                onOpenRun={(runId) => navigate(`/workflows/${workflowId}/runs/${runId}`)}
               />
 
               <div className="flex flex-col">

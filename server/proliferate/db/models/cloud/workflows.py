@@ -100,7 +100,7 @@ class WorkflowRun(Base):
     __tablename__ = "workflow_run"
     __table_args__ = (
         CheckConstraint(
-            "trigger_kind IN ('manual', 'schedule', 'chat', 'agent', 'api')",
+            "trigger_kind IN ('manual', 'schedule', 'poll', 'chat', 'agent', 'api')",
             name="ck_workflow_run_trigger_kind",
         ),
         CheckConstraint(
@@ -209,7 +209,7 @@ class WorkflowTrigger(Base):
     __tablename__ = "workflow_trigger"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('schedule')",
+            "kind IN ('schedule', 'poll')",
             name="ck_workflow_trigger_kind",
         ),
         CheckConstraint(
@@ -236,6 +236,11 @@ class WorkflowTrigger(Base):
             ")",
             name="ck_workflow_trigger_schedule_fields",
         ),
+        # A poll trigger must carry a complete poll config (endpoint + interval).
+        CheckConstraint(
+            "kind <> 'poll' OR (poll_url IS NOT NULL AND poll_interval_secs IS NOT NULL)",
+            name="ck_workflow_trigger_poll_fields",
+        ),
         Index("ix_workflow_trigger_workflow_id", "workflow_id"),
         Index("ix_workflow_trigger_target_workspace_id", "target_workspace_id"),
         # The scheduler's due scan: enabled schedule triggers whose slot has passed.
@@ -245,6 +250,13 @@ class WorkflowTrigger(Base):
             postgresql_where=text(
                 "enabled = true AND kind = 'schedule' AND next_run_at IS NOT NULL"
             ),
+        ),
+        # The poller's due scan: enabled poll triggers (due = last_poll_at NULL, or
+        # last_poll_at + interval <= now, evaluated in the claim query).
+        Index(
+            "ix_workflow_trigger_poller_due",
+            "last_poll_at",
+            postgresql_where=text("enabled = true AND kind = 'poll'"),
         ),
     )
 
@@ -283,8 +295,26 @@ class WorkflowTrigger(Base):
     )
     last_skip_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # The argument values a fired run runs with, validated against the workflow's
-    # arg schema (same coercion as a manual StartRun) at create/update.
+    # arg schema (same coercion as a manual StartRun) at create/update. For poll
+    # triggers these are static defaults, merged under the per-item mapped args.
     args_json: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    # --- poll trigger config (kind == 'poll'; spec 4.2/4.3). -------------------
+    # The conforming endpoint (GET /poll?cursor=&limit=), the header NAME the auth
+    # value rides on, and the Fernet-encrypted header VALUE (house crypto helpers;
+    # the plaintext secret is never stored and never echoed back on reads).
+    poll_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    poll_auth_header: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    poll_auth_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    poll_interval_secs: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # JSON Schema each item's ``data`` must validate against before it spawns a
+    # run. Fully DERIVED from the workflow's declared inputs (D17) — there is no
+    # authoring surface; the poller uses it unchanged for per-item validation.
+    poll_item_schema_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # Opaque, server-issued cursor: Proliferate stores and echoes it, never reads it.
+    poll_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_poll_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Trigger-error surface (HTTP failure, malformed page). Cleared on a clean poll.
+    last_poll_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
     )
@@ -294,6 +324,41 @@ class WorkflowTrigger(Base):
         default=utcnow,
         onupdate=utcnow,
     )
+
+
+class WorkflowTriggerItem(Base):
+    """At-most-one spawn per (trigger, item id). The PK is the dedup guarantee.
+
+    The Proliferate half of the at-least-once poll story (spec 4.3/4.4): the
+    endpoint may replay items, but the composite primary key means an item id
+    spawns a run at most once per trigger. Doubles as the trigger-error surface —
+    schema-invalid items are recorded ``invalid`` (never silently dropped, never
+    fed to an agent malformed), and StartRun failures are recorded ``error``.
+    """
+
+    __tablename__ = "workflow_trigger_item"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('spawned', 'invalid', 'error')",
+            name="ck_workflow_trigger_item_status",
+        ),
+    )
+
+    trigger_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow_trigger.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # The poll item's ``id`` — the endpoint's stable, unique idempotency key.
+    item_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    # The run this item spawned (SET NULL keeps item history if the run is deleted).
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("workflow_run.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(String(16))
+    # Schema-validation / mapping / StartRun failure detail for non-spawned items.
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class WorkflowStepAction(Base):

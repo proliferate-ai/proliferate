@@ -5,7 +5,7 @@ import { WorkflowMetaCard } from "@/components/workflows/editor/WorkflowMetaCard
 import { WorkflowSetupCard } from "@/components/workflows/editor/WorkflowSetupCard";
 import {
   TriggerBadgeRow,
-  TriggerScheduleForm,
+  TriggerForm,
   type TriggerDraft,
   type WorkflowTriggerResponse,
 } from "@/components/workflows/editor/WorkflowTriggersCard";
@@ -58,6 +58,21 @@ const TRIGGERS: WorkflowTriggerResponse[] = [
     schedule: { rrule: "RRULE:FREQ=WEEKLY;BYDAY=MO", timezone: "America/Los_Angeles", summary: "Weekly on Monday" },
     lastSkipReason: "previous run still running",
   }),
+  makeTrigger({
+    id: "trig-3",
+    kind: "poll",
+    schedule: null,
+    poll: {
+      url: "https://issues.example.com/poll/new-issues",
+      authHeader: "Authorization",
+      hasAuth: true,
+      intervalSecs: 300,
+      // Derived (read-only) from the workflow inputs — no authoring surface (D17).
+      itemSchema: { type: "object", required: ["title"], properties: { title: { type: "string" } } },
+      lastPollAt: "2026-07-06T18:05:00Z",
+      lastPollError: "GET failed: 503 Service Unavailable",
+    },
+  }),
 ];
 
 /**
@@ -73,15 +88,40 @@ export function WorkflowFormsFixtures() {
   const [args, setArgs] = useState<WorkflowArgSpec[]>(ARGS);
 
   const [draft, setDraft] = useState<TriggerDraft>({
+    kind: "schedule",
     rrule: DAILY_RRULE,
     timezone: "America/Los_Angeles",
     preset: presetForRrule(DAILY_RRULE),
+    pollUrl: "",
+    pollAuthHeader: "",
+    pollHasAuth: false,
+    pollReplaceAuth: true,
+    pollAuthValue: "",
+    pollIntervalSecs: 300,
     concurrency: "skip",
     enabled: true,
     workspaceId: "ws-1",
     argValues: { pr_number: "912", env: "staging" },
   });
   const patchDraft = (patch: Partial<TriggerDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
+
+  const [pollDraft, setPollDraft] = useState<TriggerDraft>({
+    kind: "poll",
+    rrule: DAILY_RRULE,
+    timezone: "America/Los_Angeles",
+    preset: presetForRrule(DAILY_RRULE),
+    pollUrl: "https://issues.example.com/poll/new-issues",
+    pollAuthHeader: "Authorization",
+    pollHasAuth: true,
+    pollReplaceAuth: false,
+    pollAuthValue: "",
+    pollIntervalSecs: 300,
+    concurrency: "queue",
+    enabled: true,
+    workspaceId: "ws-1",
+    argValues: { pr_number: "", env: "staging" },
+  });
+  const patchPollDraft = (patch: Partial<TriggerDraft>) => setPollDraft((prev) => ({ ...prev, ...patch }));
 
   return (
     <section className="flex flex-col gap-3">
@@ -96,18 +136,18 @@ export function WorkflowFormsFixtures() {
         <WorkflowSetupCard setup={setup} args={args} agents={AGENTS} onSetupChange={setSetup} onArgsChange={setArgs} />
 
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 shadow-sm">
-          <span className="text-sm font-medium text-foreground">Triggers</span>
+          <span className="text-sm font-medium text-foreground">Triggers — schedule + poll chips, poll error caption</span>
           <TriggerBadgeRow
             triggers={TRIGGERS}
             cloudWorkspaces={CLOUD_WORKSPACES}
             activeId={undefined}
-            addActive={false}
+            addingKind={null}
             addDisabled={false}
-            onAddSchedule={() => {}}
-            onEditSchedule={() => {}}
+            onAdd={() => {}}
+            onEditTrigger={() => {}}
           />
-          <p className="text-xs text-faint">Runs manually from here or the runs list; schedules fire in the cloud.</p>
-          <TriggerScheduleForm
+          <p className="text-xs text-faint">Runs manually from here or the runs list; schedules and polls fire in the cloud.</p>
+          <TriggerForm
             draft={draft}
             args={args}
             cloudWorkspaces={CLOUD_WORKSPACES}
@@ -124,19 +164,37 @@ export function WorkflowFormsFixtures() {
         </div>
 
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 shadow-sm">
+          <span className="text-sm font-medium text-foreground">Poll trigger form — secret configured/replace, schema, args mapping</span>
+          <TriggerForm
+            draft={pollDraft}
+            args={args}
+            cloudWorkspaces={CLOUD_WORKSPACES}
+            error={null}
+            busy={false}
+            isEdit
+            canDelete
+            deleting={false}
+            onPatch={patchPollDraft}
+            onSubmit={() => {}}
+            onCancel={() => {}}
+            onDelete={() => {}}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 shadow-sm">
           <span className="text-sm font-medium text-foreground">Triggers — no cloud workspace</span>
           <TriggerBadgeRow
             triggers={[]}
             cloudWorkspaces={[]}
             activeId={undefined}
-            addActive={false}
+            addingKind={null}
             addDisabled
-            onAddSchedule={() => {}}
-            onEditSchedule={() => {}}
+            onAdd={() => {}}
+            onEditTrigger={() => {}}
           />
           <p className="text-xs text-faint">
-            Scheduled runs execute in the cloud. Create a cloud workspace to schedule this workflow; local schedules are
-            coming — run it manually for now.
+            Scheduled and poll runs execute in the cloud. Create a cloud workspace to trigger this workflow that way;
+            local triggers are coming — run it manually for now.
           </p>
         </div>
       </div>

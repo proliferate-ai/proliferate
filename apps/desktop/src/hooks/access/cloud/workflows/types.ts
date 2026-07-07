@@ -16,6 +16,8 @@ export type {
   WorkflowRunDetailResponse,
   WorkflowRunListResponse,
   WorkflowRunResponse,
+  WorkflowTriggerItemListResponse,
+  WorkflowTriggerItemResponse,
   WorkflowUpdateRequest,
   WorkflowVersionResponse,
 } from "@/lib/access/cloud/workflows";

@@ -29,6 +29,8 @@ export type WorkflowTriggerResponse = Schemas["WorkflowTriggerResponse"];
 export type WorkflowTriggerListResponse = Schemas["WorkflowTriggerListResponse"];
 export type WorkflowTriggerCreateRequest = Schemas["WorkflowTriggerCreateRequest"];
 export type WorkflowTriggerUpdateRequest = Schemas["WorkflowTriggerUpdateRequest"];
+export type WorkflowTriggerItemResponse = Schemas["WorkflowTriggerItemResponse"];
+export type WorkflowTriggerItemListResponse = Schemas["WorkflowTriggerItemListResponse"];
 export type SlackChannelResponse = Schemas["SlackChannelResponse"];
 export type SlackChannelsResponse = Schemas["SlackChannelsResponse"];
 
@@ -201,5 +203,19 @@ export async function deleteWorkflowTrigger(
     method: "DELETE",
     path: "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}",
     pathParams: { workflow_id: workflowId, trigger_id: triggerId },
+  });
+}
+
+/** A poll trigger's per-item seen-set (spec 8.2 row B) — newest first. */
+export async function listWorkflowTriggerItems(
+  workflowId: string,
+  triggerId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<WorkflowTriggerItemListResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerItemListResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}/items",
+    pathParams: { workflow_id: workflowId, trigger_id: triggerId },
+    query: { limit: params?.limit, offset: params?.offset },
   });
 }

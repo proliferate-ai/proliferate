@@ -24,6 +24,10 @@ export function workflowTriggersKey(workflowId: string | null) {
   return [...workflowsRootKey(), "triggers", workflowId] as const;
 }
 
+export function workflowTriggerItemsKey(workflowId: string | null, triggerId: string | null) {
+  return [...workflowsRootKey(), "trigger-items", workflowId, triggerId] as const;
+}
+
 export function workflowSlackChannelsKey() {
   return [...workflowsRootKey(), "slack-channels"] as const;
 }

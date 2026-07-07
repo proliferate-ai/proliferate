@@ -169,8 +169,8 @@ export function goalRailLine(step: WorkflowStep): GoalRailLine | null {
 // --- Home card view model ------------------------------------------------------
 
 export interface WorkflowTriggerChip {
-  /** `manual` is always live; `schedule` is rendered but W5-gated. */
-  kind: "manual" | "schedule" | "chat" | "webhook" | "api";
+  /** `manual` is always live; `schedule`/`poll` render, `chat`/`webhook`/`api` are W5-gated. */
+  kind: "manual" | "schedule" | "poll" | "chat" | "webhook" | "api";
   label: string;
   /** Whether the trigger is wired in v1 (schedule/webhook/api render as "soon"). */
   live: boolean;

@@ -12,6 +12,7 @@ from typing import Final
 # --- Trigger kinds (spec 3.5). Every trigger funnels through one StartRun. -----
 WORKFLOW_TRIGGER_MANUAL: Final = "manual"
 WORKFLOW_TRIGGER_SCHEDULE: Final = "schedule"
+WORKFLOW_TRIGGER_POLL: Final = "poll"
 WORKFLOW_TRIGGER_CHAT: Final = "chat"
 WORKFLOW_TRIGGER_AGENT: Final = "agent"
 WORKFLOW_TRIGGER_API: Final = "api"
@@ -19,6 +20,7 @@ SUPPORTED_WORKFLOW_TRIGGER_KINDS: Final = frozenset(
     {
         WORKFLOW_TRIGGER_MANUAL,
         WORKFLOW_TRIGGER_SCHEDULE,
+        WORKFLOW_TRIGGER_POLL,
         WORKFLOW_TRIGGER_CHAT,
         WORKFLOW_TRIGGER_AGENT,
         WORKFLOW_TRIGGER_API,
@@ -199,11 +201,36 @@ SUPPORTED_WORKFLOW_SESSION_BINDINGS: Final = frozenset(
 )
 
 # --- Trigger records (workflow_trigger table; spec 3.5). -----------------------
-# A trigger is *only* a trigger: it pins target + schedule + concurrency and calls
-# the same StartRun (no interpreter, no special execution path). The kind
-# vocabulary is intentionally open (webhook/api later); v1 ships schedule only.
+# A trigger is *only* a trigger: it pins target + schedule/poll + concurrency and
+# calls the same StartRun (no interpreter, no special execution path). The kind
+# vocabulary is intentionally open (webhook/api later); v1 ships schedule + poll.
 WORKFLOW_TRIGGER_KIND_SCHEDULE: Final = "schedule"
-SUPPORTED_WORKFLOW_TRIGGER_TYPES: Final = frozenset({WORKFLOW_TRIGGER_KIND_SCHEDULE})
+WORKFLOW_TRIGGER_KIND_POLL: Final = "poll"
+SUPPORTED_WORKFLOW_TRIGGER_TYPES: Final = frozenset(
+    {WORKFLOW_TRIGGER_KIND_SCHEDULE, WORKFLOW_TRIGGER_KIND_POLL}
+)
+
+# Trigger kinds whose runs are created server-side (pending_delivery) and delivered
+# by the workflow scheduler's phase-2 delivery pass (schedule + poll). Client-
+# initiated kinds (manual/chat) deliver themselves.
+WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS: Final = frozenset(
+    {WORKFLOW_TRIGGER_KIND_SCHEDULE, WORKFLOW_TRIGGER_KIND_POLL}
+)
+
+# --- Poll trigger (spec 4.2/4.3; issue-autofix-system-v1 §2). ------------------
+# The poller GETs a conforming endpoint on an interval, spawns one run per new
+# item (idempotent by item id), and echoes the opaque server-issued cursor.
+# The interval floor keeps a misconfigured trigger from hammering an endpoint.
+WORKFLOW_POLL_MIN_INTERVAL_SECONDS: Final = 60
+WORKFLOW_POLL_DEFAULT_LIMIT: Final = 50
+WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS: Final = 10.0
+WORKFLOW_POLL_ITEM_ID_MAX_LENGTH: Final = 255
+WORKFLOW_POLL_ERROR_MAX_LENGTH: Final = 480
+# The poller runs alongside the schedule beat (spec 4.1: same worker process).
+WORKFLOW_POLLER_DEFAULT_BATCH_SIZE: Final = 100
+WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED: Final = "spawned"
+WORKFLOW_TRIGGER_ITEM_STATUS_INVALID: Final = "invalid"
+WORKFLOW_TRIGGER_ITEM_STATUS_ERROR: Final = "error"
 
 # --- Concurrency policy (spec 3.5: simple skip | queue, no batch/parallel). -----
 # skip:  a due tick is dropped (recorded with a reason) while a prior run of the

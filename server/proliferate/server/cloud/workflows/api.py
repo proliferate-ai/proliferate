@@ -35,11 +35,13 @@ from proliferate.server.cloud.workflows.models import (
     WorkflowRunListResponse,
     WorkflowRunResponse,
     WorkflowTriggerCreateRequest,
+    WorkflowTriggerItemListResponse,
     WorkflowTriggerListResponse,
     WorkflowTriggerResponse,
     WorkflowTriggerUpdateRequest,
     WorkflowUpdateRequest,
     run_payload,
+    trigger_item_payload,
     trigger_payload,
     workflow_detail_payload,
     workflow_payload,
@@ -53,6 +55,7 @@ from proliferate.server.cloud.workflows.service import (
     get_trigger,
     get_workflow_detail,
     list_runs,
+    list_trigger_items,
     list_triggers,
     list_workflows,
     mark_run_delivered,
@@ -311,3 +314,21 @@ async def delete_trigger_endpoint(
     user: User = Depends(current_product_user),
 ) -> None:
     await delete_trigger(db, user, workflow_id, trigger_id)
+
+
+@router.get(
+    "/{workflow_id}/triggers/{trigger_id}/items",
+    response_model=WorkflowTriggerItemListResponse,
+)
+async def list_trigger_items_endpoint(
+    workflow_id: UUID,
+    trigger_id: UUID,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowTriggerItemListResponse:
+    """A poll trigger's per-item seen-set (spawned/invalid/error), newest first."""
+
+    items = await list_trigger_items(db, user, workflow_id, trigger_id, limit=limit, offset=offset)
+    return WorkflowTriggerItemListResponse(items=[trigger_item_payload(i) for i in items])

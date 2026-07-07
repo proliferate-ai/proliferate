@@ -39,10 +39,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
     WORKFLOW_CONCURRENCY_SKIP,
+    WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
     WORKFLOW_RUN_STATUS_DELIVERED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE,
     WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK,
+    WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
     WORKFLOW_TRIGGER_KIND_SCHEDULE,
     WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY,
     WORKFLOW_TRIGGER_SKIP_REASON_MAX_LENGTH,
@@ -59,6 +61,7 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import service
 from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.server.cloud.workflows.actions import sweep_pending_actions
+from proliferate.server.cloud.workflows.poller import run_poll_pass
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -203,7 +206,10 @@ async def _deliver_one_run(session_factory: SchedulerSessionFactory, *, run_id: 
         run = await store.get_run(db, run_id)
         if run is None or run.status != WORKFLOW_RUN_STATUS_PENDING_DELIVERY:
             return 0
-        if run.trigger_id is None or run.trigger_kind != WORKFLOW_TRIGGER_KIND_SCHEDULE:
+        if (
+            run.trigger_id is None
+            or run.trigger_kind not in WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS
+        ):
             return 0
         # Deliver only the FIFO-first non-terminal run of this trigger. Any other
         # run defers until its predecessor is terminal (this is queue's deferral).
@@ -282,6 +288,17 @@ async def run_workflow_scheduler_tick(
 ) -> WorkflowSchedulerTickResult:
     now = utcnow()
     created = await _fire_due_triggers(session_factory, now=now, batch_size=batch_size)
+
+    # Poll pass (PR B): poll every due poll trigger and spawn one run per new item.
+    # Runs before delivery so freshly-spawned poll runs are eligible this tick; the
+    # spawned cloud runs ride phase-2 delivery unchanged (they carry trigger_id).
+    try:
+        created += await run_poll_pass(
+            session_factory, now=now, batch_size=WORKFLOW_POLLER_DEFAULT_BATCH_SIZE
+        )
+    except Exception:
+        logger.exception("workflow scheduler poll pass failed")
+
     delivered = await _deliver_pending_runs(session_factory, max_deliveries=max_deliveries)
 
     # Phase 3: refresh in-flight triggered cloud runs + sweep stale actions.

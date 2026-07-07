@@ -9,7 +9,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
+from proliferate.db.store.cloud_workflow_triggers import (
+    WorkflowTriggerItemRecord,
+    WorkflowTriggerRecord,
+)
 from proliferate.db.store.cloud_workflows import (
     WorkflowRecord,
     WorkflowRunRecord,
@@ -271,20 +274,37 @@ class TriggerScheduleRequest(WorkflowBaseModel):
     timezone: str
 
 
+class TriggerPollRequest(WorkflowBaseModel):
+    """Poll trigger config (spec 4.2/4.3). ``auth_value`` is the header VALUE and is
+    WRITE-ONLY: it is encrypted at rest (house crypto) and never echoed back on a
+    read. Omitting it on an update keeps the stored secret; setting ``auth_header``
+    to null clears the auth entirely."""
+
+    # The poll item schema is DERIVED from the workflow's declared inputs (D17):
+    # there is no authoring surface, so this request carries no item_schema or
+    # args_mapping — item data is matched to inputs by name.
+    url: str
+    auth_header: str | None = Field(default=None, alias="authHeader")
+    auth_value: str | None = Field(default=None, alias="authValue")
+    interval_secs: int = Field(alias="intervalSecs")
+
+
 class WorkflowTriggerCreateRequest(WorkflowBaseModel):
-    # v1 vocabulary is schedule-only; the field exists so webhook/api slot in later.
-    kind: Literal["schedule"] = "schedule"
+    # v1 vocabulary is schedule + poll; the field stays open so webhook/api slot in.
+    kind: Literal["schedule", "poll"] = "schedule"
     enabled: bool = True
     concurrency_policy: WorkflowTriggerConcurrency = Field(alias="concurrencyPolicy")
     target_mode: WorkflowTriggerTargetMode = Field(alias="targetMode")
     target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
-    schedule: TriggerScheduleRequest
+    # Exactly one of schedule / poll is required, matching ``kind``.
+    schedule: TriggerScheduleRequest | None = None
+    poll: TriggerPollRequest | None = None
     args: dict[str, object] = Field(default_factory=dict)
 
 
 class WorkflowTriggerUpdateRequest(WorkflowBaseModel):
     """Partial update: only supplied fields change, then the whole trigger is
-    re-validated as a unit (schedule ⋈ target ⋈ args are interdependent)."""
+    re-validated as a unit (schedule/poll ⋈ target ⋈ args are interdependent)."""
 
     enabled: bool | None = None
     concurrency_policy: WorkflowTriggerConcurrency | None = Field(
@@ -293,6 +313,7 @@ class WorkflowTriggerUpdateRequest(WorkflowBaseModel):
     target_mode: WorkflowTriggerTargetMode | None = Field(default=None, alias="targetMode")
     target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
     schedule: TriggerScheduleRequest | None = None
+    poll: TriggerPollRequest | None = None
     args: dict[str, object] | None = None
 
 
@@ -300,6 +321,21 @@ class TriggerScheduleResponse(WorkflowBaseModel):
     rrule: str
     timezone: str
     summary: str | None
+
+
+class TriggerPollResponse(WorkflowBaseModel):
+    """Poll config on a read — the secret is never echoed; ``has_auth`` reports
+    whether an encrypted auth value is stored, and ``auth_header`` its name."""
+
+    url: str
+    auth_header: str | None = Field(alias="authHeader")
+    has_auth: bool = Field(alias="hasAuth")
+    interval_secs: int = Field(alias="intervalSecs")
+    # Derived (read-only) item schema — surfaced so the UI can show what shape the
+    # endpoint must return, but never authored.
+    item_schema: dict[str, object] | None = Field(alias="itemSchema")
+    last_poll_at: str | None = Field(alias="lastPollAt")
+    last_poll_error: str | None = Field(alias="lastPollError")
 
 
 class WorkflowTriggerResponse(WorkflowBaseModel):
@@ -311,6 +347,7 @@ class WorkflowTriggerResponse(WorkflowBaseModel):
     target_mode: str = Field(alias="targetMode")
     target_workspace_id: str | None = Field(alias="targetWorkspaceId")
     schedule: TriggerScheduleResponse | None
+    poll: TriggerPollResponse | None = None
     next_run_at: str | None = Field(alias="nextRunAt")
     last_scheduled_at: str | None = Field(alias="lastScheduledAt")
     last_skipped_at: str | None = Field(alias="lastSkippedAt")
@@ -324,6 +361,20 @@ class WorkflowTriggerListResponse(WorkflowBaseModel):
     triggers: list[WorkflowTriggerResponse]
 
 
+class WorkflowTriggerItemResponse(WorkflowBaseModel):
+    """One seen-set item for a poll trigger's per-item table (spec 8.2 row B)."""
+
+    item_id: str = Field(alias="itemId")
+    run_id: str | None = Field(alias="runId")
+    status: str
+    error_message: str | None = Field(alias="errorMessage")
+    received_at: str = Field(alias="receivedAt")
+
+
+class WorkflowTriggerItemListResponse(WorkflowBaseModel):
+    items: list[WorkflowTriggerItemResponse]
+
+
 def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
     schedule = (
         TriggerScheduleResponse(
@@ -332,6 +383,19 @@ def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
             summary=record.schedule_summary,
         )
         if record.schedule_rrule is not None and record.schedule_timezone is not None
+        else None
+    )
+    poll = (
+        TriggerPollResponse(
+            url=record.poll_url,
+            auth_header=record.poll_auth_header,
+            has_auth=record.poll_has_auth,
+            interval_secs=record.poll_interval_secs,
+            item_schema=record.poll_item_schema_json,
+            last_poll_at=_iso(record.last_poll_at),
+            last_poll_error=record.last_poll_error,
+        )
+        if record.poll_url is not None and record.poll_interval_secs is not None
         else None
     )
     return WorkflowTriggerResponse(
@@ -345,6 +409,7 @@ def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
             str(record.target_workspace_id) if record.target_workspace_id else None
         ),
         schedule=schedule,
+        poll=poll,
         next_run_at=_iso(record.next_run_at),
         last_scheduled_at=_iso(record.last_scheduled_at),
         last_skipped_at=_iso(record.last_skipped_at),
@@ -352,4 +417,14 @@ def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
         args=record.args_json,
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
+    )
+
+
+def trigger_item_payload(record: WorkflowTriggerItemRecord) -> WorkflowTriggerItemResponse:
+    return WorkflowTriggerItemResponse(
+        item_id=record.item_id,
+        run_id=str(record.run_id) if record.run_id else None,
+        status=record.status,
+        error_message=record.error_message,
+        received_at=record.received_at.isoformat(),
     )
