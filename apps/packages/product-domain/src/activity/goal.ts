@@ -48,6 +48,16 @@ export interface GoalCapabilities {
    * false the pause control renders disabled — pausing is not emulated.
    */
   pause: boolean;
+  /**
+   * Whether a goal set/edit applies at a discrete turn boundary, so it reads
+   * honestly as a standalone transcript row. True for harnesses where a
+   * `/goal` edit arms at the turn boundary and fires its own `goal_updated`
+   * (Claude); false where an edit steers the running turn live with no
+   * discrete "applied" moment (codex), in which case a set/edit row would
+   * misrepresent what happened. Terminal/status rows (paused/resumed/blocked/
+   * met/failed/cleared) are unaffected — they render for every harness.
+   */
+  setEditTranscriptRows: boolean;
 }
 
 export function isGoalStatus(value: unknown): value is GoalStatus {
@@ -291,4 +301,19 @@ export function humanizeGoalDurationSeconds(totalSeconds: number): string {
   const hours = Math.floor(minutes / 60);
   const remMinutes = minutes % 60;
   return remMinutes > 0 ? `${hours}h ${remMinutes}m` : `${hours}h`;
+}
+
+/**
+ * Inline "goal met" marker label for the final completed message's action
+ * footer (codex-style "✓ Goal achieved in 40s"). Appends the elapsed time
+ * when the met goal reported `timeUsedSeconds`; otherwise just the base
+ * "Goal achieved" — never a bare "in" with no duration.
+ */
+export function goalMetMarkerLabel(
+  goal: Pick<GoalWire, "timeUsedSeconds">,
+): string {
+  if (goal.timeUsedSeconds !== null && goal.timeUsedSeconds > 0) {
+    return `Goal achieved in ${humanizeGoalDurationSeconds(goal.timeUsedSeconds)}`;
+  }
+  return "Goal achieved";
 }

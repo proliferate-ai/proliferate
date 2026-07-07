@@ -12,6 +12,7 @@ import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { activitySnapshotFromDirectoryEntry } from "@/lib/domain/sessions/directory/directory-activity";
 import type { SessionStreamConnectionState } from "@/lib/domain/sessions/directory/directory-entry";
+import { goalCapabilitiesForSession } from "@/lib/domain/sessions/goal-mirror";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useSessionTranscriptStore } from "@/stores/sessions/session-transcript-store";
@@ -57,14 +58,36 @@ export function useActiveTranscriptPaneState(): {
   const outboxEntries = useSessionIntentStore(useShallow((state) =>
     activeSessionId ? outboxEntriesForSession(state, activeSessionId) : EMPTY_OUTBOX_ENTRIES
   ));
+  // Whether goal set/edit events read honestly as standalone transcript rows
+  // for this session's harness — Claude arms a `/goal` edit at the turn
+  // boundary (a discrete moment), codex steers the running turn live (no
+  // discrete apply, so a set/edit row would mislead). Gated on the projected
+  // capability flag, never a harness name. Terminal/status rows still show
+  // for every harness.
+  const includeGoalSetEdit = useSessionDirectoryStore((state) => {
+    const entry = activeSessionId ? state.entriesById[activeSessionId] ?? null : null;
+    if (!entry) {
+      return false;
+    }
+    return goalCapabilitiesForSession(entry.actionCapabilities, entry.agentKind)
+      .setEditTranscriptRows;
+  });
   // Goal lifecycle transcript rows are composed client-side from the raw
   // session event stream — the runtime keeps goal_updated/goal_met/
   // goal_cleared chunks out of stored transcript content (see
   // `deriveGoalTranscriptEvents`). Recomputed only when the underlying
-  // envelope array identity changes (append-only per session).
+  // envelope array identity changes (append-only per session) or the
+  // harness's set/edit capability flips.
+  // `includeMet: false` — a met goal is surfaced inline in the final
+  // completed message's action footer ("✓ Goal achieved in Xs"), not as a
+  // standalone transcript row. Failed/blocked/cleared keep their rows.
   const goalEvents = useMemo(
-    () => deriveGoalTranscriptEvents(transcriptState.events),
-    [transcriptState.events],
+    () =>
+      deriveGoalTranscriptEvents(transcriptState.events, {
+        includeSetEdit: includeGoalSetEdit,
+        includeMet: false,
+      }),
+    [transcriptState.events, includeGoalSetEdit],
   );
   return useMemo(() => ({
     activeSessionId: transcriptState.activeSessionId,

@@ -11,8 +11,18 @@ afterEach(() => {
 
 const NOOP = () => {};
 
-const NOT_SUPPORTED: GoalCapabilities = { supported: false, native: false, pause: false };
-const SUPPORTED: GoalCapabilities = { supported: true, native: true, pause: true };
+const NOT_SUPPORTED: GoalCapabilities = {
+  supported: false,
+  native: false,
+  pause: false,
+  setEditTranscriptRows: false,
+};
+const SUPPORTED: GoalCapabilities = {
+  supported: true,
+  native: true,
+  pause: true,
+  setEditTranscriptRows: true,
+};
 
 function baseProps() {
   return {

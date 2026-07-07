@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveGoalBarState,
   goalFailureDetail,
+  goalMetMarkerLabel,
   goalResultStats,
   goalResultWhyLabel,
   goalStatusLabel,
@@ -202,5 +203,17 @@ describe("goalResultStats", () => {
     expect(goalResultStats(goal({ iterations: 1 }))).toEqual([
       { key: "iterations", text: "1 iteration" },
     ]);
+  });
+});
+
+describe("goalMetMarkerLabel", () => {
+  it("appends the humanized elapsed time when timeUsedSeconds is reported", () => {
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: 40 }))).toBe("Goal achieved in 40s");
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: 312 }))).toBe("Goal achieved in 5m 12s");
+  });
+
+  it("falls back to a bare 'Goal achieved' when no time is available", () => {
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: null }))).toBe("Goal achieved");
+    expect(goalMetMarkerLabel(goal({ timeUsedSeconds: 0 }))).toBe("Goal achieved");
   });
 });

@@ -6,6 +6,8 @@ import type {
 } from "@anyharness/sdk";
 import {
   buildTurnPresentation,
+  computeMessageBoundaryItemIds,
+  summarizeCompletedHistory,
   type TurnDisplayBlock,
   type TurnPresentation,
 } from "./transcript-presentation";
@@ -493,24 +495,29 @@ function buildRowsForTurnPresentation(
   needsLeadingSplit: boolean,
   goalSeqBoundaries: readonly number[],
 ): readonly Extract<TranscriptRow, { kind: "turn" }>[] {
-  const chunks = shouldSplitTurnIntoRows(turn, presentation)
-    ? chunkTurnDisplayBlocks(presentation)
-    : [];
-  if (chunks.length > 1) {
-    return chunks.map((chunk, index) => {
-      const renderPresentation: TurnPresentation = {
-        ...presentation,
-        displayBlocks: chunk.blocks,
-      };
-      return buildTurnRow({
-        turnId: turn.turnId,
-        blockKey: chunk.blockKey,
-        presentation,
-        renderPresentation,
-        isFirstTurnRow: index === 0,
-        isLastTurnRow: index === chunks.length - 1,
+  // When goal seq boundaries exist, skip the large-turn chunk early-return and
+  // use the goal-partition path instead (the final slice's scoped collapse
+  // absorbs the bulk). Goal-less turns keep the existing chunk behavior.
+  if (goalSeqBoundaries.length === 0) {
+    const chunks = shouldSplitTurnIntoRows(turn, presentation)
+      ? chunkTurnDisplayBlocks(presentation)
+      : [];
+    if (chunks.length > 1) {
+      return chunks.map((chunk, index) => {
+        const renderPresentation: TurnPresentation = {
+          ...presentation,
+          displayBlocks: chunk.blocks,
+        };
+        return buildTurnRow({
+          turnId: turn.turnId,
+          blockKey: chunk.blockKey,
+          presentation,
+          renderPresentation,
+          isFirstTurnRow: index === 0,
+          isLastTurnRow: index === chunks.length - 1,
+        });
       });
-    });
+    }
   }
 
   // If goal events exist at specific seq boundaries, split the content row at
@@ -805,29 +812,123 @@ function partitionBlocksBySeqBoundaries(
     slices[sliceIndex].push(blockWithSeq);
   }
 
-  // Build sub-rows for non-empty slices
-  const subRows: Extract<TranscriptRow, { kind: "turn" }>[] = [];
+  // Build sub-rows for non-empty slices with per-slice history collapse scoping.
+  // Only the slice containing `finalAssistantItemId` gets a history collapse;
+  // all other slices render plainly (empty history ids, null summary).
+
+  // Collect item ids present in each non-empty slice for intersection.
+  interface SliceInfo {
+    blocks: TurnDisplayBlock[];
+    blockKey: string;
+    itemIds: Set<string>;
+  }
+  const sliceInfos: SliceInfo[] = [];
   for (let i = 0; i < slices.length; i += 1) {
     const slice = slices[i];
     if (slice.length === 0) {
-      continue; // Skip empty slices
+      continue;
     }
     const sliceBlocks = slice.map((bws) => bws.block);
     const minSeq = Math.min(...slice.map((bws) => bws.seq));
     const maxSeq = Math.max(...slice.map((bws) => bws.seq));
     const blockKey = `content:${minSeq}-${maxSeq}`;
+    const itemIds = new Set<string>();
+    for (const block of sliceBlocks) {
+      if (block.kind === "item" || block.kind === "inline_tool") {
+        itemIds.add(block.itemId);
+      } else if (
+        block.kind === "collapsed_actions"
+        || block.kind === "inline_tools"
+        || block.kind === "subagent_creations"
+      ) {
+        for (const id of block.itemIds) {
+          itemIds.add(id);
+        }
+      }
+    }
+    sliceInfos.push({ blocks: sliceBlocks, blockKey, itemIds });
+  }
+
+  if (sliceInfos.length === 0) {
+    return [buildTurnRow({
+      turnId: turn.turnId,
+      blockKey: TURN_CONTENT_BLOCK_KEY,
+      presentation,
+      renderPresentation: presentation,
+      isFirstTurnRow: true,
+      isLastTurnRow: true,
+    })];
+  }
+
+  // Determine which slice contains the finalAssistantItemId.
+  const finalItemId = presentation.finalAssistantItemId;
+  let finalSliceIndex = -1;
+  if (finalItemId) {
+    for (let i = sliceInfos.length - 1; i >= 0; i -= 1) {
+      if (sliceInfos[i].itemIds.has(finalItemId)) {
+        finalSliceIndex = i;
+        break;
+      }
+    }
+  }
+
+  const subRows: Extract<TranscriptRow, { kind: "turn" }>[] = [];
+  for (let i = 0; i < sliceInfos.length; i += 1) {
+    const info = sliceInfos[i];
+    let renderPresentation: TurnPresentation;
+
+    if (i === finalSliceIndex) {
+      // Scope the collapse to this slice: intersect whole-turn history ids
+      // with items actually present in this slice.
+      const scopedHistoryRootIds = presentation.completedHistoryRootIds.filter(
+        (id) => info.itemIds.has(id),
+      );
+      const scopedSummary = summarizeCompletedHistory(
+        scopedHistoryRootIds,
+        transcript,
+        presentation.childrenByParentId,
+      );
+      const scopedBoundaryIds = computeMessageBoundaryItemIds({
+        displayBlocks: info.blocks,
+        transcript,
+        completedHistoryRootIds: new Set(scopedHistoryRootIds),
+        hasCompletedHistorySummary: scopedSummary !== null,
+      });
+      renderPresentation = {
+        ...presentation,
+        displayBlocks: info.blocks,
+        completedHistoryRootIds: scopedHistoryRootIds,
+        completedHistorySummary: scopedSummary,
+        messageBoundaryItemIds: scopedBoundaryIds,
+      };
+    } else {
+      // Non-final slices: no history collapse, recompute boundaries plainly.
+      const scopedBoundaryIds = computeMessageBoundaryItemIds({
+        displayBlocks: info.blocks,
+        transcript,
+        completedHistoryRootIds: new Set<string>(),
+        hasCompletedHistorySummary: false,
+      });
+      renderPresentation = {
+        ...presentation,
+        displayBlocks: info.blocks,
+        completedHistoryRootIds: [],
+        completedHistorySummary: null,
+        messageBoundaryItemIds: scopedBoundaryIds,
+      };
+    }
+
     subRows.push(buildTurnRow({
       turnId: turn.turnId,
-      blockKey,
+      blockKey: info.blockKey,
       presentation,
-      renderPresentation: { ...presentation, displayBlocks: sliceBlocks },
+      renderPresentation,
       isFirstTurnRow: subRows.length === 0,
-      isLastTurnRow: false, // Will update the last one below
+      isLastTurnRow: false,
     }));
   }
 
   if (subRows.length > 0) {
-    // Mark the last sub-row
     const lastSubRow = subRows[subRows.length - 1];
     subRows[subRows.length - 1] = {
       ...lastSubRow,
@@ -835,12 +936,5 @@ function partitionBlocksBySeqBoundaries(
     };
   }
 
-  return subRows.length > 0 ? subRows : [buildTurnRow({
-    turnId: turn.turnId,
-    blockKey: TURN_CONTENT_BLOCK_KEY,
-    presentation,
-    renderPresentation: presentation,
-    isFirstTurnRow: true,
-    isLastTurnRow: true,
-  })];
+  return subRows;
 }

@@ -25,7 +25,12 @@ import { GOAL_ACTIVE_SHORT, GOAL_CAPABILITIES_PAUSABLE } from "@/lib/domain/chat
 
 const NOOP = () => {};
 
-const NO_GOAL_CAPABILITIES = { supported: false, native: false, pause: false };
+const NO_GOAL_CAPABILITIES = {
+  supported: false,
+  native: false,
+  pause: false,
+  setEditTranscriptRows: false,
+};
 
 interface ActivityChipsFixtureInput {
   loops?: LoopWire[];

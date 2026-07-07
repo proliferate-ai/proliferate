@@ -18,18 +18,22 @@ function goalFixture(overrides: Partial<GoalWire>): GoalWire {
   };
 }
 
-/** Codex-shaped capability: native goals with a native pause path. */
+/** Codex-shaped capability: native goals with a native pause path; edits
+ * steer the running turn live, so no set/edit transcript rows. */
 export const GOAL_CAPABILITIES_PAUSABLE: GoalCapabilities = {
   supported: true,
   native: true,
   pause: true,
+  setEditTranscriptRows: false,
 };
 
-/** Claude-shaped capability: native goals, no native pause. */
+/** Claude-shaped capability: native goals, no native pause; edits arm at the
+ * turn boundary, so set/edit render as transcript rows. */
 export const GOAL_CAPABILITIES_NO_PAUSE: GoalCapabilities = {
   supported: true,
   native: true,
   pause: false,
+  setEditTranscriptRows: true,
 };
 
 export const GOAL_ACTIVE_SHORT = goalFixture({});

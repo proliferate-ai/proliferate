@@ -410,6 +410,67 @@ describe("buildTranscriptRowModel", () => {
       ]);
     });
 
+    // Ground truth (live Claude session): within a turn the events are
+    // user_message(216) → goal_updated set(218) → assistant_message(219..).
+    // The set row must render BETWEEN the user message block and the
+    // assistant reply block — never after the reply.
+    it("renders a goal-set between the user message and the assistant reply (ground truth)", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-user", "Set a goal then meet it", 216);
+      addAssistantItems(transcript, "turn-1", 1, 219); // single reply block at seq 219
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        // set lands at seq 218: after the user message (216), before the
+        // assistant reply (219). The turn splits at that block boundary.
+        goalEvents: [goalEvent(218, "set")],
+      });
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content:216-216",
+        "goal-event:218",
+        "turn:turn-1:block:content:219-219",
+      ]);
+    });
+
+    // A goal event whose seq lands INSIDE the span of a single continuous
+    // streamed assistant_message (one block, one startedSeq, with later
+    // deltas) renders AFTER that whole block — the message is never
+    // fragmented to wedge a goal row in (image-11/13 fix).
+    it("keeps a lone streamed assistant message intact and renders a mid-span goal event after it", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      // A single assistant message block at seq 10; its deltas keep streaming
+      // past seq 10 but it stays one block with startedSeq 10.
+      addAssistantItems(transcript, "turn-1", 1, 10);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        // seq 12 lands "inside" the streamed message's lifespan — but the
+        // block's representative seq is 10, so the goal renders after the
+        // whole (single, unsplit) message.
+        goalEvents: [goalEvent(12, "met")],
+      });
+
+      // Exactly one turn row (the assistant message is never fragmented) then
+      // the goal row after it.
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content",
+        "goal-event:12",
+      ]);
+      const turnRows = rows.filter((row) => row.kind === "turn");
+      expect(turnRows).toHaveLength(1);
+    });
+
     it("interleaves a 'met' event inline by seq even when it lands mid-turn", () => {
       const transcript = createTranscriptState("session-1");
       addTurn(transcript, "turn-1", true);
@@ -664,6 +725,212 @@ describe("buildTranscriptRowModel", () => {
         isStreaming: false,
         startedSeq,
       } as TranscriptState["itemsById"][string];
+    }
+  });
+
+  describe("goal-event history collapse scoping", () => {
+    // Ground truth: session e06fe0dc, turn 17a8a46d.
+    // A Stop-hook-extended turn with a goal boundary at seq 25.
+    it("scopes the completed-history collapse to the final slice only (ground truth)", () => {
+      const transcript = createTranscriptState("session-e06fe0dc");
+      addTurn(transcript, "turn-17a8a46d", true);
+
+      // seq 9: user_message "hi"
+      addUserItem(transcript, "turn-17a8a46d", "item-user-9", "hi", 9);
+      // seq 11: reasoning (thought)
+      addThoughtItems(transcript, "turn-17a8a46d", 1, 11);
+      // seq 18: assistant_message "Hey! What are you working on?"
+      addAssistantItem(transcript, "turn-17a8a46d", "item-asst-18", "Hey! What are you working on?", 18);
+      // seq 24: turn_ended (not an item — just marks goal boundary)
+      // seq 25: goal_updated boundary
+      // seq 26: reasoning (SAME turn id — goal continuation)
+      addThoughtItems2(transcript, "turn-17a8a46d", 1, 26);
+      // seq 31: assistant_message
+      addAssistantItem(transcript, "turn-17a8a46d", "item-asst-31", "I'll create the file.", 31);
+      // seq 35: tool_invocation
+      addToolItem(transcript, "turn-17a8a46d", "item-tool-35", 35);
+      // seq 40: assistant_message
+      addAssistantItem(transcript, "turn-17a8a46d", "item-asst-40", "Done writing.", 40);
+      // seq 46: tool_invocation
+      addToolItem(transcript, "turn-17a8a46d", "item-tool-46", 46);
+      // seq 51: final assistant_message
+      addAssistantItem(transcript, "turn-17a8a46d", "item-asst-51", "Created the file with 'jam'.", 51);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-e06fe0dc",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-17a8a46d",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(25, "set")],
+      });
+
+      // Expected structure:
+      // [0] turn slice: seq 9-18 (user, thought, assistant-18) — PLAIN (no collapse)
+      // [1] goal-event row seq 25
+      // [2] turn slice: seq 26-51 (thought, assistant-31, tool-35, assistant-40, tool-46, final-51)
+      //     — this is the final slice with scoped collapse; isLastTurnRow=true
+
+      const turnRows = rows.filter((r) => r.kind === "turn") as Extract<typeof rows[number], { kind: "turn" }>[];
+      const goalEventRows = rows.filter((r) => r.kind === "goal_event");
+
+      expect(goalEventRows).toHaveLength(1);
+      expect(goalEventRows[0]).toMatchObject({
+        kind: "goal_event",
+        event: expect.objectContaining({ seq: 25 }),
+      });
+
+      expect(turnRows).toHaveLength(2);
+
+      // First slice: PLAIN — no history collapse
+      const firstSlice = turnRows[0];
+      expect(firstSlice.renderPresentation.completedHistoryRootIds).toEqual([]);
+      expect(firstSlice.renderPresentation.completedHistorySummary).toBeNull();
+      expect(firstSlice.isFirstTurnRow).toBe(true);
+      expect(firstSlice.isLastTurnRow).toBe(false);
+
+      // Second (final) slice: has scoped collapse + is last turn row
+      const finalSlice = turnRows[1];
+      expect(finalSlice.renderPresentation.completedHistorySummary).not.toBeNull();
+      expect(finalSlice.renderPresentation.completedHistoryRootIds.length).toBeGreaterThan(0);
+      expect(finalSlice.isFirstTurnRow).toBe(false);
+      expect(finalSlice.isLastTurnRow).toBe(true);
+
+      // The scoped history should only include items from the final slice,
+      // not items from the first slice (e.g. reasoning at seq 11, assistant at seq 18)
+      expect(finalSlice.renderPresentation.completedHistoryRootIds).not.toContain("item-asst-18");
+      expect(finalSlice.renderPresentation.completedHistoryRootIds).not.toContain("item-0");
+
+      // Verify ordering: first slice, then goal, then final slice
+      const firstSliceIdx = rows.indexOf(firstSlice);
+      const goalIdx = rows.indexOf(goalEventRows[0]);
+      const finalSliceIdx = rows.indexOf(finalSlice);
+      expect(firstSliceIdx).toBeLessThan(goalIdx);
+      expect(goalIdx).toBeLessThan(finalSliceIdx);
+    });
+
+    it("no slice other than the final one carries a completedHistorySummary", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-user", "hi", 1);
+      addAssistantItem2(transcript, "turn-1", "item-a1", "reply 1", 5);
+      addToolItem(transcript, "turn-1", "item-t1", 10);
+      addAssistantItem2(transcript, "turn-1", "item-a2", "reply 2", 15);
+      addToolItem(transcript, "turn-1", "item-t2", 20);
+      addAssistantItem2(transcript, "turn-1", "item-final", "final", 25);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(8, "set")],
+      });
+
+      const turnRows = rows.filter((r) => r.kind === "turn") as Extract<typeof rows[number], { kind: "turn" }>[];
+      // Only the last turn row (containing finalAssistantItemId) may have a summary
+      for (let i = 0; i < turnRows.length - 1; i += 1) {
+        expect(turnRows[i].renderPresentation.completedHistorySummary).toBeNull();
+      }
+    });
+
+    it("goal-less large turn still chunks exactly as before (regression guard)", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-large", true);
+      addThoughtItems(transcript, "turn-large", 30);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-large",
+        latestTurnHasAssistantRenderableContent: true,
+        // No goal events
+      });
+
+      expect(rows).toHaveLength(30);
+      expect(rows[0]).toEqual(expect.objectContaining({
+        kind: "turn",
+        key: "turn:turn-large:block:item-0",
+        turnId: "turn-large",
+        blockKey: "item-0",
+        isFirstTurnRow: true,
+        isLastTurnRow: false,
+      }));
+      expect(rows[29]).toEqual(expect.objectContaining({
+        kind: "turn",
+        key: "turn:turn-large:block:item-29",
+        turnId: "turn-large",
+        blockKey: "item-29",
+        isFirstTurnRow: false,
+        isLastTurnRow: true,
+      }));
+    });
+
+    function addAssistantItem(
+      transcript: TranscriptState,
+      turnId: string,
+      itemId: string,
+      text: string,
+      startedSeq: number,
+    ) {
+      const turn = transcript.turnsById[turnId];
+      if (!turn) throw new Error(`missing test turn ${turnId}`);
+      turn.itemOrder.push(itemId);
+      transcript.itemsById[itemId] = {
+        kind: "assistant_prose",
+        itemId,
+        turnId,
+        text,
+        isStreaming: false,
+        startedSeq,
+      } as TranscriptState["itemsById"][string];
+    }
+
+    // Variant that doesn't conflict with the outer-scope helper
+    function addAssistantItem2(
+      transcript: TranscriptState,
+      turnId: string,
+      itemId: string,
+      text: string,
+      startedSeq: number,
+    ) {
+      addAssistantItem(transcript, turnId, itemId, text, startedSeq);
+    }
+
+    function addToolItem(
+      transcript: TranscriptState,
+      turnId: string,
+      itemId: string,
+      startedSeq: number,
+    ) {
+      const turn = transcript.turnsById[turnId];
+      if (!turn) throw new Error(`missing test turn ${turnId}`);
+      turn.itemOrder.push(itemId);
+      transcript.itemsById[itemId] = terminalItem(itemId, turnId, startedSeq);
+    }
+
+    // Thought items with unique item ids (to not collide with the outer addThoughtItems
+    // which uses `item-${index}` naming)
+    function addThoughtItems2(
+      transcript: TranscriptState,
+      turnId: string,
+      count: number,
+      startedSeqOffset: number,
+    ) {
+      const turn = transcript.turnsById[turnId];
+      if (!turn) throw new Error(`missing test turn ${turnId}`);
+      for (let i = 0; i < count; i += 1) {
+        const itemId = `thought-${turnId}-${startedSeqOffset + i}`;
+        turn.itemOrder.push(itemId);
+        transcript.itemsById[itemId] = thoughtItem(
+          itemId,
+          turnId,
+          startedSeqOffset + i,
+          false,
+        );
+      }
     }
   });
 });

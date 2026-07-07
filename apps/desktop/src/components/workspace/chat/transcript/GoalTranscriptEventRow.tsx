@@ -34,11 +34,14 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
         <button
           type="button"
           disabled
-          className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-ui-sm text-muted-foreground disabled:cursor-default"
+          className="inline-flex items-start gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-ui-sm text-muted-foreground disabled:cursor-default"
         >
+          {/* items-start + line-height-matched offset: the glyph registers on
+              the FIRST text line instead of floating against the block's
+              vertical center when the objective wraps. */}
           <presentation.Icon
             aria-hidden="true"
-            className={`size-3 shrink-0 ${presentation.iconClassName}`}
+            className={`mt-[0.2em] size-3 shrink-0 ${presentation.iconClassName}`}
           />
           <span className="truncate">
             {presentation.label}
@@ -59,11 +62,11 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
         disabled={!canExpand}
         onClick={canExpand ? () => setExpanded((value) => !value) : undefined}
         aria-expanded={canExpand ? expanded : undefined}
-        className="flex w-full min-w-0 items-center gap-1.5 text-left text-ui-sm text-muted-foreground disabled:cursor-default"
+        className="flex w-full min-w-0 items-start gap-1.5 text-left text-ui-sm text-muted-foreground disabled:cursor-default"
       >
         <presentation.Icon
           aria-hidden="true"
-          className={`size-3 shrink-0 ${presentation.iconClassName}`}
+          className={`mt-[0.2em] size-3 shrink-0 ${presentation.iconClassName}`}
         />
         <span className="min-w-0 truncate">
           {presentation.label}
@@ -149,7 +152,7 @@ function presentGoalTranscriptEvent(event: GoalTranscriptEvent): GoalTranscriptE
     case "met":
       return {
         Icon: CircleCheck,
-        iconClassName: "text-success",
+        iconClassName: "text-muted-foreground",
         label: "Goal met",
         detailPreview: event.detail ? truncateGoalObjective(event.detail, ROW_PREVIEW_MAX_CHARS) : null,
         fullDetail: event.detail,

@@ -12,7 +12,12 @@ import { useSessionActivity } from "@/hooks/activity/derived/use-session-activit
 import { useActivityNowMs } from "@/hooks/activity/derived/use-activity-now-ms";
 import { useSessionLoopActions } from "@/hooks/activity/workflows/use-session-loop-actions";
 
-const NO_GOAL_CAPABILITIES: GoalCapabilities = { supported: false, native: false, pause: false };
+const NO_GOAL_CAPABILITIES: GoalCapabilities = {
+  supported: false,
+  native: false,
+  pause: false,
+  setEditTranscriptRows: false,
+};
 
 /**
  * Connected activity bar for the composer dock: the goal bar (Phase A,
@@ -58,7 +63,7 @@ export function SessionActivityBar() {
       goal={goalModel?.goal ?? null}
       capabilities={goalModel?.capabilities ?? NO_GOAL_CAPABILITIES}
       composing={goalModel?.composing ?? false}
-      pendingWrite={goalActions.pendingWrite}
+      pendingWrite={goalActions.pendingWrite || (goalModel?.provisional ?? false)}
       onEdit={goalActions.editGoal}
       onPause={goalActions.pauseGoal}
       onResume={goalActions.resumeGoal}
