@@ -22,6 +22,13 @@ export interface CreateSessionWithResolvedConfigOptions {
   preserveProjectedSessionOnCreateFailure?: boolean;
   skipInitialPromptEnqueue?: boolean;
   onBeforeOptimisticPrompt?: (workspaceId: string) => Promise<void> | void;
+  /**
+   * When set, the creation workflow performs local cleanup of this session
+   * immediately after the optimistic new session is activated — so the tab
+   * swap is instantaneous. The runtime dismiss for a materialized replaced
+   * session is fire-and-forget after local cleanup.
+   */
+  replacesSessionId?: string | null;
 }
 
 export interface CreateEmptySessionWithResolvedConfigOptions {
@@ -34,4 +41,11 @@ export interface CreateEmptySessionWithResolvedConfigOptions {
   clientSessionId?: string | null;
   reuseInFlightEmptySession?: boolean;
   preserveProjectedSessionOnCreateFailure?: boolean;
+  /**
+   * When set, the creation workflow performs local cleanup of this session
+   * immediately after the optimistic new session is activated — so the tab
+   * swap is instantaneous. The runtime dismiss for a materialized replaced
+   * session is fire-and-forget after local cleanup.
+   */
+  replacesSessionId?: string | null;
 }

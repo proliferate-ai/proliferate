@@ -135,6 +135,10 @@
       "types": "./dist/primitives/ComposerControlButton.d.ts",
       "import": "./dist/primitives/ComposerControlButton.js"
     },
+    "./primitives/LevelBarsButton": {
+      "types": "./dist/primitives/LevelBarsButton.d.ts",
+      "import": "./dist/primitives/LevelBarsButton.js"
+    },
     "./primitives/ComposerTextarea": {
       "types": "./dist/primitives/ComposerTextarea.d.ts",
       "import": "./dist/primitives/ComposerTextarea.js"

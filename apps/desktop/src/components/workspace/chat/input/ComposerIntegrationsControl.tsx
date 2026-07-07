@@ -1,10 +1,9 @@
-import { Plug } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { Settings } from "@proliferate/ui/icons";
+import { Blocks, Settings } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
 import { useComposerIntegrationsState } from "@/hooks/cloud/derived/use-composer-integrations-state";
@@ -56,7 +55,7 @@ export function ComposerIntegrationsControl() {
                 className="block size-1.5 rounded-full bg-warning/70"
               />
             ) : (
-              <Plug aria-hidden="true" className="size-4" />
+              <Blocks aria-hidden="true" className="size-4" />
             )
           }
         />

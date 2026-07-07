@@ -5,14 +5,13 @@ import {
 } from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
-import { Brain, Check, ChevronDown, Zap } from "@proliferate/ui/icons";
+import { Brain, Check, Zap } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 import { SessionModeControl } from "./SessionModeControl";
-import { SessionReasoningEffortControl } from "./SessionReasoningEffortControl";
 
 interface SessionConfigControlsProps {
   agentKind: string | null;
@@ -27,8 +26,6 @@ export function SessionConfigControls({ agentKind, controls }: SessionConfigCont
       {uniqueControls.map((control) => (
         isConfiguredModeControl(control) ? (
           <SessionModeControl key={control.key} agentKind={agentKind} control={control} />
-        ) : control.key === "effort" ? (
-          <SessionReasoningEffortControl key={control.key} control={control} />
         ) : control.kind === "toggle" ? (
           <ToggleControl key={control.key} control={control} />
         ) : (
@@ -132,12 +129,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
         <ComposerControlButton
           label={control.label}
           detail={control.detail}
-          trailing={
-            <span className="flex items-center gap-1">
-              <PendingConfigIndicator pendingState={control.pendingState} />
-              <ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />
-            </span>
-          }
+          trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           className="max-w-[14rem]"
         />
       }
