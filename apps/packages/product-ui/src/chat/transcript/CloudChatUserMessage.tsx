@@ -59,7 +59,7 @@ export function CloudChatUserMessage({
           </div>
         ) : null}
         {visibleStatus ? (
-          <div className="inline-flex items-center gap-1 pr-1 text-xs text-muted-foreground">
+          <div className="inline-flex items-center gap-1 pr-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
             {visibleStatus}
           </div>
         ) : null}

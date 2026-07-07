@@ -55,7 +55,7 @@ export function VirtualTranscriptViewport({
           ref={selectionRootRef}
           data-chat-transcript-root="true"
           tabIndex={-1}
-          className={`${columnClassName} select-none outline-none`}
+          className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
         >
           {topSpacerHeight > 0 && (
             <div aria-hidden="true" style={{ height: topSpacerHeight }} />

@@ -46,15 +46,16 @@ export function AssistantMessage({
   );
 }
 
-// ANCHOR INVARIANT (owner rule): the newest content must occupy the bottom
-// line the instant it exists — no typewriter reveal, no staggered fade. The
-// previous reveal pacing meant a burst of text (or a reconnect backlog) played
-// back over seconds, so the transcript's visible bottom kept crawling while
-// the true content already existed. Content now renders immediately; the
-// stable/live split is kept purely for markdown-parse efficiency (the stable
-// prefix parses once; only the small live tail re-parses per stream batch).
+// ANCHOR INVARIANT (owner rule): the newest content must occupy its final
+// layout position the INSTANT it exists. The word-level fade (revealText) is
+// opacity-only — layout commits instantly — and React's positional
+// reconciliation keeps previously-mounted word spans stable, so only
+// newly-appended words mount fresh and animate; nothing replays. The
+// stable/live split is kept for markdown-parse efficiency (the stable prefix
+// parses once; only the small live tail re-parses per stream batch).
 function AssistantMessageContent({
   content,
+  isStreaming,
   renderLink,
   renderInlineCode,
   renderCodeBlock,
@@ -95,6 +96,7 @@ function AssistantMessageContent({
             renderLink={renderLink}
             renderInlineCode={renderInlineCode}
             renderCodeBlock={renderCodeBlock}
+            revealText={isStreaming}
           />
         </div>
       )}
