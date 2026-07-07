@@ -9,12 +9,13 @@
   "containerDefinitions": [
     {
       "name": "ingest",
-      "image": "157466816238.dkr.ecr.us-east-1.amazonaws.com/proliferate-server:latest",
+      "image": "157466816238.dkr.ecr.us-east-1.amazonaws.com/proliferate-server:Production-latest",
       "essential": true,
       "command": ["python", "/app/scripts/analytics_ingest.py"],
       "secrets": [
         {"name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/database-5plrjD:DATABASE_URL::"},
         {"name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/server-app-Qv4HKH:JWT_SECRET::"},
+        {"name": "CLOUD_SECRET_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/server-app-Qv4HKH:CLOUD_SECRET_KEY::"},
         {"name": "STRIPE_SECRET_KEY", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/server-app-Qv4HKH:STRIPE_SECRET_KEY::"},
         {"name": "E2B_SESSION_COOKIE", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/analytics-ingest-lTDQSk:E2B_SESSION_COOKIE::"},
         {"name": "E2B_TEAM_SLUG", "valueFrom": "arn:aws:secretsmanager:us-east-1:157466816238:secret:proliferate/prod/analytics-ingest-lTDQSk:E2B_TEAM_SLUG::"}
