@@ -22,9 +22,11 @@ class ProfileUpdateRequest(BaseModel):
     ``outreach_email`` is an optional override address for support/outreach
     follow-up. Sending ``null`` or an empty/whitespace string clears it (falls
     back to the account email); any other value must look like an email.
+    Unknown fields are rejected (422) so credential fields like ``password``
+    can never ride through this endpoint.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     outreach_email: str | None = None
 

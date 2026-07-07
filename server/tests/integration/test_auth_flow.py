@@ -480,7 +480,19 @@ class TestPasswordAuthFlow:
             headers={"Authorization": f"Bearer {token}"},
             json={"password": "short"},
         )
-        assert bypass.status_code == 405
+        assert bypass.status_code == 422
+
+        # Prove the password was not changed.
+        original_login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "users-me-password@example.com", "password": self.password},
+        )
+        assert original_login.status_code == 200
+        short_login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "users-me-password@example.com", "password": "short"},
+        )
+        assert short_login.status_code == 401
 
     @pytest.mark.asyncio
     async def test_password_login_throttles_repeated_failures(
