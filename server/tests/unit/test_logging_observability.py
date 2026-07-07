@@ -24,58 +24,64 @@ class TestJsonLogFormatterVersionFields:
     """JsonLogFormatter emits version and git_sha fields."""
 
     def test_version_field_present_when_set(self) -> None:
-        with patch.object(logging_module, "_SERVER_VERSION", "1.2.3"):
-            with patch.object(logging_module, "_SERVER_GIT_SHA", None):
-                formatter = JsonLogFormatter()
-                record = logging.LogRecord(
-                    name="test",
-                    level=logging.INFO,
-                    pathname="",
-                    lineno=0,
-                    msg="hello",
-                    args=None,
-                    exc_info=None,
-                )
-                output = formatter.format(record)
-                parsed = json.loads(output)
-                assert parsed["version"] == "1.2.3"
-                assert "git_sha" not in parsed
+        with (
+            patch.object(logging_module, "_SERVER_VERSION", "1.2.3"),
+            patch.object(logging_module, "_SERVER_GIT_SHA", None),
+        ):
+            formatter = JsonLogFormatter()
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="hello",
+                args=None,
+                exc_info=None,
+            )
+            output = formatter.format(record)
+            parsed = json.loads(output)
+            assert parsed["version"] == "1.2.3"
+            assert "git_sha" not in parsed
 
     def test_git_sha_field_present_when_set(self) -> None:
-        with patch.object(logging_module, "_SERVER_VERSION", "2.0.0"):
-            with patch.object(logging_module, "_SERVER_GIT_SHA", "abc1234"):
-                formatter = JsonLogFormatter()
-                record = logging.LogRecord(
-                    name="test",
-                    level=logging.INFO,
-                    pathname="",
-                    lineno=0,
-                    msg="world",
-                    args=None,
-                    exc_info=None,
-                )
-                output = formatter.format(record)
-                parsed = json.loads(output)
-                assert parsed["version"] == "2.0.0"
-                assert parsed["git_sha"] == "abc1234"
+        with (
+            patch.object(logging_module, "_SERVER_VERSION", "2.0.0"),
+            patch.object(logging_module, "_SERVER_GIT_SHA", "abc1234"),
+        ):
+            formatter = JsonLogFormatter()
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="world",
+                args=None,
+                exc_info=None,
+            )
+            output = formatter.format(record)
+            parsed = json.loads(output)
+            assert parsed["version"] == "2.0.0"
+            assert parsed["git_sha"] == "abc1234"
 
     def test_version_fields_absent_when_none(self) -> None:
-        with patch.object(logging_module, "_SERVER_VERSION", None):
-            with patch.object(logging_module, "_SERVER_GIT_SHA", None):
-                formatter = JsonLogFormatter()
-                record = logging.LogRecord(
-                    name="test",
-                    level=logging.INFO,
-                    pathname="",
-                    lineno=0,
-                    msg="no version",
-                    args=None,
-                    exc_info=None,
-                )
-                output = formatter.format(record)
-                parsed = json.loads(output)
-                assert "version" not in parsed
-                assert "git_sha" not in parsed
+        with (
+            patch.object(logging_module, "_SERVER_VERSION", None),
+            patch.object(logging_module, "_SERVER_GIT_SHA", None),
+        ):
+            formatter = JsonLogFormatter()
+            record = logging.LogRecord(
+                name="test",
+                level=logging.INFO,
+                pathname="",
+                lineno=0,
+                msg="no version",
+                args=None,
+                exc_info=None,
+            )
+            output = formatter.format(record)
+            parsed = json.loads(output)
+            assert "version" not in parsed
+            assert "git_sha" not in parsed
 
     def test_configure_server_logging_sets_version_globals(
         self, monkeypatch: pytest.MonkeyPatch
@@ -164,7 +170,6 @@ class TestReportCritical:
         monkeypatch.setattr(settings, "sentry_dsn", "")
 
         calls: list[tuple[str, dict[str, Any]]] = []
-        original_logger = sentry_integration._report_critical_logger
 
         class _FakeLogger:
             def exception(self, msg: str, *args: object, **kwargs: object) -> None:
@@ -214,7 +219,7 @@ class TestCorrelationContextBackground:
     """bind_background_correlation_context sets context vars for background work."""
 
     def test_bind_sets_vars_and_returns_tokens(self) -> None:
-        tokens = bind_background_correlation_context(
+        bind_background_correlation_context(
             organization_id="org-123",
             tenant_id="ten-456",
         )
