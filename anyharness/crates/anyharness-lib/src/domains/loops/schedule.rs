@@ -336,4 +336,14 @@ mod tests {
         assert!(next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "* * * *"), 0).is_err());
         assert!(next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "99 * * * *"), 0).is_err());
     }
+
+    #[test]
+    fn cron_range_step_bounds_check() {
+        // 50-70/5 in minutes field (max 59) — range end exceeds field max.
+        assert!(next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "50-70/5 * * * *"), 0).is_err());
+        // 20-10/5 reversed range in minutes — start > end.
+        assert!(next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "20-10/5 * * * *"), 0).is_err());
+        // 10-20/5 valid range-step in minutes.
+        assert!(next_fire_at_ms(&schedule(LoopScheduleKind::Cron, "10-20/5 * * * *"), 0).is_ok());
+    }
 }
