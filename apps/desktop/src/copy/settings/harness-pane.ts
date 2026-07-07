@@ -54,6 +54,7 @@ export const HARNESS_PANE_COPY = {
   // Native == the implicit empty state (contract §7): zero enabled sources.
   nativeStateLocal: "No auth configured — the CLI's own login is used.",
   nativeStateCloud: "No auth configured — cloud runs stay disabled for this harness.",
+  cliAlwaysActive: "Native logins always apply alongside other sources.",
   cursorNativeDescription: (displayName: string) =>
     `${displayName} authenticates with its own sign-in. There is nothing to configure here.`,
   signInDescription: (displayName: string) =>
