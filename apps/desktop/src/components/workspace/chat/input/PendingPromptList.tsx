@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { ArrowUpRight, Pencil, X } from "@proliferate/ui/icons";
 import { GripVertical } from "lucide-react";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
@@ -187,7 +188,7 @@ function PendingPromptRow({
   return (
     <div
       data-reorder-item
-      className={`group/queue-row relative flex items-center justify-between gap-2 py-0.5 pl-4 text-sm transition-colors ${
+      className={`group/queue-row relative flex items-center justify-between gap-2 py-0.5 pl-4 transition-colors ${
         isDragging ? "opacity-50" : ""
       } ${isDropTarget ? "border-t border-accent" : ""}`}
     >
@@ -202,9 +203,10 @@ function PendingPromptRow({
         </div>
       )}
 
-      {/* Message text */}
+      {/* Message text — one step smaller than the chat input / transcript
+          message text (--text-message, aliased to --text-composer). */}
       <div
-        className={`min-w-0 flex-1 whitespace-pre-wrap leading-4 transition-colors line-clamp-2 ${
+        className={`min-w-0 flex-1 whitespace-pre-wrap text-ui leading-[var(--text-ui--line-height)] transition-colors line-clamp-2 ${
           isBeingEdited
             ? "text-muted-foreground/60"
             : "text-muted-foreground"
@@ -222,42 +224,45 @@ function PendingPromptRow({
       {!isSending && !isSteering && (
         <div className="flex shrink-0 items-center gap-1">
           {showSteerAction && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleSteer}
-              className="h-auto shrink-0 rounded-full border border-transparent px-2 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:text-foreground"
-              aria-label="Run this message next"
-            >
-              <ArrowUpRight className="mr-0.5 size-3" />
-              Steer
-            </Button>
+            <Tooltip content="Send next — interrupts the current turn">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleSteer}
+                className={ROW_ACTION_CLASSNAME}
+                aria-label="Run this message next"
+              >
+                <ArrowUpRight className="size-3.5" />
+              </Button>
+            </Tooltip>
           )}
           {renderEditAction && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={!canEdit}
-              onClick={handleBeginEdit}
-              className={ROW_ACTION_CLASSNAME}
-              aria-label="Edit queued message"
-              title={editDisabledReason ?? "Edit queued message"}
-            >
-              <Pencil className="size-3.5" />
-            </Button>
+            <Tooltip content={editDisabledReason ?? "Edit message"}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={!canEdit}
+                onClick={handleBeginEdit}
+                className={ROW_ACTION_CLASSNAME}
+                aria-label="Edit queued message"
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+            </Tooltip>
           )}
           {renderDeleteAction && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={!canDelete}
-              onClick={handleDelete}
-              className={ROW_ACTION_CLASSNAME}
-              aria-label="Delete queued message"
-              title={deleteDisabledReason ?? "Delete queued message"}
-            >
-              <X className="size-3.5" />
-            </Button>
+            <Tooltip content={deleteDisabledReason ?? "Remove from queue"}>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={!canDelete}
+                onClick={handleDelete}
+                className={ROW_ACTION_CLASSNAME}
+                aria-label="Delete queued message"
+              >
+                <X className="size-3.5" />
+              </Button>
+            </Tooltip>
           )}
         </div>
       )}
