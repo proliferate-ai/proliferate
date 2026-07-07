@@ -1691,6 +1691,20 @@ body {
   color: var(--workspace-shell-action-hover-foreground);
 }
 
+/* Modifier: flat at rest, rim appears on hover/open. */
+.workspace-shell-icon-button--hover-rim {
+  border-color: transparent;
+}
+.workspace-shell-icon-button--hover-rim:hover:not(:disabled),
+.workspace-shell-icon-button--hover-rim[data-state="open"] {
+  border-color: var(--workspace-shell-action-border);
+}
+
+/* Modifier: flat always (rest, hover, open) — only tint fill on hover. */
+.workspace-shell-icon-button--flat {
+  border-color: transparent;
+}
+
 /* Split control: primary action + chevron menu segment sharing one pill.
    The left segment drops its inner edge so the right segment's border is the
    single divider seam (no doubled line). */

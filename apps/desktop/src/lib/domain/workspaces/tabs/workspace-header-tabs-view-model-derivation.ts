@@ -1,6 +1,7 @@
 import {
   getKnownSessionAgentKind,
   getKnownSessionCanFork,
+  getKnownSessionClosedAt,
   getKnownSessionId,
   getKnownSessionTitle,
   getKnownSessionViewState,
@@ -161,6 +162,7 @@ export function buildHeaderClosedChatTabs(args: {
         }),
         isActive: id === args.highlightedChatSessionId,
         isVisible: false,
+        closedAt: null,
       });
       continue;
     }
@@ -181,6 +183,7 @@ export function buildHeaderClosedChatTabs(args: {
       }),
       isActive: id === args.highlightedChatSessionId,
       isVisible: false,
+      closedAt: getKnownSessionClosedAt(known),
     });
   }
   return rows;
