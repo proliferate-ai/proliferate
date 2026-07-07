@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   MarkdownBody,
   type MarkdownCodeBlockRenderer,
@@ -53,6 +53,12 @@ export function AssistantMessage({
 // newly-appended words mount fresh and animate; nothing replays. The
 // stable/live split is kept for markdown-parse efficiency (the stable prefix
 // parses once; only the small live tail re-parses per stream batch).
+//
+// BLIP FIX: `revealedUpTo` tracks how much of the live content was already
+// rendered in a prior frame. When the markdown structure changes (e.g. `**bo`
+// completing to `**bold**`), React may remount word spans. The offset ensures
+// remounted spans for already-seen text render WITHOUT the animation class,
+// preventing the visible opacity blip.
 function AssistantMessageContent({
   content,
   isStreaming,
@@ -66,10 +72,30 @@ function AssistantMessageContent({
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 }) {
+  // Track previous total content length to compute revealedUpTo for the live
+  // tree. Since rows are keyed by message id, this component mounts fresh per
+  // message — no cross-message reset needed.
+  const prevContentLengthRef = useRef(0);
+
   const splitContent = useMemo(
     () => splitAssistantContent(content),
     [content],
   );
+
+  // revealedUpTo in live-local coordinates: everything from the live tree that
+  // was already rendered in the previous frame. Handles the live→stable
+  // boundary migration because stableContent.length grows by exactly what
+  // migrated out of the live tree.
+  const revealedUpTo = Math.max(
+    0,
+    prevContentLengthRef.current - splitContent.stableContent.length,
+  );
+
+  // Update the ref AFTER render so next render sees the current length.
+  useEffect(() => {
+    prevContentLengthRef.current = content.length;
+  });
+
   const stableClassName = splitContent.liveContent
     ? "[&>*:first-child]:mt-0"
     : "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0";
@@ -97,6 +123,7 @@ function AssistantMessageContent({
             renderInlineCode={renderInlineCode}
             renderCodeBlock={renderCodeBlock}
             revealText={isStreaming}
+            revealedUpTo={revealedUpTo}
           />
         </div>
       )}

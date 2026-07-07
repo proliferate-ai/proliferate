@@ -10,7 +10,13 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { MarkdownRevealContext, revealChildren } from "./MarkdownRevealText";
+import {
+  type HastNode,
+  type MarkdownRevealState,
+  MarkdownRevealContext,
+  REVEAL_DISABLED,
+  revealChildren,
+} from "./MarkdownRevealText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ProviderLinkMention } from "./ProviderLinkMention";
@@ -24,6 +30,8 @@ interface MarkdownBodyProps {
   renderCodeBlock?: MarkdownCodeBlockRenderer;
   taskListItems?: MarkdownTaskListItemPresentation;
   revealText?: boolean;
+  /** Character offset into the source string: text before this was already rendered. */
+  revealedUpTo?: number;
 }
 
 /**
@@ -109,8 +117,8 @@ const LI_CLASSNAME = `pl-0.5 ${PROSE_TEXT}`;
 // Factory: creates a stable component that reads reveal context and delegates.
 function mdComponent(tag: MdTag, className: string) {
   return (props: MdElementProps) => {
-    const r = useContext(MarkdownRevealContext);
-    return mdHtmlElement(tag, className, props, r);
+    const ctx = useContext(MarkdownRevealContext);
+    return mdHtmlElement(tag, className, props, ctx);
   };
 }
 
@@ -292,6 +300,7 @@ export const MarkdownBody = memo(function MarkdownBody({
   renderCodeBlock,
   taskListItems = "inline",
   revealText = false,
+  revealedUpTo = 0,
 }: MarkdownBodyProps) {
   const markdownClassName = [
     `${PROSE_TEXT} text-foreground break-words`,
@@ -320,8 +329,13 @@ export const MarkdownBody = memo(function MarkdownBody({
     ),
   }), [renderCodeBlock, renderInlineCode, renderLink, taskListItems]);
 
+  // Build reveal context value. Use a stable reference for the disabled case.
+  const revealState: MarkdownRevealState | null = revealText
+    ? { enabled: true, revealedUpTo }
+    : REVEAL_DISABLED;
+
   return (
-    <MarkdownRevealContext.Provider value={revealText}>
+    <MarkdownRevealContext.Provider value={revealState}>
       <div className={markdownClassName}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -389,14 +403,19 @@ export { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 
 // mdHtmlElement is called from within STATIC_MARKDOWN_COMPONENTS entries,
 // which ARE React component functions (hooks-valid call site). Each entry
-// calls useContext(MarkdownRevealContext) and passes revealText so word spans
-// can be applied without rebuilding the components map per render.
-function mdHtmlElement(tag: MdTag, baseClassName: string, props: MdElementProps, reveal = false) {
+// calls useContext(MarkdownRevealContext) and passes the context state so
+// word spans can be applied without rebuilding the components map per render.
+function mdHtmlElement(
+  tag: MdTag,
+  baseClassName: string,
+  props: MdElementProps,
+  ctx: MarkdownRevealState | null = null,
+) {
   const {
     children,
     dangerouslySetInnerHTML,
     className,
-    node: _node,
+    node,
     ...rest
   } = props;
   const mergedClassName = [baseClassName, className].filter(Boolean).join(" ");
@@ -408,6 +427,8 @@ function mdHtmlElement(tag: MdTag, baseClassName: string, props: MdElementProps,
       dangerouslySetInnerHTML,
     });
   }
-  const finalChildren = reveal ? revealChildren(children) : children;
+  const finalChildren = ctx?.enabled
+    ? revealChildren(children, node as HastNode | undefined, ctx)
+    : children;
   return createElement(tag, { ...rest, className: mergedClassName }, finalChildren);
 }
