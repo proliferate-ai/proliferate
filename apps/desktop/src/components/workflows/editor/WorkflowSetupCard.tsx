@@ -127,11 +127,7 @@ export function WorkflowSetupCard({ setup, args, agents: _agents, onSetupChange,
     onArgsChange(args.map((arg, i) => (i === index ? next : arg)));
   };
 
-  const sessionLabel = setup.sessionBinding === "headless" ? "Headless" : "Fresh (visible)";
-  const summaryParts = [sessionLabel];
-  if (args.length > 0) {
-    summaryParts.push(`${args.length} ${args.length === 1 ? "arg" : "args"}`);
-  }
+  const summary = args.length > 0 ? `${args.length} ${args.length === 1 ? "arg" : "args"}` : null;
 
   return (
     <div className="rounded-xl border border-border bg-background shadow-sm">
@@ -142,7 +138,7 @@ export function WorkflowSetupCard({ setup, args, agents: _agents, onSetupChange,
       >
         <span className="flex min-w-0 flex-col">
           <span className="text-sm font-medium text-foreground">Configuration</span>
-          <span className="truncate text-xs text-muted-foreground">{summaryParts.join(" · ")}</span>
+          {summary ? <span className="truncate text-xs text-muted-foreground">{summary}</span> : null}
         </span>
         {expanded ? <ChevronDown className="size-4 shrink-0 text-faint" /> : <ChevronRight className="size-4 shrink-0 text-faint" />}
       </button>
