@@ -565,6 +565,20 @@ pub struct ResolvedArtifact {
     pub message: Option<String>,
 }
 
+/// CLI-specific authentication state derived purely from local auth file
+/// discovery (env vars do not mask this).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CliAuthState {
+    /// Local auth file present and valid
+    Authenticated,
+    /// Local auth file present but expired
+    Expired,
+    /// No local auth file found (even if env vars provide credentials)
+    Absent,
+    /// Agent has no discoverable CLI auth (discovery == None on all slots)
+    Unsupported,
+}
+
 /// Machine-local resolved state for one complete agent.
 #[derive(Debug, Clone)]
 pub struct ResolvedAgent {
@@ -572,6 +586,7 @@ pub struct ResolvedAgent {
     pub status: ResolvedAgentStatus,
     pub credential_state: CredentialState,
     pub auth_slots: Vec<ResolvedAuthSlot>,
+    pub cli_auth_state: Option<CliAuthState>,
     pub native: Option<ResolvedArtifact>,
     pub agent_process: ResolvedArtifact,
     pub spawn: Option<SpawnSpec>,

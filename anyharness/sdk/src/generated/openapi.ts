@@ -1820,6 +1820,8 @@ export interface components {
             advanced: boolean;
         };
         /** @enum {string} */
+        AgentCliAuthState: "authenticated" | "expired" | "absent" | "unsupported";
+        /** @enum {string} */
         AgentCredentialState: "ready" | "missing_env" | "login_required" | "unknown";
         /** @enum {string} */
         AgentInstallState: "installed" | "install_required" | "installing" | "failed";
@@ -1911,6 +1913,7 @@ export interface components {
         AgentSeedStatus: "not_configured_dev" | "missing_bundled_seed" | "hydrating" | "ready" | "partial" | "failed";
         AgentSummary: {
             agentProcess: components["schemas"]["ArtifactStatus"];
+            cliAuthState?: null | components["schemas"]["AgentCliAuthState"];
             credentialState: components["schemas"]["AgentCredentialState"];
             displayName: string;
             docsUrl?: string | null;

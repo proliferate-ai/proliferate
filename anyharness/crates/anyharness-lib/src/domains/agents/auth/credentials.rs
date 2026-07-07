@@ -7,8 +7,8 @@ use anyharness_credential_discovery::{
 };
 
 use crate::domains::agents::model::{
-    AuthReadinessPolicy, AuthSlotSpec, AuthSpec, CredentialDiscoveryKind, CredentialState,
-    ResolvedAuthSlot,
+    AuthReadinessPolicy, AuthSlotSpec, AuthSpec, CliAuthState, CredentialDiscoveryKind,
+    CredentialState, ResolvedAuthSlot,
 };
 
 /// Determine the credential state for an agent by checking env vars first,
@@ -48,6 +48,45 @@ pub fn detect_auth_slots_with_env(
         .collect::<Vec<_>>();
 
     (aggregate_credential_state(auth, &slots), slots)
+}
+
+/// Compute the CLI-specific authentication state for an agent by checking ONLY
+/// local auth files (env vars do not influence this state).
+pub fn detect_cli_auth_state(auth: &AuthSpec, home_dir: &Path) -> Option<CliAuthState> {
+    // Check if any slot has discoverable CLI auth
+    let has_discovery = auth
+        .slots
+        .iter()
+        .any(|slot| slot.discovery != CredentialDiscoveryKind::None);
+
+    if !has_discovery {
+        return Some(CliAuthState::Unsupported);
+    }
+
+    // Aggregate state: if any slot is authenticated → authenticated,
+    // else if any expired → expired, else absent
+    let mut found_authenticated = false;
+    let mut found_expired = false;
+
+    for slot in &auth.slots {
+        match detect_local_auth(&slot.discovery, home_dir) {
+            LocalAuthDetection::Present => {
+                found_authenticated = true;
+            }
+            LocalAuthDetection::Expired => {
+                found_expired = true;
+            }
+            LocalAuthDetection::Absent => {}
+        }
+    }
+
+    if found_authenticated {
+        Some(CliAuthState::Authenticated)
+    } else if found_expired {
+        Some(CliAuthState::Expired)
+    } else {
+        Some(CliAuthState::Absent)
+    }
 }
 
 fn detect_slot_credentials(
@@ -488,6 +527,118 @@ mod tests {
             detect_opencode_local_auth(&home),
             LocalAuthDetection::Absent
         ));
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn cli_auth_state_absent_when_env_ready_but_no_auth_file() {
+        let home = make_temp_home();
+        let auth = AuthSpec {
+            readiness_policy: AuthReadinessPolicy::AnyRequiredSlot,
+            slots: vec![AuthSlotSpec {
+                id: "codex".into(),
+                label: "Codex".into(),
+                credential_provider_ids: vec!["openai".into()],
+                required_for_readiness: true,
+                env_vars: vec!["OPENAI_API_KEY".into()],
+                login: Some(test_login_spec()),
+                discovery: CredentialDiscoveryKind::Codex,
+                materialization: Default::default(),
+            }],
+        };
+
+        // With env var set, credential_state should be Ready
+        let mut env = std::collections::BTreeMap::new();
+        env.insert("OPENAI_API_KEY".to_string(), "sk-test".to_string());
+        let (credential_state, _) = detect_auth_slots_with_env(&auth, &home, &env);
+        assert_eq!(credential_state, CredentialState::Ready);
+
+        // But CLI auth state should be Absent (no auth file)
+        let cli_state = detect_cli_auth_state(&auth, &home);
+        assert_eq!(cli_state, Some(CliAuthState::Absent));
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn cli_auth_state_authenticated_when_auth_file_present() {
+        let home = make_temp_home();
+        std::fs::write(
+            home.join(".claude.json"),
+            r#"{"oauthAccount":{"accountUuid":"14e13aa4-45cf-400d-a512-4722faa2320f"}}"#,
+        )
+        .expect("write claude.json");
+
+        let auth = AuthSpec {
+            readiness_policy: AuthReadinessPolicy::AnyRequiredSlot,
+            slots: vec![AuthSlotSpec {
+                id: "claude".into(),
+                label: "Claude".into(),
+                credential_provider_ids: vec!["anthropic".into()],
+                required_for_readiness: true,
+                env_vars: vec![],
+                login: Some(test_login_spec()),
+                discovery: CredentialDiscoveryKind::Claude,
+                materialization: Default::default(),
+            }],
+        };
+
+        let cli_state = detect_cli_auth_state(&auth, &home);
+        assert_eq!(cli_state, Some(CliAuthState::Authenticated));
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn cli_auth_state_expired_when_auth_file_expired() {
+        let home = make_temp_home();
+        std::fs::create_dir_all(home.join(".claude")).expect("create claude dir");
+        std::fs::write(
+            home.join(".claude/.credentials.json"),
+            r#"{"claudeAiOauth":{"accessToken":"token","expiresAt":1000}}"#,
+        )
+        .expect("write expired creds");
+
+        let auth = AuthSpec {
+            readiness_policy: AuthReadinessPolicy::AnyRequiredSlot,
+            slots: vec![AuthSlotSpec {
+                id: "claude".into(),
+                label: "Claude".into(),
+                credential_provider_ids: vec!["anthropic".into()],
+                required_for_readiness: true,
+                env_vars: vec![],
+                login: Some(test_login_spec()),
+                discovery: CredentialDiscoveryKind::Claude,
+                materialization: Default::default(),
+            }],
+        };
+
+        let cli_state = detect_cli_auth_state(&auth, &home);
+        assert_eq!(cli_state, Some(CliAuthState::Expired));
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn cli_auth_state_unsupported_when_no_discovery() {
+        let home = make_temp_home();
+        let auth = AuthSpec {
+            readiness_policy: AuthReadinessPolicy::ProviderManaged,
+            slots: vec![AuthSlotSpec {
+                id: "custom".into(),
+                label: "Custom".into(),
+                credential_provider_ids: vec![],
+                required_for_readiness: false,
+                env_vars: vec![],
+                login: None,
+                discovery: CredentialDiscoveryKind::None,
+                materialization: Default::default(),
+            }],
+        };
+
+        let cli_state = detect_cli_auth_state(&auth, &home);
+        assert_eq!(cli_state, Some(CliAuthState::Unsupported));
 
         let _ = std::fs::remove_dir_all(&home);
     }

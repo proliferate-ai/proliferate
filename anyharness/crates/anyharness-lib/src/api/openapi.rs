@@ -1,7 +1,7 @@
 use utoipa::OpenApi;
 
 use anyharness_contract::v1::{
-    AdvanceReplaySessionResponse, AgentCredentialState, AgentInstallState,
+    AdvanceReplaySessionResponse, AgentCliAuthState, AgentCredentialState, AgentInstallState,
     AgentLaunchModelOption, AgentLaunchOption, AgentLaunchOptionsResponse,
     AgentLoginTerminalRecord, AgentLoginTerminalStatus, AgentReadinessState, AgentSeedFailureKind,
     ModelEffort,
@@ -257,6 +257,7 @@ use anyharness_contract::v1::{
         AgentSeedFailureKind,
         AgentInstallState,
         AgentCredentialState,
+        AgentCliAuthState,
         PushRevokedJtisRequest,
         PushRevokedJtisResponse,
         ApplyAgentAuthStateResponse,
