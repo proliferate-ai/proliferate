@@ -36,11 +36,8 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
 
   return (
     <section className="space-y-6">
-      <SettingsPageHeader title={displayName} />
-
-      {issueAgent ? <HarnessConfigIssueBanner agent={issueAgent} /> : null}
-
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-4">
+        <SettingsPageHeader title={displayName} />
         <SegmentedControl
           ariaLabel="Agent authentication surface"
           items={SURFACE_ITEMS}
@@ -48,6 +45,8 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
           onChange={setSurface}
         />
       </div>
+
+      {issueAgent ? <HarnessConfigIssueBanner agent={issueAgent} /> : null}
 
       {surface === "cloud" ? (
         <HarnessSurfaceCloud harnessKind={harnessKind} displayName={displayName} />
