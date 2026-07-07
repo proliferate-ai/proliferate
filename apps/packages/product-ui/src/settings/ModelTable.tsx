@@ -42,7 +42,7 @@ export interface ModelTableProps {
 const TH_CLASS =
   "border-b border-border bg-accent px-3 py-1.5 text-left text-[10px] font-medium whitespace-nowrap text-faint";
 const TD_CLASS =
-  "border-t border-border px-3 py-1 align-top text-[11px] whitespace-nowrap";
+  "border-t border-border px-3 py-2 align-top text-[11px] whitespace-nowrap";
 
 function Dash() {
   return <span className="text-[11px] text-faint">—</span>;

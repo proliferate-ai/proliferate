@@ -60,6 +60,32 @@ export function HarnessSettingsSection({
     return null;
   }
 
+  // When rendering as a standalone section (not inside a parent panel), wrap in
+  // a card with a title header to visually separate from the Authentication card.
+  if (variant === "section") {
+    return (
+      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-foreground/[0.02]">
+        <div className="border-b border-border px-4 py-3">
+          <h3 className="text-sm font-medium text-foreground">
+            {HARNESS_PANE_COPY.harnessSettingsTitle}
+          </h3>
+        </div>
+        <div className="px-4 py-3.5">
+          <div className="flex flex-col">
+            {settings.map((setting) => (
+              <HarnessSettingRow
+                key={setting.key}
+                harnessKind={harnessKind}
+                surface={surface}
+                setting={setting}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.harnessSettingsTitle}>
       {settings.map((setting) => (
