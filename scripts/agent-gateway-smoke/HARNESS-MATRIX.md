@@ -43,8 +43,8 @@ grok-build, grok-code-fast-1`. Compared against each agent's
   claude-haiku-4-5-20251001]` — all 4 present in the live list. **Match.**
 - **claude**: `gatewayPolicy` = `{providers:[anthropic], roles.small_fast:
   claude-haiku-4-5-20251001}` — model present. **Match.**
-- **codex**: `gatewayPolicy` = `{providers:[anthropic, openai]}` — both
-  providers represented in `model_list`. **Match.**
+- **codex**: `gatewayPolicy` = `{providers:[openai]}` — provider
+  represented in `model_list`. **Match.**
 - **grok**: `gatewayPolicy` = `{}` (deliberately empty). **Finding, not a
   mismatch:** grok is the one harness whose gatewayPolicy carries no
   `seedModels`/model ids to diff against the live list, because the CLI

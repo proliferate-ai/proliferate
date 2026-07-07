@@ -1431,7 +1431,7 @@
           "openai-api": "gpt-5.5",
           "openai-oauth": "gpt-5.5",
           "bedrock": "openai.gpt-5.5",
-          "gateway": "claude-sonnet-4-5-20250929"
+          "gateway": "gpt-5.2"
         },
         "observedDefaults": {
           "bedrock": "openai.gpt-oss-120b",
@@ -1440,7 +1440,6 @@
         },
         "gatewayPolicy": {
           "providers": [
-            "anthropic",
             "openai"
           ]
         }
