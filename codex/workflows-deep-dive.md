@@ -1,14 +1,15 @@
 # Workflows — navigable deep dive
 
-> Companion to [`workflows-architecture.md`](workflows-architecture.md) (the dense
-> as-built reference). **This doc is the map.** It is organized for someone reading
+> **This doc is the map of the CURRENT state.** It is organized for someone reading
 > to *understand* the system: click a link, land on the real code. Every path below
 > was verified against the worktree `workflows/ui-round3` (tip `dfe38a81b`). Links
 > are relative to this file (`codex/`).
 >
-> Read `workflows-architecture.md` for the *prose narrative* and the design/drift
-> appendices; read this for *structure, file trees, verbatim types, and flow
-> diagrams* with jump links.
+> Companion: [`workflows-architecture.md`](workflows-architecture.md) is the
+> **end-state** doc for the PR A–E arc (effects ledger + Slack delivery, poll
+> triggers, `agent.emit`, `workflow.run`, gateway function grants) — read it for
+> where the system is going and the [OPEN-n] decision log; read this for what is
+> built today.
 
 Four nouns, unchanged: **Session** = conversational context · **Run** = one
 execution · **Workflow** = the program · **Trigger** = a thing that starts a run.
