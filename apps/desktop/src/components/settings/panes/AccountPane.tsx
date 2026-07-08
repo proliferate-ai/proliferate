@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   AccountSettingsPane,
   type AccountPasswordCredentialSubmit,
-  type AccountProviderView,
 } from "@proliferate/product-ui/account/AccountSettingsPane";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { setPasswordCredential } from "@proliferate/cloud-sdk";
@@ -22,6 +21,7 @@ import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import {
+  buildAccountProviderViews,
   getAccountActionDescription,
   getAccountDisplayName,
   getAccountProfileSummary,
@@ -379,75 +379,4 @@ function clearGitHubAppAuthorizationRefreshTimers(timerIds: number[]) {
   for (const timerId of timerIds) {
     window.clearTimeout(timerId);
   }
-}
-
-function buildAccountProviderViews({
-  githubAccountLabel,
-  githubConnected,
-  googleAccounts,
-  ssoAccounts,
-  googleAvailable,
-  showProviders,
-}: {
-  githubAccountLabel: string | null;
-  githubConnected: boolean;
-  googleAccounts: Array<{ accountEmail?: string | null; accountId?: string | null }>;
-  ssoAccounts: Array<{
-    accountEmail?: string | null;
-    accountId?: string | null;
-    displayName?: string | null;
-    brandLabel?: string | null;
-  }>;
-  googleAvailable: boolean;
-  showProviders: boolean;
-}): AccountProviderView[] {
-  if (!showProviders) {
-    return [
-      {
-        provider: "github",
-        label: "GitHub",
-        accountLabel: "Not signed in",
-        connected: false,
-        primary: false,
-      },
-    ];
-  }
-
-  const providers: AccountProviderView[] = ssoAccounts.map((account) => ({
-    provider: "sso" as const,
-    label: account.displayName ?? "SSO",
-    brandLabel: account.brandLabel ?? account.displayName ?? null,
-    accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
-    connected: true,
-  }));
-
-  providers.push(
-    {
-      provider: "github",
-      label: "GitHub",
-      accountLabel: githubConnected ? githubAccountLabel ?? "Connected" : "Not connected",
-      connected: githubConnected,
-      primary: githubConnected,
-    },
-  );
-
-  if (googleAccounts.length > 0) {
-    providers.push(
-      ...googleAccounts.map((account) => ({
-        provider: "google" as const,
-        label: "Google",
-        accountLabel: account.accountEmail ?? account.accountId ?? "Connected",
-        connected: true,
-      })),
-    );
-  } else {
-    providers.push({
-      provider: "google",
-      label: "Google",
-      accountLabel: googleAvailable ? "Not connected" : "Not configured in this environment",
-      connected: false,
-    });
-  }
-
-  return providers;
 }
