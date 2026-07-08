@@ -225,11 +225,35 @@ Two lanes every agent/workspace scenario runs in, unless marked otherwise:
 - **local lane**: desktop (web-port mode) + local AnyHarness runtime.
 - **sandbox lane**: cloud workspace on real E2B.
 
+Identity per target (ruled 2026-07-08): the **fresh user** is mintable only
+where a registration API exists — the local/self-hosted target. On staging
+(hosted, OAuth-only signup) there is deliberately no test-only registration
+escape hatch; fresh-user cold-path scenarios run fully on the local target
+(still a real from-zero E2B provision), and staging approximates cold with
+"fresh workspace for the durable user."
+
+GitHub fixture: a dedicated test GitHub org with the Proliferate GitHub App
+installed once, durably (dev app for local, staging app for staging).
+Scenarios use repos the installation already covers; the install/OAuth dance
+itself is not automated (real-provider-handshake posture: add on first
+production break).
+
 ### T3-PROV-1: provision — new user (cold path)
 As the **fresh user**: first-ever cloud workspace → personal sandbox created
 from zero (enrollment, worker boot, materialization).
 Assert: `ready` within [BUDGET — Pablo to set; suggest p95 ≤ 5 min fail,
 warn at 3]; connect and run one shell command.
+Trigger under test (ruled 2026-07-08): the personal sandbox is created by the
+**GitHub App authorization callback**
+(`complete_github_app_user_authorization_callback` →
+`ensure_personal_cloud_sandbox_exists` + `schedule_materialize_sandbox`), with
+`ensure_personal_cloud_sandbox_exists` also reachable via repo-add and secret
+materialization. The cold path must be exercised **through the GitHub App
+auth path, not by calling the sandbox service directly** — no mock: the test
+GitHub org has the App pre-installed, and the fresh user completes real App
+authorization against it. If driving the real GitHub authorize redirect
+headlessly proves infeasible, the fallback seam is invoking the
+post-authorization service call the callback makes — never a faked GitHub.
 
 ### T3-PROV-2: access — existing user (warm path)
 As the **durable user**, whose sandbox already exists: reopen the workspace;
@@ -241,6 +265,9 @@ existing-user paths fail differently — both must be green.
 Create a worktree workspace locally (off a local repo) AND inside a cloud
 sandbox (off the sandbox's repo checkout). Assert: worktree created on the
 right base branch, session opens in it, edits isolated from the base tree.
+Budget (ruled 2026-07-08): on an already-running sandbox, worktree creation
+completes in **≤ 1 s** measured at the runtime operation (sandbox wake time,
+if any, is T3-PROV-2's budget, not this one).
 
 ### T3-CHAT-1: every harness × its cheapest model, via the gateway
 For **each cataloged harness**, in **both lanes**, using the harness's
@@ -275,9 +302,26 @@ the target server → heartbeat → worker pushes catalog → runtime reconciles
 desktop-local runtime. This is the "they update the way we described, not
 just locally but in the sandbox" requirement.
 
+### T3-CFG-1: live config options apply in an existing session
+Added 2026-07-08 (Pablo: "occasionally this breaks"). In an **existing** chat
+session (not a fresh one), per harness: enumerate the harness's exposed
+configuration options from the catalog/harness contract and cycle each one —
+every selectable model (switch → send a message → the reply is attributed to
+the switched model), every mode/approval-policy-style enum (switch → the
+session accepts it and behaves accordingly, asserted at the harness-contract
+level, e.g. the option readback/state event — not by interpreting prose).
+Assert: each option value round-trips (set → readback matches) and the session
+survives every switch. Options are **enumerated from the catalog at build
+time, never hardcoded**, so a new option is automatically in scope.
+Per-harness × per-option red. Runs in the local lane by default (cheap);
+sandbox lane on the release train.
+
 ### T3-SEC-MAT-1: secrets materialize
 Steps: set personal + org env-var secret and a workspace file secret → create
 a fresh cloud workspace → poll `materialization.status` to `ready`.
+Budget (ruled 2026-07-08): on an already-running sandbox, a secret PUT reaches
+`ready` and the sandbox file is updated within **≤ 60 s** ("roughly
+immediate"); adjust with evidence if the mechanism is legitimately slower.
 Assert in-sandbox: `{PROLIFERATE_HOME}/secrets/global.env` contains both
 merged env vars (org secrets materialize into **each member's personal
 sandbox** — that's the mechanism, assert it as such);
@@ -285,17 +329,46 @@ sandbox** — that's the mechanism, assert it as such);
 Update propagation: PUT a new value → status returns to `pending` → `ready` →
 sandbox file updated.
 
-### T3-INT-1: real integration through the gateway
-Steps: connect a real low-stakes integration (test Slack workspace) → agent
-session calls a tool through the integrations gateway.
-Assert: tool call succeeds; audit row written; org-policy toggle off → same
-call returns enumerated scope/policy error.
+### T3-INT-1: real integration through the gateway — every harness, both lanes
+Steps: connect one real low-stakes integration (test Slack workspace) once;
+then for **each cataloged harness, in both lanes** (piggybacking T3-CHAT-1's
+session matrix): the agent session calls a tool through the integrations
+gateway.
+Assert: tool call succeeds per harness × lane (per-harness red, like
+T3-CHAT-1); audit row written; org-policy toggle off → same call returns
+enumerated scope/policy error (toggle asserted once, not per harness).
 
-### T3-REPO-1: repo settings take effect
+### T3-REPO-1: repo settings take effect — both lanes
 Steps: configure default branch + environment vars/scripts on the repo
-environment → fresh workspace.
-Assert: checkout is on the configured branch; env script ran (marker file);
-env vars present in session shell.
+environment → fresh workspace, **locally AND in a cloud sandbox** (ruled
+2026-07-08: setup scripts are a local mechanism too, not sandbox-only).
+Assert, per lane: checkout is on the configured branch; setup/env script ran
+(marker file); env vars present in session shell.
+
+### T3-BILL-1: real consumption is metered — LLM and compute
+Added 2026-07-08. As the durable user, run a real agent session (reuse a
+T3-CHAT-1 run) and keep a sandbox running for a known interval.
+Assert, against the billing surfaces (usage UI/API + underlying meter
+records): (a) **LLM consumption** — the session produced meter events whose
+tokens/cost match the gateway's recorded usage for the test key, and the
+credit balance decremented accordingly; (b) **compute consumption** — sandbox
+runtime for the interval produced compute meter events and the corresponding
+credit decrement. Both sides must attribute to the right org/user. Staging
+lane additionally asserts the Stripe webhook path is live: meter events
+delivered (no stuck/undelivered webhook backlog for the test org).
+
+### T3-BILL-2: exhaustion gates — compute and LLM independently
+Drive the test org's credits to exhaustion (smallest real mechanism available;
+test-clock/grant manipulation is allowed as *setup*, but the enforcement under
+test is real).
+Assert, compute side: running sandbox is **paused** and inaccessible; new
+cloud sandbox/workspace creation is blocked with the enumerated
+credits-exhausted kind. Assert, LLM side: gateway rejects the test key's
+completion call with the enumerated budget error; live session surfaces it as
+an enumerated error, not a hang. Then refill → sandbox resumable, gateway
+serves again, new workspaces allowed. (Tier-2 T2-BILL-1 proves this logic
+against Stripe test clocks per-PR; this scenario proves the **deployed**
+enforcement chain end-to-end on real infrastructure.)
 
 ---
 

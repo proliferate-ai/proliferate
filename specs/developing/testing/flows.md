@@ -43,12 +43,12 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Local workspace create | 3 | — |
 | Worktree workspace create — locally AND inside a cloud sandbox | 3 | — |
 | Cloud workspace create: request path + UI state up to the provisioning seam | 2 | — |
-| New user cold path: first-ever sandbox provisioned from zero, within time budget | 3 | — |
+| New user cold path: GitHub App authorization triggers first-ever sandbox provisioned from zero, within time budget | 3 | — |
 | Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | — |
 | Cloud workspace pause/resume/connect on real E2B | 3 | — |
 | Local ↔ cloud workspace migration | 3 | — |
 | Add repo from cloud | 2 | — |
-| Repo settings applied: default branch, action scripts, environment scripts/env vars take effect in sandbox | 3 | — |
+| Repo settings applied: default branch, action scripts, environment scripts/env vars take effect — locally AND in sandbox | 3 | — |
 
 ## Agents & sessions
 
@@ -58,7 +58,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Correct harness spawned: right binary, right version per catalog pin — asserted locally AND in the sandbox, before the chat | 3 | — |
 | Install an agent; switch agents in a workspace | 3 | — |
 | Per-agent catalog version bump gate (staging smoke before pin bump) | 3 | — |
-| Config/harness option updates applied by a live agent | 3 | — |
+| Config/harness option updates applied by a live agent: cycle every catalog-enumerated option (models, modes) in an existing session | 3 | — |
 | Session resume after runtime restart | 3 | — |
 
 ## Secrets
@@ -75,7 +75,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
 | Connect integration (fake provider), toggle on/off | 2 | — |
-| Authenticate a real integration; agent in sandbox uses it through the gateway | 3 | — |
+| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | — |
 
 ## Workflows
 
@@ -91,7 +91,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
 | Checkout → grants → overage → cut-off → reactivation (Stripe test mode + test clocks) | 2 | — |
-| Credits consumed properly: real session → meter events + credit decrement match consumption | 3 | — |
+| Credits consumed properly: real session → LLM **and compute** meter events + credit decrement match consumption; Stripe webhook delivery live on staging | 3 | — |
 | Out of credits: sandbox paused and not accessible | 3 | — |
 | Out of credits: gateway LLM access gated; reactivates on refill | 3 | — |
 | Plan gates the model list: user sees/uses exactly the models their plan allows | 3 | — |
