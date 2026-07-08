@@ -94,8 +94,12 @@ Negatives (each its own case):
 - revoked: admin revokes → accept fails.
 - wrong email: login as `other@test.local` → invitation not listed; direct
   accept call with the known UUID → rejected (email mismatch).
-- duplicate pending invite for same (org, email) → rejected by partial unique
-  index → enumerated error.
+- duplicate invite for same (org, email) is NOT rejected: re-inviting rotates
+  — `create_or_rotate_organization_invitation` expires the old pending row
+  (`status=expired`) and inserts a fresh pending row (new id, new
+  `expires_at`) inside one transaction. Assert: accept with the **old**
+  invitation id → `invalid_invitation` (enumerated error, same as expired);
+  accept with the **new** id → succeeds normally with invited role.
 
 ### T2-INV-2: single-org register-via-invite path
 Preconditions: `SINGLE_ORG_MODE=true`.
