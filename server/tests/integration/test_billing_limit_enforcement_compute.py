@@ -90,9 +90,7 @@ async def _seed_org_with_usage(
     subject = await ensure_organization_billing_subject(db_session, org.id)
     user_id = await _create_user(db_session)
     db_session.add(_segment(subject_id=subject.id, user_id=user_id, seconds=used_seconds))
-    await replace_budget_limits(
-        db_session, organization_id=org.id, limits=make_limits(user_id)
-    )
+    await replace_budget_limits(db_session, organization_id=org.id, limits=make_limits(user_id))
     await db_session.commit()
     return org.id, subject.id, user_id
 

@@ -294,9 +294,7 @@ async def _resolve_compute_limit_pause(
     if subject_id not in org_id_by_subject:
         async with db_engine.async_session_factory() as db:
             subject = await get_billing_subject_by_id(db, subject_id)
-        org_id_by_subject[subject_id] = (
-            subject.organization_id if subject is not None else None
-        )
+        org_id_by_subject[subject_id] = subject.organization_id if subject is not None else None
     organization_id = org_id_by_subject[subject_id]
     if organization_id is None:
         return None

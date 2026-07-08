@@ -374,9 +374,7 @@ async def _enforce_org_llm_limits(
     ``exhausted``); back under cap with positive credit re-enables it.
     """
     limits = await billing_store.list_budget_limits(db, organization_id)
-    enabled_llm_limits = [
-        limit for limit in limits if limit.kind == "llm" and limit.enabled
-    ]
+    enabled_llm_limits = [limit for limit in limits if limit.kind == "llm" and limit.enabled]
     enrollments = await agent_gateway_store.list_active_enrollments_for_subject(
         db,
         billing_subject_id=billing_subject_id,
