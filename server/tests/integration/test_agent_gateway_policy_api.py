@@ -299,7 +299,7 @@ class TestOrgAgentPolicyPlanGating:
 
 class TestOrgAgentPolicyViolations:
     @pytest.mark.asyncio
-    async def test_violations_computed_live_and_nothing_blocked(
+    async def test_violations_report_covers_stale_selections(
         self,
         client: AsyncClient,
         monkeypatch: pytest.MonkeyPatch,
@@ -368,46 +368,33 @@ class TestOrgAgentPolicyViolations:
         assert all(item["email"] for item in violations)
         assert outsider_id not in {item["userId"] for item in violations}
 
-        # Flag-only: a member can still select a violating source afterwards.
-        still_allowed = await _put_selections(
+        # Select-time enforcement is now HARD: once the policy is in place a
+        # member can no longer PUT a NEW violating selection. (Detailed cases
+        # live in test_agent_gateway_policy_enforcement.)
+        blocked = await _put_selections(
             client,
             member_headers,
             harness="grok",
             surface="local",
             sources=[api_key(str(member_key["id"]))],
         )
-        assert still_allowed.status_code == 200, still_allowed.text
+        assert blocked.status_code == 403, blocked.text
+        assert blocked.json()["detail"]["code"] == "policy_violation"
 
-        after = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "grok", "local", "api_key") in {
-            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
-            for item in after.json()["violations"]
-        }
-
-        # A member can select any REGISTERED harness kind, and the admin can
-        # allow-list that exact kind to resolve the violation.
-        opencode_selection = await _put_selections(
-            client,
-            member_headers,
-            harness="opencode",
-            surface="cloud",
-            sources=[gateway],
-        )
-        assert opencode_selection.status_code == 200, opencode_selection.text
-        flagged_opencode = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "opencode", "cloud", "gateway") in {
-            (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
-            for item in flagged_opencode.json()["violations"]
-        }
-
-        allow_opencode = await client.put(
+        # The stale codex/gateway selection only conflicts on the harness axis
+        # (gateway IS an allowed route). Adding codex to the allow-list resolves
+        # that at-rest violation without the member touching the row.
+        allow_codex = await client.put(
             _policy_path(organization_id),
             headers=owner_headers,
-            json={"allowedRoutes": ["gateway"], "allowedHarnesses": ["claude", "opencode"]},
+            json={"allowedRoutes": ["gateway"], "allowedHarnesses": ["claude", "codex"]},
         )
-        assert allow_opencode.status_code == 200, allow_opencode.text
+        assert allow_codex.status_code == 200, allow_codex.text
         resolved = await client.get(violations_path, headers=owner_headers)
-        assert (member_id, "opencode", "cloud", "gateway") not in {
+        resolved_flagged = {
             (item["userId"], item["harnessKind"], item["surface"], item["sourceKind"])
             for item in resolved.json()["violations"]
         }
+        assert (member_id, "codex", "cloud", "gateway") not in resolved_flagged
+        # The api_key/local row still conflicts on the route axis.
+        assert (member_id, "claude", "local", "api_key") in resolved_flagged
