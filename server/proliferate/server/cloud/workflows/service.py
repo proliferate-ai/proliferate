@@ -83,6 +83,13 @@ from proliferate.server.cloud.workflows.domain.run_status import (
     check_transition,
     is_terminal,
 )
+from proliferate.server.cloud.workflows.gateway_grants import (
+    assert_declared_providers_ready,
+    granted_namespaces,
+    mint_run_gateway_token,
+    resolve_run_scope,
+    visible_provider_namespaces,
+)
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
     TriggerPollRequest,
@@ -150,6 +157,31 @@ async def _validate_workflow_includes(
         )
     except WorkflowCompositionError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
+
+
+async def _validate_workflow_functions(
+    db: AsyncSession, *, owner_user_id: UUID, definition: dict[str, object]
+) -> None:
+    """Save-time L22 check: every declared ``functions`` provider must be a
+    definition visible to the owner (seed + the owner's org customs).
+
+    Structural validation (non-empty strings, no dup providers) already happened in
+    ``parse_definition``; this needs owner context + the DB, so it runs here. It
+    does NOT require a *ready account* — that is a StartRun-time (fail-the-run)
+    concern, since accounts connect/disconnect independently of the definition.
+    """
+
+    namespaces = granted_namespaces(resolve_run_scope(definition))
+    if not namespaces:
+        return
+    visible = await visible_provider_namespaces(db, owner_user_id=owner_user_id)
+    unknown = sorted(set(namespaces) - visible)
+    if unknown:
+        raise CloudApiError(
+            "workflow_function_provider_unknown",
+            f"integrations reference provider(s) you cannot use: {unknown}.",
+            status_code=400,
+        )
 
 
 async def visible_workflow(
@@ -224,6 +256,7 @@ async def create_workflow(
     await _validate_workflow_includes(
         db, owner_user_id=user.id, workflow_id=None, definition=definition
     )
+    await _validate_workflow_functions(db, owner_user_id=user.id, definition=definition)
     active_count = await store.count_active_workflows(db, owner_user_id=user.id)
     if not workflow_create_allowed(active_count, max_allowed=free_plan_workflow_limit()):
         raise CloudApiError(
@@ -257,6 +290,7 @@ async def update_workflow(
     await _validate_workflow_includes(
         db, owner_user_id=user.id, workflow_id=workflow_id, definition=definition
     )
+    await _validate_workflow_functions(db, owner_user_id=user.id, definition=definition)
     name = _clean_name(body.name) if body.name is not None else None
     update_description = "description" in body.model_fields_set
     result = await store.append_version(
@@ -501,6 +535,17 @@ async def start_run(
     except WorkflowCompositionError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
+    # Per-run gateway scope (PR E, E3 namespace-level): the definition's declared
+    # integration namespaces, stamped per slot. L22 fail-fast BEFORE the run row
+    # exists — a declared namespace with no ready account fails the run cleanly
+    # rather than silently narrowing the grant. No tools/list fetch at mint.
+    run_scope = resolve_run_scope(version.definition_json)
+    await assert_declared_providers_ready(
+        db,
+        owner_user_id=workflow.owner_user_id,
+        namespaces=granted_namespaces(run_scope),
+    )
+
     run_id = uuid4()
     resolved_plan = _resolve_plan(
         run_id=run_id,
@@ -512,7 +557,7 @@ async def start_run(
         session_bindings=session_bindings or {},
         agents=resolved_agents,
     )
-    return await store.create_run(
+    run = await store.create_run(
         db,
         run_id=run_id,
         workflow_id=workflow_id,
@@ -526,6 +571,19 @@ async def start_run(
         trigger_id=trigger_id,
         scheduled_for=scheduled_for,
     )
+
+    # Mint the per-run gateway token for EVERY run (L16), both lanes, empty scope
+    # legal. The plaintext lands in the plan's gateway block; the L25 subset
+    # intersection with the delivering worker happens later, at cloud delivery,
+    # when the worker is known (local lane ships the definition scope unchanged —
+    # the runtime errors explicitly if it can't honor it, §5.3). The token FKs the
+    # run row, so it is minted after create_run, then folded into the plan.
+    _token, gateway_block = await mint_run_gateway_token(
+        db, run_id=run_id, owner_user_id=workflow.owner_user_id, scope=run_scope
+    )
+    resolved_plan["gateway"] = gateway_block
+    updated = await store.update_run(db, run_id=run_id, resolved_plan_json=resolved_plan)
+    return updated if updated is not None else run
 
 
 # --- delivery + observed status ------------------------------------------------
@@ -604,6 +662,12 @@ async def report_run_status(
         finished_at=finished_at,
     )
     assert updated is not None
+
+    # Terminal status is the choke point that expires the per-run gateway token
+    # (idempotent — an already-terminal run has no active token). Do this before
+    # apply_step_actions so a crash mid-actions still leaves the token expired.
+    if is_terminal(updated.status):
+        await store.expire_run_gateway_tokens_for_run(db, workflow_run_id=run_id)
 
     try:
         from proliferate.server.cloud.workflows.actions import apply_step_actions

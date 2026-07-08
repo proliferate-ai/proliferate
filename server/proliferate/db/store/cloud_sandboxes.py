@@ -15,6 +15,7 @@ from uuid import UUID
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CLOUD_SANDBOX_PURPOSE_INTERACTIVE
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.utils.time import utcnow
 
@@ -30,6 +31,7 @@ class CloudSandboxValue:
     created_by_user_id: UUID | None
     billing_subject_id: UUID | None
     status: str
+    purpose: str
     last_error: str | None
     e2b_sandbox_id: str | None
     e2b_template_ref: str
@@ -57,6 +59,7 @@ def cloud_sandbox_value(row: CloudSandbox) -> CloudSandboxValue:
         created_by_user_id=row.owner_user_id,
         billing_subject_id=None,
         status=status,
+        purpose=row.purpose,
         last_error=None,
         e2b_sandbox_id=row.provider_sandbox_id,
         e2b_template_ref=sandbox_type,
@@ -150,10 +153,14 @@ async def ensure_personal_cloud_sandbox(
     created_by_user_id: UUID,
     billing_subject_id: UUID,
     e2b_template_ref: str,
+    purpose: str = CLOUD_SANDBOX_PURPOSE_INTERACTIVE,
 ) -> CloudSandboxValue:
     del created_by_user_id, billing_subject_id, e2b_template_ref
     existing = await load_personal_cloud_sandbox(db, user_id, lock_row=True)
     if existing is not None:
+        # L26: purpose is stamped ONCE at creation and never inferred later, so an
+        # already-existing sandbox keeps whatever it was stamped with — a
+        # workflow-driven wake does not restamp an interactive sandbox.
         return existing
     now = utcnow()
     row = CloudSandbox(
@@ -161,6 +168,7 @@ async def ensure_personal_cloud_sandbox(
         sandbox_type="e2b",
         provider_sandbox_id=None,
         status="creating",
+        purpose=purpose,
         anyharness_base_url=None,
         runtime_token_ciphertext=None,
         anyharness_data_key_ciphertext=None,

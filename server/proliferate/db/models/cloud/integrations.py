@@ -30,6 +30,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -100,6 +101,13 @@ class CloudIntegrationPolicy(Base):
     organization_id: Mapped[uuid.UUID] = mapped_column(index=True)
     definition_id: Mapped[uuid.UUID] = mapped_column(index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # L25 admin key: the org-level scope this definition is allowed to expose to a
+    # worker's gateway token (a tool-name allowlist, ``["claim", ...]``). NULL means
+    # "no scope restriction from policy" — the admin surface for the worker-level
+    # allowlist, extending this row rather than a parallel table. Not wired into
+    # gateway enforcement in A–E (enforcement reads the worker token's scope_json);
+    # kept nullable so it can be authored without touching existing rows.
+    scope_json: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     updated_by_user_id: Mapped[uuid.UUID] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

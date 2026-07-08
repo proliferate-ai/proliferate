@@ -7,10 +7,11 @@ a workflow lookup with id ``"runs"``.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
@@ -18,8 +19,10 @@ from proliferate.constants.workflows import WORKFLOW_TARGET_MODE_PERSONAL_CLOUD
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_workflows as store
+from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.integrations.slack import client as slack_client
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
@@ -65,6 +68,7 @@ from proliferate.server.cloud.workflows.service import (
     update_workflow,
 )
 from proliferate.utils.crypto import decrypt_json
+from proliferate.utils.time import utcnow
 
 router = APIRouter(prefix="/workflows", tags=["cloud-workflows"])
 
@@ -168,6 +172,71 @@ async def refresh_run_endpoint(
 
     run = await get_run(db, user, run_id)
     return run_payload(await refresh_cloud_run(db, user, run))
+
+
+@dataclass(frozen=True)
+class _PingActor:
+    """Minimal actor for the ping-triggered refresh — the run-token proves the run,
+    so the owner id is all the cloud-sandbox gateway access needs."""
+
+    id: UUID
+
+
+@router.post("/runs/{run_id}/ping", status_code=202)
+async def run_ping_endpoint(
+    run_id: UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+) -> Response:
+    """Completion ping (L16 / §3.7). NO user-session auth — the per-run gateway
+    token IS the auth. The runtime fires this after each step transition; the
+    handler validates the token, requires token↔run_id match (so run A's token
+    can't ping run B), and wakes the existing refresh path for cloud-lane runs.
+
+    The body carries nothing: it is a stateless nudge. Duplicate/stale/late pings
+    are safe by construction — refresh is reconcile-shaped and run-status
+    transitions are monotonic — so no state is added here.
+    """
+
+    header = request.headers.get("authorization", "")
+    scheme, _, raw = header.partition(" ")
+    token = raw.strip()
+    if scheme.lower() != "bearer" or not token:
+        raise CloudApiError(
+            "workflow_ping_unauthorized",
+            "Missing or malformed run ping token.",
+            status_code=401,
+        )
+    grant = await store.get_active_run_gateway_token_by_hash(
+        db,
+        token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
+        now=utcnow(),
+    )
+    if grant is None:
+        # Unknown, expired (terminal run), or revoked token.
+        raise CloudApiError(
+            "workflow_ping_unauthorized",
+            "Run ping token is invalid, expired, or revoked.",
+            status_code=401,
+        )
+    if grant.workflow_run_id != run_id:
+        raise CloudApiError(
+            "workflow_ping_run_mismatch",
+            "This token does not belong to the pinged run.",
+            status_code=403,
+        )
+
+    run = await store.get_run(db, run_id)
+    # Local-lane runs are observed by the desktop relay, which owns local
+    # observation; the ping is accepted (202) and no-ops the refresh here.
+    if run is not None and run.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        try:
+            await refresh_cloud_run(db, _PingActor(id=grant.owner_user_id), run)
+        except CloudApiError:
+            # A failed refresh never changes engine state — the ping is a nudge,
+            # not a transition; the scheduler phase-3 sweep remains the backstop.
+            pass
+    return Response(status_code=202)
 
 
 @router.get("/slack/channels", response_model=SlackChannelsResponse)

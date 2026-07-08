@@ -18,7 +18,7 @@ from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integration_gateway.domain import json_rpc, virtual_tools
+from proliferate.server.cloud.integration_gateway.domain import json_rpc, scope, virtual_tools
 from proliferate.server.cloud.integration_gateway.domain.tool_args import (
     parse_call_tool_args,
     parse_list_tools_args,
@@ -35,8 +35,15 @@ async def ready_accounts_for_grant(
     *,
     grant: IntegrationGatewayGrant,
 ) -> list[GatewayProviderAccount]:
-    """The owner's enabled, ready accounts whose definition is not archived."""
-    accounts = await accounts_store.list_ready_accounts_for_user(db, grant.owner_user_id)
+    """The owner's enabled, ready accounts whose definition is not archived.
+
+    Org-aware (regression fix): for an org-scoped grant, definitions the org has
+    disabled by policy are excluded — the same overlay ``get_ready_account_for_provider``
+    applies, so ``list_providers`` cannot surface an org-disabled provider.
+    """
+    accounts = await accounts_store.list_ready_accounts_for_user(
+        db, grant.owner_user_id, organization_id=grant.organization_id
+    )
     definitions = await definitions_store.get_definitions_by_ids(
         db, {account.definition_id for account in accounts}
     )
@@ -55,7 +62,9 @@ async def account_for_provider(
     grant: IntegrationGatewayGrant,
     provider: str,
 ) -> GatewayProviderAccount:
-    pair = await accounts_store.get_ready_account_for_provider(db, grant.owner_user_id, provider)
+    pair = await accounts_store.get_ready_account_for_provider(
+        db, grant.owner_user_id, provider, organization_id=grant.organization_id
+    )
     if pair is None:
         raise CloudApiError(
             "integration_provider_not_found",
@@ -71,6 +80,9 @@ async def list_providers(
     *,
     grant: IntegrationGatewayGrant,
 ) -> dict[str, object]:
+    # Scope filtering (§6.3, least astonishment): a caller only *sees* the
+    # providers its grant reaches. Worker-token grants apply only the worker layer;
+    # run-token grants also hide providers outside the frozen run scope.
     providers = [
         {
             "provider": pair.definition.namespace,
@@ -79,6 +91,11 @@ async def list_providers(
             "status": pair.account.status,
         }
         for pair in await ready_accounts_for_grant(db, grant=grant)
+        if scope.provider_visible(
+            run_scope=grant.run_scope,
+            worker_scope=grant.worker_scope,
+            provider=pair.definition.namespace,
+        )
     ]
     return {"providers": providers}
 
@@ -93,7 +110,15 @@ async def list_tools_for_provider(
     tools = await get_or_refresh_tool_cache(
         db, account_record=pair.account, definition_record=pair.definition
     )
-    return {"provider": provider, "tools": tools}
+    # tools/list is filtered to the granted (provider, tools) — the agent never
+    # sees a tool it may not call (§6.3). Out-of-scope providers filter to empty.
+    filtered = scope.filter_tools_to_scope(
+        run_scope=grant.run_scope,
+        worker_scope=grant.worker_scope,
+        provider=provider,
+        tools=tools if isinstance(tools, list) else [],
+    )
+    return {"provider": provider, "tools": filtered}
 
 
 async def call_provider_tool(
@@ -104,6 +129,22 @@ async def call_provider_tool(
     tool: str,
     arguments: dict[str, object],
 ) -> dict[str, object]:
+    # Defense in depth (§6.3 / L25): tools/call re-checks scope on every request,
+    # both layers, even though tools/list already hid out-of-scope tools. A denial
+    # is an enumerated, agent-readable error (surfaced as an MCP error result by the
+    # tools/call handler), never a 500.
+    decision = scope.authorize_tool_call(
+        run_scope=grant.run_scope,
+        worker_scope=grant.worker_scope,
+        provider=provider,
+        tool=tool,
+    )
+    if not decision.allowed:
+        raise CloudApiError(
+            "integration_gateway_scope_denied",
+            decision.detail or "This tool is out of scope for the caller.",
+            status_code=403,
+        )
     pair = await account_for_provider(db, grant=grant, provider=provider)
     url, headers, query = await resolve_launch(db, pair.account, pair.definition)
     result = await mcp_remote.call_tool(

@@ -419,3 +419,53 @@ class WorkflowStepAction(Base):
         default=utcnow,
         onupdate=utcnow,
     )
+
+
+class WorkflowRunGatewayToken(Base):
+    """The per-run integration-gateway credential (PR E / OPEN-3(a), L16).
+
+    Every run mints exactly one of these at StartRun — even a run whose plan needs
+    no integration tools (``scope_json`` is then an empty list, which is legal and
+    NEVER conflated with an unscoped worker token). Its plaintext rides inside the
+    run's ``resolved_plan_json.gateway`` block to the sandbox; only the hash is
+    stored (hashed exactly like the worker token, under its own HMAC domain).
+
+    The token is the run-report credential too: the runtime pings
+    ``/runs/{run_id}/ping`` with it. Identity is proven by the credential, so a
+    request's run attribution is not a claim — ``workflow_run_id`` IS the run.
+
+    ``scope_json`` is the frozen function grant (the definition's ``functions[]``,
+    resolved), narrowed at delivery to the intersection with the delivering
+    worker's allowlist (L25 layer 2 ⊆ layer 1). ``status`` walks
+    active -> expired (terminal run status) | revoked.
+    """
+
+    __tablename__ = "cloud_workflow_run_gateway_token"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'expired', 'revoked')",
+            name="ck_cloud_workflow_run_gateway_token_status",
+        ),
+        Index("ix_cloud_workflow_run_gateway_token_run_id", "workflow_run_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workflow_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow_run.id", ondelete="CASCADE"),
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    # The resolved function grant: ``[{"provider": str, "tools": [str, ...]}, ...]``.
+    # NOT NULL — an empty list means "no tools granted", distinct from a worker
+    # token's NULL "unscoped" (L25).
+    scope_json: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )

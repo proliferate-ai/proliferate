@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from proliferate.auth.authorization import ActorIdentity
+from proliferate.constants.cloud import CLOUD_SANDBOX_PURPOSE_WORKFLOW_RUN
 from proliferate.constants.workflows import (
     WORKFLOW_CLOUD_DELIVERY_TIMEOUT_SECONDS,
     WORKFLOW_CLOUD_REFRESH_TIMEOUT_SECONDS,
@@ -38,6 +39,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db.store import cloud_workflows as store
+from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_workflows import WorkflowRunRecord
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.workflow_runs import (
@@ -46,6 +48,9 @@ from proliferate.integrations.anyharness.workflow_runs import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway.service import ensure_cloud_sandbox_gateway_access
+from proliferate.server.cloud.integration_gateway.domain.scope import (
+    intersect_namespaces_with_worker,
+)
 from proliferate.server.cloud.workflows.domain.run_status import is_terminal
 from proliferate.server.cloud.workflows.service import mark_run_delivered
 from proliferate.utils.time import utcnow
@@ -107,11 +112,18 @@ async def deliver_cloud_run(
         )
 
     try:
-        access = await ensure_cloud_sandbox_gateway_access(db, user)
+        # L26: waking the sandbox for a workflow run stamps 'workflow-run' iff this
+        # is the create; an existing sandbox keeps its stamped purpose.
+        access = await ensure_cloud_sandbox_gateway_access(
+            db, user, purpose=CLOUD_SANDBOX_PURPOSE_WORKFLOW_RUN
+        )
+        # L25: now the delivering worker is known, intersect the run's frozen scope
+        # (ceiling) with the worker's allowlist and re-freeze BEFORE the plan ships.
+        plan = await _apply_delivery_scope_intersection(db, run)
         await deliver_workflow_run(
             access.upstream_base_url,
             access.upstream_token,
-            plan=run.resolved_plan_json,
+            plan=plan,
             workspace_id=workspace_id,
             timeout=WORKFLOW_CLOUD_DELIVERY_TIMEOUT_SECONDS,
         )
@@ -120,6 +132,47 @@ async def deliver_cloud_run(
         return await _record_delivery_failure(db, run.id, message)
 
     return await mark_run_delivered(db, user, run.id)
+
+
+async def _apply_delivery_scope_intersection(
+    db: AsyncSession, run: WorkflowRunRecord
+) -> dict[str, object]:
+    """Narrow the run's frozen gateway scope to the delivering worker's allowlist.
+
+    L25 layer 2 ⊆ layer 1, computed at delivery because the worker is only known
+    now. NULL worker scope = unscoped passthrough (run scope unchanged, distinct
+    from an empty allowlist). Re-freezes both the token row and the plan's gateway
+    block so the shipped plan and the enforced token agree.
+    """
+
+    plan = dict(run.resolved_plan_json or {})
+    gateway = plan.get("gateway")
+    if not isinstance(gateway, dict):
+        return plan
+    # E3: the plan's gateway carries the flat NAMESPACE grant; the token's
+    # scope_json is per-slot. Narrow both at namespace granularity.
+    run_namespaces = gateway.get("integrations")
+    if not isinstance(run_namespaces, list):
+        return plan
+    worker_scope = await runtime_workers_store.get_active_worker_gateway_scope_for_owner(
+        db, owner_user_id=run.executor_user_id
+    )
+    intersected = intersect_namespaces_with_worker(run_namespaces, worker_scope)
+    if intersected == run_namespaces:
+        return plan
+    # Re-freeze the per-slot token scope to the intersected namespace set (v1
+    # stamps every slot with the same list; rebuild from the plan's session slots).
+    sessions = plan.get("sessions")
+    slots = list(sessions) if isinstance(sessions, dict) else []
+    new_scope_json = {slot: {"integrations": list(intersected)} for slot in slots}
+    await store.refreeze_run_gateway_token_scope(
+        db, workflow_run_id=run.id, scope_json=new_scope_json
+    )
+    gateway = dict(gateway)
+    gateway["integrations"] = intersected
+    plan["gateway"] = gateway
+    updated = await store.update_run(db, run_id=run.id, resolved_plan_json=plan)
+    return updated.resolved_plan_json if updated is not None else plan
 
 
 # --- Refresh (observed-state reconciliation) -----------------------------------
@@ -211,6 +264,12 @@ async def _sync_run_from_view(
         finished_at=finished_at,
     )
     assert updated is not None
+
+    # Terminal via the reconcile path (a ping- or scheduler-driven refresh that
+    # observes completion) expires the per-run gateway token too — idempotent, so
+    # a later report or refresh that also sees terminal is a no-op.
+    if is_terminal(updated.status):
+        await store.expire_run_gateway_tokens_for_run(db, workflow_run_id=run_id)
 
     try:
         from proliferate.server.cloud.workflows.actions import apply_step_actions

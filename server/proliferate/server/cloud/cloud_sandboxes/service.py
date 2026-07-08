@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CLOUD_SANDBOX_PURPOSE_INTERACTIVE
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
@@ -35,14 +36,17 @@ async def get_cloud_sandbox_detail(
 async def ensure_cloud_sandbox_ready(
     db: AsyncSession,
     user: _UserWithId,
+    *,
+    purpose: str = CLOUD_SANDBOX_PURPOSE_INTERACTIVE,
 ) -> CloudSandboxValue:
-    return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
+    return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id, purpose=purpose)
 
 
 async def ensure_personal_cloud_sandbox_exists(
     db: AsyncSession,
     *,
     user_id: UUID,
+    purpose: str = CLOUD_SANDBOX_PURPOSE_INTERACTIVE,
 ) -> CloudSandboxValue:
     await sandbox_store.acquire_cloud_sandbox_owner_lock(
         db,
@@ -51,12 +55,15 @@ async def ensure_personal_cloud_sandbox_exists(
         organization_id=None,
     )
     billing_subject = await billing_subjects.ensure_personal_billing_subject(db, user_id)
+    # ``purpose`` is honored only when this call is the one that CREATES the sandbox
+    # (L26: stamped once, never inferred). An existing sandbox is returned as-is.
     sandbox = await sandbox_store.ensure_personal_cloud_sandbox(
         db,
         user_id=user_id,
         created_by_user_id=user_id,
         billing_subject_id=billing_subject.id,
         e2b_template_ref="e2b",
+        purpose=purpose,
     )
     return sandbox
 

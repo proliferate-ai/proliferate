@@ -274,6 +274,22 @@ WORKFLOW_SHORT_TEXT_MAX_LENGTH: Final = 255
 WORKFLOW_MAX_STEPS: Final = 50
 WORKFLOW_MAX_ARGS: Final = 25
 
+# --- Per-run gateway function grants (spec 6 / L16, L22, L25). -----------------
+# A definition may declare a top-level ``functions`` allow-list — one entry per
+# provider, each with a non-empty tool list. StartRun resolves it into the run's
+# frozen gateway scope. The caps keep a definition from declaring an unbounded
+# grant surface.
+WORKFLOW_MAX_FUNCTION_PROVIDERS: Final = 25
+WORKFLOW_MAX_TOOLS_PER_PROVIDER: Final = 100
+
+# The per-run gateway token (OPEN-3(a)) lives for the run + a grace window; it is
+# flipped to ``expired`` the instant the run reaches a terminal status, so 24h is a
+# backstop for a run whose terminal report never arrives.
+WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS: Final = 24 * 60 * 60
+WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE: Final = "active"
+WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED: Final = "expired"
+WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_REVOKED: Final = "revoked"
+
 # --- Free-plan cap (spec 6: 1 non-archived workflow per user). -----------------
 FREE_PLAN_MAX_WORKFLOWS_PER_USER: Final = 1
 

@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, Index, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -128,6 +129,10 @@ class CloudIntegrationGatewayToken(Base):
     organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="active")
+    # L25 layer 1: worker-level provider-namespace allowlist (``["issues", ...]``).
+    # NULL = unscoped (today's behavior, never conflated with an empty allowlist);
+    # no backfill — existing workers stay unscoped until they re-enroll.
+    scope_json: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

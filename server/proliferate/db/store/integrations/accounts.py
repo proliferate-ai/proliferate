@@ -110,19 +110,44 @@ async def list_accounts_for_user(
 async def list_ready_accounts_for_user(
     db: AsyncSession,
     user_id: UUID,
+    *,
+    organization_id: UUID | None = None,
 ) -> tuple[IntegrationAccountRecord, ...]:
-    accounts = (
-        (
-            await db.execute(
-                select(CloudIntegrationAccount)
-                .where(
-                    CloudIntegrationAccount.owner_user_id == user_id,
-                    CloudIntegrationAccount.enabled.is_(True),
-                    CloudIntegrationAccount.status == "ready",
-                )
-                .order_by(CloudIntegrationAccount.created_at.asc())
-            )
+    """The user's enabled, ready accounts (non-archived definitions).
+
+    When ``organization_id`` is given the org's integration policy is enforced —
+    an account is excluded when the org has disabled that definition (a policy row
+    with ``enabled = false``, or no policy row and the definition is not
+    ``enabled_by_default``). This mirrors ``get_ready_account_for_provider`` so a
+    personally-connected account cannot bypass an org's disable decision. Callers
+    with a real org context (e.g. the integration gateway) MUST pass it.
+    """
+    stmt = (
+        select(CloudIntegrationAccount)
+        .join(
+            CloudIntegrationDefinition,
+            CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
         )
+        .where(
+            CloudIntegrationAccount.owner_user_id == user_id,
+            CloudIntegrationAccount.enabled.is_(True),
+            CloudIntegrationAccount.status == "ready",
+            CloudIntegrationDefinition.archived_at.is_(None),
+        )
+    )
+    if organization_id is not None:
+        stmt = stmt.outerjoin(
+            CloudIntegrationPolicy,
+            (CloudIntegrationPolicy.definition_id == CloudIntegrationDefinition.id)
+            & (CloudIntegrationPolicy.organization_id == organization_id),
+        ).where(
+            func.coalesce(
+                CloudIntegrationPolicy.enabled,
+                CloudIntegrationDefinition.enabled_by_default,
+            ).is_(True)
+        )
+    accounts = (
+        (await db.execute(stmt.order_by(CloudIntegrationAccount.created_at.asc())))
         .scalars()
         .all()
     )

@@ -359,6 +359,16 @@ parser, no migration; E4). The spine is `agents: [{slot, harness, model, steps}]
 plan, not authored). **Zero-agent draft rule**: `require_steps=False` on
 create/update; `StartRun` always parses with `require_steps=True`.
 
+**Integrations (PR E, E3 namespace-only).** `integrations` is a flat list of
+integration namespace strings (`["sentry","linear","slack"]`) — no `{provider,
+tools}` shape, no tool lists anywhere in the definition. `_parse_integrations`
+validates each is an identifier, deduped. `resolve_run_scope` stamps the
+namespace grant per slot into `scope_json` (`{"<slot>": {"integrations": [...]}}`)
+with NO tool fetch at mint (no `tools/list` call, no new StartRun failure mode).
+The gateway enforces a namespace-only scope entry as "ALL tools of that
+provider" at call time (`domain/scope.py`), so providers whose tools grow
+mid-run work without re-mint.
+
 Step kinds ([constants/workflows.py](../server/proliferate/constants/workflows.py)):
 `agent.config` (narrowed to `{model}` only — same-harness rule), `agent.prompt`
 (+`required_invocation?{provider,tool}`), **`agent.emit`** (NEW: `name` required +
@@ -372,6 +382,13 @@ discriminator and `in_app` are removed, E1b). **`human.approval` is removed (E1)
 uniqueness (whole definition) and *strictly-prior* ref visibility: `{{inputs.NAME}}`
 must be a declared input; `{{EMIT.FIELD}}` must name an emit produced by an
 earlier step (earlier nodes in full, earlier steps in the same node).
+
+**`integrations` (§6, PR E, E3 namespace-only)** — `_parse_integrations`
+(top-level, not a step) validates a flat list of namespace strings
+(`["sentry","linear","slack"]`): each an identifier, deduped. No `{provider,
+tools}` shape and no tool lists anywhere. Structural only here (`parse_definition`
+stays pure); the owner-visibility check needs the DB and runs in the service layer
+(§3.4a).
 
 **`workflow.include` (§3.5, PR D)** — `_parse_workflow_include` validates the
 definition-only composition step's shape (a UUID `workflow_id`, an `args` mapping of
@@ -545,6 +562,113 @@ wake the sandbox in-request). No outbox/Celery.
   `report_run_status` hook, so an unattended cloud run without a live UI tab still
   gets its Slack actions performed via scheduler phase 3.
 
+### 3.4a Per-run gateway grants, completion ping, two-layer scope (PR E)
+
+New in PR E ([gateway_grants.py](../server/proliferate/server/cloud/workflows/gateway_grants.py),
+[integration_gateway/domain/scope.py](../server/proliferate/server/cloud/integration_gateway/domain/scope.py)).
+The design of record is architecture §6 + L16/L21–L26.
+
+**Mint at StartRun, EVERY run (L16).** After the plan is resolved, `start_run`
+resolves the run's NAMESPACE grant (E3) = the definition's top-level
+`integrations[]`, stamped **per slot** into `scope_json`
+(`{"<slot>": {"integrations": [...]}}` — §2.6; v1 stamps every slot with the same
+workflow-level list). `resolve_run_scope` returns that per-slot dict;
+`granted_namespaces` flattens it for the checks below. Composition inlines a
+child's *steps*, not its grant (L24). **No `tools/list` fetch at mint — E3
+introduces no new StartRun failure mode.** **L22 fail-fast** runs BEFORE the run
+row is created: `assert_declared_providers_ready` checks each declared namespace
+has a ready account for the owner via the same org-aware
+`get_ready_account_for_provider` the gateway uses — a declared namespace with no
+ready account fails the run (`workflow_function_provider_not_ready` 409), never a
+silent narrowing. Save-time, `create_workflow`/`update_workflow` additionally
+reject an `integrations` namespace the owner cannot even see
+(`workflow_function_provider_unknown`, seed + org customs). Then the run row is
+created, a per-run token is minted (`secrets.token_urlsafe`, hashed exactly like
+the worker token under its own HMAC domain — `hash_workflow_run_gateway_token`),
+and the plaintext is folded into `resolved_plan_json.gateway` (identical shape on
+both lanes — L16 — the local runtime errors if it can't honor it, §5.3):
+
+```python
+resolved_plan["gateway"] = {
+    "url": <same URL enroll composes>,          # {base}/v1/cloud/integration-gateway/mcp
+    "authorization": "Bearer <per-run token>",  # plaintext; only the hash is stored
+    "ping_url": "{base}/v1/cloud/workflows/runs/{run_id}/ping",
+    "integrations": ["sentry", "linear"],       # flat namespace list, possibly empty
+}
+```
+
+The runtime only reads `integrations`'s emptiness (L22 local-lane fail-fast); it
+never inspects tools. The token row (`cloud_workflow_run_gateway_token`) stores only
+the hash + the frozen per-slot `scope_json` (NOT NULL; an empty per-slot grant is
+never conflated with a worker token's NULL "unscoped"), status
+`active|expired|revoked`, `expires_at = now + 24h` (a backstop — terminal status
+expires it first).
+
+**Two-layer scope (L25), NAMESPACE granularity (E3).** Layer 1 = a worker-level
+provider-namespace allowlist (nullable `scope_json` on
+`cloud_integration_gateway_token`; NULL = unscoped/today's behavior, never
+"empty"). Layer 2 = the per-run token's frozen namespace grant. **Mint-vs-delivery
+intersection choice:** the delivering worker is not known at StartRun for cloud runs
+(the scheduler/`deliver_cloud_run` waking the sandbox is where the worker becomes
+known), so the token is minted at StartRun with the *definition* namespaces and the
+L25 subset intersection is performed **at delivery** — `deliver_cloud_run` →
+`_apply_delivery_scope_intersection` reads the owner's active worker allowlist
+(`get_active_worker_gateway_scope_for_owner`), intersects the plan's
+`gateway.integrations` (`scope.intersect_namespaces_with_worker`; NULL worker =
+unscoped passthrough, empty = drops all), and re-freezes BOTH the plan's
+`gateway.integrations` and the per-slot token `scope_json` before the plan ships.
+Enforcement is asymmetric: mint/delivery decides what *may* be requested; **every
+gateway request re-checks the CURRENT worker allowlist** so a worker scope narrowed
+after mint bites on the next call.
+
+**Gateway enforcement** ([dependencies.py](../server/proliferate/server/cloud/integration_gateway/dependencies.py),
+[service.py](../server/proliferate/server/cloud/integration_gateway/service.py)):
+`require_integration_gateway_grant` tries the run-token hash FIRST (its own HMAC
+domain — no collision with worker tokens), falling back to the worker token
+unchanged. It **flattens** the per-slot `scope_json` into the namespace-level
+`run_scope` the pure layer consumes — one namespace-only entry per granted provider
+(`{"provider": ns}`, no `tools` key), union across slots (`_flatten_run_scope`). A
+run grant carries `{run_id, owner, org, run_scope}` plus the freshly re-resolved
+`worker_scope`. **E3: a namespace-only scope entry matches EVERY tool of that
+provider at call time** — `scope.authorize_tool_call`/`filter_tools_to_scope` treat
+an entry with no `tools` key as all-tools, so `tools/list` returns every tool of a
+granted namespace and `tools/call` allows any of them; a provider outside the run
+scope is still denied (`integration_gateway_scope_denied`, surfaced through the MCP
+error-result envelope, not a 500). Providers whose tools grow mid-run work without
+re-mint. An explicit `tools` list on an entry (reserved for future per-slot
+narrowing) still restricts; core-v1 never emits it. The scope check is a **pure
+helper** in `integration_gateway/domain/scope.py`, callable outside the FastAPI
+dependency, so the future server-side `function_call` performer (§6.6/L18/L23)
+authorizes through the same code. **Org policy (addendum):** `ready_accounts_for_grant`
+and `account_for_provider` pass the grant's `organization_id` to the store so a
+provider the owner's org has disabled by policy is filtered out of both
+`list_providers` and `call_tool` — the same overlay the L22 mint check applies.
+
+**Completion ping (§3.7 / L16).** `POST /runs/{run_id}/ping` in
+[api.py](../server/proliferate/server/cloud/workflows/api.py) has **no user-session
+auth** — the per-run token IS its auth. It validates the bearer (active + unexpired
+`cloud_workflow_run_gateway_token`), requires `token.workflow_run_id == run_id`
+(else 403 — run A's token can't ping run B), and for cloud-lane runs triggers the
+existing `refresh_cloud_run`/`_sync_run_from_view`; local-lane runs accept 202 and
+no-op (the desktop relay owns local observation). The body carries nothing;
+duplicate/stale/late pings are safe by construction (refresh is reconcile-shaped,
+transitions monotonic) — no state is added. Terminal status is the choke point that
+expires the token: `report_run_status` AND `_sync_run_from_view` both call
+`expire_run_gateway_tokens_for_run` when the resulting status is terminal
+(idempotent), so a late ping after terminal is a benign 401.
+
+**Sandbox purpose (L26).** `cloud_sandbox` gains a stamped `purpose` enum
+(`interactive` | `workflow-run`, NOT NULL server_default `interactive`), set once at
+creation and never inferred later. Workflow cloud delivery threads
+`purpose='workflow-run'` through `ensure_cloud_sandbox_gateway_access` →
+`ensure_cloud_sandbox_ready` → `ensure_personal_cloud_sandbox`; because the personal
+sandbox is shared and returned as-is when it already exists, an existing sandbox is
+never restamped (first-create wins).
+
+**First integrations (L21):** the issues service (`api_key` seed) and Slack —
+`api_key`-style, no mid-run OAuth-refresh failure mode. OAuth-DCR providers are
+deferred until the frozen per-run scope has a mid-run reauth story.
+
 ### 3.5 Scheduler — [scheduler.py](../server/proliferate/server/cloud/workflows/scheduler.py)
 
 A second beat beside the automations scheduler, launched in
@@ -634,6 +758,7 @@ after 3 consecutive failures.
 | POST | `/workflows/runs/{run_id}/status` | **local relay** reports observed state; also triggers `apply_step_actions` |
 | POST | `/workflows/runs/{run_id}/deliver` | **cloud** lane retry of stuck `pending_delivery` |
 | GET | `/workflows/runs/{run_id}/refresh` | **cloud** lane pull; syncs ledger; also triggers `apply_step_actions` |
+| POST | `/workflows/runs/{run_id}/ping` | PR E (§3.4a) — completion ping; **no user session**, auth is the per-run gateway token; token↔run_id must match (else 403); cloud lane triggers `refresh_cloud_run`, local lane 202-no-ops; always 202 on valid token |
 | GET | `/workflows/slack/channels` | PR A — `{channels:[{id,name}], connected}`; `connected:false` + empty list when the actor has no ready Slack account ([integrations accounts store](../server/proliferate/db/store/integrations/accounts.py)) |
 | GET/PATCH/DELETE | `/workflows/{workflow_id}` | detail / update (append version) / archive |
 | POST | `/workflows/{workflow_id}/runs` | **StartRun**; personal_cloud also calls `deliver_cloud_run` in-request |

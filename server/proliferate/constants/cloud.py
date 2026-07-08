@@ -310,6 +310,11 @@ CLOUD_TARGET_HEARTBEAT_STALE_SECONDS: Final = 180
 CLOUD_RUNTIME_WORKER_ENROLLMENT_TOKEN_DOMAIN: Final = "cloud-runtime-worker-enrollment"
 CLOUD_RUNTIME_WORKER_TOKEN_DOMAIN: Final = "cloud-runtime-worker"
 CLOUD_INTEGRATION_GATEWAY_TOKEN_DOMAIN: Final = "cloud-integration-gateway"
+# The per-run workflow gateway token (PR E / OPEN-3(a)) gets its own HMAC domain
+# so a run token can never authenticate against the per-worker gateway-token
+# table and vice versa, even though both ride the same /integration-gateway/mcp
+# endpoint. Hashing reuses ``hash_runtime_token`` (worker-token hashing, exactly).
+CLOUD_WORKFLOW_RUN_GATEWAY_TOKEN_DOMAIN: Final = "cloud-workflow-run-gateway"
 
 # Cloud sandboxes mint a longer-lived enrollment (the worker boots once per
 # provisioning); desktop mints a short-lived one at login.
@@ -319,6 +324,21 @@ CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS: Final = 900
 CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS: Final = 30
 CLOUD_RUNTIME_WORKER_OFFLINE_THRESHOLD_SECONDS: Final = 90
 CLOUD_INTEGRATION_GATEWAY_MCP_PATH: Final = "/v1/cloud/integration-gateway/mcp"
+# The per-run completion-ping route (L16 / §3.7). Composed against the worker
+# cloud base URL exactly like the gateway MCP path so the runtime can reach it.
+CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE: Final = "/v1/cloud/workflows/runs/{run_id}/ping"
+
+# ---------------------------------------------------------------------------
+# Cloud sandbox purpose (L26): a stamped enum set once at creation, never
+# inferred from caller context. ``workflow-run`` is stamped only when a sandbox
+# is created by workflow-driven cloud delivery; every other create is
+# ``interactive`` (and existing rows default to it — see the migration).
+# ---------------------------------------------------------------------------
+CLOUD_SANDBOX_PURPOSE_INTERACTIVE: Final = "interactive"
+CLOUD_SANDBOX_PURPOSE_WORKFLOW_RUN: Final = "workflow-run"
+SUPPORTED_CLOUD_SANDBOX_PURPOSES: Final = frozenset(
+    {CLOUD_SANDBOX_PURPOSE_INTERACTIVE, CLOUD_SANDBOX_PURPOSE_WORKFLOW_RUN}
+)
 
 
 # ---------------------------------------------------------------------------

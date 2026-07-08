@@ -11,6 +11,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
+    WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
+    WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_TERMINAL_STATUSES,
     WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
@@ -19,6 +21,7 @@ from proliferate.constants.workflows import (
 from proliferate.db.models.cloud.workflows import (
     Workflow,
     WorkflowRun,
+    WorkflowRunGatewayToken,
     WorkflowStepAction,
     WorkflowVersion,
 )
@@ -359,6 +362,7 @@ async def update_run(
     status: str | None = None,
     step_cursor: int | None = None,
     step_outputs_json: dict[str, object] | None = None,
+    resolved_plan_json: dict[str, object] | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
     anyharness_workspace_id: str | None = None,
@@ -385,6 +389,8 @@ async def update_run(
         row.step_cursor = step_cursor
     if step_outputs_json is not None:
         row.step_outputs_json = step_outputs_json
+    if resolved_plan_json is not None:
+        row.resolved_plan_json = resolved_plan_json
     if clear_error:
         row.error_code = None
         row.error_message = None
@@ -560,6 +566,134 @@ async def list_actions_for_run(
         .all()
     )
     return tuple(_action_record(row) for row in rows)
+
+
+# --- per-run gateway token (PR E / OPEN-3a) ------------------------------------
+
+
+@dataclass(frozen=True)
+class RunGatewayTokenRecord:
+    id: UUID
+    workflow_run_id: UUID
+    owner_user_id: UUID
+    organization_id: UUID | None
+    # E3: per-slot namespace grant ``{"<slot>": {"integrations": [...]}}`` (§2.6).
+    scope_json: dict[str, dict[str, object]]
+    status: str
+    expires_at: datetime
+
+
+def _run_gateway_token_record(row: WorkflowRunGatewayToken) -> RunGatewayTokenRecord:
+    scope = row.scope_json if isinstance(row.scope_json, dict) else {}
+    return RunGatewayTokenRecord(
+        id=row.id,
+        workflow_run_id=row.workflow_run_id,
+        owner_user_id=row.owner_user_id,
+        organization_id=row.organization_id,
+        scope_json=dict(scope),
+        status=row.status,
+        expires_at=row.expires_at,
+    )
+
+
+async def create_run_gateway_token(
+    db: AsyncSession,
+    *,
+    workflow_run_id: UUID,
+    owner_user_id: UUID,
+    organization_id: UUID | None,
+    token_hash: str,
+    scope_json: dict[str, dict[str, object]],
+    expires_at: datetime,
+) -> RunGatewayTokenRecord:
+    now = utcnow()
+    row = WorkflowRunGatewayToken(
+        workflow_run_id=workflow_run_id,
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        token_hash=token_hash,
+        scope_json=scope_json,
+        status=WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
+        expires_at=expires_at,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(row)
+    await db.flush()
+    return _run_gateway_token_record(row)
+
+
+async def get_active_run_gateway_token_by_hash(
+    db: AsyncSession, *, token_hash: str, now: datetime
+) -> RunGatewayTokenRecord | None:
+    """An active, unexpired run gateway token by its hash (the ping/gateway auth)."""
+
+    row = (
+        await db.execute(
+            select(WorkflowRunGatewayToken).where(
+                WorkflowRunGatewayToken.token_hash == token_hash,
+                WorkflowRunGatewayToken.status == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
+                WorkflowRunGatewayToken.expires_at > now,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return None
+    row.last_used_at = now
+    await db.flush()
+    return _run_gateway_token_record(row)
+
+
+async def refreeze_run_gateway_token_scope(
+    db: AsyncSession, *, workflow_run_id: UUID, scope_json: dict[str, dict[str, object]]
+) -> None:
+    """L25 delivery re-freeze: set the active token's scope to the intersection."""
+
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowRunGatewayToken).where(
+                    WorkflowRunGatewayToken.workflow_run_id == workflow_run_id,
+                    WorkflowRunGatewayToken.status
+                    == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.scope_json = scope_json
+        row.updated_at = now
+    if rows:
+        await db.flush()
+
+
+async def expire_run_gateway_tokens_for_run(db: AsyncSession, *, workflow_run_id: UUID) -> int:
+    """Flip a run's active gateway token(s) to expired. Idempotent: an already
+    terminal run has no active token, so the update touches nothing."""
+
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowRunGatewayToken).where(
+                    WorkflowRunGatewayToken.workflow_run_id == workflow_run_id,
+                    WorkflowRunGatewayToken.status
+                    == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.status = WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED
+        row.updated_at = now
+    if rows:
+        await db.flush()
+    return len(rows)
 
 
 async def list_in_flight_triggered_cloud_runs(
