@@ -10,6 +10,7 @@ use chrono::DateTime;
 use super::schema::{
     AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource,
     AgentCatalogAuthContext, AgentCatalogAuthSignal, AgentCatalogDocument, AgentCatalogModel,
+    AgentCatalogSetting,
 };
 use crate::domains::agents::model::AgentKind;
 
@@ -80,6 +81,8 @@ fn validate_agent(
     for model in &agent.session.models {
         validate_model(&agent.kind, model, &context_ids, &mut seen_models)?;
     }
+
+    validate_settings(&agent.kind, &agent.settings)?;
     Ok(())
 }
 
@@ -285,6 +288,81 @@ fn validate_model(
                     "agent catalog agent '{agent_kind}' model '{}' control '{control_key}' default '{default}' is not a value",
                     model.id
                 );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Valid setting types (v1: boolean only).
+const VALID_SETTING_TYPES: &[&str] = &["boolean"];
+/// Valid delivery surfaces for settings.
+const VALID_SETTING_SURFACES: &[&str] = &["local", "cloud"];
+/// Valid mapping kinds.
+const VALID_SETTING_MAPPING_KINDS: &[&str] = &["cli_flag", "env"];
+
+fn validate_settings(agent_kind: &str, settings: &[AgentCatalogSetting]) -> anyhow::Result<()> {
+    let mut seen_keys = HashSet::new();
+    for setting in settings {
+        if setting.key.trim().is_empty() {
+            anyhow::bail!("agent catalog agent '{agent_kind}' has setting with empty key");
+        }
+        if !seen_keys.insert(setting.key.clone()) {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' is duplicated",
+                setting.key
+            );
+        }
+        if !VALID_SETTING_TYPES.contains(&setting.setting_type.as_str()) {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has unsupported type '{}'",
+                setting.key,
+                setting.setting_type
+            );
+        }
+        if setting.label.trim().is_empty() {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has empty label",
+                setting.key
+            );
+        }
+        if setting.surfaces.is_empty() {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has no surfaces",
+                setting.key
+            );
+        }
+        for surface in &setting.surfaces {
+            if !VALID_SETTING_SURFACES.contains(&surface.as_str()) {
+                anyhow::bail!(
+                    "agent catalog agent '{agent_kind}' setting '{}' has invalid surface '{surface}'",
+                    setting.key
+                );
+            }
+        }
+        if !VALID_SETTING_MAPPING_KINDS.contains(&setting.mapping.kind.as_str()) {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has unsupported mapping kind '{}'",
+                setting.key,
+                setting.mapping.kind
+            );
+        }
+        if setting.mapping.kind == "cli_flag" {
+            match setting.mapping.flag.as_deref() {
+                Some(flag) if !flag.trim().is_empty() => {}
+                _ => anyhow::bail!(
+                    "agent catalog agent '{agent_kind}' setting '{}' cli_flag mapping is missing flag",
+                    setting.key
+                ),
+            }
+        }
+        if setting.mapping.kind == "env" {
+            match setting.mapping.env.as_deref() {
+                Some(env) if !env.trim().is_empty() => {}
+                _ => anyhow::bail!(
+                    "agent catalog agent '{agent_kind}' setting '{}' env mapping is missing env",
+                    setting.key
+                ),
             }
         }
     }
