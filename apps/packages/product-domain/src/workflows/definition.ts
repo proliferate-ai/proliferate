@@ -63,6 +63,19 @@ export const WORKFLOW_GOAL_DEFAULT_TOKEN_BUDGET = 400_000;
 
 export const FREE_PLAN_MAX_WORKFLOWS_PER_USER = 1;
 
+/** Max integration namespaces a workflow may declare (mirrors
+ * `WORKFLOW_MAX_FUNCTION_PROVIDERS`, constants/workflows.py, L22). */
+export const WORKFLOW_MAX_INTEGRATIONS = 25;
+
+/**
+ * The integration namespaces exposed to the editor's picker at launch (L21,
+ * 2026-07-07): the issues service and Slack, the only two integrations with no
+ * mid-run OAuth-refresh failure mode. OAuth-DCR providers (Linear, Notion,
+ * Supabase) are deferred — see architecture doc §6.1/§6.6. E3: namespace-only —
+ * no per-tool selection.
+ */
+export const WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES = ["issues", "slack"] as const;
+
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SLOT_RE = /^[a-z][a-z0-9_]*$/;
 

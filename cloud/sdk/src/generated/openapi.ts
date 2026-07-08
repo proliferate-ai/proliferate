@@ -1692,6 +1692,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workflows/runs/{run_id}/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Ping Endpoint
+         * @description Completion ping (L16 / §3.7). NO user-session auth — the per-run gateway
+         *     token IS the auth. The runtime fires this after each step transition; the
+         *     handler validates the token, requires token↔run_id match (so run A's token
+         *     can't ping run B), and wakes the existing refresh path for cloud-lane runs.
+         *
+         *     The body carries nothing: it is a stateless nudge. Duplicate/stale/late pings
+         *     are safe by construction — refresh is reconcile-shaped and run-status
+         *     transitions are monotonic — so no state is added here.
+         */
+        post: operations["run_ping_endpoint_v1_cloud_workflows_runs__run_id__ping_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workflows/slack/channels": {
         parameters: {
             query?: never;
@@ -9442,6 +9469,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_ping_endpoint_v1_cloud_workflows_runs__run_id__ping_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

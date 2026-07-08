@@ -4,6 +4,7 @@ import {
   createWorkflowStep,
   parseWorkflowDefinition,
   serializeWorkflowDefinition,
+  WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES,
   type WorkflowArgSpec,
   type WorkflowDefinition,
   type WorkflowSetup,
@@ -30,12 +31,18 @@ import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use
 import { useWorkflowDetail, useWorkflows } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
 import { useWorkflowSlackChannels } from "@/hooks/access/cloud/workflows/use-workflow-slack-channels";
+import { useCloudIntegrations } from "@/hooks/cloud/facade/use-cloud-integrations";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
 import { WorkflowScopeHeader } from "../editor/WorkflowScopeHeader";
 import { WorkflowTriggersCard } from "../editor/WorkflowTriggersCard";
+import {
+  WorkflowFunctionsCard,
+  type WorkflowFunctionProviderOption,
+} from "../editor/WorkflowFunctionsCard";
 import { WorkflowStepRailCard } from "../editor/WorkflowStepRailCard";
 import { WorkflowStepPanel, type EditorAgent } from "../editor/WorkflowStepPanel";
 import { WorkflowSelect } from "../editor/WorkflowSelect";
@@ -109,6 +116,8 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const cloudTargetsQuery = useCloudRunTargetWorkspaces();
   const slackChannelsQuery = useWorkflowSlackChannels();
   const workflowsQuery = useWorkflows();
+  const { activeOrganizationId } = useActiveOrganization();
+  const { integrations: cloudIntegrations } = useCloudIntegrations(activeOrganizationId);
   const { updateMutation } = useWorkflowMutations();
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -149,6 +158,23 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
           label: workspace.displayName ?? workspace.repo.branch,
         })),
     [cloudTargetsQuery.data],
+  );
+
+  // Gateway function providers (spec 6.1/6.3, L21): the owner's visible
+  // integrations, restricted client-side to the launch set (issues, slack) —
+  // everything else is "more arrive later" per the card's caption.
+  const functionProviders = useMemo<WorkflowFunctionProviderOption[]>(
+    () =>
+      cloudIntegrations
+        .filter((integration) =>
+          (WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES as readonly string[]).includes(integration.namespace),
+        )
+        .map((integration) => ({
+          namespace: integration.namespace,
+          displayName: integration.displayName,
+          connected: integration.accountId !== null && integration.health === "ready",
+        })),
+    [cloudIntegrations],
   );
 
   const issues = useMemo(
@@ -222,6 +248,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
   const setSetup = (setup: WorkflowSetup) => patchDefinition({ setup });
   const setArgs = (args: WorkflowArgSpec[]) => patchDefinition({ args });
+  const setIntegrations = (integrations: string[]) => patchDefinition({ integrations });
 
   const updateStep = (index: number, step: WorkflowStep) =>
     patchDefinition({ steps: definition.steps.map((s, i) => (i === index ? step : s)) });
@@ -361,6 +388,11 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 onSelect={() => { setSetupSelected(true); setSelectedStep(null); }}
               />
               <WorkflowSetupCard setup={definition.setup} args={definition.args} agents={agents} onSetupChange={setSetup} onArgsChange={setArgs} />
+              <WorkflowFunctionsCard
+                integrations={definition.integrations}
+                providers={functionProviders}
+                onChange={setIntegrations}
+              />
               <WorkflowTriggersCard
                 workflowId={workflowId}
                 args={definition.args}

@@ -17,6 +17,7 @@ import {
   type WorkflowStatusTone,
 } from "@proliferate/product-domain/workflows/run-status";
 import type { WorkflowTemplate } from "@proliferate/product-domain/workflows/templates";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
@@ -39,6 +40,11 @@ import {
 import { WorkflowTemplatesGallery } from "../home/WorkflowTemplatesGallery";
 
 type HomeTab = "workflows" | "runs";
+
+// Mirrors gateway_grants.py's L22 fail-fast code — a declared function
+// provider with no ready account for the owner. StartRun never silently
+// narrows the grant, so this always means "connect the named provider".
+const FUNCTION_PROVIDER_NOT_READY_CODE = "workflow_function_provider_not_ready";
 
 interface DesktopCatalogAgent {
   kind: string;
@@ -127,6 +133,7 @@ export function WorkflowsHomeScreen() {
     definition: WorkflowDefinition;
   } | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
 
   const workflowsQuery = useWorkflows();
   const runsQuery = useWorkflowRuns(null);
@@ -205,6 +212,7 @@ export function WorkflowsHomeScreen() {
 
   const runNow = (workflowId: string, submit: WorkflowRunSubmit) => {
     setRunError(null);
+    setRunErrorCode(null);
     launchMutation.mutate(
       {
         workflowId,
@@ -218,7 +226,10 @@ export function WorkflowsHomeScreen() {
           setArgsModal(null);
           navigate(`/workflows/${workflowId}/runs/${run.id}`);
         },
-        onError: (error) => setRunError(error.message),
+        onError: (error) => {
+          setRunError(error.message);
+          setRunErrorCode(error instanceof ProliferateClientError ? error.code : null);
+        },
       },
     );
   };
@@ -226,6 +237,7 @@ export function WorkflowsHomeScreen() {
   // Always open the modal: even an arg-less workflow needs a run target (spec 3.2).
   const handleRun = (workflow: WorkflowResponse, definition: WorkflowDefinition) => {
     setRunError(null);
+    setRunErrorCode(null);
     setArgsModal({ workflow, definition });
   };
 
@@ -334,8 +346,14 @@ export function WorkflowsHomeScreen() {
           args={argsModal.definition.args}
           localWorkspaces={localWorkspaceOptions}
           cloudWorkspaces={cloudWorkspaceOptions}
+          hasIntegrations={argsModal.definition.integrations.length > 0}
           busy={launchMutation.isPending}
           error={runError}
+          onOpenIntegrationsSettings={
+            runErrorCode === FUNCTION_PROVIDER_NOT_READY_CODE
+              ? () => navigate("/settings?section=integrations")
+              : undefined
+          }
           onClose={() => setArgsModal(null)}
           onSubmit={(submit) => runNow(argsModal.workflow.id, submit)}
         />

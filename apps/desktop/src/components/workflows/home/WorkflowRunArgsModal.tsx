@@ -6,6 +6,7 @@ import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Switch } from "@proliferate/ui/primitives/Switch";
+import { CircleAlert } from "@proliferate/ui/icons";
 import { WorkflowSelect } from "../editor/WorkflowSelect";
 
 type TargetMode = WorkflowTargetMode;
@@ -32,8 +33,16 @@ export interface WorkflowRunArgsModalProps {
   cloudWorkspaces: readonly WorkflowRunTargetOption[];
   /** Default local workspace (e.g. the currently-open one), if any. */
   defaultLocalWorkspaceId?: string | null;
+  /** Whether this workflow declares a non-empty `integrations` grant (spec 5.3,
+   * E3): drives the local-target warning below — cloud-only in v1, never a
+   * block. */
+  hasIntegrations?: boolean;
   busy?: boolean;
   error?: string | null;
+  /** Shown as a link under `error` when the failure is the L22 no-ready-account
+   * case (`workflow_function_provider_not_ready`) — the enumerated reason
+   * already names the provider in `error`; this jumps to where to fix it. */
+  onOpenIntegrationsSettings?: () => void;
   onClose: () => void;
   onSubmit: (input: WorkflowRunSubmit) => void;
 }
@@ -62,8 +71,10 @@ export function WorkflowRunArgsModal({
   localWorkspaces,
   cloudWorkspaces,
   defaultLocalWorkspaceId,
+  hasIntegrations = false,
   busy = false,
   error = null,
+  onOpenIntegrationsSettings,
   onClose,
   onSubmit,
 }: WorkflowRunArgsModalProps) {
@@ -139,9 +150,18 @@ export function WorkflowRunArgsModal({
     >
       <div className="flex flex-col gap-4">
         {error ? (
-          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui-sm text-destructive">
-            {error}
-          </p>
+          <div className="flex flex-col gap-1.5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui-sm text-destructive">
+            <p>{error}</p>
+            {onOpenIntegrationsSettings ? (
+              <button
+                type="button"
+                onClick={onOpenIntegrationsSettings}
+                className="self-start font-medium underline-offset-2 hover:underline"
+              >
+                Go to Settings → Integrations
+              </button>
+            ) : null}
+          </div>
         ) : null}
 
         {args.map((arg) => (
@@ -186,6 +206,14 @@ export function WorkflowRunArgsModal({
             onChange={(value) => setTargetMode(value as TargetMode)}
           />
         </div>
+
+        {hasIntegrations && targetMode === "local" ? (
+          <p className="flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+            <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            This workflow grants integrations, which require a cloud run. Running it on this
+            Mac will fail with an explicit error at the step that needs them.
+          </p>
+        ) : null}
 
         <div className="flex flex-col gap-1.5">
           <Label>Workspace</Label>

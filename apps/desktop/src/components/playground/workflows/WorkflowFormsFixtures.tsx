@@ -1,8 +1,16 @@
 import { useState } from "react";
-import type { WorkflowArgSpec, WorkflowSetup } from "@proliferate/product-domain/workflows/definition";
-import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
+import type {
+  WorkflowArgSpec,
+  WorkflowSetup,
+} from "@proliferate/product-domain/workflows/definition";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { WorkflowRunArgsModal, type WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { WorkflowMetaCard } from "@/components/workflows/editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "@/components/workflows/editor/WorkflowSetupCard";
+import {
+  WorkflowFunctionsCard,
+  type WorkflowFunctionProviderOption,
+} from "@/components/workflows/editor/WorkflowFunctionsCard";
 import {
   TriggerBadgeRow,
   TriggerForm,
@@ -50,6 +58,13 @@ function makeTrigger(overrides: Partial<WorkflowTriggerResponse>): WorkflowTrigg
   };
 }
 
+const FUNCTION_PROVIDERS: WorkflowFunctionProviderOption[] = [
+  { namespace: "issues", displayName: "Issues Service", connected: true },
+  { namespace: "slack", displayName: "Slack", connected: false },
+];
+
+const INTEGRATION_GRANTS: string[] = ["issues"];
+
 const TRIGGERS: WorkflowTriggerResponse[] = [
   makeTrigger({ id: "trig-1" }),
   makeTrigger({
@@ -86,6 +101,9 @@ export function WorkflowFormsFixtures() {
   const [description, setDescription] = useState("Investigate and fix failing tests until the suite passes.");
   const [setup, setSetup] = useState<WorkflowSetup>({ harness: "claude", model: "opus", sessionBinding: "fresh" });
   const [args, setArgs] = useState<WorkflowArgSpec[]>(ARGS);
+  const [integrations, setIntegrations] = useState<string[]>(INTEGRATION_GRANTS);
+  const [emptyIntegrations, setEmptyIntegrations] = useState<string[]>([]);
+  const [runModalOpen, setRunModalOpen] = useState(false);
 
   const [draft, setDraft] = useState<TriggerDraft>({
     kind: "schedule",
@@ -134,6 +152,16 @@ export function WorkflowFormsFixtures() {
           onDescriptionChange={setDescription}
         />
         <WorkflowSetupCard setup={setup} args={args} agents={AGENTS} onSetupChange={setSetup} onArgsChange={setArgs} />
+
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-faint">Integrations — namespace toggles (E3), loud cloud-only caption</span>
+          <WorkflowFunctionsCard integrations={integrations} providers={FUNCTION_PROVIDERS} onChange={setIntegrations} />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-faint">Integrations — no visible Issues/Slack integration yet</span>
+          <WorkflowFunctionsCard integrations={emptyIntegrations} providers={[]} onChange={setEmptyIntegrations} />
+        </div>
 
         <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4 shadow-sm">
           <span className="text-sm font-medium text-foreground">Triggers — schedule + poll chips, poll error caption</span>
@@ -196,6 +224,31 @@ export function WorkflowFormsFixtures() {
             Scheduled and poll runs execute in the cloud. Create a cloud workspace to trigger this workflow that way;
             local triggers are coming — run it manually for now.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4 shadow-sm">
+          <span className="text-sm font-medium text-foreground">
+            Run modal — local-lane integrations warning + L22 no-ready-account error
+          </span>
+          <p className="text-xs text-faint">
+            Opens with target &quot;On this Mac&quot; against a workflow that declares integrations —
+            exercises the warning caption and the enumerated-error + Settings link together.
+          </p>
+          <Button size="sm" className="self-start" onClick={() => setRunModalOpen(true)}>
+            Open run modal
+          </Button>
+          <WorkflowRunArgsModal
+            open={runModalOpen}
+            workflowName="Triage new issues"
+            args={ARGS}
+            localWorkspaces={[{ id: "local-1", label: "proliferate (local)" }]}
+            cloudWorkspaces={CLOUD_WORKSPACES}
+            hasIntegrations
+            error="This workflow grants the 'issues' integration, but you have no ready 'issues' integration. Connect it before running."
+            onOpenIntegrationsSettings={() => {}}
+            onClose={() => setRunModalOpen(false)}
+            onSubmit={() => setRunModalOpen(false)}
+          />
         </div>
       </div>
     </section>

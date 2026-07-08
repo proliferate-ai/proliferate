@@ -8,8 +8,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.auth import User
+from proliferate.db.store.integrations import accounts as accounts_store
+from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
 from proliferate.server.cloud.workflows import service
+from proliferate.utils.crypto import encrypt_json
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
     WorkflowCreateRequest,
@@ -56,7 +60,30 @@ def _definition() -> dict:
     }
 
 
+async def _seed_ready_account(db: AsyncSession, *, user_id: uuid.UUID, namespace: str) -> None:
+    await sync_seed_definitions(db)
+    await db.flush()
+    definition = await definitions_store.get_seed_by_namespace(db, namespace)
+    assert definition is not None
+    account = await accounts_store.upsert_account(
+        db, user_id=user_id, definition_id=definition.id, auth_kind="api_key", status="ready"
+    )
+    await accounts_store.set_account_credentials(
+        db,
+        account_id=account.id,
+        credential_ciphertext=encrypt_json({"secretFields": {"api_key": "s"}}),
+        credential_format="secret-fields-v1",
+        auth_status="ready",
+        token_expires_at=None,
+    )
+
+
 async def _create_workflow(db: AsyncSession, user: User, *, name: str = "Fix-it"):
+    # The definition declares integrations (["slack"]); save-time L22
+    # (visible_provider_namespaces) needs the seed definitions synced, and
+    # StartRun-time L22 fail-fast (assert_declared_providers_ready) needs a
+    # ready account for each declared namespace — mirror test_workflow_run_gateway.py.
+    await _seed_ready_account(db, user_id=user.id, namespace="slack")
     return await service.create_workflow(
         db, user, WorkflowCreateRequest(name=name, definition=_definition())
     )

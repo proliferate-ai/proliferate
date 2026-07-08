@@ -108,6 +108,30 @@ describe("definition parse/serialize", () => {
     expect((parsed.steps[1] as { model?: string }).model).toBeUndefined();
     expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
   });
+
+  it("round-trips a namespace-level integrations grant (E3)", () => {
+    const wire = {
+      version: 1,
+      inputs: [],
+      integrations: ["issues", "slack"],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" }],
+        },
+      ],
+    };
+    const parsed = parseWorkflowDefinition(wire);
+    expect(parsed.integrations).toEqual(wire.integrations);
+    expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
+
+    // Absent on the wire -> empty on the model -> empty array on serialize
+    // (integrations is always present in v2, defaulting to []).
+    const noIntegrations = parseWorkflowDefinition({ ...wire, integrations: undefined });
+    expect(noIntegrations.integrations).toEqual([]);
+  });
 });
 
 describe("validation", () => {
@@ -181,6 +205,26 @@ describe("validation", () => {
     };
     const codes = validateWorkflowDefinition(withGoal).map((i) => i.code);
     expect(codes.filter((c) => c === "invalid_definition").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("accepts a valid functions grant and flags empty/duplicate providers and tools (spec 1.5 / L22)", () => {
+    const ok: WorkflowDefinition = {
+      ...base,
+      functions: [{ provider: "issues", tools: ["claim", "search_issues"] }],
+    };
+    expect(validateWorkflowDefinition(ok)).toEqual([]);
+
+    const bad: WorkflowDefinition = {
+      ...base,
+      functions: [
+        { provider: "issues", tools: [] },
+        { provider: "issues", tools: ["claim", "claim"] },
+      ],
+    };
+    const codes = validateWorkflowDefinition(bad).map((i) => i.code);
+    expect(codes).toContain("duplicate_function_provider");
+    // Empty tools on the first grant, duplicate tool name on the second.
+    expect(codes.filter((c) => c === "invalid_definition").length).toBeGreaterThanOrEqual(2);
   });
 });
 
