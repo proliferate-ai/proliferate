@@ -21,6 +21,14 @@ AGENT_AUTH_SOURCE_GATEWAY = "gateway"
 AGENT_AUTH_SOURCE_API_KEY = "api_key"
 AGENT_AUTH_SOURCE_KINDS = (AGENT_AUTH_SOURCE_GATEWAY, AGENT_AUTH_SOURCE_API_KEY)
 
+# "native" is NOT a selection source_kind — it is the empty-selection state (zero
+# enabled rows == the harness's own CLI login). It exists ONLY as an org-policy
+# allow-list value: listing "native" in allowed_routes permits native CLI login;
+# omitting it (when allowed_routes is otherwise set) disallows it. Never persisted
+# as a selection row, so it is absent from AGENT_AUTH_SOURCE_KINDS above.
+AGENT_AUTH_ROUTE_NATIVE = "native"
+AGENT_AUTH_POLICY_ROUTES = (*AGENT_AUTH_SOURCE_KINDS, AGENT_AUTH_ROUTE_NATIVE)
+
 # The only state.json wire schema version AnyHarness understands (contract §3);
 # mirrors ``route_auth::state::STATE_VERSION`` on the Rust render plane.
 AGENT_AUTH_STATE_VERSION = 2
