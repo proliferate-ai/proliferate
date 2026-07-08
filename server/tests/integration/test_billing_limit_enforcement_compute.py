@@ -41,6 +41,7 @@ from proliferate.db.models.billing import BillingDecisionEvent, BillingHold, Usa
 from proliferate.db.models.organizations import Organization
 from proliferate.db.store.billing import BudgetLimitInput, replace_budget_limits
 from proliferate.db.store.billing_subjects import (
+    ensure_free_included_grant,
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
@@ -401,10 +402,17 @@ async def test_resume_allowed_without_hold(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A healthy subject wakes normally (gate is a no-op)."""
+    """A healthy subject wakes normally (gate is a no-op).
+
+    Seeds the free included grant explicitly: with PRO_BILLING_ENABLED the
+    snapshot only auto-grants trial hours to GitHub-linked users, and a
+    subject with zero grants is (correctly) credits-exhausted.
+    """
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
+    monkeypatch.setattr(settings, "pro_billing_enabled", False)
     user_id = await _create_user(db_session)
     await ensure_personal_billing_subject(db_session, user_id)
+    await ensure_free_included_grant(db_session, user_id)
     await db_session.commit()
     sandbox = SimpleNamespace(owner_user_id=user_id, organization_id=None)
     await assert_cloud_sandbox_resume_allowed(db_session, sandbox)  # type: ignore[arg-type]
