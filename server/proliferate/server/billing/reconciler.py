@@ -9,7 +9,6 @@ from contextlib import suppress
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -21,22 +20,15 @@ from proliferate.constants.billing import (
     BILLING_RECONCILE_INTERVAL_SECONDS,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
     USAGE_SEGMENT_CLOSED_BY_RECONCILER,
-    USAGE_SEGMENT_OPENED_BY_RECONCILER_REPAIR,
 )
-from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db import engine as db_engine
 from proliferate.db.models.billing import BillingBudgetLimit, UsageSegment
-from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import billing as billing_store
 from proliferate.db.store.billing_runtime_usage import (
     close_usage_segment_for_sandbox as close_usage_segment_for_sandbox_record,
 )
 from proliferate.db.store.billing_runtime_usage import (
     list_all_open_usage_segments as list_all_open_usage_segments_record,
-)
-from proliferate.db.store.billing_runtime_usage import (
-    open_usage_segment_for_sandbox as open_usage_segment_for_sandbox_record,
 )
 from proliferate.db.store.billing_runtime_usage import (
     record_billing_decision_event as record_billing_decision_event_record,
@@ -46,14 +38,10 @@ from proliferate.db.store.billing_runtime_usage import (
     try_acquire_billing_reconciler_lock,
 )
 from proliferate.db.store.billing_subjects import get_billing_subject_by_id
-from proliferate.db.store.cloud_runtime_environments import (
-    load_runtime_environment_by_id,
-    save_runtime_environment_state,
-)
 from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
-    load_cloud_sandbox_placeholders,
-    save_sandbox_provider_state,
+    mark_cloud_sandbox_destroyed,
+    update_cloud_sandbox_status,
 )
 from proliferate.integrations.sandbox import (
     ProviderSandboxState,
@@ -70,35 +58,6 @@ from proliferate.utils.time import utcnow
 logger = logging.getLogger("proliferate.billing.reconciler")
 
 _reconciler_task: asyncio.Task[None] | None = None
-
-
-async def open_usage_segment_for_sandbox(
-    *,
-    runtime_environment_id: UUID | None = None,
-    workspace_id: UUID | None = None,
-    sandbox_id: UUID,
-    external_sandbox_id: str | None,
-    sandbox_execution_id: str | None,
-    started_at: datetime,
-    opened_by: str,
-    user_id: UUID | None = None,
-    is_billable: bool = True,
-    event_id: str | None = None,
-) -> UsageSegment:
-    async with db_engine.async_session_factory() as db, db.begin():
-        return await open_usage_segment_for_sandbox_record(
-            db,
-            runtime_environment_id=runtime_environment_id,
-            workspace_id=workspace_id,
-            sandbox_id=sandbox_id,
-            external_sandbox_id=external_sandbox_id,
-            sandbox_execution_id=sandbox_execution_id,
-            started_at=started_at,
-            opened_by=opened_by,
-            user_id=user_id,
-            is_billable=is_billable,
-            event_id=event_id,
-        )
 
 
 async def close_usage_segment_for_sandbox(
@@ -172,105 +131,23 @@ async def with_billing_reconciler_lock[T](
             await release_billing_reconciler_lock(db)
 
 
-def _is_running_state(state: str) -> bool:
-    return state in {"running", "started"}
-
-
-async def _mark_environment_unavailable(
-    runtime_environment_id: UUID | None,
-    *,
-    destroyed: bool,
-) -> None:
-    if runtime_environment_id is None:
-        return
-    async with db_engine.async_session_factory() as db, db.begin():
-        environment = await load_runtime_environment_by_id(db, runtime_environment_id)
-        if environment is None:
-            return
-        if destroyed:
-            await save_runtime_environment_state(
-                db,
-                environment.id,
-                status=CloudRuntimeEnvironmentStatus.error.value,
-                runtime_url=None,
-                runtime_token_ciphertext=None,
-                active_sandbox_id=None,
-                increment_runtime_generation=True,
-                last_error="Provider sandbox was destroyed.",
-            )
-        else:
-            await save_runtime_environment_state(
-                db,
-                environment.id,
-                status=CloudRuntimeEnvironmentStatus.paused.value,
-            )
-
-
-async def _load_sandbox_runtime_owner(
-    db: AsyncSession,
-    sandbox_id: UUID,
-) -> tuple[CloudRuntimeEnvironment | None, CloudWorkspace | None]:
-    environment = (
-        await db.execute(
-            select(CloudRuntimeEnvironment)
-            .where(CloudRuntimeEnvironment.active_sandbox_id == sandbox_id)
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    workspace = (
-        await db.execute(
-            select(CloudWorkspace).where(CloudWorkspace.active_sandbox_id == sandbox_id).limit(1)
-        )
-    ).scalar_one_or_none()
-    return environment, workspace
-
-
 async def _mark_sandbox_environment_unavailable(
     sandbox_id: UUID,
     *,
     destroyed: bool,
 ) -> None:
-    async with db_engine.async_session_factory() as db:
-        environment, _workspace = await _load_sandbox_runtime_owner(db, sandbox_id)
-    await _mark_environment_unavailable(
-        environment.id if environment is not None else None,
-        destroyed=destroyed,
-    )
+    """Reflect a reconciler stop into the ``cloud_sandbox`` row.
 
-
-async def _repair_placeholders(
-    *,
-    states_by_placeholder_id: dict[str, ProviderSandboxState],
-) -> None:
-    async with db_engine.async_session_factory() as db:
-        placeholders = await load_cloud_sandbox_placeholders(db)
-    for placeholder in placeholders:
-        state = states_by_placeholder_id.get(str(placeholder.id))
-        if state is None:
-            continue
-        async with db_engine.async_session_factory() as db:
-            environment, workspace = await _load_sandbox_runtime_owner(db, placeholder.id)
-        if environment is None and workspace is None:
-            continue
-        async with db_engine.async_session_factory() as db, db.begin():
-            await save_sandbox_provider_state(
-                db,
-                placeholder.id,
-                external_sandbox_id=state.external_sandbox_id,
-                status="running" if _is_running_state(state.state) else state.state,
-                started_at=state.started_at,
-            )
-        if _is_running_state(state.state):
-            await open_usage_segment_for_sandbox(
-                user_id=environment.user_id if environment is not None else workspace.user_id,
-                runtime_environment_id=environment.id if environment is not None else None,
-                workspace_id=workspace.id if workspace is not None else None,
-                sandbox_id=placeholder.id,
-                external_sandbox_id=state.external_sandbox_id,
-                sandbox_execution_id=None,
-                started_at=state.started_at or state.observed_at,
-                opened_by=USAGE_SEGMENT_OPENED_BY_RECONCILER_REPAIR,
-            )
+    The old runtime-environment tables are gone (#823 cutover); the surviving
+    ``CloudSandbox`` carries the lifecycle status directly. A provider destroy
+    marks the row destroyed; a pause/stop marks it paused so the next
+    connect/resume re-provisions rather than reusing a dead handle.
+    """
+    async with db_engine.async_session_factory() as db, db.begin():
+        if destroyed:
+            await mark_cloud_sandbox_destroyed(db, sandbox_id)
+        else:
+            await update_cloud_sandbox_status(db, sandbox_id, status="paused")
 
 
 async def _resolve_compute_limit_pause(
@@ -350,15 +227,15 @@ async def _enforce_or_reconcile_segment(
     if sandbox is None:
         return
 
-    if state is None and sandbox.external_sandbox_id:
+    if state is None and sandbox.e2b_sandbox_id:
         try:
-            state = await provider.get_sandbox_state(sandbox.external_sandbox_id)
+            state = await provider.get_sandbox_state(sandbox.e2b_sandbox_id)
         except Exception:
             logger.exception(
                 "billing reconciler failed to directly observe sandbox",
                 extra={
                     "sandbox_id": str(sandbox.id),
-                    "external_sandbox_id": sandbox.external_sandbox_id,
+                    "e2b_sandbox_id": sandbox.e2b_sandbox_id,
                 },
             )
             return
@@ -368,7 +245,7 @@ async def _enforce_or_reconcile_segment(
             "billing reconciler skipped sandbox with unknown provider state",
             extra={
                 "sandbox_id": str(sandbox.id),
-                "external_sandbox_id": sandbox.external_sandbox_id,
+                "e2b_sandbox_id": sandbox.e2b_sandbox_id,
             },
         )
         return
@@ -379,13 +256,6 @@ async def _enforce_or_reconcile_segment(
             ended_at=state.end_at or state.observed_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_RECONCILER,
         )
-        async with db_engine.async_session_factory() as db, db.begin():
-            await save_sandbox_provider_state(
-                db,
-                sandbox.id,
-                status="paused",
-                stopped_at=state.end_at or state.observed_at,
-            )
         await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=False)
         return
 
@@ -395,13 +265,6 @@ async def _enforce_or_reconcile_segment(
             ended_at=state.end_at or state.observed_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_RECONCILER,
         )
-        async with db_engine.async_session_factory() as db, db.begin():
-            await save_sandbox_provider_state(
-                db,
-                sandbox.id,
-                status="destroyed",
-                stopped_at=state.end_at or state.observed_at,
-            )
         await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=True)
         return
 
@@ -409,15 +272,15 @@ async def _enforce_or_reconcile_segment(
         billing_snapshot.active_spend_hold or limit_breached
     ):
         provider = get_configured_sandbox_provider()
-        if sandbox.external_sandbox_id:
+        if sandbox.e2b_sandbox_id:
             try:
-                await provider.pause_sandbox(sandbox.external_sandbox_id)
+                await provider.pause_sandbox(sandbox.e2b_sandbox_id)
             except Exception:
                 logger.exception(
                     "billing enforcement failed to pause sandbox",
                     extra={
                         "sandbox_id": str(sandbox.id),
-                        "external_sandbox_id": sandbox.external_sandbox_id,
+                        "e2b_sandbox_id": sandbox.e2b_sandbox_id,
                     },
                 )
                 return
@@ -427,13 +290,6 @@ async def _enforce_or_reconcile_segment(
             ended_at=ended_at,
             closed_by=USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
         )
-        async with db_engine.async_session_factory() as db, db.begin():
-            await save_sandbox_provider_state(
-                db,
-                sandbox.id,
-                status="paused",
-                stopped_at=ended_at,
-            )
         await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=False)
 
 
@@ -444,13 +300,6 @@ async def run_billing_reconcile_pass() -> None:
         provider = get_configured_sandbox_provider()
         states = await provider.list_sandbox_states()
         states_by_external_id = {state.external_sandbox_id: state for state in states}
-        states_by_placeholder_id = {
-            state.metadata["cloud_sandbox_id"]: state
-            for state in states
-            if state.metadata.get("cloud_sandbox_id")
-        }
-
-        await _repair_placeholders(states_by_placeholder_id=states_by_placeholder_id)
 
         snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
         recorded_hold_decision_subjects: set[UUID] = set()
