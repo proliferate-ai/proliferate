@@ -1,0 +1,19 @@
+{
+  "name": "@proliferate/tests-intent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:auth": "playwright test specs/auth.spec.ts",
+    "test:invitation": "playwright test specs/invitation.spec.ts"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "@types/node": "^24.13.2",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.0"
+  }
+}
