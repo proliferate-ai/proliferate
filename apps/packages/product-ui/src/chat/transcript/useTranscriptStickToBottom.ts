@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /** Classification of a viewport scroll event: our own snap vs the user. */
 export interface TranscriptScrollSample {
@@ -82,6 +82,11 @@ export function useTranscriptStickToBottom({
   // snapping but remember we were pinned so we can restore on shrink.
   const lastInsetRef = useRef(bottomInsetPx);
   const suppressedPinRef = useRef(false);
+  // Latest-value ref for bottomInsetPx, kept current every render (not via
+  // effect) so resetForSession can read the current inset without taking a
+  // dependency on the prop itself — see resetForSession below.
+  const bottomInsetPxRef = useRef(bottomInsetPx);
+  bottomInsetPxRef.current = bottomInsetPx;
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -220,16 +225,36 @@ export function useTranscriptStickToBottom({
     programmaticRef.current = null;
     lastScrollTopRef.current = 0;
     suppressedPinRef.current = false;
-    lastInsetRef.current = bottomInsetPx;
+    // Read the current inset from the ref, not the bottomInsetPx closure
+    // value: this callback's identity must stay stable across inset changes
+    // (see dep array below), so it cannot depend on the latest prop directly.
+    lastInsetRef.current = bottomInsetPxRef.current;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
-  }, [bottomInsetPx, scrollToBottom, setPinned, startGlueLoop]);
+    // Deliberately omits bottomInsetPx: consumers (FullTranscriptRowList,
+    // VirtualizedTranscriptRowList) key session-reset layout effects on this
+    // callback's identity alongside session/workspace id. If it changed on
+    // every dock-height change, those effects would re-fire and unconditionally
+    // snap on every inset change, reintroducing jumps while a dock card is up.
+  }, [scrollToBottom, setPinned, startGlueLoop]);
 
   // Inset tracking: when the inset grows while pinned, suppress the snap and
   // remember we were pinned. When it shrinks back and we're still suppressed
   // (user didn't scroll away), restore pinning with a snap.
-  useEffect(() => {
+  //
+  // This must run as a layout effect, not a passive one: consumers'
+  // bottomInsetPx-dependent useLayoutEffects (virtualizer paddingEnd, etc.) run
+  // after this hook's effects because the hook is called before them in both
+  // consumers, but layout effects run before passive effects across a commit.
+  // If this stayed a passive effect, the first inset growth could let a
+  // consumer's layout effect snap before suppression engages here.
+  //
+  // Design ruling: while suppressed, content-driven autoscroll (the glue loop)
+  // is frozen intentionally — the product wants the viewport to hold perfectly
+  // still while a dock card is up, even if new content streams in. Do not
+  // "fix" that by letting content growth snap through suppression.
+  useLayoutEffect(() => {
     const previous = lastInsetRef.current;
     const current = bottomInsetPx;
     lastInsetRef.current = current;

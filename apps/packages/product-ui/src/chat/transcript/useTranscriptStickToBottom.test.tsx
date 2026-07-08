@@ -41,12 +41,17 @@ interface HarnessHandle {
   viewport: HTMLDivElement;
 }
 
-function renderHarness(onScrollSample = vi.fn()) {
+interface RenderableHarness {
+  current: HarnessHandle;
+  setInset: (bottomInsetPx: number) => void;
+}
+
+function renderHarness(onScrollSample = vi.fn(), initialInsetPx = 0): RenderableHarness {
   const handle: { current: HarnessHandle | null } = { current: null };
 
-  function Harness() {
+  function Harness({ bottomInsetPx }: { bottomInsetPx: number }) {
     const scrollRef = useRef<HTMLDivElement>(null);
-    const api = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+    const api = useTranscriptStickToBottom({ scrollRef, onScrollSample, bottomInsetPx });
     return (
       <div
         ref={(node) => {
@@ -60,10 +65,16 @@ function renderHarness(onScrollSample = vi.fn()) {
     );
   }
 
-  render(<Harness />);
+  const { rerender } = render(<Harness bottomInsetPx={initialInsetPx} />);
   // Drain the mount snap (resetForSession is not called on mount; the snap
   // comes from consumers — here we just want a clean queue).
-  return handle as { current: HarnessHandle };
+  const result = handle as unknown as RenderableHarness;
+  result.setInset = (bottomInsetPx: number) => {
+    act(() => {
+      rerender(<Harness bottomInsetPx={bottomInsetPx} />);
+    });
+  };
+  return result;
 }
 
 function setMetrics(el: HTMLElement, metrics: { scrollHeight: number; clientHeight: number; scrollTop: number }) {
@@ -285,5 +296,100 @@ describe("useTranscriptStickToBottom", () => {
       flushRafRound();
     });
     expect(viewport.scrollTop).toBe(700);
+  });
+
+  describe("suppressed pin (bottomInsetPx growth/shrink)", () => {
+    it("suppresses the snap when the inset grows while pinned", () => {
+      const handle = renderHarness(vi.fn(), 0);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
+      expect(handle.current.api.isPinnedToBottom).toBe(true);
+
+      // Dock card grows the bottom inset while pinned: freeze, don't snap.
+      handle.setInset(80);
+
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+      expect(handle.current.api.pinnedRef.current).toBe(false);
+      // No scroll write happened — the viewport must not have moved.
+      expect(viewport.scrollTop).toBe(1000);
+    });
+
+    it("restores pin and snaps when the inset shrinks back while suppressed and the user hasn't scrolled", () => {
+      const handle = renderHarness(vi.fn(), 0);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
+
+      handle.setInset(80);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+
+      // Content grew while suppressed too (e.g. streaming continued) — the
+      // bottom keeps moving, but the frozen viewport shouldn't have followed.
+      setMetrics(viewport, { scrollHeight: 1400, clientHeight: 300, scrollTop: 1000 });
+
+      // Dock card closes: inset shrinks back to 0.
+      handle.setInset(0);
+
+      expect(handle.current.api.isPinnedToBottom).toBe(true);
+      expect(handle.current.api.pinnedRef.current).toBe(true);
+      expect(viewport.scrollTop).toBe(viewport.scrollHeight);
+    });
+
+    it("clears suppression on a real user scroll, so a later shrink does not snap", () => {
+      const handle = renderHarness(vi.fn(), 0);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
+
+      handle.setInset(80);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+
+      // The user scrolls (moves away) while suppressed — this must clear
+      // suppression regardless of where they land.
+      userScroll(handle, 600);
+      const scrollTopAfterUserScroll = viewport.scrollTop;
+
+      // Dock card closes: inset shrinks back, but since suppression was
+      // cleared by the user's scroll, this must NOT snap.
+      handle.setInset(0);
+
+      expect(viewport.scrollTop).toBe(scrollTopAfterUserScroll);
+    });
+
+    it("keeps resetForSession's identity stable across inset changes", () => {
+      const handle = renderHarness(vi.fn(), 0);
+      const firstResetForSession = handle.current.api.resetForSession;
+
+      handle.setInset(40);
+      const secondResetForSession = handle.current.api.resetForSession;
+
+      handle.setInset(0);
+      const thirdResetForSession = handle.current.api.resetForSession;
+
+      expect(secondResetForSession).toBe(firstResetForSession);
+      expect(thirdResetForSession).toBe(firstResetForSession);
+    });
+
+    it("does not snap on content growth while suppressed (viewport freeze is intentional)", () => {
+      const handle = renderHarness(vi.fn(), 0);
+      const { viewport } = handle.current;
+      setMetrics(viewport, { scrollHeight: 1000, clientHeight: 300, scrollTop: 1000 });
+
+      handle.setInset(80);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+
+      // Simulate a tab/window resume glue attempt firing while suppressed —
+      // this stands in for any content-driven autoscroll trigger. It must
+      // bail without moving the viewport: the freeze while suppressed is a
+      // deliberate product decision, not a bug.
+      setMetrics(viewport, { scrollHeight: 2200, clientHeight: 300, scrollTop: 1000 });
+      act(() => {
+        fireEvent(document, new Event("visibilitychange"));
+      });
+      act(() => {
+        flushRafRound();
+      });
+
+      expect(viewport.scrollTop).toBe(1000);
+      expect(handle.current.api.isPinnedToBottom).toBe(false);
+    });
   });
 });

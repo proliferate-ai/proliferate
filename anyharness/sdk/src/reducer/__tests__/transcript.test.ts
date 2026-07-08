@@ -8,7 +8,13 @@ import {
   selectPendingUserInputInteraction,
   selectPrimaryPendingInteraction,
 } from "../../index.js";
-import type { ContentPart, SessionEventEnvelope, ThoughtItem, ToolCallItem } from "../../index.js";
+import type {
+  ContentPart,
+  PromptProvenance,
+  SessionEventEnvelope,
+  ThoughtItem,
+  ToolCallItem,
+} from "../../index.js";
 
 describe("transcript reducer", () => {
   it("normalizes available slash commands at the reducer boundary", () => {
@@ -1620,6 +1626,35 @@ function pendingPromptRemoved(
       reason: "deleted",
     },
   };
+}
+
+function pendingPromptsReordered(
+  eventSeq: number,
+  pendingPrompts: Array<{
+    seq: number;
+    promptId: string | null;
+    text: string;
+    contentParts?: ContentPart[];
+    queuedAt?: string;
+    promptProvenance?: PromptProvenance | null;
+  }>,
+): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: eventSeq,
+    timestamp: `2026-04-04T00:00:0${eventSeq}Z`,
+    event: {
+      type: "pending_prompts_reordered",
+      pendingPrompts: pendingPrompts.map((prompt) => ({
+        seq: prompt.seq,
+        promptId: prompt.promptId,
+        text: prompt.text,
+        contentParts: prompt.contentParts ?? [{ type: "text", text: prompt.text }],
+        queuedAt: prompt.queuedAt ?? `2026-04-04T00:00:0${eventSeq}Z`,
+        promptProvenance: prompt.promptProvenance ?? null,
+      })),
+    },
+  } as unknown as SessionEventEnvelope;
 }
 
 function reasoningStarted(
