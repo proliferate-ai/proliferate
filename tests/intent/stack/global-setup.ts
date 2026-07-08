@@ -7,6 +7,7 @@
 // module closed over stay valid.
 
 import { bootStack } from "./boot.ts";
+import { resetPasswordLoginRateLimits } from "./seed.ts";
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
   const stack = await bootStack();
@@ -14,5 +15,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.TIER2_INTENT_WEB_BASE_URL = stack.webBaseUrl;
   process.env.TIER2_INTENT_DATABASE_URL = stack.databaseUrl;
   process.env.TIER2_INTENT_SETUP_TOKEN_FILE = stack.setupTokenFile;
+  // The profile DB persists between runs; failed-login counters from a prior
+  // run's negatives must not 429 this run's logins (5 failures / 15 min / IP).
+  await resetPasswordLoginRateLimits();
   return stack.teardown;
 }

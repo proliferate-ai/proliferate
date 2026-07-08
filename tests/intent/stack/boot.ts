@@ -258,9 +258,9 @@ export async function bootStack(): Promise<BootedStack> {
   rmSync(setupTokenFile, { force: true });
 
   log(`running alembic migrations against ${instance.databaseName}...`);
-  run("server/.venv/bin/alembic", ["upgrade", "head"], {
+  run(path.join(REPO_ROOT, "server", ".venv", "bin", "alembic"), ["upgrade", "head"], {
     cwd: path.join(REPO_ROOT, "server"),
-    env: { DATABASE_URL: databaseUrl },
+    env: { DATABASE_URL: databaseUrl, DEBUG: "true" },
   });
 
   mkdirSync(instance.anyharnessRuntimeHome, { recursive: true });

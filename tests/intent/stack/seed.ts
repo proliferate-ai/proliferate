@@ -8,7 +8,12 @@
 import { readFileSync } from "node:fs";
 import { Client } from "pg";
 
-export const ADMIN_EMAIL = "owner@t2intent.test";
+// NOTE deliberately .example.com, not .test: RFC-reserved `.test` addresses
+// expose a real product bug (first-run claim accepts them, but /users/me then
+// 500s because UserRead's EmailStr rejects special-use TLDs — validation
+// mismatch between account creation and profile serialization). Documented in
+// the PR; the suite steers around it so it tests the intended flows.
+export const ADMIN_EMAIL = "owner@t2intent.example.com";
 export const ADMIN_PASSWORD = "Tier2Intent!Passw0rd";
 export const ADMIN_ORG_NAME = "Tier2 Intent Org";
 
@@ -272,7 +277,7 @@ export async function backdateInvitationExpiry(invitationId: string, expiresAt: 
   await client.connect();
   try {
     await client.query(
-      `UPDATE organization_invitations SET expires_at = $1 WHERE id = $2`,
+      `UPDATE organization_invitation SET expires_at = $1 WHERE id = $2`,
       [expiresAt.toISOString(), invitationId],
     );
   } finally {
@@ -280,7 +285,31 @@ export async function backdateInvitationExpiry(invitationId: string, expiresAt: 
   }
 }
 
-/** The server uses asyncpg's SQLAlchemy URL scheme; node-postgres needs the plain `postgresql://` scheme. */
+/**
+ * Clear password-login rate-limit counters. The limiter buckets failures per
+ * email AND per client IP (5 failures / 15 min, constants/auth.py); every
+ * browser context in this suite shares 127.0.0.1, so the deliberate
+ * wrong-password/wrong-account negatives would trip the IP bucket for every
+ * later login in the run. Between tests that is limiter noise, not the
+ * behavior under test, so specs reset the limiter's real table after
+ * intentionally failing logins.
+ */
+export async function resetPasswordLoginRateLimits(): Promise<void> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    await client.query(`DELETE FROM password_login_attempt`);
+  } finally {
+    await client.end();
+  }
+}
+
+/** The server uses asyncpg's SQLAlchemy URL scheme; node-postgres needs the
+ * plain `postgresql://` scheme, and its resolver chokes on the bracketed
+ * `[::1]` host the macOS profile default uses — Docker's Postgres publishes
+ * on localhost for both stacks, so map it. */
 function toPostgresDriverUrl(url: string): string {
-  return url.replace(/^postgresql\+asyncpg:\/\//, "postgresql://");
+  return url
+    .replace(/^postgresql\+asyncpg:\/\//, "postgresql://")
+    .replace("@[::1]:", "@localhost:");
 }
