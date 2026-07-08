@@ -8,6 +8,7 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "organization-secrets",
   "organization-members",
   "billing",
+  "organization-limits",
   "organization-sso",
   "organization-integrations",
   "organization-model-policy",
@@ -21,9 +22,6 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "agent-grok",
   "agent-api-keys",
   "agent-defaults",
-  // BUDGETS PARKED: keep OrganizationBudgetsPane in code, but do not register
-  // the page until real budget data/enforcement replaces mocked UI.
-  // "organization-limits",
   // SLACK BOT PARKED: keep the id nearby for revival, but do not register it.
   // "slack-bot",
 ] as const;
@@ -46,6 +44,7 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "organization-secrets",
   "organization-members",
   "billing",
+  "organization-limits",
   "organization-sso",
   "organization-integrations",
   "organization-model-policy",
@@ -59,8 +58,6 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "agent-grok",
   "agent-api-keys",
   "agent-defaults",
-  // BUDGETS PARKED: omit from Cmd-number settings shortcuts while disabled.
-  // "organization-limits",
   // SLACK BOT PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "slack-bot",
 ] as const satisfies readonly SettingsSection[];

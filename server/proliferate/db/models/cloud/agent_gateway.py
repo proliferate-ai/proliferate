@@ -207,7 +207,7 @@ class AgentGatewayEnrollment(Base):
             name="ck_agent_gateway_enrollment_sync_status",
         ),
         CheckConstraint(
-            "budget_status IN ('ok', 'exhausted')",
+            "budget_status IN ('ok', 'exhausted', 'limit_reached')",
             name="ck_agent_gateway_enrollment_budget_status",
         ),
         Index(

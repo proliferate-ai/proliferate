@@ -74,6 +74,7 @@ from proliferate.server.organizations.registration_pages import (
     router as registration_pages_router,
 )
 from proliferate.server.organizations.sso.api import router as organization_sso_router
+from proliferate.server.organizations.usage.api import router as organization_usage_router
 from proliferate.server.setup.api import router as first_run_setup_router
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 from proliferate.server.support.api import router as support_router
@@ -291,6 +292,11 @@ def create_app() -> FastAPI:
     app.include_router(organizations_router, prefix=f"{api_prefix}/v1", tags=["organizations"])
     app.include_router(
         organization_sso_router,
+        prefix=f"{api_prefix}/v1",
+        tags=["organizations"],
+    )
+    app.include_router(
+        organization_usage_router,
         prefix=f"{api_prefix}/v1",
         tags=["organizations"],
     )

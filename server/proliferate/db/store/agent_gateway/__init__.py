@@ -31,6 +31,7 @@ from proliferate.db.store.agent_gateway.enrollments import (
     list_billing_subject_ids_with_active_enrollments,
     list_enrollments_needing_sync,
     list_org_memberships_missing_enrollment,
+    list_organizations_with_limit_reached_enrollments,
     list_user_ids_missing_enrollment,
     mark_enrollment_failed,
     mark_enrollment_synced,
@@ -73,6 +74,9 @@ from proliferate.db.store.agent_gateway.usage import (
     advance_usage_import_cursor,
     get_usage_import_cursor,
     insert_usage_event_once,
+    llm_cost_usd_by_user,
+    llm_cost_usd_in_window,
+    llm_cost_usd_timeseries,
 )
 
 __all__ = [
@@ -120,7 +124,11 @@ __all__ = [
     "list_enrollments_needing_sync",
     "list_org_member_route_selections",
     "list_org_memberships_missing_enrollment",
+    "list_organizations_with_limit_reached_enrollments",
     "list_user_ids_missing_enrollment",
+    "llm_cost_usd_by_user",
+    "llm_cost_usd_in_window",
+    "llm_cost_usd_timeseries",
     "mark_enrollment_failed",
     "mark_enrollment_synced",
     "put_auth_selections",

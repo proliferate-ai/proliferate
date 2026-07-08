@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.billing import (
     BILLING_DECISION_ENFORCE_ACTIVE_SPEND,
+    BILLING_DECISION_ORG_LIMIT_PAUSE,
+    BILLING_DECISION_USER_LIMIT_PAUSE,
     BILLING_MODE_ENFORCE,
     BILLING_RECONCILE_INTERVAL_SECONDS,
     USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT,
@@ -23,9 +25,10 @@ from proliferate.constants.billing import (
 )
 from proliferate.constants.cloud import CloudRuntimeEnvironmentStatus
 from proliferate.db import engine as db_engine
-from proliferate.db.models.billing import UsageSegment
+from proliferate.db.models.billing import BillingBudgetLimit, UsageSegment
 from proliferate.db.models.cloud.runtime_environments import CloudRuntimeEnvironment
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
+from proliferate.db.store import billing as billing_store
 from proliferate.db.store.billing_runtime_usage import (
     close_usage_segment_for_sandbox as close_usage_segment_for_sandbox_record,
 )
@@ -42,6 +45,7 @@ from proliferate.db.store.billing_runtime_usage import (
     release_billing_reconciler_lock,
     try_acquire_billing_reconciler_lock,
 )
+from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.db.store.cloud_runtime_environments import (
     load_runtime_environment_by_id,
     save_runtime_environment_state,
@@ -58,6 +62,7 @@ from proliferate.integrations.sandbox import (
 )
 from proliferate.integrations.sentry import report_critical
 from proliferate.server.billing.accounting_pass import run_billing_accounting_pass
+from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.billing.models import BillingSnapshot
 from proliferate.server.billing.snapshots import get_billing_snapshot_for_subject
 from proliferate.utils.time import utcnow
@@ -268,12 +273,77 @@ async def _repair_placeholders(
             )
 
 
+async def _resolve_compute_limit_pause(
+    *,
+    segment: UsageSegment,
+    org_id_by_subject: dict[UUID, UUID | None],
+    compute_limits_by_org: dict[UUID, list[BillingBudgetLimit]],
+    spend_cache: dict[tuple[UUID, str, UUID | None], float],
+    now: datetime,
+) -> str | None:
+    """Decision type when the segment breaches an org compute cap, else None.
+
+    Enforce-mode only, matching the ``active_spend_hold`` path. Compute limits
+    are org-scoped: personal subjects (no ``organization_id``) never bind. A
+    per-user cap is compared against the segment user's window usage and takes
+    precedence over an org-wide cap, which sums the whole subject.
+    """
+    if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
+        return None
+    subject_id = segment.billing_subject_id
+    if subject_id not in org_id_by_subject:
+        async with db_engine.async_session_factory() as db:
+            subject = await get_billing_subject_by_id(db, subject_id)
+        org_id_by_subject[subject_id] = subject.organization_id if subject is not None else None
+    organization_id = org_id_by_subject[subject_id]
+    if organization_id is None:
+        return None
+    if organization_id not in compute_limits_by_org:
+        async with db_engine.async_session_factory() as db:
+            org_limits = await billing_store.list_budget_limits(db, organization_id)
+        compute_limits_by_org[organization_id] = [
+            limit for limit in org_limits if limit.kind == "compute" and limit.enabled
+        ]
+    limits = compute_limits_by_org[organization_id]
+    if not limits:
+        return None
+
+    async def _window_seconds(window: str, scope_user_id: UUID | None) -> float:
+        key = (subject_id, window, scope_user_id)
+        if key not in spend_cache:
+            start, end = window_bounds(window, now)
+            async with db_engine.async_session_factory() as db:
+                spend_cache[key] = await billing_store.compute_usage_seconds_in_window(
+                    db,
+                    billing_subject_id=subject_id,
+                    start=start,
+                    end=end,
+                    now=now,
+                    user_id=scope_user_id,
+                )
+        return spend_cache[key]
+
+    if segment.user_id is not None:
+        for limit in limits:
+            if limit.user_id != segment.user_id:
+                continue
+            if await _window_seconds(limit.window, segment.user_id) >= float(limit.cap_value):
+                return BILLING_DECISION_USER_LIMIT_PAUSE
+    for limit in limits:
+        if limit.user_id is not None:
+            continue
+        if await _window_seconds(limit.window, None) >= float(limit.cap_value):
+            return BILLING_DECISION_ORG_LIMIT_PAUSE
+    return None
+
+
 async def _enforce_or_reconcile_segment(
     *,
     segment: UsageSegment,
     provider: SandboxProvider,
     state: ProviderSandboxState | None,
     billing_snapshot: BillingSnapshot,
+    limit_breached: bool = False,
 ) -> None:
     async with db_engine.async_session_factory() as db:
         sandbox = await load_cloud_sandbox_by_id(db, segment.sandbox_id)
@@ -335,7 +405,9 @@ async def _enforce_or_reconcile_segment(
         await _mark_sandbox_environment_unavailable(sandbox.id, destroyed=True)
         return
 
-    if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and billing_snapshot.active_spend_hold:
+    if settings.cloud_billing_mode == BILLING_MODE_ENFORCE and (
+        billing_snapshot.active_spend_hold or limit_breached
+    ):
         provider = get_configured_sandbox_provider()
         if sandbox.external_sandbox_id:
             try:
@@ -382,6 +454,13 @@ async def run_billing_reconcile_pass() -> None:
 
         snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
         recorded_hold_decision_subjects: set[UUID] = set()
+        # Org budget-limit enforcement caches (spec §4.2), scoped to this pass:
+        # subject→org, org→enabled compute limits, and window usage.
+        org_id_by_subject: dict[UUID, UUID | None] = {}
+        compute_limits_by_org: dict[UUID, list[BillingBudgetLimit]] = {}
+        compute_spend_cache: dict[tuple[UUID, str, UUID | None], float] = {}
+        recorded_limit_decisions: set[tuple[UUID, UUID | None, str]] = set()
+        now = utcnow()
         open_segments = await list_all_open_usage_segments()
         for segment in open_segments:
             billing_snapshot = snapshots_by_subject.get(segment.billing_subject_id)
@@ -407,6 +486,29 @@ async def run_billing_reconcile_pass() -> None:
                     remaining_seconds=billing_snapshot.remaining_seconds,
                 )
                 recorded_hold_decision_subjects.add(segment.billing_subject_id)
+            limit_decision = await _resolve_compute_limit_pause(
+                segment=segment,
+                org_id_by_subject=org_id_by_subject,
+                compute_limits_by_org=compute_limits_by_org,
+                spend_cache=compute_spend_cache,
+                now=now,
+            )
+            if limit_decision is not None:
+                decision_key = (segment.billing_subject_id, segment.user_id, limit_decision)
+                if decision_key not in recorded_limit_decisions:
+                    await record_billing_decision_event(
+                        billing_subject_id=segment.billing_subject_id,
+                        actor_user_id=segment.user_id,
+                        workspace_id=segment.workspace_id,
+                        decision_type=limit_decision,
+                        mode=settings.cloud_billing_mode,
+                        would_block_start=False,
+                        would_pause_active=True,
+                        reason="compute budget limit reached",
+                        active_sandbox_count=billing_snapshot.active_sandbox_count,
+                        remaining_seconds=billing_snapshot.remaining_seconds,
+                    )
+                    recorded_limit_decisions.add(decision_key)
             await _enforce_or_reconcile_segment(
                 segment=segment,
                 provider=provider,
@@ -416,6 +518,7 @@ async def run_billing_reconcile_pass() -> None:
                     else None
                 ),
                 billing_snapshot=billing_snapshot,
+                limit_breached=limit_decision is not None,
             )
 
     acquired, _ = await with_billing_reconciler_lock(_run)
