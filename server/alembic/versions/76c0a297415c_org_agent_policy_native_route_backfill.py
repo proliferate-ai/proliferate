@@ -12,7 +12,7 @@ absence of "native" unambiguously means an admin intentionally disallowed it via
 the fixed pane. Rows with a null list (no restriction) are left untouched.
 
 Revision ID: 76c0a297415c
-Revises: bcc0459a6f11
+Revises: d4bbfa6e0669
 Create Date: 2026-07-07 00:00:00.000000
 
 """
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "76c0a297415c"
-down_revision: Union[str, Sequence[str], None] = "bcc0459a6f11"
+down_revision: Union[str, Sequence[str], None] = "d4bbfa6e0669"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
