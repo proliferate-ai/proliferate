@@ -30,6 +30,7 @@ export const WORKFLOW_STEP_META: Record<WorkflowStepKind, WorkflowStepKindMeta> 
   "scm.open_pr": { glyph: "⇈", label: "Open PR", hint: "Open a pull request" },
   notify: { glyph: "🔔", label: "Notify", hint: "Send a notification" },
   "human.approval": { glyph: "⏸", label: "Approval", hint: "Wait for a human" },
+  "workflow.include": { glyph: "⧉", label: "Include", hint: "Inline a workflow" },
 };
 
 /** Glyph shown for a step in the home-card strip. Goal-armed prompts show `◎`. */
@@ -84,6 +85,8 @@ export function workflowStepPreview(step: WorkflowStep): string {
       return collapse(step.message) || WORKFLOW_STEP_META[step.kind].hint;
     case "human.approval":
       return collapse(step.message) || WORKFLOW_STEP_META[step.kind].hint;
+    case "workflow.include":
+      return WORKFLOW_STEP_META[step.kind].hint;
   }
 }
 
@@ -106,6 +109,8 @@ export function workflowStepExcerpt(step: WorkflowStep): string {
     case "notify":
     case "human.approval":
       return normalize(step.message);
+    case "workflow.include":
+      return "";
   }
 }
 

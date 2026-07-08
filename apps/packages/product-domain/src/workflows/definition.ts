@@ -28,6 +28,7 @@ export const WORKFLOW_STEP_KINDS = [
   "scm.open_pr",
   "notify",
   "branch",
+  "workflow.include",
 ] as const;
 export type WorkflowStepKind = (typeof WORKFLOW_STEP_KINDS)[number];
 
@@ -174,6 +175,24 @@ export interface BranchStep extends StepBase {
   reason?: string;
 }
 
+/**
+ * Composition step (spec 3.5 / L20): inline another workflow's steps into this
+ * workflow's single resolved plan. Definition-only — the server's resolver
+ * splices the target's CURRENT version's steps at StartRun, before delivery, so
+ * the runtime never sees a `workflow.include` step (there is no child run). `args`
+ * maps the child's declared argument names to templated strings written in THIS
+ * workflow's context (they may reference `{{args.*}}` / `{{steps...}}` here).
+ */
+export interface WorkflowIncludeStep extends StepBase {
+  kind: "workflow.include";
+  /** The included workflow's id (its current version's steps are inlined). */
+  workflowId: string;
+  /** child-input-name -> templated value (in this workflow's interpolation context). */
+  args: Record<string, string>;
+  /** Include handle: prefixes the child's emit names at resolution (optional). */
+  name?: string;
+}
+
 export type WorkflowStep =
   | AgentPromptStep
   | AgentEmitStep
@@ -181,7 +200,8 @@ export type WorkflowStep =
   | ShellRunStep
   | ScmOpenPrStep
   | NotifyStep
-  | BranchStep;
+  | BranchStep
+  | WorkflowIncludeStep;
 
 export interface WorkflowAgentNode {
   slot: string;
@@ -230,6 +250,8 @@ export function createWorkflowStep(kind: WorkflowStepKind): WorkflowStep {
       return { kind, onFail: { ...DEFAULT_ON_FAIL }, slackChannelId: "", message: "" };
     case "branch":
       return { kind, onFail: { ...DEFAULT_ON_FAIL }, on: "", cases: {} };
+    case "workflow.include":
+      return { kind, onFail: { ...DEFAULT_ON_FAIL }, workflowId: "", args: {} };
   }
 }
 
@@ -409,6 +431,18 @@ function parseStep(raw: unknown): WorkflowStep | null {
       }
       return step;
     }
+    case "workflow.include": {
+      const rawArgs = asRecord(record.args);
+      const args: Record<string, string> = {};
+      if (rawArgs) {
+        for (const [key, value] of Object.entries(rawArgs)) {
+          if (typeof value === "string") {
+            args[key] = value;
+          }
+        }
+      }
+      return { kind, onFail, workflowId: asString(record.workflow_id) ?? "", args };
+    }
   }
 }
 
@@ -559,6 +593,11 @@ function serializeStep(step: WorkflowStep): Record<string, unknown> {
       if (step.reason !== undefined) {
         base.reason = step.reason;
       }
+      return base;
+    }
+    case "workflow.include": {
+      base.workflow_id = step.workflowId;
+      base.args = { ...step.args };
       return base;
     }
   }

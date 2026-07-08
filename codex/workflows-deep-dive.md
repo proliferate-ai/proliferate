@@ -7,7 +7,7 @@
 >
 > Companion: [`workflows-architecture.md`](workflows-architecture.md) is the
 > **end-state** doc for the PR A–E arc (actions ledger + Slack delivery, poll
-> triggers, `agent.emit`, `workflow.run`, gateway function grants) — read it for
+> triggers, `agent.emit`, `workflow.include` composition, gateway function grants) — read it for
 > where the system is going and the [OPEN-n] decision log; read this for what is
 > built today.
 
@@ -373,6 +373,18 @@ uniqueness (whole definition) and *strictly-prior* ref visibility: `{{inputs.NAM
 must be a declared input; `{{EMIT.FIELD}}` must name an emit produced by an
 earlier step (earlier nodes in full, earlier steps in the same node).
 
+**`workflow.include` (§3.5, PR D)** — `_parse_workflow_include` validates the
+definition-only composition step's shape (a UUID `workflow_id`, an `args` mapping of
+child-arg identifiers → template strings). Its arg-mapping values are ordinary
+templated strings in the parent's context, so `_iter_step_strings` yields them and
+`_validate_references` checks them against the parent's args/earlier steps. That
+same reference pass now tracks which earlier steps are includes and rejects any
+`{{steps[i]...}}` / `{{steps.<name>...}}` that targets one (`include_step_reference`)
+— an include produces no output and referencing into the child is out of scope v1.
+The DB-backed checks (target ownership, arg coverage, cycles) live in the service
+layer, not here; the resolver ([composition.py](../server/proliferate/server/cloud/workflows/domain/composition.py))
+inlines it away at StartRun (§3.3).
+
 ### 3.2 Interpolation — [domain/interpolation.py](../server/proliferate/server/cloud/workflows/domain/interpolation.py)
 
 Stored grammar is `{{inputs.<name>}}` + `{{<emit>.<field>}}` (B6). Reserved
@@ -391,7 +403,8 @@ first-segments: `inputs`, `steps`, `fields`.
 
 `start_run(...)` (line 316): validate target_mode/trigger_kind → owner-scoped 404 →
 cloud target must be materialized (`target_workspace_not_ready` 409 before any row)
-→ pin version → `parse_definition` strict → `coerce_arguments` → `_resolve_plan`
+→ pin version → `parse_definition` strict → `coerce_arguments` →
+`resolve_included_agents` (composition, PR D — below) → `_resolve_plan`
 (line 262) → `store.create_run(status=pending_delivery)`. The run id is
 pre-generated so it is inside the payload before insert. `trigger_kind` accepts
 `'poll'` (PR B) exactly like `'schedule'` — from `start_run` onward a poll-fired
@@ -409,13 +422,76 @@ return {
     "target_mode": target_mode,
     "sessions": {slot: {harness, model, session_binding, bind_session_id?}},  # per-slot
     "inputs": coerced_inputs,                        # eager values, verbatim
-    "steps": [...],  # flattened spine; each step stamped key="<node>.-.<step>", slot, label;
-                     # {{inputs.*}} baked, {{emit.field}} rewritten to {{steps[n].output.field}}
+    "steps": [...],  # flattened spine, includes inlined FIRST (composition); each step
+                     # stamped key="<node>.-.<step>", slot, label; {{inputs.*}} baked,
+                     # {{emit.field}} rewritten to {{steps[n].output.field}}
 }
 ```
 `session_binding` defaults by trigger kind (manual/chat=fresh, schedule/poll=headless).
 StartRun wire (B9): `args`→`inputs`, `target` = `workspace_id` XOR `trigger_id`,
 optional `session_bindings:{slot:session_id}`.
+
+**Composition by inlining (PR D, L20)** — [domain/composition.py](../server/proliferate/server/cloud/workflows/domain/composition.py).
+A `workflow.include` step is **definition-only**: `resolve_included_steps` splices
+the target workflow's CURRENT version's steps into the parent's agents spine at
+StartRun, **before delivery** — one run, one plan, one cursor, one sandbox. There
+is no child run, no parent linkage, no spawn. **The runtime is COMPLETELY unchanged
+by D — there is no `plan.rs` change; the resolver eliminates every include step
+before the flatten pass, so the runtime never sees one. That is the design (the
+"no include kind in a resolved plan" property is asserted in
+`test_workflow_include.py`).**
+
+**Adapted to the v2 agents spine (this rebase):** a `workflow.include` step lives
+*inside an agent node's step list* and inlines the child definition's STEPS into
+that node (`resolve_included_agents` walks every node; `resolve_included_steps`
+expands one node's step list). Composition operates **purely on the v2 named-ref
+grammar** (`{{inputs.*}}` / `{{<emit>.<field>}}`) — it never touches indices. The
+*parent's* single flatten pass (`_resolve_plan`) later assigns structured step keys
+and rewrites every `{{<emit>.<field>}}` to the runtime's indexed
+`{{steps[n].output.<field>}}`, so the ref-namespacing obligation collapses to
+name-prefixing. Ordering is still load-bearing: inline FIRST, then the flatten
+pass's eager `{{inputs.*}}` + emit-index rewrite runs over the whole spine in one
+place. **A child definition with more than one agent node is REJECTED as an include
+target for now (`include_multi_agent`, PROPOSED per A3's include row)** — cross-spine
+inlining is the Part II composition pass's problem; the child's single node's
+harness/model are discarded (its steps run in the parent node's slot). The two
+resolver obligations (spec 3.5):
+
+- **Arg binding** — the include's `args` mapping becomes the child's input context:
+  each child `{{inputs.<name>}}` token is textually replaced by the mapping value
+  (no brace-escaping — both sides are author-written definition text, unlike a
+  user-supplied StartRun input). Mapping values may carry the PARENT's `{{inputs.*}}`
+  (eager-resolved by the flatten pass) and `{{<emit>.<field>}}` refs (stay
+  late-bound, rewritten to indexed form by the flatten pass); uncovered optional
+  child inputs fall back to their default.
+- **Emit-ref namespacing** — each child `agent.emit` `name` is prefixed
+  `<includeName>_` and every child `{{<emit>.<field>}}` ref to one of them is
+  rewritten to `{{<includeName>_<emit>.<field>}}` (includeName = the include's
+  `name`, else `w<parentStepIndex>`). Prefixing happens BEFORE arg binding so a
+  parent emit ref injected via the mapping (which names a PARENT emit) is never
+  itself prefixed. The parent's own refs to an include handle are rejected at save
+  (`include_step_reference`) — an include has no emit output, and cross-spine refs
+  into the child are out of scope v1.
+
+Nesting is recursive (B may include C — the child's emit names are prefixed at
+each level: `w2_w1_g`) and depth-capped at `WORKFLOW_MAX_INCLUDE_DEPTH=5`; a
+resolution-time breach fails the run cleanly (`include_depth_exceeded`) before any
+delivery. Save-time validation (`validate_includes`, called from
+`create_workflow`/`update_workflow`, walking every node's steps) proves the target
+exists / is same-owner / not archived / has exactly one agent node
+(`include_multi_agent`), is not self-included (`self_include`), that the mapping
+covers the child's required inputs and references only declared child inputs
+(`include_args_mismatch`), and that the include graph has no cycle (`include_cycle`,
+naming the path). A child changed since save (e.g. it grew a required input or a
+second agent node) re-fails at resolution with the same code.
+
+*Surface-syntax decisions STILL pending Pablo's veto (unchanged by this rebase —
+chosen by the orchestrator where §3.5 left the surface open):* the step kind is
+`workflow.include` (deliberately not `workflow.run` — no runtime verb); its shape
+is `{kind, workflow_id, args:{<child-input>: <template>}, name?}`; the arg mapping
+is a flat `{child-input-name: template-string}` object; child emit-name prefixing
+uses `<includeName>_<origName>` with `w<parentStepIndex>` as the default include
+name. These four remain VETO-PENDING.
 
 Also here: `report_run_status` (line 442; locks run, enforces `check_transition`,
 stamps started/finished, writes cursor/outputs/session ids/cost, then — after the

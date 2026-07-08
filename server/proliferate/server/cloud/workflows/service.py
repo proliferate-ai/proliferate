@@ -55,6 +55,11 @@ from proliferate.server.automations.domain.schedule import (
     normalize_schedule,
 )
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.workflows.domain.composition import (
+    WorkflowCompositionError,
+    resolve_included_agents,
+    validate_includes,
+)
 from proliferate.server.cloud.workflows.domain.definition import (
     WorkflowDefinitionError,
     parse_definition,
@@ -121,6 +126,30 @@ def _validated_definition(raw: dict[str, object]) -> dict[str, object]:
     except WorkflowDefinitionError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
     return canonical
+
+
+async def _validate_workflow_includes(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    workflow_id: UUID | None,
+    definition: dict[str, object],
+) -> None:
+    """Save-time composition checks (spec 3.5): target ownership, arg coverage, cycles.
+
+    These need the DB (fetching each include target's current version), so they run
+    here rather than in the pure ``parse_definition``.
+    """
+
+    try:
+        await validate_includes(
+            db,
+            owner_user_id=owner_user_id,
+            workflow_id=workflow_id,
+            agents=list(definition.get("agents", [])),
+        )
+    except WorkflowCompositionError as exc:
+        raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
 
 async def visible_workflow(
@@ -190,6 +219,11 @@ async def create_workflow(
 ) -> tuple[WorkflowRecord, list[WorkflowVersionRecord]]:
     name = _clean_name(body.name)
     definition = _validated_definition(body.definition)
+    # workflow_id is None at create: the workflow has no id yet, so no include
+    # cycle can involve it — self-include only becomes possible on update.
+    await _validate_workflow_includes(
+        db, owner_user_id=user.id, workflow_id=None, definition=definition
+    )
     active_count = await store.count_active_workflows(db, owner_user_id=user.id)
     if not workflow_create_allowed(active_count, max_allowed=free_plan_workflow_limit()):
         raise CloudApiError(
@@ -220,6 +254,9 @@ async def update_workflow(
             "workflow_archived", "Cannot update an archived workflow.", status_code=409
         )
     definition = _validated_definition(body.definition)
+    await _validate_workflow_includes(
+        db, owner_user_id=user.id, workflow_id=workflow_id, definition=definition
+    )
     name = _clean_name(body.name) if body.name is not None else None
     update_description = "description" in body.model_fields_set
     result = await store.append_version(
@@ -285,6 +322,7 @@ def _resolve_plan(
     target_mode: str,
     coerced_inputs: dict[str, object],
     session_bindings: dict[str, str],
+    agents: list[dict[str, object]],
 ) -> dict[str, object]:
     """The single resolution pass (data-contract §4): flatten the agents spine
     into one ordered step list, stamp each step with its structured key + slot +
@@ -293,7 +331,10 @@ def _resolve_plan(
     """
 
     canonical = version.definition_json
-    agents = canonical.get("agents", [])
+    # ``agents`` arrives with every workflow.include already inlined into the
+    # owning node's step list (L20, composition.resolve_included_agents) and in the
+    # v2 named-ref grammar — this pass flattens it, assigns keys, and rewrites
+    # emit names to indices in one place (composition never touches indices).
     # E3/§2.6: the workflow-level integrations grant is stamped onto every slot
     # (per-slot narrowing is a later resolver-only change). Actual token mint +
     # all-tools scope expansion is PR E's phase.
@@ -446,6 +487,20 @@ async def start_run(
     except ArgumentError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
+    # Composition (L20): inline any workflow.include steps into the agents spine,
+    # server-side, before the flatten pass. This fails the run cleanly (no
+    # pending_delivery row) if an include target changed since save, exceeds the
+    # depth cap, is now multi-agent, or its arg mapping no longer covers the
+    # child's required inputs.
+    try:
+        resolved_agents = await resolve_included_agents(
+            db,
+            owner_user_id=workflow.owner_user_id,
+            agents=list(version.definition_json.get("agents", [])),
+        )
+    except WorkflowCompositionError as exc:
+        raise CloudApiError(exc.code, exc.message, status_code=400) from exc
+
     run_id = uuid4()
     resolved_plan = _resolve_plan(
         run_id=run_id,
@@ -455,6 +510,7 @@ async def start_run(
         target_mode=target_mode,
         coerced_inputs=coerced_inputs,
         session_bindings=session_bindings or {},
+        agents=resolved_agents,
     )
     return await store.create_run(
         db,

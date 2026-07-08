@@ -187,6 +187,7 @@ function PanelHost({ initial, title }: { initial: WorkflowStep; title: string })
           suggestions={SUGGESTIONS}
           slackConnected={false}
           slackChannels={[]}
+          includableWorkflows={[]}
           supportsGoals={() => true}
           onChange={setStep}
           onClose={() => undefined}

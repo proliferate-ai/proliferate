@@ -262,6 +262,10 @@ function outputChipsFor(
       }
       return parts.length > 0 ? [{ kind: "text", label: parts.join(" · ") }] : [];
     }
+    case "workflow.include":
+      // Never present in a resolved plan: the server inlines it away at StartRun
+      // (L20), so a run view never sees one. Kept for exhaustiveness.
+      return [];
   }
 }
 

@@ -1,14 +1,19 @@
-import { useMemo, type ReactNode } from "react";
-import type {
-  AgentConfigStep,
-  AgentPromptStep,
-  HumanApprovalStep,
-  NotifyStep,
-  ScmOpenPrStep,
-  ShellRunStep,
-  WorkflowApprovalOnTimeout,
-  WorkflowNotifyChannel,
-  WorkflowStep,
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  isWorkflowStepName,
+  parseWorkflowDefinition,
+  WORKFLOW_STEP_NAME_MAX_LENGTH,
+  type AgentConfigStep,
+  type AgentEmitStep,
+  type AgentPromptStep,
+  type HumanApprovalStep,
+  type NotifyStep,
+  type ScmOpenPrStep,
+  type ShellRunStep,
+  type WorkflowApprovalOnTimeout,
+  type WorkflowIncludeStep,
+  type WorkflowNotifyChannel,
+  type WorkflowStep,
 } from "@proliferate/product-domain/workflows/definition";
 import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/interpolation";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -17,6 +22,7 @@ import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { X } from "@proliferate/ui/icons";
 import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
+import { useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
 import { TemplateVarTextarea } from "./TemplateVarTextarea";
 import { WorkflowGoalAttachment } from "./WorkflowGoalAttachment";
 import { WorkflowSelect } from "./WorkflowSelect";
@@ -32,6 +38,11 @@ export interface EditorSlackChannel {
   name: string;
 }
 
+export interface EditorIncludableWorkflow {
+  id: string;
+  name: string;
+}
+
 export interface WorkflowStepPanelProps {
   step: WorkflowStep;
   /** The effective harness for this step — Setup harness folded through any
@@ -42,6 +53,8 @@ export interface WorkflowStepPanelProps {
   slackConnected: boolean;
   /** Channels the connected Slack account can post to; empty when not connected. */
   slackChannels: readonly EditorSlackChannel[];
+  /** Owner's non-archived workflows (this one excluded) — the include picker. */
+  includableWorkflows: readonly EditorIncludableWorkflow[];
   supportsGoals: (harnessKind: string) => boolean;
   onChange: (step: WorkflowStep) => void;
   onClose: () => void;
@@ -93,8 +106,15 @@ export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
             slackChannels={props.slackChannels}
             onChange={onChange}
           />
-        ) : (
+        ) : step.kind === "human.approval" ? (
           <ApprovalEditor step={step} onChange={onChange} />
+        ) : (
+          <IncludeEditor
+            step={step}
+            suggestions={props.suggestions}
+            includableWorkflows={props.includableWorkflows}
+            onChange={onChange}
+          />
         )}
       </div>
     </div>
@@ -409,6 +429,81 @@ function ApprovalEditor({
         />
       </InlineRow>
       <p className="text-xs text-faint">Approver: the workflow owner.</p>
+    </div>
+  );
+}
+
+/**
+ * Composition editor (spec 3.5 / L20): pick a workflow to inline, then map its
+ * declared arguments to templated values written in THIS workflow's context. The
+ * target's steps run inline in this workflow's single run — there is no child run
+ * (the server splices them at StartRun, before delivery). The child's declared
+ * args are read from the existing workflow-detail hook once a target is picked.
+ */
+function IncludeEditor({
+  step,
+  suggestions,
+  includableWorkflows,
+  onChange,
+}: {
+  step: WorkflowIncludeStep;
+  suggestions: readonly TemplateSuggestion[];
+  includableWorkflows: readonly EditorIncludableWorkflow[];
+  onChange: (step: WorkflowStep) => void;
+}) {
+  const detailQuery = useWorkflowDetail(step.workflowId || null);
+  const childArgs = useMemo(() => {
+    const raw = detailQuery.data?.currentVersion?.definition;
+    return raw ? parseWorkflowDefinition(raw).args : [];
+  }, [detailQuery.data]);
+
+  const pickTarget = (workflowId: string) => {
+    // A new target has its own arg schema; drop stale mappings on switch.
+    onChange({ ...step, workflowId, args: {} });
+  };
+  const setArg = (name: string, value: string) => {
+    onChange({ ...step, args: { ...step.args, [name]: value } });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <InlineRow label="Workflow">
+        <WorkflowSelect
+          ariaLabel="Workflow to include"
+          value={step.workflowId || ""}
+          placeholder={includableWorkflows.length > 0 ? "Select a workflow" : "No other workflows"}
+          disabled={includableWorkflows.length === 0}
+          options={includableWorkflows.map((wf) => ({ value: wf.id, label: wf.name }))}
+          onChange={pickTarget}
+        />
+      </InlineRow>
+      {step.workflowId ? (
+        childArgs.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            <FieldLabel>Arguments</FieldLabel>
+            {childArgs.map((arg) => (
+              <div key={arg.name} className="flex flex-col gap-1">
+                <span className="font-mono text-xs text-muted-foreground">
+                  {arg.name}
+                  {arg.required ? <span className="text-destructive"> *</span> : null}
+                </span>
+                <TemplateVarTextarea
+                  value={step.args[arg.name] ?? ""}
+                  onChange={(value) => setArg(arg.name, value)}
+                  suggestions={suggestions}
+                  rows={2}
+                  placeholder={`{{args.…}} or a value for ${arg.name}`}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-faint">This workflow takes no arguments.</p>
+        )
+      ) : null}
+      <p className="text-xs text-faint">
+        Steps run inline in this workflow&apos;s single run.
+      </p>
     </div>
   );
 }

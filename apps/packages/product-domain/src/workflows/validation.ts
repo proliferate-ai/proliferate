@@ -43,6 +43,13 @@ export interface WorkflowIssue {
 
 export interface ValidateWorkflowOptions {
   harnessSupportsGoals?: (harness: string) => boolean;
+  /**
+   * The id of the workflow being edited, if it has one (spec 3.5). Used to flag a
+   * `workflow.include` that targets the workflow itself (self-include). The full
+   * include-graph CYCLE check is SERVER-ONLY: it must fetch other workflows'
+   * current versions, which the editor doesn't have — the server is the authority.
+   */
+  workflowId?: string;
 }
 
 interface TemplatedField {
@@ -83,6 +90,13 @@ function templatedFields(step: WorkflowStep): TemplatedField[] {
       return [{ field: "message", value: step.message }];
     case "branch":
       return [{ field: "on", value: step.on }];
+    case "workflow.include":
+      // Each input-mapping value is a templated string in THIS workflow's context
+      // (spec 3.5 obl. a) — validate its refs against the parent's inputs/emits.
+      return Object.entries(step.args).map(([key, value]) => ({
+        field: `args.${key}`,
+        value,
+      }));
   }
 }
 
@@ -270,6 +284,22 @@ function validateStep(
             location: { scope: "step", stepIndex, field: "cases" },
           });
         }
+      }
+      break;
+    }
+    case "workflow.include": {
+      if (step.workflowId.trim() === "") {
+        push({
+          code: "invalid_definition",
+          message: "Choose a workflow to include.",
+          location: { scope: "step", stepIndex, field: "workflowId" },
+        });
+      } else if (options.workflowId && step.workflowId === options.workflowId) {
+        push({
+          code: "self_include",
+          message: "A workflow cannot include itself.",
+          location: { scope: "step", stepIndex, field: "workflowId" },
+        });
       }
       break;
     }

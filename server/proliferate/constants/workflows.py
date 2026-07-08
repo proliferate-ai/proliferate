@@ -122,6 +122,12 @@ WORKFLOW_STEP_SHELL_RUN: Final = "shell.run"
 WORKFLOW_STEP_SCM_OPEN_PR: Final = "scm.open_pr"
 WORKFLOW_STEP_NOTIFY: Final = "notify"
 WORKFLOW_STEP_BRANCH: Final = "branch"
+# Composition (spec 3.5 / L20): a definition-only step that names another workflow
+# whose CURRENT version's steps are inlined into this plan at resolution time. It
+# is deliberately NOT "workflow.run" — no runtime verb is implied. The server's
+# plan resolver eliminates it before delivery, so it never reaches the runtime
+# (the Rust plan.rs has no matching StepKind — that IS the L20 property).
+WORKFLOW_STEP_WORKFLOW_INCLUDE: Final = "workflow.include"
 SUPPORTED_WORKFLOW_STEP_KINDS: Final = frozenset(
     {
         WORKFLOW_STEP_AGENT_CONFIG,
@@ -131,11 +137,17 @@ SUPPORTED_WORKFLOW_STEP_KINDS: Final = frozenset(
         WORKFLOW_STEP_SCM_OPEN_PR,
         WORKFLOW_STEP_NOTIFY,
         WORKFLOW_STEP_BRANCH,
+        WORKFLOW_STEP_WORKFLOW_INCLUDE,
     }
 )
 
 # Default emit re-ask budget (executor MAX_EMIT_ATTEMPTS; overridable per emit).
 WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS: Final = 3
+
+# Max workflow.include nesting depth (spec 3.5 / L20). A breach fails at save time
+# (cycle/depth walk) and, defensively, at resolution time (include_depth_exceeded)
+# BEFORE any delivery — the runtime never sees a partially-resolved plan.
+WORKFLOW_MAX_INCLUDE_DEPTH: Final = 5
 
 # --- branch targets (data-contract §1.2 / C11: narrowed to continue|end). ------
 WORKFLOW_BRANCH_TARGET_CONTINUE: Final = "continue"

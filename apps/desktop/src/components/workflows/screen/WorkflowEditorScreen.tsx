@@ -27,7 +27,7 @@ import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/Workflo
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
-import { useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
+import { useWorkflowDetail, useWorkflows } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
 import { useWorkflowSlackChannels } from "@/hooks/access/cloud/workflows/use-workflow-slack-channels";
 import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
@@ -56,7 +56,15 @@ interface Draft {
   definition: WorkflowDefinition;
 }
 
-const STEP_KINDS: WorkflowStepKind[] = ["agent.prompt", "agent.config", "shell.run", "scm.open_pr", "notify", "human.approval"];
+const STEP_KINDS: WorkflowStepKind[] = ["agent.prompt", "agent.emit", "agent.config", "shell.run", "scm.open_pr", "notify", "branch", "workflow.include"];
+
+/** The output_schema's top-level property names, or `[]` when not an object schema. */
+function emitOutputSchemaFields(outputSchema: Record<string, unknown>): string[] {
+  const properties = outputSchema.properties;
+  return properties && typeof properties === "object" && !Array.isArray(properties)
+    ? Object.keys(properties as Record<string, unknown>)
+    : [];
+}
 
 function stepOutputNames(step: WorkflowStep): string[] {
   switch (step.kind) {
@@ -100,6 +108,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const catalogQuery = useCloudAgentCatalog();
   const cloudTargetsQuery = useCloudRunTargetWorkspaces();
   const slackChannelsQuery = useWorkflowSlackChannels();
+  const workflowsQuery = useWorkflows();
   const { updateMutation } = useWorkflowMutations();
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -145,9 +154,21 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const issues = useMemo(
     () =>
       draft
-        ? validateWorkflowDefinition(draft.definition, { harnessSupportsGoals: harnessSupportsGoals })
+        ? validateWorkflowDefinition(draft.definition, {
+            harnessSupportsGoals: harnessSupportsGoals,
+            workflowId,
+          })
         : [],
-    [draft],
+    [draft, workflowId],
+  );
+
+  // Owner's other non-archived workflows — the workflow.include picker source.
+  const includableWorkflows = useMemo(
+    () =>
+      (workflowsQuery.data?.workflows ?? [])
+        .filter((wf) => wf.id !== workflowId && wf.archivedAt === null)
+        .map((wf) => ({ id: wf.id, name: wf.name })),
+    [workflowsQuery.data, workflowId],
   );
 
   const effectiveConfigs = useMemo(
@@ -464,6 +485,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 suggestions={suggestions}
                 slackConnected={slackChannelsQuery.data?.connected ?? false}
                 slackChannels={slackChannelsQuery.data?.channels ?? []}
+                includableWorkflows={includableWorkflows}
                 supportsGoals={harnessSupportsGoals}
                 onChange={(next) => updateStep(selectedStep, next)}
                 onClose={() => setSelectedStep(null)}

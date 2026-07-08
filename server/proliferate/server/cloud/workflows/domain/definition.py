@@ -16,6 +16,7 @@ gets stored in ``workflow_version.definition_json``.
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Iterator
 
 from proliferate.constants.workflows import (
@@ -40,6 +41,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_STEP_NOTIFY,
     WORKFLOW_STEP_SCM_OPEN_PR,
     WORKFLOW_STEP_SHELL_RUN,
+    WORKFLOW_STEP_WORKFLOW_INCLUDE,
 )
 from proliferate.server.cloud.workflows.domain.interpolation import (
     ArgSpec,
@@ -64,6 +66,11 @@ class WorkflowDefinitionError(Exception):
 
 def _err(code: str, message: str) -> WorkflowDefinitionError:
     return WorkflowDefinitionError(code, message)
+
+
+# An input-mapping key on a ``workflow.include`` step: an identifier that must
+# name a declared child input (coverage checked in ``composition``).
+_ARG_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _require_dict(value: object, *, field: str) -> dict[str, object]:
@@ -460,6 +467,59 @@ def _parse_branch(step: dict[str, object], *, field: str) -> dict[str, object]:
     return canonical
 
 
+def _parse_workflow_include(step: dict[str, object], *, field: str) -> dict[str, object]:
+    """Composition step (spec 3.5 / L20): inline another workflow's steps.
+
+    Definition-only: the target workflow's CURRENT version's (single agent node's)
+    steps are spliced into THIS agent node by the server's resolver at
+    ``StartRun``, before delivery — the runtime never sees a ``workflow.include``
+    step. ``args`` maps the child's declared input names to templated strings
+    written in THIS workflow's context (so they may reference the parent's
+    ``{{inputs.*}}`` / ``{{<emit>.<field>}}``); the resolver binds them into the
+    child's ``{{inputs.*}}`` tokens (§3.5 obl. a).
+
+    Structural validation only here: the target's existence / ownership / archive
+    state and the arg-coverage + cycle checks need the DB and live in the service
+    layer (``composition.validate_includes``).
+    """
+
+    _reject_unknown_keys(step, {"kind", "on_fail", "name", "workflow_id", "args"}, field=field)
+    workflow_id = _require_str(step, "workflow_id", field=field)
+    try:
+        uuid.UUID(workflow_id)
+    except ValueError as exc:
+        raise _err("invalid_definition", f"'{field}.workflow_id' must be a UUID.") from exc
+    raw_args = step.get("args", {})
+    if raw_args is None:
+        raw_args = {}
+    if not isinstance(raw_args, dict):
+        raise _err("invalid_definition", f"'{field}.args' must be an object.")
+    args: dict[str, object] = {}
+    for key, value in raw_args.items():
+        if not isinstance(key, str) or not _ARG_NAME_RE.match(key):
+            raise _err("invalid_definition", f"'{field}.args' keys must be argument identifiers.")
+        if not isinstance(value, str):
+            raise _err(
+                "invalid_definition",
+                f"'{field}.args.{key}' must be a template string.",
+            )
+        args[key] = value
+    canonical: dict[str, object] = {"workflow_id": workflow_id, "args": args}
+    # ``name`` is the include handle: it prefixes the child's emit names at
+    # resolution (composition) and reserves a slot in the emit namespace so a
+    # parent ref that targets it is rejected (include_step_reference).
+    name = _optional_str(step, "name", field=field)
+    if name is not None:
+        if not _IDENTIFIER_RE.match(name):
+            raise _err("invalid_definition", f"'{field}.name' must be an identifier.")
+        if name in WORKFLOW_RESERVED_REF_SEGMENTS:
+            raise _err(
+                "invalid_definition", f"'{field}.name' '{name}' is a reserved reference segment."
+            )
+        canonical["name"] = name
+    return canonical
+
+
 _STEP_PARSERS = {
     WORKFLOW_STEP_AGENT_CONFIG: _parse_agent_config,
     WORKFLOW_STEP_AGENT_PROMPT: _parse_agent_prompt,
@@ -468,6 +528,7 @@ _STEP_PARSERS = {
     WORKFLOW_STEP_SCM_OPEN_PR: _parse_scm_open_pr,
     WORKFLOW_STEP_NOTIFY: _parse_notify,
     WORKFLOW_STEP_BRANCH: _parse_branch,
+    WORKFLOW_STEP_WORKFLOW_INCLUDE: _parse_workflow_include,
 }
 
 
@@ -569,12 +630,29 @@ def _validate_spine_references(
     agents: list[dict[str, object]], input_names: frozenset[str]
 ) -> None:
     """Walk the flattened run order enforcing emit-name uniqueness (whole
-    definition) and strictly-prior ref visibility, plus branch semantics."""
+    definition) and strictly-prior ref visibility, plus branch semantics.
+
+    ``workflow.include`` steps are validated too (their input-mapping values are
+    parent-context templates), but they produce no emit of their own — a parent
+    ref that names an include handle is rejected (``include_step_reference``); the
+    child's emits are namespaced away at resolution and are never visible here
+    (cross-spine refs are a Part II concern)."""
 
     prior_emits: set[str] = set()
+    include_names: set[str] = set()
     for node in agents:
         for step in node["steps"]:  # type: ignore[index]
             for value in _iter_step_strings(step):
+                for reference in iter_references(value):
+                    if (
+                        isinstance(reference, EmitReference)
+                        and reference.emit in include_names
+                    ):
+                        raise _err(
+                            "include_step_reference",
+                            f"Template references workflow.include step "
+                            f"'{reference.emit}', which has no output.",
+                        )
                 try:
                     validate_string_references(
                         value,
@@ -592,6 +670,10 @@ def _validate_spine_references(
                 if name in prior_emits:
                     raise _err("duplicate_emit", f"Duplicate emit name '{name}'.")
                 prior_emits.add(name)  # type: ignore[arg-type]
+            elif step["kind"] == WORKFLOW_STEP_WORKFLOW_INCLUDE:
+                include_name = step.get("name")
+                if isinstance(include_name, str):
+                    include_names.add(include_name)
 
 
 def _validate_branch_on(step: dict[str, object], prior_emits: set[str]) -> None:

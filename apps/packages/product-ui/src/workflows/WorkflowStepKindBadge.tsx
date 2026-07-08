@@ -3,6 +3,7 @@ import type { WorkflowStepKind } from "@proliferate/product-domain/workflows/def
 import { WORKFLOW_STEP_META } from "@proliferate/product-domain/workflows/presentation";
 import type { IconProps } from "@proliferate/ui/icons";
 import {
+  Blocks,
   GitPullRequest,
   Pause,
   Robot,
@@ -24,6 +25,7 @@ const KIND_ICON: Record<WorkflowStepKind, ComponentType<IconProps>> = {
   "scm.open_pr": GitPullRequest,
   notify: SendIcon,
   "human.approval": Pause,
+  "workflow.include": Blocks,
 };
 
 const PILL_TREATMENT = "border border-border bg-transparent text-foreground";
