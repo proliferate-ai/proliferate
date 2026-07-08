@@ -240,6 +240,7 @@ impl WorkflowRunManager {
                 run_id.clone(),
                 run.workspace_id.clone(),
                 plan.sessions.clone(),
+                plan.gateway.clone(),
             );
             executor.hydrate_from_run(&run);
             let progress =

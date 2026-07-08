@@ -7,8 +7,13 @@ mod actor;
 mod commands;
 mod exec_policy;
 mod executor;
+mod gateway;
 mod manager;
 
 pub use exec_policy::{WorkflowAutoApproveAdvisor, WorkflowOwnedSessions};
 pub use executor::WorkflowExecDeps;
+pub use gateway::{
+    HttpRunPingSink, RunPingSink, WorkflowGatewaySessions,
+    WorkflowRunGatewaySessionLaunchExtension,
+};
 pub use manager::WorkflowRunManager;

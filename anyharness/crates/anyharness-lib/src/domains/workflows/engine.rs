@@ -162,6 +162,13 @@ pub trait WorkflowStepExecutor: Send + Sync {
     /// executor's concern: agent steps re-send a prompt as a NEW turn (unless a
     /// recorded turn already landed), and goal re-arm is allowed.
     async fn execute_step(&self, step: &PlanStep, ctx: &StepExecContext) -> StepOutcome;
+
+    /// Called by the driver after every step transition is applied (§3.7/L16).
+    /// The live executor fires the per-run completion ping here; the default is
+    /// a no-op so scripted test executors need not implement it. Must be
+    /// fire-and-forget: a slow or failing side effect here may never stall or
+    /// fail the run (the cursor has already moved).
+    fn on_step_transition(&self) {}
 }
 
 #[cfg(test)]

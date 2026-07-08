@@ -47,7 +47,40 @@ pub struct ResolvedPlan {
     /// Server-resolved input values, kept verbatim for the run record.
     #[serde(default, alias = "args")]
     pub inputs: serde_json::Value,
+    /// Per-run integration-gateway block (§6.4/OPEN-3(a), §3.7/L16). Present
+    /// whenever the delivery minted a per-run gateway token — which, under L16,
+    /// is every run (an empty `integrations` list is legal). Absent for legacy
+    /// plans predating PR E. Carries the MCP URL + credential the executor
+    /// injects into workflow-owned sessions, and the completion-ping endpoint
+    /// the actor nudges after each step transition.
+    #[serde(default)]
+    pub gateway: Option<PlanGateway>,
     pub steps: Vec<PlanStep>,
+}
+
+/// The per-run gateway block the server mints at StartRun and threads through
+/// `resolved_plan_json.gateway`. `authorization` is the full `Authorization`
+/// header value (e.g. `"Bearer <per-run-token>"`), used verbatim — matching the
+/// worker dotfile convention ([`crate::integrations::integration_gateway`]) and
+/// the gateway's own `Bearer <token>` parsing.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PlanGateway {
+    /// The integration-gateway MCP endpoint URL (`SessionMcpServer::Http`).
+    pub url: String,
+    /// The full `Authorization` header value (verbatim), used for both the MCP
+    /// server header and the completion ping.
+    pub authorization: String,
+    /// The completion-ping endpoint (`POST`, empty body) the actor nudges after
+    /// each step transition (§3.7/L16).
+    pub ping_url: String,
+    /// The namespace-level scope this run's token grants — the definition's
+    /// resolved `integrations[]` (E3: integration namespaces, no tool lists;
+    /// the gateway treats a namespace grant as "all tools of that provider" at
+    /// call time). Empty means "no integration scopes" (still legal: the token
+    /// exists only to authorize the completion ping). The runtime only reads
+    /// its emptiness (L22 local-lane fail-fast); it never inspects tools.
+    #[serde(default)]
+    pub integrations: Vec<String>,
 }
 
 impl ResolvedPlan {
@@ -493,5 +526,69 @@ mod tests {
     fn rejects_invalid_json() {
         let error = parse("{not json").expect_err("invalid json must reject");
         assert!(matches!(error, PlanError::InvalidJson(_)));
+    }
+
+    // --- per-run gateway block (PR E, E3 namespace-level scope) ---
+
+    #[test]
+    fn parses_full_gateway_block_with_integrations() {
+        let plan = parse(
+            r#"{
+                "run_id": "run-gw",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "gateway": {
+                    "url": "https://cloud.test/v1/cloud/integration-gateway/mcp",
+                    "authorization": "Bearer per-run-secret",
+                    "ping_url": "https://cloud.test/v1/cloud/workflows/runs/run-gw/ping",
+                    "integrations": ["issues", "slack"]
+                },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
+            }"#,
+        )
+        .expect("parse gateway plan");
+        let gateway = plan.gateway.as_ref().expect("gateway present");
+        assert_eq!(gateway.url, "https://cloud.test/v1/cloud/integration-gateway/mcp");
+        assert_eq!(gateway.authorization, "Bearer per-run-secret");
+        assert_eq!(
+            gateway.ping_url,
+            "https://cloud.test/v1/cloud/workflows/runs/run-gw/ping"
+        );
+        assert_eq!(gateway.integrations, vec!["issues", "slack"]);
+    }
+
+    #[test]
+    fn gateway_integrations_default_to_empty() {
+        // §3.7/L16: a token is minted for every run, so a gateway block can be
+        // present with no integration scopes at all (empty `integrations`).
+        let plan = parse(
+            r#"{
+                "run_id": "run-gw-empty",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "gateway": {
+                    "url": "https://cloud.test/mcp",
+                    "authorization": "Bearer t",
+                    "ping_url": "https://cloud.test/ping"
+                },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "shell.run", "command": "x" } ]
+            }"#,
+        )
+        .expect("parse gateway plan without integrations");
+        let gateway = plan.gateway.as_ref().expect("gateway present");
+        assert!(gateway.integrations.is_empty());
+    }
+
+    #[test]
+    fn plans_without_gateway_still_parse() {
+        // A token is minted for every run under L16, but a gateway-less plan
+        // must still parse (the block is `serde(default)`).
+        let plan = parse(
+            r#"{
+                "run_id": "run-nogw",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
+            }"#,
+        )
+        .expect("parse plan without gateway");
+        assert!(plan.gateway.is_none());
     }
 }

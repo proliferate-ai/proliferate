@@ -75,7 +75,10 @@ use crate::domains::workspaces::store::WorkspaceStore;
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
-use crate::live::workflows::{WorkflowExecDeps, WorkflowOwnedSessions, WorkflowRunManager};
+use crate::live::workflows::{
+    HttpRunPingSink, WorkflowExecDeps, WorkflowGatewaySessions, WorkflowOwnedSessions,
+    WorkflowRunGatewaySessionLaunchExtension, WorkflowRunManager,
+};
 use crate::persistence::Db;
 
 #[derive(Debug, thiserror::Error)]
@@ -252,6 +255,10 @@ impl AppState {
         // Shared registry of workflow-owned sessions: written by the workflow
         // executor, read by the inbound permission advisor (always-bypass net).
         let workflow_owned_sessions = Arc::new(WorkflowOwnedSessions::new());
+        // Per-run gateway MCP servers, keyed by session id: written by the
+        // workflow executor before launch, read by the workflow gateway launch
+        // extension (§6.4/OPEN-3(a)).
+        let workflow_gateway_sessions = Arc::new(WorkflowGatewaySessions::new());
         let acp_manager = sessions::wire_live_sessions(&sessions::LiveSessionsWiringDeps {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
@@ -294,6 +301,13 @@ impl AppState {
         let integration_gateway_session_launch_extension = Arc::new(
             IntegrationGatewaySessionLaunchExtension::new(runtime_home.clone()),
         );
+        // Per-run workflow gateway launch extension: injects the plan's gateway
+        // block for workflow-owned sessions. Ordered BEFORE the worker-dotfile
+        // extension below so the plan block wins on dedupe (both use the same
+        // INTEGRATION_GATEWAY_ID connection/server name).
+        let workflow_run_gateway_session_launch_extension = Arc::new(
+            WorkflowRunGatewaySessionLaunchExtension::new(workflow_gateway_sessions.clone()),
+        );
         let product_mcp_launch_catalog =
             product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
                 runtime_base_url: runtime_base_url.clone(),
@@ -317,6 +331,9 @@ impl AppState {
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
+            // Plan-block gateway must precede the worker-dotfile gateway so it
+            // wins on MCP-server dedupe for workflow-owned sessions.
+            workflow_run_gateway_session_launch_extension.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
             goal_guard_extension,
@@ -346,6 +363,8 @@ impl AppState {
             workflow_service: workflow_service.clone(),
             acp_manager: acp_manager.clone(),
             workflow_owned_sessions: workflow_owned_sessions.clone(),
+            workflow_gateway_sessions: workflow_gateway_sessions.clone(),
+            run_ping_sink: Arc::new(HttpRunPingSink::new()),
         }));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),

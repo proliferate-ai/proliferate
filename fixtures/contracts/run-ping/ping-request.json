@@ -1,0 +1,9 @@
+{
+  "_comment": "Golden contract fixture (§3.7/L16): the completion-ping HTTP request the runtime emits after each step transition. `url` MUST equal gateway-block.json `ping_url`; `headers.authorization` MUST equal gateway-block.json `authorization` (forwarded verbatim — a run's own token, so run A can never ping run B). Method is POST with an empty body (a stateless nudge). Producing side = anyharness runtime (HttpRunPingSink); consuming side = server ping endpoint.",
+  "method": "POST",
+  "url": "https://cloud.test/v1/cloud/workflows/runs/run-abc123/ping",
+  "headers": {
+    "authorization": "Bearer per-run-token-abc123"
+  },
+  "body": null
+}

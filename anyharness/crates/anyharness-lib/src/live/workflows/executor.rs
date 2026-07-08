@@ -18,15 +18,17 @@ use tokio::sync::broadcast;
 
 use super::commands;
 use super::exec_policy::{bypass_mode_for_kind, WorkflowOwnedSessions};
+use super::gateway::{fire_run_ping, workflow_gateway_server, RunPingSink, WorkflowGatewaySessions};
 use crate::domains::goals::runtime::{GoalOpError, GoalRuntime};
 use crate::domains::sessions::live_config::ACP_MODEL_COMPAT_CONFIG_ID;
+use crate::domains::sessions::model::SessionMcpBindingPolicy;
 use crate::domains::sessions::runtime::{SendPromptOutcome, SessionRuntime};
 use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
 use crate::domains::workflows::model::WorkflowRunRecord;
 use crate::domains::workflows::plan::{
     AgentConfigStep, AgentEmitStep, AgentPromptStep, BranchStep, BranchTarget, GoalSpec, OnBlocked,
-    PlanStep, RequiredInvocation, ScmOpenPrStep, SessionSpec, ShellRunStep, StepKind,
+    PlanGateway, PlanStep, RequiredInvocation, ScmOpenPrStep, SessionSpec, ShellRunStep, StepKind,
 };
 use crate::domains::workflows::service::WorkflowService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -63,6 +65,12 @@ pub struct WorkflowExecDeps {
     ///
     /// [`WorkflowAutoApproveAdvisor`]: super::exec_policy::WorkflowAutoApproveAdvisor
     pub workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
+    /// Per-run gateway MCP servers, keyed by session id. The executor registers
+    /// its workflow-owned session's server here before launch; the launch
+    /// extension reads it (§6.4/OPEN-3(a)).
+    pub workflow_gateway_sessions: Arc<WorkflowGatewaySessions>,
+    /// Fire-and-forget sink for the per-run completion ping (§3.7/L16).
+    pub run_ping_sink: Arc<dyn RunPingSink>,
 }
 
 #[derive(Clone)]
@@ -88,6 +96,11 @@ pub struct WorkflowStepExecutorImpl {
     /// slot -> effective model (base `sessions[slot].model`, folded by
     /// `agent.config`).
     models: Mutex<HashMap<String, Option<String>>>,
+    /// The plan's per-run gateway block (§6.4/§3.7). Drives both the
+    /// session-launch MCP injection and the completion ping. Cloned from the
+    /// plan at construction; recomputed identically on crash-resume (the plan
+    /// is re-parsed to build the executor).
+    gateway: Option<PlanGateway>,
 }
 
 impl WorkflowStepExecutorImpl {
@@ -96,6 +109,7 @@ impl WorkflowStepExecutorImpl {
         run_id: String,
         workspace_id: String,
         sessions: BTreeMap<String, SessionSpec>,
+        gateway: Option<PlanGateway>,
     ) -> Self {
         let models = sessions
             .iter()
@@ -108,6 +122,7 @@ impl WorkflowStepExecutorImpl {
             sessions,
             current: Mutex::new(HashMap::new()),
             models: Mutex::new(models),
+            gateway,
         }
     }
 
@@ -125,6 +140,12 @@ impl WorkflowStepExecutorImpl {
                 // (the registry is in-memory, so a restart would otherwise drop
                 // it).
                 self.deps.workflow_owned_sessions.mark(session_id);
+                // Re-register the per-run gateway server too, so a relaunch of
+                // the resumed session (crash-resume) re-injects it (same
+                // in-memory registry, dropped on restart).
+                if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
+                    self.deps.workflow_gateway_sessions.set(session_id, server);
+                }
                 current.insert(
                     slot.clone(),
                     CurrentSession {
@@ -173,6 +194,18 @@ impl WorkflowStepExecutorImpl {
     /// existing session instead of creating one; that field is always absent
     /// until the session-plane PR lands.
     async fn ensure_session(&self, slot: &str) -> Result<String, StepOutcome> {
+        // §5.3 builder obligation (L22 fail-fast): a gateway block that grants
+        // integration scopes but carries no usable gateway in this lane (empty
+        // authorization/URL, e.g. the local lane where nothing mints a per-run
+        // token) can never hand the agent its tools. Fail explicitly at the
+        // first agent step rather than silently launching with zero tools.
+        if gateway_functions_unsupported(self.gateway.as_ref()) {
+            return Err(failed_msg(
+                "functions_unsupported_local",
+                "workflow declares gateway integration grants but this run has no usable gateway \
+                 (integrations cannot be honored in this lane)",
+            ));
+        }
         if let Some(current) = self.current.lock().unwrap().get(slot) {
             return Ok(current.session_id.clone());
         }
@@ -199,6 +232,11 @@ impl WorkflowStepExecutorImpl {
                 .get_session(&bind_id)
                 .map_err(|error| failed_msg("session_bind_failed", error.to_string()))?
                 .ok_or_else(|| failed_msg("session_bind_missing", bind_id.clone()))?;
+            // Register the per-run gateway MCP server for the bound session too,
+            // so a relaunch injects it (same in-memory registry as fresh).
+            if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
+                self.deps.workflow_gateway_sessions.set(&bind_id, server);
+            }
             (bind_id, session.agent_kind)
         } else {
             // Exec policy (goals-and-workflows-v1 §3.3 "always bypass"): open the
@@ -207,10 +245,15 @@ impl WorkflowStepExecutorImpl {
             // permission prompt. `None` (harness with no native bypass mode) is
             // covered by the auto-approve safety net.
             let mode = bypass_mode_for_kind(&harness);
+            // Split create/start (as reviews/subagents do) so the per-run gateway
+            // server and workflow ownership can be registered BEFORE launch — the
+            // launch extension reads both from their in-memory registries, and MCP
+            // servers are only assembled from the extension seam (never from the
+            // durable session bindings).
             let record = self
                 .deps
                 .session_runtime
-                .create_and_start_session(
+                .create_durable_session(
                     &self.workspace_id,
                     &harness,
                     model.as_deref(),
@@ -218,9 +261,25 @@ impl WorkflowStepExecutorImpl {
                     None,
                     Vec::new(),
                     None,
+                    SessionMcpBindingPolicy::InheritWorkspace,
                     false,
                     OriginContext::system_local_runtime(),
                 )
+                .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?;
+            // Register the session as workflow-owned so the inbound permission
+            // advisor auto-approves for it. Done before launch/first turn.
+            self.deps.workflow_owned_sessions.mark(&record.id);
+            // Register the per-run gateway MCP server for this session so the
+            // launch extension injects it (plan block wins over the worker
+            // dotfile via the extension ordering + dedupe on
+            // connection_id/server_name).
+            if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
+                self.deps.workflow_gateway_sessions.set(&record.id, server);
+            }
+            let record = self
+                .deps
+                .session_runtime
+                .start_persisted_session(&record)
                 .await
                 .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?;
             (record.id, harness)
@@ -641,6 +700,26 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
             }
             StepKind::Branch(branch) => self.run_branch(branch),
         }
+    }
+
+    /// §3.7/L16: fire the per-run completion ping after each applied transition.
+    /// No gateway block → no ping. Fire-and-forget via the injected sink.
+    fn on_step_transition(&self) {
+        fire_run_ping(self.gateway.as_ref(), self.deps.run_ping_sink.as_ref());
+    }
+}
+
+/// §5.3: a gateway block declaring integration grants that this lane cannot
+/// honor — non-empty `integrations` with an empty/absent credential or URL —
+/// must fail the run explicitly rather than silently launch the agent with zero
+/// tools.
+fn gateway_functions_unsupported(gateway: Option<&PlanGateway>) -> bool {
+    match gateway {
+        Some(gateway) => {
+            !gateway.integrations.is_empty()
+                && (gateway.authorization.trim().is_empty() || gateway.url.trim().is_empty())
+        }
+        None => false,
     }
 }
 
@@ -1178,6 +1257,35 @@ mod tests {
             provider: provider.to_string(),
             tool: tool.to_string(),
         }
+    }
+
+    fn plan_gateway(integrations: Vec<String>) -> PlanGateway {
+        PlanGateway {
+            url: "https://cloud.test/mcp".to_string(),
+            authorization: "Bearer per-run".to_string(),
+            ping_url: "https://cloud.test/ping".to_string(),
+            integrations,
+        }
+    }
+
+    #[test]
+    fn functions_unsupported_only_when_grants_lack_a_usable_gateway() {
+        // No gateway at all → supported (nothing granted).
+        assert!(!gateway_functions_unsupported(None));
+        // Gateway with no integration grants → supported (ping-only token).
+        assert!(!gateway_functions_unsupported(Some(&plan_gateway(Vec::new()))));
+        // Grants + a usable gateway → supported.
+        assert!(!gateway_functions_unsupported(Some(&plan_gateway(vec![
+            "issues".to_string()
+        ]))));
+        // Grants but empty authorization → unsupported (local lane).
+        let mut gw = plan_gateway(vec!["issues".to_string()]);
+        gw.authorization = "  ".to_string();
+        assert!(gateway_functions_unsupported(Some(&gw)));
+        // Grants but empty URL → unsupported.
+        let mut gw = plan_gateway(vec!["issues".to_string()]);
+        gw.url = String::new();
+        assert!(gateway_functions_unsupported(Some(&gw)));
     }
 
     #[test]
