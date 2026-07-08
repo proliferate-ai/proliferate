@@ -22,27 +22,40 @@ export interface VisiblePendingPromptEntry extends PendingPromptEntry {
 interface DerivedEditingState {
   activeSessionId: string | null;
   pendingPrompts: readonly PendingPromptEntry[];
-  storedEditingSeq: number | null;
-  editingSeq: number | null;
-  isStoredSeqLive: boolean;
+  storedEditingPromptId: string | null;
+  editingPromptId: string | null;
+  editingPrompt: PendingPromptEntry | null;
+  isStoredPromptLive: boolean;
 }
 
 /**
  * Pure derivation of "is this edit still live": reconciles the raw stored
- * seq against the current pendingPrompts. A stale pointer (drained or
- * concurrently deleted row) naturally falls to `editingSeq = null` on the
- * next render without any sync bookkeeping.
+ * promptId against the current pendingPrompts. Tracking by the stable
+ * promptId (rather than the volatile runtime seq) means a server reorder
+ * renumber can no longer silently retarget an in-flight edit. A stale
+ * pointer (drained, concurrently deleted, or just executed row) naturally
+ * falls to `editingPromptId = null` on the next render without any sync
+ * bookkeeping.
  */
 function useDerivedEditingState(): DerivedEditingState {
   const activeSessionId = useActiveSessionId();
   const pendingPrompts = useActivePendingPrompts();
-  const storedEditingSeq = useChatInputStore((state) =>
-    activeSessionId ? state.editingQueueSeqBySessionId[activeSessionId] ?? null : null,
+  const storedEditingPromptId = useChatInputStore((state) =>
+    activeSessionId ? state.editingQueuePromptIdBySessionId[activeSessionId] ?? null : null,
   );
-  const isStoredSeqLive = storedEditingSeq != null
-    && pendingPrompts.some((p) => p.seq === storedEditingSeq);
-  const editingSeq = isStoredSeqLive ? storedEditingSeq : null;
-  return { activeSessionId, pendingPrompts, storedEditingSeq, editingSeq, isStoredSeqLive };
+  const editingPrompt = storedEditingPromptId != null
+    ? pendingPrompts.find((p) => p.promptId === storedEditingPromptId) ?? null
+    : null;
+  const isStoredPromptLive = editingPrompt != null;
+  const editingPromptId = isStoredPromptLive ? storedEditingPromptId : null;
+  return {
+    activeSessionId,
+    pendingPrompts,
+    storedEditingPromptId,
+    editingPromptId,
+    editingPrompt,
+    isStoredPromptLive,
+  };
 }
 
 /**
@@ -53,27 +66,29 @@ function useDerivedEditingState(): DerivedEditingState {
  */
 export function useQueuedPromptEditReader(): {
   visiblePendingPrompts: VisiblePendingPromptEntry[];
-  beginEdit: (args: { seq: number; text: string }) => void;
+  beginEdit: (args: { promptId: string | null; text: string }) => void;
 } {
-  const { activeSessionId, pendingPrompts, editingSeq } = useDerivedEditingState();
+  const { activeSessionId, pendingPrompts, editingPromptId } = useDerivedEditingState();
   const setEditDraft = useChatInputStore((state) => state.setEditDraft);
-  const setEditingQueueSeq = useChatInputStore((state) => state.setEditingQueueSeq);
+  const setEditingQueuePromptId = useChatInputStore((state) => state.setEditingQueuePromptId);
 
   const visiblePendingPrompts = useMemo<VisiblePendingPromptEntry[]>(
     () => pendingPrompts.map((entry) => ({
       ...entry,
-      isBeingEdited: entry.seq === editingSeq,
+      isBeingEdited: entry.promptId != null && entry.promptId === editingPromptId,
     })),
-    [pendingPrompts, editingSeq],
+    [pendingPrompts, editingPromptId],
   );
 
   const beginEdit = useCallback(
-    ({ seq, text }: { seq: number; text: string }) => {
-      if (!activeSessionId) return;
+    ({ promptId, text }: { promptId: string | null; text: string }) => {
+      // The edit pointer is keyed on the stable promptId; a prompt without one
+      // cannot be safely re-targeted across a reorder renumber, so ignore it.
+      if (!activeSessionId || !promptId) return;
       setEditDraft(activeSessionId, text);
-      setEditingQueueSeq(activeSessionId, seq);
+      setEditingQueuePromptId(activeSessionId, promptId);
     },
-    [activeSessionId, setEditDraft, setEditingQueueSeq],
+    [activeSessionId, setEditDraft, setEditingQueuePromptId],
   );
 
   return { visiblePendingPrompts, beginEdit };
@@ -82,8 +97,8 @@ export function useQueuedPromptEditReader(): {
 export function useQueuedPromptEditStatus(): {
   isEditing: boolean;
 } {
-  const { editingSeq } = useDerivedEditingState();
-  const isEditing = editingSeq != null;
+  const { editingPromptId } = useDerivedEditingState();
+  const isEditing = editingPromptId != null;
   return useMemo(() => ({ isEditing }), [isEditing]);
 }
 
@@ -95,7 +110,6 @@ export function useQueuedPromptEditStatus(): {
  */
 export function useQueuedPromptEdit(): {
   isEditing: boolean;
-  editingSeq: number | null;
   editDraft: string;
   setEditDraftText: (value: string) => void;
   cancelEdit: () => void;
@@ -104,18 +118,18 @@ export function useQueuedPromptEdit(): {
   const {
     activeSessionId,
     pendingPrompts,
-    storedEditingSeq,
-    editingSeq,
-    isStoredSeqLive,
+    storedEditingPromptId,
+    editingPromptId,
+    isStoredPromptLive,
   } = useDerivedEditingState();
   const editDraft = useChatInputStore((state) =>
     activeSessionId ? state.editDraftBySessionId[activeSessionId] ?? "" : "",
   );
   const setEditDraft = useChatInputStore((state) => state.setEditDraft);
-  const setEditingQueueSeq = useChatInputStore((state) => state.setEditingQueueSeq);
+  const setEditingQueuePromptId = useChatInputStore((state) => state.setEditingQueuePromptId);
   const editPendingPrompt = useEditPendingPrompt();
 
-  const isEditing = editingSeq != null;
+  const isEditing = editingPromptId != null;
 
   // Intentional exception to the "no watch-to-set" guideline
   // (specs/codebase/structures/frontend/guides/state.md). The trigger is SSE arrival
@@ -123,11 +137,11 @@ export function useQueuedPromptEdit(): {
   // Mounted only in ChatInput so the effect runs once per store transition.
   useEffect(() => {
     if (!activeSessionId) return;
-    if (storedEditingSeq != null && !isStoredSeqLive) {
+    if (storedEditingPromptId != null && !isStoredPromptLive) {
       setEditDraft(activeSessionId, "");
-      setEditingQueueSeq(activeSessionId, null);
+      setEditingQueuePromptId(activeSessionId, null);
     }
-  }, [activeSessionId, isStoredSeqLive, setEditDraft, setEditingQueueSeq, storedEditingSeq]);
+  }, [activeSessionId, isStoredPromptLive, setEditDraft, setEditingQueuePromptId, storedEditingPromptId]);
 
   const setEditDraftText = useCallback(
     (value: string) => {
@@ -140,41 +154,47 @@ export function useQueuedPromptEdit(): {
   const cancelEdit = useCallback(() => {
     if (!activeSessionId) return;
     setEditDraft(activeSessionId, "");
-    setEditingQueueSeq(activeSessionId, null);
-  }, [activeSessionId, setEditDraft, setEditingQueueSeq]);
+    setEditingQueuePromptId(activeSessionId, null);
+  }, [activeSessionId, setEditDraft, setEditingQueuePromptId]);
 
   const commitEdit = useCallback(async () => {
-    if (!activeSessionId || editingSeq == null) return;
+    if (!activeSessionId || editingPromptId == null) return;
     const trimmed = editDraft.trim();
     if (!trimmed) {
       cancelEdit();
       return;
     }
-    const editingPrompt = pendingPrompts.find((prompt) => prompt.seq === editingSeq);
+    // Resolve the prompt fresh at commit time from its stable promptId, then
+    // derive the live seq. If the prompt vanished (executed/deleted while the
+    // edit was open) cancel gracefully rather than editing the wrong row.
+    const editingPrompt = pendingPrompts.find((prompt) => prompt.promptId === editingPromptId);
+    if (!editingPrompt) {
+      cancelEdit();
+      return;
+    }
     try {
       if (isLocallyEditableOutboxPrompt(editingPrompt)) {
         patchLocalOutboxPrompt(editingPrompt.promptId, trimmed);
       } else {
-        await editPendingPrompt(activeSessionId, editingSeq, trimmed);
+        await editPendingPrompt(activeSessionId, editingPrompt.seq, trimmed);
       }
     } finally {
       setEditDraft(activeSessionId, "");
-      setEditingQueueSeq(activeSessionId, null);
+      setEditingQueuePromptId(activeSessionId, null);
     }
   }, [
     activeSessionId,
     cancelEdit,
     editDraft,
     editPendingPrompt,
-    editingSeq,
+    editingPromptId,
     pendingPrompts,
     setEditDraft,
-    setEditingQueueSeq,
+    setEditingQueuePromptId,
   ]);
 
   return {
     isEditing,
-    editingSeq,
     editDraft,
     setEditDraftText,
     cancelEdit,

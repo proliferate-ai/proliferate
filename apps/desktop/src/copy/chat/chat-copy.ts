@@ -11,6 +11,7 @@ export const CHAT_COMPOSER_LABELS = {
 export const CHAT_STREAMING_STATUS_LABELS = {
   thinking: "Thinking",
   sending: "Sending…",
+  steering: "Steering…",
   restoringSession: "Restoring session…",
 } as const;
 

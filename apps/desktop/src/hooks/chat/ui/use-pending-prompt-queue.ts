@@ -13,7 +13,8 @@ export interface PendingPromptQueueState {
   rows: PendingPromptQueueRow[];
   steeringSeq: number | null;
   sessionMaterialized: boolean;
-  onBeginEdit: (seq: number) => void;
+  reorderInFlight: boolean;
+  onBeginEdit: (entry: PendingPromptQueueRow) => void;
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -32,34 +33,51 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
   const steerPendingPrompt = useSteerPendingPrompt();
   const { cancelBeforeDispatch, dismissPrompt } = usePromptOutboxActions();
   const [steeringSeq, setSteeringSeq] = useState<number | null>(null);
+  const [reorderInFlight, setReorderInFlight] = useState(false);
   const optimisticOrderRef = useRef<string[] | null>(null);
 
   const rows = useMemo(() => {
     const derived = visiblePendingPrompts.map(derivePendingPromptQueueRow);
-    // Apply optimistic reorder if active (between user drag and server ack).
-    if (optimisticOrderRef.current) {
-      const keyMap = new Map(derived.map((row) => [row.key, row]));
-      const reordered: PendingPromptQueueRow[] = [];
-      for (const key of optimisticOrderRef.current) {
-        const row = keyMap.get(key);
-        if (row) {
-          reordered.push(row);
-        }
+    const order = optimisticOrderRef.current;
+    // Apply the optimistic order only while the reorder round-trip is in
+    // flight. The ref is cleared when the mutation settles (see handleReorder),
+    // after which we always fall back to the server-driven order — so later
+    // server reorders (e.g. Steer promotions) are no longer overridden by a
+    // stale drag-time order. `reorderInFlight` is included in the deps so the
+    // clear re-renders this memo back to the reconciled order.
+    if (!order) return derived;
+    const keyMap = new Map(derived.map((row) => [row.key, row]));
+    const reordered: PendingPromptQueueRow[] = [];
+    for (const key of order) {
+      const row = keyMap.get(key);
+      if (row) {
+        reordered.push(row);
       }
-      // Include any rows not in the optimistic order (new arrivals).
-      for (const row of derived) {
-        if (!optimisticOrderRef.current.includes(row.key)) {
-          reordered.push(row);
-        }
-      }
-      // If server has reconciled (lengths match, keys stable), clear optimistic.
-      if (reordered.length === derived.length) {
-        return reordered;
-      }
-      optimisticOrderRef.current = null;
     }
-    return derived;
-  }, [visiblePendingPrompts]);
+    // Include any rows not in the optimistic order (new arrivals).
+    for (const row of derived) {
+      if (!order.includes(row.key)) {
+        reordered.push(row);
+      }
+    }
+    return reordered;
+  }, [visiblePendingPrompts, reorderInFlight]);
+
+  // Resolve the current runtime seq for a row from its stable promptId against
+  // the latest pendingPrompts — never the row snapshot. A reorder renumbers the
+  // same seq set into a permutation, so a seq captured at render time can point
+  // at the wrong prompt by action time. Returns null when the promptId is gone
+  // (just executed/deleted) so the caller no-ops.
+  const resolveLiveSeq = useCallback(
+    (entry: PendingPromptQueueRow): number | null => {
+      if (!entry.promptId) {
+        return entry.seq > 0 ? entry.seq : null;
+      }
+      const live = visiblePendingPrompts.find((p) => p.promptId === entry.promptId);
+      return live ? live.seq : null;
+    },
+    [visiblePendingPrompts],
+  );
 
   const handleDelete = useCallback(
     (entry: PendingPromptQueueRow) => {
@@ -72,25 +90,30 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
         return;
       }
       if (!activeSessionId || entry.deleteAction !== "runtime") return;
-      void deletePendingPrompt(activeSessionId, entry.seq);
+      const seq = resolveLiveSeq(entry);
+      if (seq == null || seq <= 0) return;
+      void deletePendingPrompt(activeSessionId, seq);
     },
-    [activeSessionId, cancelBeforeDispatch, deletePendingPrompt, dismissPrompt],
+    [activeSessionId, cancelBeforeDispatch, deletePendingPrompt, dismissPrompt, resolveLiveSeq],
   );
 
   const handleBeginEdit = useCallback(
-    (seq: number) => {
-      const entry = visiblePendingPrompts.find((candidate) => candidate.seq === seq);
-      if (!entry) return;
-      beginEdit({ seq: entry.seq, text: entry.text });
+    (entry: PendingPromptQueueRow) => {
+      if (!entry.promptId) return;
+      const live = visiblePendingPrompts.find((p) => p.promptId === entry.promptId);
+      if (!live) return;
+      beginEdit({ promptId: live.promptId ?? null, text: live.text });
     },
     [beginEdit, visiblePendingPrompts],
   );
 
   const handleSteer = useCallback(
     (entry: PendingPromptQueueRow) => {
-      if (!activeSessionId || !sessionMaterialized || entry.seq <= 0) return;
-      setSteeringSeq(entry.seq);
-      steerPendingPrompt(activeSessionId, entry.seq)
+      if (!activeSessionId || !sessionMaterialized) return;
+      const seq = resolveLiveSeq(entry);
+      if (seq == null || seq <= 0) return;
+      setSteeringSeq(seq);
+      steerPendingPrompt(activeSessionId, seq)
         .catch(() => {
           // Errors are surfaced via the mutation's onError or silently absorbed
           // when the session is not yet materialized (graceful no-op).
@@ -99,7 +122,7 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
           setSteeringSeq(null);
         });
     },
-    [activeSessionId, sessionMaterialized, steerPendingPrompt],
+    [activeSessionId, sessionMaterialized, resolveLiveSeq, steerPendingPrompt],
   );
 
   const handleReorder = useCallback(
@@ -107,17 +130,27 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
       if (!activeSessionId || !sessionMaterialized || fromIndex === toIndex) return;
       const currentRows = [...rows];
       const [moved] = currentRows.splice(fromIndex, 1);
+      if (!moved) return;
       currentRows.splice(toIndex, 0, moved);
       // Only runtime-confirmed rows (seq > 0) can be reordered server-side.
       const runtimeSeqs = currentRows
         .filter((row) => row.seq > 0)
         .map((row) => row.seq);
       if (runtimeSeqs.length === 0) return;
-      // Apply optimistic order immediately.
+      // Apply optimistic order immediately, and clear it once the round-trip
+      // settles (success or failure) so the server order takes over.
       optimisticOrderRef.current = currentRows.map((row) => row.key);
-      reorderPendingPrompts(activeSessionId, runtimeSeqs).catch(() => {
-        optimisticOrderRef.current = null;
-      });
+      setReorderInFlight(true);
+      reorderPendingPrompts(activeSessionId, runtimeSeqs)
+        .then(() => {
+          optimisticOrderRef.current = null;
+        })
+        .catch(() => {
+          optimisticOrderRef.current = null;
+        })
+        .finally(() => {
+          setReorderInFlight(false);
+        });
     },
     [activeSessionId, sessionMaterialized, reorderPendingPrompts, rows],
   );
@@ -126,6 +159,7 @@ export function usePendingPromptQueue(): PendingPromptQueueState {
     rows,
     steeringSeq,
     sessionMaterialized,
+    reorderInFlight,
     onBeginEdit: handleBeginEdit,
     onDelete: handleDelete,
     onSteer: handleSteer,

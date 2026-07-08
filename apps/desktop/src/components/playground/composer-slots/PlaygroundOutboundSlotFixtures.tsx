@@ -24,6 +24,7 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
           entries={pendingQueueRows(PENDING_PROMPTS_SINGLE)}
           steeringSeq={null}
           sessionMaterialized={true}
+          reorderInFlight={false}
           onBeginEdit={noop}
           onDelete={noop}
           onSteer={noop}
@@ -36,6 +37,7 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
           entries={pendingQueueRows(PENDING_PROMPTS_MULTI)}
           steeringSeq={null}
           sessionMaterialized={true}
+          reorderInFlight={false}
           onBeginEdit={noop}
           onDelete={noop}
           onSteer={noop}
@@ -48,6 +50,7 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
           entries={pendingQueueRows(PENDING_PROMPTS_WITH_EDITING)}
           steeringSeq={null}
           sessionMaterialized={true}
+          reorderInFlight={false}
           onBeginEdit={noop}
           onDelete={noop}
           onSteer={noop}
@@ -61,6 +64,7 @@ export function renderOutboundSlot(scenario: ScenarioKey): ReactNode | null {
           entries={pendingQueueRows(PLAYGROUND_SUBAGENT_WAKE_QUEUE)}
           steeringSeq={null}
           sessionMaterialized={true}
+          reorderInFlight={false}
           onBeginEdit={noop}
           onDelete={noop}
           onSteer={noop}

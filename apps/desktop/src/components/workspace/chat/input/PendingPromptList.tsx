@@ -13,7 +13,8 @@ export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];
   steeringSeq: number | null;
   sessionMaterialized: boolean;
-  onBeginEdit: (seq: number) => void;
+  reorderInFlight: boolean;
+  onBeginEdit: (entry: PendingPromptQueueRow) => void;
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
@@ -27,6 +28,7 @@ export function PendingPromptList({
   entries,
   steeringSeq,
   sessionMaterialized,
+  reorderInFlight,
   onBeginEdit,
   onDelete,
   onSteer,
@@ -61,10 +63,12 @@ export function PendingPromptList({
             isSteering={steeringSeq === entry.seq}
             isDragging={dragIndex === index}
             isDropTarget={dropIndex === index && dragIndex !== null && dragIndex !== index}
+            reorderInFlight={reorderInFlight}
             onBeginEdit={onBeginEdit}
             onDelete={onDelete}
             onSteer={onSteer}
             onDragStart={handleDragStart}
+            onReorder={onReorder}
           />
         ))}
       </div>
@@ -77,6 +81,7 @@ export function ConnectedPendingPromptList() {
     rows,
     steeringSeq,
     sessionMaterialized,
+    reorderInFlight,
     onBeginEdit,
     onDelete,
     onSteer,
@@ -92,6 +97,7 @@ export function ConnectedPendingPromptList() {
       entries={rows}
       steeringSeq={steeringSeq}
       sessionMaterialized={sessionMaterialized}
+      reorderInFlight={reorderInFlight}
       onBeginEdit={onBeginEdit}
       onDelete={onDelete}
       onSteer={onSteer}
@@ -108,10 +114,12 @@ interface PendingPromptRowProps {
   isSteering: boolean;
   isDragging: boolean;
   isDropTarget: boolean;
-  onBeginEdit: (seq: number) => void;
+  reorderInFlight: boolean;
+  onBeginEdit: (entry: PendingPromptQueueRow) => void;
   onDelete: (entry: PendingPromptQueueRow) => void;
   onSteer: (entry: PendingPromptQueueRow) => void;
   onDragStart: (index: number, event: React.PointerEvent) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
 const ROW_ACTION_CLASSNAME =
@@ -125,10 +133,12 @@ function PendingPromptRow({
   isSteering,
   isDragging,
   isDropTarget,
+  reorderInFlight,
   onBeginEdit,
   onDelete,
   onSteer,
   onDragStart,
+  onReorder,
 }: PendingPromptRowProps) {
   const {
     seq,
@@ -151,8 +161,8 @@ function PendingPromptRow({
 
   const handleBeginEdit = useCallback(() => {
     if (!canEdit) return;
-    onBeginEdit(seq);
-  }, [canEdit, onBeginEdit, seq]);
+    onBeginEdit(entry);
+  }, [canEdit, entry, onBeginEdit]);
 
   const handleDelete = useCallback(() => {
     if (!canDelete) return;
@@ -170,10 +180,23 @@ function PendingPromptRow({
     [index, onDragStart],
   );
 
+  const handleReorderKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === "ArrowUp" && index > 0) {
+        event.preventDefault();
+        onReorder(index, index - 1);
+      } else if (event.key === "ArrowDown" && index < totalCount - 1) {
+        event.preventDefault();
+        onReorder(index, index + 1);
+      }
+    },
+    [index, onReorder, totalCount],
+  );
+
   const stateHint = isSending || isSteering
     ? (
       <ThinkingText
-        text={isSteering ? "Steering…" : CHAT_STREAMING_STATUS_LABELS.sending}
+        text={isSteering ? CHAT_STREAMING_STATUS_LABELS.steering : CHAT_STREAMING_STATUS_LABELS.sending}
         className="shrink-0 text-ui-sm font-normal leading-[var(--text-ui-sm--line-height)]"
       />
     )
@@ -190,14 +213,18 @@ function PendingPromptRow({
       data-reorder-item
       className={`group/queue-row relative flex items-center justify-between gap-2 py-0.5 pl-4 transition-colors ${
         isDragging ? "opacity-50" : ""
-      } ${isDropTarget ? "border-t border-accent" : ""}`}
+      } ${isDropTarget ? "border-t border-primary" : ""}`}
     >
-      {/* Drag handle — left gutter, hover-reveal only */}
+      {/* Drag handle — left gutter, hover-reveal only. Keyboard-operable:
+          focus and press ArrowUp/ArrowDown to move the row one position. */}
       {canDragReorder && (
         <div
-          className="absolute left-0 flex cursor-grab items-center opacity-0 transition-opacity active:cursor-grabbing group-hover/queue-row:opacity-70"
+          role="button"
+          tabIndex={0}
+          aria-label="Reorder message"
+          className="absolute left-0 flex cursor-grab items-center opacity-0 transition-opacity focus-visible:opacity-70 active:cursor-grabbing group-hover/queue-row:opacity-70"
           onPointerDown={handlePointerDown}
-          aria-label="Reorder"
+          onKeyDown={handleReorderKeyDown}
         >
           <GripVertical className="size-3.5 text-muted-foreground" />
         </div>
@@ -228,9 +255,10 @@ function PendingPromptRow({
               <Button
                 variant="ghost"
                 size="icon-sm"
+                disabled={reorderInFlight}
                 onClick={handleSteer}
                 className={ROW_ACTION_CLASSNAME}
-                aria-label="Run this message next"
+                aria-label="Send next — interrupts the current turn"
               >
                 <ArrowUpRight className="size-3.5" />
               </Button>
@@ -241,7 +269,7 @@ function PendingPromptRow({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                disabled={!canEdit}
+                disabled={!canEdit || reorderInFlight}
                 onClick={handleBeginEdit}
                 className={ROW_ACTION_CLASSNAME}
                 aria-label="Edit queued message"
@@ -255,7 +283,7 @@ function PendingPromptRow({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                disabled={!canDelete}
+                disabled={!canDelete || reorderInFlight}
                 onClick={handleDelete}
                 className={ROW_ACTION_CLASSNAME}
                 aria-label="Delete queued message"

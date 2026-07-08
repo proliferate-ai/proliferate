@@ -10,7 +10,7 @@ describe("chat input store", () => {
     useChatInputStore.setState({
       draftByWorkspaceId: {},
       editDraftBySessionId: {},
-      editingQueueSeqBySessionId: {},
+      editingQueuePromptIdBySessionId: {},
       focusRequestNonce: 0,
     });
   });

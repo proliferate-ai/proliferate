@@ -10,21 +10,21 @@ import {
 interface ChatInputState {
   draftByWorkspaceId: Record<string, ChatComposerDraft>;
   editDraftBySessionId: Record<string, string>;
-  editingQueueSeqBySessionId: Record<string, number>;
+  editingQueuePromptIdBySessionId: Record<string, string>;
   focusRequestNonce: number;
   setDraft: (workspaceId: string, value: ChatComposerDraft) => void;
   setDraftText: (workspaceId: string, value: string) => void;
   appendDraftText: (workspaceId: string, value: string) => void;
   clearDraft: (workspaceId: string) => void;
   setEditDraft: (sessionId: string, value: string) => void;
-  setEditingQueueSeq: (sessionId: string, seq: number | null) => void;
+  setEditingQueuePromptId: (sessionId: string, promptId: string | null) => void;
   requestFocus: () => void;
 }
 
 export const useChatInputStore = create<ChatInputState>((set) => ({
   draftByWorkspaceId: {},
   editDraftBySessionId: {},
-  editingQueueSeqBySessionId: {},
+  editingQueuePromptIdBySessionId: {},
   focusRequestNonce: 0,
 
   setDraft: (workspaceId, value) => set((state) => {
@@ -102,19 +102,19 @@ export const useChatInputStore = create<ChatInputState>((set) => ({
     };
   }),
 
-  setEditingQueueSeq: (sessionId, seq) => set((state) => {
-    const nextEditing = { ...state.editingQueueSeqBySessionId };
-    if (seq == null) {
+  setEditingQueuePromptId: (sessionId, promptId) => set((state) => {
+    const nextEditing = { ...state.editingQueuePromptIdBySessionId };
+    if (promptId == null) {
       if (!(sessionId in nextEditing)) {
         return state;
       }
       delete nextEditing[sessionId];
     } else {
-      nextEditing[sessionId] = seq;
+      nextEditing[sessionId] = promptId;
     }
 
     return {
-      editingQueueSeqBySessionId: nextEditing,
+      editingQueuePromptIdBySessionId: nextEditing,
     };
   }),
 

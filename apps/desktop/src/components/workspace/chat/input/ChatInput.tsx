@@ -124,9 +124,12 @@ export function ChatInput({
   const { beginEdit } = useQueuedPromptEditReader();
   const handleEditLastQueued = useCallback(() => {
     if (pendingPrompts.length === 0) return;
-    // Edit the newest queued message (last in the list).
+    // Edit the newest queued message (last in the list). Key the edit on the
+    // stable promptId so a reorder renumber can't retarget it; a prompt without
+    // one can't be safely tracked, so skip it.
     const last = pendingPrompts[pendingPrompts.length - 1];
-    beginEdit({ seq: last.seq, text: last.text });
+    if (!last.promptId) return;
+    beginEdit({ promptId: last.promptId, text: last.text });
   }, [beginEdit, pendingPrompts]);
   const planAttachments = usePlanDraftAttachments({
     workspaceUiKey,
