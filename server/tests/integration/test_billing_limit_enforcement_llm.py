@@ -155,6 +155,14 @@ async def _enroll_member(db_session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID
         amount_usd=Decimal("100"),
         source_ref=f"seed-{uuid.uuid4().hex[:8]}",
     )
+    org_id, user_id, virtual_key_id = await _enroll_member_in_org(db_session, org.id)
+    return org.id, subject.id, user_id, virtual_key_id
+
+
+async def _enroll_member_in_org(
+    db_session: AsyncSession, organization_id: uuid.UUID
+) -> tuple[uuid.UUID, uuid.UUID, str]:
+    """Add one more member (own virtual key) to an already-seeded org."""
     user = User(
         email=f"member-{uuid.uuid4().hex[:10]}@example.com",
         hashed_password="unused-oauth-only",
@@ -165,9 +173,9 @@ async def _enroll_member(db_session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID
     db_session.add(user)
     await db_session.flush()
     user_id = user.id
-    enrollment = await ensure_org_enrollment(db_session, org.id, user_id)
+    enrollment = await ensure_org_enrollment(db_session, organization_id, user_id)
     assert enrollment.virtual_key_id is not None
-    return org.id, subject.id, user_id, enrollment.virtual_key_id
+    return organization_id, user_id, enrollment.virtual_key_id
 
 
 @pytest.mark.asyncio
@@ -264,3 +272,83 @@ async def test_llm_topup_reactivation_never_clears_limit_reached(
     await db_session.refresh(row)
     assert row.budget_status == "limit_reached"
     assert virtual_key_id not in stub_litellm.enabled_keys
+
+
+@pytest.mark.asyncio
+async def test_org_wide_cap_reenables_on_zero_new_spend_tick(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: _StubLiteLLM,
+) -> None:
+    """An org-wide cap that disables every member must still clear on a raise.
+
+    Once every member key is disabled the org produces no new spend at all, so
+    a later cap raise (or disabling the limit) must not depend on fresh spend
+    rows in the imported batch to be re-applied — the sweep over
+    ``limit_reached`` enrollments is what re-evaluates the org here.
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    org_id, subject_id, user_a, key_a = await _enroll_member(db_session)
+    _, user_b, key_b = await _enroll_member_in_org(db_session, org_id)
+    enrollment_a_id = (
+        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=key_a)
+    ).id
+    enrollment_b_id = (
+        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=key_b)
+    ).id
+
+    # Org-wide cap (user_id=None): applies to the subject's combined spend.
+    await billing_store.replace_budget_limits(
+        db_session,
+        organization_id=org_id,
+        limits=[
+            BudgetLimitInput(
+                user_id=None,
+                kind="llm",
+                window="month",
+                cap_value=Decimal("1.00"),
+                enabled=True,
+            )
+        ],
+    )
+
+    # One tick of spend from either member trips the org-wide cap and
+    # disables both members' keys (the cap is evaluated against the whole
+    # subject, not per-user spend).
+    stub_litellm.spend_rows = [_spend_row(api_key=key_a, spend=5.0, occurred_at=NOW)]
+    await run_usage_import(db_session, now=NOW)
+
+    row_a = await db_session.get(AgentGatewayEnrollment, enrollment_a_id)
+    row_b = await db_session.get(AgentGatewayEnrollment, enrollment_b_id)
+    await db_session.refresh(row_a)
+    await db_session.refresh(row_b)
+    assert row_a.budget_status == "limit_reached"
+    assert row_b.budget_status == "limit_reached"
+    assert key_a in stub_litellm.disabled_keys
+    assert key_b in stub_litellm.disabled_keys
+
+    # Raise the org-wide cap well above spend, then run the import pass again
+    # with ZERO new spend rows: the org produced no fresh spend (every key was
+    # disabled), so only the limit_reached sweep can re-evaluate and re-enable.
+    await billing_store.replace_budget_limits(
+        db_session,
+        organization_id=org_id,
+        limits=[
+            BudgetLimitInput(
+                user_id=None,
+                kind="llm",
+                window="month",
+                cap_value=Decimal("1000.00"),
+                enabled=True,
+            )
+        ],
+    )
+    stub_litellm.spend_rows = []
+    await run_usage_import(db_session, now=NOW)
+
+    await db_session.refresh(row_a)
+    await db_session.refresh(row_b)
+    assert row_a.budget_status == "ok"
+    assert row_b.budget_status == "ok"
+    assert key_a in stub_litellm.enabled_keys
+    assert key_b in stub_litellm.enabled_keys

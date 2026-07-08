@@ -54,6 +54,9 @@ logger = logging.getLogger(__name__)
 
 _ZERO = Decimal("0")
 
+# Keyset-pagination page size for the limit_reached sweep below.
+_LIMIT_REACHED_SWEEP_PAGE_SIZE = 500
+
 
 @dataclass(frozen=True)
 class UsageImportResult:
@@ -113,6 +116,11 @@ async def run_usage_import(
     from there (minus the overlap). Rows whose virtual key cannot be resolved
     to an enrollment are still recorded (with null subject links and a
     ``needs_review`` status) so spend is never silently dropped.
+
+    Org-wide LLM cap enforcement runs twice: once for orgs with new spend this
+    tick, and once as a sweep over every org still holding a ``limit_reached``
+    member (regardless of new spend) so a cap raise/disable can re-enable a
+    fully-disabled org even on a tick with zero imported rows.
     """
     at = now or utcnow()
     cursor = await agent_gateway_store.get_usage_import_cursor(db)
@@ -240,6 +248,33 @@ async def run_usage_import(
             billing_subject_id=subject_id,
             now=at,
         )
+
+    # Sweep every org still holding a ``limit_reached`` member, regardless of
+    # whether it had new spend this tick. An org-wide cap that disables every
+    # member key stops the org from producing any new spend at all, so
+    # ``affected_orgs`` above would never see it again — a later cap raise or
+    # limit-disable must still be able to clear ``limit_reached`` on a
+    # zero-new-spend tick.
+    after: UUID | None = None
+    while True:
+        page = await agent_gateway_store.list_organizations_with_limit_reached_enrollments(
+            db,
+            limit=_LIMIT_REACHED_SWEEP_PAGE_SIZE,
+            after=after,
+        )
+        if not page:
+            break
+        for organization_id, subject_id in page:
+            if organization_id not in affected_orgs:
+                await _enforce_org_llm_limits(
+                    db,
+                    organization_id=organization_id,
+                    billing_subject_id=subject_id,
+                    now=at,
+                )
+        if len(page) < _LIMIT_REACHED_SWEEP_PAGE_SIZE:
+            break
+        after = page[-1][0]
 
     await agent_gateway_store.advance_usage_import_cursor(
         db,
