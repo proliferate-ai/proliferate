@@ -128,11 +128,14 @@ Negatives: member setting org-scope secret → 403.
 
 ---
 
-## Tier 2 — integrations (connect + toggle, faked provider)
+## Tier 2 — integrations (connect + toggle, real definition, no outbound)
 
 ### T2-INT-1: api_key connect + org policy toggle
-Preconditions: a stub MCP integration definition seeded (api_key kind) —
-this reuses the tier-2 stub-server slot, not a real provider.
+Ruled 2026-07-08: **no stub/fake integration provider** — same posture as
+no-fake-sandbox/no-mock-LLM. Use a **real cataloged api_key-kind integration
+definition**; the stored key is a placeholder value (connect/CRUD paths never
+validate it against the provider). No outbound call leaves the stack in
+tier 2 — the real tool call through the gateway is T3-INT-1's job.
 Steps: user connects via `POST /integrations/authentications`
 (authKind api_key) → account created. Org admin toggles
 `PATCH /integrations/admin/organizations/{id}/definitions/{id}/enabled` off.
@@ -305,6 +308,12 @@ Usage & Limits pane render those numbers (Playwright).
 
 ## Tier 2 — workflows (to the seam)
 
+**PARKED (ruled 2026-07-08): the workflows surface is being reworked in a
+large in-flight PR arc; these scenarios are not built now. The workflows
+branches rebase on top of the test harness when they land and add their own
+tests per the PR obligation in `README.md`. Definitions below are kept as the
+starting contract for that work, not as current to-dos.**
+
 ### T2-WF-1: definition lifecycle + run-to-delivery-seam
 Steps: create workflow in editor (steps incl. one invalid ref to assert live
 validation) → save version → trigger manually with args.
@@ -448,10 +457,13 @@ Update propagation: PUT a new value → status returns to `pending` → `ready` 
 sandbox file updated.
 
 ### T3-INT-1: real integration through the gateway — every harness, both lanes
-Steps: connect one real low-stakes integration (test Slack workspace) once;
-then for **each cataloged harness, in both lanes** (piggybacking T3-CHAT-1's
-session matrix): the agent session calls a tool through the integrations
-gateway.
+Ruled 2026-07-08: the integration is **api_key-kind with a real key** (e.g.
+Slack bot token for the `proliferate-e2e` workspace stored as the api_key
+credential) — no OAuth dance in the runner, no mocked provider; the gateway
+itself is what's under test.
+Steps: connect the integration once with the real key; then for **each
+cataloged harness, in both lanes** (piggybacking T3-CHAT-1's session matrix):
+the agent session calls a tool through the integrations gateway.
 Assert: tool call succeeds per harness × lane (per-harness red, like
 T3-CHAT-1); audit row written; org-policy toggle off → same call returns
 enumerated scope/policy error (toggle asserted once, not per harness).

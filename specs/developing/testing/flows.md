@@ -74,17 +74,17 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Connect integration (fake provider), toggle on/off | 2 | — |
+| Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | — |
 | Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | — |
 
-## Workflows
+## Workflows — PARKED (surface being reworked; tests land with the rework PRs)
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Create/edit/trigger workflow via UI → run created, plan resolved, delivery attempted (up to the sandbox seam) | 2 | — |
-| Workflow run reaches terminal state with a real agent | 3 | — |
-| Poll trigger against stub feed: replay-safe, invalid items surfaced | 2 | — |
-| Workflow services live: schedule + poll triggers, emit, chaining, Slack delivery | 3 | — |
+| Create/edit/trigger workflow via UI → run created, plan resolved, delivery attempted (up to the sandbox seam) | 2 | parked |
+| Workflow run reaches terminal state with a real agent | 3 | parked |
+| Poll trigger against stub feed: replay-safe, invalid items surfaced | 2 | parked |
+| Workflow services live: schedule + poll triggers, emit, chaining, Slack delivery | 3 | parked |
 
 ## Billing
 
