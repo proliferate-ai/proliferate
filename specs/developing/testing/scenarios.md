@@ -168,24 +168,138 @@ locally booted anyharness — decide when building.]
 
 ## Tier 2 — billing
 
-### T2-BILL-1: checkout → grants → overage → cut-off → reactivate
-Stripe test mode (`sk_test_` key) + webhook forwarding + test clocks, per
-`specs/developing/local/stripe-local-testing.md`. Steps mirror the manual pass
-already verified on the `billing` profile (memory: 2026-07-04): checkout
-completes → plan reflects paid; simulate meter overage; drive credits to zero
-via test clock.
-Assert: `authorize_sandbox_start` blocks with
-`WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED` (assert the enumerated kind,
-via the blocked-action message in UI); refill/reactivate → authorization
-passes again.
+Expanded 2026-07-08 after a full billing-surface survey (Pablo: "billing is
+the thing I'm least confident in — every scenario must be tested"). All
+tier-2 billing runs on Stripe **test mode** (`sk_test_`) + webhook forwarding
++ test clocks per `specs/developing/local/stripe-local-testing.md` — real
+Stripe, not a mock. Two independent config axes define the matrix and both
+branches of each must be covered where marked: `CLOUD_BILLING_MODE`
+(`off|observe|enforce`) and `PRO_BILLING_ENABLED` (pro plans vs legacy flat).
+Survey correction baked in: `authorize_sandbox_start` is **dead code** — the
+live start gate is `assert_cloud_sandbox_resume_allowed` on the resume/connect
+path (`server/proliferate/server/billing/authorization.py:193`); assert
+against that, never the dead function.
 
-### T2-BILL-2: plan limits
-Assert: free-plan repo limit enforced (`repo_limit_for_billing_state`);
-agent-gateway policy edit gated by `agent_gateway_policy_min_plan` when set.
+### T2-BILL-1: checkout → grants → consumption → cut-off → reactivate
+The core loop, per the manual pass verified 2026-07-04 on the `billing`
+profile, now automated: checkout completes → subscription synced, plan
+reflects paid; `invoice.paid` issues the period grant (`pro_period` hours =
+seats, or `cloud_monthly` on legacy); drive credits to zero via test clock +
+seeded usage segments.
+Assert: resume/connect blocked with the enumerated decision
+(`CloudSandboxResumeBlockedError`, 402) and the UI shows the
+credits-exhausted blocked state (`WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED`
+via `start_block_reason`); refill (legacy: `refill_10h` checkout; pro: top-up
+grant) → resume allowed again. Grant consumption **order** asserted: grants
+drain earliest-expiring-first within type priority
+(`ordered_accounting_grants`).
+
+### T2-BILL-2: plan limits + policy gates
+Assert: free-plan repo limit enforced (`repo_limit_for_billing_snapshot` →
+`repo_limit_exceeded` on scheduling past the cap); agent-gateway policy edit
+gated by `agent_gateway_policy_min_plan` (`org_agent_policy_plan_required`,
+403, on a free org when min plan is `pro`).
 Survey flag for the registry row "plan gates the model list": **no
 plan-conditioned model list exists in code today.** Row stays in `flows.md`
 only if that behavior is planned product work; otherwise it should be
 deleted. [PABLO TO RULE]
+
+### T2-BILL-3: seats — invite/remove/re-invite on a Pro org
+Pro billing is seat-based; every membership change must reconcile Stripe seat
+quantity and grants (`maybe_create_organization_seat_adjustment` →
+`process_pending_seat_adjustments`).
+Steps/Assert on a Pro-subscribed org with a test clock:
+- invite + accept a member → `BillingSeatAdjustment` row created; Stripe
+  subscription-item quantity bumped; a prorated `pro_seat_proration` grant
+  issued (capped +1 seat per adjustment).
+- remove the member → quantity synced down; **no** refund/grant issued.
+- re-invite + accept the **same** member within the same billing period →
+  quantity back up, but **no second proration grant** (the same-period
+  decrease marker suppresses it — the double-grant race is the risk).
+- adjustment retry: simulate a failing Stripe call → retries up to 3 then
+  `failed_terminal`; a subsequent adjustment still converges quantity.
+- negative: same flows on a free org and with `PRO_BILLING_ENABLED=false` →
+  billing untouched (no adjustment rows).
+
+### T2-BILL-4: team checkout — the second, independent org-creation path
+`team_checkout` (create a brand-new org gated on checkout) has its own
+activation/failure state machine, separate from adding billing to an existing
+org — test it separately.
+Steps: create team checkout session → org exists as `pending_checkout` (not
+joinable); complete checkout in Stripe test mode → `checkout.session.completed`
+webhook with `purpose=team_subscription` activates the org, staged invites
+send, gateway enrollment scheduled.
+Negatives: subscription not `active|trialing` at webhook time → intent
+`failed_billing_state`, org never activates; expired (24h) intent → same
+terminal, no orphan active org; replayed activation webhook → idempotent.
+
+### T2-BILL-5: compute overage — bill up to cap, write off past it, then block
+On a subject with `overage_enabled` and a per-seat cap: exhaust grants, keep
+consuming.
+Assert: uncovered seconds convert to cents and export as Stripe metered usage
+events (`BillingUsageExport` billable rows) — sandbox **not** paused while
+under cap; fractional-cent remainder carried (`BillingOverageRemainder`);
+once `cap_used_cents` ≥ cap → further usage written off
+(`writeoff_reason='overage_cap_exhausted'`) and snapshot flips to
+`cap_exhausted` → hard-blocked. Overage settings API: cap validation
+(`invalid_overage_cap` outside 0..1,000,000).
+Negative: `overage_enabled=false` → cutoff is immediate at grant exhaustion,
+zero export rows.
+
+### T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups (incl. failure)
+Three distinct gate states that must not bleed into each other:
+- **exhaustion**: drive `remaining_usd` ≤ 0 on a granted subject → virtual key
+  disabled, `budget_status='exhausted'`; top-up grant → key reactivated.
+- **admin cap** (`billing_budget_limit` kind=`llm`, org-wide and per-user
+  independently): over cap → `budget_status='limit_reached'`; credit refill
+  does **not** clear it (deliberate); raising/disabling the cap does, even
+  with zero new spend (the quiet-tick sweep).
+- **auto top-up overage**: overage-enabled subject drops below threshold →
+  one-off Stripe invoice item charged, `topup` grant issued, exactly one
+  top-up per tick. **Failure path is mandatory**: declined test card / no
+  Stripe customer / `agent_gateway_llm_topup_price_id` unset → fail-closed:
+  key disabled at zero like a capped org (the "overage promise quietly
+  evaporates" risk).
+Also assert `is_gateway_budget_available` flips correctly for launch gating.
+
+### T2-BILL-7: webhook robustness — idempotency, replay, ordering
+Against the Stripe webhook receiver (`claim_webhook_event` semantics):
+- exact duplicate delivery of a processed event → silent ack, no double grant
+  (assert grant count unchanged after replaying `invoice.paid`).
+- concurrent duplicate while first is in-flight → `409 stripe_webhook_in_progress`.
+- handler exception → receipt `failed`, retry (redelivery) succeeds and
+  processes exactly once.
+- out-of-order: deliver `invoice.paid` before `customer.subscription.updated`
+  for the same subscription → grants still issued safely, final state
+  converges.
+- Slack billing notifications fire exactly once per real transition, not on
+  replays.
+
+### T2-BILL-8: subscription edge states
+- payment failure: `invoice.payment_failed` → hold applied; resume blocked
+  with the payment-failed decision; `invoice.paid` clears the hold.
+- cancellation mid-period: `cancel_at_period_end=true` synced; access
+  continues through period end; 24h rollover grace honored after
+  `current_period_end`; then hard cutoff.
+- `customer.subscription.deleted` after a **clean voluntary cancellation**:
+  pin the CURRENT behavior (unconditional `payment_failed` hold — survey
+  2026-07-08 confirmed the reason-sensitive refinement was never shipped) as
+  an expected-fail/known-bug test until the product fix lands. [FILED AS
+  FINDING — Pablo to rule fix-now vs post-release.]
+- billing modes: `CLOUD_BILLING_MODE=off` → all enforcement inert, product
+  fully usable; `observe` → accounting/exports happen, nothing ever blocked;
+  `enforce` → gates live. One smoke per mode.
+- free trial: `free_trial_v2` granted lazily on snapshot for a GitHub-linked
+  account, exactly once per GitHub identity ever (constant period key);
+  account without GitHub identity → **no trial, no error** (pin current
+  silent behavior; UX finding noted).
+
+### T2-BILL-9: usage surfaces tell the truth
+Seed known usage (segments + LLM events with fixed amounts) → assert
+`/billing/usage/summary`, `/billing/usage/timeseries`,
+`/organizations/{id}/usage/by-user`, and `/billing/llm-balance` return exactly
+the seeded totals, attributed to the right users; sidebar consumption card and
+Usage & Limits pane render those numbers (Playwright).
 
 ---
 
@@ -353,13 +467,18 @@ Assert, per lane: checkout is on the configured branch; setup/env script ran
 Added 2026-07-08. As the durable user, run a real agent session (reuse a
 T3-CHAT-1 run) and keep a sandbox running for a known interval.
 Assert, against the billing surfaces (usage UI/API + underlying meter
-records): (a) **LLM consumption** — the session produced meter events whose
-tokens/cost match the gateway's recorded usage for the test key, and the
-credit balance decremented accordingly; (b) **compute consumption** — sandbox
-runtime for the interval produced compute meter events and the corresponding
-credit decrement. Both sides must attribute to the right org/user. Staging
-lane additionally asserts the Stripe webhook path is live: meter events
-delivered (no stuck/undelivered webhook backlog for the test org).
+records): (a) **LLM consumption** — the session produced
+`agent_llm_usage_event` rows whose tokens/cost match the gateway's recorded
+usage for the test key, and the credit balance decremented accordingly;
+(b) **compute consumption** — sandbox runtime for the interval produced a
+closed `usage_segment` (opened/closed by the E2B webhooks, not a timer) and
+the accounting pass drained the corresponding grant seconds. Both sides must
+attribute to the right org/user — note the known attribution gap: compute
+segments bill the workspace owner's **personal** subject; LLM events bill the
+**org** subject where enrolled. Assert current behavior as-built; the org
+compute-attribution fix has its own finding. Staging lane additionally
+asserts the Stripe webhook path is live: meter events delivered (no
+stuck/undelivered webhook backlog for the test org).
 
 ### T3-BILL-2: exhaustion gates — compute and LLM independently
 Drive the test org's credits to exhaustion (smallest real mechanism available;
@@ -385,3 +504,24 @@ enforcement chain end-to-end on real infrastructure.)
    tier 2, with full coverage in tier 3's desktop lane?
 4. Google OAuth stays tier-3-only (mock not feasible without product change)
    — confirm.
+
+## Product findings from the billing survey (2026-07-08) — rule before fixing
+
+Confirmed against code; each needs a Pablo ruling (fix pre-release vs pin
+current behavior as known-bug expected-fail):
+
+1. **Org/per-user compute budget limits never fire.** `usage_segment` rows
+   always bill the workspace owner's *personal* billing subject
+   (`billing_runtime_usage.py:55-63`), so both compute-limit enforcement
+   sites resolve `organization_id=None` and bail — an admin-configured
+   compute cap saves in the UI and silently does nothing. (LLM caps are
+   unaffected — correctly org-attributed.)
+2. **Clean voluntary cancellation gets a `payment_failed` hold.**
+   `customer.subscription.deleted` applies the hold unconditionally
+   (`stripe_webhooks.py:193-199`) — no reason sensitivity, so a customer who
+   cancels cleanly can be spuriously blocked when Stripe deletes the record
+   at period end.
+3. **No-GitHub account gets no free trial and no explanation.**
+   `ensure_free_trial_v2_grant` silently returns when the account has no
+   linked GitHub identity — looks broken to the user. (UX severity, not
+   correctness.)
