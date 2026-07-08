@@ -381,6 +381,10 @@ async def test_resume_denied_on_spend_hold(
 
     assert excinfo.value.decision_type == BILLING_DECISION_ENFORCE_ACTIVE_SPEND
     assert excinfo.value.status_code == 402
+    # Mirror the production caller (materialization/runner._run_with_fresh_session),
+    # which rolls back its session in the exception handler. The decision event
+    # must have been committed by the gate itself, so it survives this rollback.
+    await db_session.rollback()
     recorded = await db_session.scalar(
         select(func.count())
         .select_from(BillingDecisionEvent)
