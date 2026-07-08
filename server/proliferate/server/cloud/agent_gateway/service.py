@@ -507,28 +507,19 @@ def _selection_set_policy_violation(
     no other way to comply, since there is no DELETE endpoint).
     """
     enabled = [source for source in sources if source.enabled]
-    if (
-        allowed_harnesses is not None
-        and harness_kind not in allowed_harnesses
-        and enabled
-    ):
-        return (
-            f"Harness '{harness_kind}' is not allowed by your organization's policy."
-        )
+    if allowed_harnesses is not None and harness_kind not in allowed_harnesses and enabled:
+        return f"Harness '{harness_kind}' is not allowed by your organization's policy."
     if allowed_routes is None:
         return None
     if not enabled:
         # Zero enabled sources == the harness's own (native) CLI login.
         if AGENT_AUTH_ROUTE_NATIVE not in allowed_routes:
-            return (
-                "Native CLI login is not allowed by your organization's policy."
-            )
+            return "Native CLI login is not allowed by your organization's policy."
         return None
     for source in enabled:
         if source.source_kind not in allowed_routes:
             return (
-                f"Auth route '{source.source_kind}' is not allowed by "
-                "your organization's policy."
+                f"Auth route '{source.source_kind}' is not allowed by your organization's policy."
             )
     return None
 

@@ -297,9 +297,7 @@ class TestSelectTimeEnforcement:
         # An org restricts everything to gateway-only. A user who is NOT a member
         # (personal scope) is unaffected and may select api_key freely.
         owner_id, owner_headers = await _authed_user(client)
-        organization_id = await _create_organization(
-            owner_user_id=owner_id, member_user_ids=[]
-        )
+        organization_id = await _create_organization(owner_user_id=owner_id, member_user_ids=[])
         await _set_policy(
             client,
             owner_headers,
@@ -328,9 +326,7 @@ class TestSelectTimeEnforcement:
 
         # A restricted legacy list lacking native gains it.
         assert backfill_native('["gateway"]') == '["gateway", "native"]'
-        assert backfill_native('["gateway", "api_key"]') == (
-            '["gateway", "api_key", "native"]'
-        )
+        assert backfill_native('["gateway", "api_key"]') == ('["gateway", "api_key", "native"]')
         # A row that already allows native, or is unrestricted (null), is untouched.
         assert backfill_native('["gateway", "native"]') is None
         assert backfill_native(None) is None
