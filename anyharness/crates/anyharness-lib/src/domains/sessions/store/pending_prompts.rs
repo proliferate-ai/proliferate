@@ -215,10 +215,23 @@ impl SessionStore {
                 .query_map([session_id], |row| row.get(0))?
                 .collect::<rusqlite::Result<Vec<_>>>()?;
 
-            // Validate: same set (no duplicates, no extras, no missing).
+            // Validate exact multiset equality: the request must be a
+            // permutation of the existing seqs — no duplicates, no extras, no
+            // missing. Do NOT dedup the request before comparing: deduping would
+            // let e.g. [2, 2, 1] over existing {1, 2} pass and corrupt the seq
+            // numbering. Reject on any count mismatch or any duplicate seq.
+            if ordered_seqs.len() != existing.len() {
+                anyhow::bail!(
+                    "reorder seqs count mismatch: expected {} rows, got {}",
+                    existing.len(),
+                    ordered_seqs.len()
+                );
+            }
             let mut sorted_requested = ordered_seqs.to_vec();
             sorted_requested.sort_unstable();
-            sorted_requested.dedup();
+            if sorted_requested.windows(2).any(|pair| pair[0] == pair[1]) {
+                anyhow::bail!("reorder seqs contain duplicates: {:?}", ordered_seqs);
+            }
             let mut sorted_existing = existing.clone();
             sorted_existing.sort_unstable();
             if sorted_requested != sorted_existing {

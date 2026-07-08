@@ -7,7 +7,7 @@ use anyharness_contract::v1::{
 use crate::domains::sessions::model::{PromptAttachmentRecord, PromptAttachmentState};
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{
-    PromptAcceptError, PromptAcceptance, QueueMutationError,
+    PromptAcceptError, PromptAcceptance, QueueMutationError, Resolution,
 };
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::model::AttachmentSource;
@@ -331,8 +331,14 @@ impl SessionActor {
             }
         }
 
-        // If busy, cancel the current turn so drain picks up the promoted head.
+        // If busy, mirror the Cancel arm in turn/active.rs exactly: resolve any
+        // pending interaction (Resolution::Cancelled) BEFORE sending the
+        // CancelNotification. Otherwise steering while a permission/plan prompt
+        // is pending would interrupt the turn but leave that interaction
+        // dangling. The CancelNotification then interrupts the current turn so
+        // the drain loop picks up the promoted head.
         if is_busy {
+            self.resolve_pending_interactions(Resolution::Cancelled).await;
             let _ = self.conn.send_notification(
                 acp::schema::CancelNotification::new(self.native_session_id.clone()),
             );

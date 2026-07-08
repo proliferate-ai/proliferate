@@ -561,4 +561,46 @@ mod tests {
             RuntimeEventInjectionError::SessionReplaying
         ));
     }
+
+    #[tokio::test]
+    async fn replay_actor_rejects_reorder_pending_prompts() {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let disposition = handle_non_replay_command(
+            SessionCommand::ReorderPendingPrompts {
+                ordered_seqs: vec![2, 1],
+                respond_to: tx,
+            },
+            false,
+        )
+        .await;
+
+        assert!(disposition.is_none());
+        let error = rx
+            .await
+            .expect("response")
+            .expect_err("replay should reject reorder");
+        assert!(matches!(error, QueueMutationError::NotFound));
+    }
+
+    #[tokio::test]
+    async fn replay_actor_rejects_steer_pending_prompt() {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let disposition = handle_non_replay_command(
+            SessionCommand::SteerPendingPrompt {
+                seq: 1,
+                respond_to: tx,
+            },
+            false,
+        )
+        .await;
+
+        assert!(disposition.is_none());
+        let error = rx
+            .await
+            .expect("response")
+            .expect_err("replay should reject steer");
+        assert!(matches!(error, QueueMutationError::NotFound));
+    }
 }
