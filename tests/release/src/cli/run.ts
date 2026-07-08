@@ -2,6 +2,7 @@ import { HELP_TEXT, parseArgs } from "./args.js";
 import { assertResolved, resolveEnv } from "../config/env-resolution.js";
 import { envVarNames } from "../config/env-manifest.js";
 import { selectScenarios, allScenarioIds } from "../scenarios/registry.js";
+import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
 import type { ScenarioFailure } from "../report/types.js";
 import { writeFailureReports, toFailureReport } from "../report/failure-reporter.js";
 import { fileIssuesForFailures } from "../report/issue-filer.js";
@@ -33,6 +34,9 @@ async function main(): Promise<void> {
 
   const agentsSelector = args.agents;
   const failures: ScenarioFailure[] = [];
+  const blocked: Array<{ scenarioId: string; lane: string; reason: string }> = [];
+  const expectedFail: Array<{ scenarioId: string; lane: string; diagnosis: string }> = [];
+  let greenCount = 0;
 
   for (const scenario of scenarios) {
     for (const runtimeLane of scenario.lanes) {
@@ -45,7 +49,16 @@ async function main(): Promise<void> {
           dryRun: args.dryRun,
           env: neededEnv,
         });
+        greenCount += 1;
       } catch (error) {
+        if (error instanceof ScenarioBlockedError) {
+          blocked.push({ scenarioId: scenario.id, lane: runtimeLane, reason: error.reason });
+          continue;
+        }
+        if (error instanceof ScenarioExpectedFailError) {
+          expectedFail.push({ scenarioId: scenario.id, lane: runtimeLane, diagnosis: error.diagnosis });
+          continue;
+        }
         failures.push({
           scenarioId: scenario.id,
           registryFlowRef: scenario.registryFlowRef,
@@ -53,6 +66,22 @@ async function main(): Promise<void> {
           expected: `${scenario.title} completes without error`,
           error,
         });
+      }
+    }
+  }
+
+  if (!args.dryRun) {
+    console.log(`\n${greenCount} scenario run(s) green.`);
+    if (blocked.length > 0) {
+      console.log(`${blocked.length} scenario run(s) blocked (known gate, not a fresh failure):`);
+      for (const entry of blocked) {
+        console.log(`  - [${entry.scenarioId}/${entry.lane}] ${entry.reason}`);
+      }
+    }
+    if (expectedFail.length > 0) {
+      console.log(`${expectedFail.length} scenario run(s) expected-fail (diagnosed, tracked, not blocking):`);
+      for (const entry of expectedFail) {
+        console.log(`  - [${entry.scenarioId}/${entry.lane}] ${entry.diagnosis}`);
       }
     }
   }
@@ -77,7 +106,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`\nAll ${countRuns(scenarios)} scenario run(s) completed with no failures.`);
+  if (args.dryRun) {
+    console.log(`\nAll ${countRuns(scenarios)} scenario run(s) completed with no failures.`);
+  } else {
+    console.log(`\nNo red scenario runs (${greenCount} green, ${blocked.length} blocked, ${expectedFail.length} expected-fail).`);
+  }
 }
 
 function printEnvManifestReport(): void {

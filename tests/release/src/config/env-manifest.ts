@@ -110,16 +110,56 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     description:
       "`owner/repo` of a disposable GitHub repository used for worktree, repo-settings, and " +
       "checkout scenarios (T3-WT-1, T3-REPO-1).",
-    whereItLives: "A repo under the proliferate-ai test org, reserved for release-e2e.",
+    whereItLives:
+      "Confirmed live 2026-07-08: proliferate-e2e/e2e-fixture — a real repo under the " +
+      "proliferate-e2e GitHub org (the same org the GitHub App fixture in T3-PROV-1 uses), " +
+      "with `main` and `develop` branches already present. Default when unset.",
     secret: false,
   },
   {
     name: "RELEASE_E2E_GITHUB_TEST_TOKEN",
     description: "Token with read/write access to RELEASE_E2E_GITHUB_TEST_REPO for checkout and push steps.",
-    whereItLives: "A fine-scoped PAT or GitHub App installation token for the test repo only.",
+    whereItLives:
+      "A fine-scoped PAT or GitHub App installation token for the test repo only. Local dev: " +
+      "the runner falls back to the operator's own `gh` CLI auth (`gh auth token`) for cloning " +
+      "the public fixture repo when this is unset, since read access to a public repo needs no " +
+      "dedicated credential — set this explicitly once a write-scoped fixture token is provisioned.",
     secret: true,
   },
+  {
+    name: "RELEASE_E2E_LOCAL_RUNTIME_URL",
+    description:
+      "Base URL of the LOCAL lane's AnyHarness runtime HTTP API (workspaces/worktrees/sessions/agents) " +
+      "— distinct from RELEASE_E2E_SERVER_URL (the Python server). Local-lane scenarios talk to this " +
+      "directly, matching how desktop's web-port mode creates local workspaces/worktrees/sessions " +
+      "(no Python-server mediation, no auth — the local-dev trust boundary is the OS user).",
+    whereItLives:
+      "Printed in the profile's `~/.proliferate-local/dev/profiles/<profile>/profile.env` as " +
+      "ANYHARNESS_PORT (`http://127.0.0.1:<ANYHARNESS_PORT>`). Defaults to " +
+      "http://127.0.0.1:8542 (this repo's ANYHARNESS_PORT default) when unset — never required, " +
+      "so a fresh clone's first --dry-run run never blocks on it.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_LOCAL_DATABASE_URL",
+    description:
+      "Postgres URL for the LOCAL lane's profile DB. Only needed by T3-PROV-1's fallback seam " +
+      "(tests/release/scripts/prov1_fallback.py), which calls the real GitHub-App-callback service " +
+      "functions in-process against this DB, bypassing the real GitHub OAuth redirect (infeasible " +
+      "on a dedicated feature profile — its callback URL is pinned to the main profile's port, per " +
+      "specs/developing/local/feature-worktree-auth.md Layer C) and the (separately tracked) " +
+      "current_product_user gate. Staging has no equivalent — that fallback is local-lane-only.",
+    whereItLives:
+      "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate_dev_<profile>, per " +
+      "specs/developing/local/feature-worktree-auth.md. Never required outside T3-PROV-1.",
+    secret: false,
+    lanes: ["local"],
+  },
 ] as const;
+
+export const DEFAULT_LOCAL_RUNTIME_URL = "http://127.0.0.1:8542";
+export const DEFAULT_GITHUB_TEST_REPO = "proliferate-e2e/e2e-fixture";
 
 export function envVarNames(): string[] {
   return ENV_MANIFEST.map((spec) => spec.name);

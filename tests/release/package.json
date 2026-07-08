@@ -5,7 +5,8 @@
   "description": "Tier-3 live end-to-end / tier-4 upgrade-path release runner (specs/developing/testing/README.md).",
   "scripts": {
     "release-e2e": "tsx src/cli/run.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",

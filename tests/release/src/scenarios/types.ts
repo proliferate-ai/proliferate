@@ -1,25 +1,44 @@
 import type { EnvResolution } from "../config/env-resolution.js";
 import type { DesktopMode, RuntimeLane, TargetLane } from "../config/types.js";
 
+export interface ScenarioPlanStep {
+  description: string;
+}
+
 /**
- * Thrown by every stub scenario's `run()` when invoked outside --dry-run.
- * Tier-3 scenarios need real credentials (none exist yet) and a real E2B
- * template/AnyHarness binary; until phase 2 wires those up, this is the
- * expected outcome for a non-dry-run invocation.
+ * Thrown when a scenario cannot assert for real because of a known,
+ * out-of-band blocker (not a scenario bug, not a product bug this scenario is
+ * responsible for) — e.g. the `github_link_required` gate tracked in
+ * `src/fixtures/identity.ts`. Distinct from `ScenarioFailure`: a blocked run
+ * does not fail the release gate and does not get an issue filed against it
+ * (the blocker already has its own tracking); it is reported so the gap stays
+ * visible instead of silently passing or silently failing.
  */
-export class NotImplementedError extends Error {
-  constructor(scenarioId: string) {
-    super(
-      `${scenarioId} is a skeleton stub (tier-3 runner phase 1). It describes its plan under ` +
-        "--dry-run but does not execute yet — no tier-3 credentials exist for any target " +
-        "deployment. See specs/developing/testing/scenarios.md for the scenario contract.",
-    );
-    this.name = "NotImplementedError";
+export class ScenarioBlockedError extends Error {
+  readonly reason: string;
+
+  constructor(reason: string) {
+    super(reason);
+    this.name = "ScenarioBlockedError";
+    this.reason = reason;
   }
 }
 
-export interface ScenarioPlanStep {
-  description: string;
+/**
+ * Thrown when a scenario was attempted for real (per README's "3 real
+ * attempts, then mark expected-fail" rule) and the diagnosis is recorded
+ * here, distinct from an actual product bug (which gets a filed issue
+ * instead — see `../report/issue-filer.ts`). An expected-fail run does not
+ * fail the release gate; it is a documented, known gap.
+ */
+export class ScenarioExpectedFailError extends Error {
+  readonly diagnosis: string;
+
+  constructor(diagnosis: string) {
+    super(diagnosis);
+    this.name = "ScenarioExpectedFailError";
+    this.diagnosis = diagnosis;
+  }
 }
 
 export interface ScenarioRunContext {
@@ -49,6 +68,11 @@ export interface ScenarioDefinition {
   requiredEnv: readonly string[];
   /** Ordered human-readable steps; printed verbatim under --dry-run. */
   plan(ctx: ScenarioPlanContext): ScenarioPlanStep[];
-  /** Executes the scenario for one runtime lane. Stubs throw NotImplementedError outside --dry-run. */
+  /**
+   * Executes the scenario for one runtime lane. Throws `ScenarioBlockedError`
+   * for a known out-of-band gate, `ScenarioExpectedFailError` for a diagnosed
+   * real gap, or any other error for a genuine red — see the two classes
+   * above for how the CLI (`src/cli/run.ts`) reports each differently.
+   */
   run(ctx: ScenarioRunContext): Promise<void>;
 }

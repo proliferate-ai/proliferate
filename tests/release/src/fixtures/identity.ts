@@ -28,7 +28,15 @@
 
 import { randomBytes } from "node:crypto";
 
-import { ApiClient } from "./http.js";
+import { ApiClient, ApiRequestError } from "./http.js";
+
+/**
+ * NOT `proliferate.test` — see the note at `mintFreshUser` below. `.dev` is a
+ * real, unreserved gTLD, so the server's email-validator syntax/policy checks
+ * pass even though the domain never resolves (deliverability checking is
+ * disabled server-side for these flows).
+ */
+const FIXTURE_EMAIL_DOMAIN = "proliferate-releasee2e.dev";
 
 export interface AuthSessionResponse {
   accessToken: string;
@@ -115,7 +123,15 @@ export async function mintFreshUser(creds: DurableUserCredentials): Promise<Fres
   // Math.random() is not appropriate here: the suffix disambiguates concurrent
   // runs and the password is a real (if throwaway) credential sent to the
   // server, so both need a cryptographically secure source.
-  const email = `release-e2e+${Date.now()}-${randomToken(6)}@proliferate.test`;
+  //
+  // Domain note (found running this fixture for real against a local target,
+  // 2026-07-08): the server's email validation (pydantic-core / email-validator)
+  // rejects IANA special-use domains (`.test`, `.example`, `.invalid`,
+  // `.localhost`) outright, even with deliverability checks disabled — a user
+  // created with a `.test` address 500s on every future login because
+  // `UserRead` serialization re-validates the stored email. Use a domain that
+  // is fake but not in the special-use registry.
+  const email = `release-e2e+${Date.now()}-${randomToken(6)}@${FIXTURE_EMAIL_DOMAIN}`;
   const password = `release-e2e-${randomToken(10)}!Aa1`;
 
   const invitation = await adminClient.post<OrganizationInvitationResponse>(
@@ -168,4 +184,109 @@ async function findMemberByEmail(
     `/v1/organizations/${organizationId}/members`,
   );
   return response.members.find((member) => member.email.toLowerCase() === email.toLowerCase());
+}
+
+/**
+ * One-time durable-user seeding for the **local** target, only. The local
+ * profile boots with an empty Postgres DB, so unlike staging (where the
+ * `e2e-tests` org/user is provisioned once, out of band, by ops), a fresh
+ * `--lane local` run needs to create it itself via the real first-run `/setup`
+ * claim transport (`server/proliferate/server/setup/api.py`) — the same
+ * unauthenticated, single-use, form-encoded flow a human running
+ * `pdevui <profile>` would use per
+ * `specs/developing/local/feature-worktree-auth.md` Layer B.
+ *
+ * Idempotent across runs against the same profile: `/setup` permanently 404s
+ * ("not found — nothing to set up here") once any user exists, which this
+ * treats as "already seeded" and falls through to a normal login rather than
+ * failing. Not applicable to `--lane staging`, which never mounts `/setup`.
+ */
+export async function ensureLocalDurableUser(creds: DurableUserCredentials): Promise<DurableUserCredentials> {
+  const client = new ApiClient({ baseUrl: creds.serverUrl });
+  const setupOpen = await isLocalSetupOpen(client);
+  if (setupOpen) {
+    const setupTokenFile = process.env.SETUP_TOKEN_FILE;
+    if (!setupTokenFile) {
+      throw new Error(
+        "ensureLocalDurableUser: /setup is open (fresh profile) but SETUP_TOKEN_FILE is not set. " +
+          "Boot the profile with SETUP_TOKEN_FILE=/tmp/proliferate-<profile>-setup-token per " +
+          "specs/developing/local/feature-worktree-auth.md Layer B, then re-run.",
+      );
+    }
+    const { readFile } = await import("node:fs/promises");
+    const setupToken = (await readFile(setupTokenFile, "utf8")).trim();
+    await claimLocalSetup(client, {
+      email: creds.email,
+      password: creds.password,
+      setupToken,
+      organizationName: "e2e-tests",
+    });
+  }
+  const session = await loginDurableUser(creds);
+  const organizations = await client
+    .withBearerToken(session.accessToken)
+    .get<{ organizations: Array<{ id: string; name: string }> }>("/v1/organizations");
+  const organizationId = organizations.organizations[0]?.id;
+  if (!organizationId) {
+    throw new Error("ensureLocalDurableUser: durable user has no organization after claim/login.");
+  }
+  return { ...creds, organizationId };
+}
+
+async function isLocalSetupOpen(client: ApiClient): Promise<boolean> {
+  // GET /setup renders HTML (200 while open, 404 "There is nothing to set up
+  // here" once claimed) — not JSON, so this reaches for fetch directly rather
+  // than ApiClient.get's JSON-shaped contract.
+  const response = await fetch(`${client.baseUrl}/setup`).catch(() => undefined);
+  return response?.status === 200;
+}
+
+async function claimLocalSetup(
+  client: ApiClient,
+  params: { email: string; password: string; setupToken: string; organizationName: string },
+): Promise<void> {
+  const baseUrl = client.baseUrl;
+  const body = new URLSearchParams({
+    email: params.email,
+    password: params.password,
+    setup_token: params.setupToken,
+    organization_name: params.organizationName,
+  });
+  const response = await fetch(`${baseUrl}/setup`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new ApiRequestError("POST", "/setup", response.status, text);
+  }
+}
+
+/**
+ * The known blocker (per the tier-3 runner build task, 2026-07-08):
+ * `current_product_user` (`server/proliferate/auth/dependencies.py:54`) 403s
+ * every password-only account with `code: "github_link_required"` — every
+ * cloud/sandbox/secrets/repo route depends on it, and single-org local dev
+ * has no way to link a real GitHub identity to a fresh or durable password
+ * account without borrowing another profile's session (`pseedauth`, which
+ * would replace this profile's DB wholesale). A fix
+ * (`fix/product-user-single-org-bypass`) is in flight upstream.
+ *
+ * `GITHUB_LINK_GATE_WORKAROUND_ACTIVE` is the single flag: flip it to `false`
+ * once that fix merges, and every scenario using `withProductGate` below
+ * starts asserting for real again with no other code change.
+ */
+export const GITHUB_LINK_GATE_WORKAROUND_ACTIVE = true;
+
+export function isGithubLinkRequiredError(error: unknown): boolean {
+  if (!(error instanceof ApiRequestError) || error.status !== 403 || typeof error.body !== "object" || error.body === null) {
+    return false;
+  }
+  // FastAPI's default HTTPException envelope wraps the raised detail:
+  // `{"detail": {"code": "github_link_required", "message": "..."}}` — found
+  // running this for real against `current_product_user`, 2026-07-08 (not a
+  // bare top-level `code` field, which was this check's first, wrong guess).
+  const body = error.body as { code?: unknown; detail?: { code?: unknown } };
+  return body.code === "github_link_required" || body.detail?.code === "github_link_required";
 }

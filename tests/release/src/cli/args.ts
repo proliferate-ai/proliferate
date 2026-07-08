@@ -18,7 +18,12 @@ const DEFAULTS: Omit<CliArgs, "help"> = {
   scenarios: "all",
   dryRun: false,
   fileIssues: false,
-  outputDir: "tests/release/.output",
+  // Relative to this package's own cwd (`tests/release/`), which is what
+  // both `make release-e2e` and a direct `pnpm exec tsx src/cli/run.ts` use
+  // — found running this for real 2026-07-08: the previous default
+  // ("tests/release/.output") double-nested into
+  // tests/release/tests/release/.output instead.
+  outputDir: ".output",
 };
 
 /**
@@ -45,6 +50,9 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         i += 1;
         break;
       case "--scenarios":
+      case "--only":
+        // --only is sugar for --scenarios (per the tier-3 build task: "runner
+        // should support --only <id>"); both set the same field.
         args.scenarios = parseListFlag(requireValue(argv, i, arg));
         i += 1;
         break;
@@ -97,8 +105,9 @@ Flags:
   --desktop <web|native>     Desktop lane to drive (default: web)
   --agents <list|all>        Comma-separated harness kinds, or "all" (default: all)
   --scenarios <list|all>     Comma-separated scenario ids, or "all" (default: all)
+  --only <id>                Alias for --scenarios with a single id (e.g. --only T3-WT-1)
   --dry-run                  Report the plan + env manifest; never call a real provider/LLM
   --file-issues              File one GitHub issue per distinct failure via \`gh\` (default: off)
-  --output-dir <path>        Where failure reports are written (default: tests/release/.output)
+  --output-dir <path>        Where failure reports are written, relative to tests/release/ (default: .output)
   --help                     Show this text
 `;

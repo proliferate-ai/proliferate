@@ -24,7 +24,7 @@ export class ApiRequestError extends Error {
 }
 
 export class ApiClient {
-  private readonly baseUrl: string;
+  readonly baseUrl: string;
   private bearerToken: string | undefined;
 
   constructor(options: ApiClientOptions) {
@@ -38,6 +38,10 @@ export class ApiClient {
 
   async post<TResponse>(path: string, body: unknown): Promise<TResponse> {
     return this.request<TResponse>("POST", path, body);
+  }
+
+  async put<TResponse>(path: string, body: unknown): Promise<TResponse> {
+    return this.request<TResponse>("PUT", path, body);
   }
 
   async get<TResponse>(path: string): Promise<TResponse> {
