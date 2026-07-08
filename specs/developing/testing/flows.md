@@ -99,8 +99,9 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Subscription edges: payment-failed hold + clear, mid-period cancel + rollover grace, billing modes off/observe/enforce, one-trial-per-GitHub-identity | 2 | — |
 | Usage surfaces truthful: seeded usage matches summary/timeseries/by-user/llm-balance APIs + UI | 2 | — |
 | Credits consumed properly: real session → LLM **and compute** meter events + credit decrement match consumption; Stripe webhook delivery live on staging | 3 | — |
-| Out of credits: sandbox paused and not accessible | 3 | — |
+| Out of credits: sandbox paused and not accessible — **including every bypass route** (direct API resume, stale session, webhook race, pre-exhaustion key, other org member, trigger-driven start) | 3 | — |
 | Out of credits: gateway LLM access gated; reactivates on refill | 3 | — |
+| Overage bills real money correctly: compute metered events + amounts match up to cap then hard-block; LLM auto top-up charges once then fail-closes on payment failure | 3 | — |
 | Plan gates the model list: user sees/uses exactly the models their plan allows | 3 | — |
 
 ## Upgrade & release

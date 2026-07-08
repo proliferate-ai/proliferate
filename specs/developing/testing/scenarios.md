@@ -480,7 +480,7 @@ compute-attribution fix has its own finding. Staging lane additionally
 asserts the Stripe webhook path is live: meter events delivered (no
 stuck/undelivered webhook backlog for the test org).
 
-### T3-BILL-2: exhaustion gates — compute and LLM independently
+### T3-BILL-2: exhaustion gates — compute and LLM independently, no bypasses
 Drive the test org's credits to exhaustion (smallest real mechanism available;
 test-clock/grant manipulation is allowed as *setup*, but the enforcement under
 test is real).
@@ -488,10 +488,38 @@ Assert, compute side: running sandbox is **paused** and inaccessible; new
 cloud sandbox/workspace creation is blocked with the enumerated
 credits-exhausted kind. Assert, LLM side: gateway rejects the test key's
 completion call with the enumerated budget error; live session surfaces it as
-an enumerated error, not a hang. Then refill → sandbox resumable, gateway
-serves again, new workspaces allowed. (Tier-2 T2-BILL-1 proves this logic
-against Stripe test clocks per-PR; this scenario proves the **deployed**
-enforcement chain end-to-end on real infrastructure.)
+an enumerated error, not a hang.
+**Bypass sweep (added 2026-07-08 — "they definitely can't access things after
+money bites, no matter what"):** while exhausted, attempt every alternate
+entry we know exists and assert each is refused, not just the front door:
+- resume the paused sandbox via direct API call (not UI);
+- reconnect via a session opened **before** exhaustion (stale handle);
+- the E2B-webhook race: force a `created`/`resumed` provider event while the
+  spend hold is active → inline re-pause fires (webhook path, not just the
+  15-min reconciler);
+- LLM via a **pre-exhaustion materialized key** still on the sandbox disk —
+  the disabled-key propagation must beat it (re-materialization path);
+- start a workspace as a **different member of the same exhausted org**;
+- trigger-driven work (workflow/automation) that would start a sandbox.
+Then refill → sandbox resumable, gateway serves again, new workspaces allowed.
+(Tier-2 T2-BILL-1 proves this logic against Stripe test clocks per-PR; this
+scenario proves the **deployed** enforcement chain end-to-end on real
+infrastructure.)
+
+### T3-BILL-3: overage bills real money correctly (staging lane)
+Added 2026-07-08 — overage is the highest-stakes billing path (it charges
+cards) and was tier-2-only. On the staging test org with `overage_enabled`
+and a small per-seat cap:
+- **compute**: exhaust grants, keep a sandbox running → metered usage events
+  arrive in Stripe (test mode) for the overage price, sandbox stays UP while
+  under cap; cross the cap → hard block flips on (`cap_exhausted`), further
+  usage written off, no more billing.
+- **LLM**: drop below the top-up threshold → exactly one auto top-up invoice
+  item charged in Stripe, `topup` grant appears, key stays live. Then disable
+  the payment method → next threshold crossing fail-closes (key disabled),
+  no silent free usage and no repeated failed charges.
+Assert amounts end-to-end: seconds consumed → cents exported → Stripe event
+totals match (the fractional-cent remainder logic is under test here too).
 
 ---
 
