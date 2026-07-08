@@ -4,8 +4,17 @@
 after the five blessed build items land. It is the alignment surface: every
 design point is tagged. **All eight [OPEN-n] questions were ruled by Pablo on
 2026-07-07** — each ruling is recorded inline as **RULED** at its section and in
-the §9 table. This doc is now the design of record for the arc: PRs A–E, plus a
-UX PR F that is gated on its own design pass (§8.3).
+the §9 table. Three further amendments were ruled the same day, 2026-07-07,
+on mechanisms the doc had not yet surfaced as [OPEN-n] — recorded inline as
+**Amendment** at their section and appended to the §9 log as L16–L18. This
+doc is now the design of record for the arc: PRs A–E, plus a
+UX PR F that is gated on its own design pass (§8.3). A further ruling pass,
+same day, 2026-07-07: four sequencing rules (L19) that rename the "effects"
+mechanism to **server-performed actions** and reverse the chaining design
+(L20 — composition is nesting, not spawning, superseding PR D as designed
+below), plus six rulings out of the function-invocations and
+integration-scoping design passes (L21–L26, §6, §5). These are recorded
+inline at their owning sections and in §9.
 
 **Companion docs — cross-linked, not duplicated:**
 - [`workflows-deep-dive.md`](workflows-deep-dive.md) — the **current-state**
@@ -29,17 +38,28 @@ UX PR F that is gated on its own design pass (§8.3).
   recommendation, and one paragraph of tradeoff. All eight were ruled
   2026-07-07; the tags remain for traceability, with the ruling recorded
   inline and in §9.
+- **Amendment** — a ruling made 2026-07-07, same pass as the [OPEN-n]
+  rulings, but on a mechanism the doc had not named as open — no options
+  table, just the ruled shape. Recorded inline at its section and as a new
+  L-numbered row in §9.
 
 **The five build items** (LOCKED — Pablo ruling 2026-07-06, "your load-bearing
 set is blessed, with one amendment"; build order A→B→C→D→E):
 
 | PR | Item | One line |
 |---|---|---|
-| **A** | Effects ledger + Slack notify delivery | server observes a completed step → performs a side effect exactly once; `notify(slack)` becomes real |
+| **A** | Actions ledger + Slack notify delivery | server observes a completed step → performs a server-performed action exactly once; `notify(slack)` becomes real |
 | **B** | Poll trigger primitive | Proliferate polls a conforming endpoint, spawns one run per new item, idempotently |
 | **C** | `agent.emit` typed output | agent must produce schema-validated JSON that lands in `{{steps[n].output.*}}` |
-| **D** | `workflow.run` fire-and-forget chaining | a step that spawns a child run via the PR-A observer |
+| **D** | ~~`workflow.run` fire-and-forget chaining~~ — **SUPERSEDED by L20** | ~~a step that spawns a child run via the PR-A observer~~ — redirected to composition-by-inlining, resolved server-side at StartRun; no child run, see §3.5, §9 L20 |
 | **E** | Gateway function grants | workflow definitions name allowed gateway tools; gateway enforces scope + audit at call time |
+
+**PR D is being actively built against the chaining/spawn design below — it
+must be redirected per L20 before it lands.** "Effects" is renamed
+**server-performed actions** throughout this doc per L19 (Rule 3); table
+`workflow_step_effect` → `workflow_step_action`, column `effect_kind` →
+`action_kind`, module `effects.py` → `actions.py` — builder task, tracked in
+the PR A row of §2 and the PR sections below.
 
 Sequencing against the existing stack (LOCKED, from the standing merge plan):
 sidecars #12/#24 → catalog pin bump → #909 (`goals/phase-a`) → #921
@@ -106,40 +126,62 @@ Run status enum + transition guard: `constants/workflows.py:38-99`,
 `domain/run_status.py:25-51` (`check_transition`; same-status = idempotent
 no-op; terminal has no outgoing edges). Unchanged by A–E.
 
-### 1.2 NEW: the step-effects ledger (PLANNED A)
+### 1.2 NEW: the step-actions ledger (PLANNED A)
 
-The shared mechanism under PR A (Slack sends) and PR D (child spawns): *the
-server observes a completed step in reported/refreshed run state and performs a
-side effect at most once per (run, step, kind), with retry for never-started
-effects.* One table, one CAS:
+**Amendment (Pablo, 2026-07-07 — L19, Rule 3): renamed from "step-effects" to
+"step-actions."** "Effect" implied reactive causality — a thing that runs
+*because* some other thing ran — which is the framing that let `spawn_child_run`
+masquerade as just another consequence of a completed step. The correct frame:
+an **action** is a step's own verb, declared in the plan at author time,
+performed by the server only because the credential never enters a sandbox
+(the Slack bot token) or the target is a server-owned object. The runtime
+executes the step up to producing its validated output; the server performs
+the step's *declared action* with exactly-once claim semantics. Agent output
+supplies only the arguments, never the verb — an action whose job would be
+deciding or causing *what executes next* is invalid by definition, because
+that is sequencing, and sequencing is Rule 2's property (§3.1), never the
+server's. This is a rename, not a redesign, applied as a global terminology
+sweep across this doc's own prose and code blocks: table
+`workflow_step_effect` → `workflow_step_action`, column `effect_kind` →
+`action_kind`, module `server/proliferate/server/cloud/workflows/effects.py`
+→ `actions.py` — nothing is merged to main yet, so the rename is cheap now and
+never again (builder task, tracked against PR A). Ledger contents, post-rename:
+`slack_notify` now, `function_call` later (§6.6/L18/L23) — **`spawn_child_run`
+is removed outright**, not renamed: L20 (§3.5) supersedes child spawning
+entirely, so there is no action of that kind to carry forward.
+
+The shared mechanism under PR A (Slack sends) — and, per L18/L23, `function_call`
+later: *the server observes a completed step in reported/refreshed run state
+and performs a server-performed action at most once per (run, step, kind),
+with retry for never-started actions.* One table, one CAS:
 
 ```python
 # server/proliferate/db/models/cloud/workflows.py  (PR A)
-class WorkflowStepEffect(Base):
-    """Server-side effects claimed off observed step completions.
+class WorkflowStepAction(Base):
+    """Server-performed actions claimed off observed step completions.
 
-    The (run_id, step_index, effect_kind) unique constraint IS the claim: the
-    transaction that inserts the row owns the effect. status walks
+    The (run_id, step_index, action_kind) unique constraint IS the claim: the
+    transaction that inserts the row owns the action. status walks
     pending -> done | failed; a sweeper retries stale 'pending' rows (an owner
     that crashed before performing) and transient 'failed' rows.
     """
 
-    __tablename__ = "workflow_step_effect"
+    __tablename__ = "workflow_step_action"
     __table_args__ = (
         UniqueConstraint(
-            "run_id", "step_index", "effect_kind",
-            name="uq_workflow_step_effect_claim",
+            "run_id", "step_index", "action_kind",
+            name="uq_workflow_step_action_claim",
         ),
         CheckConstraint(
-            "effect_kind IN ('slack_notify', 'spawn_child_run')",
-            name="ck_workflow_step_effect_kind",
+            "action_kind IN ('slack_notify')",
+            name="ck_workflow_step_action_kind",
         ),
         CheckConstraint(
             "status IN ('pending', 'done', 'failed')",
-            name="ck_workflow_step_effect_status",
+            name="ck_workflow_step_action_status",
         ),
         Index(
-            "ix_workflow_step_effect_sweep",
+            "ix_workflow_step_action_sweep",
             "updated_at",
             postgresql_where=text("status = 'pending'"),
         ),
@@ -150,44 +192,50 @@ class WorkflowStepEffect(Base):
         ForeignKey("workflow_run.id", ondelete="CASCADE"),
     )
     step_index: Mapped[int] = mapped_column(Integer)
-    effect_kind: Mapped[str] = mapped_column(String(32))
+    action_kind: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(16), default="pending")
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
-    # slack_notify: {channel_id, message_ts} | spawn_child_run: {child_run_id}
+    # slack_notify: {channel_id, message_ts} — function_call joins later (§6.6/L23)
     result_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at / updated_at  # house pattern
 ```
 
+**~~`spawn_child_run` (PLANNED D, SUPERSEDED by L20)~~** — the CHECK above
+previously admitted a second kind, `spawn_child_run`, with `result_json` shape
+`{child_run_id}`, backing PR D's fire-and-forget chaining (old §3.5). L20
+(§3.5, §9) rules that workflow composition is nesting at plan-resolution time,
+not a runtime-observed spawn, so there is no child run and nothing for an
+action to claim. Kept here only for provenance; do not build it.
+
 The claim CAS (§3.4 shows it in flow context):
 
 ```python
-# server/proliferate/server/cloud/workflows/effects.py  (PR A)
-async def claim_step_effect(
-    db: AsyncSession, *, run_id: UUID, step_index: int, effect_kind: str
+# server/proliferate/server/cloud/workflows/actions.py  (PR A)
+async def claim_step_action(
+    db: AsyncSession, *, run_id: UUID, step_index: int, action_kind: str
 ) -> UUID | None:
-    """INSERT ... ON CONFLICT DO NOTHING. Returns the new effect id when this
+    """INSERT ... ON CONFLICT DO NOTHING. Returns the new action id when this
     caller won the claim, None when another observer already owns it."""
     stmt = (
-        pg_insert(WorkflowStepEffect)
+        pg_insert(WorkflowStepAction)
         .values(id=uuid4(), run_id=run_id, step_index=step_index,
-                effect_kind=effect_kind, status="pending", attempt_count=0)
-        .on_conflict_do_nothing(constraint="uq_workflow_step_effect_claim")
-        .returning(WorkflowStepEffect.id)
+                action_kind=action_kind, status="pending", attempt_count=0)
+        .on_conflict_do_nothing(constraint="uq_workflow_step_action_claim")
+        .returning(WorkflowStepAction.id)
     )
     return (await db.execute(stmt)).scalar_one_or_none()
 ```
 
 **Honest guarantee statement** (PLANNED A — this wording should survive into
-the code docstring): the ledger gives *exactly-once claim*. Effect execution is
-*at-least-once completion* via the sweeper. A crash inside the effect window
+the code docstring): the ledger gives *exactly-once claim*. Action execution is
+*at-least-once completion* via the sweeper. A crash inside the action window
 (after the Slack POST succeeded, before `status='done'` committed) can
 duplicate a send — the same guarantee class as every non-transactional external
-side effect. For **child spawns** we close even that gap: the child
-`run_id` is pre-generated and stored on the effect row *before* `start_run` is
-called with it, and `start_run` gains an optional explicit `run_id` — a
-sweeper retry then re-creates the same child id and the insert conflicts
-harmlessly. True exactly-once for spawns; Slack keeps the honest weaker class.
+side effect. (The stronger, pre-generated-id trick that used to close this gap
+for child spawns no longer applies — there are no child spawns under L20;
+`function_call`'s guarantee class, when it is built, is a question for that
+design pass, §6.6/L23.)
 
 ### 1.3 NEW: poll trigger config + seen-set (PLANNED B)
 
@@ -240,10 +288,17 @@ class WorkflowTriggerItem(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 ```
 
-### 1.4 NEW: parent↔child linkage (PLANNED D)
+### 1.4 ~~NEW: parent↔child linkage (PLANNED D)~~ — SUPERSEDED by L20 (§9)
+
+**Superseded (Pablo, 2026-07-07 — L20, §9).** There is no child run under the
+nesting-composition ruling: composing workflow B inside workflow A inlines B's
+steps into A's single resolved plan at StartRun, server-side. One run, one
+plan, one cursor, one sandbox — no `parent_run_id`, no `parent_step_index`, no
+cross-run linkage of any kind. The migration and column below are not built;
+kept for provenance only.
 
 ```python
-# alembic: <rev>_workflow_run_parent.py  (PR D)
+# ~~alembic: <rev>_workflow_run_parent.py  (PR D)~~ — NOT BUILT, superseded by L20
 op.add_column("workflow_run", sa.Column(
     "parent_run_id", sa.Uuid(),
     sa.ForeignKey("workflow_run.id", ondelete="SET NULL"), nullable=True))
@@ -252,8 +307,9 @@ op.create_index("ix_workflow_run_parent", "workflow_run", ["parent_run_id"],
                 postgresql_where=sa.text("parent_run_id IS NOT NULL"))
 ```
 
-Child provenance (`trigger_kind` value, executor identity, target workspace) is
-[OPEN-7] — see §3.6.
+Child provenance (`trigger_kind` value, executor identity, target workspace)
+was [OPEN-7] — see §3.6, itself superseded by L20: there is no child run left
+to have provenance.
 
 ### 1.5 Definition-JSON vocabulary growth (PLANNED C, E — no new tables)
 
@@ -264,7 +320,7 @@ Two extensions to the canonical definition dict stored in
 {
   "args": [...],                       // exists today
   "setup": {...},                      // exists today
-  "functions": [                       // NEW (PR E): gateway tool grants
+  "functions": [                       // NEW (PR E): gateway tool grants — L22, L24
     { "provider": "issues", "tools": ["claim", "search_issues", "update_status"] }
   ],
   "steps": [
@@ -275,7 +331,7 @@ Two extensions to the canonical definition dict stored in
       "output_schema": { "type": "object", "required": ["pr_title"], "properties": { "pr_title": {"type": "string"} } },
       "on_fail": { "kind": "stop" }
     },
-    {                                  // NEW (PR D): chaining step
+    {                                  // ~~NEW (PR D): chaining step~~ — SUPERSEDED by L20, see below
       "kind": "workflow.run",
       "workflow_id": "…uuid…",
       "args": { "issue_id": "{{steps[0].output.issue_id}}" }
@@ -284,19 +340,45 @@ Two extensions to the canonical definition dict stored in
 }
 ```
 
+**~~`workflow.run` (PLANNED D)~~ — SUPERSEDED by L20 (Pablo, 2026-07-07, §9).**
+This step kind, as a runtime-executed "spawn a child run" verb, is not built.
+L20 rules that composing workflow B inside workflow A means **B's steps are
+inlined into A's resolved plan at resolution time**, server-side, before
+delivery — see §3.5 for the full ruling and the two resolver obligations
+(arg binding, step-ref namespacing) this implies for
+[definition.py](../server/proliferate/server/cloud/workflows/domain/definition.py).
+Whatever surface syntax replaces the `workflow.run` step above (a "compose"
+block, an inline-reference field — undesigned) must resolve to inlined steps,
+never to a runtime step kind that produces a "spawn requested" output.
+
+**L22/L24 on the `functions` block (Pablo, 2026-07-07):** `functions` is a
+**declared allow-list**, validated at save time against the owner's visible
+integration definitions and resolved at `StartRun` — not a static registry,
+not runtime discovery. `StartRun` **fails the run** if a declared provider has
+no ready account; it never silently narrows the grant. There is no workflow
+"kind" taxonomy (triage vs. fix vs. anything else) that pre-sizes scope —
+each definition's own `functions[]` independently sizes its grant, full stop.
+First providers exposed this way (L21): the **issues service** (`api_key`
+seed, §6.1) and **Slack** (`api_key`-style, credential path already exercised
+by `slack_notify`) — both have no mid-run OAuth-refresh failure mode.
+OAuth-DCR providers (Linear, Notion, Supabase) are deferred until the frozen
+per-run scope has a mid-run reauth story; see §6 for the full ruling.
+
 Validator: `SUPPORTED_WORKFLOW_STEP_KINDS` in
 [constants/workflows.py:113-129](../server/proliferate/constants/workflows.py)
-gains `agent.emit` + `workflow.run`; new `_parse_agent_emit` / `_parse_workflow_run`
-register in `_STEP_PARSERS`
+gains `agent.emit` (PR C) — **not** `workflow.run` (superseded by L20; whatever
+replaces it is undesigned); new `_parse_agent_emit` registers in
+`_STEP_PARSERS`
 ([definition.py](../server/proliferate/server/cloud/workflows/domain/definition.py),
 pattern: deep dive reading-path ①). `functions` joins `args`/`setup`/`steps` in
 the top-level allowed keys; each entry validates provider = a registered
 integration-definition namespace visible to the owner, tools = non-empty
-strings. Rust mirror: two `StepKind` variants in
+strings. Rust mirror: **one** `StepKind` variant (`AgentEmit`) in
 [plan.rs:67-98](../anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs)
-(internally-tagged enum — old runtimes hard-fail on unknown kinds, which is
-correct: a plan with steps the runtime can't execute must not half-run; the
-catalog/runtime rebuild ships in the same PR).
+— not two; `WorkflowRun` is not added (internally-tagged enum — old runtimes
+hard-fail on unknown kinds, which is correct: a plan with steps the runtime
+can't execute must not half-run; the catalog/runtime rebuild ships in the
+same PR).
 
 ---
 
@@ -306,29 +388,34 @@ Every file the system touches after A–E. Legend: ✅ exists today (see deep di
 for role detail) · **A**/**B**/**C**/**D**/**E** arrives in that PR · Δ modified
 in that PR.
 
+Renames per L19 (Rule 3) and strikes per L20 applied below — **D's rows are
+kept for provenance and marked superseded, not deleted**; whatever replaces
+composition (inlining, resolved server-side at StartRun) is undesigned and
+will need its own file-tree entries when it lands.
+
 ```
 server/proliferate/
-├── constants/workflows.py                              ✅ ΔC ΔD (step-kind slugs) ΔE (functions caps)
-├── db/models/cloud/workflows.py                        ✅ ΔA (WorkflowStepEffect) ΔB (trigger poll cols, WorkflowTriggerItem) ΔD (parent cols)
-├── db/store/cloud_workflows.py                         ✅ ΔA (effect CRUD+sweep scan) ΔD (start_run explicit run_id, children query)
+├── constants/workflows.py                              ✅ ΔC (step-kind slugs) ΔE (functions caps) — ΔD superseded (L20; no workflow.run slug)
+├── db/models/cloud/workflows.py                        ✅ ΔA (WorkflowStepAction, renamed from WorkflowStepEffect — L19) ΔB (trigger poll cols, WorkflowTriggerItem) — ΔD superseded (L20; no parent cols)
+├── db/store/cloud_workflows.py                         ✅ ΔA (action CRUD+sweep scan) — ΔD superseded (L20; no explicit run_id/children query — no children)
 ├── db/store/cloud_workflow_triggers.py                 ✅ ΔB (claim_due_poll_trigger, item seen-set CAS, cursor persist)
 ├── alembic/versions/
 │   ├── e4f7a2b9c6d1_workflow_entities.py               ✅
 │   ├── b2d4f6a8c0e1_workflow_trigger.py                ✅
-│   ├── <rev>_workflow_step_effect.py                   A
+│   ├── <rev>_workflow_step_action.py                   A   (renamed from <rev>_workflow_step_effect.py — L19)
 │   ├── <rev>_workflow_poll_trigger.py                  B
-│   ├── <rev>_workflow_run_parent.py                    D
-│   └── <rev>_workflow_run_gateway_token.py             E   (shape depends on OPEN-3)
+│   ├── ~~<rev>_workflow_run_parent.py~~                ~~D~~ — SUPERSEDED by L20, not built
+│   └── <rev>_workflow_run_gateway_token.py             E   (shape per L25/OPEN-3)
 ├── server/cloud/workflows/
 │   ├── api.py                                          ✅ ΔA (GET slack channels for picker) ΔB (poll-trigger CRUD passthrough)
-│   ├── models.py                                       ✅ ΔA ΔB ΔC ΔD ΔE (request/response mirrors)
-│   ├── service.py                                      ✅ ΔB (poll trigger validate) ΔD (start_run run_id param, parent linkage)
-│   ├── delivery.py                                     ✅ ΔA (refresh path calls effects.apply)
-│   ├── scheduler.py                                    ✅ ΔA (phase 3: refresh in-flight scheduled cloud runs + effect sweeper) ΔB (imports poller into the same beat)
-│   ├── effects.py                                      A   (claim CAS, slack_notify performer, spawn_child performer(D), sweeper)
+│   ├── models.py                                       ✅ ΔA ΔB ΔC ΔE (request/response mirrors) — ΔD superseded (L20)
+│   ├── service.py                                      ✅ ΔB (poll trigger validate) — ΔD's run_id param/parent linkage superseded (L20); inlining resolver work lands in domain/definition.py instead
+│   ├── delivery.py                                     ✅ ΔA (refresh path calls actions.apply)
+│   ├── scheduler.py                                    ✅ ΔA (phase 3: refresh in-flight scheduled cloud runs + action sweeper) ΔB (imports poller into the same beat)
+│   ├── actions.py                                      A   (renamed from effects.py — L19; claim CAS, slack_notify performer, sweeper — no spawn_child performer, superseded by L20)
 │   ├── poller.py                                       B   (poll loop: fetch → validate → dedup → spawn → cursor persist)
 │   └── domain/
-│       ├── definition.py                               ✅ ΔC ΔD (parsers) ΔE (functions block)
+│       ├── definition.py                               ✅ ΔC (parsers) ΔE (functions block, allow-list validation — L22) — ΔD's workflow.run parser superseded (L20); resolver gains cycle/depth-check + arg-binding + step-ref-namespacing obligations when nesting composition is designed
 │       ├── interpolation.py                            ✅ (unchanged — grammar already supports everything C needs)
 │       ├── run_status.py                               ✅
 │       ├── policy.py                                   ✅
@@ -337,34 +424,34 @@ server/proliferate/
 │   ├── anyharness/workflow_runs.py                     ✅
 │   └── slack/{client,messages,webhooks,errors}.py      ✅ (reused as-is by A: chat_post_message client.py:91, list_channels client.py:115)
 └── server/cloud/integration_gateway/
-    ├── api.py · dependencies.py · service.py           ✅ ΔE (grant carries run scope; tools/list + tools/call filtered by grant scope)
+    ├── api.py · dependencies.py · service.py           ✅ ΔE (grant carries run scope — L25 two-layer composition; tools/list + tools/call filtered by grant scope)
     └── domain/{json_rpc,tool_args,virtual_tools}.py    ✅ ΔE
 
 anyharness/crates/anyharness-lib/src/
 ├── domains/workflows/
-│   ├── plan.rs                                         ✅ ΔC (AgentEmitStep) ΔD (WorkflowRunStep)
+│   ├── plan.rs                                         ✅ ΔC (AgentEmitStep) — ΔD's WorkflowRunStep superseded (L20; not added)
 │   ├── engine.rs · model.rs · store.rs                 ✅
 │   ├── service.rs                                      ✅
-│   └── templates.rs                                    ✅ ΔC (resolve_step arm for emit; workflow.run args late-bind)
+│   └── templates.rs                                    ✅ ΔC (resolve_step arm for emit) — ΔD's workflow.run args late-bind superseded (L20; nesting resolves args server-side at plan-resolution time, not late-bound at runtime)
 ├── live/workflows/
-│   ├── executor.rs                                     ✅ ΔC (run_emit: prompt→await→read→validate→reprompt) ΔD (instant-complete arm) ΔE (per-run gateway launch extra if OPEN-3=a)
+│   ├── executor.rs                                     ✅ ΔC (run_emit: prompt→await→read→validate→reprompt) ΔE (per-run gateway launch extra if OPEN-3=a) — ΔD's instant-complete arm superseded (L20)
 │   ├── commands.rs                                     ✅ ΔA (notify_step: channel:"slack" + slack_channel_id passthrough — 5 lines)
 │   ├── actor.rs · manager.rs · exec_policy.rs          ✅
 ├── persistence/sql/0053_workflow_runs.sql              ✅ (number may shift on merge-collision renumber)
 └── api/http/workflow_runs.rs                           ✅
 
 apps/packages/product-domain/src/workflows/
-├── definition.ts · validation.ts                       ✅ ΔC ΔD ΔE (step kinds + functions mirror)
-├── run-status.ts                                       ✅ ΔC ΔD (output chips: emit payload, child-run link)
+├── definition.ts · validation.ts                       ✅ ΔC ΔE (step kinds + functions mirror) — ΔD superseded (L20)
+├── run-status.ts                                       ✅ ΔC (output chips: emit payload) — ΔD's child-run link superseded (L20; no child run)
 ├── interpolation.ts · effective-config.ts              ✅
-├── model.ts · presentation.ts · templates.ts           ✅ ΔB (poll trigger label) ΔD (chained templates)
+├── model.ts · presentation.ts · templates.ts           ✅ ΔB (poll trigger label) — ΔD's chained templates superseded (L20)
 
 apps/desktop/src/
 ├── components/workflows/editor/
-│   ├── WorkflowStepPanel.tsx                           ✅ ΔA (slack channel picker) ΔC (emit editor: prompt + schema) ΔD (workflow picker + args)
+│   ├── WorkflowStepPanel.tsx                           ✅ ΔA (slack channel picker) ΔC (emit editor: prompt + schema) — ΔD's workflow picker + args superseded (L20; nesting UI is undesigned)
 │   ├── WorkflowTriggersCard.tsx                        ✅ ΔB (poll config: url/header/secret/interval/schema/mapping)
 │   ├── WorkflowSetupCard.tsx                           ✅ Δ(OPEN-1) 
-│   └── (rest of editor/, home/, run/, screen/)         ✅ ΔD (run view parent↔child links)
+│   └── (rest of editor/, home/, run/, screen/)         ✅ — ΔD's run view parent↔child links superseded (L20; no child run)
 ├── hooks/access/cloud/workflows/                       ✅ ΔA ΔB (new endpoints)
 └── lib/access/cloud/workflows.ts                       ✅ ΔA ΔB
 
@@ -438,7 +525,25 @@ require later, for the record: a lane-keyed cursor (per-lane
 `workflow_step_runs` partitioning), concurrent session management per lane in
 the executor, lane-aware on-fail semantics (does lane 2 die when lane 1
 fails?), and a two-dimensional run timeline. Nothing in A–E forecloses it; the
-chaining story below is the v1 pressure valve.
+composition story below (§3.5 — nesting, per L20, not the old chaining
+design) is the v1 pressure valve.
+
+**Amendment (Pablo, 2026-07-07 — L19, Rules 1 & 2, §9):** the paragraph above
+already states these two rules; L19 formalizes rather than changes them, so
+they are recorded here rather than rewritten. **Rule 1 — one workflow, one
+plan JSON, delivered whole:** the server resolves a workflow into a single
+complete plan at `StartRun` (exactly the "resolution point" language above)
+and hands the entire thing to the runtime in one delivery; after handoff the
+server only observes (§3.2). **Rule 2 — the runtime owns sequencing, with no
+exceptions:** step N → N+1 is decided and executed by `run_next_step` against
+its own SQLite cursor, above, in full; the server never advances, triggers, or
+selects a step — if the server vanished mid-run, the plan would still execute
+to completion. Server-side machinery that looks like it participates in
+sequencing — the ping handler (§3.7) and the scheduler refresh (§4.1) — is
+read-only observation, not a second driver. Rule 2 is the reason L20 (§3.5)
+rules composition as resolution-time inlining rather than a runtime step that
+spawns and waits: anything that decides "what runs next" has to happen before
+the plan is delivered, never during.
 
 ### 3.2 Observed state → server (LOCKED — shipped)
 
@@ -453,33 +558,40 @@ ids/cost. Cloud lane: `GET /runs/{id}/refresh` → `_sync_run_from_view`
 
 ### 3.3 NEW — the observer hook (PLANNED A)
 
+**Renamed per L19 (Rule 3):** `effects` → `actions` throughout — module,
+function names, and the `_STEP_KINDS` map. `workflow.run`/`spawn_child_run`
+is dropped from the map outright (SUPERSEDED by L20 — there is nothing left
+for the observer to spawn; composition is resolved server-side at StartRun,
+before the runtime ever sees the plan, so there is no completed step for the
+observer to react to).
+
 Both ingest paths gain one call after they persist observed state:
 
 ```python
 # at the end of report_run_status(...) and _sync_run_from_view(...):
-await effects.apply_step_effects(db, run=updated)
+await actions.apply_step_actions(db, run=updated)
 ```
 
 ```python
-# server/proliferate/server/cloud/workflows/effects.py  (PR A; D adds the second arm)
-EFFECT_STEP_KINDS = {"notify": "slack_notify", "workflow.run": "spawn_child_run"}
+# server/proliferate/server/cloud/workflows/actions.py  (PR A)
+ACTION_STEP_KINDS = {"notify": "slack_notify"}   # function_call joins later, §6.6/L23 — no workflow.run entry (L20)
 
-async def apply_step_effects(db: AsyncSession, *, run: WorkflowRunRecord) -> None:
-    """Scan observed step outputs for effect-bearing completed steps; claim and
+async def apply_step_actions(db: AsyncSession, *, run: WorkflowRunRecord) -> None:
+    """Scan observed step outputs for action-bearing completed steps; claim and
     perform any not yet owned. Safe to call on every report/refresh: the ledger
     CAS makes re-observation free."""
     plan_steps = (run.resolved_plan_json or {}).get("steps", [])
     for index_str, output in (run.step_outputs_json or {}).items():
         index = int(index_str)
         step = plan_steps[index] if index < len(plan_steps) else {}
-        effect_kind = _effect_kind_for(step, output)      # notify+slack / workflow.run only
-        if effect_kind is None:
+        action_kind = _action_kind_for(step, output)      # notify+slack only
+        if action_kind is None:
             continue
-        effect_id = await claim_step_effect(
-            db, run_id=run.id, step_index=index, effect_kind=effect_kind)
-        if effect_id is None:
+        action_id = await claim_step_action(
+            db, run_id=run.id, step_index=index, action_kind=action_kind)
+        if action_id is None:
             continue                                       # another observer owns it
-        await _perform(db, effect_id, effect_kind, run=run, step=step, output=output)
+        await _perform(db, action_id, action_kind, run=run, step=step, output=output)
 ```
 
 `_perform("slack_notify")` resolves the owner's ready Slack integration account
@@ -488,21 +600,37 @@ async def apply_step_effects(db: AsyncSession, *, run: WorkflowRunRecord) -> Non
 decrypts the bundle, and calls the **existing first-class client**
 `chat_post_message(bot_token=…, channel_id=step["slack_channel_id"], text=output["message"], …)`
 ([integrations/slack/client.py:91-112](../server/proliferate/integrations/slack/client.py)).
-No new Slack machinery is built. Runtime side is a 5-line change in
+No new Slack machinery is built.
+
+**Defect found during the pass-2 research, recorded as a builder obligation
+on this file, now (not deferred to PR E):** `_perform_slack_notify` calls
+`get_ready_account_for_provider` **without `organization_id`**, silently
+bypassing org policy. Fix: thread the run's org id through
+`_perform`/`_perform_slack_notify` into the account lookup — belongs in the
+actions stack (this section), not in PR E.
+
+Runtime side is a 5-line change in
 [commands.rs:197-208](../anyharness/crates/anyharness-lib/src/live/workflows/commands.rs):
 `NotifyChannel::Slack` now outputs `{channel: "slack", message, slack_channel_id}`
-instead of `"slack_unavailable"` — the *effect* is the server's job; the in-app
+instead of `"slack_unavailable"` — the *action* is the server's job (§1.2/L19:
+the step's own declared verb, not a reaction to what ran); the in-app
 record remains the floor and the step still never hard-fails (LOCKED — shipped
 stance, deep dive §7).
 
 **The unattended-cloud gap this design must close** (PLANNED A — load-bearing):
 cloud `/refresh` is UI-driven; a scheduled/poll-fired cloud run nobody is
-watching would never be observed, so effects would never fire. Therefore the
+watching would never be observed, so actions would never fire. Therefore the
 workflow scheduler tick gains **phase 3**: refresh in-flight
 (`delivered`/`running`/`waiting_approval`) scheduled+polled cloud runs, capped
-per tick, plus the effect sweeper (retry `pending` effects older than 60s,
+per tick, plus the action sweeper (retry `pending` actions older than 60s,
 `attempt_count`-bounded). Local-lane runs keep the desktop relay as their
-observer (app-open-only — the known v1 gap stands).
+observer (app-open-only — the known v1 gap stands). Per §3.7/L16, this is
+now a backstop behind the per-run completion ping, not the primary mechanism
+— unaffected by L19/L20, restated here only for the cross-reference.
+
+A second pre-existing defect, found during the same pass-2 research, is
+recorded as a builder obligation against §5.3/OPEN-5 (the local-lane gateway
+gap that section already describes) rather than here.
 
 ### 3.4 Crash-resume walkthrough (LOCKED — shipped; extended by A)
 
@@ -522,26 +650,81 @@ between a notify step completing and the Slack send*:
 runtime: notify step completes → output_json = {channel:"slack", slack_channel_id, message}
 relay/refresh: POST /status carries step_outputs["3"]
 server: report_run_status persists outputs
-        → apply_step_effects → claim CAS inserts (run, 3, slack_notify) 'pending'
+        → apply_step_actions → claim CAS inserts (run, 3, slack_notify) 'pending'
         → ☠ server crashes before chat_post_message
 server restarts:
-  relay re-reports (same signature) → apply_step_effects → CAS conflicts → skip  ✓ no double claim
-  scheduler phase-3 sweeper: finds 'pending' effect, age > 60s, attempt_count 0
+  relay re-reports (same signature) → apply_step_actions → CAS conflicts → skip  ✓ no double claim
+  scheduler phase-3 sweeper: finds 'pending' action, age > 60s, attempt_count 0
         → re-performs chat_post_message → status='done', result_json={message_ts}  ✓ delivered once
-run view: renders the delivery chip from the effect row (sent / pending / failed)
+run view: renders the delivery chip from the action row (sent / pending / failed)
 ```
 
-And for PR D's child spawn: the effect row gets `result_json={"child_run_id": <pre-generated uuid>}`
-*in the claim transaction*; `start_run(..., run_id=child_run_id)` is called
-after. A sweeper retry calls `start_run` with the same id → PK conflict →
-treat as already-spawned. Exactly-once, provably.
+**~~And for PR D's child spawn: the effect row gets `result_json={"child_run_id":
+<pre-generated uuid>}` in the claim transaction; `start_run(...,
+run_id=child_run_id)` is called after. A sweeper retry calls `start_run` with
+the same id → PK conflict → treat as already-spawned. Exactly-once,
+provably.~~ — SUPERSEDED by L20 (§9).** There is no child spawn to make
+exactly-once: composition under L20 is resolved into one plan at StartRun,
+before delivery, so the crash-resume story for a nested step is identical to
+the crash-resume story for any other step in that one plan — no separate
+trace needed.
 
-### 3.5 Chaining: `workflow.run` fire-and-forget (PLANNED D; semantics LOCKED 2026-07-06)
+### 3.5 ~~Chaining: `workflow.run` fire-and-forget (PLANNED D; semantics LOCKED 2026-07-06)~~ — SUPERSEDED by L20 (§9)
 
-Runtime arm — instant, like `agent.config`:
+**Superseded (Pablo, 2026-07-07 — L20/Rule 4, §9).** Everything below this
+line, to the end of §3.6, described the old design: a runtime step kind that
+requests a spawn, observed and performed by the PR-A observer as a
+`spawn_child_run` action. **That mechanism is not being built.** PR D, as
+currently in flight, must be redirected to the ruling that follows before it
+lands.
+
+**The ruling, stated positively:** using workflow B inside workflow A means
+**B's steps are inlined into A's resolved plan at resolution time,
+server-side, before delivery.** One run, one plan, one cursor, one sandbox.
+There is no child run, no parent linkage, no `spawn_child_run` action, no
+cross-sandbox fan-out — in v1, none of that exists. This follows directly
+from L19's Rule 2 (the runtime owns sequencing, no exceptions) and Rule 4
+itself: a step whose job is deciding or causing what executes next is
+sequencing, and sequencing is not a server-performed action's job — so
+composition cannot be modeled as a step that "requests" a spawn observed
+after the fact. It has to be resolved into the sequence before the runtime
+ever sees it.
+
+Two named resolver obligations, both **resolution-time problems in the
+server's plan resolver** ([definition.py](../server/proliferate/server/cloud/workflows/domain/definition.py)),
+undesigned beyond this framing:
+
+- **(a) Arg binding** — the composing step's arg mapping becomes the
+  interpolation context for the inlined steps. Whatever syntax names "run B
+  here with these args" (undesigned; the old `workflow.run` step shape is not
+  it, since it produced a runtime-observed output rather than resolving
+  inline), its `args` mapping must feed B's `{{args.*}}` the same way
+  `StartRun` feeds a top-level run's args today (§3.1).
+- **(b) Step-ref namespacing** — B's internal `steps[n]`/named refs (§7.5/L6,
+  once named refs land) must not collide with A's once inlined into one flat
+  step list. This is a straightforward but real rewrite pass over B's
+  templated fields at inlining time.
+
+**Save-time validation gains a cycle/depth check:** A includes B includes A
+must fail at **save**, not at run — the mirror image of the old runtime
+chain-depth cap below, moved earlier because there's no runtime spawn left to
+cap.
+
+**If a genuinely-needed "start a run from a run" case appears later** (the
+one thing fire-and-forget chaining bought that inlining does not: a truly
+independent child run, its own record/actor/timeline/cost line, parent
+indifferent to its fate) **it requires a new explicit ruling that must clear
+Rule 3** (§9/L19) — a step that starts another run is, definitionally, an
+action whose job is causing what executes next, which Rule 3 rules out by
+construction unless a future ruling carves an explicit exception. It is not
+a default outcome of iterating on this design; someone has to rule it again.
+
+**Below this line: the old design, kept for provenance only. Not built.**
+
+~~Runtime arm — instant, like `agent.config`:~~
 
 ```rust
-// plan.rs (PR D)
+// ~~plan.rs (PR D)~~ — NOT BUILT, superseded by L20
 #[serde(rename = "workflow.run")]
 WorkflowRun(WorkflowRunStep),
 
@@ -559,7 +742,7 @@ StepKind::WorkflowRun(spawn) => StepOutcome::Completed {
 },
 ```
 
-The runtime performs nothing; the PR-A observer sees the completed step and
+~~The runtime performs nothing; the PR-A observer sees the completed step and
 spawns the child through the ledger (§3.4). **What fire-and-forget does and
 does not guarantee (state this in the editor UI copy too):** the child run is
 created exactly once with the interpolated args, has its own run record, actor,
@@ -570,17 +753,26 @@ using B's results*" across workflows in one plan — that composition needs
 await-child, which is deliberately v2 (awkward with one-shot plan delivery;
 LOCKED deferral, 2026-07-06). **No mid-run plan mutation, ever** (LOCKED —
 2026-07-06: "no await-child in v1; no mid-run plan mutation ever"): appending
-steps to a delivered plan is ruled out.
+steps to a delivered plan is ruled out.~~ Note: "no mid-run plan mutation,
+ever" survives L20 intact — inlining happens entirely before delivery, at
+resolution time, which is the strongest possible version of that rule, not an
+exception to it.
 
-Guard rails (PLANNED D): validator rejects `workflow_id` = the defining
+~~Guard rails (PLANNED D): validator rejects `workflow_id` = the defining
 workflow's own id (direct self-spawn); the spawner enforces a chain-depth cap
 (walk `parent_run_id`, max 5) against indirect cycles — a depth breach records
 the effect as `failed` with `error_message="chain_depth_exceeded"`, visible in
-the parent's run view.
+the parent's run view.~~ Replaced by the save-time cycle/depth check above.
 
-### 3.6 [OPEN-7] Child-run provenance — RULED (a) (Pablo, 2026-07-07)
+### 3.6 ~~[OPEN-7] Child-run provenance — RULED (a) (Pablo, 2026-07-07)~~ — SUPERSEDED by L20 (§9)
 
-**Ruling: new `'workflow'` trigger_kind (CHECK widened in the PR D migration);
+**Superseded (Pablo, 2026-07-07 — L20, §9).** There is no child run left to
+have provenance: `trigger_kind`, `executor_user_id`, and target-workspace
+inheritance were all questions about a second run record that no longer
+exists. Kept below for provenance only — this ruling does not apply to
+anything built under L20.
+
+~~**Ruling: new `'workflow'` trigger_kind (CHECK widened in the PR D migration);
 child inherits the parent's workspace; executor = owner.** Original options,
 for the record:
 
@@ -603,7 +795,69 @@ ambiguity. Inheriting the parent workspace avoids workspace provisioning in the
 observer (which has no UI context to pick one) at the cost that a chained
 workflow designed for a clean tree may see the parent's dirt — mitigated
 because chained definitions declare their own Setup and can open fresh
-sessions, and the fresh-tree question is the same one OPEN-4 answers for polls.
+sessions, and the fresh-tree question is the same one OPEN-4 answers for polls.~~
+
+### 3.7 Amendment (Pablo, 2026-07-07): the completion ping is the run-report credential
+
+**Ruling: every run's delivery mints a per-run gateway token, even when the
+plan needs no integration scopes at all (empty `scope_json` is legal) — and
+that token doubles as the run-report credential.** The mechanism §6.4 built
+to answer "how does a workflow's agent call a gateway tool" now also answers
+"how does the runtime tell the server a step finished," for exactly the
+cloud-lane runs nobody is watching — the gap named in §3.3.
+
+Runtime side: after each step transition is applied by the workflow actor —
+`apply_decision` in `live/workflows/actor.rs` — fire-and-forget
+`POST /runs/{run_id}/ping`, authorized by the per-run token: a spawned task,
+result ignored. A failed ping never changes engine state — the cursor has
+already moved by the time the ping fires; the ping is a nudge, not a
+transition.
+
+Server side: the handler validates the token, requires the token's `run_id`
+to match the path (so run A's token can't ping run B), and triggers the
+existing refresh path — `_sync_run_from_view` in `delivery.py` — which pulls
+the authoritative run view from the runtime. No new state machine, no new
+ingest path; the ping just wakes the one that already exists (§3.2).
+
+The ping body carries nothing load-bearing: it is a stateless nudge.
+Duplicate, stale, and lost pings are all safe, because refresh is
+reconcile-shaped and run-status transitions are monotonic (same-status is a
+no-op per `check_transition`). **Consequence:** the scheduler's phase-3
+refresh-in-flight-runs sweep (§3.3) demotes from primary mechanism to
+backstop cadence — see §4.1.
+
+Test obligations (per `specs/developing/testing/README.md`): Rust tier-1 via
+an injected recording ping sink (assert a ping is attempted after every
+transition; assert ping failure is inert); Python tier-1 for token scoping
+(run A's token cannot ping run B), idempotency, and no status regression when
+a ping arrives after the scheduler has already refreshed; a new golden
+contract fixture under `fixtures/contracts/run-ping/`.
+
+### 3.8 Amendment (Pablo, 2026-07-07): session lockout is an engine invariant, not UI politeness
+
+**Ruling: a session referenced by a non-terminal workflow run rejects user
+prompts at the runtime session service layer.** This is engine-enforced, not
+a UI convention the run view happens to apply.
+
+Mechanism: a new `WorkflowHeld { run_id }` variant on `SendPromptError`
+(`domains/sessions/runtime/mod.rs`), mapped in `api/http/sessions_errors.rs`
+to `409` with wire code `SESSION_WORKFLOW_HELD` — the file's
+non-exhaustive-match convention forces the mapping to be written, not
+skipped. The same variant pattern gates `SetSessionConfigOptionError` and
+`ForkSessionError`, so a held session can't be prompted, reconfigured, or
+forked out from under the run that's driving it.
+
+Guard implementation: a workflows-store query,
+`is_session_held_by_active_run(session_id)`. The run row IS the lock —
+non-terminal status holds, terminal status releases; there is no separate
+lock state to leak or sweep. `human.approval` is explicitly unaffected:
+approvals resolve via the run API, never the session handle.
+
+Test obligations: Rust tier-1 store/service reject-then-release (insert an
+active run holding the session → prompt rejected → mark the run terminal →
+prompt accepted), plus the wire-code mapping assertion; tier-2 flow-registry
+row (composer locked while the run is active → run completes → composer
+unlocked).
 
 ---
 
@@ -630,10 +884,18 @@ The workflow beat ticks every 15s
 - Loop wrapper: exponential backoff ×2 cap 300s, Sentry after 3 consecutive
   failures.
 
-PR A adds **phase 3** (observer refresh + effect sweeper, §3.3). PR B adds the
-poll loop *into the same beat* — a third gathered coroutine, same
-backoff/Sentry pattern, so operationally there is still exactly one worker
-process to run and monitor.
+PR A adds **phase 3** (observer refresh + action sweeper, §3.3 — renamed
+from "effect sweeper" per L19) — originally designed as the primary way an
+unwatched cloud run gets observed. **Amended 2026-07-07 (§3.7): phase 3 is now
+the backstop behind the per-run completion ping, not the primary mechanism.**
+The ping fires after every step transition, so in steady state phase 3's
+refresh sweep is redundant with it; phase 3 only earns its keep when a ping is
+lost, delayed, or races the runtime's own state write — the same "backstop
+cadence, not the load-bearing path" role the action sweeper already plays for
+actions. PR B adds the poll
+loop *into the same beat* — a third gathered coroutine, same backoff/Sentry
+pattern, so operationally there is still exactly one worker process to run
+and monitor.
 
 ### 4.2 The poll contract (LOCKED — restated verbatim from issue-autofix-system-v1 §2, not re-derived)
 
@@ -767,9 +1029,9 @@ and it is why no ack callback exists anywhere.
 |---|---|---|
 | schedule triggers | **cloud only** | `_validate_trigger_target_mode` rejects local at create (`schedule_local_unsupported`) — no server→desktop claim protocol exists |
 | poll triggers (B) | **cloud only** | same machinery, same reason; inherits the restriction |
-| effect observer via scheduler phase 3 (A) | cloud runs | local runs are observed by the desktop relay (app-open-only) |
-| Slack notify effect (A) | **both** — the effect runs on the *server*, fed by either lane's observed state | local lane caveat: app closed ⇒ report delayed ⇒ send delayed (not lost) |
-| gateway dotfile (`integration-gateway.json`) | **cloud only** | written solely by `proliferate-worker` at enroll ([integration_gateway.rs:21-45](../anyharness/crates/proliferate-worker/src/integration_gateway.rs)); nothing in the desktop lane writes it (verified — see OPEN-5) |
+| action observer via scheduler phase 3 (A) | cloud runs | local runs are observed by the desktop relay (app-open-only); renamed from "effect observer" per L19 |
+| Slack notify action (A) | **both** — the action runs on the *server*, fed by either lane's observed state | local lane caveat: app closed ⇒ report delayed ⇒ send delayed (not lost); renamed from "Slack notify effect" per L19 |
+| gateway dotfile (`integration-gateway.json`) | **cloud only** | written solely by `proliferate-worker` at enroll ([integration_gateway.rs:21-45](../anyharness/crates/proliferate-worker/src/integration_gateway.rs)); nothing in the desktop lane writes it (verified — see §5.3/OPEN-5; builder obligation added there per pass-2 research: surface this loudly as an explicit error, not silence, even while local support stays deferred) |
 | manual + chat-triggered runs | both | client-initiated; the desktop delivers locally itself |
 
 ### 5.2 [OPEN-4] Poll-trigger run target — RULED (a) (Pablo, 2026-07-07)
@@ -815,7 +1077,10 @@ latency on a 50-item burst ≈ 50 × 3 min ≈ 2.5h for the tail — acceptable 
 triage (5-min poll cadence already sets the latency floor, and the fix
 workflow's deeper runs are fewer). Recommendation: **(a) for v1**, with (c)'s
 door left open in the trigger schema. Tradeoff: (a)'s single workspace means
-poll-fired runs share a tree — same dirt concern as OPEN-7; the triage/fix
+poll-fired runs share a tree — the same dirt concern that composition-by-nesting
+now inherits by construction, since L20 (§3.5) puts an inlined workflow B in
+the *same* sandbox and session context as A, tighter than the old
+inherit-the-parent's-workspace OPEN-7 ruling it superseded; the triage/fix
 workflows mitigate by starting fresh sessions and not depending on tree state,
 but a customer workflow that edits code in a pinned workspace must handle its
 own hygiene (`shell.run` git-clean step, or declare fresh-tree-needed — a v2
@@ -849,6 +1114,34 @@ trigger. If (a), the gap must be loud in the UI, not discovered at runtime.
 Note: if OPEN-3 resolves to per-run tokens *in the plan*, local parity gets
 dramatically cheaper (the token rides the payload; no dotfile, no enrollment)
 — worth weighing the two rulings together.
+
+**Builder obligation, pass-2 research, recorded 2026-07-07 (second of the two
+pre-existing defects found during that pass):** the "zero gateway tools,
+silently" fact stated above is not just a v1 scoping gap, it's a silent
+failure mode today. Full local support stays deferred per this ruling, but
+the runtime/executor must, at minimum, raise an **explicit error** the moment
+a local run's plan declares `functions` scope it cannot honor — never let it
+pass through as a no-op the way the dotfile-absent case does today. This is
+independent of, and ships ahead of, whatever local parity work (b) would
+require.
+
+### 5.4 Amendment (Pablo, 2026-07-07 — L26): sandbox "purpose" is a stamped enum, not inferred
+
+**Ruling: `CloudSandbox` gains a first-class `purpose` column — `interactive`
+vs. `workflow-run` — set once at creation time and never inferred from caller
+context.** This is the same reasoning that rejected "trust the caller's
+header" for run identity everywhere else in this system (OPEN-3's tradeoff
+paragraph, §6.4, made the identical call for gateway grants: a credential or a
+stamped fact proves identity/purpose, a header or inferred context only
+claims it). A sandbox's purpose is knowable with certainty at the moment it is
+created — who asked for it and why — so there is no reason to fall back to
+inference later, and every reason not to: an inferred purpose is a claim a
+caller could get wrong or, in a prompt-injection scenario, a claim an agent
+could exploit. Consequence for L25 (§6.7): the worker-level scope allowlist
+(`cloud_integration_gateway_token.scope_json`) can eventually key off
+`purpose` too, once there's a reason to give `workflow-run` sandboxes a
+different default worker-level allowlist than `interactive` ones — not built
+in A–E, noted so the enum isn't designed twice.
 
 ---
 
@@ -884,6 +1177,12 @@ gateway, period.** The runtime's only involvement is the already-shipped launch
 extension that points sessions at the gateway URL; per-workflow scoping is
 gateway *configuration*, enforced at call time.
 
+**Amendment (Pablo, 2026-07-07 — L21):** the issues service, registered here,
+and Slack (already-shipped, §3.3) are **the only two integrations exposed at
+launch** — both `api_key`-style with no mid-run OAuth-refresh failure mode.
+OAuth-DCR providers are named but deliberately deferred; see §6.6 for the
+reauth-story reasoning.
+
 ### 6.2 How a tool call flows today (LOCKED — shipped)
 
 ```
@@ -916,6 +1215,27 @@ only *sees* granted tools — least astonishment) and `tools/call` (defense in
 depth). Scoping example from the mission (LOCKED — issues-service-v1 §5):
 triage workflow → `claim, get_issue, search_issues, update_status,
 mark_duplicate, mark_dismissed`; fix workflow → all tools.
+
+**Amendment (Pablo, 2026-07-07 — L22, exposition mechanism):** `functions[]`
+is a **declared allow-list** on `definition_json`, validated at **save time**
+against the owner's visible integration definitions (the same check §1.5
+already describes: provider = a registered namespace visible to the owner,
+tools = non-empty strings) and **resolved at `StartRun`**. This is not a
+static registry (the set of exposable providers can grow without a code
+change once a definition is registered, §6.1) and not runtime discovery (the
+agent never asks the gateway what's available and gets handed a grant back —
+the grant is fixed before the sandbox exists). **`StartRun` fails the run**
+outright if a declared provider has no ready account for the owner — it never
+silently narrows the grant to whatever happens to be ready, because a
+silently-narrowed grant is a workflow that appears to work while quietly
+doing less than its author specified.
+
+**Amendment (Pablo, 2026-07-07 — L24, no kind taxonomy):** there is no
+workflow "kind" (triage vs. fix vs. anything else) that pre-sizes a scope
+template. Each definition's `functions[]` independently sizes its own grant —
+the triage/fix split in the example above is just two definitions that
+happen to declare different lists, not two instances of a "triage-kind" and
+"fix-kind" that the system distinguishes.
 
 ### 6.4 [OPEN-3] The scoping key — RULED (a) (Pablo, 2026-07-07)
 
@@ -995,6 +1315,93 @@ service's `events` with the calling run's identity. These are the issues
 service's obligations; Proliferate's obligation is delivering trustworthy run
 identity (OPEN-3) and scoping (§6.3).
 
+### 6.6 Amendment (Pablo, 2026-07-07): `function.call` — recorded as a follow-up, not built
+
+**Ruling: a future step kind, `function.call`, is recorded here for
+traceability. It is not designed and not built in A–E.** The shape, stated so
+it isn't lost: the harness emits schema-valid arguments via the existing
+`agent.emit` machinery (§7.3); the **server** performs the integration call
+through the actions ledger (§1.2 — renamed from "effects ledger" per L19) —
+`action_kind = 'function_call'`, exactly-once claim CAS, authorized by the
+per-run token's scope (§6.4).
+
+This is compatible with L9: there are no harness-level forced tool calls; the
+harness only writes JSON, the server acts on it — `function.call` is a second
+consumer of the emit channel, not an exception to "no forced tool calls."
+
+Explicit compatibility requirement on PR E, stated here so it isn't
+rediscovered later: **the per-run token's `scope_json` must be honored for
+server-side action performers, not only sandbox-originated calls** — the
+gateway checks scope, not caller location. If PR E's implementation of §6.4
+ever assumes the caller is always an agent inside the sandbox, that
+assumption breaks the day `function.call` is built.
+
+The design content this section deferred — which integrations are exposed,
+the exposition method, forcing rules, per-workflow-kind differences — came
+back from the function-invocations and integration-scoping design passes
+(`codex/passes/pass-2-function-invocations.md`,
+`codex/passes/pass-5-integration-scoping.md`) and was ruled 2026-07-07, L21–L26:
+
+**L21 — first exposed integrations (Pablo, 2026-07-07):** the **issues
+service** (`api_key` seed, §6.1) and **Slack** — both `api_key`-style, both
+with no mid-run OAuth-refresh failure mode; Slack's credential path is
+already exercised by the `slack_notify` performer, and the issues service is
+the driving mission. **OAuth-DCR providers (Linear, Notion, Supabase) are
+deferred** until the frozen per-run scope (§6.4/OPEN-3(a): scope frozen at
+mint, expires at terminal status) has a mid-run reauth story — a frozen scope
+and a token that can go stale mid-run are in tension the moment refresh is
+involved, and that tension isn't resolved yet.
+
+**L23 — forcing rules (Pablo, 2026-07-07):** **never force at the agent
+level** — L9 stands unchanged. Agent-judgment calls are normal MCP tool use,
+gated by scope visibility (the agent only *sees* what §6.3/L22's allow-list
+grants, per the existing `tools/list` filtering). **Forced calls** are a
+`function_call` server-performed action (§1.2/L19's vocabulary: this is a
+step's own declared verb, not a reaction) claimed off an `agent.emit` step's
+validated output — the provider+tool is **step config, fixed at author time**;
+only the *arguments* come from the agent's emitted JSON. **The emitted JSON
+must never name the tool to call** — naming the tool would let agent output
+decide what executes, which is exactly the sequencing property Rule 2/Rule 3
+(L19) reserve for the runtime and for author-time step config, never for
+agent output.
+
+Design content still open when `function.call` is actually built: the
+guarantee-class question (§1.2 flagged that the pre-generated-id trick that
+gave spawns true exactly-once no longer has an analogue here) and the
+concrete `_STEP_PARSERS`/`StepKind` wiring. Not ruled here; next pass.
+
+### 6.7 Amendment (Pablo, 2026-07-07 — L25): two-layer scope composition
+
+**Ruling: scope is enforced in two layers — a coarse worker-level allowlist,
+and the fine per-run token (§6.4/OPEN-3) as a subset of it — with both layers
+re-checked, not just the outer one trusted once.**
+
+**Layer 1 — sandbox/worker-level scope.** An additive, nullable `scope_json`
+column on the existing `cloud_integration_gateway_token` row
+([runtime_workers.py:109-138](../server/proliferate/db/models/cloud/runtime_workers.py)):
+a **provider-namespace allowlist**. `NULL` means unscoped — today's behavior,
+unchanged — and is never conflated with "empty" (empty would mean "grants
+nothing"; NULL means "the allowlist concept doesn't apply to this worker").
+**No backfill**: existing workers keep working exactly as they do today until
+they naturally re-enroll and pick up a `scope_json` value.
+
+**Layer 2 — the per-run token.** Its `scope_json` (the `functions[]` shape
+per §6.4/OPEN-3(a)) **must be a subset of the worker's scope** — enforced as a
+set intersection **at mint time**, i.e. at `StartRun`.
+
+**Enforcement is asymmetric across the two layers, deliberately:** mint time
+decides what *may* be requested (the intersection above); request time
+**re-checks on every call**, mirroring the existing per-request org-membership
+re-validation pattern already in the gateway (§6.2's `_call_virtual_tool`
+path) — a worker-level scope narrowed *after* a run's token was minted must
+still bite on the next call, not only at mint time.
+
+**Admin UX:** extend the existing `CloudIntegrationPolicy` table with a
+nullable scope key, rather than stand up a parallel table — the same
+LOCKED/shipped pattern (§6.1: "no new registration machinery") applies to
+scope administration too: reuse the row that already carries org policy for
+a provider, don't duplicate it.
+
 ---
 
 ## 7. Typed I/O
@@ -1071,11 +1478,15 @@ run_emit(step, ctx):
 
 The validated object becomes the step's *entire* output, so
 `{{steps[n].output.pr_title}}` navigates into it with the existing dot-path
-resolution — zero new grammar. This is what makes notify messages, chained
-`workflow.run` args, and the autofix Slack ping ("issue, evidence, who's
-affected, PR link") all expressible today-shaped. A workflow's "completion
-event with schema" is, by construction, its last `agent.emit` — no separate
-concept exists.
+resolution — zero new grammar. This is what makes notify messages and the
+autofix Slack ping ("issue, evidence, who's affected, PR link") expressible
+today-shaped. (It also feeds the composing step's arg mapping under L20's
+nesting ruling, §3.5 — that mapping is exactly this same dot-path resolution,
+just consumed by the resolver at composition time instead of by a runtime
+step; the old wording here named `workflow.run` args specifically, which no
+longer exists as a runtime-visible concept.) A workflow's "completion event
+with schema" is, by construction, its last `agent.emit` — no separate concept
+exists.
 
 ### 7.4 [OPEN-2] The emit mechanism — RULED (a) (Pablo, 2026-07-07)
 
@@ -1119,7 +1530,9 @@ mirror, and autocomplete (~a day inside PR C, where the grammar files are
 already open) and makes definitions durable under editing — the template/FDE
 motion writes definitions that get edited by others; (b) is free now but every
 reorder is a landmine and editor-rewrite has its own edge cases (refs inside
-`workflow.run` args). Recommendation: **(a), inside PR C.**
+a composing step's arg mapping — the concern that used to be phrased as
+"`workflow.run` args" before L20 redirected composition to resolution-time
+inlining, §3.5). Recommendation: **(a), inside PR C.**
 
 ---
 
@@ -1141,10 +1554,10 @@ Open-session deep link, local-lane approve/deny), playground fixtures. Routes:
 
 | PR | surface |
 |---|---|
-| A | notify step panel: Slack channel picker (new `GET /v1/cloud/workflows/slack/channels` wrapping [client.py:115 list_channels](../server/proliferate/integrations/slack/client.py)); `slackConnected` flag → "Connect Slack in Settings → Integrations" caption when absent; run-view delivery chip fed by the effect row (sent ✓ / pending / failed + reason) |
+| A | notify step panel: Slack channel picker (new `GET /v1/cloud/workflows/slack/channels` wrapping [client.py:115 list_channels](../server/proliferate/integrations/slack/client.py)); `slackConnected` flag → "Connect Slack in Settings → Integrations" caption when absent; run-view delivery chip fed by the action row (sent ✓ / pending / failed + reason) — renamed from "effect row" per L19 |
 | B | triggers card: poll config form (url, auth header name+secret, interval, item schema, args mapping with per-arg path fields); trigger row surfaces `last_poll_error` + per-item table (spawned/invalid) linked from the trigger |
 | C | emit step editor: prompt + schema editor (JSON textarea with validation, template chips for common shapes); run-view output chip renders the emitted object (collapsed JSON) |
-| D | step panel: workflow picker (owner's non-archived workflows) + args editor with `{{steps…}}` autocomplete; run view: "Spawned run →" link on the step row, "Started by <parent> step N ↗" banner on the child |
+| D | ~~step panel: workflow picker (owner's non-archived workflows) + args editor with `{{steps…}}` autocomplete; run view: "Spawned run →" link on the step row, "Started by <parent> step N ↗" banner on the child~~ — **SUPERSEDED by L20** (§9): no child run, no "Spawned run →" link, no parent/child banner. Whatever UI composition needs (an inline-reference picker into a nested workflow's steps?) is undesigned. |
 | E | editor: Functions section (provider + tool multi-select from the gateway's tool cache); local-launch caption per OPEN-5 |
 
 ### 8.3 Concept-doc intents → disposition ([OPEN-8] — RULED (a), Pablo 2026-07-07)
@@ -1178,8 +1591,9 @@ is the intent inventory that design pass expands from:
 mocking stuff we don't have")
 
 Every chip/line in the run view renders from real observed data (`output_json`,
-effect rows). No invented intermediate states. `goal_iterating` stays the only
-client-derived status (from real cursor + goal-armed fact).
+action rows — renamed from "effect rows" per L19). No invented intermediate
+states. `goal_iterating` stays the only client-derived status (from real
+cursor + goal-armed fact).
 
 ---
 
@@ -1198,12 +1612,23 @@ client-derived status (from real cursor + goal-armed fact).
 | L7 | Poll contract: at-least-once, opaque cursor, id idempotency, schema-validated data, no queue-pop | issue-autofix-system-v1 §2; Pablo ruling 2026-07-06 |
 | L8 | Functions = MCP tools through the integrations gateway; **no session-level MCP injection concept, ever**; per-workflow scoping is gateway config | issue-autofix-system-v1 §3; Pablo rulings 2026-07-06 (×2) |
 | L9 | No forced tool calls; `agent.emit` (schema-validated) is the typed output channel; completion event = last emit | Pablo ruling 2026-07-06 |
-| L10 | Parallel lanes deferred; chaining = fire-and-forget `workflow.run` via server-observed spawn; no await-child v1; **no mid-run plan mutation ever** | Pablo ruling 2026-07-06 |
+| L10 | Parallel lanes deferred; ~~chaining = fire-and-forget `workflow.run` via server-observed spawn~~ **SUPERSEDED by L20** — composition is resolution-time nesting, not a runtime-observed spawn (§3.5); no await-child v1 (survives); **no mid-run plan mutation ever** (survives, and is strengthened by L20 — inlining happens entirely before delivery) | Pablo ruling 2026-07-06; superseded in part 2026-07-07 (L20) |
 | L11 | Flaky-test handling out of v1 entirely; unresolvable test failures → `needs-human` | issue-autofix-system-v1 §5.3/§8 |
 | L12 | Slack notify delivery graduates to required (critical path); server-observed delivery, runtime never blocks on it | Pablo ruling 2026-07-06 (amendment) |
 | L13 | Build order A→B→C→D→E; PR A holds until #921 lands; docs updated in the same PR as code | Pablo rulings 2026-07-06 |
 | L14 | Run view renders only real observed data (no mocked states) | Pablo, UI gallery round 2 |
 | L15 | Schedule (and by inheritance poll) triggers are cloud-only until a server→desktop claim protocol exists | shipped `_validate_trigger_target_mode` |
+| L16 | Completion ping is the run-report credential: every run mints a per-run gateway token at delivery (empty `scope_json` legal); runtime fires `POST /runs/{run_id}/ping` after each `apply_decision` transition (fire-and-forget, failure inert); server validates token↔run_id match and re-runs `_sync_run_from_view`; scheduler phase 3 demotes to backstop | Pablo amendment, 2026-07-07 (§3.7, §4.1) |
+| L17 | Session lockout is an engine invariant: a non-terminal workflow run holds its session at the runtime session-service layer (`WorkflowHeld` on `SendPromptError`/`SetSessionConfigOptionError`/`ForkSessionError` → 409 `SESSION_WORKFLOW_HELD`); the run row IS the lock, no separate lock state; `human.approval` unaffected | Pablo amendment, 2026-07-07 (§3.8) |
+| L18 | `function.call` step kind recorded as a follow-up, not built: harness emits via `agent.emit`, server performs the integration call through the actions ledger (`action_kind='function_call'`, exactly-once claim CAS, scoped by the per-run token); compatible with L9; scope enforcement applies to server-side performers too, not only sandbox callers; design deferred to the function-invocations pass — that pass's rulings landed 2026-07-07 as L21–L26 | Pablo amendment, 2026-07-07 (§6.6); ledger vocabulary renamed same day, L19 |
+| L19 | Sequencing invariants, four rules: (1) one workflow = one plan JSON, delivered whole at StartRun, server observes only after handoff; (2) the runtime owns sequencing with no exceptions — server-side machinery (ping §3.7, scheduler refresh §4.1) is read-only observation; (3) server-performed **actions**, not "effects" — renamed vocabulary (table `workflow_step_effect`→`workflow_step_action`, column `effect_kind`→`action_kind`, module `effects.py`→`actions.py`, full prose sweep); an action is a step's own author-time-declared verb, never a decider of what runs next; ledger contents: `slack_notify` now, `function_call` later (L18/L23), nothing else — `spawn_child_run` dropped outright; (4) composition is nesting, not spawning — see L20 | Pablo ruling, 2026-07-07 (§1.2, §3.1, §3.3) |
+| L20 | Composition is nesting, not spawning: using workflow B inside A inlines B's steps into A's single resolved plan at StartRun, server-side, before delivery — one run, one plan, one cursor, one sandbox; no child run, no parent linkage, no `spawn_child_run` action, no cross-sandbox fan-out in v1. Save-time validation gains a cycle/depth check (A includes B includes A fails at save). Two resolver obligations: (a) arg binding — composing step's arg mapping becomes the inlined steps' interpolation context; (b) step-ref namespacing — B's internal refs must not collide with A's. **SUPERSEDES** the `workflow.run` fire-and-forget chaining design (PR D, old §3.5), the `spawn_child_run` action kind, and the child-run-provenance ruling (old §3.6/OPEN-7). A future start-a-run-from-a-run case needs a new explicit ruling that clears Rule 3 (L19) — not a default. **PR D must be redirected before it lands.** | Pablo ruling, 2026-07-07 (§3.5, §9) |
+| L21 | First exposed integrations: the issues service (`api_key` seed) + Slack — both `api_key`-style, no mid-run OAuth-refresh failure mode. OAuth-DCR providers (Linear, Notion, Supabase) deferred until the frozen per-run scope has a mid-run reauth story | Pablo ruling, 2026-07-07, function-invocations pass (§6.1, §6.6) |
+| L22 | Exposition mechanism: a declared `functions[]` allow-list on `definition_json`, validated at save time against the owner's visible integration definitions, resolved at StartRun. Not a static registry, not runtime discovery. StartRun **fails the run** if a declared provider has no ready account, rather than silently narrowing | Pablo ruling, 2026-07-07, function-invocations pass (§6.3) |
+| L23 | Forcing rules: never force at the agent level (L9 stands) — agent-judgment calls are normal MCP tool use gated by scope visibility. Forced calls are a `function_call` server-performed action claimed off an `agent.emit` step's validated output; provider+tool is step config fixed at author time, only arguments come from agent output; the emitted JSON must never name the tool to call | Pablo ruling, 2026-07-07, function-invocations pass (§6.6) |
+| L24 | No workflow "kind" taxonomy — scope lives entirely on the definition; each `definition_json.functions[]` independently sizes its own grant | Pablo ruling, 2026-07-07, function-invocations pass (§6.3) |
+| L25 | Two-layer scope composition: sandbox/worker-level scope is a provider-namespace allowlist (additive nullable `scope_json` on `cloud_integration_gateway_token`; NULL = unscoped/today's behavior, never "empty"; no backfill). The per-run token's `scope_json` must be a subset of the worker's scope, enforced as set intersection at mint time (StartRun). Enforcement is asymmetric: mint time decides what may be requested, request time re-checks every call. Admin UX extends `CloudIntegrationPolicy` with a nullable scope key, not a parallel table | Pablo ruling, 2026-07-07, integration-scoping pass (§6.7) |
+| L26 | Sandbox "purpose" is a first-class stamped enum column on `CloudSandbox` (`interactive` vs. `workflow-run`), set at creation, never inferred from caller context — same reasoning that rejected trust-the-header run identity in OPEN-3 | Pablo ruling, 2026-07-07, integration-scoping pass (§5.4) |
 
 ### OPEN — all ruled by Pablo, 2026-07-07
 
@@ -1215,7 +1640,7 @@ client-derived status (from real cursor + goal-armed fact).
 | OPEN-4 | Poll-trigger run target (§5.2) | (a) pinned cloud workspace per trigger + queue (schedule-trigger shape reused) · (b) fresh headless workspace per item · (c) configurable, (a) default | **(a)** pinned workspace + queue, (c)'s door open in schema; fix workflow opens with a git-hygiene step; throughput ceiling noted — revisit at volume |
 | OPEN-5 | Local-lane gateway functions (§5.3) | (a) cloud-only v1, loud UI caption · (b) local parity (dotfile/token on laptop) | **(a)** cloud-only v1; loud caption at definition save AND local launch |
 | OPEN-6 | Named step-output refs (§7.5) | (a) optional step `name` + `{{steps.<name>.output.*}}`, inside PR C · (b) index-only, editor rewrites on reorder | **(a)** named refs inside PR C; `output_name` deprecated into `name` |
-| OPEN-7 | Child-run provenance (§3.6) | trigger_kind: (a) new `'workflow'` · (b) reuse `'agent'`; workspace: inherit parent's (rec.); executor = owner (stated) | **(a)** new `'workflow'` trigger_kind; inherit parent workspace; executor = owner |
+| OPEN-7 | Child-run provenance (§3.6) — **SUPERSEDED by L20**: there is no child run left to have provenance | trigger_kind: (a) new `'workflow'` · (b) reuse `'agent'`; workspace: inherit parent's (rec.); executor = owner (stated) | ~~**(a)** new `'workflow'` trigger_kind; inherit parent workspace; executor = owner~~ — moot under L20, kept for provenance only |
 | OPEN-8 | UX-surface sequencing (§8.3): new-chat recommended strip, in-chat trigger modal, tab-grouped run sessions, session input-lockout during runs, seeded org templates, seeded workspaces | (a) separate UX PR F after E · (b) fold selected items into A–E · (c) later | **(a)** separate UX PR F after E — full bundle incl. Stop/cancel (+ server-side cancel endpoint) and NEW seeded-workspaces item; F gated on its own engine-depth design doc |
 
 ---
@@ -1232,7 +1657,7 @@ requires it). Server unit suites ride each PR
 (`cd server && uv run --extra dev pytest tests/unit/test_workflow_*.py -q`);
 these scripts are the *behavioral* pass on top.
 
-### PR A — effects ledger + Slack
+### PR A — actions ledger + Slack (renamed from "effects ledger" per L19)
 
 1. Settings → Integrations → connect Slack (real OAuth against the seeded
    `slack` definition; needs `CLOUD_MCP_SLACK_*` env in the profile).
@@ -1240,16 +1665,22 @@ these scripts are the *behavioral* pass on top.
    the panel should list real channels; pick a test channel. Run (local lane).
 3. **Expect:** message in the channel within ~5s of the step completing; run
    view shows the delivery chip `sent ✓`; exactly one
-   `workflow_step_effect` row (`status='done'`, `result_json.message_ts` set).
+   `workflow_step_action` row (`status='done'`, `result_json.message_ts` set).
 4. **Crash drill:** re-run; the moment the prompt step completes, `kill -9` the
    server (`make run` supervisor restarts it, or restart manually). **Expect:**
    after restart the sweeper (scheduler phase 3) delivers; the channel shows
-   **exactly one** message for that run; effect row `attempt_count ≥ 1`.
+   **exactly one** message for that run; action row `attempt_count ≥ 1`.
 5. **Replay drill:** POST the same `/status` body twice (curl, bearer from
    login). **Expect:** second call is a no-op (CAS conflict), no second send.
 6. Cloud lane: same workflow on a schedule trigger, one-shot RRULE, **close the
    run view** (nobody polls `/refresh`). **Expect:** message still arrives —
    phase 3 observed the run without a UI.
+7. **Org-policy drill (covers the §3.3 defect fix):** as an org member whose
+   org has Slack policy-disabled but who personally has a ready Slack
+   account, run the workflow inside that org. **Expect:** the send is blocked
+   by org policy — proving `_perform_slack_notify` now passes the run's
+   `organization_id` into `get_ready_account_for_provider` instead of
+   silently bypassing it.
 
 ### PR B — poll trigger
 
@@ -1298,9 +1729,17 @@ def poll(request: Request, cursor: str = "", limit: int = 50):
    (`attempt` field), then step `failed` with code `emit_invalid` and the
    validation errors in the output — no infinite loop, no fabricated pass.
 
-### PR D — workflow.run
+### PR D — ~~workflow.run~~ — SUPERSEDED by L20 (§9); script kept for provenance, not runnable against the ruled design
 
-1. Child workflow `W2`: arg `title:string`, one prompt step. Parent `W1`:
+**This script validates the fire-and-forget chaining design L20 replaces.**
+It is not runnable against the nesting-composition ruling (§3.5) because
+there is no child run, no `workflow.run` step, and no `spawn_child_run`
+action to exercise. A replacement script belongs to whatever PR builds
+composition-by-inlining, once that design exists beyond the resolver
+obligations named in §3.5. Kept below verbatim so the old guarantees being
+given up are visible.
+
+~~1. Child workflow `W2`: arg `title:string`, one prompt step. Parent `W1`:
    `agent.emit` (emits `{"title": ...}`) → `workflow.run(W2, args:{title:"{{steps[0].output.title}}"})`.
 2. Run `W1`. **Expect:** `W1` completes immediately after the spawn step
    (fire-and-forget); a `W2` run appears with the interpolated arg, linked both
@@ -1311,7 +1750,7 @@ def poll(request: Request, cursor: str = "", limit: int = 50):
    child id makes the retry conflict).
 4. **Cycle drill:** point a workflow at itself → validator rejects; build an
    A→B→A indirect loop → chain stops at depth 5 with
-   `chain_depth_exceeded` on the effect row.
+   `chain_depth_exceeded` on the effect row.~~
 
 ### PR E — function grants
 
@@ -1338,8 +1777,10 @@ a fix workflow (wide set) whose last steps are `agent.emit` → `notify(slack)`.
 the service's `events`; duplicate poll deliveries produce zero duplicate runs;
 Slack pings arrive with emitted fields filled in; every state transition in the
 service was made through gateway tool calls attributable to a run. That
-demonstration — poll + functions + emit + chaining + Slack, on the real
-contracts — is the definition of done for this arc.
+demonstration — poll + functions + emit + Slack, on the real contracts — is
+the definition of done for this arc. (The original list here also said
+"chaining" — dropped: PR D as scoped for this demo doesn't exist under L20,
+and nothing in this acceptance test depends on workflow composition.)
 
 ---
 

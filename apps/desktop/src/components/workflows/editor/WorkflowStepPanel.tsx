@@ -27,6 +27,11 @@ export interface EditorAgent {
   models: { id: string; label: string }[];
 }
 
+export interface EditorSlackChannel {
+  id: string;
+  name: string;
+}
+
 export interface WorkflowStepPanelProps {
   step: WorkflowStep;
   /** The effective harness for this step — Setup harness folded through any
@@ -35,6 +40,8 @@ export interface WorkflowStepPanelProps {
   agents: readonly EditorAgent[];
   suggestions: readonly TemplateSuggestion[];
   slackConnected: boolean;
+  /** Channels the connected Slack account can post to; empty when not connected. */
+  slackChannels: readonly EditorSlackChannel[];
   supportsGoals: (harnessKind: string) => boolean;
   onChange: (step: WorkflowStep) => void;
   onClose: () => void;
@@ -79,7 +86,13 @@ export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
         ) : step.kind === "scm.open_pr" ? (
           <OpenPrEditor step={step} suggestions={props.suggestions} onChange={onChange} />
         ) : step.kind === "notify" ? (
-          <NotifyEditor step={step} suggestions={props.suggestions} slackConnected={props.slackConnected} onChange={onChange} />
+          <NotifyEditor
+            step={step}
+            suggestions={props.suggestions}
+            slackConnected={props.slackConnected}
+            slackChannels={props.slackChannels}
+            onChange={onChange}
+          />
         ) : (
           <ApprovalEditor step={step} onChange={onChange} />
         )}
@@ -279,13 +292,16 @@ function NotifyEditor({
   step,
   suggestions,
   slackConnected,
+  slackChannels,
   onChange,
 }: {
   step: NotifyStep;
   suggestions: readonly TemplateSuggestion[];
   slackConnected: boolean;
+  slackChannels: readonly EditorSlackChannel[];
   onChange: (step: WorkflowStep) => void;
 }) {
+  const isSlack = step.channel === "slack";
   return (
     <div className="flex flex-col gap-4">
       <InlineRow label="Channel">
@@ -301,10 +317,34 @@ function NotifyEditor({
               disabled: !slackConnected,
             },
           ]}
-          onChange={(value) => onChange({ ...step, channel: value as WorkflowNotifyChannel })}
+          onChange={(value) =>
+            onChange({
+              ...step,
+              channel: value as WorkflowNotifyChannel,
+              slackChannelId: value === "slack" ? step.slackChannelId : undefined,
+            })
+          }
         />
       </InlineRow>
       <p className="-mt-1 text-xs text-faint">Always recorded in-app and in run history.</p>
+      {isSlack ? (
+        <InlineRow label="Slack channel">
+          {slackConnected ? (
+            <WorkflowSelect
+              ariaLabel="Slack channel"
+              value={step.slackChannelId ?? ""}
+              placeholder="Choose a channel"
+              options={slackChannels.map((channel) => ({
+                value: channel.id,
+                label: `#${channel.name}`,
+              }))}
+              onChange={(slackChannelId) => onChange({ ...step, slackChannelId })}
+            />
+          ) : (
+            <span className="text-xs text-faint">Connect Slack in Settings → Integrations</span>
+          )}
+        </InlineRow>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <FieldLabel>Message</FieldLabel>
         <TemplateVarTextarea

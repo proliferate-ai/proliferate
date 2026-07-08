@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
 from proliferate.db.store.cloud_workflows import (
@@ -45,14 +45,41 @@ class WorkflowUpdateRequest(WorkflowBaseModel):
     definition: dict[str, object]
 
 
+class WorkflowRunTarget(WorkflowBaseModel):
+    """Where a run works (data-contract §3): exactly one of a workspace (manual/
+    chat — the workspace you're in) or a trigger (schedule/poll — the server
+    derives the pinned workspace from the trigger row; derivation itself is PR G)."""
+
+    workspace_id: UUID | None = Field(default=None, alias="workspaceId")
+    trigger_id: UUID | None = Field(default=None, alias="triggerId")
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> WorkflowRunTarget:
+        if (self.workspace_id is None) == (self.trigger_id is None):
+            raise ValueError("target must set exactly one of workspace_id or trigger_id.")
+        return self
+
+
 class StartRunRequest(WorkflowBaseModel):
-    args: dict[str, object] = Field(default_factory=dict)
+    # B9: ``args`` -> ``inputs``. Freeform values coerced against the inputs schema.
+    inputs: dict[str, object] = Field(default_factory=dict)
     target_mode: WorkflowTargetMode = Field(alias="targetMode")
     version_id: UUID | None = Field(default=None, alias="versionId")
-    # Required for ``personal_cloud`` runs: the cloud workspace the server delivers
-    # the resolved plan into (validated for ownership). Ignored for ``local`` runs,
-    # whose workspace is picked client-side and handed to the local runtime.
-    target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
+    # B9 target = workspace_id XOR trigger_id (validated exactly-one). For a
+    # ``personal_cloud`` run the workspace is the delivery destination; for a
+    # trigger-fired run the workspace is derived server-side (PR G).
+    target: WorkflowRunTarget
+    # L29: optional per-slot session binding (slot -> session_id). Bind-time
+    # validation (same-harness, not held) lands with the session plane.
+    session_bindings: dict[str, str] = Field(default_factory=dict, alias="sessionBindings")
+
+    @property
+    def target_workspace_id(self) -> UUID | None:
+        return self.target.workspace_id
+
+    @property
+    def trigger_id(self) -> UUID | None:
+        return self.target.trigger_id
 
 
 class RunStatusRequest(WorkflowBaseModel):
@@ -129,8 +156,32 @@ class WorkflowRunResponse(WorkflowBaseModel):
     finished_at: str | None = Field(alias="finishedAt")
 
 
+class StepActionResponse(WorkflowBaseModel):
+    step_key: str = Field(alias="stepKey")
+    action_kind: str = Field(alias="actionKind")
+    status: str
+    result_json: dict[str, object] | None = Field(alias="resultJson")
+    error_message: str | None = Field(alias="errorMessage")
+    attempt_count: int = Field(alias="attemptCount")
+
+
+class WorkflowRunDetailResponse(WorkflowBaseModel):
+    run: WorkflowRunResponse
+    step_actions: list[StepActionResponse] = Field(alias="stepActions")
+
+
 class WorkflowRunListResponse(WorkflowBaseModel):
     runs: list[WorkflowRunResponse]
+
+
+class SlackChannelResponse(WorkflowBaseModel):
+    id: str
+    name: str
+
+
+class SlackChannelsResponse(WorkflowBaseModel):
+    channels: list[SlackChannelResponse]
+    connected: bool
 
 
 # --- constructors --------------------------------------------------------------

@@ -6,7 +6,7 @@
 > are relative to this file (`codex/`).
 >
 > Companion: [`workflows-architecture.md`](workflows-architecture.md) is the
-> **end-state** doc for the PR A–E arc (effects ledger + Slack delivery, poll
+> **end-state** doc for the PR A–E arc (actions ledger + Slack delivery, poll
 > triggers, `agent.emit`, `workflow.run`, gateway function grants) — read it for
 > where the system is going and the [OPEN-n] decision log; read this for what is
 > built today.
@@ -180,16 +180,17 @@ File tree:
 
 ```
 server/proliferate/
-├── db/models/cloud/workflows.py        # ORM: Workflow, WorkflowVersion, WorkflowRun, WorkflowTrigger
-├── db/store/cloud_workflows.py         # async data-access for workflow/version/run
+├── db/models/cloud/workflows.py        # ORM: Workflow, WorkflowVersion, WorkflowRun, WorkflowTrigger, WorkflowStepAction
+├── db/store/cloud_workflows.py         # async data-access for workflow/version/run/step-action
 ├── db/store/cloud_workflow_triggers.py # trigger store incl. claim_due_schedule_trigger (FOR UPDATE SKIP LOCKED)
 ├── constants/workflows.py              # status enums, transition table, step-kind set, caps, free-plan limit
 └── alembic/versions/
     ├── e4f7a2b9c6d1_workflow_entities.py   # workflow + version + run tables (down_rev c9b8a7d6e5f4)
-    └── b2d4f6a8c0e1_workflow_trigger.py    # workflow_trigger + trigger_id/scheduled_for on run (down_rev e4f7a2b9c6d1)
+    ├── b2d4f6a8c0e1_workflow_trigger.py    # workflow_trigger + trigger_id/scheduled_for on run (down_rev e4f7a2b9c6d1)
+    └── c3a5e7f9d1b2_workflow_step_action.py # workflow_step_action table (down_rev b2d4f6a8c0e1) — PR A
 ```
 
-Both migrations are idempotent (guarded `_has_table`/`_has_index`/`_has_column`).
+All three migrations are idempotent (guarded `_has_table`/`_has_index`/`_has_column`).
 
 **Tables** ([db/models/cloud/workflows.py](../server/proliferate/db/models/cloud/workflows.py)):
 
@@ -232,6 +233,17 @@ Index("uq_workflow_run_trigger_slot", "trigger_id", "scheduled_for", unique=True
   a cloud⇒workspace / local⇒null constraint (line 225), and `ck_workflow_trigger_schedule_fields`
   (line 231 — a `schedule` must carry rrule + timezone + next_run_at). Scheduler
   due-scan index `ix_workflow_trigger_scheduler_due` (line 242).
+- **`workflow_step_action`** (line 299, PR A) — the step-actions ledger: server-side
+  actions (Slack sends today) claimed off *observed* step completions. An action
+  performs the side effect of a step the runtime already executed; it never decides
+  what runs next (L19). `UniqueConstraint(run_id, step_key, action_kind)` (B5)
+  **is** the claim — whichever observer's `INSERT ... ON CONFLICT DO NOTHING` lands
+  owns performing the action. `status` CHECK `pending|done|failed` (line 324); partial
+  index `ix_workflow_step_action_sweep … WHERE status = 'pending'` (line 328) drives
+  the sweeper. Honest guarantee (stated in the model docstring): **exactly-once
+  claim, at-least-once completion** — a crash between a successful Slack POST and
+  the `status='done'` commit can duplicate a send, the same class as any
+  non-transactional external side effect.
 
 ### 2b. Run status enum + transition table
 
@@ -261,8 +273,12 @@ has no outgoing edges.
 - `workflow_runs(run_id PK, …, workspace_id NOT NULL REFERENCES workspaces ON DELETE
   CASCADE, plan_json NOT NULL, status NOT NULL, step_cursor DEFAULT 0, session_ids_json?,
   …)` + indexes on `(workspace_id, created_at DESC)` and `(status)`.
-- `workflow_step_runs(run_id FK CASCADE, step_index, kind, status, attempt DEFAULT 0,
-  output_json?, error_code?, error_message?, …, PRIMARY KEY(run_id, step_index))`.
+- `workflow_step_runs(run_id FK CASCADE, step_index, step_key NOT NULL, kind, status,
+  attempt DEFAULT 0, output_json?, …, PRIMARY KEY(run_id, step_index))` + a unique
+  index on `(run_id, step_key)`. `step_key` is the format-v2 structured key
+  "<node>.<lane>.<step>" (B5); the cursor stays an integer position, but the key
+  is the step's stable identity (outputs are reported by key). The Postgres
+  `workflow_step_action` claim is `(run_id, step_key, action_kind)`.
 
 Rust status mirrors ([model.rs](../anyharness/crates/anyharness-lib/src/domains/workflows/model.rs)):
 `WorkflowRunStatus = Running|WaitingApproval|Completed|Failed|Cancelled` (terminal:
@@ -281,7 +297,8 @@ cloud/workflows/
 ├── models.py       # Pydantic request/response (populate_by_name, camelCase wire aliases)
 ├── service.py      # workflow/version CRUD, trigger CRUD, StartRun + _resolve_plan
 ├── delivery.py     # cloud lane: deliver_cloud_run, refresh_cloud_run
-├── scheduler.py    # second beat: fire due triggers + deliver eligible cloud runs
+├── scheduler.py    # second beat: fire due triggers + deliver eligible cloud runs + refresh/sweep (PR A phase 3)
+├── actions.py      # PR A: step-actions ledger — claim_step_action, apply_step_actions, sweep_pending_actions
 └── domain/         # pure, unit-tested, no DB
     ├── definition.py     # strict validator: raw dict → canonical dict
     ├── interpolation.py  # template grammar + arg coercion + injection guard
@@ -294,29 +311,43 @@ Integration boundary (raw HTTP to anyharness, kept out of the product domain):
 
 ### 3.1 Validator — [domain/definition.py](../server/proliferate/server/cloud/workflows/domain/definition.py)
 
-`parse_definition(raw, *, require_steps=True)` (line 443) → `(canonical, [ArgSpec])`.
-Rejects unknown kinds *and* unknown fields (`_reject_unknown_keys`, line 61).
-Top-level keys: `args`, `setup`, `steps`. Steps dispatched by `kind` through
-`_STEP_PARSERS` (line 376). **Zero-step draft rule**: `require_steps=False` on
-create/update (save-but-don't-run); `StartRun` always parses with `require_steps=True`.
-`_parse_goal` (line 241) parses the goal *attachment*; `_parse_agent_config` (line 288)
-requires ≥1 of harness/model. `_validate_references` (line 431) runs
-`validate_string_references` — `{{args.NAME}}` must be a declared arg; `{{steps[N].output.NAME}}`
-must point strictly earlier.
+**Format v2 (PR A — data-contract §1).** `parse_definition(raw, *,
+require_steps=True)` → `(canonical, [ArgSpec])`. Rejects unknown kinds *and*
+unknown fields. Top-level keys are now `{version, name?, description?, inputs,
+integrations, agents}` — a hard cut from the old `{args, setup, steps}` (no dual
+parser, no migration; E4). The spine is `agents: [{slot, harness, model, steps}]`
+(≥1 node, slot unique `^[a-z][a-z0-9_]*$`); there is no top-level `steps` and no
+`setup` (slot = session affinity; `session_binding` is stamped on the resolved
+plan, not authored). **Zero-agent draft rule**: `require_steps=False` on
+create/update; `StartRun` always parses with `require_steps=True`.
 
-**No `agent.goal` step kind** — the goal is an attachment on `agent.prompt`
-(drift note #1). Supported kinds ([constants/workflows.py:120](../server/proliferate/constants/workflows.py#L120)):
-`agent.config`, `agent.prompt`, `shell.run`, `scm.open_pr`, `notify`, `human.approval`.
+Step kinds ([constants/workflows.py](../server/proliferate/constants/workflows.py)):
+`agent.config` (narrowed to `{model}` only — same-harness rule), `agent.prompt`
+(+`required_invocation?{provider,tool}`), **`agent.emit`** (NEW: `name` required +
+unique, `output_schema?`, `max_attempts` default 3), `shell.run`, `scm.open_pr`,
+**`branch`** (NEW: `on` = one prior-emit ref, `cases:{value:{to:continue|end}}`,
+`reason?`), `notify` (Slack-only — `{slack_channel_id, message}`, the `channel`
+discriminator and `in_app` are removed, E1b). **`human.approval` is removed (E1)**
+— the `waiting_approval` run status survives via `goal.on_blocked`.
+
+`_validate_spine_references` walks the flattened run order enforcing emit-name
+uniqueness (whole definition) and *strictly-prior* ref visibility: `{{inputs.NAME}}`
+must be a declared input; `{{EMIT.FIELD}}` must name an emit produced by an
+earlier step (earlier nodes in full, earlier steps in the same node).
 
 ### 3.2 Interpolation — [domain/interpolation.py](../server/proliferate/server/cloud/workflows/domain/interpolation.py)
 
-- `coerce_arguments` (line 188) — strict (rejects unknown args), fills defaults,
-  enforces required, coerces to declared type.
-- `interpolate_args` (line 251) — eager `{{args.*}}` substitution, **segment-based
-  (never re-scanned)**; `_escape_braces` (line 219) backslash-escapes every `{`/`}`
-  in a substituted value so an arg literally containing `{{steps[0].output.x}}` can't
-  survive as a live step-output token. The runtime unescapes in
-  [templates.rs](../anyharness/crates/anyharness-lib/src/domains/workflows/templates.rs).
+Stored grammar is `{{inputs.<name>}}` + `{{<emit>.<field>}}` (B6). Reserved
+first-segments: `inputs`, `steps`, `fields`.
+
+- `coerce_arguments` (unchanged machinery) — strict (rejects unknown inputs),
+  fills defaults, enforces required, coerces to declared type (text|number|
+  choice|boolean, E2).
+- `resolve_string` / `resolve_value` — the resolver's single pass: eager
+  `{{inputs.*}}` substitution (segment-based; `_escape_braces` backslash-escapes
+  `{`/`}` so an input value can't inject a live token) **and** rewrites
+  `{{<emit>.<field>}}` → `{{steps[n].output.<field>}}` using the emit→flat-index
+  map. templates.rs stays on the indexed grammar (unchanged) and unescapes.
 
 ### 3.3 Service — [service.py](../server/proliferate/server/cloud/workflows/service.py)
 
@@ -330,20 +361,26 @@ pre-generated so it is inside the payload before insert.
 ```python
 return {
     "run_id": str(run_id),
+    "plan_version": 1,
     "workflow_id": str(workflow_id),
     "workflow_version_id": str(version.id),
     "version_n": version.version_n,
     "trigger_kind": trigger_kind,
     "target_mode": target_mode,
-    "setup": canonical.get("setup", {}),            # {harness, model, session_binding}
-    "args": coerced_args,                            # eager values, verbatim
-    "steps": interpolate_args(canonical["steps"], coerced_args),  # {{args.*}} baked; {{steps[n].*}} late-bound
+    "sessions": {slot: {harness, model, session_binding, bind_session_id?}},  # per-slot
+    "inputs": coerced_inputs,                        # eager values, verbatim
+    "steps": [...],  # flattened spine; each step stamped key="<node>.-.<step>", slot, label;
+                     # {{inputs.*}} baked, {{emit.field}} rewritten to {{steps[n].output.field}}
 }
 ```
-<sub>[service.py:262-272](../server/proliferate/server/cloud/workflows/service.py#L262)</sub>
+`session_binding` defaults by trigger kind (manual/chat=fresh, schedule/poll=headless).
+StartRun wire (B9): `args`→`inputs`, `target` = `workspace_id` XOR `trigger_id`,
+optional `session_bindings:{slot:session_id}`.
 
-Also here: `report_run_status` (locks run, enforces `check_transition`, stamps
-started/finished, writes cursor/outputs/session ids/cost), `mark_run_delivered`
+Also here: `report_run_status` (line 434; locks run, enforces `check_transition`,
+stamps started/finished, writes cursor/outputs/session ids/cost, then — after the
+status write commits — calls `actions.apply_step_actions` in a try/except so an
+action failure never breaks status ingestion, line 475), `mark_run_delivered`
 (idempotent), owner-scoped `list_runs`/`get_run`, and trigger CRUD. **Local schedule
 triggers are rejected at create** (`_validate_trigger_target_mode` →
 `schedule_local_unsupported`) — there's no server→desktop claim protocol.
@@ -357,34 +394,53 @@ wake the sandbox in-request). No outbox/Celery.
   `ensure_cloud_sandbox_gateway_access`, POSTs `/v1/workflow-runs {plan, workspaceId}`
   (expects 202) → `mark_run_delivered`. Any error → `_record_delivery_failure`
   (line 65; `error_code='delivery_failed'`, status stays `pending_delivery` for retry).
-- `refresh_cloud_run` (line 214) — the UI's cloud poll path. `read_workflow_run`
-  (GET through gateway) → `_parse_sandbox_run_view` (line 136, camelCase) →
-  `_sync_run_from_view` (line 166): a **lenient reconciling read** that applies the
+- `refresh_cloud_run` (line 225) — the UI's cloud poll path (also called
+  unattended by scheduler phase 3, §3.5 below). `read_workflow_run`
+  (GET through gateway) → `_parse_sandbox_run_view` (line 139, camelCase) →
+  `_sync_run_from_view` (line 169): a **lenient reconciling read** that applies the
   observed snapshot but **skips the strict transition guard**, yet refuses to
   overwrite a run the server already considers terminal. A 404 leaves the ledger
-  untouched.
+  untouched. After the write commits it also calls `actions.apply_step_actions`
+  (line 216, try/except-isolated, PR A) — the poll-driven twin of the
+  `report_run_status` hook, so an unattended cloud run without a live UI tab still
+  gets its Slack actions performed via scheduler phase 3.
 
 ### 3.5 Scheduler — [scheduler.py](../server/proliferate/server/cloud/workflows/scheduler.py)
 
 A second beat beside the automations scheduler, launched in
 [automations/worker/main.py](../server/proliferate/server/automations/worker/main.py)
 `_amain` via `asyncio.gather(run_scheduler_loop(...), run_workflow_scheduler_loop(...))`
-(lines 50–57). Two phases per tick:
+(lines 50–57). Three phases per tick:
 
-- **Phase 1 — fire due triggers.** `_fire_due_triggers` (line 180) →
-  `_fire_one_trigger` (line 96): `claim_due_schedule_trigger` (`FOR UPDATE SKIP LOCKED`,
+- **Phase 1 — fire due triggers.** `_fire_due_triggers` (line 181) →
+  `_fire_one_trigger` (line 97): `claim_due_schedule_trigger` (`FOR UPDATE SKIP LOCKED`,
   [cloud_workflow_triggers.py:235](../server/proliferate/db/store/cloud_workflow_triggers.py#L235))
   → archived-workflow guard → concurrency (`skip` drops + records reason + advances
   cursor; `queue` always creates) → `start_run` wrapped in `db.begin_nested()` so a
   StartRun error rolls back just the run insert.
-- **Phase 2 — deliver eligible cloud runs.** `_deliver_pending_runs` (line 220) →
-  `_deliver_one_run` (line 200): delivers **only the FIFO-first non-terminal run per
+- **Phase 2 — deliver eligible cloud runs.** `_deliver_pending_runs` (line 221) →
+  `_deliver_one_run` (line 201): delivers **only the FIFO-first non-terminal run per
   trigger** (`earliest_non_terminal_run_id_for_trigger`,
   [cloud_workflows.py:435](../server/proliferate/db/store/cloud_workflows.py#L435)) —
   one rule expresses both the immediate case and `queue` deferral. Capped per tick
   (each wakes a sandbox).
+- **Phase 3 — refresh in-flight + sweep actions** (line 245, PR A). Added so
+  Slack actions still fire for a triggered cloud run with nobody watching the run
+  view (the UI's own `/refresh` poll is what drives `apply_step_actions` the rest
+  of the time). `_refresh_in_flight_runs` (line 245) →
+  `store.list_in_flight_triggered_cloud_runs`
+  ([cloud_workflows.py:561](../server/proliferate/db/store/cloud_workflows.py#L561);
+  `delivered|running|waiting_approval`, target_mode=personal_cloud, trigger_id not
+  null) capped at
+  `_MAX_REFRESHES_PER_TICK=10` and filtered to `delivered_before=tick_start` (skips
+  a run this same tick just delivered — it needs time to execute before a refresh
+  is useful) → `refresh_cloud_run` per run, which reconciles the ledger and calls
+  `apply_step_actions`. `_sweep_actions` (line 269) → `actions.sweep_pending_actions`.
+  Both sub-phases are exception-isolated from Phase 1/2 and from each other
+  (`run_workflow_scheduler_tick`, line 288–295) — an actions bug never stalls
+  trigger firing or delivery.
 
-`run_workflow_scheduler_loop` (line 254): exponential backoff (×2, cap 300s), Sentry
+`run_workflow_scheduler_loop` (line 300): exponential backoff (×2, cap 300s), Sentry
 after 3 consecutive failures.
 
 ### 3.6 API — [api.py](../server/proliferate/server/cloud/workflows/api.py)
@@ -400,11 +456,13 @@ after 3 consecutive failures.
 |---|---|---|
 | GET | `/workflows?includeArchived` | list |
 | POST | `/workflows` | create (enforces free-plan cap) |
-| GET | `/workflows/runs?workflowId` · `/workflows/runs/{run_id}` | run reads |
+| GET | `/workflows/runs?workflowId` | run list |
+| GET | `/workflows/runs/{run_id}` | run detail — `WorkflowRunDetailResponse{run, stepActions[]}` (PR A; `step_actions` from `store.list_actions_for_run`) |
 | POST | `/workflows/runs/{run_id}/delivered` | **local** lane marks its delivery done |
-| POST | `/workflows/runs/{run_id}/status` | **local relay** reports observed state |
+| POST | `/workflows/runs/{run_id}/status` | **local relay** reports observed state; also triggers `apply_step_actions` |
 | POST | `/workflows/runs/{run_id}/deliver` | **cloud** lane retry of stuck `pending_delivery` |
-| GET | `/workflows/runs/{run_id}/refresh` | **cloud** lane pull; syncs ledger |
+| GET | `/workflows/runs/{run_id}/refresh` | **cloud** lane pull; syncs ledger; also triggers `apply_step_actions` |
+| GET | `/workflows/slack/channels` | PR A — `{channels:[{id,name}], connected}`; `connected:false` + empty list when the actor has no ready Slack account ([integrations accounts store](../server/proliferate/db/store/integrations/accounts.py)) |
 | GET/PATCH/DELETE | `/workflows/{workflow_id}` | detail / update (append version) / archive |
 | POST | `/workflows/{workflow_id}/runs` | **StartRun**; personal_cloud also calls `deliver_cloud_run` in-request |
 | GET/POST · GET/PATCH/DELETE | `/workflows/{workflow_id}/triggers[/{trigger_id}]` | trigger CRUD |
@@ -455,30 +513,42 @@ deserialize error.
 
 ```rust
 #[serde(tag = "kind")]
-pub enum StepKind {
+pub enum StepKind {   // format v2 — human.approval removed (E1), agent.emit + branch added
     #[serde(rename = "agent.config")]  AgentConfig(AgentConfigStep),
     #[serde(rename = "agent.prompt")]  AgentPrompt(AgentPromptStep),
+    #[serde(rename = "agent.emit")]    AgentEmit(AgentEmitStep),
     #[serde(rename = "shell.run")]     ShellRun(ShellRunStep),
     #[serde(rename = "scm.open_pr")]   ScmOpenPr(ScmOpenPrStep),
-    #[serde(rename = "notify")]        Notify(NotifyStep),
-    #[serde(rename = "human.approval")]HumanApproval(HumanApprovalStep),
+    #[serde(rename = "notify")]        Notify(NotifyStep),      // {slack_channel_id, message}
+    #[serde(rename = "branch")]        Branch(BranchStep),      // {on, cases:{v:{to}}, reason?}
 }
 
-pub struct AgentPromptStep { pub prompt: String, #[serde(default)] pub goal: Option<GoalSpec> }
-pub struct AgentConfigStep { pub harness: Option<String>, pub model: Option<String> }  // ≥1 present
-pub struct GoalSpec {
-    pub objective: String, pub max_turns: u32, pub max_wall_secs: u64,
-    pub token_budget: Option<i64>, pub on_blocked: OnBlocked, pub verify: Option<VerifySpec>,
-}
-pub enum OnBlocked { Notify, PauseForApproval, Fail }        // default Notify
-pub struct VerifySpec { pub shell: String, pub expect_exit: i32 }
+// PlanStep now carries key/slot/label; ResolvedPlan.setup is gone — replaced by
+// sessions:{slot -> SessionSpec{harness, model?, session_binding, bind_session_id?}}.
+// ResolvedPlan::setup() derives a single PlanSetup for the current (pre-multi-slot)
+// executor (TODO phase C/F: make the executor slot-keyed).
+pub struct PlanStep { pub key: String, pub slot: String, pub label: String, pub on_fail: OnFail, /* flatten */ kind }
+pub struct AgentPromptStep { pub prompt: String, pub goal: Option<GoalSpec>, pub required_invocation: Option<RequiredInvocation> }
+pub struct AgentEmitStep { pub prompt: String, pub max_attempts: u32 /*default 3*/, pub output_schema: Option<Value> }
+pub struct AgentConfigStep { pub harness: Option<String> /*deprecated; server emits model only*/, pub model: Option<String> }
+pub enum BranchTarget { Continue, End }
 pub enum SessionBinding { Fresh, Headless }
 ```
-<sub>[plan.rs:84-160](../anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs#L84)</sub>
+<sub>[plan.rs](../anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs)</sub>
+
+The runtime **executor** carries the v2 plan types but its per-kind *behavior* is
+unchanged in this pass: `agent.emit` and `branch` return a `not_implemented`
+failure (execution lands in phase C/F, C11/C12); `notify` is Slack-only.
 
 `PlanStep { on_fail: OnFail, #[serde(flatten)] kind: StepKind }`; `OnFail { kind:
 OnFailKind(Stop|Retry|Continue), n: u32 }`; `ResolvedPlan { run_id, …, setup: PlanSetup,
 args, steps: Vec<PlanStep> }` (line 21).
+
+`NotifyStep` (line 183, PR A) gained `#[serde(default)] pub slack_channel_id:
+Option<String>` — old plans without the field still deserialize (defaults to
+`None`); [templates.rs](../anyharness/crates/anyharness-lib/src/domains/workflows/templates.rs)
+`resolve_step` (line 140) carries it through late-binding untouched (it's never a
+template target).
 
 ### 4.2 Engine — pure on-fail decision ([engine.rs](../anyharness/crates/anyharness-lib/src/domains/workflows/engine.rs))
 
@@ -564,8 +634,10 @@ workflow_owned_sessions.
 | `agent.prompt` (goal) | `run_goal` :250 | arm → await → verify → terminal (see [§1b](#1b-step-execution-for-agentprompt--goal-arm--await--verify--terminal)) |
 | `shell.run` | [commands.rs](../anyharness/crates/anyharness-lib/src/live/workflows/commands.rs) `run_shell_step` | `/bin/sh -lc` in workspace, scrubbed env, 8 KiB tail, default 600s |
 | `scm.open_pr` | `open_pr_step` | `git push` + `gh pr create`; missing gh → `scm_unavailable` |
-| `notify` | `notify_step` | never a hard failure; Slack → `slack_unavailable` |
-| `human.approval` | `human_approval` (executor) | returns `AwaitApproval`; manager arms timeout timer |
+| `agent.emit` | — (phase C/F) | v2 kind; execution (re-ask loop, C12) not yet built — returns `not_implemented` for now |
+| `notify` | [commands.rs](../anyharness/crates/anyharness-lib/src/live/workflows/commands.rs) `notify_step` | Slack-only (E1b); never a hard failure; the runtime emits `{channel:"slack", message, slack_channel_id}`, the server-side effect claims from it |
+| `branch` | — (phase C/F) | v2 kind; continue/end arm (C11) not yet built — returns `not_implemented` for now |
+| ~~`human.approval`~~ | removed (E1) | step kind deleted; the `waiting_approval` status survives via `goal.on_blocked` |
 
 **output_json vocabulary per kind** (consumed by the run view + `{{steps[N].output}}`):
 
@@ -576,8 +648,7 @@ workflow_owned_sessions.
 | agent.prompt (goal) | `session_id`, `met_reason?`, `verified?`, `verify_attempts?`; while running `{goal:{objective,status,iterations,tokens_used}, session_id}` |
 | shell.run | `output_tail`, `exit_code`, `output_name?` |
 | scm.open_pr | `pr_url` |
-| notify | `channel`, `message` |
-| human.approval | descriptor `{kind:"human_approval", message, on_timeout, timeout_secs, deadline_at}`; on resolve `{approved, …}` |
+| notify | `channel:"slack"`, `message`, `slack_channel_id` — what the server's step-actions observer keys off (claim key is `(run_id, step_key, action_kind)`) |
 | goal block (await) | `{kind:"goal_block", session_id, message}` |
 
 **Live goal-progress snapshots.** `run_goal`'s `on_progress` closure fires on every
@@ -752,19 +823,26 @@ product-domain/src/workflows/
 
 **TS `WorkflowDefinition`** ([definition.ts:166](../apps/packages/product-domain/src/workflows/definition.ts#L166)):
 
+Format v2 (PR A) — the model mirrors the server spine. Refs use `{{inputs.*}}`
++ `{{emit.field}}`; the three grammar/kind files (definition.ts, validation.ts,
+interpolation.ts) are cut to v2. **Follow-up:** the desktop editor components and
+the sibling product-domain modules (model.ts, presentation.ts, effective-config.ts,
+templates.ts, workflows.test.ts) still reference the v1 shape and are migrated in
+the editor phase — the built dist does not compile until then.
+
 ```ts
-export interface WorkflowDefinition { args: WorkflowArgSpec[]; setup: WorkflowSetup; steps: WorkflowStep[] }
-export interface WorkflowSetup { harness: string; model: string; sessionBinding: WorkflowSessionBinding }
-export interface WorkflowGoal {
-  objective: string; maxTurns: number; maxWallSecs: number;
-  tokenBudget?: number; onBlocked: WorkflowGoalOnBlocked; verify?: WorkflowGoalVerify;
+export interface WorkflowDefinition {
+  version: 1; name?: string; description?: string;
+  inputs: WorkflowInputSpec[]; integrations: string[]; agents: WorkflowAgentNode[];
 }
-export interface AgentPromptStep extends StepBase { kind: "agent.prompt"; prompt: string; goal?: WorkflowGoal }
-export interface AgentConfigStep extends StepBase { kind: "agent.config"; harness?: string; model?: string }
+export interface WorkflowAgentNode { slot: string; harness: string; model: string; steps: WorkflowStep[] }
+export interface AgentEmitStep extends StepBase { kind: "agent.emit"; prompt: string; name: string; outputSchema?; maxAttempts? }
+export interface NotifyStep extends StepBase { kind: "notify"; slackChannelId: string; message: string }
+export interface BranchStep extends StepBase { kind: "branch"; on: string; cases: Record<string,{to:"continue"|"end"}>; reason? }
 export type WorkflowStep =
-  | AgentPromptStep | AgentConfigStep | ShellRunStep | ScmOpenPrStep | NotifyStep | HumanApprovalStep;
+  | AgentPromptStep | AgentEmitStep | AgentConfigStep | ShellRunStep | ScmOpenPrStep | NotifyStep | BranchStep;
 ```
-<sub>[definition.ts:80-170](../apps/packages/product-domain/src/workflows/definition.ts#L80)</sub>
+<sub>[definition.ts](../apps/packages/product-domain/src/workflows/definition.ts)</sub>
 
 `parseWorkflowDefinition` is lenient (never throws, drops malformed steps — the
 server validated on write); `serializeWorkflowDefinition` is its snake_case inverse.
@@ -839,7 +917,11 @@ editor/run UI of its own (drift note #7).
   a new session at the next agent step. (`plan.rs::AgentConfigStep`, `run_agent_config`.)
 - **Hidden run sessions.** Workflow-run sessions don't appear in the normal session
   list; their home is the run view's "Open session" deep link.
-- **Notify in-app floor.** `notify` is never a hard failure; Slack is a later integration.
+- **Notify in-app floor.** `notify` is never a hard failure. Slack delivery (PR A)
+  is a server-side action claimed off the observed output, not a runtime concern —
+  the runtime's job stops at emitting `{channel:"slack", message, slack_channel_id}`;
+  the send itself, retries, and idempotency live in the step-actions ledger
+  ([§2a](#2a-postgres-control-plane), [§3](#3-server-layer-control-plane)).
 
 ---
 
@@ -855,7 +937,11 @@ editor/run UI of its own (drift note #7).
 7. **No workflow-`scope` column, no Automation→trigger migration** — web `/workflows` still routes to automations.
 8. **No server-side cancel/pause endpoint** — cancel is a runtime endpoint only.
 9. **`goal_iterating` and `cancelled` are client-only step statuses** (runtime `WorkflowStepStatus` lacks them).
-10. **Notify/Slack + scm/gh are stubs** (`slack_unavailable` / `scm_unavailable`).
+10. ~~**Notify/Slack + scm/gh are stubs** (`slack_unavailable` / `scm_unavailable`).~~
+    **Slack resolved by PR A** (this tree): `notify`+slack now performs a real send
+    via the server-side step-actions ledger ([§2a](#2a-postgres-control-plane),
+    [§3](#3-server-layer-control-plane)); `scm.open_pr`'s `scm_unavailable` (missing
+    `gh`) is still a stub — unchanged.
 
 **Gaps / sequencing:**
 - **Sidecar pin bump (release blocker).** GoalPort/LoopPort ride the forked

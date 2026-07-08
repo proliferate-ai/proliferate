@@ -110,22 +110,36 @@ WORKFLOW_RUN_OBSERVABLE_STATUSES: Final = frozenset(
     }
 )
 
-# --- Step kinds (spec 3.3). ----------------------------------------------------
+# --- Step kinds (definition format v2; data-contract §1.2). --------------------
+# human.approval is REMOVED (E1); agent.emit and branch are NEW (A3/C11). The
+# waiting_approval run status survives via goal.on_blocked, not a step kind.
 WORKFLOW_STEP_AGENT_CONFIG: Final = "agent.config"
 WORKFLOW_STEP_AGENT_PROMPT: Final = "agent.prompt"
+WORKFLOW_STEP_AGENT_EMIT: Final = "agent.emit"
 WORKFLOW_STEP_SHELL_RUN: Final = "shell.run"
 WORKFLOW_STEP_SCM_OPEN_PR: Final = "scm.open_pr"
 WORKFLOW_STEP_NOTIFY: Final = "notify"
-WORKFLOW_STEP_HUMAN_APPROVAL: Final = "human.approval"
+WORKFLOW_STEP_BRANCH: Final = "branch"
 SUPPORTED_WORKFLOW_STEP_KINDS: Final = frozenset(
     {
         WORKFLOW_STEP_AGENT_CONFIG,
         WORKFLOW_STEP_AGENT_PROMPT,
+        WORKFLOW_STEP_AGENT_EMIT,
         WORKFLOW_STEP_SHELL_RUN,
         WORKFLOW_STEP_SCM_OPEN_PR,
         WORKFLOW_STEP_NOTIFY,
-        WORKFLOW_STEP_HUMAN_APPROVAL,
+        WORKFLOW_STEP_BRANCH,
     }
+)
+
+# Default emit re-ask budget (executor MAX_EMIT_ATTEMPTS; overridable per emit).
+WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS: Final = 3
+
+# --- branch targets (data-contract §1.2 / C11: narrowed to continue|end). ------
+WORKFLOW_BRANCH_TARGET_CONTINUE: Final = "continue"
+WORKFLOW_BRANCH_TARGET_END: Final = "end"
+SUPPORTED_WORKFLOW_BRANCH_TARGETS: Final = frozenset(
+    {WORKFLOW_BRANCH_TARGET_CONTINUE, WORKFLOW_BRANCH_TARGET_END}
 )
 
 # --- Per-step on_fail policy (spec 3.3). ---------------------------------------
@@ -148,35 +162,36 @@ SUPPORTED_WORKFLOW_GOAL_ON_BLOCKED: Final = frozenset(
     }
 )
 
-# --- notify channels (spec 3.3: Slack v1, in-app is the floor). ----------------
-WORKFLOW_NOTIFY_CHANNEL_IN_APP: Final = "in_app"
+# --- notify: Slack-only (E1b). No channel discriminator; template-only v1. -----
+# Retained slug for the server-side slack_notify action kind.
 WORKFLOW_NOTIFY_CHANNEL_SLACK: Final = "slack"
-SUPPORTED_WORKFLOW_NOTIFY_CHANNELS: Final = frozenset(
-    {WORKFLOW_NOTIFY_CHANNEL_IN_APP, WORKFLOW_NOTIFY_CHANNEL_SLACK}
-)
 
-# --- human.approval on_timeout (spec 3.3). -------------------------------------
-WORKFLOW_APPROVAL_ON_TIMEOUT_FAIL: Final = "fail"
-WORKFLOW_APPROVAL_ON_TIMEOUT_CONTINUE: Final = "continue"
-SUPPORTED_WORKFLOW_APPROVAL_ON_TIMEOUT: Final = frozenset(
-    {WORKFLOW_APPROVAL_ON_TIMEOUT_FAIL, WORKFLOW_APPROVAL_ON_TIMEOUT_CONTINUE}
-)
-
-# --- Workflow-level args schema (spec 3.3 / 3.6 Setup). ------------------------
-WORKFLOW_ARG_TYPE_STRING: Final = "string"
-WORKFLOW_ARG_TYPE_NUMBER: Final = "number"
-WORKFLOW_ARG_TYPE_BOOLEAN: Final = "boolean"
-WORKFLOW_ARG_TYPE_ENUM: Final = "enum"
-SUPPORTED_WORKFLOW_ARG_TYPES: Final = frozenset(
+# --- Input types (data-contract §1 / E2). text|number|choice|boolean. ----------
+# string->text, enum->choice; the coercion machinery is unchanged.
+WORKFLOW_INPUT_TYPE_TEXT: Final = "text"
+WORKFLOW_INPUT_TYPE_NUMBER: Final = "number"
+WORKFLOW_INPUT_TYPE_CHOICE: Final = "choice"
+WORKFLOW_INPUT_TYPE_BOOLEAN: Final = "boolean"
+SUPPORTED_WORKFLOW_INPUT_TYPES: Final = frozenset(
     {
-        WORKFLOW_ARG_TYPE_STRING,
-        WORKFLOW_ARG_TYPE_NUMBER,
-        WORKFLOW_ARG_TYPE_BOOLEAN,
-        WORKFLOW_ARG_TYPE_ENUM,
+        WORKFLOW_INPUT_TYPE_TEXT,
+        WORKFLOW_INPUT_TYPE_NUMBER,
+        WORKFLOW_INPUT_TYPE_CHOICE,
+        WORKFLOW_INPUT_TYPE_BOOLEAN,
     }
 )
 
-# --- setup.session_binding (spec 3.3). -----------------------------------------
+# --- slot / agent-node grammar (data-contract §1.1 / A4). ----------------------
+WORKFLOW_MAX_AGENTS: Final = 20
+
+# --- reserved reference first-segments (data-contract §1.3 / B6). --------------
+# `inputs` = eager run inputs; `steps` = the runtime's rewritten indexed target;
+# `fields` = reserved for the notify agent-filled follow-up. None may be an emit
+# name (emit names share the ref namespace).
+WORKFLOW_RESERVED_REF_SEGMENTS: Final = frozenset({"inputs", "steps", "fields"})
+
+# --- session_binding: defaulted per-slot in the resolved plan by trigger kind
+# (manual/chat=fresh, schedule/poll=headless); no longer an authored field. -----
 WORKFLOW_SESSION_BINDING_FRESH: Final = "fresh"
 WORKFLOW_SESSION_BINDING_HEADLESS: Final = "headless"
 SUPPORTED_WORKFLOW_SESSION_BINDINGS: Final = frozenset(

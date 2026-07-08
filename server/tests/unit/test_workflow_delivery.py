@@ -44,8 +44,17 @@ async def _make_user(db: AsyncSession) -> User:
 
 def _definition() -> dict:
     return {
-        "setup": {"harness": "claude", "model": "sonnet", "session_binding": "fresh"},
-        "steps": [{"kind": "agent.prompt", "prompt": "do the thing"}],
+        "version": 1,
+        "inputs": [],
+        "integrations": [],
+        "agents": [
+            {
+                "slot": "main",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "do the thing"}],
+            }
+        ],
     }
 
 
@@ -420,7 +429,7 @@ async def test_start_run_cloud_requires_target_workspace(db_session: AsyncSessio
     workflow = await _make_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
         await service.start_run(
-            db_session, user, workflow.id, args={}, target_mode="personal_cloud"
+            db_session, user, workflow.id, inputs={}, target_mode="personal_cloud"
         )
     assert exc.value.code == "target_workspace_required"
     assert exc.value.status_code == 400
@@ -438,7 +447,7 @@ async def test_start_run_cloud_rejects_unowned_workspace(db_session: AsyncSessio
             db_session,
             user,
             workflow.id,
-            args={},
+            inputs={},
             target_mode="personal_cloud",
             target_workspace_id=foreign_ws.id,
         )
@@ -455,7 +464,7 @@ async def test_start_run_cloud_rejects_unmaterialized_workspace(db_session: Asyn
             db_session,
             user,
             workflow.id,
-            args={},
+            inputs={},
             target_mode="personal_cloud",
             target_workspace_id=workspace.id,
         )
@@ -473,7 +482,7 @@ async def test_start_run_cloud_stamps_sandbox_workspace_id(db_session: AsyncSess
         db_session,
         user,
         workflow.id,
-        args={},
+        inputs={},
         target_mode="personal_cloud",
         target_workspace_id=workspace.id,
     )

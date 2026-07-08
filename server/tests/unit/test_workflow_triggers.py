@@ -63,11 +63,18 @@ async def _make_user(db: AsyncSession) -> User:
 
 
 def _definition(*, required_arg: bool = False) -> dict:
-    args = [{"name": "issue", "type": "string", "required": required_arg}]
     return {
-        "args": args,
-        "setup": {"harness": "claude", "model": "sonnet", "session_binding": "fresh"},
-        "steps": [{"kind": "agent.prompt", "prompt": "Fix {{args.issue}}"}],
+        "version": 1,
+        "inputs": [{"name": "issue", "type": "text", "required": required_arg}],
+        "integrations": [],
+        "agents": [
+            {
+                "slot": "main",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "Fix {{inputs.issue}}"}],
+            }
+        ],
     }
 
 

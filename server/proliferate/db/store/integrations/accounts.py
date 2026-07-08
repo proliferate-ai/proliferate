@@ -10,12 +10,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.models.cloud.integrations import (
     CloudIntegrationAccount,
     CloudIntegrationDefinition,
+    CloudIntegrationPolicy,
 )
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.utils.time import utcnow
@@ -132,24 +133,47 @@ async def get_ready_account_for_provider(
     db: AsyncSession,
     user_id: UUID,
     namespace: str,
+    *,
+    organization_id: UUID | None = None,
 ) -> tuple[IntegrationAccountRecord, definitions_store.IntegrationDefinitionRecord] | None:
-    """The user's enabled, ready account whose non-archived definition matches ``namespace``."""
+    """The user's enabled, ready account whose non-archived definition matches ``namespace``.
+
+    When ``organization_id`` is given the org's integration policy is enforced:
+    an account is excluded when the org has disabled that definition (a policy
+    row with ``enabled = false``, or no policy row and the definition is not
+    ``enabled_by_default``). Callers with a real org context must pass it so a
+    personally-connected account cannot bypass an org's disable decision.
+    """
+    stmt = (
+        select(CloudIntegrationAccount, CloudIntegrationDefinition)
+        .join(
+            CloudIntegrationDefinition,
+            CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
+        )
+        .where(
+            CloudIntegrationAccount.owner_user_id == user_id,
+            CloudIntegrationAccount.enabled.is_(True),
+            CloudIntegrationAccount.status == "ready",
+            CloudIntegrationDefinition.namespace == namespace,
+            CloudIntegrationDefinition.archived_at.is_(None),
+        )
+    )
+    if organization_id is not None:
+        # LEFT JOIN the org's policy row for this definition; enabled state is the
+        # policy's when present, else the definition's default. Disabled => excluded.
+        stmt = stmt.outerjoin(
+            CloudIntegrationPolicy,
+            (CloudIntegrationPolicy.definition_id == CloudIntegrationDefinition.id)
+            & (CloudIntegrationPolicy.organization_id == organization_id),
+        ).where(
+            func.coalesce(
+                CloudIntegrationPolicy.enabled,
+                CloudIntegrationDefinition.enabled_by_default,
+            ).is_(True)
+        )
     row = (
         await db.execute(
-            select(CloudIntegrationAccount, CloudIntegrationDefinition)
-            .join(
-                CloudIntegrationDefinition,
-                CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
-            )
-            .where(
-                CloudIntegrationAccount.owner_user_id == user_id,
-                CloudIntegrationAccount.enabled.is_(True),
-                CloudIntegrationAccount.status == "ready",
-                CloudIntegrationDefinition.namespace == namespace,
-                CloudIntegrationDefinition.archived_at.is_(None),
-            )
-            .order_by(CloudIntegrationAccount.created_at.asc())
-            .limit(1)
+            stmt.order_by(CloudIntegrationAccount.created_at.asc()).limit(1)
         )
     ).first()
     if row is None:

@@ -40,6 +40,9 @@ impl WorkflowRunRecord {
 pub struct WorkflowStepRunRecord {
     pub run_id: String,
     pub step_index: i64,
+    /// Structured step key "<node>.<lane>.<step>" (B5) — the step's stable
+    /// identity; outputs are reported keyed by this.
+    pub step_key: String,
     pub kind: String,
     pub status: WorkflowStepStatus,
     pub attempt: i64,

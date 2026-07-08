@@ -1692,6 +1692,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workflows/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Slack Channels Endpoint */
+        get: operations["list_slack_channels_endpoint_v1_cloud_workflows_slack_channels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workflows/{workflow_id}": {
         parameters: {
             query?: never;
@@ -4951,6 +4968,20 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
+        /** SlackChannelResponse */
+        SlackChannelResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** SlackChannelsResponse */
+        SlackChannelsResponse: {
+            /** Channels */
+            channels: components["schemas"]["SlackChannelResponse"][];
+            /** Connected */
+            connected: boolean;
+        };
         /** SsoDiscoveryResponse */
         SsoDiscoveryResponse: {
             /** Enabled */
@@ -5011,8 +5042,8 @@ export interface components {
         };
         /** StartRunRequest */
         StartRunRequest: {
-            /** Args */
-            args?: {
+            /** Inputs */
+            inputs?: {
                 [key: string]: unknown;
             };
             /**
@@ -5022,8 +5053,11 @@ export interface components {
             targetMode: "local" | "personal_cloud";
             /** Versionid */
             versionId?: string | null;
-            /** Targetworkspaceid */
-            targetWorkspaceId?: string | null;
+            target: components["schemas"]["WorkflowRunTarget"];
+            /** Sessionbindings */
+            sessionBindings?: {
+                [key: string]: string;
+            };
         };
         /** StartSsoAuthRequest */
         StartSsoAuthRequest: {
@@ -5080,6 +5114,23 @@ export interface components {
             connectionId?: string | null;
             /** Organizationid */
             organizationId?: string | null;
+        };
+        /** StepActionResponse */
+        StepActionResponse: {
+            /** Stepkey */
+            stepKey: string;
+            /** Actionkind */
+            actionKind: string;
+            /** Status */
+            status: string;
+            /** Resultjson */
+            resultJson: {
+                [key: string]: unknown;
+            } | null;
+            /** Errormessage */
+            errorMessage: string | null;
+            /** Attemptcount */
+            attemptCount: number;
         };
         /** StripeWebhookAck */
         StripeWebhookAck: {
@@ -5341,6 +5392,12 @@ export interface components {
             /** Updatedat */
             updatedAt: string;
         };
+        /** WorkflowRunDetailResponse */
+        WorkflowRunDetailResponse: {
+            run: components["schemas"]["WorkflowRunResponse"];
+            /** Stepactions */
+            stepActions: components["schemas"]["StepActionResponse"][];
+        };
         /** WorkflowRunListResponse */
         WorkflowRunListResponse: {
             /** Runs */
@@ -5402,6 +5459,18 @@ export interface components {
             startedAt: string | null;
             /** Finishedat */
             finishedAt: string | null;
+        };
+        /**
+         * WorkflowRunTarget
+         * @description Where a run works (data-contract §3): exactly one of a workspace (manual/
+         *     chat — the workspace you're in) or a trigger (schedule/poll — the server
+         *     derives the pinned workspace from the trigger row; derivation itself is PR G).
+         */
+        WorkflowRunTarget: {
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Triggerid */
+            triggerId?: string | null;
         };
         /** WorkflowTriggerCreateRequest */
         WorkflowTriggerCreateRequest: {
@@ -9160,7 +9229,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                    "application/json": components["schemas"]["WorkflowRunDetailResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9298,6 +9367,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_slack_channels_endpoint_v1_cloud_workflows_slack_channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackChannelsResponse"];
                 };
             };
         };

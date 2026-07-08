@@ -8,8 +8,8 @@ import {
   listWorkflows,
   type WorkflowDetailResponse,
   type WorkflowListResponse,
+  type WorkflowRunDetailResponse,
   type WorkflowRunListResponse,
-  type WorkflowRunResponse,
 } from "@/lib/access/cloud/workflows";
 import { coerceRunStatus, shouldPollRun } from "@proliferate/product-domain/workflows/run-status";
 import {
@@ -49,16 +49,17 @@ export function useWorkflowRuns(workflowId: string | null = null, enabled = true
 }
 
 /**
- * A single run, polled on an interval while it is non-terminal (spec 3.6:
- * simple interval, no streaming in v1). Polling stops once the run resolves.
+ * A single run (+ its step-effect ledger, spec 1.2), polled on an interval
+ * while it is non-terminal (spec 3.6: simple interval, no streaming in v1).
+ * Polling stops once the run resolves.
  */
 export function useWorkflowRun(runId: string | null, enabled = true) {
-  return useQuery<WorkflowRunResponse>({
+  return useQuery<WorkflowRunDetailResponse>({
     queryKey: workflowRunDetailKey(runId),
     queryFn: () => getWorkflowRun(runId!),
     enabled: enabled && runId !== null,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
+      const status = query.state.data?.run.status;
       if (status && !shouldPollRun(coerceRunStatus(status))) {
         return false;
       }

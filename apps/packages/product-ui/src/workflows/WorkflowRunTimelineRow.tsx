@@ -38,7 +38,17 @@ function OutputChip({ chip }: { chip: WorkflowStepOutputChip }) {
       );
     case "notify":
       return (
-        <span className={twMerge(base, chip.delivered ? "border-border text-muted-foreground" : "border-border text-faint")}>
+        <span
+          title={chip.title}
+          className={twMerge(
+            base,
+            chip.status === "sent"
+              ? "border-border text-muted-foreground"
+              : chip.status === "failed"
+                ? "border-destructive/35 text-destructive"
+                : "border-border text-faint",
+          )}
+        >
           {chip.label}
         </span>
       );

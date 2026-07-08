@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 // Side-effect: registers the auth-aware desktop cloud client factory.
 import "@/lib/access/cloud/client";
-import { refreshWorkflowRun } from "@/lib/access/cloud/workflows";
+import { refreshWorkflowRun, type WorkflowRunDetailResponse } from "@/lib/access/cloud/workflows";
 import { workflowRunDetailKey } from "./query-keys";
 
 const CLOUD_REFRESH_INTERVAL_MS = 3000;
@@ -25,7 +25,12 @@ export function useCloudRunRefreshPoll(runId: string | null, enabled: boolean): 
       try {
         const run = await refreshWorkflowRun(runId);
         if (!cancelled) {
-          queryClient.setQueryData(workflowRunDetailKey(runId), run);
+          // The refresh endpoint returns the bare run (no step-actions); keep
+          // whatever action rows are already cached until the next full poll.
+          queryClient.setQueryData<WorkflowRunDetailResponse>(
+            workflowRunDetailKey(runId),
+            (prev) => ({ run, stepActions: prev?.stepActions ?? [] }),
+          );
         }
       } catch {
         // Transient gateway/sandbox error — retry on the next tick.

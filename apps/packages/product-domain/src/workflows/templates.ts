@@ -118,7 +118,9 @@ const SENTRY_TRIAGE: WorkflowTemplate = {
       {
         kind: "notify",
         onFail: { kind: "continue" },
-        channel: "slack",
+        // Slack requires a channel pick post-connect (no slack_channel_id at
+        // template-authoring time); default to in-app so the template saves.
+        channel: "in_app",
         message: "Sentry triage finished for {{args.issue_url}}.",
       },
     ],
@@ -227,7 +229,9 @@ const WEEKLY_DIGEST: WorkflowTemplate = {
       {
         kind: "notify",
         onFail: { kind: "continue" },
-        channel: "slack",
+        // Slack requires a channel pick post-connect (no slack_channel_id at
+        // template-authoring time); default to in-app so the template saves.
+        channel: "in_app",
         message: "Weekly digest:\n{{steps[2].output.digest}}",
       },
     ],

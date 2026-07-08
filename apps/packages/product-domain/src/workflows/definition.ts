@@ -1,35 +1,39 @@
 /**
- * Pure workflow-definition model (spec 3.3 / 3.6).
+ * Pure workflow-definition model — format v2 (data-contract §1).
  *
- * This is the client-side mirror of the server definition schema
- * (`server/.../workflows/domain/definition.py` + `constants/workflows.py`).
- * The on-the-wire definition dict is **snake_case** (it is validated verbatim
- * by the control plane); the in-memory model here is **camelCase** for editor
- * ergonomics. `parseWorkflowDefinition` reads the wire dict into the model and
- * `serializeWorkflowDefinition` writes it back — the two are inverse.
+ * Client-side mirror of the server schema (`server/.../workflows/domain/
+ * definition.py` + `constants/workflows.py`). The v2 top-level shape is
+ * `{version, name?, description?, inputs, integrations, agents}`: an ordered
+ * spine of agent nodes (`{slot, harness, model, steps}`). There is no top-level
+ * `steps` and no `setup` — slot = session affinity; `session_binding` is a
+ * run-context property stamped on the resolved plan, never authored.
  *
- * The editor edits a `WorkflowDefinition` directly (drag steps, toggle goals,
- * etc.); `validation.ts` reproduces the server's strict checks for live
- * feedback; the server remains the authority on save.
+ * The on-the-wire definition dict is snake_case (validated verbatim by the
+ * control plane); the in-memory model here is camelCase for editor ergonomics.
+ * `validation.ts` reproduces the server's strict checks for live feedback; the
+ * server remains the authority on save.
+ *
+ * NOTE: the desktop editor components and sibling product-domain modules
+ * (model.ts, presentation.ts, effective-config.ts, templates.ts) still consume
+ * the v1 shape and are migrated in the editor phase.
  */
 
 // --- Enumerations (mirror constants/workflows.py) ------------------------------
 
 export const WORKFLOW_STEP_KINDS = [
   "agent.prompt",
+  "agent.emit",
   "agent.config",
   "shell.run",
   "scm.open_pr",
   "notify",
-  "human.approval",
+  "branch",
 ] as const;
 export type WorkflowStepKind = (typeof WORKFLOW_STEP_KINDS)[number];
 
-export const WORKFLOW_ARG_TYPES = ["string", "number", "boolean", "enum"] as const;
-export type WorkflowArgType = (typeof WORKFLOW_ARG_TYPES)[number];
-
-export const WORKFLOW_SESSION_BINDINGS = ["fresh", "headless"] as const;
-export type WorkflowSessionBinding = (typeof WORKFLOW_SESSION_BINDINGS)[number];
+// E2: text|number|choice|boolean (string->text, enum->choice).
+export const WORKFLOW_INPUT_TYPES = ["text", "number", "choice", "boolean"] as const;
+export type WorkflowInputType = (typeof WORKFLOW_INPUT_TYPES)[number];
 
 export const WORKFLOW_ON_FAIL_KINDS = ["stop", "retry", "continue"] as const;
 export type WorkflowOnFailKind = (typeof WORKFLOW_ON_FAIL_KINDS)[number];
@@ -37,50 +41,51 @@ export type WorkflowOnFailKind = (typeof WORKFLOW_ON_FAIL_KINDS)[number];
 export const WORKFLOW_GOAL_ON_BLOCKED = ["notify", "pause_for_approval", "fail"] as const;
 export type WorkflowGoalOnBlocked = (typeof WORKFLOW_GOAL_ON_BLOCKED)[number];
 
-export const WORKFLOW_NOTIFY_CHANNELS = ["in_app", "slack"] as const;
-export type WorkflowNotifyChannel = (typeof WORKFLOW_NOTIFY_CHANNELS)[number];
-
-export const WORKFLOW_APPROVAL_ON_TIMEOUT = ["fail", "continue"] as const;
-export type WorkflowApprovalOnTimeout = (typeof WORKFLOW_APPROVAL_ON_TIMEOUT)[number];
+// D3: branch cases narrow to continue|end.
+export const WORKFLOW_BRANCH_TARGETS = ["continue", "end"] as const;
+export type WorkflowBranchTarget = (typeof WORKFLOW_BRANCH_TARGETS)[number];
 
 // --- Sizing / caps (mirror constants/workflows.py) -----------------------------
 
 export const WORKFLOW_SHORT_TEXT_MAX_LENGTH = 255;
 export const WORKFLOW_MAX_STEPS = 50;
 export const WORKFLOW_MAX_ARGS = 25;
+export const WORKFLOW_MAX_AGENTS = 20;
+export const WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS = 3;
 
-/** Spec 3.6: default goal caps offered in the editor (25 turns / 90m / 400k). */
+/** Reserved reference first-segments (never legal emit names). */
+export const WORKFLOW_RESERVED_REF_SEGMENTS = ["inputs", "steps", "fields"] as const;
+
 export const WORKFLOW_GOAL_DEFAULT_MAX_TURNS = 25;
 export const WORKFLOW_GOAL_DEFAULT_MAX_WALL_SECS = 90 * 60;
 export const WORKFLOW_GOAL_DEFAULT_TOKEN_BUDGET = 400_000;
 
-/** Spec 6: free-plan cap, enforced client-side + server-side. */
 export const FREE_PLAN_MAX_WORKFLOWS_PER_USER = 1;
 
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SLOT_RE = /^[a-z][a-z0-9_]*$/;
 
-/** Whether a string is a legal arg / output identifier (server rule). */
+/** Whether a string is a legal input / output / emit identifier (server rule). */
 export function isWorkflowIdentifier(value: string): boolean {
   return IDENTIFIER_RE.test(value);
 }
 
-// --- Model ---------------------------------------------------------------------
-
-export type WorkflowArgDefault = string | number | boolean;
-
-export interface WorkflowArgSpec {
-  name: string;
-  type: WorkflowArgType;
-  required: boolean;
-  default?: WorkflowArgDefault;
-  /** Only meaningful for `type: "enum"`. */
-  enum?: string[];
+/** Whether a string is a legal agent slot (server rule ^[a-z][a-z0-9_]*$). */
+export function isWorkflowSlot(value: string): boolean {
+  return SLOT_RE.test(value);
 }
 
-export interface WorkflowSetup {
-  harness: string;
-  model: string;
-  sessionBinding: WorkflowSessionBinding;
+// --- Model ---------------------------------------------------------------------
+
+export type WorkflowInputDefault = string | number | boolean;
+
+export interface WorkflowInputSpec {
+  name: string;
+  type: WorkflowInputType;
+  required: boolean;
+  default?: WorkflowInputDefault;
+  /** Only meaningful for `type: "choice"`. */
+  choices?: string[];
 }
 
 export interface WorkflowOnFail {
@@ -103,34 +108,46 @@ export interface WorkflowGoal {
   verify?: WorkflowGoalVerify;
 }
 
+export interface WorkflowRequiredInvocation {
+  provider: string;
+  tool: string;
+}
+
 interface StepBase {
   onFail: WorkflowOnFail;
+  /** The one-line skim register (plain English). */
+  label?: string;
 }
 
 export interface AgentPromptStep extends StepBase {
   kind: "agent.prompt";
   prompt: string;
-  /** Goal attachment — arms a native goal for this prompt. */
   goal?: WorkflowGoal;
+  /** L27 gate: require this provider+tool was invoked during the turn. */
+  requiredInvocation?: WorkflowRequiredInvocation;
 }
 
-/**
- * Sets the active agent (harness and/or model) for every step below it, until
- * the next `agent.config`. Switching harness opens a new session; a model-only
- * change applies at the next session creation. At least one of harness/model is
- * required (the editor + server enforce this).
- */
+export interface AgentEmitStep extends StepBase {
+  kind: "agent.emit";
+  prompt: string;
+  /** The output handle refs address (required, unique across the definition). */
+  name: string;
+  /** JSON Schema for the captured output. */
+  outputSchema?: Record<string, unknown>;
+  /** Re-ask budget (default 3). */
+  maxAttempts?: number;
+}
+
+/** Switch-model step: narrows to `{model}` only (same-harness rule, A3). */
 export interface AgentConfigStep extends StepBase {
   kind: "agent.config";
-  harness?: string;
-  model?: string;
+  model: string;
 }
 
 export interface ShellRunStep extends StepBase {
   kind: "shell.run";
   command: string;
   timeoutSecs?: number;
-  /** Named output capture for `{{steps[N].output.<name>}}`. */
   outputName?: string;
 }
 
@@ -142,31 +159,44 @@ export interface ScmOpenPrStep extends StepBase {
   draft?: boolean;
 }
 
+/** Slack-only notify (E1b): no channel discriminator. */
 export interface NotifyStep extends StepBase {
   kind: "notify";
-  channel: WorkflowNotifyChannel;
+  slackChannelId: string;
   message: string;
 }
 
-export interface HumanApprovalStep extends StepBase {
-  kind: "human.approval";
-  message: string;
-  onTimeout: WorkflowApprovalOnTimeout;
-  timeoutSecs?: number;
+/** Branch (C11/D3): switch on a prior emit's field; each case is continue|end. */
+export interface BranchStep extends StepBase {
+  kind: "branch";
+  on: string;
+  cases: Record<string, { to: WorkflowBranchTarget }>;
+  reason?: string;
 }
 
 export type WorkflowStep =
   | AgentPromptStep
+  | AgentEmitStep
   | AgentConfigStep
   | ShellRunStep
   | ScmOpenPrStep
   | NotifyStep
-  | HumanApprovalStep;
+  | BranchStep;
+
+export interface WorkflowAgentNode {
+  slot: string;
+  harness: string;
+  model: string;
+  steps: WorkflowStep[];
+}
 
 export interface WorkflowDefinition {
-  args: WorkflowArgSpec[];
-  setup: WorkflowSetup;
-  steps: WorkflowStep[];
+  version: 1;
+  name?: string;
+  description?: string;
+  inputs: WorkflowInputSpec[];
+  integrations: string[];
+  agents: WorkflowAgentNode[];
 }
 
 // --- Constructors --------------------------------------------------------------
@@ -188,21 +218,23 @@ export function createWorkflowStep(kind: WorkflowStepKind): WorkflowStep {
   switch (kind) {
     case "agent.prompt":
       return { kind, onFail: { ...DEFAULT_ON_FAIL }, prompt: "" };
+    case "agent.emit":
+      return { kind, onFail: { ...DEFAULT_ON_FAIL }, prompt: "", name: "" };
     case "agent.config":
-      return { kind, onFail: { ...DEFAULT_ON_FAIL } };
+      return { kind, onFail: { ...DEFAULT_ON_FAIL }, model: "" };
     case "shell.run":
       return { kind, onFail: { ...DEFAULT_ON_FAIL }, command: "" };
     case "scm.open_pr":
       return { kind, onFail: { ...DEFAULT_ON_FAIL }, title: "" };
     case "notify":
-      return { kind, onFail: { ...DEFAULT_ON_FAIL }, channel: "in_app", message: "" };
-    case "human.approval":
-      return { kind, onFail: { ...DEFAULT_ON_FAIL }, message: "", onTimeout: "fail" };
+      return { kind, onFail: { ...DEFAULT_ON_FAIL }, slackChannelId: "", message: "" };
+    case "branch":
+      return { kind, onFail: { ...DEFAULT_ON_FAIL }, on: "", cases: {} };
   }
 }
 
-export function createEmptyDefinition(setup: WorkflowSetup): WorkflowDefinition {
-  return { args: [], setup, steps: [createWorkflowStep("agent.prompt")] };
+export function createEmptyDefinition(node: WorkflowAgentNode): WorkflowDefinition {
+  return { version: 1, inputs: [], integrations: [], agents: [node] };
 }
 
 // --- Parse (wire dict -> model) ------------------------------------------------
@@ -225,8 +257,7 @@ function parseOnFail(raw: unknown): WorkflowOnFail {
   const record = asRecord(raw);
   const kind = record?.kind;
   if (kind === "retry") {
-    const n = asPositiveInt(record?.n) ?? 1;
-    return { kind: "retry", n };
+    return { kind: "retry", n: asPositiveInt(record?.n) ?? 1 };
   }
   if (kind === "continue") {
     return { kind: "continue" };
@@ -234,23 +265,19 @@ function parseOnFail(raw: unknown): WorkflowOnFail {
   return { kind: "stop" };
 }
 
-function parseArg(raw: unknown): WorkflowArgSpec | null {
+function parseInput(raw: unknown): WorkflowInputSpec | null {
   const record = asRecord(raw);
   if (!record) {
     return null;
   }
   const name = asString(record.name);
   const type = record.type;
-  if (name === undefined || !isWorkflowArgType(type)) {
+  if (name === undefined || !isWorkflowInputType(type)) {
     return null;
   }
-  const spec: WorkflowArgSpec = {
-    name,
-    type,
-    required: record.required === true,
-  };
-  if (type === "enum" && Array.isArray(record.enum)) {
-    spec.enum = record.enum.filter((v): v is string => typeof v === "string");
+  const spec: WorkflowInputSpec = { name, type, required: record.required === true };
+  if (type === "choice" && Array.isArray(record.choices)) {
+    spec.choices = record.choices.filter((v): v is string => typeof v === "string");
   }
   const rawDefault = record.default;
   if (
@@ -295,31 +322,45 @@ function parseStep(raw: unknown): WorkflowStep | null {
     return null;
   }
   const onFail = parseOnFail(record.on_fail);
+  const label = asString(record.label);
+  const base = label !== undefined ? { onFail, label } : { onFail };
   switch (kind) {
     case "agent.prompt": {
-      const step: AgentPromptStep = { kind, onFail, prompt: asString(record.prompt) ?? "" };
-      const goal = record.goal === undefined || record.goal === null
-        ? undefined
-        : parseGoal(record.goal);
+      const step: AgentPromptStep = { kind, ...base, prompt: asString(record.prompt) ?? "" };
+      const goal = record.goal == null ? undefined : parseGoal(record.goal);
       if (goal) {
         step.goal = goal;
       }
-      return step;
-    }
-    case "agent.config": {
-      const step: AgentConfigStep = { kind, onFail };
-      const harness = asString(record.harness);
-      if (harness !== undefined) {
-        step.harness = harness;
-      }
-      const model = asString(record.model);
-      if (model !== undefined) {
-        step.model = model;
+      const inv = asRecord(record.required_invocation);
+      if (inv) {
+        step.requiredInvocation = {
+          provider: asString(inv.provider) ?? "",
+          tool: asString(inv.tool) ?? "",
+        };
       }
       return step;
     }
+    case "agent.emit": {
+      const step: AgentEmitStep = {
+        kind,
+        ...base,
+        prompt: asString(record.prompt) ?? "",
+        name: asString(record.name) ?? "",
+      };
+      const schema = asRecord(record.output_schema);
+      if (schema) {
+        step.outputSchema = schema;
+      }
+      const maxAttempts = asPositiveInt(record.max_attempts);
+      if (maxAttempts !== undefined) {
+        step.maxAttempts = maxAttempts;
+      }
+      return step;
+    }
+    case "agent.config":
+      return { kind, ...base, model: asString(record.model) ?? "" };
     case "shell.run": {
-      const step: ShellRunStep = { kind, onFail, command: asString(record.command) ?? "" };
+      const step: ShellRunStep = { kind, ...base, command: asString(record.command) ?? "" };
       const timeoutSecs = asPositiveInt(record.timeout_secs);
       if (timeoutSecs !== undefined) {
         step.timeoutSecs = timeoutSecs;
@@ -331,10 +372,10 @@ function parseStep(raw: unknown): WorkflowStep | null {
       return step;
     }
     case "scm.open_pr": {
-      const step: ScmOpenPrStep = { kind, onFail, title: asString(record.title) ?? "" };
-      const base = asString(record.base);
-      if (base !== undefined) {
-        step.base = base;
+      const step: ScmOpenPrStep = { kind, ...base, title: asString(record.title) ?? "" };
+      const b = asString(record.base);
+      if (b !== undefined) {
+        step.base = b;
       }
       const body = asString(record.body);
       if (body !== undefined) {
@@ -345,65 +386,87 @@ function parseStep(raw: unknown): WorkflowStep | null {
       }
       return step;
     }
-    case "notify": {
-      const channel = isNotifyChannel(record.channel) ? record.channel : "in_app";
-      return { kind, onFail, channel, message: asString(record.message) ?? "" };
-    }
-    case "human.approval": {
-      const step: HumanApprovalStep = {
+    case "notify":
+      return {
         kind,
-        onFail,
+        ...base,
+        slackChannelId: asString(record.slack_channel_id) ?? "",
         message: asString(record.message) ?? "",
-        onTimeout: isApprovalOnTimeout(record.on_timeout) ? record.on_timeout : "fail",
       };
-      const timeoutSecs = asPositiveInt(record.timeout_secs);
-      if (timeoutSecs !== undefined) {
-        step.timeoutSecs = timeoutSecs;
+    case "branch": {
+      const rawCases = asRecord(record.cases) ?? {};
+      const cases: Record<string, { to: WorkflowBranchTarget }> = {};
+      for (const [value, target] of Object.entries(rawCases)) {
+        const to = asRecord(target)?.to;
+        if (isBranchTarget(to)) {
+          cases[value] = { to };
+        }
+      }
+      const step: BranchStep = { kind, ...base, on: asString(record.on) ?? "", cases };
+      const reason = asString(record.reason);
+      if (reason !== undefined) {
+        step.reason = reason;
       }
       return step;
     }
   }
 }
 
-function parseSetup(raw: unknown): WorkflowSetup {
+function parseAgentNode(raw: unknown): WorkflowAgentNode | null {
   const record = asRecord(raw);
-  const binding = record?.session_binding;
+  if (!record) {
+    return null;
+  }
+  const steps = Array.isArray(record.steps)
+    ? record.steps.map(parseStep).filter((s): s is WorkflowStep => s !== null)
+    : [];
   return {
-    harness: asString(record?.harness) ?? "",
-    model: asString(record?.model) ?? "",
-    sessionBinding: isSessionBinding(binding) ? binding : "fresh",
+    slot: asString(record.slot) ?? "",
+    harness: asString(record.harness) ?? "",
+    model: asString(record.model) ?? "",
+    steps,
   };
 }
 
 /**
- * Lenient parse of a stored/template definition dict into the model. Unknown or
- * malformed steps/args are dropped (they never occur in practice — the server
- * validated on write). Never throws.
+ * Lenient parse of a stored definition dict into the model. Never throws.
  */
 export function parseWorkflowDefinition(raw: unknown): WorkflowDefinition {
   const record = asRecord(raw);
-  const args = Array.isArray(record?.args)
-    ? record.args.map(parseArg).filter((a): a is WorkflowArgSpec => a !== null)
+  const inputs = Array.isArray(record?.inputs)
+    ? record.inputs.map(parseInput).filter((a): a is WorkflowInputSpec => a !== null)
     : [];
-  const steps = Array.isArray(record?.steps)
-    ? record.steps.map(parseStep).filter((s): s is WorkflowStep => s !== null)
+  const integrations = Array.isArray(record?.integrations)
+    ? record.integrations.filter((v): v is string => typeof v === "string")
     : [];
-  return { args, setup: parseSetup(record?.setup), steps };
+  const agents = Array.isArray(record?.agents)
+    ? record.agents.map(parseAgentNode).filter((n): n is WorkflowAgentNode => n !== null)
+    : [];
+  const def: WorkflowDefinition = { version: 1, inputs, integrations, agents };
+  const name = asString(record?.name);
+  if (name !== undefined) {
+    def.name = name;
+  }
+  const description = asString(record?.description);
+  if (description !== undefined) {
+    def.description = description;
+  }
+  return def;
 }
 
 // --- Serialize (model -> wire dict) --------------------------------------------
 
-function serializeArg(arg: WorkflowArgSpec): Record<string, unknown> {
+function serializeInput(input: WorkflowInputSpec): Record<string, unknown> {
   const out: Record<string, unknown> = {
-    name: arg.name,
-    type: arg.type,
-    required: arg.required,
+    name: input.name,
+    type: input.type,
+    required: input.required,
   };
-  if (arg.type === "enum" && arg.enum) {
-    out.enum = [...arg.enum];
+  if (input.type === "choice" && input.choices) {
+    out.choices = [...input.choices];
   }
-  if (arg.default !== undefined) {
-    out.default = arg.default;
+  if (input.default !== undefined) {
+    out.default = input.default;
   }
   return out;
 }
@@ -430,23 +493,37 @@ function serializeGoal(goal: WorkflowGoal): Record<string, unknown> {
 
 function serializeStep(step: WorkflowStep): Record<string, unknown> {
   const base: Record<string, unknown> = { kind: step.kind, on_fail: serializeOnFail(step.onFail) };
+  if (step.label !== undefined) {
+    base.label = step.label;
+  }
   switch (step.kind) {
     case "agent.prompt": {
       base.prompt = step.prompt;
       if (step.goal) {
         base.goal = serializeGoal(step.goal);
       }
-      return base;
-    }
-    case "agent.config": {
-      if (step.harness !== undefined) {
-        base.harness = step.harness;
-      }
-      if (step.model !== undefined) {
-        base.model = step.model;
+      if (step.requiredInvocation) {
+        base.required_invocation = {
+          provider: step.requiredInvocation.provider,
+          tool: step.requiredInvocation.tool,
+        };
       }
       return base;
     }
+    case "agent.emit": {
+      base.prompt = step.prompt;
+      base.name = step.name;
+      if (step.outputSchema) {
+        base.output_schema = step.outputSchema;
+      }
+      if (step.maxAttempts !== undefined) {
+        base.max_attempts = step.maxAttempts;
+      }
+      return base;
+    }
+    case "agent.config":
+      base.model = step.model;
+      return base;
     case "shell.run": {
       base.command = step.command;
       if (step.timeoutSecs !== undefined) {
@@ -470,35 +547,49 @@ function serializeStep(step: WorkflowStep): Record<string, unknown> {
       }
       return base;
     }
-    case "notify": {
-      base.channel = step.channel;
+    case "notify":
+      base.slack_channel_id = step.slackChannelId;
       base.message = step.message;
       return base;
-    }
-    case "human.approval": {
-      base.message = step.message;
-      base.on_timeout = step.onTimeout;
-      if (step.timeoutSecs !== undefined) {
-        base.timeout_secs = step.timeoutSecs;
+    case "branch": {
+      base.on = step.on;
+      base.cases = Object.fromEntries(
+        Object.entries(step.cases).map(([value, target]) => [value, { to: target.to }]),
+      );
+      if (step.reason !== undefined) {
+        base.reason = step.reason;
       }
       return base;
     }
   }
 }
 
+function serializeAgentNode(node: WorkflowAgentNode): Record<string, unknown> {
+  return {
+    slot: node.slot,
+    harness: node.harness,
+    model: node.model,
+    steps: node.steps.map(serializeStep),
+  };
+}
+
 /** The snake_case definition dict to POST/PATCH. Inverse of parse. */
 export function serializeWorkflowDefinition(
   definition: WorkflowDefinition,
 ): Record<string, unknown> {
-  return {
-    args: definition.args.map(serializeArg),
-    setup: {
-      harness: definition.setup.harness,
-      model: definition.setup.model,
-      session_binding: definition.setup.sessionBinding,
-    },
-    steps: definition.steps.map(serializeStep),
+  const out: Record<string, unknown> = {
+    version: 1,
+    inputs: definition.inputs.map(serializeInput),
+    integrations: [...definition.integrations],
+    agents: definition.agents.map(serializeAgentNode),
   };
+  if (definition.name !== undefined) {
+    out.name = definition.name;
+  }
+  if (definition.description !== undefined) {
+    out.description = definition.description;
+  }
+  return out;
 }
 
 // --- Type guards ---------------------------------------------------------------
@@ -507,28 +598,14 @@ export function isWorkflowStepKind(value: unknown): value is WorkflowStepKind {
   return typeof value === "string" && (WORKFLOW_STEP_KINDS as readonly string[]).includes(value);
 }
 
-export function isWorkflowArgType(value: unknown): value is WorkflowArgType {
-  return typeof value === "string" && (WORKFLOW_ARG_TYPES as readonly string[]).includes(value);
-}
-
-function isSessionBinding(value: unknown): value is WorkflowSessionBinding {
-  return (
-    typeof value === "string" && (WORKFLOW_SESSION_BINDINGS as readonly string[]).includes(value)
-  );
+export function isWorkflowInputType(value: unknown): value is WorkflowInputType {
+  return typeof value === "string" && (WORKFLOW_INPUT_TYPES as readonly string[]).includes(value);
 }
 
 function isGoalOnBlocked(value: unknown): value is WorkflowGoalOnBlocked {
   return typeof value === "string" && (WORKFLOW_GOAL_ON_BLOCKED as readonly string[]).includes(value);
 }
 
-function isNotifyChannel(value: unknown): value is WorkflowNotifyChannel {
-  return (
-    typeof value === "string" && (WORKFLOW_NOTIFY_CHANNELS as readonly string[]).includes(value)
-  );
-}
-
-function isApprovalOnTimeout(value: unknown): value is WorkflowApprovalOnTimeout {
-  return (
-    typeof value === "string" && (WORKFLOW_APPROVAL_ON_TIMEOUT as readonly string[]).includes(value)
-  );
+function isBranchTarget(value: unknown): value is WorkflowBranchTarget {
+  return typeof value === "string" && (WORKFLOW_BRANCH_TARGETS as readonly string[]).includes(value);
 }

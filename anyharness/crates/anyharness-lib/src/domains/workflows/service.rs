@@ -5,7 +5,7 @@ use super::engine::{
     WorkflowStepExecutor,
 };
 use super::model::{WorkflowRunRecord, WorkflowStepRunRecord};
-use super::plan::{self, OnTimeout, PlanError, StepKind};
+use super::plan::{self, PlanError, StepKind};
 use super::store::WorkflowStore;
 use super::templates::{self, StepOutputs};
 
@@ -129,9 +129,18 @@ impl WorkflowService {
             };
             WorkflowStore::insert_run(tx, &run)?;
             for (index, step) in plan.steps.iter().enumerate() {
+                // v2 plans stamp a structured key; be resilient to a keyless
+                // plan by synthesizing a unique flat key (the SQLite unique index
+                // on (run_id, step_key) would otherwise collide on empty keys).
+                let step_key = if step.key.is_empty() {
+                    format!("0.-.{index}")
+                } else {
+                    step.key.clone()
+                };
                 let step_run = WorkflowStepRunRecord {
                     run_id: run_id.clone(),
                     step_index: index as i64,
+                    step_key,
                     kind: step.kind_slug().to_string(),
                     status: WorkflowStepStatus::Pending,
                     attempt: 0,
@@ -267,25 +276,10 @@ impl WorkflowService {
         let attempt = step_run.attempt;
 
         let decision = match (&step.kind, input) {
-            (StepKind::HumanApproval(_), ApprovalInput::Approve) => StepDecision::Complete {
-                output: serde_json::json!({ "approved": true }),
-            },
-            (StepKind::HumanApproval(human), ApprovalInput::Timeout) => match human.on_timeout {
-                OnTimeout::Continue => StepDecision::Complete {
-                    output: serde_json::json!({ "approved": false, "timedOut": true, "resolution": "continue" }),
-                },
-                OnTimeout::Fail => decide_after_step(
-                    step.on_fail,
-                    attempt,
-                    failed_outcome("approval_timeout", "approval timed out"),
-                ),
-            },
-            (StepKind::HumanApproval(_), ApprovalInput::Deny) => decide_after_step(
-                step.on_fail,
-                attempt,
-                failed_outcome("approval_denied", "approval denied"),
-            ),
-            // An `agent.goal` step parked on a block: approve re-runs the step
+            // human.approval is removed (E1); the only park path left is a goal
+            // step blocked with on_blocked=pause_for_approval, which keeps the
+            // waiting_approval status. An `agent.goal` step parked on a block:
+            // approve re-runs the step
             // (re-arm + continue waiting), deny/timeout fails per on_fail.
             (StepKind::AgentPrompt(_), ApprovalInput::Approve) => StepDecision::Retry,
             (StepKind::AgentPrompt(_), _) => decide_after_step(

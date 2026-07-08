@@ -19,6 +19,8 @@ export type WorkflowDetailResponse = Schemas["WorkflowDetailResponse"];
 export type WorkflowListResponse = Schemas["WorkflowListResponse"];
 export type WorkflowRunResponse = Schemas["WorkflowRunResponse"];
 export type WorkflowRunListResponse = Schemas["WorkflowRunListResponse"];
+export type WorkflowRunDetailResponse = Schemas["WorkflowRunDetailResponse"];
+export type StepActionResponse = Schemas["StepActionResponse"];
 export type WorkflowCreateRequest = Schemas["WorkflowCreateRequest"];
 export type WorkflowUpdateRequest = Schemas["WorkflowUpdateRequest"];
 export type StartRunRequest = Schemas["StartRunRequest"];
@@ -27,6 +29,8 @@ export type WorkflowTriggerResponse = Schemas["WorkflowTriggerResponse"];
 export type WorkflowTriggerListResponse = Schemas["WorkflowTriggerListResponse"];
 export type WorkflowTriggerCreateRequest = Schemas["WorkflowTriggerCreateRequest"];
 export type WorkflowTriggerUpdateRequest = Schemas["WorkflowTriggerUpdateRequest"];
+export type SlackChannelResponse = Schemas["SlackChannelResponse"];
+export type SlackChannelsResponse = Schemas["SlackChannelsResponse"];
 
 export async function listWorkflows(includeArchived = false): Promise<WorkflowListResponse> {
   return getProliferateClient().requestJson<WorkflowListResponse>({
@@ -84,8 +88,8 @@ export async function listWorkflowRuns(
   });
 }
 
-export async function getWorkflowRun(runId: string): Promise<WorkflowRunResponse> {
-  return getProliferateClient().requestJson<WorkflowRunResponse>({
+export async function getWorkflowRun(runId: string): Promise<WorkflowRunDetailResponse> {
+  return getProliferateClient().requestJson<WorkflowRunDetailResponse>({
     method: "GET",
     path: "/v1/cloud/workflows/runs/{run_id}",
     pathParams: { run_id: runId },
@@ -141,6 +145,14 @@ export async function refreshWorkflowRun(runId: string): Promise<WorkflowRunResp
     method: "GET",
     path: "/v1/cloud/workflows/runs/{run_id}/refresh",
     pathParams: { run_id: runId },
+  });
+}
+
+/** The Slack channels the connected account can post to (spec 8.2, PR A). */
+export async function listSlackChannels(): Promise<SlackChannelsResponse> {
+  return getProliferateClient().requestJson<SlackChannelsResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/slack/channels",
   });
 }
 

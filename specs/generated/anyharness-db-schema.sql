@@ -510,6 +510,7 @@ CREATE TABLE workflow_runs (
 CREATE TABLE workflow_step_runs (
     run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
     step_index INTEGER NOT NULL,
+    step_key TEXT NOT NULL,
     kind TEXT NOT NULL,
     status TEXT NOT NULL,
     attempt INTEGER NOT NULL DEFAULT 0,
@@ -762,6 +763,10 @@ CREATE INDEX idx_workflow_runs_status
 -- index: idx_workflow_runs_workspace_created
 CREATE INDEX idx_workflow_runs_workspace_created
     ON workflow_runs(workspace_id, created_at DESC);
+
+-- index: idx_workflow_step_runs_key
+CREATE UNIQUE INDEX idx_workflow_step_runs_key
+    ON workflow_step_runs(run_id, step_key);
 
 -- index: idx_workspaces_path
 CREATE INDEX idx_workspaces_path ON workspaces(path);

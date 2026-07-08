@@ -19,10 +19,13 @@ failure leaves the run *pending_delivery* (non-terminal) with a
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.workflows import (
@@ -208,6 +211,14 @@ async def _sync_run_from_view(
         finished_at=finished_at,
     )
     assert updated is not None
+
+    try:
+        from proliferate.server.cloud.workflows.actions import apply_step_actions
+
+        await apply_step_actions(db, run=updated)
+    except Exception:
+        logger.exception("apply_step_actions failed run_id=%s", run_id)
+
     return updated
 
 

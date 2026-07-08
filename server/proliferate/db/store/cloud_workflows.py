@@ -16,7 +16,12 @@ from proliferate.constants.workflows import (
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
     WORKFLOW_TRIGGER_SCHEDULE,
 )
-from proliferate.db.models.cloud.workflows import Workflow, WorkflowRun, WorkflowVersion
+from proliferate.db.models.cloud.workflows import (
+    Workflow,
+    WorkflowRun,
+    WorkflowStepAction,
+    WorkflowVersion,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -477,4 +482,103 @@ async def list_pending_scheduled_cloud_runs(
         .scalars()
         .all()
     )
+    return tuple(_run_record(row) for row in rows)
+
+
+# --- step actions (PR A) ---------------------------------------------------------
+
+_IN_FLIGHT_STATUSES = ("delivered", "running", "waiting_approval")
+
+
+@dataclass(frozen=True)
+class StepActionRecord:
+    id: UUID
+    run_id: UUID
+    step_key: str
+    action_kind: str
+    status: str
+    attempt_count: int
+    result_json: dict[str, object] | None
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+def _action_record(row: WorkflowStepAction) -> StepActionRecord:
+    return StepActionRecord(
+        id=row.id,
+        run_id=row.run_id,
+        step_key=row.step_key,
+        action_kind=row.action_kind,
+        status=row.status,
+        attempt_count=row.attempt_count,
+        result_json=dict(row.result_json) if row.result_json else None,
+        error_message=row.error_message,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+async def list_retryable_actions(
+    db: AsyncSession, *, before: datetime, max_attempts: int, limit: int = 50
+) -> tuple[StepActionRecord, ...]:
+    """Pending or transiently-failed actions older than ``before`` and still
+    under ``max_attempts`` (the sweep scan). Covers both a crashed owner
+    (stale 'pending') and a transient failure (e.g. Slack API error, 'failed')."""
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowStepAction)
+                .where(
+                    WorkflowStepAction.status.in_(("pending", "failed")),
+                    WorkflowStepAction.attempt_count < max_attempts,
+                    WorkflowStepAction.updated_at < before,
+                )
+                .order_by(WorkflowStepAction.updated_at.asc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_action_record(row) for row in rows)
+
+
+async def list_actions_for_run(
+    db: AsyncSession, *, run_id: UUID
+) -> tuple[StepActionRecord, ...]:
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowStepAction)
+                .where(WorkflowStepAction.run_id == run_id)
+                .order_by(WorkflowStepAction.step_key.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return tuple(_action_record(row) for row in rows)
+
+
+async def list_in_flight_triggered_cloud_runs(
+    db: AsyncSession, *, limit: int, delivered_before: datetime | None = None
+) -> tuple[WorkflowRunRecord, ...]:
+    """In-flight cloud runs originated by triggers (scheduled/polled) for phase-3 refresh.
+
+    ``delivered_before`` excludes runs delivered after the given timestamp (skip
+    runs just delivered this tick -- they need time to execute).
+    """
+    stmt = (
+        select(WorkflowRun)
+        .where(
+            WorkflowRun.status.in_(_IN_FLIGHT_STATUSES),
+            WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+            WorkflowRun.trigger_id.is_not(None),
+        )
+    )
+    if delivered_before is not None:
+        stmt = stmt.where(WorkflowRun.delivered_at < delivered_before)
+    stmt = stmt.order_by(WorkflowRun.updated_at.asc()).limit(max(1, limit))
+    rows = (await db.execute(stmt)).scalars().all()
     return tuple(_run_record(row) for row in rows)

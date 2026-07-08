@@ -24,8 +24,8 @@ use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
 use crate::domains::workflows::model::WorkflowRunRecord;
 use crate::domains::workflows::plan::{
-    AgentConfigStep, AgentPromptStep, GoalSpec, HumanApprovalStep, OnBlocked, OnTimeout, PlanSetup,
-    PlanStep, ScmOpenPrStep, ShellRunStep, StepKind,
+    AgentConfigStep, AgentPromptStep, GoalSpec, OnBlocked, PlanSetup, PlanStep, ScmOpenPrStep,
+    ShellRunStep, StepKind,
 };
 use crate::domains::workflows::service::WorkflowService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -475,24 +475,6 @@ impl WorkflowStepExecutorImpl {
         }
     }
 
-    fn human_approval(&self, step: &HumanApprovalStep) -> StepOutcome {
-        let deadline_at = step.timeout_secs.map(|secs| {
-            (chrono::Utc::now() + chrono::Duration::seconds(secs as i64)).to_rfc3339()
-        });
-        let on_timeout = match step.on_timeout {
-            OnTimeout::Fail => "fail",
-            OnTimeout::Continue => "continue",
-        };
-        StepOutcome::AwaitApproval {
-            descriptor: json!({
-                "kind": "human_approval",
-                "message": step.message,
-                "on_timeout": on_timeout,
-                "timeout_secs": step.timeout_secs,
-                "deadline_at": deadline_at,
-            }),
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -506,8 +488,23 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
             },
             StepKind::ShellRun(shell) => self.run_shell(shell).await,
             StepKind::ScmOpenPr(pr) => self.run_scm(pr).await,
-            StepKind::Notify(notify) => commands::notify_step(notify.channel, &notify.message),
-            StepKind::HumanApproval(approval) => self.human_approval(approval),
+            StepKind::Notify(notify) => {
+                commands::notify_step(&notify.message, &notify.slack_channel_id)
+            }
+            // TODO(workflows phase C/F): agent.emit re-ask loop (C12) and branch
+            // continue/end arm (C11). The plan carries them now; the engine
+            // executes them in a later phase. Fail loudly until then so a v2 plan
+            // using these can't silently no-op.
+            StepKind::AgentEmit(_) => StepOutcome::Failed {
+                code: "not_implemented".to_string(),
+                message: Some("agent.emit execution lands in a later phase".to_string()),
+                output: None,
+            },
+            StepKind::Branch(_) => StepOutcome::Failed {
+                code: "not_implemented".to_string(),
+                message: Some("branch execution lands in a later phase".to_string()),
+                output: None,
+            },
         }
     }
 }

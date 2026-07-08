@@ -238,7 +238,7 @@ impl WorkflowRunManager {
                 deps.clone(),
                 run_id.clone(),
                 run.workspace_id.clone(),
-                plan.setup.clone(),
+                plan.setup(),
             );
             executor.hydrate_from_run(&run);
             let progress =

@@ -294,3 +294,63 @@ class WorkflowTrigger(Base):
         default=utcnow,
         onupdate=utcnow,
     )
+
+
+class WorkflowStepAction(Base):
+    """Server-side actions claimed off observed step completions.
+
+    An action performs the side effect of a step the runtime already executed;
+    it never decides or causes what executes next (L19).
+
+    The (run_id, step_key, action_kind) unique constraint IS the claim: the
+    transaction that inserts the row owns the action. status walks
+    pending -> done | failed; a sweeper retries stale 'pending' rows (an owner
+    that crashed before performing) and transient 'failed' rows (below the
+    attempt cap).
+
+    Honest guarantee: the ledger gives *exactly-once claim*. Action execution is
+    *at-least-once completion* via the sweeper. A crash inside the action window
+    (after the Slack POST succeeded, before status='done' committed) can
+    duplicate a send -- the same guarantee class as every non-transactional
+    external side effect.
+    """
+
+    __tablename__ = "workflow_step_action"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "step_key", "action_kind",
+            name="uq_workflow_step_action_claim",
+        ),
+        CheckConstraint(
+            "action_kind IN ('slack_notify')",
+            name="ck_workflow_step_action_kind",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'done', 'failed')",
+            name="ck_workflow_step_action_status",
+        ),
+        Index(
+            "ix_workflow_step_action_sweep",
+            "updated_at",
+            postgresql_where=text("status IN ('pending', 'failed')"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow_run.id", ondelete="CASCADE"),
+    )
+    # B5 (D2): the structured step key "<node>.<lane>.<step>" — the step's stable
+    # identity across the format (bare integer indices are gone).
+    step_key: Mapped[str] = mapped_column(String(64))
+    action_kind: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    result_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )

@@ -27,7 +27,8 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
   const detailQuery = useWorkflowDetail(workflowId);
   const approvalMutation = useResolveWorkflowApproval();
 
-  const run = runQuery.data ?? null;
+  const run = runQuery.data?.run ?? null;
+  const stepActions = runQuery.data?.stepActions ?? [];
   const workflowName = detailQuery.data?.workflow.name ?? null;
 
   const isCloudRun = run?.targetMode === "personal_cloud";
@@ -60,6 +61,7 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
         ) : (
           <WorkflowRunView
             run={run}
+            stepActions={stepActions}
             definition={definition}
             workflowName={workflowName}
             approvalEnabled={isLocalRun}

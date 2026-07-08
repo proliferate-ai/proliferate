@@ -17,14 +17,21 @@ from proliferate.auth.dependencies import current_product_user
 from proliferate.constants.workflows import WORKFLOW_TARGET_MODE_PERSONAL_CLOUD
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.db.store import cloud_workflows as store
+from proliferate.db.store.integrations import accounts as accounts_store
+from proliferate.integrations.slack import client as slack_client
 from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
+    SlackChannelResponse,
+    SlackChannelsResponse,
     StartRunRequest,
+    StepActionResponse,
     WorkflowCreateRequest,
     WorkflowDetailResponse,
     WorkflowListResponse,
     WorkflowResponse,
+    WorkflowRunDetailResponse,
     WorkflowRunListResponse,
     WorkflowRunResponse,
     WorkflowTriggerCreateRequest,
@@ -54,6 +61,7 @@ from proliferate.server.cloud.workflows.service import (
     update_trigger,
     update_workflow,
 )
+from proliferate.utils.crypto import decrypt_json
 
 router = APIRouter(prefix="/workflows", tags=["cloud-workflows"])
 
@@ -88,13 +96,28 @@ async def list_runs_endpoint(
     return WorkflowRunListResponse(runs=[run_payload(r) for r in runs])
 
 
-@router.get("/runs/{run_id}", response_model=WorkflowRunResponse)
+@router.get("/runs/{run_id}", response_model=WorkflowRunDetailResponse)
 async def get_run_endpoint(
     run_id: UUID,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
-) -> WorkflowRunResponse:
-    return run_payload(await get_run(db, user, run_id))
+) -> WorkflowRunDetailResponse:
+    run = await get_run(db, user, run_id)
+    actions = await store.list_actions_for_run(db, run_id=run.id)
+    return WorkflowRunDetailResponse(
+        run=run_payload(run),
+        step_actions=[
+            StepActionResponse(
+                step_key=a.step_key,
+                action_kind=a.action_kind,
+                status=a.status,
+                result_json=a.result_json,
+                error_message=a.error_message,
+                attempt_count=a.attempt_count,
+            )
+            for a in actions
+        ],
+    )
 
 
 @router.post("/runs/{run_id}/delivered", response_model=WorkflowRunResponse)
@@ -144,6 +167,32 @@ async def refresh_run_endpoint(
     return run_payload(await refresh_cloud_run(db, user, run))
 
 
+@router.get("/slack/channels", response_model=SlackChannelsResponse)
+async def list_slack_channels_endpoint(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> SlackChannelsResponse:
+    account_pair = await accounts_store.get_ready_account_for_provider(db, user.id, "slack")
+    if account_pair is None:
+        return SlackChannelsResponse(channels=[], connected=False)
+    account, _definition = account_pair
+    try:
+        bundle = decrypt_json(account.credential_ciphertext)
+    except Exception:
+        return SlackChannelsResponse(channels=[], connected=False)
+    bot_token = bundle.get("bot_token") or bundle.get("access_token")
+    if not bot_token:
+        return SlackChannelsResponse(channels=[], connected=False)
+    try:
+        channels = await slack_client.list_channels(bot_token=bot_token)
+    except Exception:
+        return SlackChannelsResponse(channels=[], connected=True)
+    return SlackChannelsResponse(
+        channels=[SlackChannelResponse(id=c.id, name=c.name) for c in channels],
+        connected=True,
+    )
+
+
 @router.get("/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow_endpoint(
     workflow_id: UUID,
@@ -185,10 +234,12 @@ async def start_run_endpoint(
         db,
         user,
         workflow_id,
-        args=body.args,
+        inputs=body.inputs,
         target_mode=body.target_mode,
         version_id=body.version_id,
         target_workspace_id=body.target_workspace_id,
+        trigger_id=body.trigger_id,
+        session_bindings=body.session_bindings,
     )
     # Cloud lane: the server delivers gateway-direct to sandbox anyharness in the
     # request (wake + POST). Local lane: the desktop client delivers to its own

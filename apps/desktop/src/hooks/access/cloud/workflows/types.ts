@@ -5,11 +5,15 @@
  */
 
 export type {
+  SlackChannelResponse,
+  SlackChannelsResponse,
   StartRunRequest,
+  StepActionResponse,
   WorkflowCreateRequest,
   WorkflowDetailResponse,
   WorkflowListResponse,
   WorkflowResponse,
+  WorkflowRunDetailResponse,
   WorkflowRunListResponse,
   WorkflowRunResponse,
   WorkflowUpdateRequest,

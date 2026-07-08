@@ -166,12 +166,13 @@ impl WorkflowStore {
     ) -> rusqlite::Result<()> {
         tx.execute(
             "INSERT INTO workflow_step_runs (
-                run_id, step_index, kind, status, attempt, output_json, error_code,
+                run_id, step_index, step_key, kind, status, attempt, output_json, error_code,
                 error_message, started_at, ended_at, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 step.run_id,
                 step.step_index,
+                step.step_key,
                 step.kind,
                 step_status_to_db(step.status),
                 step.attempt,
@@ -271,6 +272,7 @@ fn map_step_run(row: &Row<'_>) -> rusqlite::Result<WorkflowStepRunRecord> {
     Ok(WorkflowStepRunRecord {
         run_id: row.get("run_id")?,
         step_index: row.get("step_index")?,
+        step_key: row.get("step_key")?,
         kind: row.get("kind")?,
         status,
         attempt: row.get("attempt")?,

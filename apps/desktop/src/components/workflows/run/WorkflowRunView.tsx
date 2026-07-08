@@ -18,10 +18,12 @@ import { WorkflowRunTimelineRow } from "@proliferate/product-ui/workflows/Workfl
 import { WorkflowStatusPill } from "@proliferate/product-ui/workflows/WorkflowStatusPill";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "@proliferate/ui/icons";
-import type { WorkflowRunResponse } from "@/hooks/access/cloud/workflows/types";
+import type { StepActionResponse, WorkflowRunResponse } from "@/hooks/access/cloud/workflows/types";
 
 export interface WorkflowRunViewProps {
   run: WorkflowRunResponse;
+  /** The run's step-action ledger rows (spec 1.2) — feeds delivery chips. */
+  stepActions: readonly StepActionResponse[];
   definition: WorkflowDefinition;
   workflowName: string | null;
   /** Live approve/deny for local runs; cloud-run approvals are read-only in v1. */
@@ -36,6 +38,7 @@ export interface WorkflowRunViewProps {
 /** The run observability view (spec 3.6): header + typed step timeline. */
 export function WorkflowRunView({
   run,
+  stepActions,
   definition,
   workflowName,
   approvalEnabled = false,
@@ -61,8 +64,9 @@ export function WorkflowRunView({
         stepCursor: run.stepCursor,
         stepOutputs: run.stepOutputs as Record<string, unknown> | null,
         anyharnessWorkspaceId: run.anyharnessWorkspaceId,
+        stepActions,
       }),
-    [definition, status, run.stepCursor, run.stepOutputs, run.anyharnessWorkspaceId],
+    [definition, status, run.stepCursor, run.stepOutputs, run.anyharnessWorkspaceId, stepActions],
   );
 
   return (

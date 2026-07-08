@@ -6,6 +6,8 @@
 //! [`super::templates`] late-binds against completed step outputs at execution
 //! time. Deserialization is strict: an unknown step `kind` is rejected.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -16,10 +18,19 @@ pub enum PlanError {
     Malformed(String),
 }
 
-/// The fully-resolved plan the actor executes.
+/// The fully-resolved plan the actor executes (format v2, data-contract §4).
+///
+/// The definition's `agents` spine is flattened server-side into one ordered
+/// `steps` list; each step carries its structured `key` and its `slot` (an opaque
+/// session-affinity string). Per-slot session provisioning is described by
+/// `sessions` (replacing the old single `setup`). The runtime never learns the
+/// words "agents", "integrations", or a named ref — those were resolved away.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ResolvedPlan {
     pub run_id: String,
+    /// Document-format version; strict parsers may reject unknown versions.
+    #[serde(default)]
+    pub plan_version: Option<i64>,
     #[serde(default)]
     pub workflow_id: Option<String>,
     #[serde(default)]
@@ -30,10 +41,12 @@ pub struct ResolvedPlan {
     pub trigger_kind: Option<String>,
     #[serde(default)]
     pub target_mode: Option<String>,
-    pub setup: PlanSetup,
-    /// Server-interpolated arg values, kept verbatim for the run record.
+    /// Per-slot session provisioning, keyed by the step's `slot`.
     #[serde(default)]
-    pub args: serde_json::Value,
+    pub sessions: BTreeMap<String, SessionSpec>,
+    /// Server-resolved input values, kept verbatim for the run record.
+    #[serde(default, alias = "args")]
+    pub inputs: serde_json::Value,
     pub steps: Vec<PlanStep>,
 }
 
@@ -45,12 +58,51 @@ impl ResolvedPlan {
     pub fn step_count(&self) -> usize {
         self.steps.len()
     }
+
+    /// Back-compat single-session view for the current (pre-multi-slot) executor.
+    ///
+    /// TODO(workflows phase C/F, B7): the executor must become slot-keyed —
+    /// a `slot -> session` map, no single "current" session. Until then this
+    /// derives one `PlanSetup` from the session of the first step's slot (falling
+    /// back to any session), preserving today's single-session behavior.
+    pub fn setup(&self) -> PlanSetup {
+        let slot = self.steps.first().map(|s| s.slot.as_str());
+        let session = slot
+            .and_then(|slot| self.sessions.get(slot))
+            .or_else(|| self.sessions.values().next());
+        match session {
+            Some(spec) => PlanSetup {
+                harness: spec.harness.clone(),
+                model: spec.model.clone(),
+                session_binding: spec.session_binding,
+            },
+            None => PlanSetup {
+                harness: String::new(),
+                model: None,
+                session_binding: SessionBinding::Fresh,
+            },
+        }
+    }
 }
 
+/// How one slot's session is provisioned (data-contract §4 `sessions[slot]`).
 #[derive(Debug, Clone, Deserialize)]
-pub struct PlanSetup {
+pub struct SessionSpec {
     pub harness: String,
     #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default = "SessionBinding::default_fresh")]
+    pub session_binding: SessionBinding,
+    /// L29: bind an existing session instead of creating a fresh one.
+    #[serde(default)]
+    pub bind_session_id: Option<String>,
+}
+
+/// The single-session view the current executor still consumes. Not deserialized
+/// directly — derived from `sessions` by [`ResolvedPlan::setup`].
+#[derive(Debug, Clone)]
+pub struct PlanSetup {
+    pub harness: String,
     pub model: Option<String>,
     pub session_binding: SessionBinding,
 }
@@ -64,9 +116,27 @@ pub enum SessionBinding {
     Headless,
 }
 
-/// One plan step: its kind-specific payload plus the per-step failure policy.
+impl SessionBinding {
+    fn default_fresh() -> Self {
+        SessionBinding::Fresh
+    }
+}
+
+/// One plan step: its structured identity + slot + failure policy + kind payload.
+///
+/// `key` is the structured step key "<node>.<lane>.<step>" (B5); `slot` is the
+/// step's session-affinity handle. Both are stamped by the server resolver and
+/// carried through to the observed step-run row. They are `serde(default)` at the
+/// wire boundary for resilience — the server (the authority) always populates
+/// them.
 #[derive(Debug, Clone, Deserialize)]
 pub struct PlanStep {
+    #[serde(default)]
+    pub key: String,
+    #[serde(default)]
+    pub slot: String,
+    #[serde(default)]
+    pub label: String,
     #[serde(default)]
     pub on_fail: OnFail,
     #[serde(flatten)]
@@ -87,14 +157,16 @@ pub enum StepKind {
     AgentConfig(AgentConfigStep),
     #[serde(rename = "agent.prompt")]
     AgentPrompt(AgentPromptStep),
+    #[serde(rename = "agent.emit")]
+    AgentEmit(AgentEmitStep),
     #[serde(rename = "shell.run")]
     ShellRun(ShellRunStep),
     #[serde(rename = "scm.open_pr")]
     ScmOpenPr(ScmOpenPrStep),
     #[serde(rename = "notify")]
     Notify(NotifyStep),
-    #[serde(rename = "human.approval")]
-    HumanApproval(HumanApprovalStep),
+    #[serde(rename = "branch")]
+    Branch(BranchStep),
 }
 
 impl StepKind {
@@ -102,10 +174,11 @@ impl StepKind {
         match self {
             StepKind::AgentConfig(_) => "agent.config",
             StepKind::AgentPrompt(_) => "agent.prompt",
+            StepKind::AgentEmit(_) => "agent.emit",
             StepKind::ShellRun(_) => "shell.run",
             StepKind::ScmOpenPr(_) => "scm.open_pr",
             StepKind::Notify(_) => "notify",
-            StepKind::HumanApproval(_) => "human.approval",
+            StepKind::Branch(_) => "branch",
         }
     }
 }
@@ -115,6 +188,32 @@ pub struct AgentPromptStep {
     pub prompt: String,
     #[serde(default)]
     pub goal: Option<GoalSpec>,
+    /// L27 gate: after the turn, require this provider+tool was invoked. The gate
+    /// loop (C14) lands with the session plane; the plan carries it now.
+    #[serde(default)]
+    pub required_invocation: Option<RequiredInvocation>,
+}
+
+/// Write-output step (§1.2): prompts, then captures a schema-shaped output. The
+/// emit `name` is resolved away server-side (refs are already indexed), so the
+/// runtime only needs the re-ask budget + optional schema.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AgentEmitStep {
+    pub prompt: String,
+    #[serde(default = "default_max_attempts")]
+    pub max_attempts: u32,
+    #[serde(default)]
+    pub output_schema: Option<serde_json::Value>,
+}
+
+fn default_max_attempts() -> u32 {
+    3
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RequiredInvocation {
+    pub provider: String,
+    pub tool: String,
 }
 
 /// Sets the active agent harness and/or model for the steps below it. At least
@@ -179,34 +278,37 @@ pub struct ScmOpenPrStep {
     pub draft: bool,
 }
 
+/// Slack-only notify (E1b): the server sends it (`slack_notify` action);
+/// template-only in v1. No channel discriminator, no in-app variant.
 #[derive(Debug, Clone, Deserialize)]
 pub struct NotifyStep {
-    pub channel: NotifyChannel,
+    pub slack_channel_id: String,
     pub message: String,
+}
+
+/// Branch step (C11/D3): switch on a prior emit's field (already rewritten to an
+/// indexed ref) and route each case to continue|end. The engine arm lands in a
+/// later phase; the plan carries the shape now.
+#[derive(Debug, Clone, Deserialize)]
+pub struct BranchStep {
+    pub on: String,
+    pub cases: BTreeMap<String, BranchCase>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BranchCase {
+    pub to: BranchTarget,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum NotifyChannel {
-    InApp,
-    Slack,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct HumanApprovalStep {
-    pub message: String,
-    #[serde(default)]
-    pub on_timeout: OnTimeout,
-    #[serde(default)]
-    pub timeout_secs: Option<u64>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum OnTimeout {
-    #[default]
-    Fail,
+pub enum BranchTarget {
+    /// Normal advance to the next step.
     Continue,
+    /// The run goes terminal (`completed`); later steps are marked skipped (E5).
+    End,
 }
 
 /// Per-step failure policy. Defaults to `stop`.
@@ -256,18 +358,26 @@ mod tests {
     fn full_plan_json() -> &'static str {
         r#"{
             "run_id": "run-1",
+            "plan_version": 1,
             "workflow_id": "wf-1",
             "workflow_version_id": "wfv-1",
             "version_n": 2,
             "trigger_kind": "manual",
             "target_mode": "local",
-            "setup": { "harness": "claude", "model": "sonnet", "session_binding": "fresh" },
-            "args": { "ticket": "ABC-1" },
+            "sessions": {
+                "triage": { "harness": "claude", "model": "sonnet", "session_binding": "fresh" },
+                "fix": { "harness": "codex", "model": "opus", "session_binding": "headless",
+                         "bind_session_id": "sess_abc" }
+            },
+            "inputs": { "ticket": "ABC-1" },
             "steps": [
-                { "kind": "agent.config", "harness": "codex", "model": "opus" },
+                { "key": "0.-.0", "slot": "triage", "label": "set model",
+                  "kind": "agent.config", "model": "opus" },
                 {
+                    "key": "0.-.1", "slot": "triage", "label": "investigate",
                     "kind": "agent.prompt",
-                    "prompt": "fix {{steps[0].output.thing}}",
+                    "prompt": "fix {{steps[2].output.thing}}",
+                    "required_invocation": { "provider": "linear", "tool": "update_status" },
                     "goal": {
                         "objective": "make CI green",
                         "max_turns": 25,
@@ -277,10 +387,19 @@ mod tests {
                     },
                     "on_fail": { "kind": "retry", "n": 2 }
                 },
-                { "kind": "shell.run", "command": "cargo build", "timeout_secs": 600, "output_name": "build" },
-                { "kind": "scm.open_pr", "title": "Fix", "body": "done", "draft": true },
-                { "kind": "notify", "channel": "slack", "message": "shipped" },
-                { "kind": "human.approval", "message": "ok?", "on_timeout": "continue", "timeout_secs": 3600 }
+                { "key": "0.-.2", "slot": "triage", "kind": "agent.emit",
+                  "prompt": "summarize", "max_attempts": 5,
+                  "output_schema": { "type": "object" } },
+                { "key": "1.-.0", "slot": "fix", "kind": "shell.run",
+                  "command": "cargo build", "timeout_secs": 600, "output_name": "build" },
+                { "key": "1.-.1", "slot": "fix", "kind": "scm.open_pr",
+                  "title": "Fix", "body": "done", "draft": true },
+                { "key": "1.-.2", "slot": "fix", "kind": "notify",
+                  "slack_channel_id": "C123", "message": "shipped" },
+                { "key": "1.-.3", "slot": "fix", "kind": "branch",
+                  "on": "{{steps[2].output.verdict}}",
+                  "cases": { "ship": { "to": "continue" }, "wont_fix": { "to": "end" } },
+                  "reason": "route" }
             ]
         }"#
     }
@@ -289,47 +408,58 @@ mod tests {
     fn parses_a_full_plan_with_all_step_kinds() {
         let plan = parse(full_plan_json()).expect("parse full plan");
         assert_eq!(plan.run_id, "run-1");
+        assert_eq!(plan.plan_version, Some(1));
         assert_eq!(plan.version_n, Some(2));
-        assert_eq!(plan.setup.harness, "claude");
-        assert_eq!(plan.setup.session_binding, SessionBinding::Fresh);
-        assert_eq!(plan.step_count(), 6);
+        assert_eq!(plan.step_count(), 7);
+
+        // sessions map, keyed by slot; setup() derives the first step's slot session.
+        assert_eq!(plan.sessions.len(), 2);
+        assert_eq!(plan.sessions["fix"].bind_session_id.as_deref(), Some("sess_abc"));
+        assert_eq!(plan.sessions["fix"].session_binding, SessionBinding::Headless);
+        let setup = plan.setup();
+        assert_eq!(setup.harness, "claude");
+        assert_eq!(setup.session_binding, SessionBinding::Fresh);
+
+        // steps carry structured key + slot + label.
+        assert_eq!(plan.steps[0].key, "0.-.0");
+        assert_eq!(plan.steps[0].slot, "triage");
+        assert_eq!(plan.steps[0].label, "set model");
 
         let StepKind::AgentConfig(config) = &plan.steps[0].kind else {
             panic!("expected agent.config");
         };
-        assert_eq!(config.harness.as_deref(), Some("codex"));
         assert_eq!(config.model.as_deref(), Some("opus"));
         assert_eq!(plan.steps[0].kind_slug(), "agent.config");
-        // agent.config with no explicit on_fail defaults to stop.
         assert_eq!(plan.steps[0].on_fail.kind, OnFailKind::Stop);
 
         let StepKind::AgentPrompt(agent) = &plan.steps[1].kind else {
             panic!("expected agent.prompt");
         };
+        let inv = agent.required_invocation.as_ref().expect("required_invocation");
+        assert_eq!(inv.provider, "linear");
+        assert_eq!(inv.tool, "update_status");
         let goal = agent.goal.as_ref().expect("goal");
         assert_eq!(goal.max_turns, 25);
         assert_eq!(goal.on_blocked, OnBlocked::PauseForApproval);
-        assert_eq!(goal.verify.as_ref().expect("verify").expect_exit, 0);
         assert_eq!(plan.steps[1].on_fail.kind, OnFailKind::Retry);
         assert_eq!(plan.steps[1].on_fail.n, 2);
 
-        let StepKind::ShellRun(shell) = &plan.steps[2].kind else {
-            panic!("expected shell.run");
+        let StepKind::AgentEmit(emit) = &plan.steps[2].kind else {
+            panic!("expected agent.emit");
         };
-        assert_eq!(shell.command, "cargo build");
-        assert_eq!(shell.timeout_secs, Some(600));
-        // stop is the default failure policy
-        assert_eq!(plan.steps[2].on_fail.kind, OnFailKind::Stop);
+        assert_eq!(emit.max_attempts, 5);
+        assert!(emit.output_schema.is_some());
 
-        let StepKind::Notify(notify) = &plan.steps[4].kind else {
+        let StepKind::Notify(notify) = &plan.steps[5].kind else {
             panic!("expected notify");
         };
-        assert_eq!(notify.channel, NotifyChannel::Slack);
+        assert_eq!(notify.slack_channel_id, "C123");
 
-        let StepKind::HumanApproval(approval) = &plan.steps[5].kind else {
-            panic!("expected human.approval");
+        let StepKind::Branch(branch) = &plan.steps[6].kind else {
+            panic!("expected branch");
         };
-        assert_eq!(approval.on_timeout, OnTimeout::Continue);
+        assert_eq!(branch.cases["ship"].to, BranchTarget::Continue);
+        assert_eq!(branch.cases["wont_fix"].to, BranchTarget::End);
     }
 
     #[test]
@@ -337,43 +467,35 @@ mod tests {
         let plan = parse(
             r#"{
                 "run_id": "run-2",
-                "setup": { "harness": "codex", "session_binding": "headless" },
-                "steps": [ { "kind": "agent.prompt", "prompt": "hi" } ]
+                "sessions": { "main": { "harness": "codex", "session_binding": "headless" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
             }"#,
         )
         .expect("parse minimal plan");
-        assert_eq!(plan.setup.session_binding, SessionBinding::Headless);
-        assert!(plan.setup.model.is_none());
+        assert_eq!(plan.setup().session_binding, SessionBinding::Headless);
+        assert!(plan.setup().model.is_none());
         let StepKind::AgentPrompt(agent) = &plan.steps[0].kind else {
             panic!("expected agent.prompt");
         };
         assert!(agent.goal.is_none());
+        assert!(agent.required_invocation.is_none());
         assert_eq!(plan.steps[0].on_fail.kind, OnFailKind::Stop);
     }
 
     #[test]
-    fn parses_agent_config_with_partial_fields() {
+    fn agent_emit_max_attempts_defaults_to_three() {
         let plan = parse(
             r#"{
-                "run_id": "run-cfg",
-                "setup": { "harness": "claude", "session_binding": "fresh" },
-                "steps": [
-                    { "kind": "agent.config", "harness": "codex" },
-                    { "kind": "agent.config", "model": "opus" }
-                ]
+                "run_id": "run-emit",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.emit", "prompt": "go" } ]
             }"#,
         )
-        .expect("parse agent.config plan");
-        let StepKind::AgentConfig(harness_only) = &plan.steps[0].kind else {
-            panic!("expected agent.config");
+        .expect("parse emit plan");
+        let StepKind::AgentEmit(emit) = &plan.steps[0].kind else {
+            panic!("expected agent.emit");
         };
-        assert_eq!(harness_only.harness.as_deref(), Some("codex"));
-        assert!(harness_only.model.is_none());
-        let StepKind::AgentConfig(model_only) = &plan.steps[1].kind else {
-            panic!("expected agent.config");
-        };
-        assert!(model_only.harness.is_none());
-        assert_eq!(model_only.model.as_deref(), Some("opus"));
+        assert_eq!(emit.max_attempts, 3);
     }
 
     #[test]
@@ -381,8 +503,8 @@ mod tests {
         let error = parse(
             r#"{
                 "run_id": "run-3",
-                "setup": { "harness": "claude", "session_binding": "fresh" },
-                "steps": [ { "kind": "tool.call", "tool": "x" } ]
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "human.approval", "message": "x" } ]
             }"#,
         )
         .expect_err("unknown kind must reject");
@@ -395,8 +517,8 @@ mod tests {
         let error = parse(
             r#"{
                 "run_id": "run-4",
-                "setup": { "harness": "claude", "session_binding": "fresh" },
-                "steps": [ { "kind": "agent.prompt" } ]
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt" } ]
             }"#,
         )
         .expect_err("missing prompt must reject");

@@ -23,3 +23,7 @@ export function workflowRunDetailKey(runId: string | null) {
 export function workflowTriggersKey(workflowId: string | null) {
   return [...workflowsRootKey(), "triggers", workflowId] as const;
 }
+
+export function workflowSlackChannelsKey() {
+  return [...workflowsRootKey(), "slack-channels"] as const;
+}

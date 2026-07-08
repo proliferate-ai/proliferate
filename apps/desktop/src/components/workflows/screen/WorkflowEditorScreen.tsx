@@ -29,6 +29,7 @@ import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-clo
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
 import { useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
+import { useWorkflowSlackChannels } from "@/hooks/access/cloud/workflows/use-workflow-slack-channels";
 import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
@@ -98,6 +99,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const detailQuery = useWorkflowDetail(workflowId);
   const catalogQuery = useCloudAgentCatalog();
   const cloudTargetsQuery = useCloudRunTargetWorkspaces();
+  const slackChannelsQuery = useWorkflowSlackChannels();
   const { updateMutation } = useWorkflowMutations();
 
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -459,7 +461,8 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 effectiveHarness={effectiveHarnessAt(definition, selectedStep)}
                 agents={agents}
                 suggestions={suggestions}
-                slackConnected={false}
+                slackConnected={slackChannelsQuery.data?.connected ?? false}
+                slackChannels={slackChannelsQuery.data?.channels ?? []}
                 supportsGoals={harnessSupportsGoals}
                 onChange={(next) => updateStep(selectedStep, next)}
                 onClose={() => setSelectedStep(null)}

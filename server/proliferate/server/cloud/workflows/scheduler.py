@@ -57,7 +57,8 @@ from proliferate.server.automations.domain.schedule import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import service
-from proliferate.server.cloud.workflows.delivery import deliver_cloud_run
+from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
+from proliferate.server.cloud.workflows.actions import sweep_pending_actions
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -154,7 +155,7 @@ async def _fire_one_trigger(
                     db,
                     actor,
                     trigger.workflow_id,
-                    args=trigger.args_json,
+                    inputs=trigger.args_json,
                     target_mode=trigger.target_mode,
                     trigger_kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
                     target_workspace_id=trigger.target_workspace_id,
@@ -236,6 +237,40 @@ async def _deliver_pending_runs(
     return delivered
 
 
+# --- Phase 3: refresh in-flight + sweep actions --------------------------------
+
+_MAX_REFRESHES_PER_TICK = 10
+
+
+async def _refresh_in_flight_runs(
+    session_factory: SchedulerSessionFactory, *, tick_start: datetime
+) -> int:
+    """Refresh in-flight triggered cloud runs so actions fire for unattended runs.
+
+    Only refreshes runs delivered before this tick started (skip runs we just
+    delivered -- they need time to execute before a refresh is useful).
+    """
+    async with session_factory() as db:
+        candidates = await store.list_in_flight_triggered_cloud_runs(
+            db, limit=_MAX_REFRESHES_PER_TICK, delivered_before=tick_start
+        )
+    refreshed = 0
+    for run in candidates:
+        try:
+            async with session_factory() as db, db.begin():
+                actor = _SchedulerActor(id=run.executor_user_id)
+                await refresh_cloud_run(db, actor, run)
+                refreshed += 1
+        except Exception:
+            logger.exception("workflow scheduler refresh failed run_id=%s", run.id)
+    return refreshed
+
+
+async def _sweep_actions(session_factory: SchedulerSessionFactory) -> int:
+    async with session_factory() as db, db.begin():
+        return await sweep_pending_actions(db)
+
+
 # --- tick + loop ---------------------------------------------------------------
 
 
@@ -248,6 +283,17 @@ async def run_workflow_scheduler_tick(
     now = utcnow()
     created = await _fire_due_triggers(session_factory, now=now, batch_size=batch_size)
     delivered = await _deliver_pending_runs(session_factory, max_deliveries=max_deliveries)
+
+    # Phase 3: refresh in-flight triggered cloud runs + sweep stale actions.
+    try:
+        await _refresh_in_flight_runs(session_factory, tick_start=now)
+    except Exception:
+        logger.exception("workflow scheduler phase 3 refresh failed")
+    try:
+        await _sweep_actions(session_factory)
+    except Exception:
+        logger.exception("workflow scheduler phase 3 sweep failed")
+
     return WorkflowSchedulerTickResult(created_runs=created, delivered_runs=delivered)
 
 

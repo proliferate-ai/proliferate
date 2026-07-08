@@ -11,7 +11,7 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::domains::workflows::engine::StepOutcome;
-use crate::domains::workflows::plan::{NotifyChannel, ScmOpenPrStep, ShellRunStep};
+use crate::domains::workflows::plan::{ScmOpenPrStep, ShellRunStep};
 
 /// Bytes of combined output tail retained per shell step.
 const MAX_OUTPUT_TAIL: usize = 8 * 1024;
@@ -194,16 +194,16 @@ pub async fn open_pr_step(
     }
 }
 
-/// Execute a `notify` step. Never a hard failure: the in-app record is the floor.
-pub fn notify_step(channel: NotifyChannel, message: &str) -> StepOutcome {
-    let channel = match channel {
-        NotifyChannel::InApp => "in_app",
-        // Slack delivery is a W4 integration concern; the in-app record still
-        // lands so the run history shows the intended notification.
-        NotifyChannel::Slack => "slack_unavailable",
-    };
+/// Execute a `notify` step. Slack-only (E1b): the runtime records the rendered
+/// message + channel as the step output; the server performs the actual send
+/// (`slack_notify` action). Never a hard failure.
+pub fn notify_step(message: &str, slack_channel_id: &str) -> StepOutcome {
     StepOutcome::Completed {
-        output: json!({ "channel": channel, "message": message }),
+        output: json!({
+            "channel": "slack",
+            "message": message,
+            "slack_channel_id": slack_channel_id,
+        }),
     }
 }
 
@@ -270,11 +270,13 @@ mod tests {
     }
 
     #[test]
-    fn notify_slack_is_not_a_failure() {
-        let outcome = notify_step(NotifyChannel::Slack, "hi");
+    fn notify_slack_outputs_channel_and_message() {
+        let outcome = notify_step("hi", "C12345");
         let StepOutcome::Completed { output } = outcome else {
             panic!("notify must not fail");
         };
-        assert_eq!(output["channel"], "slack_unavailable");
+        assert_eq!(output["channel"], "slack");
+        assert_eq!(output["message"], "hi");
+        assert_eq!(output["slack_channel_id"], "C12345");
     }
 }

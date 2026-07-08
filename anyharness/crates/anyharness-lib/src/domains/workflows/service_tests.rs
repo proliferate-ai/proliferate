@@ -103,10 +103,13 @@ async fn drive(
 }
 
 fn plan_json(steps: &str) -> String {
+    // v2 shape: a per-slot `sessions` map (replaces `setup`). These engine tests
+    // pass keyless steps; the service seeds synthetic flat keys for them.
     format!(
         r#"{{
             "run_id": "run-1",
-            "setup": {{ "harness": "claude", "session_binding": "fresh" }},
+            "plan_version": 1,
+            "sessions": {{ "main": {{ "harness": "claude", "session_binding": "fresh" }} }},
             "steps": {steps}
         }}"#
     )
@@ -287,65 +290,9 @@ fn suspend(message: &str) -> StepOutcome {
     }
 }
 
-#[tokio::test]
-async fn human_approval_approve_advances() {
-    let service = test_service();
-    let run_id = create(
-        &service,
-        r#"[{ "kind": "human.approval", "message": "ok?" }, { "kind": "shell.run", "command": "y" }]"#,
-    );
-    let executor = FakeExecutor::script(vec![suspend("ok?"), completed(serde_json::json!({}))]);
-    let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::SuspendedForApproval);
-    let run = service.get_run(&run_id).unwrap().unwrap();
-    assert_eq!(run.status, WorkflowRunStatus::WaitingApproval);
-
-    let outcome = service
-        .resolve_pending_approval(&run_id, ApprovalInput::Approve)
-        .expect("resolve");
-    assert!(outcome.resume);
-    // Actor resumes the loop after an approve that advanced the run.
-    let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
-}
-
-#[tokio::test]
-async fn human_approval_deny_with_stop_fails_run() {
-    let service = test_service();
-    let run_id = create(
-        &service,
-        r#"[{ "kind": "human.approval", "message": "ok?", "on_fail": { "kind": "stop" } }]"#,
-    );
-    let executor = FakeExecutor::script(vec![suspend("ok?")]);
-    drive(&service, &run_id, &executor).await;
-    let outcome = service
-        .resolve_pending_approval(&run_id, ApprovalInput::Deny)
-        .expect("resolve");
-    assert_eq!(
-        outcome.progress,
-        EngineProgress::Finished(WorkflowRunStatus::Failed)
-    );
-    let run = service.get_run(&run_id).unwrap().unwrap();
-    assert_eq!(run.error_code.as_deref(), Some("approval_denied"));
-}
-
-#[tokio::test]
-async fn human_approval_timeout_continue_advances() {
-    let service = test_service();
-    let run_id = create(
-        &service,
-        r#"[{ "kind": "human.approval", "message": "ok?", "on_timeout": "continue" }]"#,
-    );
-    let executor = FakeExecutor::script(vec![suspend("ok?")]);
-    drive(&service, &run_id, &executor).await;
-    let outcome = service
-        .resolve_pending_approval(&run_id, ApprovalInput::Timeout)
-        .expect("resolve");
-    assert_eq!(
-        outcome.progress,
-        EngineProgress::Finished(WorkflowRunStatus::Completed)
-    );
-}
+// human.approval step tests were removed with the step kind (E1). The remaining
+// park/resume path is a goal step blocked with on_blocked=pause_for_approval,
+// which still reaches waiting_approval — exercised below.
 
 #[tokio::test]
 async fn goal_block_approve_reruns_the_step() {

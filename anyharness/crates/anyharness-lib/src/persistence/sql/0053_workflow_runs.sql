@@ -27,9 +27,14 @@ CREATE INDEX idx_workflow_runs_workspace_created
 CREATE INDEX idx_workflow_runs_status
     ON workflow_runs(status);
 
+-- `step_key` is the format-v2 structured step key "<node>.<lane>.<step>" (B5,
+-- lane "-" for the flat case). The PK stays (run_id, step_index) — the cursor is
+-- pure sequencing — but the key is the step's stable *identity* (outputs are
+-- reported by key), enforced unique per run.
 CREATE TABLE workflow_step_runs (
     run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
     step_index INTEGER NOT NULL,
+    step_key TEXT NOT NULL,
     kind TEXT NOT NULL,
     status TEXT NOT NULL,
     attempt INTEGER NOT NULL DEFAULT 0,
@@ -42,3 +47,6 @@ CREATE TABLE workflow_step_runs (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (run_id, step_index)
 );
+
+CREATE UNIQUE INDEX idx_workflow_step_runs_key
+    ON workflow_step_runs(run_id, step_key);

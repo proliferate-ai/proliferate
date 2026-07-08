@@ -35,15 +35,23 @@ async def _make_user(db: AsyncSession) -> User:
 
 def _definition() -> dict:
     return {
-        "args": [
-            {"name": "issue", "type": "string", "required": True},
-            {"name": "env", "type": "enum", "enum": ["prod", "staging"], "default": "staging"},
+        "version": 1,
+        "inputs": [
+            {"name": "issue", "type": "text", "required": True},
+            {"name": "env", "type": "choice", "choices": ["prod", "staging"], "default": "staging"},
         ],
-        "setup": {"harness": "claude", "model": "sonnet", "session_binding": "fresh"},
-        "steps": [
-            {"kind": "agent.prompt", "prompt": "Fix {{args.issue}} on {{args.env}}"},
-            {"kind": "shell.run", "command": "make test", "output_name": "test"},
-            {"kind": "notify", "channel": "in_app", "message": "done {{steps[1].output.test}}"},
+        "integrations": ["slack"],
+        "agents": [
+            {
+                "slot": "main",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [
+                    {"kind": "agent.prompt", "prompt": "Fix {{inputs.issue}} on {{inputs.env}}"},
+                    {"kind": "agent.emit", "name": "check", "prompt": "run tests"},
+                    {"kind": "notify", "slack_channel_id": "C1", "message": "done {{check.result}}"},
+                ],
+            }
         ],
     }
 
@@ -83,7 +91,7 @@ async def test_update_creates_new_version_and_preserves_old(db_session: AsyncSes
     v1 = versions_v1[0]
 
     new_definition = _definition()
-    new_definition["steps"][0]["prompt"] = "Rewritten {{args.issue}}"
+    new_definition["agents"][0]["steps"][0]["prompt"] = "Rewritten {{inputs.issue}}"
     updated, versions = await service.update_workflow(
         db_session, user, workflow.id, WorkflowUpdateRequest(definition=new_definition)
     )
@@ -94,7 +102,7 @@ async def test_update_creates_new_version_and_preserves_old(db_session: AsyncSes
     # v1 is immutable: its stored definition is unchanged.
     original = next(v for v in versions if v.version_n == 1)
     assert original.id == v1.id
-    assert original.definition_json["steps"][0]["prompt"] == "Fix {{args.issue}} on {{args.env}}"
+    assert original.definition_json["agents"][0]["steps"][0]["prompt"] == "Fix {{inputs.issue}} on {{inputs.env}}"
 
 
 async def test_start_run_resolves_plan_and_records_pending_delivery(
@@ -107,7 +115,7 @@ async def test_start_run_resolves_plan_and_records_pending_delivery(
         db_session,
         user,
         workflow.id,
-        args={"issue": "PROJ-9", "env": "prod"},
+        inputs={"issue": "PROJ-9", "env": "prod"},
         target_mode="local",
     )
 
@@ -119,15 +127,15 @@ async def test_start_run_resolves_plan_and_records_pending_delivery(
     assert plan["run_id"] == str(run.id)
     assert plan["steps"][0]["prompt"] == "Fix PROJ-9 on prod"
     # Step-output references stay late-bound for the runtime.
-    assert plan["steps"][2]["message"] == "done {{steps[1].output.test}}"
-    assert plan["setup"]["harness"] == "claude"
+    assert plan["steps"][2]["message"] == "done {{steps[1].output.result}}"
+    assert plan["sessions"]["main"]["harness"] == "claude"
 
 
 async def test_start_run_rejects_missing_required_arg(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(db_session, user, workflow.id, args={}, target_mode="local")
+        await service.start_run(db_session, user, workflow.id, inputs={}, target_mode="local")
     assert exc.value.code == "missing_argument"
 
 
@@ -136,7 +144,7 @@ async def test_start_run_rejects_bad_target_mode(db_session: AsyncSession) -> No
     workflow, _ = await _create_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
         await service.start_run(
-            db_session, user, workflow.id, args={"issue": "x"}, target_mode="shared_cloud"
+            db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="shared_cloud"
         )
     assert exc.value.code == "invalid_target_mode"
 
@@ -145,7 +153,7 @@ async def test_delivery_then_status_lifecycle(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
     run = await service.start_run(
-        db_session, user, workflow.id, args={"issue": "x"}, target_mode="local"
+        db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
     )
 
     delivered = await service.mark_run_delivered(db_session, user, run.id)
@@ -175,7 +183,7 @@ async def test_status_guard_rejects_illegal_transition(db_session: AsyncSession)
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
     run = await service.start_run(
-        db_session, user, workflow.id, args={"issue": "x"}, target_mode="local"
+        db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
     )
     # pending_delivery -> running is not a legal observed transition.
     with pytest.raises(CloudApiError) as exc:
@@ -190,7 +198,7 @@ async def test_status_rejects_reports_after_terminal(db_session: AsyncSession) -
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
     run = await service.start_run(
-        db_session, user, workflow.id, args={"issue": "x"}, target_mode="local"
+        db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
     )
     await service.mark_run_delivered(db_session, user, run.id)
     await service.report_run_status(db_session, user, run.id, RunStatusRequest(status="running"))
@@ -208,7 +216,7 @@ async def test_cannot_run_archived_workflow(db_session: AsyncSession) -> None:
     await service.archive_workflow(db_session, user, workflow.id)
     with pytest.raises(CloudApiError) as exc:
         await service.start_run(
-            db_session, user, workflow.id, args={"issue": "x"}, target_mode="local"
+            db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
         )
     assert exc.value.code == "workflow_archived"
 

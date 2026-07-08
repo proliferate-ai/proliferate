@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use super::plan::{
-    AgentConfigStep, AgentPromptStep, GoalSpec, HumanApprovalStep, NotifyStep, PlanStep,
+    AgentConfigStep, AgentEmitStep, AgentPromptStep, BranchStep, GoalSpec, NotifyStep, PlanStep,
     ScmOpenPrStep, ShellRunStep, StepKind, VerifySpec,
 };
 
@@ -122,6 +122,12 @@ pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
         StepKind::AgentPrompt(agent) => StepKind::AgentPrompt(AgentPromptStep {
             prompt: resolve_string(&agent.prompt, outputs),
             goal: agent.goal.as_ref().map(|goal| resolve_goal(goal, outputs)),
+            required_invocation: agent.required_invocation.clone(),
+        }),
+        StepKind::AgentEmit(emit) => StepKind::AgentEmit(AgentEmitStep {
+            prompt: resolve_string(&emit.prompt, outputs),
+            max_attempts: emit.max_attempts,
+            output_schema: emit.output_schema.clone(),
         }),
         StepKind::ShellRun(shell) => StepKind::ShellRun(ShellRunStep {
             command: resolve_string(&shell.command, outputs),
@@ -135,16 +141,19 @@ pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
             draft: pr.draft,
         }),
         StepKind::Notify(notify) => StepKind::Notify(NotifyStep {
-            channel: notify.channel,
+            slack_channel_id: notify.slack_channel_id.clone(),
             message: resolve_string(&notify.message, outputs),
         }),
-        StepKind::HumanApproval(approval) => StepKind::HumanApproval(HumanApprovalStep {
-            message: resolve_string(&approval.message, outputs),
-            on_timeout: approval.on_timeout,
-            timeout_secs: approval.timeout_secs,
+        StepKind::Branch(branch) => StepKind::Branch(BranchStep {
+            on: resolve_string(&branch.on, outputs),
+            cases: branch.cases.clone(),
+            reason: branch.reason.clone(),
         }),
     };
     PlanStep {
+        key: step.key.clone(),
+        slot: step.slot.clone(),
+        label: step.label.clone(),
         on_fail: step.on_fail,
         kind,
     }

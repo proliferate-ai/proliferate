@@ -8,11 +8,14 @@ a ``pending_delivery`` run whose id is the delivery idempotency key.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.workflows import (
@@ -24,9 +27,13 @@ from proliferate.constants.workflows import (
     WORKFLOW_RUN_STATUS_DELIVERED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_STATUS_RUNNING,
+    WORKFLOW_SESSION_BINDING_FRESH,
+    WORKFLOW_SESSION_BINDING_HEADLESS,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
+    WORKFLOW_STEP_AGENT_EMIT,
     WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+    WORKFLOW_TRIGGER_CHAT,
     WORKFLOW_TRIGGER_KIND_SCHEDULE,
     WORKFLOW_TRIGGER_MANUAL,
 )
@@ -53,7 +60,7 @@ from proliferate.server.cloud.workflows.domain.interpolation import (
     ArgSpec,
     ArgumentError,
     coerce_arguments,
-    interpolate_args,
+    resolve_value,
 )
 from proliferate.server.cloud.workflows.domain.policy import (
     free_plan_workflow_limit,
@@ -248,6 +255,15 @@ async def archive_workflow(
 # --- StartRun ------------------------------------------------------------------
 
 
+def _default_session_binding(trigger_kind: str) -> str:
+    """Per-slot session visibility default (A1): manual/chat = fresh (deep-linked
+    in the run view), schedule/poll = headless (no UI focus)."""
+
+    if trigger_kind in (WORKFLOW_TRIGGER_MANUAL, WORKFLOW_TRIGGER_CHAT):
+        return WORKFLOW_SESSION_BINDING_FRESH
+    return WORKFLOW_SESSION_BINDING_HEADLESS
+
+
 def _resolve_plan(
     *,
     run_id: UUID,
@@ -255,20 +271,70 @@ def _resolve_plan(
     version: WorkflowVersionRecord,
     trigger_kind: str,
     target_mode: str,
-    coerced_args: dict[str, object],
+    coerced_inputs: dict[str, object],
+    session_bindings: dict[str, str],
 ) -> dict[str, object]:
+    """The single resolution pass (data-contract §4): flatten the agents spine
+    into one ordered step list, stamp each step with its structured key + slot +
+    label, build the per-slot sessions map, and resolve template refs (eager
+    ``{{inputs.*}}`` + rewrite ``{{emit.field}}`` -> ``{{steps[n].output.field}}``).
+    """
+
     canonical = version.definition_json
-    interpolated_steps = interpolate_args(canonical.get("steps", []), coerced_args)
+    agents = canonical.get("agents", [])
+    # E3/§2.6: the workflow-level integrations grant is stamped onto every slot
+    # (per-slot narrowing is a later resolver-only change). Actual token mint +
+    # all-tools scope expansion is PR E's phase.
+    integrations = list(canonical.get("integrations", []))
+
+    # First pass: assign each step its flattened index and build the
+    # emit-name -> flat-index map the ref rewrite needs.
+    emit_index: dict[str, int] = {}
+    flat_position = 0
+    for node in agents:
+        for step in node["steps"]:
+            if step.get("kind") == WORKFLOW_STEP_AGENT_EMIT:
+                emit_index[step["name"]] = flat_position
+            flat_position += 1
+
+    default_binding = _default_session_binding(trigger_kind)
+    sessions: dict[str, object] = {}
+    steps: list[dict[str, object]] = []
+    for node_index, node in enumerate(agents):
+        slot = node["slot"]
+        session_entry: dict[str, object] = {
+            "harness": node["harness"],
+            "model": node["model"],
+            "session_binding": default_binding,
+            "integrations": list(integrations),
+        }
+        bound = session_bindings.get(slot)
+        if bound is not None:
+            session_entry["bind_session_id"] = bound
+        sessions[slot] = session_entry
+
+        for step_index, step in enumerate(node["steps"]):
+            # Lane "-" for the flat (non-parallel) case; the "<node>.<lane>.<step>"
+            # shape (§4) is adopted now so lanes never re-key the contract.
+            key = f"{node_index}.-.{step_index}"
+            resolved = resolve_value(step, inputs=coerced_inputs, emit_index=emit_index)
+            assert isinstance(resolved, dict)
+            resolved["key"] = key
+            resolved["slot"] = slot
+            resolved.setdefault("label", step.get("label", ""))
+            steps.append(resolved)
+
     return {
         "run_id": str(run_id),
+        "plan_version": 1,
         "workflow_id": str(workflow_id),
         "workflow_version_id": str(version.id),
         "version_n": version.version_n,
         "trigger_kind": trigger_kind,
         "target_mode": target_mode,
-        "setup": canonical.get("setup", {}),
-        "args": coerced_args,
-        "steps": interpolated_steps,
+        "sessions": sessions,
+        "inputs": coerced_inputs,
+        "steps": steps,
     }
 
 
@@ -307,13 +373,14 @@ async def start_run(
     user: ActorIdentity,
     workflow_id: UUID,
     *,
-    args: dict[str, object],
+    inputs: dict[str, object],
     target_mode: str,
     trigger_kind: str = WORKFLOW_TRIGGER_MANUAL,
     version_id: UUID | None = None,
     target_workspace_id: UUID | None = None,
     trigger_id: UUID | None = None,
     scheduled_for: datetime | None = None,
+    session_bindings: dict[str, str] | None = None,
 ) -> WorkflowRunRecord:
     if target_mode not in SUPPORTED_WORKFLOW_TARGET_MODES:
         raise CloudApiError(
@@ -363,7 +430,7 @@ async def start_run(
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
     try:
-        coerced_args = coerce_arguments(arg_specs, args)
+        coerced_inputs = coerce_arguments(arg_specs, inputs)
     except ArgumentError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
@@ -374,7 +441,8 @@ async def start_run(
         version=version,
         trigger_kind=trigger_kind,
         target_mode=target_mode,
-        coerced_args=coerced_args,
+        coerced_inputs=coerced_inputs,
+        session_bindings=session_bindings or {},
     )
     return await store.create_run(
         db,
@@ -383,7 +451,7 @@ async def start_run(
         workflow_version_id=version.id,
         trigger_kind=trigger_kind,
         executor_user_id=workflow.owner_user_id,
-        args_json=coerced_args,
+        args_json=coerced_inputs,
         target_mode=target_mode,
         resolved_plan_json=resolved_plan,
         anyharness_workspace_id=cloud_anyharness_workspace_id,
@@ -468,6 +536,14 @@ async def report_run_status(
         finished_at=finished_at,
     )
     assert updated is not None
+
+    try:
+        from proliferate.server.cloud.workflows.actions import apply_step_actions
+
+        await apply_step_actions(db, run=updated)
+    except Exception:
+        logger.exception("apply_step_actions failed run_id=%s", run_id)
+
     return updated
 
 

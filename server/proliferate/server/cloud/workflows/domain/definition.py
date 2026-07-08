@@ -1,42 +1,56 @@
-"""Pure workflow-definition schema and strict validation (spec 3.3).
+"""Workflow-definition schema and strict validation — format v2 (data-contract §1).
 
-Parses a raw definition dict into a normalized, canonical dict. Validation is
-**strict**: unknown kinds and unknown fields are rejected. Template references are
-validated to resolve (args must exist; a step-output reference must point at an
-earlier step). The canonical dict is what gets stored in ``workflow_version``.
+Parses a raw definition dict into a normalized, canonical dict. The v2 top-level
+shape is ``{version, name?, description?, inputs, integrations, agents}``: an
+ordered spine of *agent nodes* (``{slot, harness, model, steps}``), each running
+its steps in one session. There is no top-level ``steps`` and no ``setup`` — slot
+= session affinity, and ``session_binding`` is a run-context property stamped on
+the resolved plan (service._resolve_plan), never authored here.
+
+Validation is **strict**: unknown kinds and unknown fields are rejected. Template
+references (``{{inputs.<name>}}`` / ``{{<emit>.<field>}}``) are validated for
+existence and *strictly-prior* run-order visibility. The canonical dict is what
+gets stored in ``workflow_version.definition_json``.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 
 from proliferate.constants.workflows import (
-    SUPPORTED_WORKFLOW_APPROVAL_ON_TIMEOUT,
-    SUPPORTED_WORKFLOW_ARG_TYPES,
+    SUPPORTED_WORKFLOW_BRANCH_TARGETS,
     SUPPORTED_WORKFLOW_GOAL_ON_BLOCKED,
-    SUPPORTED_WORKFLOW_NOTIFY_CHANNELS,
+    SUPPORTED_WORKFLOW_INPUT_TYPES,
     SUPPORTED_WORKFLOW_ON_FAIL_KINDS,
-    SUPPORTED_WORKFLOW_SESSION_BINDINGS,
     SUPPORTED_WORKFLOW_STEP_KINDS,
-    WORKFLOW_ARG_TYPE_ENUM,
+    WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS,
+    WORKFLOW_INPUT_TYPE_CHOICE,
+    WORKFLOW_MAX_AGENTS,
     WORKFLOW_MAX_ARGS,
     WORKFLOW_MAX_STEPS,
     WORKFLOW_ON_FAIL_RETRY,
     WORKFLOW_ON_FAIL_STOP,
-    WORKFLOW_SESSION_BINDING_FRESH,
+    WORKFLOW_RESERVED_REF_SEGMENTS,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
     WORKFLOW_STEP_AGENT_CONFIG,
+    WORKFLOW_STEP_AGENT_EMIT,
     WORKFLOW_STEP_AGENT_PROMPT,
-    WORKFLOW_STEP_HUMAN_APPROVAL,
+    WORKFLOW_STEP_BRANCH,
     WORKFLOW_STEP_NOTIFY,
     WORKFLOW_STEP_SCM_OPEN_PR,
     WORKFLOW_STEP_SHELL_RUN,
 )
 from proliferate.server.cloud.workflows.domain.interpolation import (
     ArgSpec,
+    EmitReference,
     TemplateReferenceError,
+    iter_references,
     validate_string_references,
 )
+
+_SLOT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class WorkflowDefinitionError(Exception):
@@ -116,74 +130,92 @@ def _int_field(obj: dict[str, object], key: str, *, field: str) -> int:
     return value
 
 
-# --- args schema ---------------------------------------------------------------
+def _optional_label(step: dict[str, object], *, field: str) -> str | None:
+    label = _optional_str(step, "label", field=field)
+    if label is not None and len(label) > WORKFLOW_SHORT_TEXT_MAX_LENGTH:
+        raise _err(
+            "invalid_definition",
+            f"'{field}.label' must be at most {WORKFLOW_SHORT_TEXT_MAX_LENGTH} characters.",
+        )
+    return label
 
 
-def _parse_args(raw: object) -> tuple[list[dict[str, object]], list[ArgSpec]]:
+# --- inputs schema -------------------------------------------------------------
+
+
+def _parse_inputs(raw: object) -> tuple[list[dict[str, object]], list[ArgSpec]]:
     if raw is None:
         return [], []
     if not isinstance(raw, list):
-        raise _err("invalid_definition", "'args' must be a list.")
+        raise _err("invalid_definition", "'inputs' must be a list.")
     if len(raw) > WORKFLOW_MAX_ARGS:
         raise _err(
-            "too_many_args", f"A workflow may declare at most {WORKFLOW_MAX_ARGS} arguments."
+            "too_many_args", f"A workflow may declare at most {WORKFLOW_MAX_ARGS} inputs."
         )
     canonical: list[dict[str, object]] = []
     specs: list[ArgSpec] = []
     seen: set[str] = set()
     for item in raw:
-        arg = _require_dict(item, field="args[]")
-        _reject_unknown_keys(arg, {"name", "type", "default", "required", "enum"}, field="args[]")
-        name = _require_str(arg, "name", field="args[]", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH)
-        if not name.replace("_", "").isalnum() or not (name[0].isalpha() or name[0] == "_"):
-            raise _err("invalid_definition", f"Argument name '{name}' must be an identifier.")
+        inp = _require_dict(item, field="inputs[]")
+        _reject_unknown_keys(
+            inp, {"name", "type", "default", "required", "choices"}, field="inputs[]"
+        )
+        name = _require_str(
+            inp, "name", field="inputs[]", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
+        )
+        if not _IDENTIFIER_RE.match(name):
+            raise _err("invalid_definition", f"Input name '{name}' must be an identifier.")
         if name in seen:
-            raise _err("duplicate_arg", f"Duplicate argument name '{name}'.")
+            raise _err("duplicate_arg", f"Duplicate input name '{name}'.")
         seen.add(name)
-        arg_type = arg.get("type")
-        if arg_type not in SUPPORTED_WORKFLOW_ARG_TYPES:
+        input_type = inp.get("type")
+        if input_type not in SUPPORTED_WORKFLOW_INPUT_TYPES:
             raise _err(
-                "invalid_definition", f"Argument '{name}' has unsupported type '{arg_type}'."
+                "invalid_definition", f"Input '{name}' has unsupported type '{input_type}'."
             )
-        required = arg.get("required", False)
+        required = inp.get("required", False)
         if not isinstance(required, bool):
             raise _err(
-                "invalid_definition", f"Argument '{name}' field 'required' must be a boolean."
+                "invalid_definition", f"Input '{name}' field 'required' must be a boolean."
             )
         enum_values: tuple[str, ...] = ()
-        canonical_arg: dict[str, object] = {"name": name, "type": arg_type, "required": required}
-        if arg_type == WORKFLOW_ARG_TYPE_ENUM:
-            raw_enum = arg.get("enum")
-            if not isinstance(raw_enum, list) or not raw_enum:
+        canonical_input: dict[str, object] = {
+            "name": name,
+            "type": input_type,
+            "required": required,
+        }
+        if input_type == WORKFLOW_INPUT_TYPE_CHOICE:
+            raw_choices = inp.get("choices")
+            if not isinstance(raw_choices, list) or not raw_choices:
                 raise _err(
                     "invalid_definition",
-                    f"Enum argument '{name}' requires a non-empty 'enum' list.",
+                    f"Choice input '{name}' requires a non-empty 'choices' list.",
                 )
-            if not all(isinstance(v, str) and v for v in raw_enum):
+            if not all(isinstance(v, str) and v for v in raw_choices):
                 raise _err(
                     "invalid_definition",
-                    f"Enum argument '{name}' values must be non-empty strings.",
+                    f"Choice input '{name}' values must be non-empty strings.",
                 )
-            enum_values = tuple(raw_enum)
-            canonical_arg["enum"] = list(enum_values)
-        elif "enum" in arg:
+            enum_values = tuple(raw_choices)
+            canonical_input["choices"] = list(enum_values)
+        elif "choices" in inp:
             raise _err(
-                "unknown_field", f"Argument '{name}' declares 'enum' but is not an enum type."
+                "unknown_field", f"Input '{name}' declares 'choices' but is not a choice type."
             )
-        has_default = "default" in arg and arg["default"] is not None
-        default = arg.get("default")
+        has_default = "default" in inp and inp["default"] is not None
+        default = inp.get("default")
         if has_default:
-            if arg_type == WORKFLOW_ARG_TYPE_ENUM and default not in enum_values:
+            if input_type == WORKFLOW_INPUT_TYPE_CHOICE and default not in enum_values:
                 raise _err(
                     "invalid_definition",
-                    f"Default for enum argument '{name}' is not an allowed value.",
+                    f"Default for choice input '{name}' is not an allowed value.",
                 )
-            canonical_arg["default"] = default
-        canonical.append(canonical_arg)
+            canonical_input["default"] = default
+        canonical.append(canonical_input)
         specs.append(
             ArgSpec(
                 name=name,
-                type=str(arg_type),
+                type=str(input_type),
                 required=required,
                 has_default=has_default,
                 default=default,
@@ -193,24 +225,30 @@ def _parse_args(raw: object) -> tuple[list[dict[str, object]], list[ArgSpec]]:
     return canonical, specs
 
 
-# --- setup ---------------------------------------------------------------------
+# --- integrations (namespace-only, E3) -----------------------------------------
 
 
-def _parse_setup(raw: object) -> dict[str, object]:
-    setup = _require_dict(raw, field="setup")
-    _reject_unknown_keys(setup, {"harness", "model", "session_binding"}, field="setup")
-    harness = _require_str(
-        setup, "harness", field="setup", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
-    )
-    model = _require_str(setup, "model", field="setup", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH)
-    session_binding = setup.get("session_binding", WORKFLOW_SESSION_BINDING_FRESH)
-    if session_binding not in SUPPORTED_WORKFLOW_SESSION_BINDINGS:
-        allowed = sorted(SUPPORTED_WORKFLOW_SESSION_BINDINGS)
-        raise _err(
-            "invalid_definition",
-            f"'setup.session_binding' must be one of {allowed}.",
-        )
-    return {"harness": harness, "model": model, "session_binding": session_binding}
+def _parse_integrations(raw: object) -> list[str]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise _err("invalid_definition", "'integrations' must be a list of namespace strings.")
+    seen: set[str] = set()
+    canonical: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or not item.strip():
+            raise _err(
+                "invalid_definition", "Each integration must be a non-empty namespace string."
+            )
+        if not _IDENTIFIER_RE.match(item):
+            raise _err(
+                "invalid_definition", f"Integration namespace '{item}' must be an identifier."
+            )
+        if item in seen:
+            raise _err("duplicate_integration", f"Duplicate integration '{item}'.")
+        seen.add(item)
+        canonical.append(item)
+    return canonical
 
 
 # --- on_fail -------------------------------------------------------------------
@@ -274,43 +312,84 @@ def _parse_goal(raw: object, *, field: str) -> dict[str, object]:
     return canonical
 
 
+# --- required_invocation (agent.prompt gate, §6) -------------------------------
+
+
+def _parse_required_invocation(raw: object, *, field: str) -> dict[str, object]:
+    inv = _require_dict(raw, field=f"{field}.required_invocation")
+    _reject_unknown_keys(inv, {"provider", "tool"}, field=f"{field}.required_invocation")
+    return {
+        "provider": _require_str(inv, "provider", field=f"{field}.required_invocation"),
+        "tool": _require_str(inv, "tool", field=f"{field}.required_invocation"),
+    }
+
+
 # --- steps ---------------------------------------------------------------------
 
 
 def _parse_agent_prompt(step: dict[str, object], *, field: str) -> dict[str, object]:
-    _reject_unknown_keys(step, {"kind", "on_fail", "prompt", "goal"}, field=field)
+    _reject_unknown_keys(
+        step,
+        {"kind", "on_fail", "label", "prompt", "goal", "required_invocation"},
+        field=field,
+    )
     canonical: dict[str, object] = {"prompt": _require_str(step, "prompt", field=field)}
     if "goal" in step and step["goal"] is not None:
         canonical["goal"] = _parse_goal(step["goal"], field=field)
-    return canonical
-
-
-def _parse_agent_config(step: dict[str, object], *, field: str) -> dict[str, object]:
-    """Agent config step: sets the harness and/or model for the steps below it.
-
-    At least one of ``harness`` / ``model`` must be present; each, when present,
-    must be a non-empty string.
-    """
-
-    _reject_unknown_keys(step, {"kind", "on_fail", "harness", "model"}, field=field)
-    canonical: dict[str, object] = {}
-    for key in ("harness", "model"):
-        value = _optional_str(step, key, field=field)
-        if value is not None:
-            if not value.strip():
-                raise _err("invalid_definition", f"'{field}.{key}' must be a non-empty string.")
-            canonical[key] = value
-    if not canonical:
-        raise _err(
-            "invalid_definition",
-            f"'{field}' requires at least one of 'harness' or 'model'.",
+    if "required_invocation" in step and step["required_invocation"] is not None:
+        canonical["required_invocation"] = _parse_required_invocation(
+            step["required_invocation"], field=field
         )
     return canonical
 
 
+def _parse_agent_emit(step: dict[str, object], *, field: str) -> dict[str, object]:
+    """Write-output step: prompts, then captures a named, schema-shaped output.
+
+    ``name`` is REQUIRED (it is the output handle refs address); ``max_attempts``
+    is the re-ask budget (default 3).
+    """
+
+    _reject_unknown_keys(
+        step,
+        {"kind", "on_fail", "label", "prompt", "name", "output_schema", "max_attempts"},
+        field=field,
+    )
+    name = _require_str(step, "name", field=field)
+    if not _IDENTIFIER_RE.match(name):
+        raise _err("invalid_definition", f"'{field}.name' must be an identifier.")
+    if name in WORKFLOW_RESERVED_REF_SEGMENTS:
+        raise _err(
+            "invalid_definition",
+            f"'{field}.name' '{name}' is a reserved reference segment.",
+        )
+    canonical: dict[str, object] = {
+        "prompt": _require_str(step, "prompt", field=field),
+        "name": name,
+        "max_attempts": _positive_int(step, "max_attempts", field=field, required=False)
+        or WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS,
+    }
+    if "output_schema" in step and step["output_schema"] is not None:
+        canonical["output_schema"] = _require_dict(
+            step["output_schema"], field=f"{field}.output_schema"
+        )
+    return canonical
+
+
+def _parse_agent_config(step: dict[str, object], *, field: str) -> dict[str, object]:
+    """Switch-model step: narrows to ``{model}`` only (same-harness rule).
+
+    Harness never changes mid-slot — a different harness is a different slot (A4).
+    """
+
+    _reject_unknown_keys(step, {"kind", "on_fail", "label", "model"}, field=field)
+    model = _require_str(step, "model", field=field)
+    return {"model": model}
+
+
 def _parse_shell_run(step: dict[str, object], *, field: str) -> dict[str, object]:
     _reject_unknown_keys(
-        step, {"kind", "on_fail", "command", "timeout_secs", "output_name"}, field=field
+        step, {"kind", "on_fail", "label", "command", "timeout_secs", "output_name"}, field=field
     )
     canonical: dict[str, object] = {"command": _require_str(step, "command", field=field)}
     timeout_secs = _positive_int(step, "timeout_secs", field=field, required=False)
@@ -318,16 +397,16 @@ def _parse_shell_run(step: dict[str, object], *, field: str) -> dict[str, object
         canonical["timeout_secs"] = timeout_secs
     output_name = _optional_str(step, "output_name", field=field)
     if output_name is not None:
-        if not output_name.replace("_", "").isalnum() or not (
-            output_name[0].isalpha() or output_name[0] == "_"
-        ):
+        if not _IDENTIFIER_RE.match(output_name):
             raise _err("invalid_definition", f"'{field}.output_name' must be an identifier.")
         canonical["output_name"] = output_name
     return canonical
 
 
 def _parse_scm_open_pr(step: dict[str, object], *, field: str) -> dict[str, object]:
-    _reject_unknown_keys(step, {"kind", "on_fail", "base", "title", "body", "draft"}, field=field)
+    _reject_unknown_keys(
+        step, {"kind", "on_fail", "label", "base", "title", "body", "draft"}, field=field
+    )
     canonical: dict[str, object] = {"title": _require_str(step, "title", field=field)}
     base = _optional_str(step, "base", field=field)
     if base is not None:
@@ -342,83 +421,141 @@ def _parse_scm_open_pr(step: dict[str, object], *, field: str) -> dict[str, obje
 
 
 def _parse_notify(step: dict[str, object], *, field: str) -> dict[str, object]:
-    _reject_unknown_keys(step, {"kind", "on_fail", "channel", "message"}, field=field)
-    channel = step.get("channel")
-    if channel not in SUPPORTED_WORKFLOW_NOTIFY_CHANNELS:
-        raise _err(
-            "invalid_definition",
-            f"'{field}.channel' must be one of {sorted(SUPPORTED_WORKFLOW_NOTIFY_CHANNELS)}.",
-        )
-    return {"channel": channel, "message": _require_str(step, "message", field=field)}
+    """Slack-only notify (E1b): ``{slack_channel_id, message}``, template-only v1."""
 
-
-def _parse_human_approval(step: dict[str, object], *, field: str) -> dict[str, object]:
     _reject_unknown_keys(
-        step, {"kind", "on_fail", "message", "on_timeout", "timeout_secs"}, field=field
+        step, {"kind", "on_fail", "label", "message", "slack_channel_id"}, field=field
     )
-    on_timeout = step.get("on_timeout")
-    if on_timeout not in SUPPORTED_WORKFLOW_APPROVAL_ON_TIMEOUT:
-        allowed = sorted(SUPPORTED_WORKFLOW_APPROVAL_ON_TIMEOUT)
-        raise _err(
-            "invalid_definition",
-            f"'{field}.on_timeout' must be one of {allowed}.",
-        )
-    canonical: dict[str, object] = {
+    return {
+        "slack_channel_id": _require_str(step, "slack_channel_id", field=field),
         "message": _require_str(step, "message", field=field),
-        "on_timeout": on_timeout,
     }
-    timeout_secs = _positive_int(step, "timeout_secs", field=field, required=False)
-    if timeout_secs is not None:
-        canonical["timeout_secs"] = timeout_secs
+
+
+def _parse_branch(step: dict[str, object], *, field: str) -> dict[str, object]:
+    """Branch step (C11/D3): switch on a prior emit's field; each case is
+    continue|end (narrowed from arbitrary goto)."""
+
+    _reject_unknown_keys(step, {"kind", "on_fail", "label", "on", "cases", "reason"}, field=field)
+    on = _require_str(step, "on", field=field)
+    raw_cases = step.get("cases")
+    if not isinstance(raw_cases, dict) or not raw_cases:
+        raise _err("invalid_definition", f"'{field}.cases' must be a non-empty object.")
+    cases: dict[str, object] = {}
+    for value, target in raw_cases.items():
+        target_dict = _require_dict(target, field=f"{field}.cases['{value}']")
+        _reject_unknown_keys(target_dict, {"to"}, field=f"{field}.cases['{value}']")
+        to = target_dict.get("to")
+        if to not in SUPPORTED_WORKFLOW_BRANCH_TARGETS:
+            raise _err(
+                "invalid_definition",
+                f"'{field}.cases['{value}'].to' must be one of "
+                f"{sorted(SUPPORTED_WORKFLOW_BRANCH_TARGETS)}.",
+            )
+        cases[value] = {"to": to}
+    canonical: dict[str, object] = {"on": on, "cases": cases}
+    reason = _optional_str(step, "reason", field=field)
+    if reason is not None:
+        canonical["reason"] = reason
     return canonical
 
 
 _STEP_PARSERS = {
     WORKFLOW_STEP_AGENT_CONFIG: _parse_agent_config,
     WORKFLOW_STEP_AGENT_PROMPT: _parse_agent_prompt,
+    WORKFLOW_STEP_AGENT_EMIT: _parse_agent_emit,
     WORKFLOW_STEP_SHELL_RUN: _parse_shell_run,
     WORKFLOW_STEP_SCM_OPEN_PR: _parse_scm_open_pr,
     WORKFLOW_STEP_NOTIFY: _parse_notify,
-    WORKFLOW_STEP_HUMAN_APPROVAL: _parse_human_approval,
+    WORKFLOW_STEP_BRANCH: _parse_branch,
 }
 
 
-def _parse_steps(raw: object, *, require_steps: bool = True) -> list[dict[str, object]]:
+def _parse_step(item: object, *, field: str) -> dict[str, object]:
+    step = _require_dict(item, field=field)
+    kind = step.get("kind")
+    if kind not in SUPPORTED_WORKFLOW_STEP_KINDS:
+        raise _err("unknown_step_kind", f"'{field}.kind' is not a supported step kind: {kind!r}.")
+    parser = _STEP_PARSERS[kind]
+    canonical: dict[str, object] = {
+        "kind": kind,
+        "on_fail": _parse_on_fail(step.get("on_fail"), field=field),
+    }
+    label = _optional_label(step, field=field)
+    if label is not None:
+        canonical["label"] = label
+    canonical.update(parser(step, field=field))
+    return canonical
+
+
+# --- agents spine (A4) ---------------------------------------------------------
+
+
+def _parse_agents(raw: object, *, require_steps: bool) -> list[dict[str, object]]:
     if raw is None and not require_steps:
         return []
     if not isinstance(raw, list):
-        raise _err("invalid_definition", "'steps' must be a list.")
+        raise _err("invalid_definition", "'agents' must be a list.")
     if not raw and require_steps:
-        raise _err("invalid_definition", "'steps' must be a non-empty list.")
-    if len(raw) > WORKFLOW_MAX_STEPS:
-        raise _err("too_many_steps", f"A workflow may declare at most {WORKFLOW_MAX_STEPS} steps.")
-    canonical_steps: list[dict[str, object]] = []
-    for index, item in enumerate(raw):
-        field = f"steps[{index}]"
-        step = _require_dict(item, field=field)
-        kind = step.get("kind")
-        if kind not in SUPPORTED_WORKFLOW_STEP_KINDS:
+        raise _err("invalid_definition", "A workflow requires at least one agent node.")
+    if len(raw) > WORKFLOW_MAX_AGENTS:
+        raise _err(
+            "too_many_agents", f"A workflow may declare at most {WORKFLOW_MAX_AGENTS} agent nodes."
+        )
+    total_steps = 0
+    seen_slots: set[str] = set()
+    canonical_agents: list[dict[str, object]] = []
+    for node_index, item in enumerate(raw):
+        node = _require_dict(item, field=f"agents[{node_index}]")
+        _reject_unknown_keys(
+            node, {"slot", "harness", "model", "steps"}, field=f"agents[{node_index}]"
+        )
+        slot = _require_str(node, "slot", field=f"agents[{node_index}]")
+        if not _SLOT_RE.match(slot):
             raise _err(
-                "unknown_step_kind", f"'{field}.kind' is not a supported step kind: {kind!r}."
+                "invalid_definition",
+                f"agents[{node_index}].slot '{slot}' must match ^[a-z][a-z0-9_]*$.",
             )
-        parser = _STEP_PARSERS[kind]
-        canonical: dict[str, object] = {
-            "kind": kind,
-            "on_fail": _parse_on_fail(step.get("on_fail"), field=field),
-        }
-        canonical.update(parser(step, field=field))
-        canonical_steps.append(canonical)
-    return canonical_steps
+        if slot in seen_slots:
+            raise _err("duplicate_slot", f"Duplicate agent slot '{slot}'.")
+        seen_slots.add(slot)
+        harness = _require_str(
+            node, "harness", field=f"agents[{node_index}]", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
+        )
+        model = _require_str(
+            node, "model", field=f"agents[{node_index}]", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
+        )
+        raw_steps = node.get("steps")
+        if not isinstance(raw_steps, list) or (require_steps and not raw_steps):
+            raise _err(
+                "invalid_definition",
+                f"agents[{node_index}].steps must be a non-empty list.",
+            )
+        steps: list[dict[str, object]] = []
+        for step_index, step_item in enumerate(raw_steps):
+            steps.append(
+                _parse_step(step_item, field=f"agents[{node_index}].steps[{step_index}]")
+            )
+        total_steps += len(steps)
+        if total_steps > WORKFLOW_MAX_STEPS:
+            raise _err(
+                "too_many_steps",
+                f"A workflow may declare at most {WORKFLOW_MAX_STEPS} steps.",
+            )
+        canonical_agents.append(
+            {"slot": slot, "harness": harness, "model": model, "steps": steps}
+        )
+    return canonical_agents
 
 
-# --- template reference validation --------------------------------------------
+# --- template reference + emit validation --------------------------------------
 
 
 def _iter_step_strings(step: dict[str, object]) -> Iterator[str]:
     """Yield every templated string field within a canonical step."""
 
     for key, value in step.items():
-        if key in {"kind", "on_fail"}:
+        if key in {"kind", "on_fail", "label", "name", "output_schema", "required_invocation"}:
             continue
         if isinstance(value, str):
             yield value
@@ -428,13 +565,48 @@ def _iter_step_strings(step: dict[str, object]) -> Iterator[str]:
                     yield sub
 
 
-def _validate_references(steps: list[dict[str, object]], arg_names: frozenset[str]) -> None:
-    for index, step in enumerate(steps):
-        for value in _iter_step_strings(step):
-            try:
-                validate_string_references(value, arg_names=arg_names, step_index=index)
-            except TemplateReferenceError as exc:
-                raise _err(exc.code, exc.message) from exc
+def _validate_spine_references(
+    agents: list[dict[str, object]], input_names: frozenset[str]
+) -> None:
+    """Walk the flattened run order enforcing emit-name uniqueness (whole
+    definition) and strictly-prior ref visibility, plus branch semantics."""
+
+    prior_emits: set[str] = set()
+    for node in agents:
+        for step in node["steps"]:  # type: ignore[index]
+            for value in _iter_step_strings(step):
+                try:
+                    validate_string_references(
+                        value,
+                        input_names=input_names,
+                        prior_emit_names=frozenset(prior_emits),
+                    )
+                except TemplateReferenceError as exc:
+                    raise _err(exc.code, exc.message) from exc
+            if step["kind"] == WORKFLOW_STEP_BRANCH:
+                _validate_branch_on(step, prior_emits)
+            # Register this step's emit AFTER validating its own refs (a step
+            # can never reference its own output).
+            if step["kind"] == WORKFLOW_STEP_AGENT_EMIT:
+                name = step["name"]
+                if name in prior_emits:
+                    raise _err("duplicate_emit", f"Duplicate emit name '{name}'.")
+                prior_emits.add(name)  # type: ignore[arg-type]
+
+
+def _validate_branch_on(step: dict[str, object], prior_emits: set[str]) -> None:
+    refs = iter_references(step["on"])  # type: ignore[arg-type]
+    emit_refs = [r for r in refs if isinstance(r, EmitReference)]
+    if len(refs) != 1 or len(emit_refs) != 1:
+        raise _err(
+            "invalid_definition",
+            "'branch.on' must be exactly one {{EMIT.FIELD}} reference.",
+        )
+    if emit_refs[0].emit not in prior_emits:
+        raise _err(
+            "forward_emit_reference",
+            f"branch references emit '{emit_refs[0].emit}', not produced by an earlier step.",
+        )
 
 
 # --- public entrypoint ---------------------------------------------------------
@@ -443,21 +615,41 @@ def _validate_references(steps: list[dict[str, object]], arg_names: frozenset[st
 def parse_definition(
     raw: object, *, require_steps: bool = True
 ) -> tuple[dict[str, object], list[ArgSpec]]:
-    """Validate a raw definition and return its canonical dict + parsed arg specs.
+    """Validate a raw v2 definition and return its canonical dict + parsed input specs.
 
     Raises :class:`WorkflowDefinitionError` on any structural or reference problem.
 
-    ``require_steps=False`` permits a zero-step *draft* — used when saving a
+    ``require_steps=False`` permits a zero-agent *draft* — used when saving a
     workflow that the user will still build in the editor. Running a workflow
     (StartRun) always parses with ``require_steps=True``, so an empty draft can
     be saved but not run.
     """
 
     definition = _require_dict(raw, field="definition")
-    _reject_unknown_keys(definition, {"args", "setup", "steps"}, field="definition")
-    canonical_args, arg_specs = _parse_args(definition.get("args"))
-    setup = _parse_setup(definition.get("setup"))
-    steps = _parse_steps(definition.get("steps"), require_steps=require_steps)
-    _validate_references(steps, frozenset(spec.name for spec in arg_specs))
-    canonical: dict[str, object] = {"args": canonical_args, "setup": setup, "steps": steps}
+    _reject_unknown_keys(
+        definition,
+        {"version", "name", "description", "inputs", "integrations", "agents"},
+        field="definition",
+    )
+    version = definition.get("version")
+    if version != 1:
+        raise _err("invalid_definition", "'version' must be 1.")
+
+    canonical_inputs, arg_specs = _parse_inputs(definition.get("inputs"))
+    integrations = _parse_integrations(definition.get("integrations"))
+    agents = _parse_agents(definition.get("agents"), require_steps=require_steps)
+    _validate_spine_references(agents, frozenset(spec.name for spec in arg_specs))
+
+    canonical: dict[str, object] = {
+        "version": 1,
+        "inputs": canonical_inputs,
+        "integrations": integrations,
+        "agents": agents,
+    }
+    name = _optional_str(definition, "name", field="definition")
+    if name is not None:
+        canonical["name"] = name
+    description = _optional_str(definition, "description", field="definition")
+    if description is not None:
+        canonical["description"] = description
     return canonical, arg_specs
