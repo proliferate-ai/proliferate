@@ -2,6 +2,7 @@ import type React from "react";
 import type { ReactNode } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import {
@@ -9,7 +10,7 @@ import {
   type AuthMethod,
 } from "@/lib/domain/settings/harness-auth-sources";
 import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
-import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
+import type { HarnessAuthEditorApi } from "@/hooks/agents/workflows/use-harness-auth-editor";
 
 export type { AuthMethod };
 
@@ -289,7 +290,9 @@ function MethodCard({
 }: MethodCardProps) {
   return (
     <div className="flex flex-col gap-1">
-      <button
+      <Button
+        variant="unstyled"
+        size="unstyled"
         type="button"
         aria-pressed={selected}
         disabled={disabled}
@@ -307,7 +310,7 @@ function MethodCard({
         ) : null}
         {icon}
         <span className="text-xs font-medium">{label}</span>
-      </button>
+      </Button>
       {disabled && disabledReason ? (
         <p className="px-1 text-[11px] leading-tight text-muted-foreground">
           {disabledReason}
