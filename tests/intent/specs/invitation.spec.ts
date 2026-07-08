@@ -8,9 +8,13 @@
 //   (organization_invitations.py), never by obscurity.
 // - Email delivery via Resend is skipped locally (no RESEND_API_KEY) and
 //   recorded as delivery_status='skipped'. Assert that; never expect an email.
-// - Accept is driven through the desktop-web settings UI
-//   (CurrentUserInvitationsSection on the Members pane), which calls
-//   POST /organizations/invitations/current/{id}/accept.
+// - Accept surface: in single-org mode the invite email links to the
+//   server-rendered /register page (invitation_delivery.py) — that is the
+//   product's own accept path and the happy-path drives it. The hosted-style
+//   settings-UI accept (CurrentUserInvitationsSection →
+//   POST /organizations/invitations/current/{id}/accept) is admin-gated in
+//   settings navigation, unreachable for a plain invitee — pinned as a
+//   documented product gap in its own test below.
 // - Duplicate pending invite for the same (org, email): the partial unique
 //   index uq_organization_invitation_pending_email guarantees at most one
 //   pending row; the product's create path is upsert-on-conflict (rotate), so
@@ -21,6 +25,7 @@ import {
   ADMIN_EMAIL,
   ADMIN_PASSWORD,
   acceptCurrentInvitation,
+  apiBaseUrl,
   apiRequest,
   backdateInvitationExpiry,
   ensureInstanceClaimed,
@@ -68,47 +73,45 @@ async function ensureInviteeAccount(email: string, password: string): Promise<vo
 }
 
 test.describe("T2-INV-1: invitation happy path", () => {
-  test("admin invites → pending row with skipped delivery → invitee accepts via settings UI → active membership", async ({ page }) => {
-    // The registration path (used for seeding the account) auto-consumes the
-    // invitation, so mint the account first, remove the membership it
-    // created, then send the invitation under test.
-    await ensureInviteeAccount(INVITEE_EMAIL, INVITEE_PASSWORD);
-    const preMembers = await listMembers(adminToken, organizationId);
-    const existing = preMembers.find((member) => member.email === INVITEE_EMAIL);
-    if (existing && existing.status === "active") {
-      const removed = await apiRequest(
-        `/v1/organizations/${organizationId}/members/${existing.membership_id}`,
-        { method: "DELETE", token: adminToken },
-      );
-      expect(removed.status).toBe(200);
-    }
+  // Fresh email per run: the happy path exercises the full first-contact
+  // journey (invite → register → member), which is single-use by design.
+  const FRESH_INVITEE_EMAIL = `invitee-${Date.now()}@t2intent.example.com`;
+  const FRESH_INVITEE_PASSWORD = "FreshInvitee!Passw0rd";
 
-    const invitation = await inviteMember(adminToken, organizationId, INVITEE_EMAIL, "member");
+  test("admin invites → pending row with skipped delivery → invitee joins via the invite link → active membership", async ({ page }) => {
+    // NOTE — as-built single-org reality vs the scenario's hosted wording:
+    // in single-org mode the invite email links to the server-rendered
+    // /register page with the invitation id as the token
+    // (invitation_delivery.py chooses invitation_registration_url when
+    // settings.single_org_mode). THAT page is the invitee's accept surface;
+    // registration itself activates the membership and completes the
+    // invitation in one transaction (self_registration.py). The hosted
+    // CurrentUserInvitationsSection path is asserted (as a documented gap)
+    // in the next test.
+    const invitation = await inviteMember(adminToken, organizationId, FRESH_INVITEE_EMAIL, "member");
     expect(invitation.status).toBe("pending");
-    // Locally Resend is unconfigured → the durable delivery marks 'skipped'.
-    expect(["sent", "skipped"]).toContain(invitation.delivery_status);
-    expect(invitation.delivery_status).toBe("skipped");
+    // Locally Resend is unconfigured → the durable delivery marks 'skipped'
+    // (delivery_status ∈ {sent, skipped} per the contract; skipped here).
+    expect(["sent", "skipped"]).toContain(invitation.deliveryStatus);
+    expect(invitation.deliveryStatus).toBe("skipped");
 
-    // Invitee signs in on the desktop web app and accepts through the UI.
-    await page.goto(webBaseUrl());
-    await page.getByLabel("Email").fill(INVITEE_EMAIL);
-    await page.getByLabel("Password").fill(INVITEE_PASSWORD);
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
-    await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
-
-    // Members pane (GET /organizations/invitations/current backs this section).
-    await page.goto(`${webBaseUrl()}/settings?section=organization-members`);
-    await expect(page.getByText("Pending invitations")).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("button", { name: "Accept invitation" }).first().click();
-    // Confirmation dialog → Join.
-    await page.getByRole("button", { name: "Join", exact: true }).click();
-    await expect(page.getByText(/^Joined /).first()).toBeVisible({ timeout: 30_000 });
+    // Open the invite link the email would carry and complete registration.
+    await page.goto(
+      `${apiBaseUrl()}/register?token=${invitation.id}&email=${encodeURIComponent(FRESH_INVITEE_EMAIL)}`,
+    );
+    await expect(page.getByRole("heading", { name: "Join this Proliferate instance" })).toBeVisible();
+    // Token and email arrive prefilled from the link.
+    await expect(page.getByLabel("Invitation token")).toHaveValue(invitation.id);
+    await expect(page.getByLabel("Email")).toHaveValue(FRESH_INVITEE_EMAIL);
+    await page.getByLabel("Password").fill(FRESH_INVITEE_PASSWORD);
+    await page.getByRole("button", { name: "Create account" }).click();
+    await expect(page.getByRole("heading", { name: "You are all set" })).toBeVisible();
 
     // Server-side assertions: membership active with invited role; invitation
     // accepted with accepted_by_user_id; org appears in the invitee's list.
-    const inviteeToken = (await passwordLogin(INVITEE_EMAIL, INVITEE_PASSWORD)).access_token;
+    const inviteeToken = (await passwordLogin(FRESH_INVITEE_EMAIL, FRESH_INVITEE_PASSWORD)).access_token;
     const members = await listMembers(adminToken, organizationId);
-    const membership = members.find((member) => member.email === INVITEE_EMAIL);
+    const membership = members.find((member) => member.email === FRESH_INVITEE_EMAIL);
     expect(membership).toBeDefined();
     expect(membership!.status).toBe("active");
     expect(membership!.role).toBe("member");
@@ -117,10 +120,62 @@ test.describe("T2-INV-1: invitation happy path", () => {
     const acceptedRow = adminView.find((row) => row.id === invitation.id);
     expect(acceptedRow).toBeDefined();
     expect(acceptedRow!.status).toBe("accepted");
-    expect(acceptedRow!.accepted_by_user_id).toBe(membership!.user_id);
+    expect(acceptedRow!.acceptedByUserId).toBe(membership!.userId);
 
     const inviteeOrg = await getOwnOrganization(inviteeToken);
     expect(inviteeOrg.id).toBe(organizationId);
+
+    // UI leg: the new member signs into the desktop web app and lands in the
+    // app shell (their membership is live end to end).
+    await page.goto(webBaseUrl());
+    await page.getByLabel("Email").fill(FRESH_INVITEE_EMAIL);
+    await page.getByLabel("Password").fill(FRESH_INVITEE_PASSWORD);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
+  });
+
+  test("documents GAP: pending-invitation accept UI is unreachable for a non-admin invitee (settings admin gate)", async ({ page }) => {
+    // PRODUCT GAP surfaced by this harness (named in the PR body): the
+    // scenario contract says the invitee accepts via the desktop-web settings
+    // UI (CurrentUserInvitationsSection, on the organization-members pane).
+    // But `organization-members` is adminOnly in settings navigation
+    // (lib/domain/settings/navigation-presentation.ts) and SettingsScreen
+    // redirects non-admins to General — so a plain member/invitee can never
+    // see their pending invitations there in single-org mode. The endpoint
+    // the UI would call works (asserted below); only the surface is gated.
+    // This test pins the CURRENT (gated) behavior so a fix flips it loudly.
+    const invitee = (await passwordLogin(FRESH_INVITEE_EMAIL, FRESH_INVITEE_PASSWORD));
+
+    // Give the invitee a pending invitation so the section would have content
+    // if it were reachable. (Inviting an existing member is allowed; accept
+    // then simply marks the invitation accepted against the live membership.)
+    const invitation = await inviteMember(adminToken, organizationId, FRESH_INVITEE_EMAIL, "member");
+    const listed = await listInvitationsCurrent(invitee.access_token);
+    expect(listed.find((row) => row.id === invitation.id)).toBeDefined();
+
+    // Sign in as the (non-admin) invitee and try to open the Members pane.
+    await page.goto(webBaseUrl());
+    await page.getByLabel("Email").fill(FRESH_INVITEE_EMAIL);
+    await page.getByLabel("Password").fill(FRESH_INVITEE_PASSWORD);
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
+    await page.goto(`${webBaseUrl()}/settings?section=organization-members`);
+    // Redirected away: the URL settles on the default (general) section.
+    await expect(page).toHaveURL(/section=general/, { timeout: 30_000 });
+
+    // The accept endpoint itself works for the same user — completing the
+    // acceptance the UI could not offer.
+    const accept = await acceptCurrentInvitation(invitee.access_token, invitation.id);
+    expect(accept.status).toBe(200);
+    // Poll: the accept endpoint's transaction commits in the session
+    // dependency teardown, which can land a beat after the response is
+    // written — a fresh read too fast can still see 'pending'.
+    await expect
+      .poll(async () => {
+        const adminView = await listOrganizationInvitations(adminToken, organizationId);
+        return adminView.find((row) => row.id === invitation.id)?.status;
+      }, { timeout: 10_000 })
+      .toBe("accepted");
   });
 
   test("negative: expired invitation cannot be accepted and is lazily marked expired", async () => {
@@ -129,7 +184,7 @@ test.describe("T2-INV-1: invitation happy path", () => {
     const members = await listMembers(adminToken, organizationId);
     const otherMembership = members.find((member) => member.email === OTHER_EMAIL);
     if (otherMembership && otherMembership.status === "active") {
-      await apiRequest(`/v1/organizations/${organizationId}/members/${otherMembership.membership_id}`, {
+      await apiRequest(`/v1/organizations/${organizationId}/members/${otherMembership.membershipId}`, {
         method: "DELETE",
         token: adminToken,
       });

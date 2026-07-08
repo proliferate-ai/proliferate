@@ -297,7 +297,12 @@ export async function bootStack(): Promise<BootedStack> {
   // Settings/auth/org/invitation surfaces (this suite's scope) don't read
   // through the runtime, but booting it keeps the app shell from showing a
   // persistent "runtime unavailable" state that could shadow assertions.
-  try {
+  // TIER2_INTENT_SKIP_RUNTIME=1 (CI) skips it entirely: building the Rust
+  // binary from scratch is far too slow for a per-PR job, and no current
+  // scenario needs it.
+  if (process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
+    log("skipping AnyHarness runtime (TIER2_INTENT_SKIP_RUNTIME=1)");
+  } else try {
     const runtimeBin = resolveAnyharnessRuntimeBin();
     spawnTracked(
       children,

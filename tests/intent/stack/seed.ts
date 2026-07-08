@@ -131,26 +131,28 @@ export interface OrganizationSummary {
 }
 
 export async function getOwnOrganization(token: string): Promise<OrganizationSummary> {
-  const { status, body } = await apiRequest<{ organizations: Array<{ organization: OrganizationSummary }> }>(
+  const { status, body } = await apiRequest<{ organizations: OrganizationSummary[] }>(
     "/v1/organizations",
     { token },
   );
   if (status !== 200 || body.organizations.length === 0) {
     throw new Error(`Could not resolve the caller's organization (${status}): ${JSON.stringify(body)}`);
   }
-  return body.organizations[0].organization;
+  return body.organizations[0];
 }
 
+// Response field names follow the API's camelCase aliases
+// (server/proliferate/server/organizations/models.py).
 export interface InvitationSummary {
   id: string;
-  organization_id: string;
-  organization_name: string | null;
+  organizationId: string;
+  organizationName: string | null;
   email: string;
   role: string;
   status: string;
-  delivery_status: string;
-  accepted_by_user_id: string | null;
-  expires_at: string;
+  deliveryStatus: string;
+  acceptedByUserId: string | null;
+  expiresAt: string;
 }
 
 export async function inviteMember(
@@ -163,7 +165,7 @@ export async function inviteMember(
     `/v1/organizations/${organizationId}/invitations`,
     { method: "POST", token: adminToken, body: { email, role } },
   );
-  if (status !== 200) {
+  if (status !== 200 && status !== 201) {
     throw new Error(`Invite failed for ${email} (${status}): ${JSON.stringify(body)}`);
   }
   return body;
@@ -216,8 +218,8 @@ export async function acceptCurrentInvitation(
 }
 
 export interface MemberSummary {
-  membership_id: string;
-  user_id: string;
+  membershipId: string;
+  userId: string;
   email: string;
   role: string;
   status: string;
