@@ -26,6 +26,8 @@
  * network calls once invoked for real.
  */
 
+import { randomBytes } from "node:crypto";
+
 import { ApiClient } from "./http.js";
 
 export interface AuthSessionResponse {
@@ -110,8 +112,11 @@ export async function mintFreshUser(creds: DurableUserCredentials): Promise<Fres
   const adminSession = await loginDurableUser(creds);
   const adminClient = anonymousClient.withBearerToken(adminSession.accessToken);
 
-  const email = `release-e2e+${Date.now()}-${Math.random().toString(36).slice(2, 8)}@proliferate.test`;
-  const password = `release-e2e-${Math.random().toString(36).slice(2, 12)}!Aa1`;
+  // Math.random() is not appropriate here: the suffix disambiguates concurrent
+  // runs and the password is a real (if throwaway) credential sent to the
+  // server, so both need a cryptographically secure source.
+  const email = `release-e2e+${Date.now()}-${randomToken(6)}@proliferate.test`;
+  const password = `release-e2e-${randomToken(10)}!Aa1`;
 
   const invitation = await adminClient.post<OrganizationInvitationResponse>(
     `/v1/organizations/${creds.organizationId}/invitations`,
@@ -138,6 +143,16 @@ export async function mintFreshUser(creds: DurableUserCredentials): Promise<Fres
       }
     },
   };
+}
+
+/** Lowercase alphanumeric token of `length` chars, drawn from a CSPRNG. */
+function randomToken(length: number): string {
+  return randomBytes(length)
+    .toString("base64url")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase()
+    .slice(0, length)
+    .padEnd(length, "0");
 }
 
 interface OrganizationMembersResponseShape {
