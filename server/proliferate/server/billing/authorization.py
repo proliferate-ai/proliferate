@@ -17,11 +17,11 @@ from proliferate.constants.billing import (
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.store import billing as billing_store
+from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.billing_runtime_usage import (
     record_billing_decision_event,
     resolve_billing_subject_id_for_workspace,
 )
-from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.billing_subjects import (
     ensure_organization_billing_subject,
     ensure_personal_billing_subject,
@@ -178,9 +178,9 @@ async def _compute_budget_cap_breach(
         )
 
     for limit in limits:
-        if limit.user_id == user_id and await _window_seconds(
-            limit.window, user_id
-        ) >= float(limit.cap_value):
+        if limit.user_id == user_id and await _window_seconds(limit.window, user_id) >= float(
+            limit.cap_value
+        ):
             return BILLING_DECISION_USER_LIMIT_PAUSE
     for limit in limits:
         if limit.user_id is None and await _window_seconds(limit.window, None) >= float(
@@ -228,9 +228,7 @@ async def assert_cloud_sandbox_resume_allowed(
         # identity tags. Compute limits are org-scoped, so resolve the org, then
         # its billing subject, and check caps against that org subject's usage
         # (matching the reconciler's ``_resolve_compute_limit_pause``).
-        membership = await organizations_store.get_current_membership_for_user(
-            db, owner_user_id
-        )
+        membership = await organizations_store.get_current_membership_for_user(db, owner_user_id)
         if membership is not None:
             organization_id = membership.organization.id
             org_subject = await ensure_organization_billing_subject(db, organization_id)
