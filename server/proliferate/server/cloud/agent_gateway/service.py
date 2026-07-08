@@ -24,7 +24,6 @@ from proliferate.constants.agent_gateway import (
     AGENT_AUTH_ROUTE_NATIVE,
     AGENT_AUTH_SURFACE_CLOUD,
 )
-from proliferate.db.store.organizations import list_organizations_for_user
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store.agent_gateway import (
     AgentApiKeyRecord,
@@ -35,6 +34,7 @@ from proliferate.db.store.agent_gateway import (
 )
 from proliferate.db.store.billing import list_entitlements
 from proliferate.db.store.billing_subscriptions import list_subscriptions
+from proliferate.db.store.organizations import list_organizations_for_user
 from proliferate.server.billing.domain.plans import (
     active_unlimited_cloud_entitlement,
     latest_healthy_cloud_subscription,
