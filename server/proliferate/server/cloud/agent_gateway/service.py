@@ -501,16 +501,22 @@ def _selection_set_policy_violation(
 
     Mirrors the at-rest report semantics: only ENABLED sources count (disabled
     rows never launch), and an empty enabled set == native CLI login. The
-    harness check applies regardless of route — a disallowed harness is off in
-    every form, including native.
+    harness check only applies when the desired set has an enabled source —
+    an empty/all-disabled set must always be allowed so a member can clear a
+    pre-existing selection on a harness the org has since disallowed (there is
+    no other way to comply, since there is no DELETE endpoint).
     """
-    if allowed_harnesses is not None and harness_kind not in allowed_harnesses:
+    enabled = [source for source in sources if source.enabled]
+    if (
+        allowed_harnesses is not None
+        and harness_kind not in allowed_harnesses
+        and enabled
+    ):
         return (
             f"Harness '{harness_kind}' is not allowed by your organization's policy."
         )
     if allowed_routes is None:
         return None
-    enabled = [source for source in sources if source.enabled]
     if not enabled:
         # Zero enabled sources == the harness's own (native) CLI login.
         if AGENT_AUTH_ROUTE_NATIVE not in allowed_routes:

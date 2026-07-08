@@ -126,6 +126,85 @@ class TestSelectTimeEnforcement:
         assert "codex" in rejected.json()["detail"]["message"]
 
     @pytest.mark.asyncio
+    async def test_disallowed_harness_can_be_cleared(self, client: AsyncClient) -> None:
+        # A member has a pre-existing selection on a harness the org has since
+        # disallowed. There is no DELETE endpoint, so the only remediation is
+        # PUTting an empty/all-disabled set — that must succeed even though the
+        # harness itself is disallowed.
+        owner_id, owner_headers = await _authed_user(client)
+        member_id, member_headers = await _authed_user(client)
+        organization_id = await _create_organization(
+            owner_user_id=owner_id, member_user_ids=[member_id]
+        )
+        # No policy yet: seed a selection on "codex" while it's still allowed.
+        seeded = await _put_selections(
+            client,
+            member_headers,
+            harness="codex",
+            surface="cloud",
+            sources=[_GATEWAY],
+        )
+        assert seeded.status_code == 200, seeded.text
+
+        await _set_policy(
+            client,
+            owner_headers,
+            organization_id,
+            allowed_routes=None,
+            allowed_harnesses=["claude"],
+        )
+
+        cleared = await _put_selections(
+            client,
+            member_headers,
+            harness="codex",
+            surface="cloud",
+            sources=[],
+        )
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json() == []
+
+    @pytest.mark.asyncio
+    async def test_disallowed_harness_still_rejects_enabled_source(
+        self, client: AsyncClient
+    ) -> None:
+        # Same setup as the clearing case above, but this time the member tries
+        # to PUT an enabled source on the disallowed harness — that must still
+        # be rejected; only an empty/all-disabled set is exempt.
+        owner_id, owner_headers = await _authed_user(client)
+        member_id, member_headers = await _authed_user(client)
+        organization_id = await _create_organization(
+            owner_user_id=owner_id, member_user_ids=[member_id]
+        )
+        seeded = await _put_selections(
+            client,
+            member_headers,
+            harness="codex",
+            surface="cloud",
+            sources=[_GATEWAY],
+        )
+        assert seeded.status_code == 200, seeded.text
+
+        await _set_policy(
+            client,
+            owner_headers,
+            organization_id,
+            allowed_routes=None,
+            allowed_harnesses=["claude"],
+        )
+
+        rejected = await _put_selections(
+            client,
+            member_headers,
+            harness="codex",
+            surface="cloud",
+            sources=[_GATEWAY],
+        )
+        assert rejected.status_code == 403, rejected.text
+        assert rejected.json()["detail"]["code"] == "policy_violation"
+        assert "codex" in rejected.json()["detail"]["message"]
+
+    @pytest.mark.asyncio
     async def test_native_disallowed_empty_set_rejected(self, client: AsyncClient) -> None:
         owner_id, owner_headers = await _authed_user(client)
         member_id, member_headers = await _authed_user(client)
