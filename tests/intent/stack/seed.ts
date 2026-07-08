@@ -159,16 +159,28 @@ export async function inviteMember(
   adminToken: string,
   organizationId: string,
   email: string,
-  role: "member" | "admin" = "member",
+  role: "member" | "admin" | "owner" = "member",
 ): Promise<InvitationSummary> {
-  const { status, body } = await apiRequest<InvitationSummary>(
-    `/v1/organizations/${organizationId}/invitations`,
-    { method: "POST", token: adminToken, body: { email, role } },
-  );
+  const { status, body } = await inviteMemberRaw(adminToken, organizationId, email, role);
   if (status !== 200 && status !== 201) {
     throw new Error(`Invite failed for ${email} (${status}): ${JSON.stringify(body)}`);
   }
-  return body;
+  return body as InvitationSummary;
+}
+
+/** Non-throwing variant for negative cases (e.g. an admin invited-role
+ * violation must surface as a 403 the caller asserts on, not an exception). */
+export async function inviteMemberRaw(
+  callerToken: string,
+  organizationId: string,
+  email: string,
+  role: "member" | "admin" | "owner" = "member",
+): Promise<ApiResult<InvitationSummary>> {
+  return apiRequest<InvitationSummary>(`/v1/organizations/${organizationId}/invitations`, {
+    method: "POST",
+    token: callerToken,
+    body: { email, role },
+  });
 }
 
 export async function revokeInvitation(
@@ -247,6 +259,60 @@ export async function removeMembership(
   });
 }
 
+// Response shape for PATCH .../members/{id} (organizations/models.py
+// membership_response) — note this is the *membership* record, not the
+// member-with-email shape `listMembers` returns: no email field, and the
+// row id is `id`, not `membershipId`.
+export interface MembershipUpdateResult {
+  id: string;
+  organizationId: string;
+  userId: string;
+  role: string;
+  status: string;
+  joinedAt: string;
+  removedAt: string | null;
+}
+
+export async function updateMembership(
+  adminToken: string,
+  organizationId: string,
+  membershipId: string,
+  patch: { role?: "owner" | "admin" | "member"; status?: "active" | "removed" },
+): Promise<ApiResult<MembershipUpdateResult>> {
+  return apiRequest<MembershipUpdateResult>(`/v1/organizations/${organizationId}/members/${membershipId}`, {
+    method: "PATCH",
+    token: adminToken,
+    body: patch,
+  });
+}
+
+/**
+ * Invite `email` with `role` (an admin/owner action) and complete their
+ * self-registration through the product's own `/register` surface — the
+ * single-org allowlist path every real teammate uses. Shared across specs
+ * that need more than one live role (org-roles, secrets) so each doesn't
+ * reimplement the invite+register dance.
+ */
+export async function inviteAndRegisterMember(
+  inviterToken: string,
+  organizationId: string,
+  email: string,
+  password: string,
+  role: "member" | "admin" | "owner" = "member",
+): Promise<string> {
+  // Idempotent, same spirit as invitation.spec.ts's ensureInviteeAccount: a
+  // retry (Playwright's built-in retry=1, or a rerun against this profile's
+  // persisted DB) must not try to register the same email twice and 409.
+  try {
+    return (await passwordLogin(email, password)).access_token;
+  } catch {
+    // Fall through and invite+register.
+  }
+  const invitation = await inviteMember(inviterToken, organizationId, email, role);
+  await registerInvitedAccount({ email, password, invitationToken: invitation.id });
+  return (await passwordLogin(email, password)).access_token;
+}
+
 /**
  * Create the invitee's password account through the product's own invited
  * self-registration surface (`POST /register`), the only account-creation
@@ -267,6 +333,170 @@ export async function registerInvitedAccount(params: {
   if (result.status !== 200) {
     throw new Error(`Invited registration failed for ${params.email} (${result.status}): ${result.html.slice(0, 500)}`);
   }
+}
+
+// ── Cloud secrets (T2-SEC-1) ──
+// Response field names follow CloudSecretsResponse's camelCase aliases
+// (server/proliferate/server/cloud/secrets/models.py). Values are never
+// present in these payloads by design — only metadata (id/name/byteSize/
+// updatedAt) — so there is nothing to assert-never-echoed beyond "the field
+// doesn't exist on the type", which the TS shape itself pins.
+export interface CloudSecretEnvVarMetadata {
+  id: string;
+  name: string;
+  byteSize: number;
+  updatedAt: string;
+}
+
+export interface CloudSecretFileMetadata {
+  id: string;
+  path: string;
+  byteSize: number;
+  updatedAt: string;
+}
+
+export interface CloudSecretsMaterialization {
+  status: "pending" | "running" | "ready" | "error";
+  lastError: string | null;
+  materializedAt: string | null;
+}
+
+export interface CloudSecretsResponse {
+  scopeKind: "personal" | "organization" | "workspace";
+  version: number;
+  envVars: CloudSecretEnvVarMetadata[];
+  files: CloudSecretFileMetadata[];
+  materialization: CloudSecretsMaterialization | null;
+}
+
+export async function getPersonalSecrets(token: string): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>("/v1/cloud/secrets/personal", { token });
+}
+
+export async function putPersonalSecretEnvVar(
+  token: string,
+  name: string,
+  value: string,
+): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>(`/v1/cloud/secrets/personal/env-vars/${name}`, {
+    method: "PUT",
+    token,
+    body: { value },
+  });
+}
+
+export async function deletePersonalSecretEnvVar(
+  token: string,
+  name: string,
+): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>(`/v1/cloud/secrets/personal/env-vars/${name}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
+export async function putPersonalSecretFile(
+  token: string,
+  path: string,
+  content: string,
+): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>("/v1/cloud/secrets/personal/files", {
+    method: "PUT",
+    token,
+    body: { path, content },
+  });
+}
+
+export async function getOrganizationSecrets(
+  token: string,
+  organizationId: string,
+): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>(`/v1/cloud/organizations/${organizationId}/secrets`, { token });
+}
+
+export async function putOrganizationSecretEnvVar(
+  token: string,
+  organizationId: string,
+  name: string,
+  value: string,
+): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>(
+    `/v1/cloud/organizations/${organizationId}/secrets/env-vars/${name}`,
+    { method: "PUT", token, body: { value } },
+  );
+}
+
+export async function getWorkspaceSecrets(
+  token: string,
+  gitOwner: string,
+  gitRepoName: string,
+): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>(`/v1/cloud/repos/${gitOwner}/${gitRepoName}/secrets`, { token });
+}
+
+export async function putWorkspaceSecretEnvVar(
+  token: string,
+  gitOwner: string,
+  gitRepoName: string,
+  name: string,
+  value: string,
+): Promise<ApiResult<CloudSecretsResponse>> {
+  return apiRequest<CloudSecretsResponse>(
+    `/v1/cloud/repos/${gitOwner}/${gitRepoName}/secrets/env-vars/${name}`,
+    { method: "PUT", token, body: { value } },
+  );
+}
+
+/**
+ * Upload a personal secret file via the multipart endpoint
+ * (`PUT /secrets/personal/files/upload`). Used to drive the binary-content
+ * negative (`invalid_secret_file_upload`): the server decodes the upload as
+ * UTF-8 and rejects anything that fails to decode.
+ */
+export async function uploadPersonalSecretFile(
+  token: string,
+  path: string,
+  content: Uint8Array,
+  filename = "upload.bin",
+): Promise<ApiResult<CloudSecretsResponse>> {
+  const form = new FormData();
+  form.append("path", path);
+  form.append("file", new Blob([content]), filename);
+  const response = await fetch(`${apiBaseUrl()}/v1/cloud/secrets/personal/files/upload`, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  const text = await response.text();
+  const body = text ? (JSON.parse(text) as CloudSecretsResponse) : (undefined as unknown as CloudSecretsResponse);
+  return { status: response.status, body };
+}
+
+// ── Cloud workspaces (T2-WS-1, seam only) ──
+
+export async function createCloudWorkspace(
+  token: string,
+  params: {
+    gitOwner: string;
+    gitRepoName: string;
+    branchName: string;
+    baseBranch?: string;
+    displayName?: string;
+  },
+): Promise<ApiResult<unknown>> {
+  return apiRequest("/v1/cloud/workspaces", {
+    method: "POST",
+    token,
+    body: {
+      gitProvider: "github",
+      gitOwner: params.gitOwner,
+      gitRepoName: params.gitRepoName,
+      branchName: params.branchName,
+      baseBranch: params.baseBranch,
+      displayName: params.displayName,
+      source: "web",
+    },
+  });
 }
 
 /**

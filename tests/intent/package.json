@@ -5,7 +5,10 @@
   "scripts": {
     "test": "playwright test",
     "test:auth": "playwright test specs/auth.spec.ts",
-    "test:invitation": "playwright test specs/invitation.spec.ts"
+    "test:invitation": "playwright test specs/invitation.spec.ts",
+    "test:organization-roles": "playwright test specs/organization-roles.spec.ts",
+    "test:secrets": "playwright test specs/secrets.spec.ts",
+    "test:cloud-workspace": "playwright test specs/cloud-workspace.spec.ts"
   },
   "dependencies": {
     "pg": "^8.13.1"
