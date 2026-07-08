@@ -51,6 +51,8 @@ import {
   listMembers,
   listOrganizationInvitations,
   passwordLogin,
+  registerFreshMember,
+  resetPasswordLoginRateLimits,
   updateMembership,
 } from "../stack/seed.ts";
 
@@ -97,6 +99,13 @@ test.beforeAll(async () => {
     MEMBER_ROLE_PASSWORD,
     "member",
   );
+});
+
+test.afterAll(async () => {
+  // Courtesy for whichever spec file runs next in this single-worker suite:
+  // this file's own logins are all legitimate (no intentional wrong-password
+  // negatives), but leave the shared per-IP bucket clean regardless.
+  await resetPasswordLoginRateLimits();
 });
 
 test.describe("T2-ORG-1: roles and gating", () => {
@@ -165,7 +174,7 @@ test.describe("T2-ORG-1: roles and gating", () => {
   });
 
   test("promote member -> admin via membership update; the promoted user gains admin surfaces on their next call, no re-login needed", async () => {
-    const promotedToken = await inviteAndRegisterMember(
+    const promotedToken = await registerFreshMember(
       ownerToken,
       organizationId,
       PROMOTE_EMAIL,
@@ -195,18 +204,30 @@ test.describe("T2-ORG-1: roles and gating", () => {
 
     // The SAME access token from before the promotion — role is resolved
     // from the membership row on every request, not embedded in the JWT, so
-    // this proves the effect is immediate without a fresh login.
-    const after = await inviteMemberRaw(
-      promotedToken,
-      organizationId,
-      "t2org-promote-after@t2intent.example.com",
-      "member",
-    );
-    expect([200, 201]).toContain(after.status);
+    // this proves the effect is immediate without a fresh login (modulo the
+    // same commit-visibility lag flagged elsewhere in this file: the PATCH
+    // above commits in the session dependency's teardown, which can land a
+    // beat after its response is written, so poll rather than assert once).
+    await expect
+      .poll(
+        async () =>
+          [200, 201].includes(
+            (
+              await inviteMemberRaw(
+                promotedToken,
+                organizationId,
+                "t2org-promote-after@t2intent.example.com",
+                "member",
+              )
+            ).status,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe(true);
   });
 
   test("remove a member -> membership status 'removed' -> their next org-scoped call fails", async () => {
-    const removedUserToken = await inviteAndRegisterMember(
+    const removedUserToken = await registerFreshMember(
       ownerToken,
       organizationId,
       REMOVE_EMAIL,
@@ -230,11 +251,24 @@ test.describe("T2-ORG-1: roles and gating", () => {
     expect(removal.status).toBe(200);
     expect(removal.body.status).toBe("removed");
 
-    const afterRemoval = await apiRequest(`/v1/organizations/${organizationId}`, {
-      token: removedUserToken,
-    });
-    expect(afterRemoval.status).toBe(404);
-    const detail = (afterRemoval.body as { detail?: { code?: string } }).detail;
+    // Same commit-visibility lag invitation.spec.ts's accept-flow test names
+    // ("the accept endpoint's transaction commits in the session dependency
+    // teardown, which can land a beat after the response is written") shows
+    // up here too: a read issued immediately after the PATCH occasionally
+    // still observes the pre-removal state. Poll instead of asserting once.
+    await expect
+      .poll(
+        async () =>
+          (
+            await apiRequest(`/v1/organizations/${organizationId}`, {
+              token: removedUserToken,
+            })
+          ).status,
+        { timeout: 10_000 },
+      )
+      .toBe(404);
+    const finalRead = await apiRequest(`/v1/organizations/${organizationId}`, { token: removedUserToken });
+    const detail = (finalRead.body as { detail?: { code?: string } }).detail;
     expect(detail?.code).toBe("organization_not_found");
 
     // list_organization_members (backing the admin Members pane) filters to

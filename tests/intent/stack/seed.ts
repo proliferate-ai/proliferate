@@ -303,14 +303,61 @@ export async function inviteAndRegisterMember(
   // Idempotent, same spirit as invitation.spec.ts's ensureInviteeAccount: a
   // retry (Playwright's built-in retry=1, or a rerun against this profile's
   // persisted DB) must not try to register the same email twice and 409.
+  // Only for REUSABLE (fixed-email) accounts — see registerFreshMember for
+  // guaranteed-new emails, where this login-first probe would be a doomed
+  // attempt every single run, needlessly burning the shared password-login
+  // rate-limit budget (5 failures / 15 min / IP, shared 127.0.0.1 across the
+  // whole suite; auth.spec.ts's header explains the bucket).
   try {
     return (await passwordLogin(email, password)).access_token;
   } catch {
     // Fall through and invite+register.
   }
+  return registerFreshMember(inviterToken, organizationId, email, password, role);
+}
+
+/**
+ * Invite + register a brand-new (never-before-seen) email with no
+ * login-first probe. Use this for Date.now()-suffixed emails minted fresh
+ * every run — a login-first probe against a guaranteed-nonexistent account
+ * is a guaranteed failure that only costs shared rate-limit budget.
+ */
+export async function registerFreshMember(
+  inviterToken: string,
+  organizationId: string,
+  email: string,
+  password: string,
+  role: "member" | "admin" | "owner" = "member",
+): Promise<string> {
   const invitation = await inviteMember(inviterToken, organizationId, email, role);
   await registerInvitedAccount({ email, password, invitationToken: invitation.id });
-  return (await passwordLogin(email, password)).access_token;
+  return (await loginRightAfterMutation(() => passwordLogin(email, password))).access_token;
+}
+
+/**
+ * Retry a call that reads state a mutation (registration, membership update)
+ * just wrote. `get_async_session`'s commit happens in the dependency's
+ * teardown after the endpoint body returns — invitation.spec.ts's accept-flow
+ * comment names the same class of lag ("can land a beat after the response
+ * is written"). Observed directly here too: a login immediately after
+ * self-registration occasionally 401s on the very first attempt. Short,
+ * bounded retry, not a real rate-limit risk since each attempt after the
+ * first uses the SAME (by-then-correct) credentials, so no more than one
+ * spurious failure per call is expected — and this is a distinct kind of
+ * accepted flake from network first-contact (playwright.config.ts's own
+ * retries: 1), so it's absorbed here rather than by a whole-test retry.
+ */
+async function loginRightAfterMutation<T>(attempt: () => Promise<T>, tries = 5): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+  }
+  throw lastError;
 }
 
 /**
