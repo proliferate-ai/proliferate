@@ -9,7 +9,7 @@ import { HarnessAllModelsSection } from "./HarnessAllModelsSection";
 import { HarnessAuthDetailsSection } from "./HarnessAuthDetailsSection";
 import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
-import { useHarnessAuthEditor } from "./use-harness-auth-editor";
+import { useHarnessAuthEditor } from "@/hooks/agents/workflows/use-harness-auth-editor";
 
 interface HarnessPaneProps {
   harnessKind: string;

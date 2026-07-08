@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Cloud, Laptop } from "lucide-react";
 import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessPane";
 import { useAgentSurfaceStore } from "@/stores/ui/agent-surface-store";
 
@@ -192,8 +193,10 @@ export function AgentsPlaygroundPage() {
         <span className="text-xs font-medium text-muted-foreground">Scenario:</span>
         <div className="flex flex-wrap gap-1">
           {SCENARIOS.map((s) => (
-            <button
+            <Button
               key={s.id}
+              variant="unstyled"
+              size="unstyled"
               type="button"
               className={[
                 "rounded-md px-2.5 py-1 text-xs transition-colors",
@@ -204,7 +207,7 @@ export function AgentsPlaygroundPage() {
               onClick={() => handleScenarioChange(s.id)}
             >
               {s.label}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="ml-auto">
