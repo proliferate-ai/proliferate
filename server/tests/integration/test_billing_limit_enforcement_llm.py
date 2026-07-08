@@ -275,6 +275,73 @@ async def test_llm_topup_reactivation_never_clears_limit_reached(
 
 
 @pytest.mark.asyncio
+async def test_per_user_daily_cap_does_not_mask_org_wide_monthly_cap(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    stub_litellm: _StubLiteLLM,
+) -> None:
+    """A tighter-by-raw-value per-user cap must not shadow a breached org cap.
+
+    Regression for the enforcement bug where only the single "tightest" limit
+    (by comparing raw ``cap_value`` across different windows) was checked. A
+    per-user $5/day cap is not tighter than an org-wide $100/month cap in any
+    meaningful sense — they bound different windows — so a member sitting
+    comfortably under their own $5/day cap must still be blocked once the
+    org's $100/month cap is breached (by any member's spend).
+    """
+    monkeypatch.setattr(settings, "agent_gateway_enabled", True)
+    org_id, subject_id, user_a, key_a = await _enroll_member(db_session)
+    _, _user_b, key_b = await _enroll_member_in_org(db_session, org_id)
+    enrollment_a_id = (
+        await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=key_a)
+    ).id
+    # Headroom well above the org-wide budget cap being tested, so the
+    # separate LLM-credit-exhaustion path (a different mechanism) never
+    # fires and masks the budget-cap enforcement this test targets.
+    await store.create_llm_credit_grant(
+        db_session,
+        billing_subject_id=subject_id,
+        source=LLM_CREDIT_SOURCE_ADMIN,
+        amount_usd=Decimal("10000"),
+        source_ref=f"seed-{uuid.uuid4().hex[:8]}",
+    )
+
+    await billing_store.replace_budget_limits(
+        db_session,
+        organization_id=org_id,
+        limits=[
+            BudgetLimitInput(
+                user_id=None,
+                kind="llm",
+                window="month",
+                cap_value=Decimal("100.00"),
+                enabled=True,
+            ),
+            BudgetLimitInput(
+                user_id=user_a,
+                kind="llm",
+                window="day",
+                cap_value=Decimal("5.00"),
+                enabled=True,
+            ),
+        ],
+    )
+
+    # Member A stays comfortably under their own $5/day cap...
+    # ...but member B's spend pushes the org's combined month spend over $100.
+    stub_litellm.spend_rows = [
+        _spend_row(api_key=key_a, spend=4.0, occurred_at=NOW),
+        _spend_row(api_key=key_b, spend=200.0, occurred_at=NOW),
+    ]
+    await run_usage_import(db_session, now=NOW)
+
+    row_a = await db_session.get(AgentGatewayEnrollment, enrollment_a_id)
+    await db_session.refresh(row_a)
+    assert row_a.budget_status == "limit_reached"
+    assert key_a in stub_litellm.disabled_keys
+
+
+@pytest.mark.asyncio
 async def test_org_wide_cap_reenables_on_zero_new_spend_tick(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,

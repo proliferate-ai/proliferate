@@ -43,7 +43,7 @@ from proliferate.db.store.agent_gateway import usage as llm_usage_store
 from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMSpendLogEntry
-from proliferate.server.billing.budget_limits import resolve_effective_limit, window_bounds
+from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.cloud.agent_gateway.topups import (
     reactivate_enrollment_if_credited,
     topups_enabled,
@@ -363,10 +363,14 @@ async def _enforce_org_llm_limits(
 ) -> None:
     """Apply the org's enabled LLM budget caps to its member virtual keys.
 
-    Each member's effective cap is resolved from the per-user and org-wide
-    limit rows; a per-user cap is compared against that member's window spend,
-    an org-wide cap against the whole subject's. Over cap disables the key and
-    sets ``budget_status='limit_reached'`` (only from ``ok`` — never overriding
+    Every enabled limit row is checked independently (spec: ``BillingBudgetLimit``
+    docstring — "both can coexist; enforcement checks both"): a per-user row is
+    compared against that member's own window spend, an org-wide row against the
+    whole subject's window spend. A member is over cap if ANY applicable limit
+    breaches — not just the raw-tightest one, since caps on different windows
+    (e.g. a per-user $5/day cap and an org-wide $100/month cap) aren't
+    comparable by raw value. Over cap disables the key and sets
+    ``budget_status='limit_reached'`` (only from ``ok`` — never overriding
     ``exhausted``); back under cap with positive credit re-enables it.
     """
     limits = await billing_store.list_budget_limits(db, organization_id)
@@ -398,15 +402,15 @@ async def _enforce_org_llm_limits(
     for enrollment in enrollments:
         if enrollment.user_id is None:
             continue
-        effective = resolve_effective_limit(
-            enabled_llm_limits,
-            user_id=enrollment.user_id,
-            kind="llm",
-        )
         over_cap = False
-        if effective is not None:
-            used = await _window_spend(effective.window, effective.user_id)
-            over_cap = used >= effective.cap_value
+        for limit in enabled_llm_limits:
+            if limit.user_id is not None and limit.user_id != enrollment.user_id:
+                continue
+            scope_user_id = enrollment.user_id if limit.user_id is not None else None
+            used = await _window_spend(limit.window, scope_user_id)
+            if used >= float(limit.cap_value):
+                over_cap = True
+                break
 
         if over_cap:
             await _apply_llm_limit_reached(db, enrollment)

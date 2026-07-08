@@ -104,6 +104,17 @@ def resolve_effective_limit(
     applies to everyone. When both a per-user and an org-wide limit exist the
     per-user row wins only when it is tighter (lower cap); otherwise the
     org-wide row binds.
+
+    Display-only: comparing raw ``cap_value`` across rows that may have
+    different ``window`` (day vs. month) is not meaningful for enforcement —
+    a lower monthly cap can still bind before a higher-valued daily cap. Do
+    not use this to decide whether a subject is over cap; enforcement must
+    check every applicable enabled limit independently against its own
+    window's spend (see ``_enforce_org_llm_limits`` in
+    ``cloud/agent_gateway/usage_import.py`` and ``_resolve_compute_limit_pause``
+    in ``billing/reconciler.py``). This helper is for single-value
+    summary/display surfaces only (``billing/usage.py``,
+    ``organizations/usage/service.py``).
     """
     applicable = [
         limit
