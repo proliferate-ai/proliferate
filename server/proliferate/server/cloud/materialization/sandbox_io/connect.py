@@ -17,6 +17,7 @@ from proliferate.integrations.sandbox import (
     SandboxRuntimeContext,
     get_sandbox_provider,
 )
+from proliferate.server.billing.authorization import assert_cloud_sandbox_resume_allowed
 from proliferate.server.cloud.materialization.sandbox_io.target import (
     CloudMaterializationCommandError,
     SandboxIOTarget,
@@ -84,6 +85,11 @@ async def connect_ready_sandbox(
 ) -> SandboxIOTarget:
     if sandbox.destroyed_at is not None or sandbox.status == "destroyed":
         raise CloudMaterializationCommandError("Cloud sandbox has been destroyed.")
+
+    # LIVE billing gate (spec §4.3): a sandbox the reconciler paused for a spend
+    # hold or an over-cap compute budget must not be woken by an incoming
+    # request. No-op unless CLOUD_BILLING_MODE=enforce.
+    await assert_cloud_sandbox_resume_allowed(db, sandbox)
 
     provider = get_sandbox_provider(sandbox.e2b_template_ref)
     provider_sandbox_id = sandbox.e2b_sandbox_id

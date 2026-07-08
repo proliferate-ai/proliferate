@@ -628,6 +628,9 @@ resource "aws_ecs_task_definition" "server" {
         { name = "JWT_SECRET", value = var.jwt_secret },
         { name = "E2B_API_KEY", value = var.e2b_api_key },
         { name = "E2B_TEMPLATE_NAME", value = var.e2b_template_name },
+        # Billing enforcement in production: pause/deny over-limit + spend-hold
+        # sandboxes (reconciler + live resume gate). config.py defaults to "off".
+        { name = "CLOUD_BILLING_MODE", value = "enforce" },
         { name = "PROLIFERATE_TELEMETRY_MODE", value = var.telemetry_mode },
         { name = "SENTRY_DSN", value = var.sentry_dsn },
         { name = "SENTRY_ENVIRONMENT", value = var.sentry_environment },

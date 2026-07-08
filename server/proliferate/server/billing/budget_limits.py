@@ -1,9 +1,12 @@
 """Pure budget-limit resolution + calendar-window math (no DB).
 
-Enforcement gap (spec §4.3): compute limits are enforced only by the 15-min
-reconciler pass, not at sandbox-start. ``authorize_sandbox_start`` is orphaned
-(no callers on main since #823) and no clean start/resume seam exists in the
-managed-sandbox stack, so we do not invent a start-side call chain here.
+Compute limits are enforced in two places (spec §4.2/§4.3): the 15-min
+reconciler pass (``reconciler._resolve_compute_limit_pause``) pauses open
+segments, and the live start/resume gate
+(``authorization.assert_cloud_sandbox_resume_allowed``, wired into
+``connect_ready_sandbox``) denies waking a paused-for-billing sandbox. The
+orphaned ``authorize_sandbox_start`` (dead since #823) is kept only as the
+semantic reference; the resume gate is the real seam.
 """
 
 from __future__ import annotations

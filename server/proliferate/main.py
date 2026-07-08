@@ -42,12 +42,10 @@ from proliferate.server.artifact_runtime.api import router as artifact_runtime_r
 # AUTOMATIONS PARKED: retarget to RepoEnvironment in a later PR before remounting.
 # from proliferate.server.automations.api import router as automations_router
 from proliferate.server.billing.api import router as billing_router
-
-# BILLING RECONCILER PARKED: retarget runtime usage to CloudSandbox before remounting.
-# from proliferate.server.billing.reconciler import (
-#     start_billing_reconciler,
-#     stop_billing_reconciler,
-# )
+from proliferate.server.billing.reconciler import (
+    start_billing_reconciler,
+    stop_billing_reconciler,
+)
 from proliferate.server.catalogs.api import router as catalogs_router
 from proliferate.server.cloud.agent_gateway.worker import (
     start_agent_gateway_enrollment_backfill,
@@ -206,9 +204,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     async with db_engine.async_session_factory() as db, db.begin():
         await sync_seed_definitions(db)
     if settings.cloud_billing_mode in {"observe", "enforce"}:
-        # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
-        # start_billing_reconciler()
-        pass
+        start_billing_reconciler()
     anonymous_telemetry_task = await start_server_anonymous_telemetry_sender()
     agent_gateway_backfill_task = await start_agent_gateway_enrollment_backfill()
     agent_gateway_usage_import_task = await start_agent_gateway_usage_import()
@@ -220,8 +216,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await stop_agent_gateway_usage_import(agent_gateway_usage_import_task)
         await stop_agent_gateway_enrollment_backfill(agent_gateway_backfill_task)
         await stop_server_anonymous_telemetry_sender(anonymous_telemetry_task)
-        # BILLING RECONCILER PARKED.
-        # await stop_billing_reconciler()
+        await stop_billing_reconciler()
         flush_server_sentry()
 
 
