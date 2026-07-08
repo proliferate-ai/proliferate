@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import {
   usePutAuthSelections,
   useAgentAuthState,
@@ -58,6 +59,26 @@ export function HarnessSettingsSection({
 
   if (!settings || settings.length === 0) {
     return null;
+  }
+
+  // When rendering as a standalone section (not inside a parent panel), the
+  // title sits ABOVE the card as a section heading (matching SettingsSection /
+  // the All Models section), and the bordered panel starts directly with rows.
+  if (variant === "section") {
+    return (
+      <SettingsSection title={HARNESS_PANE_COPY.harnessSettingsTitle}>
+        <div className="overflow-hidden rounded-lg border border-border bg-foreground/[0.02] px-4 py-1">
+          {settings.map((setting) => (
+            <HarnessSettingRow
+              key={setting.key}
+              harnessKind={harnessKind}
+              surface={surface}
+              setting={setting}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+    );
   }
 
   return (

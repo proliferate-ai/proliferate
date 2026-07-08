@@ -1,10 +1,17 @@
 import { useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
-import { Plus } from "@proliferate/ui/icons";
+import { useCreateAgentApiKey } from "@proliferate/cloud-sdk-react";
+import { Plus, RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { AgentLoginTerminalPanel } from "@/components/agents/AgentLoginTerminalPanel";
+import { ApiKeyCreatorModal } from "@/components/settings/panes/agent-auth/ApiKeyCreatorModal";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
+import { getHarnessEnvVarSuggestions } from "@/config/harness-env-vars";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
+import { useAgentResourcesCache } from "@/hooks/access/anyharness/agents/use-agent-resources-cache";
+import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import { useToastStore } from "@/stores/toast/toast-store";
 import { isReadyAgent } from "@/lib/domain/agents/status";
 import {
   isMultiSourceHarness,
@@ -48,6 +55,7 @@ export function HarnessAuthDetailsSection({
         ) : null}
         {isMultiSourceApiKeyConfigVisible(editor) ? (
           <ApiKeyDetails
+            harnessKind={harnessKind}
             displayName={displayName}
             editor={editor}
             variant={variant}
@@ -65,6 +73,7 @@ export function HarnessAuthDetailsSection({
   if (selectedMethod === "api_key") {
     return (
       <ApiKeyDetails
+        harnessKind={harnessKind}
         displayName={displayName}
         editor={editor}
         variant={variant}
@@ -100,16 +109,56 @@ function GatewayDetails({
 }
 
 function ApiKeyDetails({
+  harnessKind,
   displayName,
   editor,
   variant,
 }: {
+  harnessKind: string;
   displayName: string;
   editor: HarnessAuthEditorApi;
   variant: HarnessBlockVariant;
 }) {
   const apiKeys = editor.apiKeysQuery.data ?? [];
   const { providerModalOpen, setProviderModalOpen } = useProviderModal();
+  const createKey = useCreateAgentApiKey();
+  const showToast = useToastStore((state) => state.show);
+
+  // Compute the env-var suggestion for the modal prefill.
+  const usedEnvVars = new Set(editor.editorState.rows.map((row) => row.envVarName));
+  const envVarSuggestion = getHarnessEnvVarSuggestions(harnessKind).find(
+    (candidate) => !usedEnvVars.has(candidate.envVarName),
+  );
+
+  function handleAddKeyModalSubmit(input: { title: string; value: string; envVarName: string }) {
+    createKey.mutate(
+      { title: input.title, value: input.value },
+      {
+        onSuccess: (created) => {
+          editor.setAddKeyModalOpen(false);
+          editor.addBoundApiKey(
+            input.envVarName,
+            envVarSuggestion?.providerHint ?? null,
+            created.id,
+          );
+        },
+        onError: (error) => {
+          showToast(error.message || HARNESS_PANE_COPY.addApiKeyError);
+        },
+      },
+    );
+  }
+
+  function handleAddKeyModalClose() {
+    editor.setAddKeyModalOpen(false);
+    // If the modal is cancelled and there are no wired rows, revert pending
+    // method so the card de-highlights.
+    if (!editor.editorState.rows.some((row) => row.apiKeyId !== null && row.enabled)) {
+      editor.setPendingMethod(null);
+    }
+  }
+
+  const hasRows = editor.editorState.rows.length > 0;
 
   return (
     <HarnessPanelBlock
@@ -117,53 +166,89 @@ function ApiKeyDetails({
       title={HARNESS_PANE_COPY.detailsApiKey}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
-      <div className="space-y-3">
-        <div className="flex flex-col">
-          {editor.editorState.rows.map((row) => (
-            <HarnessAuthApiKeyRow
-              key={row.uid}
-              row={row}
-              apiKeys={apiKeys}
-              busy={editor.busy}
-              onEnvVarChange={editor.handleRowEnvVarChange}
-              onEnvVarBlur={editor.handleRowEnvVarBlur}
-              onKeySelect={editor.handleRowKeySelect}
-              onEnabledToggle={editor.handleRowEnabledToggle}
-              onRemove={editor.handleRemoveRow}
-            />
-          ))}
-        </div>
+      {hasRows ? (
+        <div className="space-y-3">
+          <div className="flex flex-col">
+            {editor.editorState.rows.map((row) => (
+              <HarnessAuthApiKeyRow
+                key={row.uid}
+                row={row}
+                apiKeys={apiKeys}
+                busy={editor.busy}
+                onEnvVarChange={editor.handleRowEnvVarChange}
+                onEnvVarBlur={editor.handleRowEnvVarBlur}
+                onKeySelect={editor.handleRowKeySelect}
+                onEnabledToggle={editor.handleRowEnabledToggle}
+                onRemove={editor.handleRemoveRow}
+              />
+            ))}
+          </div>
 
-        <div className="flex flex-wrap gap-2">
-          {/* "Add API key" adds a binding ROW (env var + key picker). Creating a
-              brand-new vault secret happens inside the row's KeyPicker via its
-              "New API key…" option — CREATE and BIND stay separate. */}
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            className="gap-1.5"
-            disabled={editor.busy}
-            onClick={() => editor.handleAddVariable()}
-          >
-            <Plus className="size-3.5" />
-            {HARNESS_PANE_COPY.addApiKey}
-          </Button>
-          {editor.multiSource ? (
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               className="gap-1.5"
               disabled={editor.busy}
-              onClick={() => setProviderModalOpen(true)}
+              onClick={() => editor.setAddKeyModalOpen(true)}
             >
               <Plus className="size-3.5" />
-              {HARNESS_PANE_COPY.addProvider}
+              {HARNESS_PANE_COPY.addApiKey}
             </Button>
-          ) : null}
+            {editor.multiSource ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1.5"
+                disabled={editor.busy}
+                onClick={() => setProviderModalOpen(true)}
+              >
+                <Plus className="size-3.5" />
+                {HARNESS_PANE_COPY.addProvider}
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="py-3 text-sm text-muted-foreground">
+            No API key configured.
+          </p>
+          <div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5"
+              disabled={editor.busy}
+              onClick={() => editor.setAddKeyModalOpen(true)}
+            >
+              <Plus className="size-3.5" />
+              {HARNESS_PANE_COPY.addApiKey}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <ApiKeyCreatorModal
+        open={editor.addKeyModalOpen}
+        onClose={handleAddKeyModalClose}
+        heading={HARNESS_PANE_COPY.newApiKeyModalTitle}
+        description="Create and bind a new API key in one step."
+        showTitleField
+        envVarField={{
+          label: "Environment variable",
+          placeholder: "ENV_VAR_NAME",
+          initialValue: envVarSuggestion?.envVarName ?? "",
+          helpText: `The variable name the harness reads at launch.`,
+        }}
+        submitLabel="Create and bind"
+        submitting={createKey.isPending}
+        error={null}
+        onSubmit={handleAddKeyModalSubmit}
+      />
 
       {editor.multiSource ? (
         <ProviderPickerModal
@@ -187,6 +272,17 @@ function CliDetails({
   variant: HarnessBlockVariant;
 }) {
   const { localAgent, loginSession, loginWorkflow } = editor;
+  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const { invalidateAgentListResources } = useAgentResourcesCache();
+  const [refreshing, setRefreshing] = useState(false);
+
+  function handleRefreshCredential() {
+    if (!runtimeUrl.trim()) return;
+    setRefreshing(true);
+    void invalidateAgentListResources(runtimeUrl).finally(() => {
+      setRefreshing(false);
+    });
+  }
 
   if (surface === "cloud") {
     return (
@@ -198,11 +294,29 @@ function CliDetails({
     );
   }
 
-  const canRunLogin =
+  // Prefer cliAuthState for CLI status (env-unmasked); fall back to readiness
+  // for older runtimes that don't yet expose it.
+  const cliAuthState = localAgent?.cliAuthState;
+  const cliIsAuthenticated = cliAuthState === "authenticated";
+  const cliIsExpired = cliAuthState === "expired";
+  const cliIsAbsent = cliAuthState === "absent";
+
+  // Fallback: when cliAuthState is missing/unsupported, derive from readiness
+  const fallbackCanRunLogin =
     localAgent != null
     && !isReadyAgent(localAgent)
     && localAgent.readiness === "login_required"
     && localAgent.supportsLogin;
+  const fallbackIsAuthenticated = localAgent != null && isReadyAgent(localAgent);
+
+  // If cliAuthState is present, use it; otherwise fall back to readiness-based logic
+  const canRunLogin = cliAuthState
+    ? (cliIsExpired || cliIsAbsent) && localAgent?.supportsLogin
+    : fallbackCanRunLogin;
+
+  const isAuthenticated = cliAuthState
+    ? cliIsAuthenticated
+    : fallbackIsAuthenticated;
 
   const showLoginTerminal =
     loginSession != null
@@ -210,24 +324,36 @@ function CliDetails({
       || loginSession.terminal !== null
       || loginSession.errorMessage !== null);
 
-  const isAuthenticated = localAgent != null && isReadyAgent(localAgent);
-
   return (
     <HarnessPanelBlock variant={variant} title={HARNESS_PANE_COPY.detailsCli}>
       <div className="space-y-3">
-        {canRunLogin ? (
-          <p className="text-sm font-medium text-destructive">
-            {HARNESS_PANE_COPY.cliNotAuthenticated}
-          </p>
-        ) : isAuthenticated ? (
-          <p className="text-sm text-muted-foreground">
-            {HARNESS_PANE_COPY.cliAuthenticated}
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            {HARNESS_PANE_COPY.nativeStateLocal}
-          </p>
-        )}
+        <div className="flex items-center justify-between">
+          {cliIsExpired ? (
+            <p className="text-sm font-medium text-destructive">
+              CLI credentials expired
+            </p>
+          ) : cliIsAbsent || (canRunLogin && !cliAuthState) ? (
+            <p className="text-sm font-medium text-destructive">
+              {HARNESS_PANE_COPY.cliNotAuthenticated}
+            </p>
+          ) : isAuthenticated ? (
+            <p className="text-sm text-muted-foreground">
+              {HARNESS_PANE_COPY.cliAuthenticated}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {HARNESS_PANE_COPY.nativeStateLocal}
+            </p>
+          )}
+          <IconButton
+            aria-label="Refresh credential status"
+            title="Refresh credential status"
+            disabled={refreshing}
+            onClick={handleRefreshCredential}
+          >
+            <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+          </IconButton>
+        </div>
 
         {canRunLogin ? (
           <div>

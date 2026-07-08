@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import {
   useAgentCatalog,
@@ -11,8 +11,9 @@ import {
   useAgentLaunchOptionsQuery,
   useRefreshAgentGatewayModelsMutation,
 } from "@anyharness/sdk-react";
-import { RefreshCw } from "@proliferate/ui/icons";
+import { RefreshCw, Search, X } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { Input } from "@proliferate/ui/primitives/Input";
 import { ModelTable, type ModelTableRow } from "@proliferate/product-ui/settings/ModelTable";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
@@ -213,6 +214,19 @@ export function HarnessAllModelsSection({
         ? `Source: ${catalogQuery.data.source}`
         : "";
 
+  const [filterText, setFilterText] = useState("");
+  const filteredRows = useMemo(() => {
+    if (!filterText.trim()) return rows;
+    const needle = filterText.trim().toLowerCase();
+    return rows.filter(
+      (row) =>
+        row.id.toLowerCase().includes(needle)
+        || row.displayName.toLowerCase().includes(needle)
+        || (row.description ?? "").toLowerCase().includes(needle)
+        || (row.provider ?? "").toLowerCase().includes(needle),
+    );
+  }, [rows, filterText]);
+
   return (
     <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
       <div className="space-y-3 py-3">
@@ -235,6 +249,35 @@ export function HarnessAllModelsSection({
           </Button>
         </div>
 
+        {rows.length > 0 ? (
+          // Canonical picker-search treatment (PopoverSearchField recipe): muted
+          // magnifier + borderless transparent input — no boxed field — with a
+          // hairline divider between the row and the table below.
+          <div className="flex items-center gap-2 border-b border-border px-2.5 py-[7px]">
+            <Search className="size-3.5 shrink-0 text-muted-foreground/75" />
+            <Input
+              aria-label="Filter models"
+              placeholder="Filter models..."
+              value={filterText}
+              className="h-auto min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-ui shadow-none focus:ring-0"
+              onChange={(event) => setFilterText(event.target.value)}
+            />
+            {filterText ? (
+              <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+                {filteredRows.length} of {rows.length}
+                <button
+                  type="button"
+                  aria-label="Clear filter"
+                  className="rounded p-0.5 hover:bg-accent"
+                  onClick={() => setFilterText("")}
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         {isLoading ? (
           <p className="text-sm text-muted-foreground">
             {HARNESS_PANE_COPY.allModelsLoading}
@@ -249,7 +292,7 @@ export function HarnessAllModelsSection({
             {HARNESS_PANE_COPY.allModelsEmpty}
           </p>
         ) : (
-          <ModelTable models={rows} onToggle={handleToggle} />
+          <ModelTable models={filteredRows} onToggle={handleToggle} />
         )}
       </div>
     </SettingsSection>

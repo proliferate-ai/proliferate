@@ -198,9 +198,10 @@ function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuthEditorA
       editor.setPendingMethod("gateway");
       break;
     case "api_key": {
-      // Disable gateway; enable first complete row if one exists, otherwise seed
-      // a draft row via the existing env-var suggestion logic. Mark api_key
+      // Disable gateway; enable first complete row if one exists. Mark api_key
       // pending so the card highlights immediately even before a key is wired.
+      // If no rows exist, the details section will show an empty state with an
+      // "Add API key" button; clicking the card itself never opens the modal.
       if (editor.editorState.gatewayEnabled) {
         editor.handleGatewayToggle(false);
       }
@@ -209,8 +210,6 @@ function handleSingleSourceSelect(method: AuthMethod, editor: HarnessAuthEditorA
       );
       if (firstComplete && !firstComplete.enabled) {
         editor.handleRowEnabledToggle(firstComplete.uid, true);
-      } else if (editor.editorState.rows.length === 0) {
-        editor.handleAddVariable();
       }
       editor.setPendingMethod("api_key");
       break;
@@ -249,17 +248,15 @@ function handleMultiSourceSelect(method: AuthMethod, editor: HarnessAuthEditorAp
         });
         editor.setPendingMethod(null);
       } else {
-        // Toggle ON: enable the first wired row if one exists, otherwise seed a
-        // draft row so the row editor appears. Mark api_key pending so the card
-        // lights immediately even before a key is wired (presence of a draft row
-        // is the deadlock-free signal, but pending keeps the highlight honest).
+        // Toggle ON: enable the first wired row if one exists. Mark api_key
+        // pending so the card lights immediately even before a key is wired.
+        // If no rows exist, the details section will show an empty state with an
+        // "Add API key" button; clicking the card itself never opens the modal.
         const firstComplete = editor.editorState.rows.find(
           (row) => row.apiKeyId !== null,
         );
         if (firstComplete) {
           editor.handleRowEnabledToggle(firstComplete.uid, true);
-        } else if (editor.editorState.rows.length === 0) {
-          editor.handleAddVariable();
         }
         editor.setPendingMethod("api_key");
       }

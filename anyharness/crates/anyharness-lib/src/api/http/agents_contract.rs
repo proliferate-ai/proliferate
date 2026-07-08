@@ -2,11 +2,11 @@
 //! no IO. The only file that sees both vocabularies for the agents family.
 
 use anyharness_contract::v1::{
-    AgentCredentialState, AgentInstallState, AgentLaunchModelOption, AgentLaunchOption,
-    AgentLaunchOptionsResponse, AgentLoginTerminalRecord, AgentLoginTerminalStatus,
-    AgentReadinessState, AgentReconcileSummary, AgentSummary, ArtifactStatus, InstallAgentRequest,
-    ModelCatalogStatus, ModelEffort, ReconcileAgentResult, ReconcileAgentsResponse,
-    ReconcileJobStatus, ReconcileOutcome,
+    AgentCliAuthState, AgentCredentialState, AgentInstallState, AgentLaunchModelOption,
+    AgentLaunchOption, AgentLaunchOptionsResponse, AgentLoginTerminalRecord,
+    AgentLoginTerminalStatus, AgentReadinessState, AgentReconcileSummary, AgentSummary,
+    ArtifactStatus, InstallAgentRequest, ModelCatalogStatus, ModelEffort, ReconcileAgentResult,
+    ReconcileAgentsResponse, ReconcileJobStatus, ReconcileOutcome,
 };
 
 use crate::domains::agents::auth::login_terminal::{
@@ -169,6 +169,13 @@ pub(super) fn to_summary(
             .or_else(|| Some("Agent resolution encountered an error.".into())),
     };
 
+    let cli_auth_state = resolved.cli_auth_state.map(|state| match state {
+        CliAuthState::Authenticated => AgentCliAuthState::Authenticated,
+        CliAuthState::Expired => AgentCliAuthState::Expired,
+        CliAuthState::Absent => AgentCliAuthState::Absent,
+        CliAuthState::Unsupported => AgentCliAuthState::Unsupported,
+    });
+
     AgentSummary {
         kind: desc.kind.as_str().into(),
         display_name: desc.kind.display_name().into(),
@@ -182,6 +189,7 @@ pub(super) fn to_summary(
         expected_env_vars: desc.auth.expected_env_vars(),
         docs_url: desc.docs_url.clone(),
         message,
+        cli_auth_state,
     }
 }
 
