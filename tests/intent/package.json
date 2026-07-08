@@ -5,7 +5,8 @@
   "scripts": {
     "test": "playwright test",
     "test:auth": "playwright test specs/auth.spec.ts",
-    "test:invitation": "playwright test specs/invitation.spec.ts"
+    "test:invitation": "playwright test specs/invitation.spec.ts",
+    "test:sso": "playwright test specs/sso.spec.ts"
   },
   "dependencies": {
     "pg": "^8.13.1"
@@ -14,6 +15,7 @@
     "@playwright/test": "^1.51.1",
     "@types/node": "^24.13.2",
     "@types/pg": "^8.11.10",
+    "oauth2-mock-server": "^9.1.0",
     "typescript": "^5.7.0"
   }
 }
