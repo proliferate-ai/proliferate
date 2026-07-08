@@ -370,13 +370,13 @@ describe("settings navigation", () => {
     });
   });
 
-  it("preserves organization join target only on the members section", () => {
+  it("preserves organization join target only on the account section (reachable by non-admins)", () => {
     expect(resolveSettingsSelection({
-      rawSection: "organization-members",
+      rawSection: "account",
       rawJoinOrganizationId: "org-1",
       repositories: [],
     })).toEqual({
-      activeSection: "organization-members",
+      activeSection: "account",
       activeRepoSourceRoot: null,
       focus: { joinOrganizationId: "org-1" },
       joinOrganizationId: "org-1",
@@ -394,14 +394,14 @@ describe("settings navigation", () => {
     });
   });
 
-  it("builds flat organization settings and members join links", () => {
+  it("builds flat organization settings and account join links", () => {
     expect(buildSettingsHref({ section: "organization" })).toBe(
       "/settings?section=organization",
     );
     expect(buildSettingsHref({
-      section: "organization-members",
+      section: "account",
       joinOrganizationId: "org-1",
-    })).toBe("/settings?section=organization-members&joinOrganizationId=org-1");
+    })).toBe("/settings?section=account&joinOrganizationId=org-1");
   });
 
   it("builds new settings links for cloud repo helpers", () => {

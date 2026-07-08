@@ -98,7 +98,7 @@ export function buildSettingsHref(target: SettingsNavigationTarget): string {
       params.set(name, value);
     }
   }
-  if (section === "organization-members" && target.joinOrganizationId) {
+  if (section === "account" && target.joinOrganizationId) {
     params.set("joinOrganizationId", target.joinOrganizationId);
   }
   return `/settings?${params.toString()}`;
@@ -254,7 +254,7 @@ export function resolveSettingsSelection({
     activeSection: section,
     activeRepoSourceRoot: repoSourceRoot,
     focus: sanitizeFocusForSection(section, focus),
-    joinOrganizationId: section === "organization-members" ? rawJoinOrganizationId : null,
+    joinOrganizationId: section === "account" ? rawJoinOrganizationId : null,
   };
 }
 
@@ -296,7 +296,7 @@ function sanitizeFocusForSection(
   if (section === "billing") {
     return pickFocus({ checkout: focus.checkout });
   }
-  if (section === "organization-members") {
+  if (section === "account") {
     return pickFocus({ joinOrganizationId: focus.joinOrganizationId });
   }
   if (section === "integrations") {

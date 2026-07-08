@@ -70,10 +70,10 @@ describe("desktopNavigationTarget", () => {
     );
   });
 
-  it("routes organization join links to the members settings section", () => {
+  it("routes organization join links to the account settings section (reachable by non-admins)", () => {
     expect(
       desktopNavigationTarget("proliferate://join/org-123"),
-    ).toBe("/settings?section=organization-members&joinOrganizationId=org-123");
+    ).toBe("/settings?section=account&joinOrganizationId=org-123");
   });
 
   it("routes parked Slack bot settings links to general settings", () => {

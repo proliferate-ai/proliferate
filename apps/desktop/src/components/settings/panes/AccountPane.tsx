@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AccountSettingsPane,
@@ -13,11 +13,14 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useGitHubDesktopAuthAvailability } from "@/hooks/access/cloud/auth/use-github-auth-availability";
+import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
+import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import {
   getAccountActionDescription,
   getAccountDisplayName,
@@ -28,9 +31,15 @@ import { isDevAuthBypassed } from "@/lib/domain/auth/auth-mode";
 import { useAuthActions } from "@/hooks/auth/workflows/use-auth-actions";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
+import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { buildGitHubOAuthAppSettingsUrl } from "@/lib/integrations/auth/proliferate-auth";
+import type { OrganizationInvitationRecord } from "@/lib/domain/organizations/organization-records";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { useToastStore } from "@/stores/toast/toast-store";
 import { buildGitHubAppUserAuthorizationServiceView } from "./account/GitHubAppUserAuthorizationService";
+
+const EMPTY_INVITATIONS: OrganizationInvitationRecord[] = [];
 
 export function AccountPane() {
   const navigate = useNavigate();
@@ -64,6 +73,15 @@ export function AccountPane() {
     isAuthenticated && !devAuthBypassed && cloudSignInAvailable,
     authViewerCacheScope,
   );
+  // Pending invitations for the signed-in user's own email. Account is the
+  // one settings page every member (admin or not) can reach — Members is
+  // admin-gated, so this is the reachable surface for a plain invitee.
+  const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(isAuthenticated);
+  const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
+  const organizationActions = useOrganizationActions(null);
+  const joinFlow = useOrganizationJoinInvitationFlow();
+  const { activateJoinedOrganization } = useJoinedOrganizationActivation();
+  const showToast = useToastStore((state) => state.show);
   const linkedProviders = authViewer.data?.linkedProviders ?? [];
   const linkedGitHub = linkedProviders.find((provider) => (
     provider.provider === "github" && provider.connected
@@ -130,6 +148,19 @@ export function AccountPane() {
     clearGitHubAppAuthorizationRefreshTimers(githubAppAuthorizationRefreshTimersRef.current);
     githubAppAuthorizationRefreshTimersRef.current = [];
   }, [authViewerCacheScope]);
+
+  async function handleAcceptCurrentInvitation(invitationId: string) {
+    joinFlow.setStatusMessage(null);
+    try {
+      const response = await organizationActions.acceptCurrentInvitation(invitationId);
+      await activateJoinedOrganization(response.organization.id);
+      joinFlow.clearJoinTarget();
+      joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
+      showToast(`Joined ${response.organization.name}.`, "info");
+    } catch {
+      joinFlow.setStatusMessage("Could not accept invitation.");
+    }
+  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -198,6 +229,25 @@ export function AccountPane() {
             : "Sign in to use cloud workspaces and credential sync. Local workspaces remain available without an account."
         }
       />
+
+      {joinFlow.statusMessage ? (
+        <AccountNotice>{joinFlow.statusMessage}</AccountNotice>
+      ) : null}
+
+      {joinFlow.unauthenticatedJoin ? (
+        <AccountNotice>Finish sign-in to accept this organization invitation.</AccountNotice>
+      ) : null}
+
+      {pendingInvitations.length > 0 ? (
+        <CurrentUserInvitationsSection
+          invitations={pendingInvitations}
+          accepting={organizationActions.acceptingCurrentInvitation}
+          focusedOrganizationId={joinFlow.joinOrganizationId}
+          onAccept={(invitationId) => {
+            void handleAcceptCurrentInvitation(invitationId);
+          }}
+        />
+      ) : null}
 
       <AccountSettingsPane
         displayName={displayName}
@@ -308,6 +358,14 @@ export function AccountPane() {
         error={signInError || providerLinkError}
       />
     </section>
+  );
+}
+
+function AccountNotice({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
+      {children}
+    </div>
   );
 }
 
