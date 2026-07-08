@@ -8,8 +8,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.engine import commit_session
-from proliferate.db.models.billing import BillingBudgetLimit
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import billing as billing_store
 from proliferate.db.store import organizations as organization_store
@@ -22,12 +20,15 @@ from proliferate.server.billing.budget_limits import (
 from proliferate.server.billing.subjects import ensure_organization_billing_subject_state
 from proliferate.server.billing.usage import get_usage_timeseries
 from proliferate.server.organizations.usage.models import (
-    BudgetLimit,
     BudgetLimitsResponse,
     OrgUsageByUserResponse,
     OrgUserUsageRow,
     OrgUserUsageTimeseriesResponse,
     PutBudgetLimitsRequest,
+)
+from proliferate.server.organizations.usage.transactions import (
+    budget_limit_from_row,
+    commit_replaced_limits,
 )
 from proliferate.utils.time import utcnow
 
@@ -111,7 +112,7 @@ async def get_user_usage_timeseries(
 
 async def list_limits(db: AsyncSession, organization_id: UUID) -> BudgetLimitsResponse:
     rows = await billing_store.list_budget_limits(db, organization_id)
-    return BudgetLimitsResponse(limits=[_budget_limit_from_row(row) for row in rows])
+    return BudgetLimitsResponse(limits=[budget_limit_from_row(row) for row in rows])
 
 
 async def replace_limits(
@@ -167,17 +168,5 @@ async def replace_limits(
         organization_id=organization_id,
         limits=inputs,
     )
-    await commit_session(db)
-    return BudgetLimitsResponse(limits=[_budget_limit_from_row(row) for row in rows])
-
-
-def _budget_limit_from_row(row: BillingBudgetLimit) -> BudgetLimit:
-    return BudgetLimit(
-        id=row.id,
-        user_id=row.user_id,
-        kind=row.kind,
-        window=row.window,
-        cap_value=float(row.cap_value),
-        enabled=row.enabled,
-        updated_at=row.updated_at,
-    )
+    await commit_replaced_limits(db)
+    return BudgetLimitsResponse(limits=[budget_limit_from_row(row) for row in rows])
