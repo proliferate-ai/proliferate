@@ -311,9 +311,11 @@ function OrgUsageTable({
         <div className="py-6 text-ui-sm text-muted-foreground">No usage recorded in this range.</div>
       ) : (
         rows.map((row) => (
-          <button
+          <Button
             key={row.userId}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={() => onSelectUser(row.userId)}
             className="flex w-full items-center justify-between gap-4 border-t border-border py-3 text-left first:border-t-0 hover:bg-accent/40"
           >
@@ -325,7 +327,7 @@ function OrgUsageTable({
               <UsageMiniStat label="Compute" value={row.computePcus} percent={row.computePercent} />
               <UsageMiniStat label="LLM" value={row.llmCost} percent={row.llmPercent} />
             </div>
-          </button>
+          </Button>
         ))
       )}
     </SettingsSection>
