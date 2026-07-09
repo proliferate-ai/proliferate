@@ -123,6 +123,15 @@ catalog path. Cloud product catalogs may be newer than these bundled runtime
 inputs; AnyHarness still validates creation against what the target runtime can
 actually launch.
 
+The two inputs converge on **different tracks**. The `catalog.json` *document*
+syncs **live**: the cloud worker watches the heartbeat `catalogVersion`, fetches
+the newer document, and `PUT`s it to the runtime, which validates and reconciles
+without a binary change. `registry.json` (install/launch/auth recipes) rides the
+**binary only** — it is `include_str!`'d, so a new registry ships iff a new
+runtime binary ships. In cloud sandboxes the binary itself can now be swapped in
+place (worker-owned; see `specs/tbd/anyharness-self-update-v1.md`); desktop gets
+a new binary only via the app bundle.
+
 ### Resolution Flow
 
 Resolution is owned by
