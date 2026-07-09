@@ -6,7 +6,9 @@ import {
   blockedReasonForMissingEnv,
   missingRequiredForLane,
   MissingEnvVarsError,
+  requiredEnvForTargetLane,
   resolveEnv,
+  scenarioUsesDurableIdentity,
 } from "./env-resolution.js";
 
 const NONE: ReadonlySet<string> = new Set<string>();
@@ -81,6 +83,38 @@ test("a locally-seeded var satisfies the local lane but not the sandbox lane", (
   assert.deepEqual(missingRequiredForLane(["RELEASE_E2E_DURABLE_USER_EMAIL"], "sandbox", resolution, seeded), [
     "RELEASE_E2E_DURABLE_USER_EMAIL",
   ]);
+});
+
+test("requiredEnvForTargetLane keeps the list unchanged on the local target", () => {
+  const required = ["RELEASE_E2E_SERVER_URL", "RELEASE_E2E_DURABLE_USER_EMAIL", "RELEASE_E2E_DURABLE_USER_PASSWORD"];
+  assert.deepEqual(requiredEnvForTargetLane(required, "local"), required);
+});
+
+test("requiredEnvForTargetLane drops the durable email/password on the staging target", () => {
+  const required = [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_DURABLE_USER_EMAIL",
+    "RELEASE_E2E_DURABLE_USER_PASSWORD",
+    "RELEASE_E2E_DURABLE_ORG_ID",
+  ];
+  assert.deepEqual(requiredEnvForTargetLane(required, "staging"), [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_DURABLE_ORG_ID",
+  ]);
+});
+
+test("requiredEnvForTargetLane keeps local-only vars on staging so scenarios still block honestly", () => {
+  // e.g. billing_probe.py needs RELEASE_E2E_LOCAL_DATABASE_URL, which staging
+  // does not expose — the scenario must report blocked, not silently run.
+  assert.deepEqual(requiredEnvForTargetLane(["RELEASE_E2E_LOCAL_DATABASE_URL"], "staging"), [
+    "RELEASE_E2E_LOCAL_DATABASE_URL",
+  ]);
+});
+
+test("scenarioUsesDurableIdentity is true iff the durable email is required", () => {
+  assert.equal(scenarioUsesDurableIdentity(["RELEASE_E2E_DURABLE_USER_EMAIL", "RELEASE_E2E_SERVER_URL"]), true);
+  assert.equal(scenarioUsesDurableIdentity(["RELEASE_E2E_SERVER_URL"]), false);
+  assert.equal(scenarioUsesDurableIdentity([]), false);
 });
 
 test("blockedReasonForMissingEnv names the scenario, lane, and where each var lives", () => {
