@@ -482,10 +482,11 @@ Update propagation: PUT a new value → status returns to `pending` → `ready` 
 sandbox file updated.
 
 ### T3-INT-1: real integration through the gateway — every harness, both lanes
-Ruled 2026-07-08: the integration is **api_key-kind with a real key** (e.g.
-Slack bot token for the `proliferate-e2e` workspace stored as the api_key
-credential) — no OAuth dance in the runner, no mocked provider; the gateway
-itself is what's under test.
+Ruled 2026-07-08, amended 2026-07-09 (#1030): the integration is **any
+api_key-kind catalog entry with a real key** (the scenario currently seeds
+exa; cataloged Slack is oauth2/hosted-MCP so a Slack bot token cannot be an
+api_key credential) — no OAuth dance in the runner, no mocked provider; the
+gateway itself is what's under test.
 Steps: connect the integration once with the real key; then for **each
 cataloged harness, in both lanes** (piggybacking T3-CHAT-1's session matrix):
 the agent session calls a tool through the integrations gateway.
