@@ -86,7 +86,18 @@ jobs:
           set -euo pipefail
           git fetch origin main --tags --prune
           head_sha="$(git rev-parse HEAD)"
+          # Same-day reruns must not reuse an existing train tag: the collision
+          # used to surface only at the tag-creation step, AFTER the version-bump
+          # commit had already been pushed to main. Uniquify up front instead,
+          # so the second run of a day becomes release-YYYY-MM-DD-2.
           release_id="release-$(date -u +%F)"
+          if git rev-parse -q --verify "refs/tags/$release_id" >/dev/null; then
+            n=2
+            while git rev-parse -q --verify "refs/tags/$release_id-$n" >/dev/null; do
+              n=$((n+1))
+            done
+            release_id="$release_id-$n"
+          fi
           previous_train="$(git tag --list 'release-*' --sort=-creatordate | grep -v "^$release_id$" | head -n 1 || true)"
           if [[ -n "$previous_train" ]]; then
             base_sha="$(git rev-parse "$previous_train")"
