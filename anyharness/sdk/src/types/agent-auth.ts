@@ -28,5 +28,14 @@ export interface AgentAuthStateDocument {
   version: number;
   revision: number;
   user_id?: string | null;
+  /**
+   * The origin (`scheme://host[:port]`) of the control-plane server that
+   * produced this document. The desktop write path stamps this at push time
+   * so the runtime's render plane can detect a document left over from a
+   * server the app is no longer pointed at (self-hosting-v1 §3.5) and skip
+   * injecting its gateway credentials. Omit for cloud-materialized state,
+   * where there is no server-switch concern.
+   */
+  issuing_server_origin?: string | null;
   harnesses: AgentAuthStateHarness[];
 }

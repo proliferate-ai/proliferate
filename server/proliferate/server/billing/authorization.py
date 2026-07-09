@@ -22,10 +22,7 @@ from proliferate.db.store.billing_runtime_usage import (
     record_billing_decision_event,
     resolve_billing_subject_id_for_workspace,
 )
-from proliferate.db.store.billing_subjects import (
-    ensure_organization_billing_subject,
-    ensure_personal_billing_subject,
-)
+from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.errors import ProliferateError
 from proliferate.server.billing import snapshot_state
@@ -147,16 +144,16 @@ async def record_sandbox_start_authorization(
 async def _compute_budget_cap_breach(
     db: AsyncSession,
     *,
-    billing_subject_id: UUID,
     organization_id: UUID,
     user_id: UUID,
     now: datetime,
 ) -> str | None:
-    """Decision type if the subject breaches an enabled org compute cap, else None.
+    """Decision type if the org breaches an enabled compute cap, else None.
 
     Mirrors the reconciler's ``_resolve_compute_limit_pause`` semantics for the
-    single-sandbox resume path: a per-user cap is checked against that user's
-    window usage (and wins), otherwise the org-wide cap sums the whole subject.
+    single-sandbox resume path: usage is summed by ``organization_id`` across
+    the org's segments, a per-user cap is checked against that user's window
+    usage (and wins), otherwise the org-wide cap sums the whole org.
     """
     limits = [
         limit
@@ -168,9 +165,9 @@ async def _compute_budget_cap_breach(
 
     async def _window_seconds(window: str, scope_user_id: UUID | None) -> float:
         start, end = window_bounds(window, now)
-        return await billing_store.compute_usage_seconds_in_window(
+        return await billing_store.compute_usage_seconds_in_window_for_org(
             db,
-            billing_subject_id=billing_subject_id,
+            organization_id=organization_id,
             start=start,
             end=end,
             now=now,
@@ -200,10 +197,28 @@ async def assert_cloud_sandbox_resume_allowed(
     billing subject, then blocks on an active spend hold or an over-cap compute
     budget — the same conditions that make the reconciler pause an open segment.
     Records a ``BillingDecisionEvent`` and raises ``CloudSandboxResumeBlockedError``.
+
+    Delegates to ``assert_cloud_sandbox_resume_allowed_for_owner``; the gate only
+    reads ``sandbox.owner_user_id``, so the owner-id variant can run at seams that
+    do not yet have a sandbox row (see the wake/ensure service layer).
+    """
+    await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=sandbox.owner_user_id)
+
+
+async def assert_cloud_sandbox_resume_allowed_for_owner(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID | None,
+) -> None:
+    """Owner-scoped resume gate: same checks as the sandbox variant, keyed by owner.
+
+    Split out so a caller can gate before a cloud_sandbox row exists (the wake/
+    ensure path flushes a new-row INSERT inside ``ensure_personal_cloud_sandbox_exists``,
+    and this gate ``commit()``s its audit row before raising, so it must run first).
+    Enforce-mode only (``CLOUD_BILLING_MODE=enforce``).
     """
     if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
         return
-    owner_user_id = sandbox.owner_user_id
     if owner_user_id is None:
         return
     subject = await ensure_personal_billing_subject(db, owner_user_id)
@@ -212,35 +227,29 @@ async def assert_cloud_sandbox_resume_allowed(
 
     decision_type: str | None = None
     reason: str | None = None
-    # Subject for the recorded decision event / compute-cap usage window. The
-    # spend-hold path stays on the owner's personal subject; the compute-cap
-    # path re-binds to the org billing subject (below) so it mirrors the
-    # reconciler, which scopes compute limits by ``segment.billing_subject_id``.
+    # The recorded decision event stays on the owner's personal subject — the
+    # subject that pays (invoicing unchanged). Compute limits are org-scoped, so
+    # the compute-cap check resolves the owner's org and sums usage by
+    # ``organization_id`` (matching the reconciler's ``_resolve_compute_limit_pause``).
     decision_subject_id = subject.id
     if snapshot.active_spend_hold:
         decision_type = BILLING_DECISION_ENFORCE_ACTIVE_SPEND
         reason = snapshot.hold_reason or "active_spend_hold"
     else:
-        # ``ensure_personal_billing_subject`` always yields ``organization_id is
-        # None`` (DB CheckConstraint), so the sandbox's org can't come from the
-        # subject. The cloud_sandbox row has no org column either, but the owner
-        # is one membership lookup away — the same resolution connect.py uses for
-        # identity tags. Compute limits are org-scoped, so resolve the org, then
-        # its billing subject, and check caps against that org subject's usage
-        # (matching the reconciler's ``_resolve_compute_limit_pause``).
+        # The cloud_sandbox row has no org column, but the owner is one
+        # membership lookup away — the same resolution connect.py uses for
+        # identity tags and the segment open path uses to stamp
+        # ``usage_segment.organization_id``.
         membership = await organizations_store.get_current_membership_for_user(db, owner_user_id)
         if membership is not None:
             organization_id = membership.organization.id
-            org_subject = await ensure_organization_billing_subject(db, organization_id)
             decision_type = await _compute_budget_cap_breach(
                 db,
-                billing_subject_id=org_subject.id,
                 organization_id=organization_id,
                 user_id=owner_user_id,
                 now=now,
             )
             if decision_type is not None:
-                decision_subject_id = org_subject.id
                 reason = "compute budget limit reached"
 
     if decision_type is None:
@@ -262,8 +271,10 @@ async def assert_cloud_sandbox_resume_allowed(
     # Persist the decision before raising: the production caller
     # (materialization/runner._run_with_fresh_session) rolls back its session in
     # the exception handler, which would otherwise discard this un-committed
-    # audit row. Safe here — this gate is the first statement of
-    # connect_ready_sandbox, so no other writes are staged on this session yet.
+    # audit row. Safe at every call site: this gate runs first at each seam
+    # (connect_ready_sandbox's opening statement, and the wake/ensure service
+    # layer before ensure_personal_cloud_sandbox_exists stages a row INSERT), so
+    # no other writes are staged on this session yet.
     await db.commit()
     raise CloudSandboxResumeBlockedError(
         authorization_message(reason)

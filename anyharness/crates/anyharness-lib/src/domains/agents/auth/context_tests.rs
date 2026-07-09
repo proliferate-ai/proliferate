@@ -583,9 +583,9 @@ fn bundled_docs_classify_oauth_discovery_contexts() {
 
 #[test]
 fn bundled_docs_bedrock_flag_beats_api_key_for_claude() {
-    // The flag deliberately forces the bedrock route in the harness, so when
-    // set (with aws creds present) it must win the slot even if an API key
-    // is also in the composed env.
+    // The flag is the bedrock routing switch: when set, the CLI routes to
+    // Bedrock and only serves us.anthropic.* ids, so it must win the slot even
+    // if an API key (or OAuth creds) is also in the composed env.
     let facts = [
         flag_fact("CLAUDE_CODE_USE_BEDROCK", "1"),
         discovery_fact("aws-credential-chain"),
@@ -593,9 +593,24 @@ fn bundled_docs_bedrock_flag_beats_api_key_for_claude() {
     ];
     assert_eq!(classify_bundled("claude", &facts), vec!["bedrock"]);
 
-    // Flag without aws credentials is not a bedrock context.
+    // The flag alone classifies as bedrock — a production Bedrock deployment
+    // on an ECS task role sets the flag but has no passively detectable creds
+    // (IMDS / task-role are the exotic tail we deliberately don't detect,
+    // decisions ledger 12). Keying bedrock on the flag is the honest signal:
+    // the CLI still routes to Bedrock, so bare ids must be gated.
     let flag_only = [flag_fact("CLAUDE_CODE_USE_BEDROCK", "1")];
-    assert_eq!(classify_bundled("claude", &flag_only), vec!["baseline"]);
+    assert_eq!(classify_bundled("claude", &flag_only), vec!["bedrock"]);
+
+    // No flag: an OAuth login is a plain anthropic-oauth account (bare ids
+    // stay usable) even when AWS creds happen to be present for other tools.
+    let oauth_with_aws = [
+        discovery_fact("claude-oauth-creds"),
+        discovery_fact("aws-credential-chain"),
+    ];
+    assert_eq!(
+        classify_bundled("claude", &oauth_with_aws),
+        vec!["anthropic-oauth"]
+    );
 }
 
 #[test]

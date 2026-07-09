@@ -221,7 +221,13 @@ callback `https://<site>/auth/desktop/github/callback`).
 
 ### 3.5 Connecting desktops (B4-desktop)
 
-Works today via a hand-edited file, read once at startup:
+**Status:** manual connect (URL entry -> `/meta` validation ->
+trust-confirmation -> `set_app_config` -> relaunch) plus the origin guard
+under "Server switch" below shipped in `feat/desktop-connect-server`. The
+deep link, the settings "switch server" affordance, and per-server homes are
+still open — see §9's backlog table for the exact split.
+
+Before that PR, this worked only via a hand-edited file, read once at startup:
 
 ```json
 // ~/.proliferate/config.json
@@ -550,8 +556,31 @@ subscriptions (Claude/Codex sign-in) — the gateway is never required.
 | B8 | BYO-cert / internal-CA Caddyfile variant + docs | S | — |
 | B5 | LiteLLM self-host compose surface + env rewrite | S | agent-auth stack deploy slice |
 | B10 | Supervisor-driven runtime self-update (session-preserving swap) | M | B4-server |
-| B4-desktop | In-product connect + deep link + per-server homes + updater endpoints | M | ux/wave-3 landing (LoginScreen/settings churn) |
+| B4-desktop | ~~In-product connect~~ (shipped: manual entry + trust-confirm + `set_app_config` write + relaunch) + deep link + per-server homes + updater endpoints | M | ux/wave-3 landing (LoginScreen/settings churn) |
 | B6 | GitHub App manifest flow (DB-stored creds + provider + admin pane) | M | `codex/cloud-github-app-auth-flow` |
+
+**B4-desktop, shipped subset (`feat/desktop-connect-server`):** manual
+connect on the sign-in screen (`AuthScreenLayout`/`LoginScreen` ->
+`useConnectServer` -> `ConnectServerDialog`) — URL entry, `GET {url}/meta`
+validation, trust-confirmation dialog, `set_app_config` (new Tauri command,
+read-modify-write on `config.json`, preserves unknown fields), relaunch.
+Also a quiet "connected to X" indicator + reset-to-default. Alongside it, the
+worker/runtime side now guards against injecting a previous server's gateway
+token after a switch: `agent-auth/state.json` is stamped with
+`issuing_server_origin` at push time and the render plane
+(`route_auth::resolve_launch_route_auth`) discards a mismatched document
+(treated as absent/native) instead of rendering it — backward compatible, a
+legacy unstamped file always matches.
+
+**B4-desktop, still open:** the deep link
+(`proliferate://connect?server=...`) — `ensureDeepLinkBridge` arms after the
+control-plane reachability gate in `orchestration-bootstrap.ts`, so it
+currently can't reach a signed-out, server-unreachable app the way connect
+needs to; rearming it earlier is real but separable work. Also open: a
+"switch server" affordance in settings (today it's sign-in-screen only),
+per-server homes (`~/.proliferate/servers/<sha256(origin)>/`, D1's "clean
+slate" — right now a server switch relies on the origin guard above rather
+than a fully separate on-disk home), and the updater endpoints (§4).
 
 Other in-flight collisions to sequence around: the `agent-auth/*` 12-PR
 stack, `codex/integration-catalog-gateway` / `codex/remove-runtime-config`

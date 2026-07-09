@@ -71,6 +71,21 @@ fn resolve_desktop_telemetry_mode_from_inputs(
     }
 }
 
+/// The origin (`scheme://host[:port]`) of the server the app currently points
+/// at — the configured `apiBaseUrl`, or the packaged default when unset. Used
+/// to stamp the anyharness sidecar's launch env (`sidecar.rs`) so the
+/// route-auth render plane can guard against injecting a previous server's
+/// gateway token after a connect-to-server switch (self-hosting-v1 §3.5).
+pub fn current_api_origin() -> String {
+    let config = load_app_config_record().unwrap_or_default();
+    let base_url = config
+        .api_base_url
+        .as_deref()
+        .map(normalize_base_url)
+        .unwrap_or_else(default_api_base_url);
+    get_api_origin(&base_url)
+}
+
 pub fn resolve_desktop_telemetry_mode() -> DesktopTelemetryMode {
     let config = load_app_config_record().unwrap_or_default();
     resolve_desktop_telemetry_mode_from_inputs(

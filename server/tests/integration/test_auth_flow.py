@@ -531,6 +531,96 @@ class TestPasswordAuthFlow:
         assert response.status_code == 404
 
 
+class TestSingleOrgProductUserBypass:
+    """current_product_user's single-org carve-out (mirrors current_organization_actor).
+
+    Self-hosted single-org instances have no GitHub OAuth app configured, so a
+    password-only account must be able to reach product surfaces. Hosted keeps
+    the gate. Endpoints that genuinely need a GitHub token still fail cleanly
+    at their own point of use, regardless of org mode.
+    """
+
+    password = "correct horse battery"
+
+    @pytest.mark.asyncio
+    async def test_single_org_password_only_user_passes_product_gate(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        monkeypatch.setattr(settings, "single_org_mode_override", True)
+        await _create_password_user("single-org-password@example.com", self.password)
+
+        login = await client.post(
+            "/auth/web/password/login",
+            json={"email": "single-org-password@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+        access_token = login.json()["accessToken"]
+
+        response = await client.get(
+            "/v1/cloud/workspaces",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_hosted_mode_still_enforces_product_gate_for_password_only_user(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        monkeypatch.setattr(settings, "single_org_mode_override", False)
+        await _create_password_user("hosted-password@example.com", self.password)
+
+        login = await client.post(
+            "/auth/web/password/login",
+            json={"email": "hosted-password@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+        access_token = login.json()["accessToken"]
+
+        response = await client.get(
+            "/v1/cloud/workspaces",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "github_link_required"
+
+    @pytest.mark.asyncio
+    async def test_single_org_repo_endpoint_still_rejects_user_without_github(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The single-org bypass only lifts the blanket product gate.
+
+        A repo-import surface that genuinely needs a GitHub connection keeps
+        its own point-of-use guard (proliferate/server/cloud/repos/service.py's
+        ``_require_github_access_token`` / the GitHub App authorization check),
+        so it still fails cleanly instead of silently granting access.
+        """
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        monkeypatch.setattr(settings, "single_org_mode_override", True)
+        await _create_password_user("single-org-no-github@example.com", self.password)
+
+        login = await client.post(
+            "/auth/web/password/login",
+            json={"email": "single-org-no-github@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+        access_token = login.json()["accessToken"]
+
+        response = await client.get(
+            "/v1/cloud/repositories/catalog",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "github_app_authorization_required"
+
+
 class TestDesktopPKCEFlow:
     """Test the full desktop PKCE authorization code exchange."""
 

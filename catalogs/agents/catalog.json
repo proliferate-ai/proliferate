@@ -45,14 +45,7 @@
           "id": "bedrock",
           "authSlotId": "anthropic",
           "signals": {
-            "allOf": [
-              {
-                "envFlag": "CLAUDE_CODE_USE_BEDROCK=1"
-              },
-              {
-                "discovery": "aws-credential-chain"
-              }
-            ]
+            "envFlag": "CLAUDE_CODE_USE_BEDROCK=1"
           }
         },
         {
@@ -151,8 +144,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -341,8 +333,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -376,8 +367,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,

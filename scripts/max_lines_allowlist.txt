@@ -42,7 +42,7 @@ server/proliferate/server/cloud/agent_gateway/api.py 405 harness-settings GET/PU
 server/proliferate/server/cloud/secrets/api.py 416 existing cloud secrets API pending route split
 server/tests/integration/test_agent_gateway_api.py 654 P1 auth rebuild rewrote keys/selections/state coverage for titled-key + selection model
 server/tests/integration/test_agent_gateway_store.py 673 P1 auth rebuild rewrote store coverage for titled-key + agent_auth_selection model
-server/tests/integration/test_auth_flow.py 2130 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test
+server/tests/integration/test_auth_flow.py 2220 existing server oversized integration test plus session-token-revocation coverage + /users/me password rejection test + single-org current_product_user bypass coverage
 server/tests/integration/test_billing_accounting.py 872 existing server oversized integration test
 server/tests/integration/test_billing_api.py 1918 existing server oversized integration test
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
@@ -52,3 +52,4 @@ anyharness/crates/anyharness-lib/src/api/router.rs 610 AnyHarness router (+goals
 anyharness/crates/anyharness-lib/src/app/mod.rs 608 AnyHarness app wiring (+goal/loop/activity/feed services)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 861 loops runtime — native write path + emulated Codex scheduler
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 739 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
+server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
