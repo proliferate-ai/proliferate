@@ -61,7 +61,25 @@ async function signInThroughUi(page: Page, email: string, password: string): Pro
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
+/**
+ * The sidebar (which owns the "Add repository" action) defaults to
+ * collapsed on a fresh profile — StandardWorkspaceShell renders a
+ * "Show sidebar" toggle in its place (`sidebarOpen` false-by-default,
+ * apps/desktop/src/components/workspace/shell/screen/StandardWorkspaceShell.tsx).
+ * Expand it once per test so "Add repository" is actually reachable, not
+ * just present-but-off-screen in a collapsed panel (verified: clicking
+ * straight at "Add repository" without this first hangs forever — the
+ * button resolves via role query but the sidebar container has zero width).
+ */
+async function ensureSidebarOpen(page: Page): Promise<void> {
+  const showSidebarButton = page.getByRole("button", { name: "Show sidebar" });
+  if (await showSidebarButton.isVisible().catch(() => false)) {
+    await showSidebarButton.click();
+  }
+}
+
 async function openAddRepoFlow(page: Page): Promise<void> {
+  await ensureSidebarOpen(page);
   await page.getByRole("button", { name: "Add repository" }).click();
 }
 
@@ -75,9 +93,12 @@ async function expectEntryStepVisible(page: Page): Promise<void> {
 test.beforeEach(async ({ page }) => {
   await ensureInstanceClaimed();
   await signInThroughUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-  // Sidebar's always-visible "Add repository" action is the render proof
-  // that the authenticated app shell (not the login form) owns the page.
-  await expect(page.getByRole("button", { name: "Add repository" })).toBeVisible({ timeout: 30_000 });
+  // "Show sidebar" (collapsed default) or the sidebar's own always-visible
+  // "Add repository" action (already expanded) — either is the render proof
+  // that the authenticated app shell, not the login form, owns the page.
+  await expect(
+    page.getByRole("button", { name: "Show sidebar" }).or(page.getByRole("button", { name: "Add repository" })),
+  ).toBeVisible({ timeout: 30_000 });
 });
 
 test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () => {
