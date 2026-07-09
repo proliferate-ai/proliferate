@@ -97,6 +97,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "organization", label: "Organization settings", iconId: "organization", adminOnly: true },
           { kind: "section", id: "organization-members", label: "Members", iconId: "organization-members", adminOnly: true },
           { kind: "section", id: "billing", label: "Billing", iconId: "billing", adminOnly: true },
+          { kind: "section", id: "organization-limits", label: "Usage & limits", iconId: "organization-limits", adminOnly: true },
           { kind: "section", id: "organization-secrets", label: "Organization secrets", iconId: "organization-secrets", adminOnly: true },
           { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
         ],
@@ -212,7 +213,6 @@ const SECTION_TO_SCOPE = new Map<SettingsSection, SettingsScope>(
  * to "user".
  */
 const PARKED_SECTION_SCOPES: Partial<Record<string, SettingsScope>> = {
-  "organization-limits": "org",
   "slack-bot": "org",
 };
 

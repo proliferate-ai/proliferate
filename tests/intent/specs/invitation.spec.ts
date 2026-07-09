@@ -12,9 +12,12 @@
 //   server-rendered /register page (invitation_delivery.py) — that is the
 //   product's own accept path and the happy-path drives it. The hosted-style
 //   settings-UI accept (CurrentUserInvitationsSection →
-//   POST /organizations/invitations/current/{id}/accept) is admin-gated in
-//   settings navigation, unreachable for a plain invitee — pinned as a
-//   documented product gap in its own test below.
+//   POST /organizations/invitations/current/{id}/accept) lived on the
+//   admin-gated organization-members pane, unreachable for a plain invitee
+//   (product gap, issue #1013). PR #1017 (fix/invitee-accept-ui) moves that
+//   section onto the Account pane, which every signed-in user can reach.
+//   The test below targets that fixed path but self-skips until #1017
+//   merges — see ACCOUNT_PANE_INVITATIONS_LANDED.
 // - Duplicate pending invite for the same (org, email): the partial unique
 //   index uq_organization_invitation_pending_email guarantees at most one
 //   pending row; the product's create path is upsert-on-conflict (rotate), so
@@ -134,39 +137,56 @@ test.describe("T2-INV-1: invitation happy path", () => {
     await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
   });
 
-  test("documents GAP: pending-invitation accept UI is unreachable for a non-admin invitee (settings admin gate)", async ({ page }) => {
-    // PRODUCT GAP surfaced by this harness (named in the PR body): the
-    // scenario contract says the invitee accepts via the desktop-web settings
-    // UI (CurrentUserInvitationsSection, on the organization-members pane).
-    // But `organization-members` is adminOnly in settings navigation
-    // (lib/domain/settings/navigation-presentation.ts) and SettingsScreen
-    // redirects non-admins to General — so a plain member/invitee can never
-    // see their pending invitations there in single-org mode. The endpoint
-    // the UI would call works (asserted below); only the surface is gated.
-    // This test pins the CURRENT (gated) behavior so a fix flips it loudly.
-    const invitee = (await passwordLogin(FRESH_INVITEE_EMAIL, FRESH_INVITEE_PASSWORD));
+  // Flip to true once PR #1017 (fix/invitee-accept-ui) merges: it moves
+  // CurrentUserInvitationsSection from the admin-gated organization-members
+  // pane onto AccountPane, which every signed-in user (admin or not) can
+  // reach. Until then this test is a documented skip, not a failure — the
+  // fix isn't in this branch's tree yet, so asserting the new UI would be
+  // red in this PR's own CI.
+  const ACCOUNT_PANE_INVITATIONS_LANDED = false;
 
-    // Give the invitee a pending invitation so the section would have content
-    // if it were reachable. (Inviting an existing member is allowed; accept
-    // then simply marks the invitation accepted against the live membership.)
+  test("fixed: pending-invitation accept UI is reachable for a non-admin invitee via the Account pane (#1013, #1017)", async ({ page }) => {
+    test.skip(
+      !ACCOUNT_PANE_INVITATIONS_LANDED,
+      "unblocks when #1017 (fix/invitee-accept-ui) merges — Account pane doesn't render "
+        + "CurrentUserInvitationsSection yet. Flip ACCOUNT_PANE_INVITATIONS_LANDED to true "
+        + "once it does.",
+    );
+
+    // Give the invitee a pending invitation to accept through the UI.
+    // (Inviting an existing member is allowed; accept then simply marks the
+    // invitation accepted against the live membership.)
+    const invitee = (await passwordLogin(FRESH_INVITEE_EMAIL, FRESH_INVITEE_PASSWORD));
     const invitation = await inviteMember(adminToken, organizationId, FRESH_INVITEE_EMAIL, "member");
     const listed = await listInvitationsCurrent(invitee.access_token);
     expect(listed.find((row) => row.id === invitation.id)).toBeDefined();
 
-    // Sign in as the (non-admin) invitee and try to open the Members pane.
+    // Sign in as the (non-admin) invitee and open Account — unlike Members,
+    // Account is not admin-gated, so a plain invitee lands here directly.
     await page.goto(webBaseUrl());
     await page.getByLabel("Email").fill(FRESH_INVITEE_EMAIL);
     await page.getByLabel("Password").fill(FRESH_INVITEE_PASSWORD);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
-    await page.goto(`${webBaseUrl()}/settings?section=organization-members`);
-    // Redirected away: the URL settles on the default (general) section.
-    await expect(page).toHaveURL(/section=general/, { timeout: 30_000 });
+    await page.goto(`${webBaseUrl()}/settings?section=account`);
+    await expect(page).toHaveURL(/section=account/, { timeout: 30_000 });
+    await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
 
-    // The accept endpoint itself works for the same user — completing the
-    // acceptance the UI could not offer.
-    const accept = await acceptCurrentInvitation(invitee.access_token, invitation.id);
-    expect(accept.status).toBe(200);
+    // The pending invitation is visible right on Account (CurrentUserInvitationsSection).
+    await expect(page.getByRole("heading", { name: "Pending invitations" })).toBeVisible();
+    const invitationRow = page.getByText(`member access for ${FRESH_INVITEE_EMAIL}`);
+    await expect(invitationRow).toBeVisible();
+
+    // Accept through the UI: opens a confirmation dialog, then joins.
+    await page.getByRole("button", { name: "Accept invitation" }).click();
+    await page.getByRole("button", { name: "Join" }).click();
+
+    // The section clears once the invitation is no longer pending.
+    await expect(page.getByRole("heading", { name: "Pending invitations" })).toHaveCount(0, {
+      timeout: 15_000,
+    });
+
+    // Server-side: invitation accepted against this membership.
     // Poll: the accept endpoint's transaction commits in the session
     // dependency teardown, which can land a beat after the response is
     // written — a fresh read too fast can still see 'pending'.

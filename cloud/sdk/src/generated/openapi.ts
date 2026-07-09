@@ -2125,6 +2125,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/billing/usage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Usage Summary Endpoint */
+        get: operations["get_usage_summary_endpoint_v1_billing_usage_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/usage/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Usage Timeseries Endpoint */
+        get: operations["get_usage_timeseries_endpoint_v1_billing_usage_timeseries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/llm-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Llm Balance Endpoint */
+        get: operations["get_llm_balance_endpoint_v1_billing_llm_balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/cloud-checkout": {
         parameters: {
             query?: never;
@@ -2487,6 +2538,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/{organization_id}/usage/by-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Usage By User Endpoint */
+        get: operations["get_usage_by_user_endpoint_v1_organizations__organization_id__usage_by_user_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/usage/users/{user_id}/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get User Usage Timeseries Endpoint */
+        get: operations["get_user_usage_timeseries_endpoint_v1_organizations__organization_id__usage_users__user_id__timeseries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Limits Endpoint */
+        get: operations["get_limits_endpoint_v1_organizations__organization_id__limits_get"];
+        /** Put Limits Endpoint */
+        put: operations["put_limits_endpoint_v1_organizations__organization_id__limits_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/dev/desktop-handoff": {
         parameters: {
             query?: never;
@@ -2636,7 +2739,9 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["AgentAuthSourceInput"][];
             /** Settings */
-            settings?: Record<string, unknown> | null;
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthSourceInput
@@ -2667,7 +2772,9 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["AgentAuthStateSource"][];
             /** Settings */
-            settings?: Record<string, unknown> | null;
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthStateResponse
@@ -3582,6 +3689,76 @@ export interface components {
             /** File */
             file: string;
         };
+        /** BudgetLimit */
+        BudgetLimit: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Userid */
+            userId: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compute" | "llm";
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "day" | "month";
+            /** Capvalue */
+            capValue: number;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** BudgetLimitInput */
+        BudgetLimitInput: {
+            /** Userid */
+            userId?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compute" | "llm";
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "day" | "month";
+            /** Capvalue */
+            capValue: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /**
+         * BudgetLimitWindowUsage
+         * @description The tightest applicable enabled limit for a user/kind, with this window's usage (§3.1).
+         */
+        BudgetLimitWindowUsage: {
+            /** Window */
+            window: string;
+            /** Capvalue */
+            capValue: number;
+            /** Usedvalue */
+            usedValue: number;
+            /** Blocked */
+            blocked: boolean;
+        };
+        /** BudgetLimitsResponse */
+        BudgetLimitsResponse: {
+            /** Limits */
+            limits: components["schemas"]["BudgetLimit"][];
+        };
         /** ClientDailyActivityRequest */
         ClientDailyActivityRequest: {
             /**
@@ -4222,6 +4399,15 @@ export interface components {
             /** Finalsurface */
             finalSurface: string;
         };
+        /** LlmBalance */
+        LlmBalance: {
+            /** Grantedusd */
+            grantedUsd: number;
+            /** Usedusd */
+            usedUsd: number;
+            /** Remainingusd */
+            remainingUsd: number;
+        };
         /** MetaResponse */
         MetaResponse: {
             /** Serverversion */
@@ -4292,6 +4478,36 @@ export interface components {
         OrgAgentPolicyViolationListResponse: {
             /** Violations */
             violations: components["schemas"]["OrgAgentPolicyViolation"][];
+        };
+        /** OrgUsageByUserResponse */
+        OrgUsageByUserResponse: {
+            /** Users */
+            users: components["schemas"]["OrgUserUsageRow"][];
+        };
+        /** OrgUserUsageRow */
+        OrgUserUsageRow: {
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+            /** Displayname */
+            displayName: string | null;
+            /** Email */
+            email: string;
+            /** Computeseconds */
+            computeSeconds: number;
+            /** Llmcostusd */
+            llmCostUsd: number;
+            /** Computelimitcapseconds */
+            computeLimitCapSeconds: number | null;
+            /** Llmlimitcapusd */
+            llmLimitCapUsd: number | null;
+        };
+        /** OrgUserUsageTimeseriesResponse */
+        OrgUserUsageTimeseriesResponse: {
+            /** Buckets */
+            buckets: components["schemas"]["UsageTimeseriesBucket"][];
         };
         /** OrganizationInvitationAcceptRequest */
         OrganizationInvitationAcceptRequest: {
@@ -4800,6 +5016,11 @@ export interface components {
         ProfileUpdateRequest: {
             /** Outreach Email */
             outreach_email?: string | null;
+        };
+        /** PutBudgetLimitsRequest */
+        PutBudgetLimitsRequest: {
+            /** Limits */
+            limits: components["schemas"]["BudgetLimitInput"][];
         };
         /** PutCloudSecretEnvVarRequest */
         PutCloudSecretEnvVarRequest: {
@@ -5471,6 +5692,38 @@ export interface components {
         UpdateCloudWorkspaceDisplayNameRequest: {
             /** Displayname */
             displayName?: string | null;
+        };
+        /** UsageSummary */
+        UsageSummary: {
+            /** Computeusedsecondsmtd */
+            computeUsedSecondsMtd: number;
+            /** Computeremainingseconds */
+            computeRemainingSeconds: number | null;
+            /** Llmusedusdmtd */
+            llmUsedUsdMtd: number;
+            /** Llmremainingusd */
+            llmRemainingUsd: number;
+            computeLimit: components["schemas"]["BudgetLimitWindowUsage"] | null;
+            llmLimit: components["schemas"]["BudgetLimitWindowUsage"] | null;
+            /** Canselfservetopup */
+            canSelfServeTopUp: boolean;
+        };
+        /** UsageTimeseries */
+        UsageTimeseries: {
+            /** Buckets */
+            buckets: components["schemas"]["UsageTimeseriesBucket"][];
+        };
+        /** UsageTimeseriesBucket */
+        UsageTimeseriesBucket: {
+            /**
+             * Bucketstart
+             * Format: date-time
+             */
+            bucketStart: string;
+            /** Computeseconds */
+            computeSeconds: number;
+            /** Llmcostusd */
+            llmCostUsd: number;
         };
         /** UserRead */
         UserRead: {
@@ -6227,6 +6480,7 @@ export interface operations {
                 email?: string | null;
                 organizationId?: string | null;
                 connectionId?: string | null;
+                slug?: string | null;
             };
             header?: never;
             path?: never;
@@ -10238,6 +10492,120 @@ export interface operations {
             };
         };
     };
+    get_usage_summary_endpoint_v1_billing_usage_summary_get: {
+        parameters: {
+            query?: {
+                ownerScope?: ("personal" | "organization") | null;
+                organizationId?: string | null;
+            };
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_usage_timeseries_endpoint_v1_billing_usage_timeseries_get: {
+        parameters: {
+            query?: {
+                granularity?: "day" | "week" | "month";
+                days?: number;
+                kind?: "compute" | "llm" | "all";
+                ownerScope?: ("personal" | "organization") | null;
+                organizationId?: string | null;
+            };
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageTimeseries"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_balance_endpoint_v1_billing_llm_balance_get: {
+        parameters: {
+            query?: {
+                ownerScope?: ("personal" | "organization") | null;
+                organizationId?: string | null;
+            };
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmBalance"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_cloud_checkout_v1_billing_cloud_checkout_post: {
         parameters: {
             query?: never;
@@ -11048,6 +11416,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_usage_by_user_endpoint_v1_organizations__organization_id__usage_by_user_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgUsageByUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_user_usage_timeseries_endpoint_v1_organizations__organization_id__usage_users__user_id__timeseries_get: {
+        parameters: {
+            query?: {
+                granularity?: "day" | "week" | "month";
+                days?: number;
+                kind?: "compute" | "llm" | "all";
+            };
+            header?: never;
+            path: {
+                user_id: string;
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgUserUsageTimeseriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_limits_endpoint_v1_organizations__organization_id__limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetLimitsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_limits_endpoint_v1_organizations__organization_id__limits_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutBudgetLimitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetLimitsResponse"];
                 };
             };
             /** @description Validation Error */

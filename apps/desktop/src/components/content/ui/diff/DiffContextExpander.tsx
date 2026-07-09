@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
+import { Button } from "@proliferate/ui/primitives/Button";
 import type { InterHunkGap } from "@/lib/domain/files/diff-parser";
 
 /** Threshold: gaps with this many lines or fewer show a single expand-all control */
@@ -47,7 +48,9 @@ export function DiffGapGutterControls({
   return (
     <div className="flex h-full flex-col items-center justify-center gap-0">
       {isSmall ? (
-        <button
+        <Button
+          variant="unstyled"
+          size="unstyled"
           type="button"
           onClick={() => onExpand("all")}
           aria-label={`Expand ${label}`}
@@ -55,10 +58,12 @@ export function DiffGapGutterControls({
           className={ICON_BUTTON_CLASS}
         >
           <ChevronsUpDown className="h-3 w-3" />
-        </button>
+        </Button>
       ) : (
         <>
-          <button
+          <Button
+            variant="unstyled"
+            size="unstyled"
             type="button"
             onClick={() => onExpand("down")}
             aria-label="Expand down (reveal lines adjacent to the hunk above)"
@@ -66,8 +71,10 @@ export function DiffGapGutterControls({
             className={ICON_BUTTON_CLASS}
           >
             <ChevronDown className="h-3 w-3" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="unstyled"
+            size="unstyled"
             type="button"
             onClick={() => onExpand("up")}
             aria-label="Expand up (reveal lines adjacent to the hunk below)"
@@ -75,7 +82,7 @@ export function DiffGapGutterControls({
             className={ICON_BUTTON_CLASS}
           >
             <ChevronUp className="h-3 w-3" />
-          </button>
+          </Button>
         </>
       )}
     </div>
@@ -109,7 +116,9 @@ export function DiffGapContentLabel({
         {label}
       </span>
       {!isSmall && onExpand && (
-        <button
+        <Button
+          variant="unstyled"
+          size="unstyled"
           type="button"
           onClick={() => onExpand("all")}
           aria-label={`Expand all ${label}`}
@@ -117,7 +126,7 @@ export function DiffGapContentLabel({
           className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[10px] leading-none text-muted-foreground/60 transition-colors hover:text-foreground"
         >
           Expand all
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -196,7 +205,9 @@ export function DiffContextExpander({
       {/* Gutter-width area for expand controls */}
       <div className="flex w-[var(--diffs-column-number-width,1.5rem)] shrink-0 items-center justify-center">
         {isSmall ? (
-          <button
+          <Button
+            variant="unstyled"
+            size="unstyled"
             type="button"
             onClick={() => onExpand("all")}
             aria-label={`Expand ${label}`}
@@ -204,10 +215,12 @@ export function DiffContextExpander({
             className={ICON_BUTTON_CLASS}
           >
             <ChevronsUpDown className="h-3 w-3" />
-          </button>
+          </Button>
         ) : (
           <div className="flex flex-col items-center gap-0">
-            <button
+            <Button
+              variant="unstyled"
+              size="unstyled"
               type="button"
               onClick={() => onExpand("down")}
               aria-label="Expand down (reveal lines adjacent to the hunk above)"
@@ -215,8 +228,10 @@ export function DiffContextExpander({
               className={ICON_BUTTON_CLASS}
             >
               <ChevronDown className="h-3 w-3" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="unstyled"
+              size="unstyled"
               type="button"
               onClick={() => onExpand("up")}
               aria-label="Expand up (reveal lines adjacent to the hunk below)"
@@ -224,7 +239,7 @@ export function DiffContextExpander({
               className={ICON_BUTTON_CLASS}
             >
               <ChevronUp className="h-3 w-3" />
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -237,7 +252,9 @@ export function DiffContextExpander({
           {label}
         </span>
         {!isSmall && (
-          <button
+          <Button
+            variant="unstyled"
+            size="unstyled"
             type="button"
             onClick={() => onExpand("all")}
             aria-label={`Expand all ${label}`}
@@ -245,7 +262,7 @@ export function DiffContextExpander({
             className="ml-1.5 shrink-0 cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 text-[10px] leading-none text-muted-foreground/60 transition-colors hover:text-foreground"
           >
             Expand all
-          </button>
+          </Button>
         )}
       </div>
     </div>

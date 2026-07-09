@@ -247,3 +247,38 @@ class OverageSettingsResponse(BillingBaseModel):
         default=None,
         alias="overageCapCentsPerSeat",
     )
+
+
+class BudgetLimitWindowUsage(BillingBaseModel):
+    """The tightest applicable enabled limit for a user/kind, with this window's usage (§3.1)."""
+
+    window: str
+    cap_value: float = Field(alias="capValue")
+    used_value: float = Field(alias="usedValue")
+    blocked: bool
+
+
+class UsageSummary(BillingBaseModel):
+    compute_used_seconds_mtd: float = Field(alias="computeUsedSecondsMtd")
+    compute_remaining_seconds: float | None = Field(alias="computeRemainingSeconds")
+    llm_used_usd_mtd: float = Field(alias="llmUsedUsdMtd")
+    llm_remaining_usd: float = Field(alias="llmRemainingUsd")
+    compute_limit: BudgetLimitWindowUsage | None = Field(alias="computeLimit")
+    llm_limit: BudgetLimitWindowUsage | None = Field(alias="llmLimit")
+    can_self_serve_top_up: bool = Field(alias="canSelfServeTopUp")
+
+
+class UsageTimeseriesBucket(BillingBaseModel):
+    bucket_start: datetime = Field(alias="bucketStart")
+    compute_seconds: float = Field(alias="computeSeconds")
+    llm_cost_usd: float = Field(alias="llmCostUsd")
+
+
+class UsageTimeseries(BillingBaseModel):
+    buckets: list[UsageTimeseriesBucket]
+
+
+class LlmBalance(BillingBaseModel):
+    granted_usd: float = Field(alias="grantedUsd")
+    used_usd: float = Field(alias="usedUsd")
+    remaining_usd: float = Field(alias="remainingUsd")

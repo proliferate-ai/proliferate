@@ -170,7 +170,7 @@ pub struct AgentCatalogAuthContext {
 }
 
 /// The minimal probe-testable signal algebra: `env | envFlag | discovery |
-/// anyOf | allOf` — no NOT operator, nesting depth <= 2 (enforced in
+/// route | anyOf | allOf` — no NOT operator, nesting depth <= 2 (enforced in
 /// `validation.rs`). Externally tagged so JSON reads as
 /// `{"env": "ANTHROPIC_API_KEY"}` / `{"allOf": [ ... ]}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,6 +184,11 @@ pub enum AgentCatalogAuthSignal {
     EnvFlag(String),
     /// A named discovery fact kind, e.g. `"claude-oauth-creds"`.
     Discovery(String),
+    /// An enrolled runtime route kind (e.g. `"gateway"`): matches a
+    /// `Route` fact resolved from workspace-scoped `agent-auth/state.json`
+    /// (decisions ledger 13). Route facts are collected in layer 1 beside the
+    /// env facts, never inside `classify()`, so purity holds.
+    Route(String),
     AnyOf(Vec<AgentCatalogAuthSignal>),
     AllOf(Vec<AgentCatalogAuthSignal>),
 }
@@ -192,7 +197,7 @@ impl AgentCatalogAuthSignal {
     /// Nesting depth: leaves are 1, combinators are 1 + deepest child.
     pub fn depth(&self) -> usize {
         match self {
-            Self::Env(_) | Self::EnvFlag(_) | Self::Discovery(_) => 1,
+            Self::Env(_) | Self::EnvFlag(_) | Self::Discovery(_) | Self::Route(_) => 1,
             Self::AnyOf(children) | Self::AllOf(children) => {
                 1 + children.iter().map(Self::depth).max().unwrap_or(0)
             }

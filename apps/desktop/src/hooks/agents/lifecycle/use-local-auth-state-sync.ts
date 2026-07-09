@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { useAgentAuthState } from "@proliferate/cloud-sdk-react";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { applyAgentAuthState } from "@/lib/access/anyharness/agent-auth";
-import { planLocalAuthStatePush } from "@/lib/domain/agents/local-auth-state";
+import { getProliferateApiOrigin } from "@/lib/infra/proliferate-api";
+import { planLocalAuthStatePush, stampIssuingServerOrigin } from "@/lib/domain/agents/local-auth-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 /**
@@ -44,7 +45,8 @@ export function useLocalAuthStateSync() {
       return;
     }
     let cancelled = false;
-    applyAgentAuthState({ runtimeUrl }, state)
+    const stamped = stampIssuingServerOrigin(state, getProliferateApiOrigin());
+    applyAgentAuthState({ runtimeUrl }, stamped)
       .then(() => {
         if (!cancelled) {
           lastPushedRef.current = plan.fingerprint;

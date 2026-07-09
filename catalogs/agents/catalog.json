@@ -45,14 +45,7 @@
           "id": "bedrock",
           "authSlotId": "anthropic",
           "signals": {
-            "allOf": [
-              {
-                "envFlag": "CLAUDE_CODE_USE_BEDROCK=1"
-              },
-              {
-                "discovery": "aws-credential-chain"
-              }
-            ]
+            "envFlag": "CLAUDE_CODE_USE_BEDROCK=1"
           }
         },
         {
@@ -86,7 +79,10 @@
         {
           "id": "gateway",
           "authSlotId": "gateway",
-          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected)."
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
@@ -148,8 +144,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -338,8 +333,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -373,8 +367,7 @@
             "availability": {
               "anyOf": [
                 "anthropic-api",
-                "anthropic-oauth",
-                "bedrock"
+                "anthropic-oauth"
               ]
             },
             "defaultVisible": true,
@@ -926,12 +919,217 @@
               "observedInAllContexts": false,
               "viaTrialOnly": true
             }
+          },
+          {
+            "id": "claude-sonnet-4-5",
+            "displayName": "Sonnet 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-sonnet-4-5-20250929",
+            "displayName": "Sonnet 4.5 (2025-09-29)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5",
+            "displayName": "Haiku 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5-20251001",
+            "displayName": "Haiku 4.5 (2025-10-01)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-opus-4-6",
+            "displayName": "Opus 4.6",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-opus-4-6-20260205",
+            "displayName": "Opus 4.6 (2026-02-05)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "default",
+                  "acceptEdits",
+                  "plan",
+                  "dontAsk",
+                  "bypassPermissions"
+                ],
+                "observedValue": "default"
+              },
+              "effort": {
+                "values": [
+                  "default",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "default"
+              }
+            },
+            "status": "active"
           }
         ],
         "defaults": {
           "anthropic-api": "sonnet",
           "anthropic-oauth": "opus",
-          "bedrock": "us.anthropic.claude-sonnet-4-6"
+          "bedrock": "us.anthropic.claude-sonnet-4-6",
+          "gateway": "claude-sonnet-4-5"
         },
         "observedDefaults": {
           "anthropic-api": "opus",
@@ -944,7 +1142,15 @@
           ],
           "roles": {
             "small_fast": "claude-haiku-4-5-20251001"
-          }
+          },
+          "seedModels": [
+            "claude-sonnet-4-5",
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5",
+            "claude-haiku-4-5-20251001",
+            "claude-opus-4-6",
+            "claude-opus-4-6-20260205"
+          ]
         }
       },
       "provenance": {
@@ -1064,7 +1270,10 @@
         {
           "id": "gateway",
           "authSlotId": "gateway",
-          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected)."
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
@@ -1372,7 +1581,8 @@
             "description": "Optimized for professional work and long-running agents.",
             "availability": {
               "anyOf": [
-                "openai-api"
+                "openai-api",
+                "gateway"
               ]
             },
             "defaultVisible": true,
@@ -1441,6 +1651,96 @@
               "observedInAllContexts": false,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "gpt-5.2-2025-12-11",
+            "displayName": "GPT-5.2 (2025-12-11)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "gpt-5-mini",
+            "displayName": "GPT-5 Mini",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "gpt-5-mini-2025-08-07",
+            "displayName": "GPT-5 Mini (2025-08-07)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active"
           }
         ],
         "defaults": {
@@ -1457,6 +1757,12 @@
         "gatewayPolicy": {
           "providers": [
             "openai"
+          ],
+          "seedModels": [
+            "gpt-5.2",
+            "gpt-5.2-2025-12-11",
+            "gpt-5-mini",
+            "gpt-5-mini-2025-08-07"
           ]
         }
       },
@@ -2772,7 +3078,10 @@
         {
           "id": "gateway",
           "authSlotId": "gateway",
-          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected)."
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
@@ -2957,15 +3266,74 @@
               "observedInAllContexts": true,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "grok-4",
+            "displayName": "Grok 4",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
+          },
+          {
+            "id": "grok-4-fast",
+            "displayName": "Grok 4 Fast",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
+          },
+          {
+            "id": "grok-code-fast-1",
+            "displayName": "Grok Code Fast 1",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
+          },
+          {
+            "id": "grok-build",
+            "displayName": "Grok Build",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {},
+            "status": "active"
           }
         ],
         "defaults": {
-          "xai-api": "grok-4.20-0309-non-reasoning"
+          "xai-api": "grok-4.20-0309-non-reasoning",
+          "gateway": "grok-4-fast"
         },
         "observedDefaults": {
           "xai-api": "grok-4.20-0309-non-reasoning"
         },
-        "gatewayPolicy": {}
+        "gatewayPolicy": {
+          "seedModels": [
+            "grok-4",
+            "grok-4-fast",
+            "grok-code-fast-1",
+            "grok-build"
+          ],
+          "providers": [
+            "xai"
+          ]
+        }
       },
       "provenance": {
         "probedAt": "2026-06-16T06:46:29.757670+00:00",
@@ -3074,7 +3442,10 @@
         {
           "id": "gateway",
           "authSlotId": "gateway",
-          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected)."
+          "description": "Proliferate LiteLLM gateway (route-engaged; not credential-detected).",
+          "signals": {
+            "route": "gateway"
+          }
         }
       ],
       "session": {
@@ -8147,10 +8518,119 @@
               "observedInAllContexts": false,
               "viaTrialOnly": false
             }
+          },
+          {
+            "id": "claude-sonnet-4-5",
+            "displayName": "Sonnet 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-sonnet-4-5-20250929",
+            "displayName": "Sonnet 4.5 (2025-09-29)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5",
+            "displayName": "Haiku 4.5",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
+          },
+          {
+            "id": "claude-haiku-4-5-20251001",
+            "displayName": "Haiku 4.5 (2025-10-01)",
+            "availability": {
+              "anyOf": [
+                "gateway"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "effort": {
+                "values": [
+                  "high",
+                  "max"
+                ],
+                "observedValue": "high"
+              },
+              "mode": {
+                "values": [
+                  "build",
+                  "plan"
+                ],
+                "observedValue": "build"
+              }
+            },
+            "status": "active"
           }
         ],
         "defaults": {
-          "baseline": "opencode/big-pickle"
+          "baseline": "opencode/big-pickle",
+          "gateway": "claude-sonnet-4-5"
         },
         "observedDefaults": {
           "anthropic-api": "opencode/big-pickle",

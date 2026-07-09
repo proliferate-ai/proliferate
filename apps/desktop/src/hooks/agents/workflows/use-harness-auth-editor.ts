@@ -5,11 +5,13 @@ import {
   useAgentGatewayCapabilities,
   useAgentGatewayEnrollment,
   useAuthSelections,
+  useOrgAgentPolicy,
   usePutAuthSelections,
 } from "@proliferate/cloud-sdk-react";
 import { getHarnessEnvVarSuggestions } from "@/config/harness-env-vars";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useAgentLoginTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { isReadyAgent } from "@/lib/domain/agents/status";
 import {
@@ -34,6 +36,20 @@ export interface HarnessAuthEditorApi {
 
   // Derived
   gatewayLocked: boolean;
+  // Org-policy disabling (client-side hint; the server is the hard gate). null
+  // allow-lists mean "no restriction" on that org, so every field below stays
+  // false until an org's policy actively narrows it. A member may belong to
+  // several orgs; the strictest applicable org wins (mirrors the server's
+  // per-membership enforcement loop).
+  //
+  // harnessDisallowed only gates NEW enabled selections (gateway/api_key); it
+  // never blocks going native, so a member can always clear a pre-existing
+  // selection on a harness the org has since disallowed (there is no DELETE
+  // endpoint — an empty/all-disabled PUT is the only remediation).
+  harnessDisallowed: boolean;
+  gatewayDisallowed: boolean;
+  apiKeyDisallowed: boolean;
+  nativeDisallowed: boolean;
   multiSource: boolean;
   busy: boolean;
   editorState: HarnessAuthEditorState;
@@ -74,6 +90,16 @@ export function useHarnessAuthEditor(
 ): HarnessAuthEditorApi {
   const { cloudActive } = useCloudAvailabilityState();
   const showToast = useToastStore((state) => state.show);
+
+  // Org policy is the server's hard gate; here it also drives client-side
+  // disabling so members see WHY an option is unavailable. The policy read is
+  // org-admin-gated, so for plain members it simply errors and yields no hints
+  // (the server still rejects a disallowed PUT, surfaced via the commit toast).
+  const { activeOrganizationId } = useActiveOrganization();
+  const orgPolicyQuery = useOrgAgentPolicy(
+    activeOrganizationId,
+    cloudActive && activeOrganizationId !== null,
+  );
 
   const capabilitiesQuery = useAgentGatewayCapabilities(cloudActive);
   const enrollmentQuery = useAgentGatewayEnrollment(cloudActive);
@@ -143,6 +169,21 @@ export function useHarnessAuthEditor(
   const busy = putSelections.isPending;
   const editorState: HarnessAuthEditorState = { gatewayEnabled, rows };
   const native = isNativeState(editorState);
+
+  // Policy-driven disabling. null lists == no restriction; a route/harness
+  // absent from a non-null list is disallowed by the org. Native is checked
+  // against allowedRoutes only — never gated by harnessDisallowed — so going
+  // native always stays reachable as the remediation path (mirrors the
+  // server's _selection_set_policy_violation ordering).
+  const allowedRoutes = orgPolicyQuery.data?.allowedRoutes ?? null;
+  const allowedHarnesses = orgPolicyQuery.data?.allowedHarnesses ?? null;
+  const harnessDisallowed =
+    allowedHarnesses !== null && !allowedHarnesses.includes(harnessKind);
+  const gatewayDisallowed =
+    harnessDisallowed || (allowedRoutes !== null && !allowedRoutes.includes("gateway"));
+  const apiKeyDisallowed =
+    harnessDisallowed || (allowedRoutes !== null && !allowedRoutes.includes("api_key"));
+  const nativeDisallowed = allowedRoutes !== null && !allowedRoutes.includes("native");
 
   function commit(next: HarnessAuthEditorState) {
     setGatewayEnabled(next.gatewayEnabled);
@@ -252,6 +293,10 @@ export function useHarnessAuthEditor(
     selectionsQuery,
     apiKeysQuery,
     gatewayLocked,
+    harnessDisallowed,
+    gatewayDisallowed,
+    apiKeyDisallowed,
+    nativeDisallowed,
     multiSource,
     busy,
     editorState,

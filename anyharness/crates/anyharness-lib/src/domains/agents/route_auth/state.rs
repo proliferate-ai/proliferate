@@ -98,6 +98,14 @@ pub struct AgentAuthState {
     pub revision: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_id: Option<String>,
+    /// The origin (`scheme://host[:port]`) of the control-plane server that
+    /// produced this document, stamped by the desktop write path at push time
+    /// (`use-local-auth-state-sync.ts`). `None` for cloud-materialized state
+    /// (no desktop server-switch concern there) and for files written before
+    /// this field existed — [`Self::matches_server_origin`] treats an absent
+    /// stamp as a match, so single-server users see no behavior change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issuing_server_origin: Option<String>,
     #[serde(default)]
     pub harnesses: Vec<HarnessAuth>,
 }
@@ -112,6 +120,30 @@ impl AgentAuthState {
             .map(|entry| entry.sources.as_slice())
             .unwrap_or(&[])
     }
+
+    /// Guards against injecting a PREVIOUS server's gateway tokens after a
+    /// desktop server switch (self-hosting-v1 §3.5, D1): the worker may push
+    /// a fresh document for the new server before the app re-enrolls, but a
+    /// launch racing that window must not use the just-abandoned server's
+    /// still-cached state.
+    ///
+    /// - both origins present and equal (case-insensitively, ignoring a
+    ///   trailing slash) → match.
+    /// - both present and different → mismatch (the caller treats the state
+    ///   as absent, i.e. native/no-injection, until a fresh push lands).
+    /// - either side absent (no stamp on the file, or no current-origin
+    ///   signal from the caller, e.g. a cloud sandbox) → match. This is the
+    ///   backward-compat path: it never regresses a single-server install.
+    pub fn matches_server_origin(&self, current_server_origin: Option<&str>) -> bool {
+        match (&self.issuing_server_origin, current_server_origin) {
+            (Some(stamped), Some(current)) => normalize_origin(stamped) == normalize_origin(current),
+            _ => true,
+        }
+    }
+}
+
+fn normalize_origin(origin: &str) -> String {
+    origin.trim().trim_end_matches('/').to_ascii_lowercase()
 }
 
 /// Read + parse the state file on demand. Returns:
@@ -266,6 +298,7 @@ mod tests {
             version: STATE_VERSION,
             revision: 42,
             user_id: Some("user-1".into()),
+            issuing_server_origin: None,
             harnesses: vec![
                 HarnessAuth {
                     harness_kind: "claude".into(),
@@ -295,6 +328,7 @@ mod tests {
             version: STATE_VERSION,
             revision: 5,
             user_id: None,
+            issuing_server_origin: None,
             harnesses: vec![HarnessAuth {
                 harness_kind: "codex".into(),
                 sources: vec![api_key_source("OPENAI_API_KEY", "sk-raw")],
@@ -312,6 +346,65 @@ mod tests {
         let json = r#"{ "version": 2, "revision": 0 }"#;
         let state: AgentAuthState = serde_json::from_str(json).expect("parse");
         assert!(state.harnesses.is_empty());
+        // No stamp on this (legacy) shape either.
+        assert!(state.issuing_server_origin.is_none());
+    }
+
+    #[test]
+    fn issuing_server_origin_round_trips_and_is_absent_by_default() {
+        let json = r#"{ "version": 2, "revision": 0, "issuing_server_origin": "https://proliferate.corp.example" }"#;
+        let state: AgentAuthState = serde_json::from_str(json).expect("parse");
+        assert_eq!(
+            state.issuing_server_origin,
+            Some("https://proliferate.corp.example".to_string())
+        );
+        let serialized = serde_json::to_string(&state).expect("serialize");
+        assert!(serialized.contains("\"issuing_server_origin\":\"https://proliferate.corp.example\""));
+    }
+
+    fn stamped_state(origin: Option<&str>) -> AgentAuthState {
+        AgentAuthState {
+            version: STATE_VERSION,
+            revision: 1,
+            user_id: None,
+            issuing_server_origin: origin.map(str::to_string),
+            harnesses: vec![],
+        }
+    }
+
+    #[test]
+    fn matches_server_origin_when_both_stamps_agree() {
+        let state = stamped_state(Some("https://proliferate.corp.example"));
+        assert!(state.matches_server_origin(Some("https://proliferate.corp.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_is_case_and_trailing_slash_insensitive() {
+        let state = stamped_state(Some("https://Proliferate.Corp.Example/"));
+        assert!(state.matches_server_origin(Some("https://proliferate.corp.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_rejects_a_real_mismatch() {
+        let state = stamped_state(Some("https://old-server.example"));
+        assert!(!state.matches_server_origin(Some("https://new-server.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_treats_legacy_unstamped_file_as_a_match() {
+        // Backward compat (task requirement): a file written before this field
+        // existed must not suddenly start losing its gateway credentials.
+        let state = stamped_state(None);
+        assert!(state.matches_server_origin(Some("https://proliferate.corp.example")));
+    }
+
+    #[test]
+    fn matches_server_origin_treats_absent_current_origin_signal_as_a_match() {
+        // No current-origin signal (e.g. a cloud sandbox launch, which never
+        // sets the env var this is sourced from) -> never second-guess the
+        // state file.
+        let state = stamped_state(Some("https://proliferate.corp.example"));
+        assert!(state.matches_server_origin(None));
     }
 
     fn state_with_revision(revision: i64) -> AgentAuthState {
@@ -319,6 +412,7 @@ mod tests {
             version: STATE_VERSION,
             revision,
             user_id: Some("user-1".into()),
+            issuing_server_origin: None,
             harnesses: vec![HarnessAuth {
                 harness_kind: "claude".into(),
                 sources: vec![api_key_source("ANTHROPIC_API_KEY", "sk-raw")],

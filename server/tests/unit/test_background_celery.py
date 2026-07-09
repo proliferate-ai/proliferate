@@ -4,7 +4,6 @@ from celery import Celery
 from kombu import Queue
 
 from proliferate.background.config import (
-    BILLING_RECONCILE_PASS_TASK,
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
     DEFAULT_QUEUE,
     HEALTH_NOOP_TASK,
@@ -50,7 +49,6 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
     assert celery_app.conf.task_routes == {
         HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
-        BILLING_RECONCILE_PASS_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     }
     assert (

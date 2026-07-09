@@ -9,7 +9,9 @@
 //! - `"baseline"` is active iff no context matched any slot.
 //! - A context without signals NEVER matches: it is probe-only knowledge
 //!   (the probe injected its credentials; the runtime has no detection
-//!   signature for it yet).
+//!   signature for it yet). Route-signaled contexts (e.g. `gateway`, decisions
+//!   ledger 13) DO match — they carry a `route` signal fed by a `Route` fact
+//!   collected in layer 1; only signal-less contexts stay inert.
 //! - Facts must come from the COMPOSED launch env (workspace env + auth
 //!   overlay), never the ambient process env — classifying ambient would
 //!   reproduce the probe env-leak bug in production. Secrets rule: values
@@ -124,7 +126,9 @@ pub fn classify(
         if decided_slots.contains(&slot_id) {
             continue;
         }
-        // No signals = probe-only context: never matches at runtime.
+        // No signals = probe-only context: never matches at runtime. A
+        // route-signaled context (e.g. `gateway`) carries signals and matches
+        // its `Route` fact like any other signature (decisions ledger 13).
         let Some(signals) = context.signals.as_ref() else {
             continue;
         };
@@ -150,7 +154,7 @@ fn signal_matches(signal: &AgentCatalogAuthSignal, facts: &[CredentialFact]) -> 
         AgentCatalogAuthSignal::Env(var) => facts.iter().any(|fact| match fact {
             CredentialFact::Env { var: fact_var } => fact_var == var,
             CredentialFact::EnvFlag { var: fact_var, .. } => fact_var == var,
-            CredentialFact::Discovery { .. } => false,
+            CredentialFact::Discovery { .. } | CredentialFact::Route { .. } => false,
         }),
         AgentCatalogAuthSignal::EnvFlag(spec) => {
             let Some((var, value)) = spec.split_once('=') else {
@@ -169,6 +173,9 @@ fn signal_matches(signal: &AgentCatalogAuthSignal, facts: &[CredentialFact]) -> 
         }
         AgentCatalogAuthSignal::Discovery(kind) => facts.iter().any(|fact| {
             matches!(fact, CredentialFact::Discovery { kind: fact_kind } if fact_kind == kind)
+        }),
+        AgentCatalogAuthSignal::Route(kind) => facts.iter().any(|fact| {
+            matches!(fact, CredentialFact::Route { kind: fact_kind } if fact_kind == kind)
         }),
         AgentCatalogAuthSignal::AnyOf(children) => children
             .iter()
@@ -203,7 +210,7 @@ pub fn project_credential_state(
         facts.iter().any(|fact| match fact {
             CredentialFact::Env { var: fact_var } => fact_var == var,
             CredentialFact::EnvFlag { var: fact_var, .. } => fact_var == var,
-            CredentialFact::Discovery { .. } => false,
+            CredentialFact::Discovery { .. } | CredentialFact::Route { .. } => false,
         })
     });
     if env_present {
