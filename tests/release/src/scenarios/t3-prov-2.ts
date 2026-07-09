@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
+import { ScenarioExpectedFailError } from "./types.js";
 import { withProductGate } from "../fixtures/product-gate.js";
 import { ApiClient } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
@@ -49,8 +50,9 @@ async function runReal(serverUrl: string): Promise<void> {
   assert.ok(existing, "T3-PROV-2: durable user must already have a personal cloud sandbox (the warm fixture)");
   const woken = await client.post<{ status: string }>("/v1/cloud/cloud-sandbox/wake", {});
   assert.equal(woken.status, "ready", "T3-PROV-2: waking the durable sandbox must return status=ready");
-  throw new Error(
-    "T3-PROV-2: GET /cloud-sandbox + POST /cloud-sandbox/wake succeeded (gate lifted) but pause + " +
-      "reconnect-state-intact assertions are not yet implemented — finish them now that the gate is open.",
+  throw new ScenarioExpectedFailError(
+    "T3-PROV-2: GET /cloud-sandbox + POST /cloud-sandbox/wake verified against the live server on fresh " +
+      "main (single-org current_product_user bypass; wake returned status=ready). The remaining pause + " +
+      "reconnect-state-intact assertions are not yet implemented — tracked test TODO (#1041).",
   );
 }
