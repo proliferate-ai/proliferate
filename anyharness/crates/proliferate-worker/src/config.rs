@@ -24,6 +24,28 @@ pub struct WorkerConfig {
     /// off.
     #[serde(default)]
     pub self_update_enabled: bool,
+    /// Whether this worker also converges the co-located AnyHarness runtime
+    /// binary onto the server's pinned version (heartbeat
+    /// `desiredVersions.anyharness`) by swapping it in place and relaunching
+    /// it. Independent of `self_update_enabled` so the worker-binary and
+    /// runtime-binary tracks are separately controllable. Default false: only
+    /// the sandbox sidecar opts in; the desktop app owns its bundled runtime
+    /// and must leave this off.
+    #[serde(default)]
+    pub anyharness_update_enabled: bool,
+    /// Fixed on-disk path of the AnyHarness runtime binary the worker swaps in
+    /// place. Required when `anyharness_update_enabled` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anyharness_binary_path: Option<PathBuf>,
+    /// On-disk path of the runtime launcher script the worker re-runs after a
+    /// swap (it `exec`s the fixed binary path with the original env). Required
+    /// when `anyharness_update_enabled` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anyharness_launcher_path: Option<PathBuf>,
+    /// Working directory the launcher is re-run in. Required when
+    /// `anyharness_update_enabled` is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub anyharness_workdir: Option<PathBuf>,
     /// Base URL of the co-located AnyHarness runtime HTTP API. Required for
     /// catalog sync (pushing fetched catalogs to the runtime). Defaults to
     /// `http://127.0.0.1:8457` when absent — the standard runtime port on
@@ -188,6 +210,42 @@ worker_db_path = "/tmp/worker.sqlite3"
         let contents = format!("{MINIMAL_CONFIG}self_update_enabled = true\n");
         let config: WorkerConfig = toml::from_str(&contents).expect("opt-in config");
         assert!(config.self_update_enabled);
+    }
+
+    #[test]
+    fn anyharness_update_defaults_off_with_no_paths() {
+        // Desktop configs predate (and must never enable) the runtime swap.
+        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
+        assert!(!config.anyharness_update_enabled);
+        assert_eq!(config.anyharness_binary_path, None);
+        assert_eq!(config.anyharness_launcher_path, None);
+        assert_eq!(config.anyharness_workdir, None);
+    }
+
+    #[test]
+    fn anyharness_update_opt_in_parses_with_paths() {
+        let contents = format!(
+            "{MINIMAL_CONFIG}anyharness_update_enabled = true\n\
+             anyharness_binary_path = \"/home/user/.proliferate/bin/anyharness\"\n\
+             anyharness_launcher_path = \"/home/user/start-anyharness.sh\"\n\
+             anyharness_workdir = \"/home/user/repo\"\n"
+        );
+        let config: WorkerConfig = toml::from_str(&contents).expect("opt-in config");
+        assert!(config.anyharness_update_enabled);
+        assert_eq!(
+            config.anyharness_binary_path.as_deref(),
+            Some(std::path::Path::new(
+                "/home/user/.proliferate/bin/anyharness"
+            ))
+        );
+        assert_eq!(
+            config.anyharness_launcher_path.as_deref(),
+            Some(std::path::Path::new("/home/user/start-anyharness.sh"))
+        );
+        assert_eq!(
+            config.anyharness_workdir.as_deref(),
+            Some(std::path::Path::new("/home/user/repo"))
+        );
     }
 
     #[test]
