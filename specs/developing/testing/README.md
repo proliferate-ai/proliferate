@@ -154,7 +154,7 @@ artifacts it serves are real), trigger the mechanism, assert convergence.
 | --- | --- | --- | --- |
 | Worker self-update (sandbox only) | Heartbeat `desiredVersions.worker` | Server pins (`WORKER_VERSION`) + CDN base `DESKTOP_DOWNLOADS_BASE_URL` — both **server-side** env vars (the worker asks the API server, which 302-redirects to the CDN base; stub by pointing the base at a file server the sandbox can reach, e.g. via ngrok) | **Yes** — the priority scenario |
 | Agent catalog convergence (existing sandboxes + local runtimes) | Heartbeat `desiredVersions.catalogVersion` → worker pushes catalog → runtime reconcile reinstalls drifted CLIs | Server catalog version | **Yes** — full-chain test; today only per-hop units exist |
-| AnyHarness binary self-update (sandbox only) | Heartbeat `desiredVersions.anyharness` → worker downloads pinned runtime, stops/swaps/relaunches it in place | Server pin (`RUNTIME_VERSION`) + the download base the redirect resolves to — both **server-side** (same stub shape as the worker row) | Specced, not yet built — `specs/tbd/anyharness-self-update-v1.md`; enters this table with its scenario when it lands |
+| AnyHarness binary self-update (sandbox only) | Heartbeat `desiredVersions.anyharness` → worker downloads pinned runtime, stops/swaps/relaunches it in place | Server pin (`RUNTIME_VERSION`) + the download base the redirect resolves to — both **server-side** (same stub shape as the worker row) | Mechanism built (`specs/tbd/anyharness-self-update-v1.md`); the end-to-end T4 scenario in `tests/release/upgrade/` is the remaining follow-up |
 | Desktop app (Tauri updater; bundles anyharness/worker sidecars) | 30-min poll of `latest.json` | Shipped default hardcoded in `tauri.conf.json`; **build-overridable** via a `tauri build --config` overlay (`make desktop-test-build UPDATER_URL=...`) — the shipped build is untouched | **Yes** — build an N−1 app pointed at a local feed and drive a real update. See [desktop-update-testing.md](./desktop-update-testing.md) |
 | E2B template | Build-time only; rolling `:staging`/`:production` tags affect **new** sandboxes only | `E2B_TEMPLATE_NAME` / `E2B_TEMPLATE_REF` | Yes — new-sandbox-gets-new-template + old-workspace-still-wakes |
 | SQLite/Alembic migrations | Ships inside the new binary/server | — | Yes — forward-apply on kept N−1 data |
@@ -165,14 +165,17 @@ neither has an end-to-end test today (coverage is per-hop unit tests). The
 worker scenario must include a live session on the box surviving the
 swap-and-exec.
 
-Sandbox AnyHarness in-place update is **specced but not yet built**
-(`specs/tbd/anyharness-self-update-v1.md`): the worker will watch
-`desiredVersions.anyharness` and swap the runtime binary in place. Until it
-lands the worker still ignores that field and sandboxes get a new anyharness
-only via a new template. Desktop gets a new anyharness only via the app bundle,
-and that remains bundle-only by design. The supervisor `update/` module
-validates and stages artifacts handed to it but fetches and swaps nothing, and
-is deliberately not the update owner in v1.
+Sandbox AnyHarness in-place update is **built**
+(`specs/tbd/anyharness-self-update-v1.md`): the sandbox worker watches
+`desiredVersions.anyharness`, downloads the pinned runtime through the server
+redirect, and stops/swaps/relaunches the binary in place, health-gating and
+rolling back on failure. A new anyharness now reaches a running sandbox without
+a new template. Desktop gets a new anyharness only via the app bundle, and that
+remains bundle-only by design (the worker leaves the gate off). The supervisor
+`update/` module validates and stages artifacts handed to it but fetches and
+swaps nothing, and is deliberately not the update owner in v1. The end-to-end
+T4 scenario that asserts convergence (binary **and** agent versions, cloud and
+local consistent) is the remaining follow-up.
 
 Lives in `tests/release/upgrade/`, runs under the same runner CLI.
 

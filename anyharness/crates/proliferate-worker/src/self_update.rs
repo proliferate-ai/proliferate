@@ -156,11 +156,11 @@ pub async fn converge(cloud: &CloudClient, update: &UpdatePlan) -> Result<(), Wo
 /// resolved URL with the checksum suffix appended. Deriving it (rather than
 /// re-resolving the pinned-vs-fallback path via a second redirect) guarantees
 /// the checksum and binary come from the same directory — and thus version.
-fn checksum_url_for(binary_url: &str) -> String {
+pub(crate) fn checksum_url_for(binary_url: &str) -> String {
     format!("{binary_url}{CHECKSUM_SUFFIX}")
 }
 
-fn artifact_target() -> Result<String, WorkerError> {
+pub(crate) fn artifact_target() -> Result<String, WorkerError> {
     let unsupported = || WorkerError::SelfUpdateUnsupported {
         os: std::env::consts::OS,
         arch: std::env::consts::ARCH,
@@ -286,7 +286,7 @@ fn preflight(staged: &Path, desired_version: &str) -> Result<(), WorkerError> {
 /// `--version` prints e.g. `proliferate-worker 0.3.0`; match on whitespace
 /// tokens (tolerating a leading `v`) rather than the exact line so the check
 /// survives formatting changes.
-fn version_output_matches(output: &str, desired: &str) -> bool {
+pub(crate) fn version_output_matches(output: &str, desired: &str) -> bool {
     output
         .split_whitespace()
         .any(|token| token == desired || token.strip_prefix('v') == Some(desired))

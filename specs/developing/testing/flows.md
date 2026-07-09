@@ -138,7 +138,7 @@ its own seam. Mechanism map and current-coverage audit: the tier-4 section of
 | Worker self-update: sandbox worker N−1 heartbeats, downloads N from stubbed CDN base (`DESKTOP_DOWNLOADS_BASE_URL`), verifies, swaps, execs — with a live session on the box that survives | 4 | — |
 | Catalog convergence full chain (sandbox): server catalog version bump → heartbeat → worker push → runtime reconcile → agent CLI in an **existing** sandbox reinstalled at the new pin — independent of any worker binary update | 4 | tests/release/src/scenarios/t3-update-1.ts (T3-UPDATE-1; blocked on current_product_user) |
 | Catalog convergence on desktop local: same chain through the bundled desktop worker → local runtime → agent CLI reinstalled at the new pin | 4 | tests/release/src/scenarios/t3-update-1.ts (T3-UPDATE-1; expected-fail — no such mechanism exists for the local runtime today, filed as issue #1025) |
-| AnyHarness binary self-update (sandbox): worker sees `desiredVersions.anyharness` bump → downloads pinned runtime → stops/swaps/relaunches it in place → a live session on the box restarts and completes → heartbeat reports the new version and agent CLIs reconcile to the new registry's pins | 4 | — (specced, not built — `specs/tbd/anyharness-self-update-v1.md`) |
+| AnyHarness binary self-update (sandbox): worker sees `desiredVersions.anyharness` bump → downloads pinned runtime → stops/swaps/relaunches it in place → a live session on the box restarts and completes → heartbeat reports the new version and agent CLIs reconcile to the new registry's pins | 4 | — (mechanism built per `specs/tbd/anyharness-self-update-v1.md`; scenario in `tests/release/upgrade/` is the follow-up) |
 | Desktop app update replaces bundled anyharness + worker sidecars; post-update catalog reconcile installs the right agent CLIs | 4 | — |
 | Desktop feed artifact valid per release: `latest.json` shape, signature verifies against bundled pubkey, bundle sidecars report correct versions | 4 | — |
 | Desktop real N−1 → N auto-update (nightly native lane; needs a test build with overridable feed endpoint) | 4 | — |
@@ -150,14 +150,15 @@ replacement path, which is a placeholder runbook today
 (`specs/developing/runbooks/managed-target-replacement.md`) — its test enters
 this registry when the mechanism is built.
 
-**Sandbox anyharness in-place update is specced but not yet built**
-(`specs/tbd/anyharness-self-update-v1.md`): the worker will act on
-`desiredVersions.anyharness` and swap the runtime binary in place — the row
-above tracks it. Until it lands the worker still ignores that field and
-sandboxes get a new anyharness only via new template → new sandbox. Desktop
-gets it only inside the app bundle, and that stays bundle-only by design. The
-supervisor `update/` module stages but never fetches or swaps, and is not the
-update owner in v1.
+**Sandbox anyharness in-place update is built**
+(`specs/tbd/anyharness-self-update-v1.md`): the sandbox worker acts on
+`desiredVersions.anyharness` and swaps the runtime binary in place (download →
+stop → swap → relaunch → health-gate → roll back on failure) — the row above
+tracks it, and the end-to-end scenario is the remaining follow-up. A new
+anyharness now reaches a running sandbox without a new template. Desktop gets
+it only inside the app bundle, and that stays bundle-only by design (the worker
+leaves the gate off). The supervisor `update/` module stages but never fetches
+or swaps, and is not the update owner in v1.
 
 ## Deferred — add on first production break
 
