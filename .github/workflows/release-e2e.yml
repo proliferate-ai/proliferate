@@ -217,8 +217,16 @@ jobs:
           ( cd server && .venv/bin/alembic upgrade head )
           ( cd server && .venv/bin/uvicorn proliferate.main:app --host 127.0.0.1 --port 8086 ) &
           SERVER_PID=$!
-          # Boot the AnyHarness runtime built above.
-          ./target/runtime-local/debug/anyharness serve --host 127.0.0.1 --port 8542 &
+          # Boot the AnyHarness runtime built above. ANTHROPIC_AUTH_TOKEN is
+          # exported to the runtime process because its session-create
+          # readiness gate reads only process env / native login files — it
+          # does not consult the gateway agent-auth state the runner pushes
+          # (PUT /v1/agent-auth/state), so a gateway-only environment would
+          # report claude LoginRequired. At launch the gateway render overrides
+          # ANTHROPIC_AUTH_TOKEN/_BASE_URL with the same key anyway, so this
+          # only satisfies the readiness check, never routes traffic.
+          ANTHROPIC_AUTH_TOKEN="$RELEASE_E2E_GATEWAY_TEST_KEY" \
+            ./target/runtime-local/debug/anyharness serve --host 127.0.0.1 --port 8542 &
           RUNTIME_PID=$!
           trap 'kill $SERVER_PID $RUNTIME_PID 2>/dev/null || true' EXIT
 
