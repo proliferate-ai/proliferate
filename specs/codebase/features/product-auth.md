@@ -25,7 +25,14 @@ Proliferate has two related but distinct auth concepts:
 
 GitHub remains the product-readiness provider. A password-only user is signed in
 but limited until the existing GitHub readiness check succeeds. Do not add a
-hidden bypass for normal users.
+hidden bypass for normal (hosted, multi-tenant) users.
+
+Single-org (self-hosted) instances are the one carve-out: there is no GitHub
+OAuth app configured, so `current_product_user` admits password-only accounts
+when `settings.single_org_mode` is true, same as its sibling
+`current_organization_actor`. Hosted keeps the GitHub readiness gate
+unconditionally. Endpoints that genuinely need a GitHub token (repo import,
+etc.) still enforce that at their own point of use, not through this gate.
 
 ## Web Beta Access
 

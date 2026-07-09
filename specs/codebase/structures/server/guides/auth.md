@@ -35,7 +35,7 @@ free; nothing downstream re-checks.
 ```text
 anonymous
 └── current_active_user                    active user
-    └── current_product_user               + GitHub connected — default for product/cloud surfaces
+    └── current_product_user               + GitHub connected (hosted) / single-org bypass — default for product/cloud surfaces
         ├── require_org_membership(org_id)  org member  -> OwnerContext
         └── require_org_role(org_id, roles) org standing -> OwnerContext
 
@@ -193,7 +193,7 @@ the caller." Each is a thin `Depends()` that composes the one above it.
 | Dep | Gates |
 |---|---|
 | `current_active_user` | active user, no GitHub requirement |
-| `current_product_user` | active user **+ GitHub connected** — the default for product/cloud surfaces |
+| `current_product_user` | active user **+ GitHub connected** — the default for product/cloud surfaces. Single-org (self-hosted) instances bypass the GitHub check for password-only accounts; hosted keeps it unconditionally. |
 | `optional_current_active_user` | maybe authenticated (public route with extra behavior when signed in) |
 | `current_worker` | worker JWT, resolved to a `WorkerAuthContext` (see Worker actor) |
 
