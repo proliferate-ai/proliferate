@@ -47,12 +47,15 @@ interface PriceCatalog {
   prices: { proMonthly: string; managedCloudOverageCent: string; refill10h: string };
 }
 
-function provisionPriceCatalog(): PriceCatalog {
+function provisionPriceCatalog(secretKey: string): PriceCatalog {
   // Idempotent: finds existing test-mode prices by lookup key, creates only
-  // what's missing. Never touches live mode.
+  // what's missing. Never touches live mode. The script shells out to the
+  // `stripe` CLI without --api-key, so pass the resolved key via the CLI's
+  // STRIPE_API_KEY env var — CI runners have no `stripe login` config.
   const result = spawnSync("node", ["scripts/stripe-setup-test-mode.mjs"], {
     cwd: REPO_ROOT,
     encoding: "utf8",
+    env: { ...process.env, STRIPE_API_KEY: secretKey },
   });
   if (result.status !== 0) {
     throw new Error(`stripe-setup-test-mode.mjs failed: ${(result.stderr || result.stdout || "").trim()}`);
@@ -70,7 +73,7 @@ export default async function billingGlobalSetup(): Promise<() => Promise<void>>
     return async () => {};
   }
 
-  const catalog = provisionPriceCatalog();
+  const catalog = provisionPriceCatalog(secretKey);
   const stripe: StripeBillingEnv = {
     secretKey,
     webhookSecret: `whsec_t2billing_${randomBytes(16).toString("hex")}`,

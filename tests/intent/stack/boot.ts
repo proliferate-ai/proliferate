@@ -311,6 +311,16 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     // webhook receiver verifies signatures against STRIPE_WEBHOOK_SECRET, so
     // the harness signs deliveries with the same value (see stack/billing.ts).
     const s = options.stripe;
+    // CLOUD_BILLING_MODE=enforce refuses to boot without E2B_API_KEY
+    // (main.py _validate_cloud_billing_configuration — a presence check so
+    // metering/reconciliation could run). Tier-2 billing never provisions a
+    // sandbox (compute usage is seeded usage_segment rows) and no spec calls
+    // the reconciler's provider path, so a placeholder satisfies the boot
+    // gate on CI runners that have no real key. A real key in the ambient
+    // env (local dev) always wins.
+    if (!serverEnv.E2B_API_KEY) {
+      serverEnv.E2B_API_KEY = "e2b_tier2_billing_boot_placeholder";
+    }
     serverEnv.PRO_BILLING_ENABLED = "true";
     serverEnv.CLOUD_BILLING_MODE = s.billingMode;
     serverEnv.STRIPE_SECRET_KEY = s.secretKey;
