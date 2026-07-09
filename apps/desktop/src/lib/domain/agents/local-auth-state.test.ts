@@ -3,6 +3,7 @@ import type { AgentAuthState } from "@proliferate/cloud-sdk";
 import {
   localAuthStateFingerprint,
   planLocalAuthStatePush,
+  stampIssuingServerOrigin,
 } from "./local-auth-state";
 
 function state(overrides: Partial<AgentAuthState> = {}): AgentAuthState {
@@ -92,5 +93,21 @@ describe("localAuthStateFingerprint", () => {
     expect(localAuthStateFingerprint(rotated)).not.toBe(
       localAuthStateFingerprint(state()),
     );
+  });
+});
+
+describe("stampIssuingServerOrigin", () => {
+  it("adds the origin without dropping any existing fields", () => {
+    const stamped = stampIssuingServerOrigin(state(), "https://proliferate.corp.example");
+    expect(stamped).toEqual({
+      ...state(),
+      issuing_server_origin: "https://proliferate.corp.example",
+    });
+  });
+
+  it("overwrites a previous stamp on re-push after a server switch", () => {
+    const first = stampIssuingServerOrigin(state(), "https://old-server.example");
+    const second = stampIssuingServerOrigin(first, "https://new-server.example");
+    expect(second.issuing_server_origin).toBe("https://new-server.example");
   });
 });

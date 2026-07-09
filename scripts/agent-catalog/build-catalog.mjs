@@ -51,7 +51,17 @@ const AUTH_CONTEXT_SLOTS = {
 // the registry slot's envVars/discoveryKinds (validation_pairing.rs).
 const AUTH_CONTEXT_SIGNALS = {
   claude: {
-    "bedrock": { allOf: [{ envFlag: "CLAUDE_CODE_USE_BEDROCK=1" }, { discovery: "aws-credential-chain" }] },
+    // CLAUDE_CODE_USE_BEDROCK=1 is the routing switch: when set, the CLI
+    // routes to Bedrock and only serves us.anthropic.* inference-profile ids,
+    // whichever credential source it uses. We key bedrock on the flag alone
+    // and do NOT also require aws-credential-chain — that discovery covers only
+    // the passive sources (env pair, bearer token, ~/.aws profile, SSO cache)
+    // and deliberately misses the exotic tail (IMDS / task-role / container
+    // creds, decisions ledger 12). A production Bedrock deployment on an ECS
+    // task role sets the flag but has no passively detectable creds, so an
+    // allOf would misclassify it as oauth/api and then accept bare ids the
+    // account 400s on. The flag is the honest, sufficient signal.
+    "bedrock": { envFlag: "CLAUDE_CODE_USE_BEDROCK=1" },
     "anthropic-api": { anyOf: [{ env: "ANTHROPIC_API_KEY" }, { env: "ANTHROPIC_AUTH_TOKEN" }] },
     "anthropic-oauth": { anyOf: [{ discovery: "claude-oauth-creds" }, { discovery: "claude-keychain" }] },
   },
@@ -156,6 +166,25 @@ const MODEL_VISIBILITY_OPT_OUTS = {
     "grok-imagine-video-1.5-preview",
   ],
 };
+
+// Availability stays the OBSERVED SET (menu or accepted trial per context)
+// with ONE sanctioned correction. Bedrock serves only region-prefixed
+// inference-profile ids (us.anthropic.* / global.anthropic.*). The Claude CLI
+// still lists the bare current-gen ids (default / haiku / opus) on its menu
+// during a bedrock probe run, so the raw observed set tags them
+// bedrock-available — but the CLI 400s those bare ids on use ("Try --model to
+// switch to us.anthropic.claude-opus-4-7 ..."). Menu presence is not
+// serve-ability: this is a menu-lie. Strip bedrock from any claude id that is
+// not a region-prefixed inference profile so validate_launch never accepts a
+// bare id a Bedrock-routed account cannot serve. The us.anthropic.* rows stay
+// the account's real menu; a normal oauth/api login (no bedrock context) is
+// untouched. Provenance keeps the honest observation.
+function correctAvailability(kind, modelId, contexts) {
+  if (kind === "claude" && !modelId.includes(".anthropic.")) {
+    return contexts.filter((context) => context !== "bedrock");
+  }
+  return contexts;
+}
 
 // Per-harness advanced settings: declared here (curation-owned), emitted onto
 // the agent entry, and applied at launch per the mapping kind. v1 supports
@@ -508,14 +537,15 @@ for (const [kind, runs] of byAgent) {
     const matrix = entry.mergedMatrix ?? {};
     // Observed-set semantics: exactly the contexts that saw this model.
     // 'baseline' is a first-class context; no always/anyOf inference.
-    const contexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
+    const observedContexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
+    const availabilityContexts = correctAvailability(kind, modelId, observedContexts);
     return {
       id: modelId,
       displayName:
         MODEL_DISPLAY_OVERRIDES[kind]?.[modelId] ??
         prettifyDisplayName(versionedDisplayName(entry.name, entry.description, modelId)),
       ...(entry.description ? { description: entry.description } : {}),
-      availability: { anyOf: contexts },
+      availability: { anyOf: availabilityContexts },
       // On a harness menu somewhere -> advertised; trial-only -> available
       // but hidden unless curation opts it in.
       defaultVisible: !(MODEL_VISIBILITY_OPT_OUTS[kind] ?? []).includes(modelId),
@@ -523,7 +553,7 @@ for (const [kind, runs] of byAgent) {
       status: "active",
       provenance: {
         observedIn: [...new Set(entry.observedIn)],
-        observedInAllContexts: contexts.length === probedContexts.length,
+        observedInAllContexts: observedContexts.length === probedContexts.length,
         viaTrialOnly: !entry.onMenu,
         ...(entry.variants ? { variantIds: entry.variants } : {}),
       },

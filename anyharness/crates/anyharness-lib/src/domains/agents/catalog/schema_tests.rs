@@ -61,9 +61,12 @@ fn draft_catalog_parses_with_expected_shape() {
     );
     let first = &claude.session.models[0];
     assert_eq!(first.id, "default");
+    // Bare ids are never Bedrock-servable (Bedrock takes only us.anthropic.*
+    // inference-profile ids), so `default` is api/oauth only — a Bedrock-routed
+    // account gets the us.anthropic.* rows, never this bare id.
     assert_eq!(
         first.availability.any_of,
-        vec!["anthropic-api", "anthropic-oauth", "bedrock"]
+        vec!["anthropic-api", "anthropic-oauth"]
     );
     assert!(first.default_visible);
     let effort = first.controls.get("effort").expect("effort control");

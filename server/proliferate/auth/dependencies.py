@@ -55,6 +55,16 @@ async def current_product_user(
     user: User = Depends(current_limited_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> User:
+    """Acting user for Proliferate Cloud product surfaces (secrets, workspaces, repos).
+
+    Hosted keeps the GitHub product-readiness gate, byte-for-byte the same as
+    ``current_organization_actor``. Single-org (self-hosted) instances admit
+    password-only accounts: the product surfaces themselves must work with no
+    GitHub OAuth app configured. Endpoints that genuinely need a GitHub token
+    (e.g. repo import) enforce that at the point of use instead of here.
+    """
+    if settings.single_org_mode:
+        return user
     return await _require_product_ready(db, user)
 
 

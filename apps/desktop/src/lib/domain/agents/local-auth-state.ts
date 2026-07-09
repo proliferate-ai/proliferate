@@ -1,4 +1,5 @@
 import type { AgentAuthState } from "@proliferate/cloud-sdk";
+import type { AgentAuthStateDocument } from "@anyharness/sdk";
 
 /**
  * Pure sync logic for the local agent-auth state writer (spec §5): the
@@ -29,6 +30,22 @@ export function localAuthStateFingerprint(state: AgentAuthState): string {
     }
     return value;
   });
+}
+
+/**
+ * Stamp the server-fetched document with the origin of the server that
+ * produced it before pushing it to the local runtime (spec §5 twin of the
+ * cloud materializer). The runtime's route-auth render plane compares this
+ * against the server it currently points at and skips a mismatched document
+ * (self-hosting-v1 §3.5) rather than injecting a previous server's gateway
+ * credentials — the class of bug a desktop server switch would otherwise hit
+ * while the worker is still re-enrolling against the new server.
+ */
+export function stampIssuingServerOrigin(
+  state: AgentAuthState,
+  issuingServerOrigin: string,
+): AgentAuthStateDocument {
+  return { ...state, issuing_server_origin: issuingServerOrigin };
 }
 
 export function planLocalAuthStatePush(input: {

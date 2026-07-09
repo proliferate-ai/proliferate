@@ -2,6 +2,7 @@ import type React from "react";
 import type { ReactNode } from "react";
 import type { AgentAuthSurface } from "@proliferate/cloud-sdk";
 import { Check, CloudIcon, KeyRound, SquareTerminal } from "@proliferate/ui/icons";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { HARNESS_PANE_COPY } from "@/copy/settings/harness-pane";
 import { gatewaySubtitle } from "@/copy/settings/agent-auth-copy";
 import {
@@ -9,7 +10,7 @@ import {
   type AuthMethod,
 } from "@/lib/domain/settings/harness-auth-sources";
 import { HarnessPanelBlock, type HarnessBlockVariant } from "./HarnessPanelBlock";
-import type { HarnessAuthEditorApi } from "./use-harness-auth-editor";
+import type { HarnessAuthEditorApi } from "@/hooks/agents/workflows/use-harness-auth-editor";
 
 export type { AuthMethod };
 
@@ -74,6 +75,7 @@ export function isMultiSourceApiKeyConfigVisible(editor: HarnessAuthEditorApi): 
 }
 
 const CURSOR_HARNESS = "cursor";
+const POLICY_TOOLTIP = "Disabled by your organization's policy";
 
 export function HarnessAuthSection({
   harnessKind,
@@ -145,6 +147,16 @@ function HarnessAuthMethods({
   const capabilities = editor.capabilitiesQuery.data;
   const enrollment = editor.enrollmentQuery.data;
 
+  // A disallowed policy only blocks MOVING to a method, never staying on one
+  // that's already selected — that's the only remediation path for a
+  // pre-existing selection on a harness/route the org has since disallowed
+  // (there is no DELETE endpoint). Native is deliberately excluded from the
+  // harness-level gate (see editor.nativeDisallowed) so clearing a selection
+  // by switching to CLI always stays reachable.
+  const gatewayCardDisallowed = editor.gatewayDisallowed && !selectedMethods.has("gateway");
+  const apiKeyCardDisallowed = editor.apiKeyDisallowed && !selectedMethods.has("api_key");
+  const nativeCardDisallowed = editor.nativeDisallowed && !selectedMethods.has("cli");
+
   function selectMethod(method: AuthMethod) {
     if (multiSource) {
       handleMultiSourceSelect(method, editor);
@@ -159,28 +171,44 @@ function HarnessAuthMethods({
       title={HARNESS_PANE_COPY.authenticationTitle}
       description={HARNESS_PANE_COPY.authenticationDescription(displayName)}
     >
+      {editor.harnessDisallowed ? (
+        <p className="pb-2 text-sm text-muted-foreground">{POLICY_TOOLTIP}.</p>
+      ) : null}
       <div className="grid grid-cols-3 gap-3">
         <MethodCard
           label={HARNESS_PANE_COPY.methodGateway}
           icon={<CloudIcon className="size-5" />}
           selected={selectedMethods.has("gateway")}
-          disabled={editor.gatewayLocked || editor.busy}
-          disabledReason={editor.gatewayLocked ? gatewaySubtitle(capabilities, enrollment) : undefined}
+          disabled={editor.gatewayLocked || editor.busy || gatewayCardDisallowed}
+          disabledReason={
+            editor.gatewayLocked
+              ? gatewaySubtitle(capabilities, enrollment)
+              : gatewayCardDisallowed
+                ? POLICY_TOOLTIP
+                : undefined
+          }
           onClick={() => selectMethod("gateway")}
         />
         <MethodCard
           label={HARNESS_PANE_COPY.methodApiKey}
           icon={<KeyRound className="size-5" />}
           selected={selectedMethods.has("api_key")}
-          disabled={editor.busy}
+          disabled={editor.busy || apiKeyCardDisallowed}
+          disabledReason={apiKeyCardDisallowed ? POLICY_TOOLTIP : undefined}
           onClick={() => selectMethod("api_key")}
         />
         <MethodCard
           label={HARNESS_PANE_COPY.methodCli}
           icon={<SquareTerminal className="size-5" />}
           selected={selectedMethods.has("cli")}
-          disabled={multiSource || editor.busy}
-          disabledReason={multiSource ? HARNESS_PANE_COPY.cliAlwaysActive : undefined}
+          disabled={multiSource || editor.busy || nativeCardDisallowed}
+          disabledReason={
+            multiSource
+              ? HARNESS_PANE_COPY.cliAlwaysActive
+              : nativeCardDisallowed
+                ? POLICY_TOOLTIP
+                : undefined
+          }
           onClick={() => selectMethod("cli")}
         />
       </div>
@@ -289,7 +317,9 @@ function MethodCard({
 }: MethodCardProps) {
   return (
     <div className="flex flex-col gap-1">
-      <button
+      <Button
+        variant="unstyled"
+        size="unstyled"
         type="button"
         aria-pressed={selected}
         disabled={disabled}
@@ -307,7 +337,7 @@ function MethodCard({
         ) : null}
         {icon}
         <span className="text-xs font-medium">{label}</span>
-      </button>
+      </Button>
       {disabled && disabledReason ? (
         <p className="px-1 text-[11px] leading-tight text-muted-foreground">
           {disabledReason}

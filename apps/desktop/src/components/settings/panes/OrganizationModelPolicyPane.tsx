@@ -110,8 +110,12 @@ export function OrganizationModelPolicyPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Model policy"
-        description="Which agents, auth routes, and models organization members can use."
+        description="Which agents and auth routes organization members can use."
       />
+
+      <p className="text-sm text-muted-foreground">
+        Restricting members to specific models (per-model allowlists) is coming soon.
+      </p>
 
       {policy.isLoading ? (
         <div className="text-sm text-muted-foreground">Loading policy…</div>
@@ -179,7 +183,7 @@ export function OrganizationModelPolicyPane() {
           </div>
 
           {/* Conflicts */}
-          <SettingsSection title="Conflicts" description="Member selections outside this policy. Flagged only — nothing is blocked.">
+          <SettingsSection title="Conflicts" description="Existing member selections outside this policy. New selections are blocked; these stay flagged until each member updates them.">
             <div className="overflow-clip rounded-lg bg-foreground/5">
               {violations.isLoading ? (
                 <div className="px-3.5 py-3.5 text-sm text-muted-foreground">Checking…</div>

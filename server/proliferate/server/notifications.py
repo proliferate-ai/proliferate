@@ -12,7 +12,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.background.config import NOTIFICATIONS_QUEUE, NOTIFICATIONS_SEND_SLACK_TASK
 from proliferate.config import settings
 from proliferate.db import engine as db_engine
 from proliferate.db import session_ops as db_session
@@ -152,19 +151,25 @@ def schedule_signup_slack_notification(
     dedupe_key: str | None = None,
     db: AsyncSession | None = None,
 ) -> None:
-    payload = _signup_slack_notification_task_payload(
-        notification,
-        dedupe_key=dedupe_key,
-    )
-    task_id = f"signup-slack:{dedupe_key}" if dedupe_key else None
+    # Delivered in-process (like billing Slack notifications below) rather than
+    # via Celery: no deployment path runs a Celery worker for this queue, so an
+    # enqueue here would silently vanish.
+    name = f"signup-slack-notification-{dedupe_key}" if dedupe_key else "signup-slack-notification"
+
+    def _deliver() -> None:
+        _schedule(
+            deliver_signup_slack_notification(notification, dedupe_key=dedupe_key),
+            name=name,
+        )
+
     if db is None:
-        _enqueue_slack_notification_task(payload, task_id=task_id)
+        _deliver()
         return
 
-    async def _enqueue_after_commit() -> None:
-        _enqueue_slack_notification_task(payload, task_id=task_id)
+    async def _deliver_after_commit() -> None:
+        _deliver()
 
-    db_session.defer_after_commit(db, _enqueue_after_commit)
+    db_session.defer_after_commit(db, _deliver_after_commit)
 
 
 def schedule_billing_slack_notification(notification: BillingSlackNotification) -> None:
@@ -298,57 +303,6 @@ def _billing_slack_webhook_configured(event: BillingSlackEvent) -> bool:
         else settings.billing_negative_slack_webhook_url
     )
     return bool(webhook_url.strip())
-
-
-def _signup_slack_notification_task_payload(
-    notification: SignupSlackNotification,
-    *,
-    dedupe_key: str | None,
-) -> dict[str, object]:
-    return {
-        "kind": SIGNUP_SLACK_TASK_KIND,
-        "dedupe_key": dedupe_key,
-        "notification": {
-            "name": notification.name,
-            "email": notification.email,
-            "github": notification.github,
-            "user_created_at": (
-                notification.user_created_at.isoformat()
-                if notification.user_created_at is not None
-                else None
-            ),
-        },
-    }
-
-
-def _enqueue_slack_notification_task(
-    payload: dict[str, object],
-    *,
-    task_id: str | None,
-) -> bool:
-    try:
-        _send_slack_task_to_celery(payload, task_id=task_id)
-    except Exception:
-        logger.exception("Could not enqueue Slack notification task")
-        return False
-    return True
-
-
-def _send_slack_task_to_celery(
-    payload: dict[str, object],
-    *,
-    task_id: str | None,
-) -> None:
-    from proliferate.background.celery_app import celery_app
-    from proliferate.middleware.request_context import capture_correlation_context
-
-    celery_app.send_task(
-        NOTIFICATIONS_SEND_SLACK_TASK,
-        args=(payload,),
-        queue=NOTIFICATIONS_QUEUE,
-        task_id=task_id,
-        headers=capture_correlation_context() or None,
-    )
 
 
 def _schedule(awaitable: Coroutine[object, object, bool], *, name: str) -> bool:

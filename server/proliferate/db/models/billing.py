@@ -2,14 +2,17 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -342,6 +345,64 @@ class UsageSegment(Base):
     is_billable: Mapped[bool] = mapped_column(Boolean, default=True)
     opened_by: Mapped[str] = mapped_column(String(64))
     closed_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
+class BillingBudgetLimit(Base):
+    """Org-scoped consumption cap (v1: compute seconds / LLM USD, calendar UTC).
+
+    ``user_id IS NULL`` is an org-wide limit over the whole org's window
+    consumption; a non-null ``user_id`` caps that individual. Both can coexist;
+    enforcement checks both.
+    """
+
+    __tablename__ = "billing_budget_limit"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('compute', 'llm')",
+            name="ck_billing_budget_limit_kind",
+        ),
+        CheckConstraint(
+            "\"window\" IN ('day', 'month')",
+            name="ck_billing_budget_limit_window",
+        ),
+        CheckConstraint(
+            "cap_value >= 0",
+            name="ck_billing_budget_limit_cap_non_negative",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "user_id",
+            "kind",
+            "window",
+            name="uq_billing_budget_limit_scope",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+    )
+    # NULL user_id == org-wide limit.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    kind: Mapped[str] = mapped_column(String(16))
+    # kind='compute': cap in SECONDS; kind='llm': cap in USD.
+    window: Mapped[str] = mapped_column(String(16))
+    cap_value: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        server_default=text("true"),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
