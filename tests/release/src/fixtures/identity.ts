@@ -277,7 +277,7 @@ async function claimLocalSetup(
  * once that fix merges, and every scenario using `withProductGate` below
  * starts asserting for real again with no other code change.
  */
-export const GITHUB_LINK_GATE_WORKAROUND_ACTIVE = true;
+export const GITHUB_LINK_GATE_WORKAROUND_ACTIVE = false;
 
 export function isGithubLinkRequiredError(error: unknown): boolean {
   if (!(error instanceof ApiRequestError) || error.status !== 403 || typeof error.body !== "object" || error.body === null) {
