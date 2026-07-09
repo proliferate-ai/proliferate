@@ -11,21 +11,14 @@
 // off; assert `effective_enabled` composition (org policy override >
 // definition default, AND account enabled), off then on again.
 //
-// SAME SURVEY CORRECTION as secrets.spec.ts / cloud-workspace.spec.ts, and it
-// hits harder here: every route this scenario needs — including the org-
-// admin policy endpoint — sits behind `current_product_user`
-// (auth/dependencies.py), which unconditionally requires a real GitHub OAuth
-// identity + ready provider grant, no single-org-mode carve-out. Unlike
-// secrets/workspaces, this isn't even scope-limited to "cloud" surfaces in
-// spirit — org-admin definition management (list/create/enable) has no
-// intrinsic reason to need the ACTOR's own GitHub link at all (it's an
-// org-level policy toggle, not a per-user cloud resource) — but the code
-// gates it exactly the same as the user-facing connect endpoint. Verified
-// directly: a password-only owner account (owner and admin are the same
-// role in single-org mode) gets 403 `github_link_required` on the catalog
-// read, the connect call, AND the admin enable/disable toggle, before any of
-// this scenario's business logic (account creation, effective_enabled
-// composition, negatives) is ever reached.
+// UPDATE 2026-07-09: PR #1023 ("extend single-org bypass to
+// current_product_user"), merged to main, extends the exact same single-org
+// bypass `current_organization_actor` already had to `current_product_user`
+// itself — which every route in this file (auth/dependencies.py) depends on.
+// The 403 `github_link_required` this file used to pin (a password-only
+// owner account couldn't even read the integration catalog) no longer fires
+// in single-org mode, so this spec now exercises the real T2-INT-1 flow
+// instead of documenting the gate.
 //
 // The connect target is real, not fabricated: `context7` is a genuine
 // `api_key`-kind entry in SEED_DEFINITIONS
@@ -33,25 +26,17 @@
 // `cloud_integration_definition` on every server boot by
 // `sync_seed_definitions` (server/proliferate/main.py). This spec resolves
 // its id with one direct-DB read (same class of seed-via-product-data as
-// secrets.spec.ts/cloud-workspace.spec.ts's own direct reads) specifically to
-// prove the 403 fires even against a definition that indisputably exists —
-// not a 404 masquerading as the gate.
+// secrets.spec.ts/cloud-workspace.spec.ts's own direct reads) — there is
+// still no API to list seed definitions by namespace directly, only the
+// full catalog.
 //
-// Per this wave's explicit instruction not to fake GitHub auth, this spec
-// pins the AS-BUILT gate instead of the deeper connect/toggle assertions,
-// which stay unverified pending either a product decision (should org-admin
-// policy management at least be exempted, the way `current_organization_actor`
-// already exempts single-org org/invitation endpoints?) or a real GitHub App
-// test fixture.
-//
-// UPDATE: PR #1023 ("extend single-org bypass to current_product_user"),
-// merged to main 2026-07-09, answers the question above directly — it adds
-// the exact same single-org bypass to `current_product_user` itself, which
-// this file's admin-router calls also depend on. Once this branch's stack
-// (tests/intent-wave2) rebases past it, every GAP test in this file should
-// flip to real connect/toggle assertions rather than 403s. Not rebasing this
-// PR onto that fix myself — that is the wave's merge-train's job, not a
-// single stacked PR's.
+// authenticate_integration (service.py) never checks org policy before
+// creating an account — the policy toggle governs whether the org exposes
+// the definition (effective_enabled, surfaced to admins/health), not whether
+// an already-connected account can authenticate. That composition —
+// definition.enabled_by_default (true for every seed, seeds.py) overridden
+// by an org's policy row when one exists (db/store/integrations/policies.py)
+// — is exactly what this spec's toggle round trip asserts.
 
 import { expect, test } from "@playwright/test";
 import {
@@ -79,48 +64,86 @@ test.beforeAll(async () => {
   await ensureInstanceClaimed();
   ownerToken = (await passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD)).access_token;
   organizationId = (await getOwnOrganization(ownerToken)).id;
-  // Direct-DB, not the API: proves the definition genuinely exists
-  // (source='seed', a real cataloged connector) independent of the gate this
-  // spec is about to demonstrate blocks reading it back through the API.
+  // Direct-DB, not the API: there is still no catalog-by-namespace lookup,
+  // only the full list. This proves the definition genuinely exists
+  // (source='seed', a real cataloged connector) independent of the catalog
+  // read the next test performs.
   context7DefinitionId = await getSeedIntegrationDefinitionId("context7");
 });
 
-function expectGitHubLinkRequired(result: { status: number; body: unknown }): void {
-  expect(result.status).toBe(403);
-  const detail = (result.body as { detail?: { code?: string } }).detail;
-  expect(detail?.code).toBe("github_link_required");
-}
-
-test.describe("T2-INT-1: api_key connect + org policy toggle — blocked at the product-readiness gate before reaching integrations logic", () => {
-  test("documents GAP: the integration catalog is unreachable for a password-only account, even though context7 (a real api_key definition) exists in it", async () => {
-    expectGitHubLinkRequired(await getIntegrationCatalog(ownerToken));
+test.describe("T2-INT-1: api_key connect + org policy toggle", () => {
+  test("catalog is reachable and lists the real context7 api_key definition with its connect schema", async () => {
+    const result = await getIntegrationCatalog(ownerToken);
+    expect(result.status).toBe(200);
+    const context7 = result.body.items.find((item) => item.definitionId === context7DefinitionId);
+    expect(context7).toBeDefined();
+    expect(context7?.namespace).toBe("context7");
+    expect(context7?.authKind).toBe("api_key");
   });
 
-  test("documents GAP: connecting an api_key integration 403s before the connect logic runs, against a real seeded definition id", async () => {
-    expectGitHubLinkRequired(
-      await authenticateApiKeyIntegration(ownerToken, context7DefinitionId, "placeholder-api-key-value"),
+  test("connects context7 with a placeholder api_key: account created, ready, enabled — no outbound provider call", async () => {
+    const result = await authenticateApiKeyIntegration(
+      ownerToken,
+      context7DefinitionId,
+      "placeholder-api-key-value",
     );
+    expect(result.status).toBe(200);
+    expect(result.body.account.definitionId).toBe(context7DefinitionId);
+    expect(result.body.account.namespace).toBe("context7");
+    expect(result.body.account.authKind).toBe("api_key");
+    expect(result.body.account.status).toBe("ready");
+    expect(result.body.account.enabled).toBe(true);
+    // api_key connect never starts an OAuth flow.
+    expect(result.body.oauthFlowId).toBeNull();
+    expect(result.body.authorizationUrl).toBeNull();
   });
 
-  test("documents GAP: the org-admin policy surface (list + enable/disable toggle) hits the same account-level gate — it is not org-role-scoped, so the owner/admin cannot manage a real definition's policy either", async () => {
-    expectGitHubLinkRequired(await listAdminIntegrationDefinitions(ownerToken, organizationId));
-    expectGitHubLinkRequired(
-      await setAdminIntegrationEnabled(ownerToken, organizationId, context7DefinitionId, false),
-    );
+  test("org admin toggles the definition off: effective_enabled composes the policy override over the seed default", async () => {
+    // Starting state is true either way: with no policy row yet,
+    // effective_enabled falls back to the definition's own
+    // enabled_by_default (true for every seed definition); if a prior run on
+    // this profile DB already created a policy row, this spec's own
+    // toggle-back-on step below always leaves it enabled=true. Either way,
+    // policyEnabled is either null or true here — never false — going in.
+    const before = await listAdminIntegrationDefinitions(ownerToken, organizationId);
+    expect(before.status).toBe(200);
+    const context7Before = before.body.find((item) => item.definitionId === context7DefinitionId);
+    expect(context7Before?.policyEnabled).not.toBe(false);
+    expect(context7Before?.effectiveEnabled).toBe(true);
+
+    const off = await setAdminIntegrationEnabled(ownerToken, organizationId, context7DefinitionId, false);
+    expect(off.status).toBe(200);
+    expect(off.body.policyEnabled).toBe(false);
+    expect(off.body.effectiveEnabled).toBe(false);
+
+    // Persisted, not just echoed back on the toggle call itself.
+    const after = await listAdminIntegrationDefinitions(ownerToken, organizationId);
+    const context7After = after.body.find((item) => item.definitionId === context7DefinitionId);
+    expect(context7After?.policyEnabled).toBe(false);
+    expect(context7After?.effectiveEnabled).toBe(false);
+  });
+
+  test("org admin toggles the definition back on: effective_enabled true again", async () => {
+    const on = await setAdminIntegrationEnabled(ownerToken, organizationId, context7DefinitionId, true);
+    expect(on.status).toBe(200);
+    expect(on.body.policyEnabled).toBe(true);
+    expect(on.body.effectiveEnabled).toBe(true);
+
+    const after = await listAdminIntegrationDefinitions(ownerToken, organizationId);
+    const context7After = after.body.find((item) => item.definitionId === context7DefinitionId);
+    expect(context7After?.policyEnabled).toBe(true);
+    expect(context7After?.effectiveEnabled).toBe(true);
   });
 });
 
 // NOT COVERED by this wave, named so the gap is loud rather than silent:
-// - IntegrationAccountResponse shape on a successful connect (accountId,
-//   status, enabled=true) for an api_key definition;
-// - effective_enabled composition across all three layers (org policy
-//   override > definition default, AND account enabled) — the toggle
-//   off-then-on round trip the scenario names;
-// - the OAuth-kind seam-only assertion (flow row created, authorizationUrl
-//   returned, no real provider round-trip) — also unreachable via this gate,
-//   same as the api_key path;
-// - IntegrationHealthResponse reflecting the toggled state.
-// All of the above require getting a test account past current_product_user's
-// GitHub-readiness gate, which this wave does not fake. Re-scope once Pablo
-// rules on the GAP above (see also secrets.spec.ts / cloud-workspace.spec.ts,
-// which hit the identical gate on the cloud secrets/workspaces surfaces).
+// - The OAuth-kind connect path (flow row created, authorizationUrl
+//   returned, no real provider round-trip) — context7 is api_key-kind;
+//   asserting the oauth2 branch needs a different seed definition (e.g.
+//   `exa` is also api_key, so this suite would need to pick an actual
+//   oauth2-kind seed to cover that branch, or an org-custom definition).
+// - IntegrationHealthResponse reflecting the toggled state (health.py) —
+//   this spec only asserts the admin-definition-list composition, not the
+//   health surface a connected account also feeds.
+// - Removing an account (`DELETE /integrations/accounts/{id}`) and
+//   re-connecting.

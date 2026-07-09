@@ -5,18 +5,18 @@
 //
 // The one direct-DB read here (resolving a seed integration definition's id)
 // is the same kind of "seed via the product's own data, no API to read it
-// back" case `backdateInvitationExpiry` already established in seed.ts: every
-// `/v1/integrations/*` route — catalog included — requires
-// `current_product_user` (see integrations.spec.ts's header), so a
-// password-only test account cannot even list the catalog to discover a
-// definition id. `sync_seed_definitions` (server/proliferate/main.py) upserts
-// every entry in `SEED_DEFINITIONS`
+// back" case `backdateInvitationExpiry` already established in seed.ts:
+// there is still no catalog-by-namespace lookup, only the full
+// `GET /integrations/catalog` list, so resolving one real definition's id
+// directly against `cloud_integration_definition` is the more direct way to
+// bootstrap the fixture. `sync_seed_definitions` (server/proliferate/main.py)
+// upserts every entry in `SEED_DEFINITIONS`
 // (server/proliferate/server/cloud/integrations/seeds.py) into
 // `cloud_integration_definition` on every server boot, so reading the row
 // directly is reading real seeded product data, not fabricating a stub.
 
 import { Client } from "pg";
-import { apiBaseUrl, apiRequest, databaseUrl, toPostgresDriverUrl } from "./seed.ts";
+import { apiRequest, databaseUrl, toPostgresDriverUrl } from "./seed.ts";
 
 interface ApiResult<T> {
   status: number;
@@ -125,11 +125,4 @@ export async function listAdminIntegrationDefinitions(
     `/v1/cloud/integrations/admin/organizations/${organizationId}/definitions`,
     { token },
   );
-}
-
-/** Sanity probe used only to document the gate: confirms the API is up and
- * the path resolves (vs. a 404 that would make the 403 assertion vacuous). */
-export async function probeIntegrationsAlive(): Promise<boolean> {
-  const response = await fetch(`${apiBaseUrl()}/health`);
-  return response.ok;
 }
