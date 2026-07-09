@@ -100,6 +100,15 @@ async function runReal(
   });
   const client = new ApiClient({ baseUrl: serverUrl }).withBearerToken(session.accessToken);
 
+  // The auth endpoint takes a UUID definitionId, not a namespace string
+  // (server/proliferate/server/cloud/integrations/models.py:34-41), so resolve
+  // it from the seed catalog first.
+  const catalog = await client.get<{ items: Array<{ definitionId: string; namespace: string }> }>(
+    "/v1/cloud/integrations/catalog",
+  );
+  const definition = catalog.items.find((item) => item.namespace === namespace);
+  assert.ok(definition, `T3-INT-1: catalog must contain an api_key-kind definition for namespace "${namespace}"`);
+
   // First real, gated call: connect the integration. Reaching past this means
   // the github_link gate lifted (withProductGate would otherwise report
   // blocked). The per-harness gateway tool-call matrix, the audit-row
@@ -108,11 +117,11 @@ async function runReal(
   // gateway MCP route and the audit store are asserted against the live
   // server once this scenario is actually reachable, following the same
   // "finish it when the gate is open" convention as T3-PROV-2 / T3-SEC-MAT-1.
-  const account = await client.post<{ id: string; definitionNamespace: string }>(
+  const response = await client.post<{ account: { accountId: string; definitionId: string; namespace: string } }>(
     "/v1/cloud/integrations/authentications",
-    { definitionNamespace: namespace, authKind: "api_key", secrets: { api_key: apiKey } },
+    { definitionId: definition.definitionId, authKind: "api_key", apiKey },
   );
-  assert.ok(account.id, "T3-INT-1: connecting the integration must return an account id");
+  assert.ok(response.account.accountId, "T3-INT-1: connecting the integration must return an account id");
 
   throw new Error(
     "T3-INT-1: integration connect succeeded (gate lifted) but the per-harness × per-lane gateway " +
