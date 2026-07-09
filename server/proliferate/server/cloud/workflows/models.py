@@ -102,14 +102,19 @@ class RunStatusRequest(WorkflowBaseModel):
 
 class WorkflowResponse(WorkflowBaseModel):
     id: str
-    owner_user_id: str = Field(alias="ownerUserId")
-    created_by_user_id: str = Field(alias="createdByUserId")
+    # Nullable: seeded workflows (track 1f) are org-agnostic and have no owner.
+    owner_user_id: str | None = Field(alias="ownerUserId")
+    created_by_user_id: str | None = Field(alias="createdByUserId")
     name: str
     description: str | None
     current_version_id: str | None = Field(alias="currentVersionId")
     archived_at: str | None = Field(alias="archivedAt")
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")
+    # Track 1f: True for code-defined seed rows reconciled at boot (the
+    # strip/picker's "seeds also feed it" source, per R5).
+    is_seed: bool = Field(default=False, alias="isSeed")
+    seed_slug: str | None = Field(default=None, alias="seedSlug")
 
 
 class WorkflowVersionResponse(WorkflowBaseModel):
@@ -117,7 +122,7 @@ class WorkflowVersionResponse(WorkflowBaseModel):
     workflow_id: str = Field(alias="workflowId")
     version_n: int = Field(alias="versionN")
     definition: dict[str, object]
-    created_by_user_id: str = Field(alias="createdByUserId")
+    created_by_user_id: str | None = Field(alias="createdByUserId")
     created_at: str = Field(alias="createdAt")
 
 
@@ -199,14 +204,18 @@ def _iso(value: datetime | None) -> str | None:
 def workflow_payload(record: WorkflowRecord) -> WorkflowResponse:
     return WorkflowResponse(
         id=str(record.id),
-        owner_user_id=str(record.owner_user_id),
-        created_by_user_id=str(record.created_by_user_id),
+        owner_user_id=str(record.owner_user_id) if record.owner_user_id else None,
+        created_by_user_id=(
+            str(record.created_by_user_id) if record.created_by_user_id else None
+        ),
         name=record.name,
         description=record.description,
         current_version_id=str(record.current_version_id) if record.current_version_id else None,
         archived_at=_iso(record.archived_at),
         created_at=record.created_at.isoformat(),
         updated_at=record.updated_at.isoformat(),
+        is_seed=record.is_seed,
+        seed_slug=record.seed_slug,
     )
 
 
@@ -216,7 +225,9 @@ def version_payload(record: WorkflowVersionRecord) -> WorkflowVersionResponse:
         workflow_id=str(record.workflow_id),
         version_n=record.version_n,
         definition=record.definition_json,
-        created_by_user_id=str(record.created_by_user_id),
+        created_by_user_id=(
+            str(record.created_by_user_id) if record.created_by_user_id else None
+        ),
         created_at=record.created_at.isoformat(),
     )
 

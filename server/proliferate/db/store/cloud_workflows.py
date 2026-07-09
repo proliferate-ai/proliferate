@@ -31,14 +31,16 @@ from proliferate.utils.time import utcnow
 @dataclass(frozen=True)
 class WorkflowRecord:
     id: UUID
-    owner_user_id: UUID
-    created_by_user_id: UUID
+    owner_user_id: UUID | None
+    created_by_user_id: UUID | None
     name: str
     description: str | None
     current_version_id: UUID | None
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    is_seed: bool = False
+    seed_slug: str | None = None
 
 
 @dataclass(frozen=True)
@@ -47,7 +49,7 @@ class WorkflowVersionRecord:
     workflow_id: UUID
     version_n: int
     definition_json: dict[str, object]
-    created_by_user_id: UUID
+    created_by_user_id: UUID | None
     created_at: datetime
 
 
@@ -91,6 +93,8 @@ def _workflow_record(row: Workflow) -> WorkflowRecord:
         archived_at=row.archived_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
+        is_seed=row.is_seed,
+        seed_slug=row.seed_slug,
     )
 
 
@@ -231,13 +235,129 @@ async def list_workflows(
     *,
     owner_user_id: UUID,
     include_archived: bool = False,
+    include_seeds: bool = True,
 ) -> tuple[WorkflowRecord, ...]:
-    stmt = select(Workflow).where(Workflow.owner_user_id == owner_user_id)
+    """The owner's own workflows, plus (by default) the code-defined seed rows.
+
+    Seeds are org-agnostic (``is_seed=True``, ``owner_user_id IS NULL``) so they
+    are unioned in rather than filtered by owner — this is also the strip/picker
+    source query (track 1f): seeds show up alongside the org's most-recently-run
+    workflows, annotated via ``WorkflowRecord.is_seed``.
+    """
+    condition = Workflow.owner_user_id == owner_user_id
+    if include_seeds:
+        condition = condition | (Workflow.is_seed.is_(True))
+    stmt = select(Workflow).where(condition)
     if not include_archived:
         stmt = stmt.where(Workflow.archived_at.is_(None))
-    stmt = stmt.order_by(Workflow.created_at.desc())
+    stmt = stmt.order_by(Workflow.is_seed.asc(), Workflow.created_at.desc())
     rows = (await db.execute(stmt)).scalars().all()
     return tuple(_workflow_record(row) for row in rows)
+
+
+async def list_seed_workflows(db: AsyncSession) -> tuple[WorkflowRecord, ...]:
+    """All non-archived seed workflow rows (reconciler read + strip/picker)."""
+
+    stmt = (
+        select(Workflow)
+        .where(Workflow.is_seed.is_(True), Workflow.archived_at.is_(None))
+        .order_by(Workflow.seed_slug.asc())
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return tuple(_workflow_record(row) for row in rows)
+
+
+async def get_seed_workflow_by_slug(db: AsyncSession, *, seed_slug: str) -> WorkflowRecord | None:
+    row = await db.scalar(
+        select(Workflow).where(Workflow.is_seed.is_(True), Workflow.seed_slug == seed_slug)
+    )
+    return None if row is None else _workflow_record(row)
+
+
+async def upsert_seed_workflow(
+    db: AsyncSession,
+    *,
+    seed_slug: str,
+    name: str,
+    description: str | None,
+    definition_json: dict[str, object],
+) -> tuple[WorkflowRecord, WorkflowVersionRecord]:
+    """Insert or update the seeded workflow for ``seed_slug`` (track 1f).
+
+    Matches on ``is_seed=True`` + ``seed_slug``, mirroring the integration seed
+    reconciler's ``source='seed'`` + namespace match. Idempotent: an unchanged
+    definition is a no-op version bump is skipped when the definition is
+    byte-identical to the current version's ``definition_json``. A changed
+    definition appends a new immutable version (same append-only discipline as
+    an authored edit) and repoints ``current_version_id``.
+    """
+
+    now = utcnow()
+    workflow = await db.scalar(
+        select(Workflow).where(Workflow.is_seed.is_(True), Workflow.seed_slug == seed_slug)
+    )
+    if workflow is None:
+        workflow = Workflow(
+            owner_user_id=None,
+            created_by_user_id=None,
+            name=name,
+            description=description,
+            is_seed=True,
+            seed_slug=seed_slug,
+            current_version_id=None,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(workflow)
+        await db.flush()
+        version = WorkflowVersion(
+            workflow_id=workflow.id,
+            version_n=1,
+            definition_json=definition_json,
+            created_by_user_id=None,
+            created_at=now,
+        )
+        db.add(version)
+        await db.flush()
+        workflow.current_version_id = version.id
+        await db.flush()
+        return _workflow_record(workflow), _version_record(version)
+
+    # Existing seed row: reactivate if archived, refresh mutable meta, and only
+    # append a new version when the definition actually changed.
+    workflow.archived_at = None
+    workflow.name = name
+    workflow.description = description
+    current_version = (
+        await db.get(WorkflowVersion, workflow.current_version_id)
+        if workflow.current_version_id
+        else None
+    )
+    if current_version is not None and current_version.definition_json == definition_json:
+        workflow.updated_at = now
+        await db.flush()
+        return _workflow_record(workflow), _version_record(current_version)
+
+    next_n = (
+        await db.execute(
+            select(func.coalesce(func.max(WorkflowVersion.version_n), 0)).where(
+                WorkflowVersion.workflow_id == workflow.id
+            )
+        )
+    ).scalar_one() + 1
+    version = WorkflowVersion(
+        workflow_id=workflow.id,
+        version_n=next_n,
+        definition_json=definition_json,
+        created_by_user_id=None,
+        created_at=now,
+    )
+    db.add(version)
+    await db.flush()
+    workflow.current_version_id = version.id
+    workflow.updated_at = now
+    await db.flush()
+    return _workflow_record(workflow), _version_record(version)
 
 
 async def count_active_workflows(db: AsyncSession, *, owner_user_id: UUID) -> int:

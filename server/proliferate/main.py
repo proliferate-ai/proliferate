@@ -64,6 +64,7 @@ from proliferate.server.cloud.github_app.api import (
     setup_callback_router as github_app_setup_callback_router,
 )
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.cloud.workflows.seeds import sync_seed_workflow_definitions
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
 from proliferate.server.meta import router as meta_router
@@ -228,6 +229,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Reconcile the built-in integration seed definitions into the database.
     async with db_engine.async_session_factory() as db, db.begin():
         await sync_seed_definitions(db)
+    # Reconcile the built-in seed workflow definitions (track 1f).
+    async with db_engine.async_session_factory() as db, db.begin():
+        await sync_seed_workflow_definitions(db)
     if settings.cloud_billing_mode in {"observe", "enforce"}:
         # BILLING RECONCILER PARKED: old reconciler imports deleted runtime env tables.
         # start_billing_reconciler()

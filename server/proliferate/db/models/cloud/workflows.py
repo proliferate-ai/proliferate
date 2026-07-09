@@ -48,17 +48,36 @@ class Workflow(Base):
             "owner_user_id",
             postgresql_where=text("archived_at IS NULL"),
         ),
+        # The seed reconciler's upsert-match query and the strip/picker's
+        # "seeded defs" read.
+        Index(
+            "ix_workflow_is_seed_active",
+            "is_seed",
+            postgresql_where=text("archived_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+    # Nullable to allow seeded rows (owner_user_id/created_by_user_id NULL, see
+    # ``is_seed`` below): a seeded workflow has no user owner — it is
+    # org-agnostic, code-defined, and reconciled at boot (track 1f).
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=True,
     )
-    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=True,
     )
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Track 1f: seeded (code-defined, curated) workflow definitions reconciled
+    # at boot, matched on ``seed_slug`` (like integrations' source='seed' +
+    # namespace). Most-reversible marker approach: a nullable boolean + a
+    # nullable unique slug, rather than inventing a "system owner" concept
+    # that doesn't otherwise exist for workflows.
+    is_seed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    seed_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True)
     # Nullable + no DB-level FK constraint: the pointer is set immediately after the
     # first version row is inserted (the two tables reference each other). The app
     # keeps it consistent; a hard FK would deadlock the create ordering.
@@ -88,8 +107,10 @@ class WorkflowVersion(Base):
     )
     version_n: Mapped[int] = mapped_column(Integer)
     definition_json: Mapped[dict[str, object]] = mapped_column(JSONB)
-    created_by_user_id: Mapped[uuid.UUID] = mapped_column(
+    # Nullable for seeded versions (no authoring user; see Workflow.is_seed).
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
