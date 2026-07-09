@@ -49,9 +49,14 @@ import {
 import {
   authenticateApiKeyIntegration,
   getIntegrationCatalog,
+  getIntegrationHealth,
   getSeedIntegrationDefinitionId,
   listAdminIntegrationDefinitions,
+  readUntil,
+  removeIntegrationAccount,
   setAdminIntegrationEnabled,
+  type AdminIntegrationDefinitionResult,
+  type IntegrationHealthItemResult,
 } from "../stack/seed-integrations.ts";
 
 test.describe.configure({ mode: "serial" });
@@ -70,6 +75,37 @@ test.beforeAll(async () => {
   // read the next test performs.
   context7DefinitionId = await getSeedIntegrationDefinitionId("context7");
 });
+
+/** Read the admin definition list until context7's row satisfies `settled`
+ * (bounded; returns the last-read row either way — see readUntil). */
+async function readAdminDefinitionUntil(
+  settled: (item: AdminIntegrationDefinitionResult | undefined) => boolean,
+): Promise<AdminIntegrationDefinitionResult | undefined> {
+  const body = await readUntil(
+    async () => {
+      const result = await listAdminIntegrationDefinitions(ownerToken, organizationId);
+      expect(result.status).toBe(200);
+      return result.body;
+    },
+    (items) => settled(items.find((item) => item.definitionId === context7DefinitionId)),
+  );
+  return body.find((item) => item.definitionId === context7DefinitionId);
+}
+
+/** Same, for context7's row on the health surface. */
+async function readHealthUntil(
+  settled: (item: IntegrationHealthItemResult | undefined) => boolean,
+): Promise<IntegrationHealthItemResult | undefined> {
+  const body = await readUntil(
+    async () => {
+      const result = await getIntegrationHealth(ownerToken, organizationId);
+      expect(result.status).toBe(200);
+      return result.body;
+    },
+    (response) => settled(response.items.find((item) => item.definitionId === context7DefinitionId)),
+  );
+  return body.items.find((item) => item.definitionId === context7DefinitionId);
+}
 
 test.describe("T2-INT-1: api_key connect + org policy toggle", () => {
   test("catalog is reachable and lists the real context7 api_key definition with its connect schema", async () => {
@@ -99,26 +135,34 @@ test.describe("T2-INT-1: api_key connect + org policy toggle", () => {
   });
 
   test("org admin toggles the definition off: effective_enabled composes the policy override over the seed default", async () => {
-    // Starting state is true either way: with no policy row yet,
-    // effective_enabled falls back to the definition's own
-    // enabled_by_default (true for every seed definition); if a prior run on
-    // this profile DB already created a policy row, this spec's own
-    // toggle-back-on step below always leaves it enabled=true. Either way,
-    // policyEnabled is either null or true here — never false — going in.
+    // Normalize the starting state instead of assuming it: with no policy
+    // row yet, effective_enabled falls back to the definition's own
+    // enabled_by_default (true for every seed definition), but this profile
+    // DB persists across runs and a prior run that failed mid-file can leave
+    // the policy row off — so if it is off, turn it back on first. What the
+    // test then asserts is the transition, which is the actual contract.
     const before = await listAdminIntegrationDefinitions(ownerToken, organizationId);
     expect(before.status).toBe(200);
     const context7Before = before.body.find((item) => item.definitionId === context7DefinitionId);
-    expect(context7Before?.policyEnabled).not.toBe(false);
-    expect(context7Before?.effectiveEnabled).toBe(true);
+    if (context7Before?.policyEnabled === false) {
+      const heal = await setAdminIntegrationEnabled(ownerToken, organizationId, context7DefinitionId, true);
+      expect(heal.status).toBe(200);
+      await readAdminDefinitionUntil((item) => item?.policyEnabled === true);
+    }
+    const settledBefore = await readAdminDefinitionUntil((item) => item?.effectiveEnabled === true);
+    expect(settledBefore?.effectiveEnabled).toBe(true);
 
     const off = await setAdminIntegrationEnabled(ownerToken, organizationId, context7DefinitionId, false);
     expect(off.status).toBe(200);
     expect(off.body.policyEnabled).toBe(false);
     expect(off.body.effectiveEnabled).toBe(false);
 
-    // Persisted, not just echoed back on the toggle call itself.
-    const after = await listAdminIntegrationDefinitions(ownerToken, organizationId);
-    const context7After = after.body.find((item) => item.definitionId === context7DefinitionId);
+    // Persisted, not just echoed back on the toggle call itself. readUntil
+    // absorbs the endpoint's commit-in-dependency-teardown lag (see
+    // seed-integrations.ts); the assertions still run on the settled value.
+    const context7After = await readAdminDefinitionUntil(
+      (item) => item?.policyEnabled === false,
+    );
     expect(context7After?.policyEnabled).toBe(false);
     expect(context7After?.effectiveEnabled).toBe(false);
   });
@@ -129,21 +173,100 @@ test.describe("T2-INT-1: api_key connect + org policy toggle", () => {
     expect(on.body.policyEnabled).toBe(true);
     expect(on.body.effectiveEnabled).toBe(true);
 
-    const after = await listAdminIntegrationDefinitions(ownerToken, organizationId);
-    const context7After = after.body.find((item) => item.definitionId === context7DefinitionId);
+    const context7After = await readAdminDefinitionUntil(
+      (item) => item?.policyEnabled === true,
+    );
     expect(context7After?.policyEnabled).toBe(true);
     expect(context7After?.effectiveEnabled).toBe(true);
   });
+
+  // The health surface (GET /integrations/health) is the response the UI
+  // actually renders, and the only one that carries all three enablement
+  // layers side by side: policyEnabled (org override), effectiveEnabled
+  // (override > definition default), accountEnabled, plus the composed
+  // verdict. For an api_key account the health probe is DB-only —
+  // _account_health (health.py) runs its ensure_provider_access probe only
+  // for auth_kind == "oauth2" — so this read is itself outbound-free, same
+  // as the connect path.
+  test("health surface composes all three layers for the connected account: ready, effective-enabled, account enabled", async () => {
+    const item = await readHealthUntil((entry) => entry?.health === "ready");
+    expect(item).toBeDefined();
+    expect(item?.effectiveEnabled).toBe(true);
+    expect(item?.policyEnabled).toBe(true);
+    expect(item?.accountEnabled).toBe(true);
+    expect(item?.accountId).not.toBeNull();
+    expect(item?.health).toBe("ready");
+  });
+
+  test("health surface flips to disabled_by_org while the policy is off, with the account row intact underneath", async () => {
+    const off = await setAdminIntegrationEnabled(ownerToken, organizationId, context7DefinitionId, false);
+    expect(off.status).toBe(200);
+
+    const item = await readHealthUntil((entry) => entry?.health === "disabled_by_org");
+    expect(item?.effectiveEnabled).toBe(false);
+    expect(item?.policyEnabled).toBe(false);
+    expect(item?.health).toBe("disabled_by_org");
+    // The org toggle disables exposure, it does not touch the user's account:
+    // the connected account row survives, still enabled at its own layer.
+    expect(item?.accountId).not.toBeNull();
+    expect(item?.accountEnabled).toBe(true);
+
+    // Restore for the tests below (and for reruns on this persisted profile DB).
+    const on = await setAdminIntegrationEnabled(ownerToken, organizationId, context7DefinitionId, true);
+    expect(on.status).toBe(200);
+
+    const restoredItem = await readHealthUntil((entry) => entry?.health === "ready");
+    expect(restoredItem?.effectiveEnabled).toBe(true);
+    expect(restoredItem?.health).toBe("ready");
+  });
+
+  test("disconnect: DELETE the account 204s, health returns to needs_auth, and re-connecting works", async () => {
+    const connected = await readHealthUntil((entry) => entry?.accountId != null);
+    expect(connected?.accountId).not.toBeNull();
+
+    const removed = await removeIntegrationAccount(ownerToken, connected!.accountId!);
+    expect(removed.status).toBe(204);
+
+    const disconnected = await readHealthUntil((entry) => entry?.accountId == null);
+    expect(disconnected?.accountId).toBeNull();
+    expect(disconnected?.accountEnabled).toBeNull();
+    expect(disconnected?.health).toBe("needs_auth");
+    // Org policy is unaffected by the account's removal.
+    expect(disconnected?.effectiveEnabled).toBe(true);
+
+    // Re-connect (still a placeholder key, still no outbound) so the suite
+    // ends in the connected steady state every earlier test assumes on rerun.
+    const reconnect = await authenticateApiKeyIntegration(
+      ownerToken,
+      context7DefinitionId,
+      "placeholder-api-key-value-reconnect",
+    );
+    expect(reconnect.status).toBe(200);
+    expect(reconnect.body.account.status).toBe("ready");
+
+    const reconnected = await readHealthUntil((entry) => entry?.accountId != null);
+    expect(reconnected?.health).toBe("ready");
+    expect(reconnected?.accountId).not.toBeNull();
+  });
 });
 
-// NOT COVERED by this wave, named so the gap is loud rather than silent:
-// - The OAuth-kind connect path (flow row created, authorizationUrl
-//   returned, no real provider round-trip) — context7 is api_key-kind;
-//   asserting the oauth2 branch needs a different seed definition (e.g.
-//   `exa` is also api_key, so this suite would need to pick an actual
-//   oauth2-kind seed to cover that branch, or an org-custom definition).
-// - IntegrationHealthResponse reflecting the toggled state (health.py) —
-//   this spec only asserts the admin-definition-list composition, not the
-//   health surface a connected account also feeds.
-// - Removing an account (`DELETE /integrations/accounts/{id}`) and
-//   re-connecting.
+// NOT COVERED, named so the gap is loud rather than silent:
+// - The OAuth-kind connect seam (scenarios.md's negative: "flow row created,
+//   authorizationUrl returned, no real provider round-trip"). Deliberately
+//   excluded, not just unpicked: as built, start_oauth_flow
+//   (server/proliferate/server/cloud/integrations/oauth/service.py) performs
+//   real provider metadata discovery against the definition's MCP URL
+//   (discover_protected_resource_metadata / discover_authorization_server_
+//   metadata) BEFORE any flow row exists or an authorizationUrl can be
+//   returned — there is no as-built way to reach that seam without an
+//   outbound network call, which tier 2's no-outbound contract forbids.
+//   The oauth2 branch is tier 3's to assert (T3-INT-1 posture) unless the
+//   discovery step grows a seam.
+//
+// No-outbound proof for the api_key path, stated once for the whole file:
+// authenticate_integration's api_key branch (integrations/service.py) is
+// upsert_account + set_account_credentials (local encrypt) only — no code
+// path touches the provider, which is why a placeholder key lands
+// status="ready" immediately with no oauthFlowId/authorizationUrl (asserted
+// above). The health reads used here are also outbound-free for api_key
+// accounts: _account_health's provider probe runs only for oauth2 accounts.
