@@ -1219,19 +1219,27 @@ Resources:
                 CLOUD_MCP_SLACK_CLIENT_SECRET=
                 CLOUD_MCP_SLACK_TOKEN_ENDPOINT_AUTH_METHOD=client_secret_post
 
-                # Agent LLM gateway. Leave disabled unless a private Bifrost router is deployed.
+                # Agent LLM gateway (optional LiteLLM add-on). Enabling it is two steps: set
+                # AGENT_GATEWAY_ENABLED=true here, then start the profiled services with
+                # `docker compose --env-file .env.runtime -f docker-compose.production.yml
+                # --profile agent-gateway up -d`. Plain bootstrap.sh/update.sh runs never
+                # start litellm/litellm-db. Docs: /docs/deployment/add-ons/model-gateway
                 AGENT_GATEWAY_ENABLED=false
-                AGENT_GATEWAY_BIFROST_BASE_URL=http://127.0.0.1:8080
-                AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=https://gateway.company.com
-                AGENT_GATEWAY_BIFROST_ADMIN_TOKEN=
-                AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED=false
-                AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD=0
-                AGENT_GATEWAY_MAX_REQUEST_BYTES=4194304
-                AGENT_GATEWAY_REQUEST_TIMEOUT_SECONDS=120.0
-                AGENT_GATEWAY_OPENCODE_ENABLED=false
-                AGENT_GATEWAY_RECONCILER_ENABLED=false
-                AGENT_GATEWAY_RECONCILER_INTERVAL_SECONDS=300.0
-                AGENT_GATEWAY_RECONCILER_BATCH_SIZE=50
+                AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000
+                # Public URL agents use to reach LiteLLM, for example https://llm.company.com
+                AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=
+                # Generate with `openssl rand -hex 32`. AGENT_GATEWAY_LITELLM_MASTER_KEY must
+                # be the exact same value as LITELLM_MASTER_KEY.
+                AGENT_GATEWAY_LITELLM_MASTER_KEY=
+                LITELLM_MASTER_KEY=
+                LITELLM_POSTGRES_PASSWORD=
+                AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD=5
+                AGENT_GATEWAY_DEFAULT_ORG_BUDGET_USD=0
+                # Provider keys the gateway routes centrally live with the LiteLLM service;
+                # ANTHROPIC_API_KEY below also serves AI session titles. Add OPENAI_API_KEY /
+                # XAI_API_KEY when you route those providers.
+                OPENAI_API_KEY=
+                XAI_API_KEY=
 
                 # Cloud workspace provider.
                 E2B_API_KEY=
