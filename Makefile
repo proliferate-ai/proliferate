@@ -110,7 +110,7 @@ endif
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
-        release-desktop-dry-run release-desktop-draft \
+        desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b \
         cloud-runtime-build publish-cloud-template-env-local \
@@ -524,6 +524,16 @@ db-ah:
 	@sqlite3 -cmd ".headers on" -cmd ".mode column" $(HOME)/.proliferate-local/anyharness/db.sqlite
 
 # --- Release helpers ---
+
+# Build a TEST-FLAVOR desktop app whose auto-updater points at a local manifest
+# server (UPDATER_URL) and trusts a throwaway key. For the tier-4 upgrade test.
+# The shipped tauri.conf.json is untouched -- a gitignored overlay is merged via
+# `tauri build --config`. See specs/developing/testing/desktop-update-testing.md.
+#   make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json
+desktop-test-build:
+	@test -n "$(UPDATER_URL)" || { echo "UPDATER_URL is required. Example: make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json"; exit 1; }
+	UPDATER_URL="$(UPDATER_URL)" UPDATER_PUBKEY="$(UPDATER_PUBKEY)" TARGET="$(TARGET)" BUNDLES="$(BUNDLES)" \
+		bash apps/desktop/scripts/build-updater-test.sh
 
 release-desktop-dry-run:
 	@set -e; \
