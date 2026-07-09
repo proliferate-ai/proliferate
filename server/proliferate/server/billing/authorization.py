@@ -200,10 +200,30 @@ async def assert_cloud_sandbox_resume_allowed(
     billing subject, then blocks on an active spend hold or an over-cap compute
     budget — the same conditions that make the reconciler pause an open segment.
     Records a ``BillingDecisionEvent`` and raises ``CloudSandboxResumeBlockedError``.
+
+    Delegates to ``assert_cloud_sandbox_resume_allowed_for_owner``; the gate only
+    reads ``sandbox.owner_user_id``, so the owner-id variant can run at seams that
+    do not yet have a sandbox row (see the wake/ensure service layer).
+    """
+    await assert_cloud_sandbox_resume_allowed_for_owner(
+        db, owner_user_id=sandbox.owner_user_id
+    )
+
+
+async def assert_cloud_sandbox_resume_allowed_for_owner(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID | None,
+) -> None:
+    """Owner-scoped resume gate: same checks as the sandbox variant, keyed by owner.
+
+    Split out so a caller can gate before a cloud_sandbox row exists (the wake/
+    ensure path flushes a new-row INSERT inside ``ensure_personal_cloud_sandbox_exists``,
+    and this gate ``commit()``s its audit row before raising, so it must run first).
+    Enforce-mode only (``CLOUD_BILLING_MODE=enforce``).
     """
     if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
         return
-    owner_user_id = sandbox.owner_user_id
     if owner_user_id is None:
         return
     subject = await ensure_personal_billing_subject(db, owner_user_id)
@@ -262,8 +282,10 @@ async def assert_cloud_sandbox_resume_allowed(
     # Persist the decision before raising: the production caller
     # (materialization/runner._run_with_fresh_session) rolls back its session in
     # the exception handler, which would otherwise discard this un-committed
-    # audit row. Safe here — this gate is the first statement of
-    # connect_ready_sandbox, so no other writes are staged on this session yet.
+    # audit row. Safe at every call site: this gate runs first at each seam
+    # (connect_ready_sandbox's opening statement, and the wake/ensure service
+    # layer before ensure_personal_cloud_sandbox_exists stages a row INSERT), so
+    # no other writes are staged on this session yet.
     await db.commit()
     raise CloudSandboxResumeBlockedError(
         authorization_message(reason)
