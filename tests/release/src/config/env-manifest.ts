@@ -75,7 +75,10 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     name: "RELEASE_E2E_DURABLE_USER_EMAIL",
     description:
       "Login email for the durable seeded e2e-tests account used by existing-user " +
-      "scenarios (T3-PROV-2 and friends). Its sandbox intentionally persists between runs.",
+      "scenarios (T3-PROV-2 and friends). Its sandbox intentionally persists between runs. " +
+      "NOT used by --lane staging: staging's durable user (proliferate-e2e-bot, confirmed " +
+      "2026-07-09) was created by a real GitHub OAuth sign-in and has no password — see " +
+      "RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN below.",
     whereItLives:
       "Seeded once per target deployment via the same first-run/invite flow real users go " +
       "through (see server/proliferate/server/organizations/registration_api.py); " +
@@ -84,9 +87,38 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   },
   {
     name: "RELEASE_E2E_DURABLE_USER_PASSWORD",
-    description: "Password for RELEASE_E2E_DURABLE_USER_EMAIL.",
+    description: "Password for RELEASE_E2E_DURABLE_USER_EMAIL. NOT used by --lane staging (see above).",
     whereItLives: "Team credentials vault, alongside RELEASE_E2E_DURABLE_USER_EMAIL.",
     secret: true,
+  },
+  {
+    name: "RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN",
+    description:
+      "Bootstrap-only refresh token for the staging durable user's product session " +
+      "(proliferate-e2e-bot / support@proliferate.com, a GitHub-OAuth-only account with no " +
+      "password). Used by tests/release/src/fixtures/staging-session.ts to authenticate " +
+      "--lane staging existing-user scenarios in place of RELEASE_E2E_DURABLE_USER_EMAIL/" +
+      "PASSWORD. Refresh tokens rotate on every use (POST /auth/mobile/session/refresh), so " +
+      "after the first run the live token lives in the state file below; this env var is only " +
+      "the initial bootstrap value.",
+    whereItLives:
+      "Minted once via `uv run python tests/release/scripts/staging_session_seed.py mint " +
+      "proliferate-e2e-bot`, run inside a one-off in-VPC ECS task against proliferate-staging " +
+      "(the staging DB is VPC-only — see that script's module docstring for the exact " +
+      "aws ecs run-task invocation). Local dev: ~/.proliferate-local/dev/release-e2e.env " +
+      "(or seed the state file directly). Never committed.",
+    secret: true,
+  },
+  {
+    name: "RELEASE_E2E_STAGING_SESSION_STATE",
+    description:
+      "Path to the JSON state file holding the current (rotating) staging session refresh " +
+      "token. Optional override; defaults to " +
+      "~/.proliferate-local/dev/release-e2e-staging-session.json. " +
+      "tests/release/src/fixtures/staging-session.ts rewrites it atomically after each " +
+      "rotation, so re-authenticating is possible without re-supplying the bootstrap token.",
+    whereItLives: "Written and maintained by tests/release/src/fixtures/staging-session.ts. Operator override only.",
+    secret: false,
   },
   {
     name: "RELEASE_E2E_DURABLE_ORG_ID",
