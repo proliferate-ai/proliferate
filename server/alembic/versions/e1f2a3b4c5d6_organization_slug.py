@@ -6,7 +6,7 @@ column is nullable with a partial unique index; existing rows are backfilled
 from their name.
 
 Revision ID: e1f2a3b4c5d6
-Revises: 75e8009a52c7
+Revises: d10c0a11e5ef
 Create Date: 2026-07-09 00:00:00.000000
 
 """
@@ -19,7 +19,7 @@ from proliferate.utils.slug import slugify
 
 # revision identifiers, used by Alembic.
 revision: str = "e1f2a3b4c5d6"
-down_revision: Union[str, Sequence[str], None] = "75e8009a52c7"
+down_revision: Union[str, Sequence[str], None] = "d10c0a11e5ef"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
