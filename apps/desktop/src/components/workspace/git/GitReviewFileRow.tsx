@@ -1,9 +1,13 @@
-import { useEffect, useMemo, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, type CSSProperties } from "react";
 import {
   type AnyHarnessQueryTimingOptions,
   useGitDiffQuery,
+  useRevertGitPatchesMutation,
+  useStagePatchMutation,
+  useUnstagePatchMutation,
 } from "@anyharness/sdk-react";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
+import type { UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import {
   CircleAlert,
@@ -17,8 +21,14 @@ import {
 } from "@/components/workspace/git/GitReviewInlineState";
 import { GitReviewStageAction } from "@/components/workspace/git/GitReviewStageAction";
 import { GitReviewStatusBadge } from "@/components/workspace/git/GitReviewStatusBadge";
+import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
-import { resolveDiffDisplayPolicy } from "@/lib/domain/workspaces/changes/diff-display-policy";
+import { extractHunkPatch, isHunkActionEligible } from "@/lib/domain/files/hunk-patch";
+import { useToastStore } from "@/stores/toast/toast-store";
+import {
+  DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
+  resolveDiffDisplayPolicy,
+} from "@/lib/domain/workspaces/changes/diff-display-policy";
 import type {
   GitPanelReviewFile,
   GitPanelReviewScope,
@@ -30,6 +40,37 @@ type OpenFile = (path: string) => Promise<void>;
 const SIDEBAR_DIFF_SURFACE_STYLE = {
   "--codex-diffs-surface-override": "var(--color-diff-surface)",
 } as CSSProperties;
+
+// Header row (min-h-9 + py) height estimate for content-visibility sizing.
+const REVIEW_CARD_HEADER_ESTIMATE_PX = 38;
+
+/**
+ * Off-screen review cards skip layout/paint via content-visibility:auto —
+ * without it every diff row of every file stays painted and long change
+ * lists starve the WKWebView compositor (black flashes while scrolling).
+ *
+ * Full-height layout: diffs render at natural height (no inner 24-line
+ * viewport cap), so the intrinsic-size estimate uses the full expected
+ * line count (changed lines + ~50% context) rather than the old capped
+ * value. This keeps the outer panel scrollbar stable for off-screen cards.
+ */
+function reviewCardVirtualizationStyle({
+  collapsed,
+  changedLines,
+}: {
+  collapsed: boolean;
+  changedLines: number;
+}): CSSProperties {
+  // Estimate total rendered lines: changed lines + ~50% context lines.
+  // No cap — diffs render full height in this layout variant.
+  const estimatedLines = collapsed
+    ? 0
+    : Math.ceil(Math.max(changedLines, 1) * 1.5);
+  return {
+    contentVisibility: "auto",
+    containIntrinsicSize: `auto calc(${REVIEW_CARD_HEADER_ESTIMATE_PX}px + var(--diffs-line-height) * ${estimatedLines})`,
+  } as CSSProperties;
+}
 
 export function GitReviewFileRow({
   id,
@@ -72,6 +113,25 @@ export function GitReviewFileRow({
   const isBranchMode = sectionScope === "branch";
   const isLastTurnMode = sectionScope === "last_turn";
   const shouldUnstage = sectionScope === "staged";
+
+  // Hunk-level mutation hooks (lightweight — share the same query client)
+  const revertMutation = useRevertGitPatchesMutation({ workspaceId });
+  const stagePatchMutation = useStagePatchMutation({ workspaceId });
+  const unstagePatchMutation = useUnstagePatchMutation({ workspaceId });
+  const showToast = useToastStore((state) => state.show);
+  const hunkMutationInFlight =
+    revertMutation.isPending || stagePatchMutation.isPending || unstagePatchMutation.isPending;
+  // Gap expansion reads the worktree file, which only matches the diff's
+  // NEW side for worktree-target scopes: `unstaged` (worktree vs index) and
+  // `last_turn`/`base_worktree` (worktree vs merge-base). `staged` diffs
+  // target the index and `branch` diffs target HEAD, so those degrade to
+  // informational separators.
+  const gapExpansionScopeValid = sectionScope === "unstaged" || isLastTurnMode;
+  const { fileLines, requestFileLines } = useLazyDiffFileLines({
+    workspaceId,
+    path: file.path,
+    enabled: gapExpansionScopeValid && isRuntimeReady,
+  });
   const metadataPolicy = useMemo(
     () => currentDiff
       ? resolveDiffDisplayPolicy({
@@ -120,10 +180,80 @@ export function GitReviewFileRow({
     && !diffQuery.data
     && !diffQuery.isError,
   );
+  // Opt large diffs into per-row content-visibility virtualization (the
+  // [data-diff-row-virtualization] rule in design desktop.css): the diff
+  // renders at full height in the outer panel scroll, so without it every
+  // row of a multi-thousand-line patch stays painted while scrolling.
+  const virtualizeDiffRows = Boolean(
+    patchPolicy
+    && patchPolicy.patchLineCount > DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD,
+  );
   const emptyDiffState = formatEmptyDiffState({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
   });
+
+  // Hunk-level actions: only for working-tree scopes (unstaged/staged) in
+  // unified layout, and only when the patch is complete and the file is not
+  // binary/rename/copy. Branch and last-turn diffs are excluded — their hunks
+  // are not guaranteed to apply against the current worktree/index.
+  const hunkActionsEnabled = Boolean(
+    patch
+    && !isBranchMode
+    && !isLastTurnMode
+    && layout === "unified"
+    && !diffQuery.data?.truncated
+    && isHunkActionEligible(patch, file.oldPath)
+    && isRuntimeReady,
+  );
+
+  const handleHunkRevert = useCallback(
+    (hunkIndex: number) => {
+      if (!patch) return;
+      const result = extractHunkPatch({ patch, hunkIndex, filePath: file.path, oldPath: file.oldPath });
+      if (result) {
+        revertMutation
+          .mutateAsync({
+            entries: [{
+              path: file.path,
+              operation: "edit",
+              patch: result.patch,
+            }],
+          })
+          .catch((error: unknown) => {
+            showToast(formatHunkActionError(error, "Could not revert this change."));
+          });
+      }
+    },
+    [patch, file.path, file.oldPath, revertMutation, showToast],
+  );
+
+  const handleHunkStageOrUnstage = useCallback(
+    (hunkIndex: number) => {
+      if (!patch) return;
+      const result = extractHunkPatch({ patch, hunkIndex, filePath: file.path, oldPath: file.oldPath });
+      if (!result) return;
+      if (shouldUnstage) {
+        unstagePatchMutation.mutateAsync(result.patch).catch((error: unknown) => {
+          showToast(formatHunkActionError(error, "Could not unstage this change."));
+        });
+      } else {
+        stagePatchMutation.mutateAsync(result.patch).catch((error: unknown) => {
+          showToast(formatHunkActionError(error, "Could not stage this change."));
+        });
+      }
+    },
+    [patch, file.path, file.oldPath, shouldUnstage, stagePatchMutation, unstagePatchMutation, showToast],
+  );
+
+  const hunkActions: UnifiedDiffHunkActions | null = hunkActionsEnabled
+    ? {
+        mode: shouldUnstage ? "staged" : "unstaged",
+        disabled: !isRuntimeReady || hunkMutationInFlight,
+        onRevert: handleHunkRevert,
+        onStageOrUnstage: handleHunkStageOrUnstage,
+      }
+    : null;
 
   useEffect(() => {
     if (diffQuery.data || diffQuery.isError) {
@@ -149,7 +279,15 @@ export function GitReviewFileRow({
     <div
       id={id}
       data-review-path={file.path}
-      style={SIDEBAR_DIFF_SURFACE_STYLE}
+      data-diff-row-virtualization={virtualizeDiffRows ? "" : undefined}
+      className="scroll-mt-2"
+      style={{
+        ...SIDEBAR_DIFF_SURFACE_STYLE,
+        ...reviewCardVirtualizationStyle({
+          collapsed,
+          changedLines: additions + deletions,
+        }),
+      }}
     >
       <FileDiffCard
         filePath={file.displayPath}
@@ -175,7 +313,7 @@ export function GitReviewFileRow({
       >
         {!currentDiff ? (
           <GitReviewInlineEmptyState
-            icon={<FileIcon className="size-3.5" />}
+            icon={<FileIcon className="size-4" />}
             title="No current diff"
             description="This file was touched, but there are no current changes to review against the selected base."
             onOpenFile={() => void openFile(file.path)}
@@ -188,7 +326,7 @@ export function GitReviewFileRow({
           />
         ) : waitingForDiffPermit ? (
           <GitReviewInlineEmptyState
-            icon={<RefreshCw className="size-3.5" />}
+            icon={<RefreshCw className="size-4" />}
             title="Waiting to load diff"
             description="This file will load when review capacity is available."
           />
@@ -200,7 +338,7 @@ export function GitReviewFileRow({
           />
         ) : diffErrorMessage ? (
           <GitReviewInlineEmptyState
-            icon={<CircleAlert className="size-3.5" />}
+            icon={<CircleAlert className="size-4" />}
             title="Diff unavailable"
             description={diffErrorMessage}
             onOpenFile={() => void openFile(file.path)}
@@ -220,11 +358,13 @@ export function GitReviewFileRow({
                 wrapLongLines={wrapLongLines}
                 layout={layout}
                 variant={layout === "unified" ? "chat" : "default"}
-                viewportClassName="max-h-[calc(var(--diffs-line-height)*24)]"
                 operationId={measurementOperationId ?? null}
                 overscrollBehaviorX="none"
                 overscrollBehaviorY="none"
                 chainVerticalWheel
+                fileLines={fileLines}
+                onRequestFileLines={requestFileLines}
+                hunkActions={hunkActions}
               />
               {diffQuery.data?.truncated ? (
                 <p className="px-3 py-2 text-center text-xs text-sidebar-muted-foreground">
@@ -254,4 +394,11 @@ function formatDiffErrorMessage(error: unknown): string {
     return error;
   }
   return "Failed to load diff";
+}
+
+function formatHunkActionError(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return fallback;
 }

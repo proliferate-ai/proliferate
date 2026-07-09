@@ -32,9 +32,7 @@ describe("resolveChatInputAvailability", () => {
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,
-      pendingWorkspaceEntry: null,
-      mobility: null,
-    })).toEqual({
+      pendingWorkspaceEntry: null,    })).toEqual({
       isDisabled: false,
       disabledReason: null,
       areRuntimeControlsDisabled: false,
@@ -55,9 +53,7 @@ describe("resolveChatInputAvailability", () => {
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,
-      pendingWorkspaceEntry: null,
-      mobility: null,
-    })).toEqual({
+      pendingWorkspaceEntry: null,    })).toEqual({
       isDisabled: false,
       disabledReason: null,
       areRuntimeControlsDisabled: false,
@@ -81,39 +77,10 @@ describe("resolveChatInputAvailability", () => {
       pendingWorkspaceEntry: {
         source: "cloud-created",
         stage: "awaiting-cloud-ready",
-      },
-      mobility: null,
-    })).toEqual({
+      },    })).toEqual({
       isDisabled: false,
       disabledReason: null,
       areRuntimeControlsDisabled: false,
-      selectedWorkspaceKind: "cloud",
-    });
-  });
-
-  it("lets mobility handoff override normal availability", () => {
-    expect(resolveChatInputAvailability({
-      selectedWorkspaceId: "workspace-1",
-      isCloudWorkspaceSelected: false,
-      connectionState: "healthy",
-      selectedCloudWorkspaceStatus: null,
-      selectedCloudWorkspaceActionBlockReason: null,
-      selectedCloudRuntimePhase: null,
-      selectedCloudRuntimeActionBlockReason: null,
-      activeSessionId: "session-1",
-      isConfiguredLaunchLoading: false,
-      hasReadyConfiguredLaunch: true,
-      configuredLaunchDisabledReason: null,
-      pendingWorkspaceEntry: null,
-      mobility: {
-        handoffActive: true,
-        statusDescription: "Moving workspace.",
-        selectedEffectiveOwner: "cloud",
-      },
-    })).toEqual({
-      isDisabled: true,
-      disabledReason: "Moving workspace.",
-      areRuntimeControlsDisabled: true,
       selectedWorkspaceKind: "cloud",
     });
   });
@@ -131,9 +98,7 @@ describe("resolveChatInputAvailability", () => {
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,
-      pendingWorkspaceEntry: null,
-      mobility: null,
-    })).toEqual({
+      pendingWorkspaceEntry: null,    })).toEqual({
       isDisabled: false,
       disabledReason: null,
       areRuntimeControlsDisabled: false,
@@ -154,9 +119,7 @@ describe("resolveChatInputAvailability", () => {
       isConfiguredLaunchLoading: false,
       hasReadyConfiguredLaunch: true,
       configuredLaunchDisabledReason: null,
-      pendingWorkspaceEntry: null,
-      mobility: null,
-    } as const;
+      pendingWorkspaceEntry: null,    } as const;
 
     expect(resolveChatInputAvailability({
       ...base,

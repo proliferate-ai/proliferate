@@ -35,6 +35,7 @@ fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
         status: ResolvedAgentStatus::Ready,
         credential_state: CredentialState::Ready,
         auth_slots: Vec::new(),
+        cli_auth_state: None,
         native: Some(ResolvedArtifact {
             role: ArtifactRole::NativeCli,
             installed: true,
@@ -61,8 +62,6 @@ fn session_record() -> SessionRecord {
         workspace_id: "workspace-1".to_string(),
         agent_kind: AgentKind::Claude.as_str().to_string(),
         native_session_id: Some("stale-native".to_string()),
-        agent_auth_scope: None,
-        required_agent_auth_revision: None,
         agent_auth_contexts: None,
         requested_model_id: None,
         current_model_id: None,

@@ -16,6 +16,7 @@ import {
   type TranscriptOpenSessionRole,
 } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import { logLatency } from "@/lib/infra/measurement/debug-latency";
 import {
   ensureSessionTranscriptEntry,
@@ -33,6 +34,7 @@ interface SessionTranscriptPaneProps {
 const OLDER_SESSION_HISTORY_EVENT_BUDGET = 1_500;
 const OLDER_SESSION_HISTORY_TURN_LIMIT = 20;
 const OLDER_SESSION_HISTORY_TIMEOUT_MS = 60_000;
+const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
 
 export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPaneProps) {
   useDebugRenderCount("session-transcript-pane");
@@ -44,33 +46,43 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
   const { data: workspaceCollections } = useWorkspaces();
   const [olderHistoryLoadingSessionId, setOlderHistoryLoadingSessionId] = useState<string | null>(null);
   const immediatePaneState = useActiveTranscriptPaneState();
-  const deferredPaneState = useDeferredValue(immediatePaneState);
+  // STARVATION GUARD: only the session IDENTITY is deferred — never the
+  // transcript content. Deferring the whole pane state meant every stream
+  // batch restarted the in-flight deferred render; once per-batch renders got
+  // heavier than the batch interval (full live-tail markdown re-parse after
+  // the typewriter's removal), the deferred lane never committed and the
+  // transcript froze on "Thinking…" until the stream ended.
+  //
+  // Session switches keep their interruptible heavy mount: while the deferred
+  // id lags the immediate id, the pane renders a cheap placeholder urgently,
+  // and the full transcript mounts inside the deferred lane when it flips.
+  // Stream batches do not change the session id, so they cannot restart that
+  // lane. All content fields read from ONE immediate snapshot, so
+  // outbox/optimistic/transcript stay mutually consistent by construction.
+  const deferredActiveSessionId = useDeferredValue(immediatePaneState.activeSessionId);
   const transcriptDeferred =
-    deferredPaneState.activeSessionId !== immediatePaneState.activeSessionId;
+    deferredActiveSessionId !== immediatePaneState.activeSessionId;
   const activeSessionId = transcriptDeferred
     ? null
-    : deferredPaneState.activeSessionId;
-  // The transcript renders from the deferred snapshot, so every input the
-  // row model derives rows from must come from the same snapshot. Mixing
-  // immediate outbox/optimistic state with a deferred transcript opens a
-  // window where a prompt's outbox row is already tombstoned while its
-  // transcript echo hasn't rendered yet — the message disappears for a
-  // frame and the transcript visibly jumps.
+    : immediatePaneState.activeSessionId;
   const optimisticPrompt = transcriptDeferred
     ? null
-    : deferredPaneState.optimisticPrompt;
+    : immediatePaneState.optimisticPrompt;
   const outboxEntries = transcriptDeferred
     ? []
-    : deferredPaneState.outboxEntries;
+    : immediatePaneState.outboxEntries;
   const transcript = transcriptDeferred
     ? null
-    : deferredPaneState.transcript;
+    : immediatePaneState.transcript;
+  const goalEvents = transcriptDeferred
+    ? EMPTY_GOAL_EVENTS
+    : immediatePaneState.goalEvents;
   const sessionViewState = transcriptDeferred
     ? "idle"
-    : deferredPaneState.sessionViewState;
+    : immediatePaneState.sessionViewState;
   const oldestLoadedEventSeq = transcriptDeferred
     ? null
-    : deferredPaneState.oldestLoadedEventSeq;
+    : immediatePaneState.oldestLoadedEventSeq;
   const selectedWorkspace = useMemo(
     () => selectedWorkspaceId
       ? workspaceCollections?.allWorkspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null
@@ -261,6 +273,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
         optimisticPrompt={optimisticPrompt}
         outboxEntries={outboxEntries}
         transcript={transcript}
+        goalEvents={goalEvents}
         sessionViewState={sessionViewState}
         hasOlderHistory={hasOlderHistory}
         isLoadingOlderHistory={isLoadingOlderHistory}

@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 interface ChatComposerSurfaceProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
@@ -17,7 +17,7 @@ export function ChatComposerSurface({
       {...props}
       data-chat-composer-surface="true"
       className={twMerge(
-        "chat-composer-surface relative flex flex-col rounded-[var(--radius-composer,1.5rem)]",
+        "chat-composer-surface relative flex flex-col rounded-[var(--radius-composer,1rem)]",
         overflowMode === "clip"
           ? "overflow-hidden"
           : overflowMode === "visible"

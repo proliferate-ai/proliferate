@@ -28,7 +28,7 @@ export function SystemMessage({ content }: SystemMessageProps) {
       </Button>
       {systemExpanded && (
         <div
-          className="mt-1 rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[12px] leading-[1.65] tracking-[-0.01em] whitespace-pre-wrap text-muted-foreground select-text"
+          className="mt-1 rounded-md border border-border bg-card px-3.5 py-2.5 font-sans text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] tracking-[-0.01em] whitespace-pre-wrap text-muted-foreground select-text"
         >
           {content}
         </div>

@@ -2,15 +2,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyharness_contract::v1::{
-    ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope,
-    SessionExecutionPhase, SessionExecutionSummary,
+    ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope, SessionExecutionPhase,
+    SessionExecutionSummary,
 };
 use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
 
 pub use crate::live::sessions::actor::command::{
-    ForkSessionCommandError, ForkSessionCommandResult, Resolution, PromptAcceptError,
-    PromptAcceptance, QueueMutationError, ResolveInteractionCommandError,
-    SetConfigOptionCommandError,
+    ForkSessionCommandError, ForkSessionCommandResult, PromptAcceptError, PromptAcceptance,
+    QueueMutationError, Resolution, ResolveInteractionCommandError, SetConfigOptionCommandError,
 };
 
 use crate::domains::sessions::prompt::PromptPayload;
@@ -24,6 +23,40 @@ pub enum LiveSessionCommandError<E> {
     ActorUnavailable,
     ResponseDropped,
     Rejected(E),
+}
+
+/// Classification of an ACP ext-method failure, preserved through the
+/// `anyhow::Error` the actor returns so callers can tell a server-side failure
+/// (the sidecar never answered, or returned an internal error) apart from a
+/// client-side rejection (invalid params) and map it to the right HTTP status
+/// instead of folding everything into a 400.
+#[derive(Debug, thiserror::Error)]
+pub enum AgentExtMethodError {
+    /// The sidecar did not answer within the actor's ext-method deadline.
+    #[error("agent did not answer {method} within {timeout_secs}s")]
+    Timeout { method: String, timeout_secs: u64 },
+    /// The sidecar answered with a JSON-RPC error. `code` is the JSON-RPC
+    /// error code (e.g. -32602 invalid params, -32603 internal error).
+    #[error("agent ext-method {method} failed ({code}): {message}")]
+    Rpc {
+        method: String,
+        code: i32,
+        message: String,
+    },
+}
+
+impl AgentExtMethodError {
+    /// True when the failure is server-side (the agent hung, or reported an
+    /// internal error) rather than a client-side rejection — the caller should
+    /// surface a 5xx/unavailable, not a 400.
+    pub fn is_agent_unavailable(&self) -> bool {
+        match self {
+            Self::Timeout { .. } => true,
+            // JSON-RPC internal error (-32603). Invalid params (-32602) and the
+            // rest stay client rejections.
+            Self::Rpc { code, .. } => *code == -32603,
+        }
+    }
 }
 
 fn anyhow_command_error(error: LiveSessionCommandError<anyhow::Error>) -> anyhow::Error {
@@ -143,11 +176,7 @@ impl LiveSessionHandle {
     /// Mirror a plan linkage into the pending-interaction snapshot. Safe to
     /// call after resolution (no-op when the interaction is gone); used by
     /// the plans runtime after a decision op reports a (re)link.
-    pub async fn link_pending_interaction_to_plan(
-        &self,
-        request_id: &str,
-        plan_id: &str,
-    ) {
+    pub async fn link_pending_interaction_to_plan(&self, request_id: &str, plan_id: &str) {
         let mut execution = self.execution.write().await;
         let Some(pending) = execution
             .pending_interactions
@@ -299,13 +328,30 @@ impl LiveSessionHandle {
     pub async fn run_domain_op(
         &self,
         op: Box<dyn crate::live::sessions::model::SessionDomainOp>,
-    ) -> Result<Box<dyn std::any::Any + Send>, LiveSessionCommandError<std::convert::Infallible>> {
+    ) -> Result<Box<dyn std::any::Any + Send>, LiveSessionCommandError<std::convert::Infallible>>
+    {
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.command_tx
             .send(SessionCommand::RunDomainOp { op, respond_to: tx })
             .await
             .map_err(|_| LiveSessionCommandError::ActorUnavailable)?;
-        rx.await.map_err(|_| LiveSessionCommandError::ResponseDropped)
+        rx.await
+            .map_err(|_| LiveSessionCommandError::ResponseDropped)
+    }
+
+    /// Send an ACP extension-method request to the agent, serialized through
+    /// the actor loop, and return its raw JSON result.
+    pub async fn call_agent_ext_method(
+        &self,
+        method: String,
+        params: serde_json::Value,
+    ) -> Result<serde_json::Value, LiveSessionCommandError<anyhow::Error>> {
+        self.send_request(|respond_to| SessionCommand::CallAgentExtMethod {
+            method,
+            params,
+            respond_to,
+        })
+        .await
     }
 
     pub async fn verify_fork_ready(
@@ -377,5 +423,48 @@ impl LiveSessionHandle {
         phase: SessionExecutionPhase,
     ) -> Self {
         Self::new(session_id, command_tx, event_tx, native_session_id, phase)
+    }
+}
+
+#[cfg(test)]
+mod ext_method_error_tests {
+    use super::AgentExtMethodError;
+
+    #[test]
+    fn timeout_and_internal_errors_are_agent_unavailable() {
+        assert!(AgentExtMethodError::Timeout {
+            method: "_anyharness/goal/set".to_string(),
+            timeout_secs: 45,
+        }
+        .is_agent_unavailable());
+        assert!(AgentExtMethodError::Rpc {
+            method: "_anyharness/goal/get".to_string(),
+            code: -32603,
+            message: "sqlite state db unavailable".to_string(),
+        }
+        .is_agent_unavailable());
+    }
+
+    #[test]
+    fn invalid_params_stays_a_client_rejection() {
+        assert!(!AgentExtMethodError::Rpc {
+            method: "_anyharness/goal/set".to_string(),
+            code: -32602,
+            message: "invalid params".to_string(),
+        }
+        .is_agent_unavailable());
+    }
+
+    #[test]
+    fn classification_survives_anyhow_downcast() {
+        let error: anyhow::Error = AgentExtMethodError::Timeout {
+            method: "_anyharness/goal/clear".to_string(),
+            timeout_secs: 45,
+        }
+        .into();
+        let downcast = error
+            .downcast_ref::<AgentExtMethodError>()
+            .expect("ext-method error survives anyhow round-trip");
+        assert!(downcast.is_agent_unavailable());
     }
 }

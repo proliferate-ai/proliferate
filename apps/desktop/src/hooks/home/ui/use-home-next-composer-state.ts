@@ -65,14 +65,30 @@ export function useHomeNextComposerState({
     && submittedPreview === null
     && !isLaunching;
 
+  // PERF: `getComputedStyle` twice per keystroke is avoidable work in the hot
+  // typing path — line-height and root font-size only change on theme/UI-scale
+  // edits, so cache them briefly. The `scrollHeight` read below still forces a
+  // reflow; that one is inherent to autosizing.
+  const fontMetricsRef = useRef<{
+    lineHeightPx: number;
+    rootFontSizePx: number;
+    measuredAtMs: number;
+  } | null>(null);
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
 
-    const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
-    if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) return;
+    const nowMs = Date.now();
+    let metrics = fontMetricsRef.current;
+    if (!metrics || nowMs - metrics.measuredAtMs > 1_000) {
+      const lineHeightPx = parseFloat(getComputedStyle(el).lineHeight);
+      if (!Number.isFinite(lineHeightPx) || lineHeightPx <= 0) return;
+      const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      metrics = { lineHeightPx, rootFontSizePx, measuredAtMs: nowMs };
+      fontMetricsRef.current = metrics;
+    }
+    const { lineHeightPx, rootFontSizePx } = metrics;
 
-    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize);
     const homeMinHeightPx = Number.isFinite(rootFontSizePx)
       ? rootFontSizePx * HOME_CHAT_COMPOSER_INPUT.minHeightRem
       : lineHeightPx * HOME_CHAT_COMPOSER_INPUT.minRows;

@@ -13,28 +13,9 @@ export type SupportReportScopeKind =
   | "choose_workspace"
   | "app_only";
 export type RuntimeConnectionTelemetryState = "connecting" | "failed" | "healthy";
-export type RuntimeInputSyncTelemetryTrigger =
-  | "preference_enabled"
-  | "startup"
-  | "online"
-  | "hourly"
-  | "retry"
-  | "credential_mutation"
-  | "repo_config_mutation"
-  | "runtime_reconnected";
-export type RuntimeInputSyncTelemetrySourceKind =
-  | "credential"
-  | "repo_tracked_file";
 export type TrackedFileTelemetrySource = "workspace" | "repo_root";
-export type RuntimeInputSyncTelemetryFailureKind =
-  | "cloud_unavailable"
-  | "missing_local_source"
-  | "needs_reconnect"
-  | "too_large"
-  | "runtime_unavailable"
-  | "request_failed";
-export type AuthTelemetryProvider = "apple" | "dev_bypass" | "github" | "google" | "sso";
-export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_poll";
+export type AuthTelemetryProvider = "apple" | "dev_bypass" | "github" | "google" | "password" | "sso";
+export type AuthSignInSource = "desktop_callback" | "dev_bypass" | "interactive_poll" | "password_form";
 export type WorkspaceCreationKind = "repo" | "worktree" | "local";
 export type WorkspaceOpenSource = "filesystem";
 export type SetupScriptTelemetryStatus = "failed" | "not_run" | "succeeded";
@@ -159,7 +140,6 @@ export interface DesktopProductEventMap {
     files_out_of_sync: boolean;
     tracked_file_count: number;
   };
-  cloud_workspace_credentials_resynced: undefined;
   cloud_workspace_setup_started: {
     has_saved_script: boolean;
   };
@@ -199,20 +179,6 @@ export interface DesktopProductEventMap {
   runtime_connection_state_changed: {
     connection_state: RuntimeConnectionTelemetryState;
     has_error: boolean;
-  };
-  runtime_input_sync_cycle_completed: {
-    trigger: RuntimeInputSyncTelemetryTrigger;
-    credential_count: number;
-    repo_file_count: number;
-    failure_count: number;
-  };
-  runtime_input_sync_item_failed: {
-    source_kind: RuntimeInputSyncTelemetrySourceKind;
-    tracked_file_source?: TrackedFileTelemetrySource | null;
-    failure_kind: RuntimeInputSyncTelemetryFailureKind;
-  };
-  runtime_input_sync_toggled: {
-    enabled: boolean;
   };
   screen_viewed: {
     route: DesktopTelemetryRoute;

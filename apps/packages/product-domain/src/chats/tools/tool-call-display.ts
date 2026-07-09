@@ -78,12 +78,6 @@ export function describeToolCallDisplay(
         hint: cleanedToolName || nativeName || undefined,
         iconKey: "settings",
       };
-    case "mode_switch":
-      return {
-        label: "Mode change",
-        hint: cleanedToolName || nativeName || undefined,
-        iconKey: "settings",
-      };
     case "terminal": {
       const description = readString(raw?.description) ?? undefined;
       return {

@@ -81,7 +81,6 @@ export function renderableOutboxEntriesForTranscript(
   const promptIdsToFind = new Set(transcriptCandidates.map((entry) => entry.clientPromptId));
   const echoedPromptIds = collectTranscriptPromptIds(transcript, promptIdsToFind);
   const renderableEntries: PromptOutboxEntry[] = [];
-  let hasEarlierBlockingPrompt = false;
   for (const entry of entries) {
     const isEchoed = echoedPromptIds.has(entry.clientPromptId);
     const isFailedBeforeDispatch = entry.deliveryState === "failed_before_dispatch";
@@ -90,16 +89,14 @@ export function renderableOutboxEntriesForTranscript(
       renderableEntries.push(entry);
       continue;
     }
-    if (
-      !hasEarlierBlockingPrompt
-      && entry.placement === "transcript"
-      && !isTerminal
-      && !isEchoed
-    ) {
+    // A submitted message must NEVER be invisible: queue-placed entries
+    // (sends while the session is busy) render in the transcript exactly like
+    // transcript-placed ones, in outbox order, until the real user_message
+    // echo replaces them. Placement still controls DELIVERY semantics (when
+    // the prompt dispatches) — previously queue-placed sends vanished from
+    // the conversation until the current turn finished.
+    if (!isTerminal && !isEchoed) {
       renderableEntries.push(entry);
-    }
-    if (!isTerminal && !isEchoed && isOutboxEntryBlockingNewTranscriptPrompt(entry)) {
-      hasEarlierBlockingPrompt = true;
     }
   }
   return renderableEntries;
@@ -238,7 +235,7 @@ function isOutboxEntryBlockingNewTranscriptPrompt(entry: PromptOutboxEntry): boo
 
 function isOutboxTranscriptCandidate(entry: PromptOutboxEntry): boolean {
   return entry.deliveryState === "failed_before_dispatch"
-    || (entry.placement === "transcript" && !isOutboxEntryTerminal(entry));
+    || !isOutboxEntryTerminal(entry);
 }
 
 function collectTranscriptPromptIds(

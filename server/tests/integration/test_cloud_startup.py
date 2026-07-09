@@ -3,8 +3,9 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from proliferate.constants.cloud import CloudSandboxStatus
+from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
-from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 
 
@@ -19,40 +20,26 @@ async def test_app_startup_does_not_reconnect_cloud_sandboxes(
 
     async_session = async_sessionmaker(test_engine, expire_on_commit=False)
     async with async_session() as session:
-        user_id = uuid.uuid4()
-        billing_subject = await ensure_personal_billing_subject(session, user_id)
-        workspace = CloudWorkspace(
-            user_id=user_id,
-            billing_subject_id=billing_subject.id,
-            display_name="acme/rocket",
-            git_provider="github",
-            git_owner="acme",
-            git_repo_name="rocket",
-            git_branch="cloud-branch",
-            git_base_branch="main",
-            status="ready",
-            status_detail="Ready",
-            last_error=None,
-            template_version="v1",
-            runtime_generation=1,
-            runtime_url="https://example-runtime.invalid",
-            runtime_token_ciphertext="ciphertext",
-            anyharness_workspace_id="workspace-123",
+        user = User(
+            email=f"cloud-startup-{uuid.uuid4().hex[:8]}@example.com",
+            hashed_password="unused-oauth-only",
+            is_active=True,
+            is_superuser=False,
+            is_verified=True,
+            display_name="Cloud Startup Tester",
         )
-        session.add(workspace)
-        await session.commit()
-        await session.refresh(workspace)
+        session.add(user)
+        await session.flush()
+        await ensure_personal_billing_subject(session, user.id)
 
         sandbox = CloudSandbox(
-            provider="e2b",
-            external_sandbox_id=f"sandbox-{uuid.uuid4()}",
-            status="paused",
-            template_version="v1",
+            owner_user_id=user.id,
+            provider_sandbox_id=f"sandbox-{uuid.uuid4()}",
+            status=CloudSandboxStatus.paused,
+            anyharness_base_url="https://example-runtime.invalid",
+            runtime_token_ciphertext="ciphertext",
         )
         session.add(sandbox)
-        await session.commit()
-
-        workspace.active_sandbox_id = sandbox.id
         await session.commit()
 
     async def _boom(*_args, **_kwargs) -> None:

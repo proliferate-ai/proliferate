@@ -4,6 +4,7 @@ import { ArrowLeft, RefreshCw } from "@proliferate/ui/icons";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { TRAILING_STATUS_MIN_HEIGHT } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
+import { CHAT_STREAMING_STATUS_LABELS } from "@/copy/chat/chat-copy";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
 import { useChatLaunchIntentActions } from "@/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "@/lib/domain/chat/launch/launch-intent";
@@ -95,7 +96,10 @@ export function ChatLaunchIntentPane({ bottomInsetPx }: ChatLaunchIntentPaneProp
               />
               {isPending && (
                 <div className={`mt-2 ${TRAILING_STATUS_MIN_HEIGHT}`}>
-                  <StreamingIndicator startedAt={new Date(activeIntent.createdAt).toISOString()} />
+                  <StreamingIndicator
+                    startedAt={new Date(activeIntent.createdAt).toISOString()}
+                    label={CHAT_STREAMING_STATUS_LABELS.sending}
+                  />
                 </div>
               )}
             </div>

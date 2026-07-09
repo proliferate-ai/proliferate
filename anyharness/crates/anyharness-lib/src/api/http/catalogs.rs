@@ -4,7 +4,7 @@
 //! `ETag` request header forwards the cloud response's ETag. Sync semantics
 //! live in `domains/agents/catalog/sync.rs`.
 
-use anyharness_contract::v1::ApplyAgentCatalogResponse;
+use anyharness_contract::v1::{AgentCatalogVersionResponse, ApplyAgentCatalogResponse};
 use axum::{
     body::Bytes,
     extract::State,
@@ -14,7 +14,7 @@ use axum::{
 
 use super::error::ApiError;
 use crate::app::AppState;
-use crate::domains::agents::catalog::sync::SyncOutcome;
+use crate::domains::agents::catalog::sync::{CatalogSource, SyncOutcome};
 
 #[utoipa::path(
     put,
@@ -63,5 +63,30 @@ fn apply_agent_catalog_response(outcome: SyncOutcome) -> ApplyAgentCatalogRespon
             from_version: None,
             to_version: None,
         },
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/v1/catalogs/agents/version",
+    responses(
+        (status = 200, description = "Active agent catalog version and source", body = AgentCatalogVersionResponse),
+    ),
+    tag = "catalogs"
+)]
+pub async fn get_agent_catalog_version(
+    State(state): State<AppState>,
+) -> Json<AgentCatalogVersionResponse> {
+    let active = state.catalog_sync_service.active();
+    Json(AgentCatalogVersionResponse {
+        catalog_version: active.version,
+        source: catalog_source_label(active.source).to_owned(),
+    })
+}
+
+fn catalog_source_label(source: CatalogSource) -> &'static str {
+    match source {
+        CatalogSource::Bundled => "bundled",
+        CatalogSource::Fetched => "fetched",
     }
 }

@@ -42,6 +42,7 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
+import { useGitPromptSnapshotEffects } from "@/hooks/workspaces/workflows/use-git-prompt-snapshot-effects";
 import { completeChatPromptSubmitSideEffects } from "@/lib/workflows/chat/complete-chat-prompt-submit-side-effects";
 
 export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
@@ -75,6 +76,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
   });
   const scopedLaunchIdentity = forceNewSession ? null : currentLaunchIdentity;
   const configuredLaunch = useConfiguredLaunchReadiness(scopedLaunchIdentity);
+  const gitPromptEffects = useGitPromptSnapshotEffects();
 
   const handleSubmit = useCallback(async (input?: {
     text: string;
@@ -225,12 +227,14 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
       }
       completeChatPromptSubmitSideEffects({
         workspaceId: selectedWorkspaceId,
+        logicalWorkspaceId: selectedLogicalWorkspaceId,
+        repoRootId: gitPromptEffects.repoRootIdForLogicalWorkspace(selectedLogicalWorkspaceId),
         getWorkspaceArrivalEvent: () => useSessionSelectionStore.getState().workspaceArrivalEvent,
         getCachedWorkspaceSetupStatus,
         agentKind: launchSelection?.kind ?? "unknown",
         reuseSession: targetSessionId !== null,
         setWorkspaceArrivalEvent,
-      }, { trackProductEvent });
+      }, { trackProductEvent, ...gitPromptEffects.promptSubmitDeps });
       return true;
     } catch (error) {
       if (latencyFlowId) {
@@ -256,6 +260,7 @@ export function useChatPromptActions(options?: { forceNewSession?: boolean }) {
     createSessionWithResolvedConfig,
     findOrCreateSession,
     getCachedWorkspaceSetupStatus,
+    gitPromptEffects,
     hasSlot,
     forceNewSession,
     isDisabled,

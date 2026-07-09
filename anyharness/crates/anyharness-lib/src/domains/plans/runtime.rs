@@ -182,10 +182,7 @@ impl PlanRuntime {
                     None,
                     Vec::new(),
                     None,
-                    None,
                     true,
-                    None,
-                    None,
                     origin,
                 )
                 .await
@@ -292,15 +289,18 @@ impl PlanRuntime {
                 decision,
                 pending_permissions,
             });
-            let reply = handle.run_domain_op(op).await.map_err(|error| match error {
-                LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
-                    anyhow::anyhow!("session actor is not available for plan decision"),
-                ),
-                LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
-                    anyhow::anyhow!("session actor dropped plan decision response"),
-                ),
-                LiveSessionCommandError::Rejected(infallible) => match infallible {},
-            })?;
+            let reply = handle
+                .run_domain_op(op)
+                .await
+                .map_err(|error| match error {
+                    LiveSessionCommandError::ActorUnavailable => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor is not available for plan decision"),
+                    ),
+                    LiveSessionCommandError::ResponseDropped => PlanDecisionError::Store(
+                        anyhow::anyhow!("session actor dropped plan decision response"),
+                    ),
+                    LiveSessionCommandError::Rejected(infallible) => match infallible {},
+                })?;
             let output = reply.downcast::<PlanDecisionOpOutput>().map_err(|_| {
                 PlanDecisionError::Store(anyhow::anyhow!(
                     "plan decision op returned an unexpected reply type"

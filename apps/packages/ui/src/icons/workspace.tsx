@@ -126,10 +126,47 @@ export function FilePlus({ className, ...props }: IconProps) {
 
 export function FolderPlus({ className, ...props }: IconProps) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
       <line x1="12" x2="12" y1="10" y2="16" />
       <line x1="9" x2="15" y1="13" y2="13" />
+    </svg>
+  );
+}
+
+/**
+ * Two equal columns — split-view / side-by-side layout toggles (e.g. the
+ * split-diff switch). Distinct from SplitPanel, whose off-center divider
+ * means "app panel toggle".
+ */
+export function Columns2({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M12 3v18" />
+    </svg>
+  );
+}
+
+/** Rounded square with a centered plus — "create workspace" affordance. */
+export function SquarePlus({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M8 12h8" />
+      <path d="M12 8v8" />
+    </svg>
+  );
+}
+
+/** Folder-tree glyph for file-browser / file-tree toggles. */
+export function FolderTree({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z" />
+      <path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z" />
+      <path d="M3 5a2 2 0 0 0 2 2h3" />
+      <path d="M3 3v13a2 2 0 0 0 2 2h3" />
     </svg>
   );
 }
@@ -187,13 +224,11 @@ export function FolderFilled({ className, ...props }: IconProps) {
   );
 }
 
-/** Filter/funnel icon matching Codex's sidebar filter button */
+/** Funnel filter icon for the sidebar's workspace-type filter button. */
 export function Filter({ className, ...props }: IconProps) {
   return (
-    <svg className={className} xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 20 20" {...props}>
-      <path d="M12.5 14.0049C12.8673 14.0049 13.165 14.3027 13.165 14.6699C13.165 15.0372 12.8673 15.335 12.5 15.335H7.5C7.13273 15.335 6.83496 15.0372 6.83496 14.6699C6.83496 14.3027 7.13273 14.0049 7.5 14.0049H12.5Z" />
-      <path d="M15 9.33496C15.3673 9.33496 15.665 9.63273 15.665 10C15.665 10.3673 15.3673 10.665 15 10.665H5C4.63273 10.665 4.33496 10.3673 4.33496 10C4.33496 9.63273 4.63273 9.33496 5 9.33496H15Z" />
-      <path d="M17.5 4.66504C17.8673 4.66504 18.165 4.96281 18.165 5.33008C18.165 5.69735 17.8673 5.99512 17.5 5.99512H2.5C2.13273 5.99512 1.83496 5.69735 1.83496 5.33008C1.83496 4.96281 2.13273 4.66504 2.5 4.66504H17.5Z" />
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M22 3H2l8 9.46V19l4 2v-8.54z" />
     </svg>
   );
 }
@@ -248,6 +283,28 @@ export function GitBranchIcon({ className, ...props }: IconProps) {
       <circle cx="14.5833" cy="5" r="1.875" stroke="currentColor" strokeWidth="1.33" />
       <path d="M5.4165 6.66664V13.3333" stroke="currentColor" strokeWidth="1.33" strokeLinejoin="round" />
       <path d="M5.41658 12.5V11.6667C5.41658 10.7462 6.16278 10 7.08325 10H12.9166C13.8371 10 14.5833 9.25381 14.5833 8.33333V7.5" stroke="currentColor" strokeWidth="1.33" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Codex-style spiral-bound notebook — the "project" glyph (16 viewBox, filled). */
+export function ProjectNotebook({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path
+        d="M8.66724 8.1416C8.95692 8.14191 9.19165 8.37723 9.19165 8.66699C9.19152 8.95664 8.95684 9.19208 8.66724 9.19238H6.00024C5.71038 9.19238 5.47499 8.95683 5.47485 8.66699C5.47485 8.37704 5.71029 8.1416 6.00024 8.1416H8.66724Z"
+        fill="currentColor"
+      />
+      <path
+        d="M10.0002 5.47461C10.29 5.47474 10.5256 5.71019 10.5256 6C10.5256 6.28987 10.2901 6.52526 10.0002 6.52539H6.00024C5.71029 6.52539 5.47485 6.28995 5.47485 6C5.47492 5.71011 5.71034 5.47461 6.00024 5.47461H10.0002Z"
+        fill="currentColor"
+      />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M10.9944 1.83691C12.3887 1.83718 13.5198 2.96795 13.5198 4.3623V11.6475C13.5197 13.0418 12.3886 14.1716 10.9944 14.1719H5.02075C3.62628 14.1719 2.49544 13.0419 2.49536 11.6475V11.1924H2.33325C2.04338 11.1924 1.80799 10.9568 1.80786 10.667C1.80786 10.377 2.0433 10.1416 2.33325 10.1416H2.49536V8.52539H2.33325C2.0433 8.52539 1.80786 8.28995 1.80786 8C1.80793 7.71011 2.04334 7.47461 2.33325 7.47461H2.49536V5.85938H2.33325C2.04347 5.85938 1.80813 5.62371 1.80786 5.33398C1.80786 5.04403 2.0433 4.80859 2.33325 4.80859H2.49536V4.3623C2.49536 2.96779 3.62623 1.83691 5.02075 1.83691H10.9944ZM5.02075 2.8877C4.20613 2.8877 3.54614 3.54768 3.54614 4.3623V4.80859H3.66626C3.95621 4.80859 4.19165 5.04403 4.19165 5.33398C4.19139 5.62371 3.95605 5.85938 3.66626 5.85938H3.54614V7.47461H3.66626C3.95617 7.47461 4.19158 7.71011 4.19165 8C4.19165 8.28995 3.95621 8.52539 3.66626 8.52539H3.54614V10.1416H3.66626C3.95621 10.1416 4.19165 10.377 4.19165 10.667C4.19152 10.9568 3.95613 11.1924 3.66626 11.1924H3.54614V11.6475C3.54622 12.462 4.20618 13.1221 5.02075 13.1221H10.9944C11.8087 13.1218 12.4689 12.4619 12.469 11.6475V4.3623C12.469 3.54785 11.8088 2.88796 10.9944 2.8877H5.02075Z"
+        fill="currentColor"
+      />
     </svg>
   );
 }

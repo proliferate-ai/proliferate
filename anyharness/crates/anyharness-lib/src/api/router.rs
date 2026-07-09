@@ -11,14 +11,17 @@ use subtle::ConstantTimeEq;
 use url::form_urlencoded;
 
 use super::http::{
-    agent_auth_config, agents, auth as http_auth, catalogs, cowork, files, git, health, hosting,
-    mobility, plans, processes, product_mcp, replay, repo_roots, reviews, runtime_config, sessions,
-    sessions_config, sessions_events, sessions_fork, sessions_interactions, sessions_lifecycle,
+    agent_auth, agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git,
+    goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots,
+    reviews, sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
+    sessions_lifecycle,
     sessions_pending, sessions_prompt, sessions_resume, subagents, terminals, workspaces,
     workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees, worktrees,
 };
 use super::sse::sessions as sse_sessions;
+use super::ws::activity as ws_activity;
 use super::ws::agent_login_terminals as ws_agent_login_terminals;
+use super::ws::feeds as ws_feeds;
 use super::ws::terminals as ws_terminals;
 use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
@@ -45,6 +48,14 @@ pub fn build_router(state: AppState) -> Router {
             get(ws_agent_login_terminals::agent_login_terminal_ws),
         )
         .route("/agents/{kind}", get(agents::get_agent))
+        .route(
+            "/agents/{kind}/catalog/gateway-models",
+            get(agent_gateway_catalog::get_gateway_models),
+        )
+        .route(
+            "/agents/{kind}/catalog/refresh-gateway",
+            post(agent_gateway_catalog::refresh_gateway_models),
+        )
         .route("/agents/{kind}/install", post(agents::install_agent))
         .route(
             "/agents/{kind}/login/start",
@@ -54,20 +65,14 @@ pub fn build_router(state: AppState) -> Router {
             "/agents/{kind}/login/terminal",
             post(agents::start_agent_login_terminal),
         )
-        .route(
-            "/agents/auth-config",
-            put(agent_auth_config::apply_agent_auth_config),
-        )
-        .route(
-            "/agents/auth-config/status",
-            get(agent_auth_config::get_agent_auth_config_status),
-        )
         .route("/auth/revoked-jtis", put(http_auth::push_revoked_jtis))
+        // Agent-auth state (desktop-pushed local-surface state.json)
+        .route("/agent-auth/state", put(agent_auth::put_agent_auth_state))
         // Catalogs (worker-pushed agent catalog document)
         .route("/catalogs/agents", put(catalogs::apply_agent_catalog))
         .route(
-            "/runtime-config",
-            get(runtime_config::get_runtime_config).put(runtime_config::apply_runtime_config),
+            "/catalogs/agents/version",
+            get(catalogs::get_agent_catalog_version),
         )
         // Workspaces
         .route(
@@ -300,6 +305,14 @@ pub fn build_router(state: AppState) -> Router {
             post(git::unstage_paths),
         )
         .route(
+            "/workspaces/{workspace_id}/git/stage-patch",
+            post(git::stage_patch),
+        )
+        .route(
+            "/workspaces/{workspace_id}/git/unstage-patch",
+            post(git::unstage_patch),
+        )
+        .route(
             "/workspaces/{workspace_id}/git/revert-patches",
             post(git::revert_patches),
         )
@@ -313,6 +326,11 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/workspaces/{workspace_id}/hosting/pull-requests",
             post(hosting::create_pull_request),
+        )
+        // Hosting (repo-root-scoped, branch PR statuses via gh GraphQL)
+        .route(
+            "/repo-roots/{repo_root_id}/hosting/pull-requests",
+            get(hosting::get_repo_pull_request_statuses),
         )
         // Terminals (workspace-scoped, interactive PTY shells)
         .route(
@@ -426,6 +444,28 @@ pub fn build_router(state: AppState) -> Router {
             "/sessions/{session_id}/prompt-attachments/{attachment_id}",
             get(sessions_pending::get_prompt_attachment),
         )
+        .route(
+            "/sessions/{session_id}/goal",
+            put(goals::set_session_goal).delete(goals::clear_session_goal),
+        )
+        // Loops (native crons + emulated scheduler)
+        .route(
+            "/sessions/{session_id}/loops",
+            get(loops::list_session_loops)
+                .put(loops::set_session_loop)
+                .delete(loops::clear_session_loops),
+        )
+        .route(
+            "/sessions/{session_id}/loops/{loop_id}",
+            put(loops::edit_session_loop).delete(loops::clear_session_loop),
+        )
+        // Activity watch (live SessionActivity)
+        .route(
+            "/sessions/{session_id}/activity/watch",
+            get(ws_activity::activity_watch_ws),
+        )
+        // Feeds (lazy live content for roster elements)
+        .route("/feeds/{feed_id}", get(ws_feeds::feed_ws))
         .route(
             "/sessions/{session_id}/resume",
             post(sessions_resume::resume_session),

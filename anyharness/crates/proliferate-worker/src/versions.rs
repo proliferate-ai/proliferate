@@ -1,49 +1,20 @@
-const SUPERVISOR_VERSION_ENV: &str = "PROLIFERATE_SUPERVISOR_VERSION";
-
 pub fn worker_version() -> Option<String> {
     Some(env!("CARGO_PKG_VERSION").to_string())
 }
 
-pub fn supervisor_version() -> Option<String> {
-    std::env::var(SUPERVISOR_VERSION_ENV)
+/// The AnyHarness runtime version co-deployed with this worker, when the
+/// launcher advertises it via env. The worker never introspects the runtime
+/// binary itself; absence is fine — the server tolerates a missing report.
+///
+/// FOLLOW-UP: no launcher exports `PROLIFERATE_ANYHARNESS_VERSION` yet (the
+/// server only knows its *pinned* runtime version, not what actually runs in
+/// a sandbox, so the export has to come from whatever stages/launches the
+/// runtime — the sandbox supervisor or the desktop app). Until that lands,
+/// this reports `None` and `cloud_runtime_worker.anyharness_version` stays
+/// NULL for real workers.
+pub fn anyharness_version() -> Option<String> {
+    std::env::var("PROLIFERATE_ANYHARNESS_VERSION")
         .ok()
-        .and_then(|version| normalize_configured_version(&version))
-}
-
-pub fn supervisor_version_or_configured(configured: &Option<String>) -> Option<String> {
-    supervisor_version().or_else(|| configured.as_deref().and_then(normalize_configured_version))
-}
-
-fn normalize_configured_version(version: &str) -> Option<String> {
-    let version = version.trim();
-    if version.is_empty() {
-        None
-    } else {
-        Some(version.to_string())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{normalize_configured_version, supervisor_version_or_configured};
-
-    #[test]
-    fn normalize_configured_version_trims_and_rejects_empty_values() {
-        assert_eq!(
-            normalize_configured_version(" 0.2.0 "),
-            Some("0.2.0".to_string())
-        );
-        assert_eq!(normalize_configured_version("   "), None);
-    }
-
-    #[test]
-    fn supervisor_version_falls_back_to_configured_value() {
-        let configured = Some(" 0.3.0 ".to_string());
-        if std::env::var("PROLIFERATE_SUPERVISOR_VERSION").is_err() {
-            assert_eq!(
-                supervisor_version_or_configured(&configured),
-                Some("0.3.0".to_string())
-            );
-        }
-    }
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }

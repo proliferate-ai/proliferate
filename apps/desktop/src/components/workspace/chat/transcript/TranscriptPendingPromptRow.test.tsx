@@ -42,7 +42,7 @@ describe("TranscriptPendingPromptRow", () => {
     expect(statusLine.parentElement?.textContent).toBe("Not sent: session is closed");
     expect(container.querySelector("[data-chat-user-message]")).toBeNull();
     expect(container.innerHTML).not.toContain("min-h-[calc");
-    expect(container.innerHTML).toContain("text-[length:var(--text-chat)]");
+    expect(statusLine.closest("[data-chat-transcript-ignore]")?.className).toContain("text-chat");
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));

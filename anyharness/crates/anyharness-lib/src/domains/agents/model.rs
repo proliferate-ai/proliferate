@@ -6,7 +6,6 @@ use std::path::PathBuf;
 pub enum AgentKind {
     Claude,
     Codex,
-    Gemini,
     Cursor,
     OpenCode,
     Grok,
@@ -17,7 +16,6 @@ impl AgentKind {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
-            Self::Gemini => "gemini",
             Self::Cursor => "cursor",
             Self::OpenCode => "opencode",
             Self::Grok => "grok",
@@ -28,7 +26,6 @@ impl AgentKind {
         match self {
             Self::Claude => "Claude",
             Self::Codex => "Codex",
-            Self::Gemini => "Gemini",
             Self::Cursor => "Cursor",
             Self::OpenCode => "OpenCode",
             Self::Grok => "Grok",
@@ -39,7 +36,6 @@ impl AgentKind {
         &[
             Self::Claude,
             Self::Codex,
-            Self::Gemini,
             Self::Cursor,
             Self::OpenCode,
             Self::Grok,
@@ -50,7 +46,6 @@ impl AgentKind {
         match s {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
-            "gemini" => Some(Self::Gemini),
             "cursor" => Some(Self::Cursor),
             "opencode" => Some(Self::OpenCode),
             "grok" => Some(Self::Grok),
@@ -276,8 +271,6 @@ pub enum CredentialDiscoveryKind {
     Claude,
     /// Check Codex-specific auth.json (API key + OAuth).
     Codex,
-    /// Check Gemini-specific OAuth cache files.
-    Gemini,
     /// Check OpenCode-specific auth.json (multi-provider), while leaving
     /// readiness provider-managed when no local auth file exists.
     OpenCode,
@@ -572,6 +565,20 @@ pub struct ResolvedArtifact {
     pub message: Option<String>,
 }
 
+/// CLI-specific authentication state derived purely from local auth file
+/// discovery (env vars do not mask this).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CliAuthState {
+    /// Local auth file present and valid
+    Authenticated,
+    /// Local auth file present but expired
+    Expired,
+    /// No local auth file found (even if env vars provide credentials)
+    Absent,
+    /// Agent has no discoverable CLI auth (discovery == None on all slots)
+    Unsupported,
+}
+
 /// Machine-local resolved state for one complete agent.
 #[derive(Debug, Clone)]
 pub struct ResolvedAgent {
@@ -579,6 +586,7 @@ pub struct ResolvedAgent {
     pub status: ResolvedAgentStatus,
     pub credential_state: CredentialState,
     pub auth_slots: Vec<ResolvedAuthSlot>,
+    pub cli_auth_state: Option<CliAuthState>,
     pub native: Option<ResolvedArtifact>,
     pub agent_process: ResolvedArtifact,
     pub spawn: Option<SpawnSpec>,

@@ -6,7 +6,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 type AttachedPaneSide = "left" | "right";
 

@@ -1,4 +1,4 @@
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { WorktreeStorageSection } from "@/components/settings/panes/environments/WorktreeStorageSection";
 
 export function WorktreesPane() {
@@ -6,7 +6,7 @@ export function WorktreesPane() {
     <section className="space-y-6">
       <SettingsPageHeader
         title="Pruning"
-        description="Set worktree pressure reminders and manage checkouts, git status, storage, and workspace history."
+        description="Review worktree storage and prune stale checkouts."
       />
       <WorktreeStorageSection />
     </section>

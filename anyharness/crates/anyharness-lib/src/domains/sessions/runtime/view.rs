@@ -8,7 +8,8 @@
 use std::collections::HashMap;
 
 use anyharness_contract::v1::{
-    Session, SessionExecutionSummary, SessionLinkSummary, SessionLiveConfigSnapshot,
+    ActivityProcess, ActivitySubagent, Goal, Loop, Session, SessionActivity,
+    SessionExecutionSummary, SessionLinkSummary, SessionLiveConfigSnapshot, TurnState,
     WorkspaceExecutionSummary,
 };
 
@@ -27,6 +28,10 @@ pub struct SessionView {
     pub live_config: Option<SessionLiveConfigSnapshot>,
     pub execution_summary: SessionExecutionSummary,
     pub pending_prompts: Vec<PendingPromptRecord>,
+    pub active_goal: Option<Goal>,
+    pub loops: Vec<Loop>,
+    pub processes: Vec<ActivityProcess>,
+    pub agents: Vec<ActivitySubagent>,
 }
 
 impl SessionView {
@@ -40,6 +45,19 @@ impl SessionView {
             .iter()
             .map(PendingPromptRecord::to_contract)
             .collect();
+        session.active_goal = self.active_goal.clone();
+        session.activity = Some(SessionActivity {
+            // TODO(activity-runtime): source `turn_id`/`started_at` from the
+            // live sink's `current_turn_id` once the loop/activity runtime
+            // PR threads it through `LiveSessionExecutionSnapshot` — the
+            // no-optimistic-state rule means this scaffolding reports Idle
+            // rather than fabricate a turn id.
+            turn: TurnState::Idle,
+            goal: self.active_goal,
+            loops: self.loops,
+            processes: self.processes,
+            agents: self.agents,
+        });
         session
     }
 }
@@ -61,11 +79,18 @@ impl SessionRuntime {
             .session_service
             .store()
             .list_pending_prompts(&record.id)?;
+        let active_goal = self.active_goal_resolver.active_goal(&record.id)?;
+        let loops = self.loops_resolver.active_loops(&record.id)?;
+        let (processes, agents) = self.activity_roster_resolver.activity_roster(&record.id)?;
         Ok(SessionView {
             record: record.clone(),
             live_config,
             execution_summary,
             pending_prompts,
+            active_goal,
+            loops,
+            processes,
+            agents,
         })
     }
 
@@ -78,19 +103,35 @@ impl SessionRuntime {
         records: &[SessionRecord],
     ) -> anyhow::Result<Vec<SessionView>> {
         let session_ids: Vec<String> = records.iter().map(|record| record.id.clone()).collect();
-        let mut live_configs = self.session_service.get_live_config_snapshots(&session_ids)?;
+        let mut live_configs = self
+            .session_service
+            .get_live_config_snapshots(&session_ids)?;
         let mut pending_prompts = self
             .session_service
             .store()
             .list_pending_prompts_for_sessions(&session_ids)?;
+        let mut active_goals = self
+            .active_goal_resolver
+            .active_goals_for_sessions(&session_ids)?;
+        let mut loops_by_session = self.loops_resolver.active_loops_for_sessions(&session_ids)?;
+        let mut rosters_by_session = self
+            .activity_roster_resolver
+            .activity_rosters_for_sessions(&session_ids)?;
 
         let mut views = Vec::with_capacity(records.len());
         for record in records {
+            let (processes, agents) = rosters_by_session
+                .remove(&record.id)
+                .unwrap_or_default();
             views.push(SessionView {
                 record: record.clone(),
                 live_config: live_configs.remove(&record.id),
                 execution_summary: self.session_execution_summary(record).await,
                 pending_prompts: pending_prompts.remove(&record.id).unwrap_or_default(),
+                active_goal: active_goals.remove(&record.id),
+                loops: loops_by_session.remove(&record.id).unwrap_or_default(),
+                processes,
+                agents,
             });
         }
         Ok(views)
@@ -225,12 +266,26 @@ mod tests {
                 .iter()
                 .map(PendingPromptRecord::to_contract)
                 .collect();
+            // `into_contract` always assembles `activity` now (empty rosters
+            // when the resolvers have nothing for this session) — mirror
+            // that here so the byte-for-byte comparison stays meaningful.
+            legacy.activity = Some(SessionActivity {
+                turn: TurnState::Idle,
+                goal: None,
+                loops: Vec::new(),
+                processes: Vec::new(),
+                agents: Vec::new(),
+            });
 
             let view = SessionView {
                 record: record.clone(),
                 live_config,
                 execution_summary: execution_summary.clone(),
                 pending_prompts: pending_prompts.clone(),
+                active_goal: None,
+                loops: Vec::new(),
+                processes: Vec::new(),
+                agents: Vec::new(),
             };
 
             assert_eq!(

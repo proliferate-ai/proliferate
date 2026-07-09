@@ -3,10 +3,17 @@ export type ScenarioKey =
   | "todos-short"
   | "todos-mid"
   | "todos-long"
+  | "todo-strip-with-approval"
   | "execute-approval"
   | "edit-approval"
+  | "interaction-motion"
+  | "interaction-marker-permission"
+  | "interaction-marker-question"
   | "claude-plan-short"
   | "claude-plan-long"
+  | "plan-streaming-upgrade"
+  | "mode-transition"
+  | "carry-out-plan"
   | "pending-prompts-single"
   | "pending-prompts-multi"
   | "pending-prompts-editing"
@@ -35,16 +42,17 @@ export type ScenarioKey =
   | "mcp-elicitation-validation-error"
   | "mcp-elicitation-cancel-decline"
   | "status-background"
+  | "status-live-stream"
   | "status-hook-running"
   | "status-hook-completed"
   | "status-hook-blocked"
   | "status-deprecation"
   | "status-assistant-handoff"
-  | "gemini-retry-status"
-  | "gemini-blocked-warning"
-  | "gemini-no-response-warning"
-  | "gemini-mcp-approval-options"
-  | "gemini-tool-before-approval"
+  | "grok-retry-status"
+  | "grok-blocked-warning"
+  | "grok-no-response-warning"
+  | "opencode-mcp-approval-options"
+  | "opencode-tool-before-approval"
   | "tool-bash-running"
   | "tool-bash-completed"
   | "tool-bash-failed"
@@ -67,14 +75,32 @@ export type ScenarioKey =
   | "subagents-queued-wake"
   | "subagents-queued-wake-with-approval"
   | "subagent-wake-card"
-  | "mobility-local-actionable"
-  | "mobility-local-blocked"
-  | "mobility-unpublished-branch"
-  | "mobility-unpushed-commits"
-  | "mobility-out-of-sync-branch"
-  | "mobility-cloud-active"
-  | "mobility-in-flight"
-  | "mobility-failed"
+  | "goal-active-short"
+  | "goal-active-long"
+  | "goal-active-pause-disabled"
+  | "goal-paused"
+  | "goal-editing"
+  | "goal-editing-multiline"
+  | "goal-composing"
+  | "goal-met-sticky"
+  | "goal-met-long-objective"
+  | "goal-met-expanded"
+  | "goal-blocked-sticky"
+  | "goal-blocked-expanded"
+  | "goal-failed-budget"
+  | "goal-pending-write"
+  | "goal-empty"
+  | "goal-transcript-lifecycle"
+  | "activity-loops-native"
+  | "activity-loops-many"
+  | "activity-loops-emulated"
+  | "activity-loops-fired-sequence"
+  | "activity-terminals-running"
+  | "activity-terminals-mixed"
+  | "activity-agents-mixed"
+  | "activity-all-kinds"
+  | "activity-with-goal"
+  | "activity-empty"
   | "loading-states";
 
 interface Scenario {
@@ -86,10 +112,17 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "todos-short": { label: "Todos (3)" },
   "todos-mid": { label: "Todos (5)" },
   "todos-long": { label: "Todos (12)" },
+  "todo-strip-with-approval": { label: "Todo strip + approval" },
   "execute-approval": { label: "Execute approval" },
   "edit-approval": { label: "Edit approval" },
+  "interaction-motion": { label: "Interaction motion" },
+  "interaction-marker-permission": { label: "Marker + permission" },
+  "interaction-marker-question": { label: "Marker + question" },
   "claude-plan-short": { label: "Plan approval (short)" },
   "claude-plan-long": { label: "Plan approval (long)" },
+  "plan-streaming-upgrade": { label: "Plan streaming upgrade" },
+  "mode-transition": { label: "Mode transition" },
+  "carry-out-plan": { label: "Carry-out receipt" },
   "pending-prompts-single": { label: "Queue (1 row)" },
   "pending-prompts-multi": { label: "Queue (3 rows)" },
   "pending-prompts-editing": { label: "Queue (editing row)" },
@@ -118,16 +151,17 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "mcp-elicitation-validation-error": { label: "MCP validation" },
   "mcp-elicitation-cancel-decline": { label: "MCP cancel/decline" },
   "status-background": { label: "Status background" },
+  "status-live-stream": { label: "Live stream" },
   "status-hook-running": { label: "Hook running" },
   "status-hook-completed": { label: "Hook completed" },
   "status-hook-blocked": { label: "Hook blocked" },
   "status-deprecation": { label: "Deprecation notice" },
   "status-assistant-handoff": { label: "Prose handoff" },
-  "gemini-retry-status": { label: "Gemini retry" },
-  "gemini-blocked-warning": { label: "Gemini blocked" },
-  "gemini-no-response-warning": { label: "Gemini no response" },
-  "gemini-mcp-approval-options": { label: "Gemini MCP approval" },
-  "gemini-tool-before-approval": { label: "Gemini pre-approval tool" },
+  "grok-retry-status": { label: "Grok retry" },
+  "grok-blocked-warning": { label: "Grok blocked" },
+  "grok-no-response-warning": { label: "Grok no response" },
+  "opencode-mcp-approval-options": { label: "OpenCode MCP approval" },
+  "opencode-tool-before-approval": { label: "OpenCode pre-approval tool" },
   "tool-bash-running": { label: "Tool bash running" },
   "tool-bash-completed": { label: "Tool bash completed" },
   "tool-bash-failed": { label: "Tool bash failed" },
@@ -150,14 +184,32 @@ export const SCENARIOS: Record<ScenarioKey, Scenario> = {
   "subagents-queued-wake": { label: "Subagent queued wake" },
   "subagents-queued-wake-with-approval": { label: "Subagents + wake + approval" },
   "subagent-wake-card": { label: "Subagent wake card" },
-  "mobility-local-actionable": { label: "Mobility (actionable)" },
-  "mobility-local-blocked": { label: "Mobility (blocked)" },
-  "mobility-unpublished-branch": { label: "Mobility (publish branch)" },
-  "mobility-unpushed-commits": { label: "Mobility (push commits)" },
-  "mobility-out-of-sync-branch": { label: "Mobility (out of sync)" },
-  "mobility-cloud-active": { label: "Mobility (cloud footer)" },
-  "mobility-in-flight": { label: "Mobility (in flight)" },
-  "mobility-failed": { label: "Mobility (failed)" },
+  "goal-active-short": { label: "Goal active (codex)" },
+  "goal-active-long": { label: "Goal long objective" },
+  "goal-active-pause-disabled": { label: "Goal active (claude)" },
+  "goal-paused": { label: "Goal paused" },
+  "goal-editing": { label: "Goal editing" },
+  "goal-editing-multiline": { label: "Goal editing (multi-line)" },
+  "goal-composing": { label: "Goal composing" },
+  "goal-met-sticky": { label: "Goal met" },
+  "goal-met-long-objective": { label: "Goal met (long objective)" },
+  "goal-met-expanded": { label: "Goal met (expanded)" },
+  "goal-blocked-sticky": { label: "Goal blocked" },
+  "goal-blocked-expanded": { label: "Goal blocked (expanded)" },
+  "goal-failed-budget": { label: "Goal failed (budget)" },
+  "goal-pending-write": { label: "Goal pending write" },
+  "goal-empty": { label: "Goal empty" },
+  "goal-transcript-lifecycle": { label: "Goal lifecycle in transcript" },
+  "activity-loops-native": { label: "Loops (native)" },
+  "activity-loops-many": { label: "Loops (many)" },
+  "activity-loops-emulated": { label: "Loops (emulated)" },
+  "activity-loops-fired-sequence": { label: "Loops (fired sequence)" },
+  "activity-terminals-running": { label: "Terminals (running)" },
+  "activity-terminals-mixed": { label: "Terminals (mixed exit)" },
+  "activity-agents-mixed": { label: "Agents (mixed status)" },
+  "activity-all-kinds": { label: "Activity chips (all kinds)" },
+  "activity-with-goal": { label: "Activity chips + goal" },
+  "activity-empty": { label: "Activity chips empty" },
   "loading-states": { label: "Loading states" },
 };
 

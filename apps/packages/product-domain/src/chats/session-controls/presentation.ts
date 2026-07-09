@@ -6,22 +6,12 @@ export type SupportedLiveControlKey =
   | "effort"
   | "fast_mode";
 
-export type SessionControlTone =
-  | "neutral"
-  | "accent"
-  | "primary"
-  | "warning"
-  | "destructive"
-  | "success"
-  | "info";
-
 export type SessionControlIconKey =
   | "branch"
   | "build"
   | "chat"
   | "claude"
   | "edit"
-  | "gemini"
   | "openai"
   | "opencodeBuild"
   | "opencodePlan"
@@ -36,14 +26,12 @@ export interface ConfiguredSessionControlValue {
   label: string;
   shortLabel?: string | null;
   description?: string | null;
-  tone: SessionControlTone;
   icon: SessionControlIconKey;
   isDefault?: boolean;
 }
 
 export interface SessionControlPresentation {
   icon: SessionControlIconKey | null;
-  tone: SessionControlTone;
   shortLabel?: string | null;
 }
 
@@ -79,7 +67,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Default",
         shortLabel: "Default",
         description: "Ask before each action.",
-        tone: "info",
         icon: "chat",
         isDefault: true,
       },
@@ -88,7 +75,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Accept Edits",
         shortLabel: "Edits",
         description: "Auto-approve file edits.",
-        tone: "success",
         icon: "edit",
       },
       {
@@ -96,7 +82,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Auto",
         shortLabel: "Auto",
         description: "Use a model classifier to approve or deny permission prompts.",
-        tone: "success",
         icon: "sparkles",
       },
       {
@@ -104,7 +89,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Plan",
         shortLabel: "Plan",
         description: "Plan without execution.",
-        tone: "accent",
         icon: "plan",
       },
       {
@@ -112,7 +96,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Don't Ask",
         shortLabel: "Don't Ask",
         description: "Auto-approve most actions.",
-        tone: "warning",
         icon: "shieldCheck",
       },
       {
@@ -120,7 +103,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Bypass",
         shortLabel: "Bypass",
         description: "Skip permission checks.",
-        tone: "destructive",
         icon: "zap",
       },
     ],
@@ -132,7 +114,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Read Only",
         shortLabel: "Read Only",
         description: "Inspect and plan without editing.",
-        tone: "info",
         icon: "read",
         isDefault: true,
       },
@@ -141,7 +122,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Auto",
         shortLabel: "Auto",
         description: "Auto-approve standard edits.",
-        tone: "success",
         icon: "edit",
       },
       {
@@ -149,7 +129,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Full Access",
         shortLabel: "Full Access",
         description: "Allow unrestricted changes.",
-        tone: "destructive",
         icon: "zap",
       },
     ],
@@ -159,7 +138,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Default",
         shortLabel: "Default",
         description: "Standard collaboration behavior.",
-        tone: "info",
         icon: "chat",
         isDefault: true,
       },
@@ -168,7 +146,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Plan",
         shortLabel: "Plan",
         description: "Plan before applying changes.",
-        tone: "accent",
         icon: "plan",
       },
     ],
@@ -180,7 +157,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Agent",
         shortLabel: "Agent",
         description: "Full agent capabilities.",
-        tone: "success",
         icon: "edit",
         isDefault: true,
       },
@@ -189,7 +165,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Plan",
         shortLabel: "Plan",
         description: "Plan before applying changes.",
-        tone: "accent",
         icon: "plan",
       },
       {
@@ -197,45 +172,7 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Ask",
         shortLabel: "Ask",
         description: "Answer without making changes.",
-        tone: "info",
         icon: "chat",
-      },
-    ],
-  },
-  gemini: {
-    mode: [
-      {
-        value: "default",
-        label: "Default",
-        shortLabel: "Default",
-        description: "Ask before each action.",
-        tone: "info",
-        icon: "chat",
-        isDefault: true,
-      },
-      {
-        value: "autoEdit",
-        label: "Auto Edit",
-        shortLabel: "Auto Edit",
-        description: "Auto-approve edits.",
-        tone: "success",
-        icon: "edit",
-      },
-      {
-        value: "yolo",
-        label: "YOLO",
-        shortLabel: "YOLO",
-        description: "Skip permission checks.",
-        tone: "destructive",
-        icon: "zap",
-      },
-      {
-        value: "plan",
-        label: "Plan",
-        shortLabel: "Plan",
-        description: "Plan without execution.",
-        tone: "accent",
-        icon: "plan",
       },
     ],
   },
@@ -246,7 +183,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Build",
         shortLabel: "Build",
         description: "Default build mode.",
-        tone: "success",
         icon: "opencodeBuild",
         isDefault: true,
       },
@@ -255,7 +191,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
         label: "Plan",
         shortLabel: "Plan",
         description: "Plan before applying changes.",
-        tone: "accent",
         icon: "opencodePlan",
       },
     ],
@@ -264,7 +199,6 @@ export const SESSION_CONTROL_PRESENTATIONS: Record<string, ConfiguredSessionCont
 
 const FALLBACK_PRESENTATION: SessionControlPresentation = {
   icon: null,
-  tone: "neutral",
   shortLabel: null,
 };
 
@@ -334,7 +268,6 @@ export function launchControlToConfiguredSessionControlValues(
       label: presentation?.label ?? value.label,
       shortLabel: presentation?.shortLabel ?? value.label,
       description: value.description ?? presentation?.description ?? null,
-      tone: presentation?.tone ?? inferred.tone,
       icon: presentation?.icon ?? inferred.icon,
       isDefault: Boolean(value.isDefault),
     };
@@ -350,26 +283,24 @@ export function resolveSessionControlPresentation(
   return configured
     ? {
       icon: configured.icon,
-      tone: configured.tone,
       shortLabel: configured.shortLabel ?? null,
     }
     : FALLBACK_PRESENTATION;
 }
 
 export function inferSessionControlPresentation(value: string): {
-  tone: SessionControlTone;
   icon: SessionControlIconKey;
 } {
   const normalized = value.toLowerCase();
   if (normalized.includes("plan")) {
-    return { tone: "accent", icon: "plan" };
+    return { icon: "plan" };
   }
   if (
     normalized.includes("yolo")
     || normalized.includes("bypass")
     || normalized.includes("full")
   ) {
-    return { tone: "destructive", icon: "zap" };
+    return { icon: "zap" };
   }
   if (
     normalized.includes("auto")
@@ -377,10 +308,10 @@ export function inferSessionControlPresentation(value: string): {
     || normalized.includes("build")
     || normalized.includes("edit")
   ) {
-    return { tone: "success", icon: "edit" };
+    return { icon: "edit" };
   }
   if (normalized.includes("ask") || normalized.includes("read")) {
-    return { tone: "info", icon: "read" };
+    return { icon: "read" };
   }
-  return { tone: "neutral", icon: "read" };
+  return { icon: "read" };
 }

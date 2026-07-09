@@ -43,7 +43,7 @@ export {
 }
 export type { DesktopAuthCallback }
 
-interface DesktopTokenResponse {
+export interface DesktopTokenResponse {
   access_token: string
   refresh_token: string
   token_type: string
@@ -92,11 +92,11 @@ export interface DesktopProviderAuthOptions {
 const GITHUB_RECOVERY_TIMEOUT_MS = 2 * 60 * 1000
 const GITHUB_APP_SETTINGS_FALLBACK_URL = "https://github.com/settings/applications"
 
-function buildUrl(path: string): string {
+export function buildUrl(path: string): string {
   return buildAuthUrl(path)
 }
 
-function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
+export function toStoredSession(response: DesktopTokenResponse): StoredAuthSession {
   const expiresAt = new Date(Date.now() + response.expires_in * 1000).toISOString()
   return {
     access_token: response.access_token,

@@ -38,12 +38,10 @@ export function SidebarStatusGlyph({
 }: SidebarStatusGlyphProps): ReactNode {
   switch (indicator.kind) {
     case "error":
-      return <CircleAlert className="size-3 text-destructive" />;
+      return <CircleAlert className="size-3.5 text-destructive" />;
     case "waiting_input":
     case "waiting_plan":
-      return <Clock className="size-3 text-info" />;
-    case "needs_review":
-      return <span aria-hidden="true" className="block size-2 rounded-full bg-info" />;
+      return <Clock className="size-3.5 text-info" />;
     case "iterating":
     case "queued_prompt":
       return <Spinner className="size-3.5 text-sidebar-foreground" />;

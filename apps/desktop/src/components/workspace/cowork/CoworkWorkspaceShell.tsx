@@ -4,7 +4,7 @@ import { ChatView } from "@/components/workspace/chat/ChatView";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { SplitPanel } from "@proliferate/ui/icons";
+import { SplitPanelLeft } from "@proliferate/ui/icons";
 import { CoworkArtifactsPanel } from "@/components/workspace/cowork/CoworkArtifactsPanel";
 import { CoworkWorkspaceHeader } from "@/components/workspace/cowork/CoworkWorkspaceHeader";
 import { useResize } from "@/hooks/ui/layout/use-resize";
@@ -70,6 +70,7 @@ export function CoworkWorkspaceShell({
   const {
     phase: updaterPhase,
     downloadProgress,
+    restartWhenIdle,
     downloadUpdate,
     openRestartPrompt,
   } = useUpdater();
@@ -136,11 +137,14 @@ export function CoworkWorkspaceShell({
                 title="Hide sidebar"
                 className="rounded-md"
               >
-                <SplitPanel className="size-4" />
+                <SplitPanelLeft className="size-4" />
               </IconButton>
+              {/* The update pill's single home is the top-left, next to the
+                  sidebar toggle. */}
               <SidebarUpdatePill
                 phase={updaterPhase}
                 downloadProgress={downloadProgress}
+                restartWhenIdle={restartWhenIdle}
                 onDownloadUpdate={downloadUpdate}
                 onOpenRestartPrompt={openRestartPrompt}
               />
@@ -176,11 +180,12 @@ export function CoworkWorkspaceShell({
                   title="Show sidebar"
                   className="rounded-md"
                 >
-                  <SplitPanel className="size-4" />
+                  <SplitPanelLeft className="size-4" />
                 </IconButton>
                 <SidebarUpdatePill
                   phase={updaterPhase}
                   downloadProgress={downloadProgress}
+                  restartWhenIdle={restartWhenIdle}
                   onDownloadUpdate={downloadUpdate}
                   onOpenRestartPrompt={openRestartPrompt}
                 />
@@ -203,7 +208,6 @@ export function CoworkWorkspaceShell({
                 className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent"
               />
               <ChatView
-                showWorkspaceFooter={false}
                 showWorkspaceStatusPanels={false}
               />
             </div>

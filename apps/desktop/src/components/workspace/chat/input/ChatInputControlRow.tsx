@@ -1,35 +1,225 @@
-import type { ComponentProps } from "react";
 import { ChatComposerActions } from "./ChatComposerActions";
-import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
-import { ComposerModelConfigSelector } from "./ComposerModelConfigSelector";
-import type { ModelSelector } from "./ModelSelector";
-import type { SessionConfigControls } from "./SessionConfigControls";
+import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
+import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
+import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
+import { ComposerOverflowControl } from "./ComposerOverflowControl";
+import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
+import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
+import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
 import { RuntimePressureIndicator } from "./RuntimePressureIndicator";
 import { SessionModeControl } from "./SessionModeControl";
 import {
   buildComposerSessionControlGroups,
 } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import { ChatComposerControlRowFrame } from "@proliferate/product-ui/chat/composer/ChatComposerControlRowFrame";
+import { Plus, Target } from "@proliferate/ui/icons";
+import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
+import { deriveGoalBarState } from "@proliferate/product-domain/activity/goal";
+import { useSessionGoal } from "@/hooks/activity/derived/use-session-goal";
+import { useGoalBarStore } from "@/stores/activity/goal-bar-store";
 
 export interface ChatInputControlRowProps {
   runtimeControlsDisabled: boolean;
-  modelSelectorProps: ComponentProps<typeof ModelSelector>;
-  agentKind: ComponentProps<typeof SessionConfigControls>["agentKind"];
-  sessionConfigControls: ComponentProps<typeof SessionConfigControls>["controls"];
+  modelSelectorProps: ModelSelectorProps;
+  agentKind: string | null;
+  sessionConfigControls: LiveSessionControlDescriptor[];
   isEditingQueuedPrompt: boolean;
   chatDisabled: boolean;
   isSubmitting: boolean;
   supportsAttachments: boolean;
   canAttachFiles: boolean;
   activeSessionId: string | null;
-  workspaceUiKey: string | null;
-  sdkWorkspaceId: string | null;
-  hasUnresolvedPlans: boolean;
   onAttachFile: () => void;
   isRunning: boolean;
   isEmpty: boolean;
   onSubmit: () => void;
   onCancel: () => void;
+}
+
+export interface ComposerLeadingControlsProps {
+  runtimeControlsDisabled: boolean;
+  modelSelectorProps: ModelSelectorProps;
+  agentKind: string | null;
+  sessionConfigControls: LiveSessionControlDescriptor[];
+  activeSessionId: string | null;
+}
+
+/**
+ * The leading control cluster (model selector, effort bars, mode, goal,
+ * integrations). Shared verbatim between the in-session chat composer
+ * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
+ * home feeds it launch-time control descriptors instead of live-session
+ * ones, and session-only controls (goal) hide via their own gating.
+ */
+export function ComposerLeadingControls({
+  runtimeControlsDisabled,
+  modelSelectorProps,
+  agentKind,
+  sessionConfigControls,
+  activeSessionId,
+}: ComposerLeadingControlsProps) {
+  const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
+
+  const sessionGoal = useSessionGoal();
+  const beginComposingGoal = useGoalBarStore((state) => state.beginComposing);
+  // Goal is a live-session affordance: it attaches an objective to an active
+  // session, so it self-gates on activeSessionId (null pre-session and on
+  // home) in addition to capability support.
+  const canSetGoal = !!activeSessionId
+    && !!sessionGoal
+    && sessionGoal.capabilities.supported
+    && deriveGoalBarState(sessionGoal.goal).kind !== "live";
+
+  const effortControl = controlGroups.modelConfigControls.find((c) => c.key === "effort") ?? null;
+  const fastModeControl = controlGroups.modelConfigControls.find(
+    (c) => c.key === "fast_mode" && c.kind === "toggle",
+  ) ?? null;
+
+  return (
+    <>
+      {/* 1. Model/harness selector — leftmost */}
+      <div
+        className={`flex min-w-0 items-center ${
+          runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+        }`}
+      >
+        <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
+      </div>
+
+      {/* 2a. Fast mode toggle — sits before the reasoning bars so speed and
+          effort read as one model-tuning cluster */}
+      {fastModeControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerFastModeToggle control={fastModeControl} />
+        </span>
+      )}
+
+      {/* 2. Reasoning effort bars */}
+      {effortControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerReasoningEffortBars control={effortControl} />
+        </span>
+      )}
+
+      {/* 3. Mode control (bypass/plan/etc) */}
+      {controlGroups.modeControl && (
+        <span
+          className={`inline-flex min-w-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <SessionModeControl
+            agentKind={agentKind}
+            control={controlGroups.modeControl}
+            triggerStyle="value"
+          />
+        </span>
+      )}
+
+      {/* 4. Goal button */}
+      {canSetGoal && (
+        <ComposerControlButton
+          icon={<Target className="size-4" />}
+          label="Set goal"
+          title="Give the agent an objective to keep pursuing."
+          onClick={() => {
+            if (activeSessionId) {
+              beginComposingGoal(activeSessionId);
+            }
+          }}
+          className="max-w-[12rem]"
+        />
+      )}
+
+      {/* 5. Integrations control */}
+      <ComposerIntegrationsControl />
+    </>
+  );
+}
+
+export interface ComposerTrailingControlsProps {
+  runtimeControlsDisabled: boolean;
+  agentKind: string | null;
+  sessionConfigControls: LiveSessionControlDescriptor[];
+  isEditingQueuedPrompt: boolean;
+  chatDisabled: boolean;
+  isSubmitting: boolean;
+  supportsAttachments: boolean;
+  canAttachFiles: boolean;
+  activeSessionId: string | null;
+  onAttachFile: () => void;
+}
+
+/**
+ * The trailing control cluster (attach, runtime pressure, overflow) —
+ * shared between chat and home like ComposerLeadingControls. Home
+ * passes supportsAttachments/canAttachFiles=false and gets the exact
+ * disabled plus-button + "available after a session starts" detail that
+ * chat's pre-session state shows.
+ */
+export function ComposerTrailingControls({
+  runtimeControlsDisabled,
+  agentKind,
+  sessionConfigControls,
+  isEditingQueuedPrompt,
+  chatDisabled,
+  isSubmitting,
+  supportsAttachments,
+  canAttachFiles,
+  activeSessionId,
+  onAttachFile,
+}: ComposerTrailingControlsProps) {
+  const canUseUtilityActions =
+    !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
+  const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
+  const canAttachFile = canUseUtilityActions && canAttachFiles;
+  const attachFileDetail = canAttachFile
+    ? "Upload image or text context."
+    : !supportsAttachments
+      ? activeSessionId
+        ? "Attachments are not supported by this agent"
+        : "Attachments are available after a session starts"
+      : "Chat is unavailable right now";
+
+  return (
+    <>
+      {/* 6. Plus button — direct file attach */}
+      {!isEditingQueuedPrompt && (
+        <ComposerControlButton
+          iconOnly
+          icon={<Plus className="size-4" />}
+          label="Add file"
+          title={attachFileDetail}
+          aria-label="Add file"
+          disabled={!canAttachFile}
+          onClick={onAttachFile}
+        />
+      )}
+
+      {/* 7. Runtime pressure */}
+      <RuntimePressureIndicator />
+
+      {/* 8. Overflow three-dots */}
+      <span
+        className={`inline-flex shrink-0 ${
+          runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+        }`}
+      >
+        <ComposerOverflowControl
+          agentKind={agentKind}
+          controls={controlGroups.modelConfigControls}
+        />
+      </span>
+    </>
+  );
 }
 
 export function ChatInputControlRow({
@@ -43,86 +233,42 @@ export function ChatInputControlRow({
   supportsAttachments,
   canAttachFiles,
   activeSessionId,
-  workspaceUiKey,
-  sdkWorkspaceId,
-  hasUnresolvedPlans,
   onAttachFile,
   isRunning,
   isEmpty,
   onSubmit,
   onCancel,
 }: ChatInputControlRowProps) {
-  const canUseUtilityActions =
-    !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
-  const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
-  const canAttachFile = canUseUtilityActions && canAttachFiles;
-  // Plan references resolve to markdown text in the runtime, so they do not
-  // depend on file/image attachment capabilities.
-  const canAttachPlan = canUseUtilityActions && !!workspaceUiKey && !!sdkWorkspaceId;
-  const attachFileDetail = canAttachFile
-    ? "Upload image or text context."
-    : !supportsAttachments
-      ? activeSessionId
-        ? "Attachments are not supported by this agent"
-        : "Attachments are available after a session starts"
-      : "Chat is unavailable right now";
-  const attachPlanDetail = canAttachPlan
-    ? "Attach an existing plan snapshot."
-    : workspaceUiKey
-      ? "Chat is unavailable right now"
-      : "Select a workspace before attaching a plan";
-
   return (
     <ChatComposerControlRowFrame
       leading={(
-        <>
-        {!isEditingQueuedPrompt && (
-          <ComposerAddActionPopover
-            canAttachFile={canAttachFile}
-            attachFileDetail={attachFileDetail}
-            canAttachPlan={canAttachPlan}
-            attachPlanDetail={attachPlanDetail}
-            workspaceUiKey={workspaceUiKey}
-            sdkWorkspaceId={sdkWorkspaceId}
-            onAttachFile={onAttachFile}
-          />
-        )}
-        {controlGroups.modeControl && (
-          <span
-            className={`inline-flex min-w-0 ${
-              runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-            }`}
-          >
-            <SessionModeControl
-              agentKind={agentKind}
-              control={controlGroups.modeControl}
-              triggerStyle="value"
-            />
-          </span>
-        )}
-        </>
+        <ComposerLeadingControls
+          runtimeControlsDisabled={runtimeControlsDisabled}
+          modelSelectorProps={modelSelectorProps}
+          agentKind={agentKind}
+          sessionConfigControls={sessionConfigControls}
+          activeSessionId={activeSessionId}
+        />
       )}
       trailing={(
-        <>
-          <RuntimePressureIndicator />
-          <div
-            className={`flex min-w-0 items-center gap-[5px] ${
-              runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-            }`}
-          >
-            <ComposerModelConfigSelector
-              modelSelectorProps={modelSelectorProps}
-              agentKind={agentKind}
-              controls={controlGroups.modelConfigControls}
-            />
-          </div>
-        </>
+        <ComposerTrailingControls
+          runtimeControlsDisabled={runtimeControlsDisabled}
+          agentKind={agentKind}
+          sessionConfigControls={sessionConfigControls}
+          isEditingQueuedPrompt={isEditingQueuedPrompt}
+          chatDisabled={chatDisabled}
+          isSubmitting={isSubmitting}
+          supportsAttachments={supportsAttachments}
+          canAttachFiles={canAttachFiles}
+          activeSessionId={activeSessionId}
+          onAttachFile={onAttachFile}
+        />
       )}
       action={(
         <ChatComposerActions
           isRunning={isRunning}
           isEmpty={isEmpty}
-          isDisabled={chatDisabled || hasUnresolvedPlans || isSubmitting}
+          isDisabled={chatDisabled || isSubmitting}
           isEditingQueuedPrompt={isEditingQueuedPrompt}
           onSubmit={onSubmit}
           onCancel={onCancel}

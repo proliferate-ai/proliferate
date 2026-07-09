@@ -20,7 +20,7 @@ export function McpElicitationFieldControl({
   onChange,
 }: McpElicitationFieldControlProps) {
   const description = field.description ? (
-    <div className="mt-1 text-xs text-muted-foreground">{field.description}</div>
+    <div className="mt-1 text-ui-sm text-muted-foreground">{field.description}</div>
   ) : null;
   const label = `${field.label}${field.required ? " *" : ""}`;
 
@@ -30,7 +30,7 @@ export function McpElicitationFieldControl({
         <div className="flex items-center gap-2">
           <Checkbox
             checked={Boolean(value)}
-            onChange={(event) => onChange(event.currentTarget.checked)}
+            onCheckedChange={(checked) => onChange(checked === true)}
           />
           <Label className="mb-0 text-sm text-foreground">{label}</Label>
         </div>

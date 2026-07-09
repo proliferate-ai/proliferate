@@ -13,7 +13,7 @@ Scope:
 - `cloud/sdk/src/client/organizations.ts`
 - `apps/web/src/pages/OrganizationJoinPage.tsx`
 - `apps/desktop/src/components/settings/panes/OrganizationMembersPane.tsx`
-- `apps/desktop/src/components/app/sidebar/AppSidebarFooter.tsx`
+- `apps/desktop/src/components/app/sidebar/SidebarAccountFooter.tsx`
 - `apps/desktop/src/lib/domain/auth/desktop-navigation.ts`
 
 ## Model
@@ -71,6 +71,16 @@ If the Desktop user is signed in, Desktop preserves the join target and shows an
 explicit accept-invitation action for the matching pending invitation. If the
 Desktop user is signed out, Desktop starts the normal sign-in path and preserves
 the join target so the same explicit accept flow resumes after authentication.
+
+## Permissions
+
+All server-side invitation management endpoints — create, resend, revoke, and
+list (`GET /organizations/{organization_id}/invitations`) — require the caller
+to hold the `admin` or `owner` role on the target organization
+(`current_path_org_admin`). Plain members can see the organization's active
+memberships (`/members`) but not pending invitation emails or roles. This
+mirrors the Desktop UI, which treats the whole `organization-members` section
+as admin-only (see `settings-admin-ia.md`).
 
 ## Admin UX
 

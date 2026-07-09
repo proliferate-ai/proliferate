@@ -53,10 +53,6 @@ vi.mock("@/components/auth/AuthShell", async () => {
   };
 });
 import {
-  BRAILLE_SWEEP_DOT_FRAMES,
-  BRAILLE_SWEEP_FRAME_INTERVAL_MS,
-} from "@proliferate/product-ui/brand/ProliferateLivingMark";
-import {
   buildUiTextScaleCssVariables,
   DEFAULT_UI_TEXT_SCALE_CSS_VARIABLES,
   UI_FONT_SCALES,
@@ -93,14 +89,6 @@ function expectDefaultAuthAppearance(element: HTMLElement) {
   }
 }
 
-function readVisibleBrailleDots(container: HTMLElement) {
-  return Array.from(
-    container.querySelectorAll<HTMLElement>('[data-braille-dot][data-visible="true"]'),
-  )
-    .map((element) => element.dataset.brailleDot)
-    .join(",");
-}
-
 describe("SessionCheckScreen", () => {
   it("uses the auth-style checking copy and branded mark surface", () => {
     const html = renderToStaticMarkup(<SessionCheckScreen />);
@@ -111,29 +99,32 @@ describe("SessionCheckScreen", () => {
     expect(html).not.toContain("data-jank-canary=\"braille\"");
   });
 
-  it("fades the branded mark through the outgoing braille sweep", () => {
-    vi.useFakeTimers();
+  it("breathes the brand mark while checking and settles it on resolve", () => {
+    const { container, rerender } = render(<SessionCheckScreen />);
 
-    const { container } = render(<SessionCheckScreen />);
-    const seenDotFrames = new Set<string>([readVisibleBrailleDots(container)]);
+    expect(container.querySelector('[data-brand-mark="breathing"]')).toBeTruthy();
+    expect(container.querySelector(".animate-brand-mark-breathe")).toBeTruthy();
 
-    for (let frame = 1; frame < BRAILLE_SWEEP_DOT_FRAMES.length; frame += 1) {
-      act(() => {
-        vi.advanceTimersByTime(BRAILLE_SWEEP_FRAME_INTERVAL_MS);
-      });
-      seenDotFrames.add(readVisibleBrailleDots(container));
-    }
+    rerender(<SessionCheckScreen resolving />);
 
-    expect(readVisibleBrailleDots(container)).toBe("0");
+    expect(container.querySelector('[data-brand-mark="settled"]')).toBeTruthy();
+    expect(container.querySelector(".animate-brand-mark-settle")).toBeTruthy();
+    expect(container.querySelector(".animate-brand-mark-breathe")).toBeNull();
+  });
 
-    act(() => {
-      vi.advanceTimersByTime(120);
-    });
+  it("latches onResolved exactly once after the mark settles", async () => {
+    const onResolved = vi.fn();
+    const { rerender } = render(
+      <SessionCheckScreen resolving={false} onResolved={onResolved} />,
+    );
+    expect(onResolved).not.toHaveBeenCalled();
 
-    expect(container.querySelector(".animate-resolve-0")).toBeTruthy();
-    expect(seenDotFrames).toContain(BRAILLE_SWEEP_DOT_FRAMES[6].join(","));
-    expect(seenDotFrames).toContain(BRAILLE_SWEEP_DOT_FRAMES[10].join(","));
-    expect(seenDotFrames).not.toContain("15");
+    rerender(<SessionCheckScreen resolving onResolved={onResolved} />);
+    await waitFor(() => expect(onResolved).toHaveBeenCalledTimes(1));
+
+    rerender(<SessionCheckScreen resolving onResolved={onResolved} />);
+    await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+    expect(onResolved).toHaveBeenCalledTimes(1);
   });
 
   it("ignores user appearance text-size preferences", () => {
@@ -225,7 +216,10 @@ describe("AuthScreenLayout", () => {
     const { rerender } = render(<AuthScreenLayout mode="loading" />);
 
     expect(screen.getByText("Let's get your life's work done.")).toBeTruthy();
-    expect(screen.getByText("Restoring your session…")).toBeTruthy();
+    // ThinkingText renders the label twice (base + aria-hidden sweep copy).
+    expect(
+      screen.getByText("Restoring your session…", { selector: "[data-thinking-text]" }),
+    ).toBeTruthy();
     expect(
       screen.getByText("Continue with GitHub").closest("button")?.disabled,
     ).toBe(true);

@@ -256,6 +256,22 @@ export function reduceEvent(
       };
       break;
 
+    // Goal/loop mirror transitions and roster (process/subagent) upserts are
+    // session-level activity state, not transcript content; the directory
+    // layer consumes them. Keeping explicit no-op cases here (rather than
+    // letting them fall through to `default`) preserves the
+    // NON_TRANSCRIPT_CHUNK_EVENTS discipline so they never surface as unknown
+    // transcript items.
+    case "goal_updated":
+    case "goal_met":
+    case "goal_cleared":
+    case "loop_upserted":
+    case "loop_removed":
+    case "loop_fired":
+    case "process_upserted":
+    case "subagent_upserted":
+      break;
+
     case "pending_prompt_added":
       s.pendingPrompts = upsertPendingPrompt(s.pendingPrompts, {
         seq: evt.seq,

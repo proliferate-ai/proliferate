@@ -1,6 +1,5 @@
 """DB adapter for fastapi-users and user lookup store helpers."""
 
-from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -25,6 +24,37 @@ async def get_active_user_by_id(
     if user is None or not user.is_active:
         return None
     return user
+
+
+async def bump_user_token_generation(
+    db: AsyncSession,
+    user_id: UUID,
+) -> int | None:
+    """Increment the user's ``token_generation``, revoking all issued tokens.
+
+    Every access/refresh token embeds the generation current at mint time, so
+    incrementing it invalidates every previously issued token for this user
+    (all surfaces) on their next use — the "log out everywhere" primitive.
+    Returns the new generation, or ``None`` when the user is missing.
+
+    The increment is a single atomic ``UPDATE ... RETURNING`` (no read-modify-
+    write race). If the user is already loaded in this session, the cached ORM
+    instance is refreshed so callers that then re-mint tokens observe the new
+    generation.
+    """
+    result = await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(token_generation=User.token_generation + 1)
+        .returning(User.token_generation)
+    )
+    new_generation = result.scalar_one_or_none()
+    if new_generation is None:
+        return None
+    cached = await db.get(User, user_id)
+    if cached is not None:
+        await db.refresh(cached)
+    return new_generation
 
 
 async def get_user_with_oauth_accounts_by_id(
@@ -82,36 +112,6 @@ async def update_user_github_profile(
     if display_name and not (user.display_name or "").strip():
         user.display_name = display_name
     return user
-
-
-async def claim_customerio_welcome_send(
-    db: AsyncSession,
-    user_id: UUID,
-) -> bool:
-    """Atomically claim the welcome-email send for ``user_id``.
-
-    Sets ``customerio_welcome_sent_at`` only when it is currently NULL. Returns
-    True when this caller won the claim, False when the welcome was already
-    sent (or the user is missing).
-    """
-    now = datetime.now(UTC)
-    result = await db.execute(
-        update(User)
-        .where(User.id == user_id)
-        .where(User.customerio_welcome_sent_at.is_(None))
-        .values(customerio_welcome_sent_at=now)
-    )
-    return (result.rowcount or 0) > 0
-
-
-async def clear_customerio_welcome_send(
-    db: AsyncSession,
-    user_id: UUID,
-) -> None:
-    """Clear ``customerio_welcome_sent_at`` so a future attempt can retry."""
-    await db.execute(
-        update(User).where(User.id == user_id).values(customerio_welcome_sent_at=None)
-    )
 
 
 async def load_user_with_oauth_accounts_by_id(

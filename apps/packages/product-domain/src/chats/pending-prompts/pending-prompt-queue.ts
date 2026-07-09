@@ -26,6 +26,12 @@ export interface PendingPromptQueueRow {
   label: string;
   kind: PendingPromptQueueRowKind;
   isBeingEdited: boolean;
+  /**
+   * The entry is in flight to the runtime (outbox preparing/dispatching).
+   * Presentation-only: queue rows show a "Sending…" state hint while true —
+   * the edit/delete wiring is unchanged and still governed by the flags below.
+   */
+  isSending: boolean;
   showEditAction: boolean;
   canEdit: boolean;
   editDisabledReason: string | null;
@@ -41,6 +47,9 @@ export function derivePendingPromptQueueRow(
   const isRuntimeConfirmed = entry.seq > 0;
   const key = entry.promptId ? `prompt:${entry.promptId}` : `seq:${entry.seq}`;
   const deleteAction = resolveDeleteAction(entry);
+  const isSending =
+    entry.localOutboxDeliveryState === "preparing"
+    || entry.localOutboxDeliveryState === "dispatching";
   const wakeProvenance = isSubagentWakeProvenance(entry.promptProvenance)
     ? entry.promptProvenance
     : null;
@@ -52,6 +61,7 @@ export function derivePendingPromptQueueRow(
       label: collapseQueueLabel(formatWakePromptQueueText(wakeProvenance)),
       kind: "wake",
       isBeingEdited: entry.isBeingEdited,
+      isSending,
       showEditAction: false,
       canEdit: false,
       editDisabledReason: null,
@@ -74,6 +84,7 @@ export function derivePendingPromptQueueRow(
       label: collapseQueueLabel(reviewLabel),
       kind: "review_feedback",
       isBeingEdited: entry.isBeingEdited,
+      isSending,
       showEditAction: false,
       canEdit: false,
       editDisabledReason: null,
@@ -103,6 +114,7 @@ export function derivePendingPromptQueueRow(
     label: collapseQueueLabel(summarizeContentParts(entry.contentParts, entry.text)) || "Queued message",
     kind: "plain",
     isBeingEdited: entry.isBeingEdited,
+    isSending,
     showEditAction,
     canEdit,
     editDisabledReason: showEditAction && !canEdit ? "Available once queued" : null,

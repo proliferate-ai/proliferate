@@ -2,106 +2,87 @@ use tokio::time::sleep;
 use tracing::{info, warn};
 
 use crate::{
-    cloud_client::{inventory as cloud_inventory, CloudClient},
+    catalog_sync::{self, CatalogSyncState},
+    cloud_client::CloudClient,
     config::WorkerConfig,
-    control,
     error::WorkerError,
-    identity::{self, credentials::WorkerIdentity},
-    inventory, lifecycle,
+    identity,
+    identity::credentials::WorkerIdentity,
+    integration_gateway, lifecycle,
     process_lock::WorkerProcessLock,
+    self_update,
     store::WorkerStore,
-    tail,
 };
 
 pub async fn run(config: WorkerConfig, once: bool) -> Result<(), WorkerError> {
     let _process_lock = WorkerProcessLock::acquire(&config.worker_db_path)?;
     let store = WorkerStore::open(config.worker_db_path.clone())?;
     let cloud = CloudClient::new(&config)?;
-    let identity = identity::ensure_enrolled(&config, &store, &cloud).await?;
-    let health = lifecycle::heartbeat::runtime_health(&config).await;
-    info!(
-        healthy = health.status == "online",
-        status = health.status,
-        "anyharness health probe completed"
-    );
-    info!(
-        target_id = %identity.target_id,
-        worker_id = %identity.worker_id,
-        "proliferate worker started"
-    );
-    if let Err(error) = upload_inventory(&cloud, &identity, &health).await {
-        warn!(?error, "worker inventory upload failed");
+    let (identity, integration_gateway) =
+        identity::ensure_enrolled(&config, &store, &cloud).await?;
+    info!(worker_id = %identity.worker_id, "proliferate worker started");
+
+    // Write the integration-gateway dotfile on every (re)enroll.
+    if let Some(gateway) = integration_gateway {
+        integration_gateway::write(&config, &gateway)?;
+        info!(
+            path = %integration_gateway::dotfile_path(&config).display(),
+            "wrote integration-gateway dotfile"
+        );
     }
-    if let Err(error) = lifecycle::heartbeat::send_once(&config, &cloud, &identity, &store).await {
-        warn!(?error, "worker heartbeat failed");
-        refresh_github_credentials_after_heartbeat_failure(&config, &cloud, &identity).await;
-    }
+
+    let catalog_state = CatalogSyncState::new();
+    heartbeat_and_converge(&config, &cloud, &identity, &catalog_state, once).await;
     if once {
         return Ok(());
     }
-    let command_config = config.clone();
-    let command_cloud = cloud.clone();
-    let command_identity = identity.clone();
-    let command_store = store.clone();
-    tokio::spawn(async move {
-        if let Err(error) = control::r#loop::run_loop(
-            command_config,
-            command_cloud,
-            command_identity,
-            command_store,
-        )
-        .await
-        {
-            warn!(?error, "worker command loop exited");
-        }
-    });
-    let tail_config = config.clone();
-    let tail_cloud = cloud.clone();
-    let tail_identity = identity.clone();
-    let tail_store = store.clone();
-    tokio::spawn(async move {
-        if let Err(error) =
-            tail::r#loop::run_loop(tail_config, tail_cloud, tail_identity, tail_store).await
-        {
-            warn!(?error, "worker event tail loop exited");
-        }
-    });
     loop {
         sleep(lifecycle::heartbeat::interval(&config)).await;
-        if let Err(error) =
-            lifecycle::heartbeat::send_once(&config, &cloud, &identity, &store).await
-        {
-            warn!(?error, "worker heartbeat failed");
-            refresh_github_credentials_after_heartbeat_failure(&config, &cloud, &identity).await;
-        }
+        heartbeat_and_converge(&config, &cloud, &identity, &catalog_state, false).await;
     }
 }
 
-async fn refresh_github_credentials_after_heartbeat_failure(
+/// One heartbeat plus whatever the ack demands. Never fails the worker loop:
+/// a missed heartbeat or a failed self-update leaves the current binary
+/// serving, and the next tick retries. In `--once` mode a pending update is
+/// only reported (dry run), never executed.
+async fn heartbeat_and_converge(
     config: &WorkerConfig,
     cloud: &CloudClient,
     identity: &WorkerIdentity,
+    catalog_state: &CatalogSyncState,
+    dry_run: bool,
 ) {
-    if let Err(error) = lifecycle::github_credentials::converge_once(config, cloud, identity).await
-    {
+    let response = match lifecycle::heartbeat::send_once(cloud, identity).await {
+        Ok(response) => response,
+        Err(error) => {
+            warn!(?error, "worker heartbeat failed");
+            return;
+        }
+    };
+
+    // Catalog sync: non-fatal, runs before self-update because a binary swap
+    // exec's and never returns.
+    catalog_sync::maybe_sync(config, cloud, &identity.worker_token, &response, catalog_state)
+        .await;
+
+    let Some(update) = self_update::plan(config, &response) else {
+        return;
+    };
+    if dry_run {
+        info!(
+            desired = %update.desired_version,
+            "self-update pending; skipped in --once mode"
+        );
+        return;
+    }
+    // On success this never returns: converge ends by exec'ing the swapped
+    // binary in place of this process.
+    if let Err(error) = self_update::converge(cloud, &update).await {
         warn!(
             ?error,
-            "github credential convergence failed after heartbeat failure"
+            desired = %update.desired_version,
+            "worker self-update failed; staying on the current version"
         );
     }
-}
-
-async fn upload_inventory(
-    cloud: &CloudClient,
-    identity: &WorkerIdentity,
-    health: &lifecycle::heartbeat::RuntimeHealth,
-) -> Result<(), WorkerError> {
-    let request = cloud_inventory::report(
-        inventory::collect(),
-        health.status,
-        health.status_detail.clone(),
-    );
-    cloud
-        .upload_inventory(&identity.worker_token, &request)
-        .await
 }

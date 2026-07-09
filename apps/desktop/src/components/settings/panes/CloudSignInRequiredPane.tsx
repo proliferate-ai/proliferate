@@ -1,6 +1,6 @@
 import { Button } from "@proliferate/ui/primitives/Button";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useGitHubSignIn } from "@/hooks/auth/workflows/use-github-sign-in";
@@ -20,37 +20,31 @@ export function CloudSignInRequiredPane() {
         description={CAPABILITY_COPY.cloudSignInDescription}
       />
 
-      <SettingsCard>
-        <div className="space-y-4 p-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-foreground">
-              Sign in to use cloud workspaces.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {CAPABILITY_COPY.cloudSignInDetails}
-            </p>
-          </div>
-
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void signIn()}
-            disabled={signingIn || signInChecking}
-            loading={signingIn}
-            className="w-fit"
-          >
-            {signingIn
-              ? AUTH_ACCOUNT_LABELS.signingIn
-              : signInChecking
-                ? AUTH_ACCOUNT_LABELS.checkingSignIn
-                : AUTH_ACCOUNT_LABELS.signIn}
-          </Button>
-
-          {signInError && (
-            <p className="text-sm text-destructive">{signInError}</p>
-          )}
-        </div>
-      </SettingsCard>
+      <SettingsEmptyState
+        title="Sign in to use cloud workspaces"
+        description={CAPABILITY_COPY.cloudSignInDetails}
+        action={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void signIn()}
+              disabled={signingIn || signInChecking}
+              loading={signingIn}
+              className="w-fit"
+            >
+              {signingIn
+                ? AUTH_ACCOUNT_LABELS.signingIn
+                : signInChecking
+                  ? AUTH_ACCOUNT_LABELS.checkingSignIn
+                  : AUTH_ACCOUNT_LABELS.signIn}
+            </Button>
+            {signInError && (
+              <p className="text-sm text-destructive">{signInError}</p>
+            )}
+          </>
+        }
+      />
     </section>
   );
 }

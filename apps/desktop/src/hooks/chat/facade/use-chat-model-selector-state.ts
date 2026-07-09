@@ -69,7 +69,7 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
       }
       : null,
   });
-  const { hasAgents, isLoading: agentsLoading, notReadyAgents } = useAgentCatalog();
+  const { hasAgents, isLoading: agentsLoading } = useAgentCatalog();
   const launchControlPreferences = useUserPreferencesStore(useShallow((state) => ({
     defaultSessionModeByAgentKind: state.defaultSessionModeByAgentKind,
     defaultLiveSessionControlValuesByAgentKind:
@@ -212,7 +212,6 @@ export function useChatModelSelectorState(options?: { suppressActiveSessionState
     groups: launchCatalog.groups,
     hasAgents: selectorHasAgents,
     isLoading: selectorIsLoading,
-    notReadyAgents,
     onSelect: handleLaunchSelect,
     launchControls,
     launchAgentKind: currentSelection?.kind ?? null,

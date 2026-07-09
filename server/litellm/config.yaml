@@ -1,0 +1,151 @@
+# LiteLLM proxy config for the Proliferate agent gateway.
+#
+# Used both by the local docker-compose `litellm` service (bind-mounted) and
+# by the deployed image (server/litellm/Dockerfile layers this file onto
+# ghcr.io/berriai/litellm). Model names must be explicitly listed: unknown
+# names return 400 from the proxy.
+#
+# Both the bare alias and the dated/versioned model_name map to the same
+# upstream model so harnesses that pin dated ids (e.g. Claude Code) resolve.
+#
+# Provider keys come from the container environment:
+#   ANTHROPIC_API_KEY  (deploy: from AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY)
+#   OPENAI_API_KEY     (deploy: from AGENT_GATEWAY_MANAGED_OPENAI_API_KEY)
+#   XAI_API_KEY        (deploy: from AGENT_GATEWAY_MANAGED_XAI_API_KEY)
+#
+# Aliasing rule: a model_name may only be re-pointed at a different upstream
+# model id when both are served by the SAME provider (e.g. grok-build below
+# aliases to a cheaper xAI model, same as the dated/bare Anthropic pairs
+# above). Never alias one provider's model_name to another provider's
+# upstream — that silently swaps the model a harness thinks it is talking to.
+# This file is the one deployed config (dev and prod both run it as-is): any
+# dev-only shim/mock (LiteLLM `mock_response`, cross-provider test aliases)
+# belongs in a docker-compose dev overlay, never here.
+
+model_list:
+  # Anthropic
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-sonnet-4-5-20250929
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20250929
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-haiku-4-5-20251001
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-opus-4-6
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+  - model_name: claude-opus-4-6-20260205
+    litellm_params:
+      model: anthropic/claude-opus-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # OpenAI
+  - model_name: gpt-5.2
+    litellm_params:
+      model: openai/gpt-5.2
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: gpt-5.2-2025-12-11
+    litellm_params:
+      model: openai/gpt-5.2
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: gpt-5-mini
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: gpt-5-mini-2025-08-07
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # xAI. The grok CLI discovers models via GET /v1/models and speaks plain
+  # chat/completions, so it will send whatever model_name we advertise here —
+  # these ids are ours to choose, but litellm_params.model must be a REAL id
+  # LiteLLM's xai provider serves (verified against LiteLLM's own
+  # model_prices_and_context_window.json; never invented):
+  #   - xai/grok-4 exists as-is.
+  #   - there is no plain "xai/grok-4-fast"; xai/grok-4-1-fast is the current
+  #     (non-deprecated) fast-tier model, so grok-4-fast resolves there.
+  #   - xai/grok-code-fast-1 exists as-is.
+  - model_name: grok-4
+    litellm_params:
+      model: xai/grok-4
+      api_key: os.environ/XAI_API_KEY
+  - model_name: grok-4-fast
+    litellm_params:
+      model: xai/grok-4-1-fast
+      api_key: os.environ/XAI_API_KEY
+  - model_name: grok-code-fast-1
+    litellm_params:
+      model: xai/grok-code-fast-1
+      api_key: os.environ/XAI_API_KEY
+  # grok-build is the CLI's interactive/title-gen model — cheap to keep.
+  # Same-provider alias only (never cross-provider): a small xAI model.
+  - model_name: grok-build
+    litellm_params:
+      model: xai/grok-3-mini-latest
+      api_key: os.environ/XAI_API_KEY
+
+  # AWS Bedrock. Credentials come from the AWS default credential chain:
+  # deployed (prod/staging): the ECS task role with attached policy
+  # arn:aws:iam::157466816238:policy/proliferate-gateway-bedrock-invoke;
+  # local dev: GATEWAY_AWS_ACCESS_KEY_ID + GATEWAY_AWS_SECRET_ACCESS_KEY
+  # environment variables (optional; stack boots without them). Model names
+  # are the REAL inference-profile IDs so the family-key join enriches rows
+  # and Bedrock-pinned harness IDs resolve. LiteLLM's bedrock provider
+  # accepts pass-through for cross-region inference profiles (us.*, eu.*,
+  # global.*) — these IDs are verified to exist in the LiteLLM manifest.
+  #
+  # Anthropic on Bedrock (us. cross-region profiles):
+  - model_name: us.anthropic.claude-sonnet-4-6
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-4-6
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-sonnet-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-5
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-opus-4-7
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-4-7
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-opus-4-8
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-4-8
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-fable-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-fable-5
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    litellm_params:
+      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  #
+  # Anthropic on Bedrock (global. cross-region profiles):
+  - model_name: global.anthropic.claude-fable-5
+    litellm_params:
+      model: bedrock/global.anthropic.claude-fable-5
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  #
+  # OpenAI open-weight on Bedrock:
+  - model_name: openai.gpt-oss-120b-1:0
+    litellm_params:
+      model: bedrock/openai.gpt-oss-120b-1:0
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: openai.gpt-oss-20b-1:0
+    litellm_params:
+      model: bedrock/openai.gpt-oss-20b-1:0
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

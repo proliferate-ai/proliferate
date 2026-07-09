@@ -2,19 +2,22 @@ import { useMemo, type ReactNode } from "react";
 import { resolveComposerDockSlots } from "@proliferate/product-domain/chats/composer/resolve-dock-slots";
 import { CloudRuntimeAttachedPanel } from "@/components/workspace/chat/surface/CloudRuntimeAttachedPanel";
 import { WorkspaceArrivalAttachedPanel } from "@/components/workspace/chat/surface/WorkspaceArrivalAttachedPanel";
-import { TodoTrackerPanel } from "@/components/workspace/chat/input/TodoTrackerPanel";
+import { TodoTrackerPanel, TodoTrackerStrip } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
-import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
+import { SessionActivityBar } from "@/components/workspace/activity/SessionActivityBar";
+import { useSessionGoalBarModel } from "@/hooks/activity/derived/use-session-goal";
+import { useSessionActivityChips } from "@/hooks/activity/derived/use-session-activity-chips";
 import {
   useActivePendingInteractionState,
   useActivePendingPrompts,
 } from "@/hooks/chat/derived/use-active-pending-session-interactions";
 import { useDelegatedWorkComposer } from "@/hooks/chat/facade/use-delegated-work-composer";
 import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-tracker";
+import { useComposerDockCardPresence } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
 
@@ -34,6 +37,8 @@ export function useComposerDockSlots(options?: {
   const pendingPrompts = useActivePendingPrompts();
   const activeTodoTracker = useActiveTodoTracker();
   const delegatedWorkComposer = useDelegatedWorkComposer();
+  const sessionGoalBarModel = useSessionGoalBarModel();
+  const sessionActivityChips = useSessionActivityChips();
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
   const selectedCloudRuntime = useSelectedCloudRuntimeState();
   const hasCloudRuntimePanel = !!selectedCloudRuntime.state
@@ -45,6 +50,8 @@ export function useComposerDockSlots(options?: {
     primaryPendingInteractionKind: primaryPendingInteraction?.kind ?? null,
     hasActiveTodoTracker: !!activeTodoTracker,
     hasDelegatedWork: !!delegatedWorkComposer,
+    hasSessionGoal: !!sessionGoalBarModel,
+    hasSessionActivity: sessionActivityChips.length > 0,
     hasWorkspaceStatusPanel: !!workspaceStatusPanel,
     hasCloudRuntimePanel,
   }), [
@@ -53,6 +60,8 @@ export function useComposerDockSlots(options?: {
     hasCloudRuntimePanel,
     pendingPrompts.length,
     primaryPendingInteraction?.kind,
+    sessionActivityChips.length,
+    sessionGoalBarModel,
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
     workspaceStatusPanel,
@@ -75,11 +84,36 @@ export function useComposerDockSlots(options?: {
         ? <CloudRuntimeAttachedPanel />
         : null
   ), [dockSlotResolution.attachedSlot?.ambientSlot?.kind]);
-  const activeAgentSlot = useMemo<ReactNode | null>(() => (
-    interactionPanel || (dockSlotResolution.activeSlot?.kind === "todo_tracker" && activeTodoTracker
+  // While an interaction holds the slot, plan progress collapses to a slim
+  // one-line strip directly below the card instead of being evicted.
+  const todoStrip = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.activeSlotCompanion?.kind === "todo_strip" && activeTodoTracker
+      ? <TodoTrackerStrip entries={activeTodoTracker.entries} />
+      : null
+  ), [activeTodoTracker, dockSlotResolution.activeSlotCompanion?.kind]);
+  const activeSlotContent = useMemo<ReactNode | null>(() => {
+    if (interactionPanel) {
+      return (
+        <>
+          {interactionPanel}
+          {todoStrip}
+        </>
+      );
+    }
+    return dockSlotResolution.activeSlot?.kind === "todo_tracker" && activeTodoTracker
       ? <TodoTrackerPanel entries={activeTodoTracker.entries} />
-      : null)
-  ), [activeTodoTracker, dockSlotResolution.activeSlot?.kind, interactionPanel]);
+      : null;
+  }, [activeTodoTracker, dockSlotResolution.activeSlot?.kind, interactionPanel, todoStrip]);
+  // Identity key for the active-slot presence animation: a new interaction
+  // (or the todo tracker taking the slot back) replays the entrance, while
+  // resolving the last card fades the slot out before unmount.
+  const activeSlotKind = dockSlotResolution.activeSlot?.kind ?? null;
+  const activeSlotKey = activeSlotKind === "todo_tracker"
+    ? "todo_tracker"
+    : activeSlotKind && primaryPendingInteraction
+      ? `${primaryPendingInteraction.kind}:${primaryPendingInteraction.requestId}`
+      : null;
+  const activeAgentSlot = useComposerDockCardPresence(activeSlotKey, activeSlotContent);
   const delegatedWorkSlot = useMemo<ReactNode | null>(() => (
     dockSlotResolution.attachedSlot?.delegatedWork && delegatedWorkComposer
       ? (
@@ -89,26 +123,38 @@ export function useComposerDockSlots(options?: {
       )
       : null
   ), [delegatedWorkComposer, dockSlotResolution.attachedSlot?.delegatedWork]);
+  // The activity bar (goal + chips) renders last so it docks directly
+  // against the composer surface — it is the ever-present element while
+  // goal or activity state is live.
+  const sessionActivitySlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.attachedSlot?.sessionGoal || dockSlotResolution.attachedSlot?.sessionActivity
+      ? <SessionActivityBar />
+      : null
+  ), [dockSlotResolution.attachedSlot?.sessionGoal, dockSlotResolution.attachedSlot?.sessionActivity]);
   const attachedSlot = useMemo<ReactNode | null>(() => (
-    ambientContextSlot || delegatedWorkSlot
+    ambientContextSlot || delegatedWorkSlot || sessionActivitySlot
       ? (
       <>
         {ambientContextSlot}
         {delegatedWorkSlot}
+        {sessionActivitySlot}
       </>
       )
       : null
-  ), [ambientContextSlot, delegatedWorkSlot]);
+  ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot]);
 
   return useMemo(() => ({
-    outboundSlot: dockSlotResolution.outboundSlot
-      ? <ConnectedPendingPromptList />
-      : null,
+    // Queued prompts now render IN THE TRANSCRIPT (renderableOutboxEntriesFor-
+    // Transcript includes queue-placed entries), so the dock's pending list is
+    // retired — rendering both would show the same message twice. NOTE: this
+    // also retires the dock's queued-prompt edit affordance (beginEdit was
+    // only reachable from that list); re-home it on the transcript pending row
+    // if we want it back.
+    outboundSlot: null,
     activeSlot: activeAgentSlot,
     attachedSlot,
   }), [
     activeAgentSlot,
     attachedSlot,
-    dockSlotResolution.outboundSlot,
   ]);
 }

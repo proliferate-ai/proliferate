@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
-import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
+import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import type { AppCommandActions } from "./app-command-action-types";
 
@@ -14,7 +14,6 @@ export type AppNavigationCommandActions = Pick<
   | "openSettings"
   | "showKeyboardShortcuts"
   | "goHome"
-  | "goIntegrations"
   | "goWorkflows"
   | "openWebApp"
   | "openSupport"
@@ -30,14 +29,12 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const openSettings = useCallback(() => {
     navigate("/settings");
   }, [navigate]);
+  const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const showKeyboardShortcuts = useCallback(() => {
-    navigate(buildSettingsHref({ section: "keyboard" }));
-  }, [navigate]);
+    openShortcutsDialog(true);
+  }, [openShortcutsDialog]);
   const goHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
-  }, [goToTopLevelRoute]);
-  const goIntegrations = useCallback(() => {
-    goToTopLevelRoute(APP_ROUTES.integrations);
   }, [goToTopLevelRoute]);
   const goWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
@@ -48,9 +45,10 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
       showToast("Failed to open the web app.");
     });
   }, [openExternal, showToast]);
-  const openSupport = useCallback(() => {
-    requestSupportDialog();
-  }, []);
+  const {
+    openBug: openSupport,
+    disabledReason: supportDisabledReason,
+  } = useOpenSupportReportWindow({ source: "sidebar" });
 
   return useMemo<AppNavigationCommandActions>(() => ({
     openSettings: {
@@ -65,10 +63,6 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
       execute: goHome,
       disabledReason: null,
     },
-    goIntegrations: {
-      execute: goIntegrations,
-      disabledReason: null,
-    },
     goWorkflows: {
       execute: goWorkflows,
       disabledReason: null,
@@ -79,14 +73,14 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     },
     openSupport: {
       execute: openSupport,
-      disabledReason: null,
+      disabledReason: supportDisabledReason,
     },
   }), [
     goHome,
-    goIntegrations,
     goWorkflows,
     openSettings,
     openSupport,
+    supportDisabledReason,
     openWebApp,
     showKeyboardShortcuts,
   ]);

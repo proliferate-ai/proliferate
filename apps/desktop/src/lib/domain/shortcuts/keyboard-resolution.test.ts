@@ -86,11 +86,11 @@ describe("resolveKeyboardShortcut", () => {
     });
 
     expect(resolveKeyboardShortcut({
-      key: "?",
+      key: "/",
       code: "Slash",
       metaKey: true,
       ctrlKey: false,
-      shiftKey: true,
+      shiftKey: false,
       altKey: false,
     } as KeyboardEvent)).toEqual({
       id: "app.show-keyboard-shortcuts",

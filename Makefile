@@ -17,15 +17,11 @@ USE_EXISTING_REDIS ?= 0
 STRIPE_FORWARD_TO ?= http://127.0.0.1:8000/v1/billing/webhooks/stripe
 STRIPE_SNAPSHOT_EVENTS ?= checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.paid,invoice.payment_failed
 AGENT_GATEWAY ?= 0
-LOCAL_BIFROST_BASE_URL ?= http://127.0.0.1:8080
-BIFROST_APP_DIR ?= $(HOME)/.proliferate-local/bifrost
-BIFROST_LOG_LEVEL ?= info
-AGENT_GATEWAY_TUNNEL ?= 0
+LOCAL_LITELLM_BASE_URL ?= http://127.0.0.1:14000
+LOCAL_LITELLM_MASTER_KEY ?= sk-proliferate-local-dev
 CLOUD_WORKER_TUNNEL ?= 0
 AUTH_PROFILE ?=
 SSO_STATUS ?= enabled
-AGENT_GATEWAY_FREE_CREDIT_USD ?= 5
-AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS ?= claude,codex
 AWS_REGION ?= us-east-1
 PROD_CLUSTER ?= proliferate-prod
 PROD_SERVICE ?= proliferate-prod-server
@@ -42,6 +38,12 @@ CLOUD_SSH_WORKER_API_PORT ?= 8044
 CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
 DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
+LANE ?= local
+DESKTOP ?= web
+AGENTS ?= all
+SCENARIOS ?= all
+DRY_RUN ?=
+FILE_ISSUES ?=
 DESKTOP_RELEASE_TARGET_OS ?= macos
 DESKTOP_RELEASE_TAG ?= desktop-v$(shell node -p "require('./apps/desktop/package.json').version" 2>/dev/null)
 SERVER_ENV_SOURCE = set -a; \
@@ -103,7 +105,8 @@ endif
 endif
 
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
-        server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready db db-local db-ah server-migrate serve install \
+        server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
+        server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
@@ -119,6 +122,7 @@ endif
         prod-service prod-taskdef prod-tasks prod-task prod-logs prod-secret-keys \
         prod-db-url prod-sql prod-psql prod-rds \
         db-migrate-up db-migrate-down \
+        release-e2e \
         all clean
 
 # --- Profile dev (setup, build, and run are separate) ---
@@ -215,57 +219,19 @@ run: dev-artifacts-ready
 	export STRIPE_CHECKOUT_CANCEL_URL="$$FRONTEND_BASE_URL/settings/cloud?checkout=cancel"; \
 	export STRIPE_CUSTOMER_PORTAL_RETURN_URL="$$FRONTEND_BASE_URL/settings/cloud"; \
 	export STRIPE_FORWARD_TO="http://127.0.0.1:$$PROLIFERATE_API_PORT/v1/billing/webhooks/stripe"; \
-	agent_gateway_mode="$(AGENT_GATEWAY)"; \
-	agent_gateway_tunnel_mode="$(AGENT_GATEWAY_TUNNEL)"; \
 	cloud_worker_tunnel_mode="$(CLOUD_WORKER_TUNNEL)"; \
-	if [ "$$cloud_worker_tunnel_mode" = "0" ] && { [ "$$agent_gateway_tunnel_mode" = "ngrok" ] || [ "$$agent_gateway_tunnel_mode" = "1" ]; }; then \
-		cloud_worker_tunnel_mode=ngrok; \
-	fi; \
 	if [ "$$cloud_worker_tunnel_mode" = "ngrok" ] || [ "$$cloud_worker_tunnel_mode" = "1" ]; then \
 		if ! command -v ngrok >/dev/null 2>&1; then \
 			echo "ngrok is required for CLOUD_WORKER_TUNNEL=ngrok."; \
 			exit 1; \
 		fi; \
-		if [ "$$agent_gateway_mode" = "bifrost" ] && { [ "$$agent_gateway_tunnel_mode" = "ngrok" ] || [ "$$agent_gateway_tunnel_mode" = "1" ]; }; then \
-			export AGENT_GATEWAY_BIFROST_BASE_URL="$${AGENT_GATEWAY_BIFROST_BASE_URL:-$(LOCAL_BIFROST_BASE_URL)}"; \
-			bifrost_port=$$(node -e 'const u = new URL(process.env.AGENT_GATEWAY_BIFROST_BASE_URL); console.log(u.port || (u.protocol === "https:" ? "443" : "80"));'); \
-			public_mux_port=$$((PROLIFERATE_API_PORT + 3000)); \
-			if curl -fsS "http://127.0.0.1:$$public_mux_port/__proliferate_mux_health" >/dev/null 2>&1; then \
-				echo "Using existing public tunnel mux on :$$public_mux_port"; \
-			else \
-				echo "Starting public tunnel mux :$$public_mux_port (API :$$PROLIFERATE_API_PORT, Bifrost :$$bifrost_port)"; \
-				node scripts/dev-public-tunnel-mux.mjs \
-					--listen-port "$$public_mux_port" \
-					--api-base-url "http://127.0.0.1:$$PROLIFERATE_API_PORT" \
-					--bifrost-base-url "$$AGENT_GATEWAY_BIFROST_BASE_URL" \
-					> "/tmp/proliferate-public-mux-$$PROLIFERATE_DEV_PROFILE.log" 2>&1 & \
-				for attempt in $$(seq 1 80); do \
-					curl -fsS "http://127.0.0.1:$$public_mux_port/__proliferate_mux_health" >/dev/null 2>&1 && break; \
-					if [ "$$attempt" = "80" ]; then \
-						echo "Public tunnel mux did not become healthy on :$$public_mux_port"; \
-						exit 1; \
-					fi; \
-					sleep 0.25; \
-				done; \
-			fi; \
-			cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$public_mux_port" 2>/dev/null || true); \
-			if [ -z "$$cloud_worker_ngrok_url" ]; then \
-				echo "Starting ngrok tunnel for public API/Bifrost mux :$$public_mux_port"; \
-				ngrok http "$$public_mux_port" --log=stdout --log-format=json > "/tmp/proliferate-public-mux-$$PROLIFERATE_DEV_PROFILE-ngrok.log" 2>&1 & \
-				cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$public_mux_port" --wait-ms 45000); \
-			else \
-				echo "Using existing ngrok tunnel for public API/Bifrost mux: $$cloud_worker_ngrok_url"; \
-			fi; \
-			export AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL="$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-$$cloud_worker_ngrok_url}"; \
+		cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" 2>/dev/null || true); \
+		if [ -z "$$cloud_worker_ngrok_url" ]; then \
+			echo "Starting ngrok tunnel for Cloud worker callbacks :$$PROLIFERATE_API_PORT"; \
+			ngrok http "$$PROLIFERATE_API_PORT" --log=stdout --log-format=json > "/tmp/proliferate-cloud-worker-$$PROLIFERATE_DEV_PROFILE-ngrok.log" 2>&1 & \
+			cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" --wait-ms 45000); \
 		else \
-			cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" 2>/dev/null || true); \
-			if [ -z "$$cloud_worker_ngrok_url" ]; then \
-				echo "Starting ngrok tunnel for Cloud worker callbacks :$$PROLIFERATE_API_PORT"; \
-				ngrok http "$$PROLIFERATE_API_PORT" --log=stdout --log-format=json > "/tmp/proliferate-cloud-worker-$$PROLIFERATE_DEV_PROFILE-ngrok.log" 2>&1 & \
-				cloud_worker_ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$PROLIFERATE_API_PORT" --wait-ms 45000); \
-			else \
-				echo "Using existing ngrok tunnel for Cloud worker callbacks: $$cloud_worker_ngrok_url"; \
-			fi; \
+			echo "Using existing ngrok tunnel for Cloud worker callbacks: $$cloud_worker_ngrok_url"; \
 		fi; \
 		export CLOUD_WORKER_BASE_URL="$${CLOUD_WORKER_BASE_URL:-$$cloud_worker_ngrok_url}"; \
 		export CLOUD_MCP_OAUTH_CALLBACK_BASE_URL="$${CLOUD_MCP_OAUTH_CALLBACK_BASE_URL:-$$cloud_worker_ngrok_url}"; \
@@ -277,75 +243,30 @@ run: dev-artifacts-ready
 	if [ "$$use_profile_db" = "1" ]; then \
 		$(PROFILE_DB_ENSURE_COMMAND) \
 	fi; \
-	if [ "$$agent_gateway_mode" = "1" ] || [ "$$agent_gateway_mode" = "bifrost" ]; then \
+	agent_gateway_mode="$(AGENT_GATEWAY)"; \
+	if [ "$$agent_gateway_mode" = "1" ] || [ "$$agent_gateway_mode" = "litellm" ]; then \
 		export AGENT_GATEWAY_ENABLED=true; \
-		export AGENT_GATEWAY_BIFROST_BASE_URL="$${AGENT_GATEWAY_BIFROST_BASE_URL:-$(LOCAL_BIFROST_BASE_URL)}"; \
-		export AGENT_GATEWAY_RECONCILER_ENABLED="$${AGENT_GATEWAY_RECONCILER_ENABLED:-true}"; \
-		export AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED="$${AGENT_GATEWAY_USER_FREE_CREDIT_ENABLED:-true}"; \
-		export AGENT_GATEWAY_USER_FREE_CREDIT_USD="$${AGENT_GATEWAY_USER_FREE_CREDIT_USD:-$(AGENT_GATEWAY_FREE_CREDIT_USD)}"; \
-		export AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS="$${AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS:-$(AGENT_GATEWAY_MANAGED_CREDIT_AGENT_KINDS)}"; \
-		export AGENT_GATEWAY_BYOK_ENABLED="$${AGENT_GATEWAY_BYOK_ENABLED:-true}"; \
-		export AGENT_GATEWAY_PERSONAL_BYOK_ENABLED="$${AGENT_GATEWAY_PERSONAL_BYOK_ENABLED:-true}"; \
-		export AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED="$${AGENT_GATEWAY_BIFROST_ISOLATION_VERIFIED:-true}"; \
-		export AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED="$${AGENT_GATEWAY_ANTHROPIC_BYOK_ENABLED:-true}"; \
-		export AGENT_GATEWAY_OPENAI_BYOK_ENABLED="$${AGENT_GATEWAY_OPENAI_BYOK_ENABLED:-true}"; \
-		export AGENT_GATEWAY_BEDROCK_BYOK_ENABLED="$${AGENT_GATEWAY_BEDROCK_BYOK_ENABLED:-true}"; \
-		export AGENT_GATEWAY_GEMINI_BYOK_ENABLED="$${AGENT_GATEWAY_GEMINI_BYOK_ENABLED:-true}"; \
-		if [ -z "$${AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY:-}" ] && [ -n "$${ANTHROPIC_API_KEY:-}" ]; then \
-			export AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY="$$ANTHROPIC_API_KEY"; \
-		fi; \
-		if [ -z "$${AGENT_GATEWAY_MANAGED_OPENAI_API_KEY:-}" ] && [ -n "$${OPENAI_API_KEY:-}" ]; then \
-			export AGENT_GATEWAY_MANAGED_OPENAI_API_KEY="$$OPENAI_API_KEY"; \
-		fi; \
-		bifrost_port=$$(node -e 'const u = new URL(process.env.AGENT_GATEWAY_BIFROST_BASE_URL); console.log(u.port || (u.protocol === "https:" ? "443" : "80"));'); \
-		bifrost_host=$$(node -e 'const u = new URL(process.env.AGENT_GATEWAY_BIFROST_BASE_URL); console.log(u.hostname);'); \
-		if [ "$$bifrost_host" = "127.0.0.1" ] || [ "$$bifrost_host" = "localhost" ]; then \
-			node scripts/dev-bifrost-ensure-config.mjs \
-				--base-url "$$AGENT_GATEWAY_BIFROST_BASE_URL" \
-				--app-dir "$(BIFROST_APP_DIR)"; \
-		fi; \
-		if curl -fsS "$$AGENT_GATEWAY_BIFROST_BASE_URL/health" >/dev/null 2>&1; then \
-			echo "Using existing Bifrost at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
-		elif [ "$$bifrost_host" = "127.0.0.1" ] || [ "$$bifrost_host" = "localhost" ]; then \
-			echo "Starting local Bifrost at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
-			mkdir -p "$(BIFROST_APP_DIR)"; \
-			BIFROST_HOST=127.0.0.1 npx -y @maximhq/bifrost -port "$$bifrost_port" -app-dir "$(BIFROST_APP_DIR)" -log-level "$(BIFROST_LOG_LEVEL)" & \
-			for attempt in $$(seq 1 80); do \
-				curl -fsS "$$AGENT_GATEWAY_BIFROST_BASE_URL/health" >/dev/null 2>&1 && break; \
-				if [ "$$attempt" = "80" ]; then \
-					echo "Bifrost did not become healthy at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
+		export AGENT_GATEWAY_LITELLM_BASE_URL="$${AGENT_GATEWAY_LITELLM_BASE_URL:-$(LOCAL_LITELLM_BASE_URL)}"; \
+		export AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL="$${AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL:-$$AGENT_GATEWAY_LITELLM_BASE_URL}"; \
+		if [ -z "$${LITELLM_MASTER_KEY:-}" ] && [ -z "$${AGENT_GATEWAY_LITELLM_MASTER_KEY:-}" ]; then \
+			case "$$AGENT_GATEWAY_LITELLM_BASE_URL" in \
+				*127.0.0.1*|*localhost*) \
+					echo "WARNING: LITELLM_MASTER_KEY unset; booting the local LiteLLM proxy with the well-known dev default ($(LOCAL_LITELLM_MASTER_KEY)). Set LITELLM_MASTER_KEY for anything shared." >&2; \
+					export LITELLM_MASTER_KEY="$(LOCAL_LITELLM_MASTER_KEY)"; \
+					;; \
+				*) \
+					echo "ERROR: AGENT_GATEWAY_LITELLM_BASE_URL=$$AGENT_GATEWAY_LITELLM_BASE_URL is not local but LITELLM_MASTER_KEY/AGENT_GATEWAY_LITELLM_MASTER_KEY are unset. Refusing to boot with a default master key. Set the master key explicitly." >&2; \
 					exit 1; \
-				fi; \
-				sleep 0.5; \
-			done; \
-		else \
-			echo "Bifrost is not reachable at $$AGENT_GATEWAY_BIFROST_BASE_URL"; \
-			exit 1; \
+					;; \
+			esac; \
 		fi; \
-		if [ "$$agent_gateway_tunnel_mode" = "ngrok" ] || [ "$$agent_gateway_tunnel_mode" = "1" ]; then \
-			if ! command -v ngrok >/dev/null 2>&1; then \
-				echo "ngrok is required for AGENT_GATEWAY_TUNNEL=ngrok."; \
-				exit 1; \
-			fi; \
-			if [ -n "$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-}" ]; then \
-				echo "Using public Bifrost URL from mux: $$AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL"; \
-			else \
-				ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$bifrost_port" 2>/dev/null || true); \
-				if [ -z "$$ngrok_url" ]; then \
-					echo "Starting ngrok tunnel for Bifrost :$$bifrost_port"; \
-					ngrok http "$$bifrost_port" --log=stdout --log-format=json > /tmp/proliferate-bifrost-ngrok.log 2>&1 & \
-					ngrok_url=$$(node scripts/dev-ngrok-tunnel-url.mjs --port "$$bifrost_port" --wait-ms 45000); \
-				else \
-					echo "Using existing ngrok tunnel for Bifrost: $$ngrok_url"; \
-				fi; \
-				export AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL="$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-$$ngrok_url}"; \
-			fi; \
-		else \
-			export AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL="$${AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL:-$$AGENT_GATEWAY_BIFROST_BASE_URL}"; \
-		fi; \
-		echo "Agent gateway Bifrost enabled: admin $$AGENT_GATEWAY_BIFROST_BASE_URL, public $$AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL"; \
+		export LITELLM_MASTER_KEY="$${LITELLM_MASTER_KEY:-$(LOCAL_LITELLM_MASTER_KEY)}"; \
+		export AGENT_GATEWAY_LITELLM_MASTER_KEY="$${AGENT_GATEWAY_LITELLM_MASTER_KEY:-$$LITELLM_MASTER_KEY}"; \
+		make server-litellm-up; \
+		make server-litellm-wait; \
+		echo "Agent gateway LiteLLM enabled: admin $$AGENT_GATEWAY_LITELLM_BASE_URL, public $$AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL"; \
 	elif [ "$$agent_gateway_mode" != "0" ]; then \
-		echo "Unsupported AGENT_GATEWAY=$$agent_gateway_mode. Use 0, 1, or bifrost."; \
+		echo "Unsupported AGENT_GATEWAY=$$agent_gateway_mode. Use 0, 1, or litellm."; \
 		exit 1; \
 	fi; \
 	(cd server && DATABASE_URL="$$DATABASE_URL" .venv/bin/alembic upgrade head); \
@@ -541,6 +462,31 @@ server-redis-wait:
 
 server-redis-down:
 	@docker compose -f server/docker-compose.yml stop redis
+
+server-litellm-up:
+	@command -v docker >/dev/null 2>&1 || { \
+		echo "Docker is required for the local LiteLLM gateway. Install or start Docker and retry."; \
+		exit 1; \
+	}
+	@docker info >/dev/null 2>&1 || { \
+		echo "Docker is not running. Start Docker Desktop and retry."; \
+		exit 1; \
+	}
+	@docker compose -f server/docker-compose.yml up -d litellm
+
+server-litellm-wait:
+	@attempts=0; \
+	until curl -fsS "$(LOCAL_LITELLM_BASE_URL)/health/liveliness" >/dev/null 2>&1; do \
+		attempts=$$((attempts + 1)); \
+		if [ $$attempts -ge 30 ]; then \
+			echo "Local LiteLLM did not become ready. Check \`docker compose -f server/docker-compose.yml logs litellm\`."; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+
+server-litellm-down:
+	@docker compose -f server/docker-compose.yml stop litellm litellm-db
 
 server-redis-ready:
 ifeq ($(USE_EXISTING_REDIS),1)
@@ -824,6 +770,21 @@ test-cloud-webhooks: server-db-ready
 test-cloud-all: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud -xvs
 
+# Tier-3 live end-to-end / tier-4 upgrade-path runner
+# (specs/developing/testing/README.md "Running tier 3/4 locally"). One runner
+# CLI with lane flags; this target is a thin wrapper so CI and laptops call it
+# identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
+# SCENARIOS=<list|all> DRY_RUN=1 FILE_ISSUES=1.
+release-e2e:
+	pnpm install --silent
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--lane $(LANE) \
+		--desktop $(DESKTOP) \
+		--agents $(AGENTS) \
+		--scenarios $(SCENARIOS) \
+		$(if $(DRY_RUN),--dry-run,) \
+		$(if $(FILE_ISSUES),--file-issues,)
+
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \
 		echo "SSH_TARGET is required, for example:"; \
@@ -898,8 +859,13 @@ clippy:
 
 # --- Cloud client (Python control plane → TypeScript types) ---
 
+# Pin the deployment posture (telemetry/single-org mode) so the generated
+# schema is machine-independent: conditionally mounted routes (e.g. password
+# registration under single-org mode) must not churn with the local .env.
 cloud-openapi:
 	cd server && DEBUG=1 \
+	  TELEMETRY_MODE=local_dev \
+	  SINGLE_ORG_MODE=1 \
 	  JWT_SECRET=local-openapi-generation-secret \
 	  CLOUD_SECRET_KEY=local-openapi-generation-cloud-secret \
 	  GITHUB_OAUTH_CLIENT_ID=local-openapi-generation-github-client-id \
@@ -942,9 +908,18 @@ shared-build:
 	pnpm --filter @proliferate/product-ui build
 	pnpm --filter @proliferate/product-surfaces build
 
+# SKIP_RUST=1 skips both cargo builds — for frontend-only worktrees (UI waves)
+# that run against a shared prebuilt runtime via ANYHARNESS_DEV_RUNTIME_BIN.
+# Both `dev-artifacts-ready` and the `run` target honor that env var, so such a
+# worktree never needs its own runtime build. (`tauri dev` still compiles the
+# desktop shell into the worktree's target/ on first run.)
 build-rust:
-	$(CARGO) build --workspace
-	CARGO_TARGET_DIR="$(DEV_ANYHARNESS_TARGET_DIR)" $(CARGO) build -p anyharness
+	@if [ -n "$(SKIP_RUST)" ] && [ "$(SKIP_RUST)" != "0" ]; then \
+		echo "SKIP_RUST set — skipping cargo builds (runtime: $${ANYHARNESS_DEV_RUNTIME_BIN:-<unset>})"; \
+	else \
+		$(CARGO) build --workspace && \
+		CARGO_TARGET_DIR="$(DEV_ANYHARNESS_TARGET_DIR)" $(CARGO) build -p anyharness; \
+	fi
 
 runtime-build: build-rust
 

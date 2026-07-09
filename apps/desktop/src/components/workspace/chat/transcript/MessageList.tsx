@@ -1,5 +1,7 @@
 import {
+  memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -13,33 +15,53 @@ import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain
 import {
   finishOrCancelMeasurementOperation,
   markOperationForNextCommit,
+  recordMeasurementMetric,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import type { PromptOutboxEntry } from "@proliferate/product-domain/sessions/intents/session-intent-model";
 import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
+import { useTypingActivityStore } from "@/lib/infra/interaction/typing-activity-store";
 import type { TranscriptOpenSessionRole } from "@proliferate/product-domain/chats/transcript/transcript-open-target";
 import type {
   PendingPromptEntry,
   TranscriptState,
 } from "@anyharness/sdk";
 import type { SessionViewState } from "@proliferate/product-domain/sessions/activity";
+import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 import {
   ChatTranscriptView,
+  type ChatTranscriptGoalEventRenderInput,
   type ChatTranscriptPendingPromptRenderInput,
+  type ChatTranscriptPendingStatusInput,
   type ChatTranscriptTurnRowRenderInput,
+  type ChatTranscriptTurnStatusInput,
 } from "@proliferate/product-ui/chat/transcript/ChatTranscriptView";
 import type { ChatTranscriptState } from "@proliferate/product-domain/chats/transcript/chat-transcript-state";
+import { collectToolCallIdsWithProposedPlan } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import {
   resolvePendingPromptTrailingStatus,
   resolveTurnTrailingStatus,
 } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { TranscriptContextProviders, type TranscriptOpenSessionHandler } from "./TranscriptContexts";
+import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
+import { GoalTranscriptEventRow } from "./GoalTranscriptEventRow";
 import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "./TranscriptTurnRow";
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
+const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
+
+// INPUT-PRIORITY (the "typing must never be laggy" rule): WHILE THE USER IS
+// TYPING, the transcript view renders from a DEFERRED copy of the view state,
+// so keystrokes preempt stream-driven transcript re-renders and consecutive
+// stream batches coalesce. When the user is NOT typing, the fresh copy renders
+// urgently — deferring unconditionally starved the transcript while an agent
+// streamed (each ~80-250ms batch restarted the in-flight deferred pass;
+// measured 6.6s from prompt submit to first transcript commit), which read as
+// "I sent a message and nothing happened".
+const DeferredChatTranscriptView = memo(ChatTranscriptView);
 
 interface MessageListProps {
   activeSessionId: string;
@@ -48,6 +70,7 @@ interface MessageListProps {
   outboxEntries?: readonly PromptOutboxEntry[];
   transcript: TranscriptState;
   sessionViewState: SessionViewState;
+  goalEvents?: readonly GoalTranscriptEvent[];
   hasOlderHistory?: boolean;
   isLoadingOlderHistory?: boolean;
   olderHistoryCursor?: number | null;
@@ -65,6 +88,7 @@ export function MessageList({
   outboxEntries = EMPTY_OUTBOX_ENTRIES,
   transcript,
   sessionViewState,
+  goalEvents = EMPTY_GOAL_EVENTS,
   hasOlderHistory = false,
   isLoadingOlderHistory = false,
   olderHistoryCursor = null,
@@ -93,6 +117,7 @@ export function MessageList({
     outboxEntries,
     transcript,
     sessionViewState,
+    goalEvents,
     history: {
       hasOlderHistory,
       isLoadingOlderHistory,
@@ -105,6 +130,7 @@ export function MessageList({
   }), [
     activeSessionId,
     bottomInsetPx,
+    goalEvents,
     hasOlderHistory,
     isLoadingOlderHistory,
     olderHistoryCursor,
@@ -115,8 +141,38 @@ export function MessageList({
     sessionViewState,
     transcript,
   ]);
+  const deferredTranscriptViewState = useDeferredValue(transcriptViewState);
+  const typingActive = useTypingActivityStore((state) => state.typingActive);
+  const effectiveTranscriptViewState = typingActive
+    ? deferredTranscriptViewState
+    : transcriptViewState;
 
-  const handleTranscriptScroll = useCallback(() => {
+  // Transcript-wide ExitPlanMode suppression index (the plan-doubling fix):
+  // a proposed_plan item can land in a different turn than the ExitPlanMode
+  // tool call that opened it, so the suppression set MUST span the whole
+  // transcript — not a single turn's blocks. Derived once here and threaded
+  // to every turn row via context. Keyed off the effective (deferred while
+  // typing) transcript so it stays consistent with what the rows render.
+  const proposedPlanToolCallIds = useMemo(
+    () => collectToolCallIdsWithProposedPlan(effectiveTranscriptViewState.transcript),
+    [effectiveTranscriptViewState.transcript],
+  );
+
+  const handleTranscriptScroll = useCallback((sample?: { programmatic: boolean }) => {
+    // Tag the scroll source: a persistent stream of `source.programmatic`
+    // samples (with no user input) means a stick-to-bottom snap / virtualizer
+    // measurement feedback loop — the difference between "user scrolled" and
+    // "we are scrolling ourselves in circles".
+    recordMeasurementMetric({
+      type: "diagnostic",
+      category: "transcript_scroll",
+      label: sample === undefined
+        ? "source.unknown"
+        : sample.programmatic
+          ? "source.programmatic"
+          : "source.user",
+      count: 1,
+    });
     const operationId = startMeasurementOperation({
       kind: "transcript_scroll",
       sampleKey: "transcript",
@@ -186,6 +242,29 @@ export function MessageList({
     openFile,
     openGitReviewPane,
   ]);
+  const renderGoalEventRow = useCallback((input: ChatTranscriptGoalEventRenderInput) => (
+    <GoalTranscriptEventRow event={input.event} />
+  ), []);
+  // Stable renderer identities — required for DeferredChatTranscriptView's
+  // memo to bail out on urgent (typing) passes.
+  const renderPendingPromptTrailingStatusRow = useCallback(
+    (input: ChatTranscriptPendingStatusInput) =>
+      resolvePendingPromptTrailingStatus(
+        input.queuedAt,
+        input.sessionViewState,
+        input.forceWorking,
+      ),
+    [],
+  );
+  const renderTurnTrailingStatusRow = useCallback(
+    (input: ChatTranscriptTurnStatusInput) =>
+      resolveTurnTrailingStatus(
+        input.startedAt,
+        input.sessionViewState,
+        input.transientStatusText,
+      ),
+    [],
+  );
 
   return (
     <DebugProfiler id="transcript-list">
@@ -195,27 +274,20 @@ export function MessageList({
           onOpenSession={onOpenSession}
           canOpenSession={canOpenSession}
         >
-          <DebugProfiler id="transcript-row-list-router">
-            <ChatTranscriptView
-              state={transcriptViewState}
-              outboxActions={outboxActions}
-              onScrollSample={handleTranscriptScroll}
-              renderPendingPromptRow={renderPendingPromptRow}
-              renderTurnRow={renderTurnRow}
-              renderPendingPromptTrailingStatus={(input) =>
-                resolvePendingPromptTrailingStatus(
-                  input.queuedAt,
-                  input.sessionViewState,
-                  input.forceWorking,
-                )}
-              renderTurnTrailingStatus={(input) =>
-                resolveTurnTrailingStatus(
-                  input.startedAt,
-                  input.sessionViewState,
-                  input.transientStatusText,
-                )}
-            />
-          </DebugProfiler>
+          <ProposedPlanToolCallIdsProvider value={proposedPlanToolCallIds}>
+            <DebugProfiler id="transcript-row-list-router">
+              <DeferredChatTranscriptView
+                state={effectiveTranscriptViewState}
+                outboxActions={outboxActions}
+                onScrollSample={handleTranscriptScroll}
+                renderPendingPromptRow={renderPendingPromptRow}
+                renderTurnRow={renderTurnRow}
+                renderGoalEventRow={renderGoalEventRow}
+                renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
+                renderTurnTrailingStatus={renderTurnTrailingStatusRow}
+              />
+            </DebugProfiler>
+          </ProposedPlanToolCallIdsProvider>
         </TranscriptContextProviders>
       </DebugProfiler>
     </DebugProfiler>

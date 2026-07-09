@@ -23,6 +23,7 @@ describe("planBatchedStreamSideEffects", () => {
 
     expect(plan.invalidateWorkspaceCollections).toBe(true);
     expect(plan.invalidateGitStatus).toBe(true);
+    expect(plan.invalidatePrStatus).toBe(true);
     expect(plan.lastActivityTimestamp).toBe("2026-04-04T00:00:03Z");
     expect(plan.orderedEffects).toEqual([
       { kind: "clear_active_summary_refresh" },
@@ -30,6 +31,30 @@ describe("planBatchedStreamSideEffects", () => {
       { kind: "clear_pending_config_rollback" },
       { kind: "schedule_active_summary_refresh" },
     ]);
+  });
+
+  it("plans invalidatePrStatus exactly when invalidateGitStatus is planned", () => {
+    const turnEndPlan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [turnEnded(2)],
+    });
+    expect(turnEndPlan.invalidatePrStatus).toBe(turnEndPlan.invalidateGitStatus);
+    expect(turnEndPlan.invalidatePrStatus).toBe(true);
+
+    const noTurnEndPlan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [turnStarted(2)],
+    });
+    expect(noTurnEndPlan.invalidatePrStatus).toBe(noTurnEndPlan.invalidateGitStatus);
+    expect(noTurnEndPlan.invalidatePrStatus).toBe(false);
+
+    const noWorkspacePlan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      workspaceId: null,
+      envelopes: [turnEnded(2)],
+    });
+    expect(noWorkspacePlan.invalidatePrStatus).toBe(noWorkspacePlan.invalidateGitStatus);
+    expect(noWorkspacePlan.invalidatePrStatus).toBe(false);
   });
 
   it("plans final rollback clearing when no queued config changes remain", () => {
@@ -127,7 +152,8 @@ describe("planBatchedStreamSideEffects", () => {
     });
 
     expect(plan.reviewParentSessionIds).toEqual(["parent-1", "parent-2"]);
-    expect(plan.lastActivityTimestamp).toBe("2026-04-04T00:00:04Z");
+    // review_run_updated is a mid-turn tick and does not bump activity
+    expect(plan.lastActivityTimestamp).toBe(null);
   });
 
   it("plans subagent effects from completed MCP tool calls", () => {
@@ -220,6 +246,56 @@ describe("planBatchedStreamSideEffects", () => {
     expect(plan.invalidateWorkspaceCollections).toBe(true);
   });
 
+  it("bumps activity on turn boundary events only", () => {
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [
+        turnStarted(2),
+        interactionRequested(3),
+        turnEnded(4),
+        errorEvent(5),
+        sessionEnded(6),
+      ],
+    });
+
+    expect(plan.lastActivityTimestamp).toBe("2026-04-04T00:00:06Z");
+  });
+
+  it("does not bump activity on mid-turn item ticks", () => {
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [
+        itemStarted(2),
+        itemCompleted(3, "tool-1"),
+      ],
+    });
+
+    expect(plan.lastActivityTimestamp).toBe(null);
+  });
+
+  it("does not bump activity on subagent or session_link mid-turn events", () => {
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [
+        subagentTurnCompleted(2),
+        sessionLinkTurnCompleted(3, "cowork_coding_session"),
+      ],
+    });
+
+    expect(plan.lastActivityTimestamp).toBe(null);
+  });
+
+  it("does not bump activity on interaction_resolved (subsequent turn events handle it)", () => {
+    const plan = planBatchedStreamSideEffects({
+      ...baseInput(),
+      envelopes: [
+        interactionResolved(2),
+      ],
+    });
+
+    expect(plan.lastActivityTimestamp).toBe(null);
+  });
+
   it("carries reconciled mode preference intents into the plan", () => {
     const liveConfig = liveConfigSnapshot();
     const reconciledChange = {
@@ -289,6 +365,49 @@ function turnEnded(seq: number): SessionEventEnvelope {
     type: "turn_ended",
     stopReason: "end_turn",
   });
+}
+
+function itemStarted(seq: number): SessionEventEnvelope {
+  return envelope(seq, {
+    type: "item_started",
+    item: {
+      kind: "tool_call",
+      status: "in_progress",
+      sourceAgentKind: "codex",
+      contentParts: [],
+    },
+  } as unknown as SessionEventEnvelope["event"]);
+}
+
+function interactionRequested(seq: number): SessionEventEnvelope {
+  return envelope(seq, {
+    type: "interaction_requested",
+    requestId: `interaction-${seq}`,
+    kind: "permission",
+    source: { tool_call_id: null },
+  } as unknown as SessionEventEnvelope["event"]);
+}
+
+function interactionResolved(seq: number): SessionEventEnvelope {
+  return envelope(seq, {
+    type: "interaction_resolved",
+    requestId: `interaction-${seq}`,
+    kind: "permission",
+    outcome: "allowed",
+  } as unknown as SessionEventEnvelope["event"]);
+}
+
+function errorEvent(seq: number): SessionEventEnvelope {
+  return envelope(seq, {
+    type: "error",
+    message: "test error",
+  } as unknown as SessionEventEnvelope["event"]);
+}
+
+function sessionEnded(seq: number): SessionEventEnvelope {
+  return envelope(seq, {
+    type: "session_ended",
+  } as unknown as SessionEventEnvelope["event"]);
 }
 
 function subagentTurnCompleted(seq: number): SessionEventEnvelope {

@@ -136,7 +136,12 @@ impl BackgroundWorkDurable for SessionStore {
         tool_call_id: &str,
         last_activity_at: &str,
     ) -> anyhow::Result<()> {
-        SessionStore::touch_background_work_activity(self, session_id, tool_call_id, last_activity_at)
+        SessionStore::touch_background_work_activity(
+            self,
+            session_id,
+            tool_call_id,
+            last_activity_at,
+        )
     }
 
     fn mark_background_work_terminal(
@@ -146,7 +151,13 @@ impl BackgroundWorkDurable for SessionStore {
         state: SessionBackgroundWorkState,
         completed_at: &str,
     ) -> anyhow::Result<bool> {
-        SessionStore::mark_background_work_terminal(self, session_id, tool_call_id, state, completed_at)
+        SessionStore::mark_background_work_terminal(
+            self,
+            session_id,
+            tool_call_id,
+            state,
+            completed_at,
+        )
     }
 }
 

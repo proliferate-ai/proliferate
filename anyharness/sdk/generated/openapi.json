@@ -30,6 +30,57 @@
         }
       }
     },
+    "/v1/agent-auth/state": {
+      "put": {
+        "tags": [
+          "agent-auth"
+        ],
+        "operationId": "put_agent_auth_state",
+        "requestBody": {
+          "description": "Agent-auth state document (the state.json contract)",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "State persisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplyAgentAuthStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Payload rejected; persisted state unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale revision; persisted state unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents": {
       "get": {
         "tags": [
@@ -46,56 +97,6 @@
                   "items": {
                     "$ref": "#/components/schemas/AgentSummary"
                   }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/agents/auth-config": {
-      "put": {
-        "tags": [
-          "agents"
-        ],
-        "operationId": "apply_agent_auth_config",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplyAgentAuthConfigRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Agent auth config applied",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplyAgentAuthConfigResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/agents/auth-config/status": {
-      "get": {
-        "tags": [
-          "agents"
-        ],
-        "operationId": "get_agent_auth_config_status",
-        "responses": {
-          "200": {
-            "description": "Redacted agent auth config status",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AgentAuthConfigStatusResponse"
                 }
               }
             }
@@ -285,6 +286,88 @@
           },
           "404": {
             "description": "Agent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/catalog/gateway-models": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "get_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved gateway model plan (probe or seed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/catalog/refresh-gateway": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "refresh_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gateway re-probed and recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshGatewayResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No gateway selection for this harness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Gateway probe failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -1160,6 +1243,66 @@
         }
       }
     },
+    "/v1/repo-roots/{repo_root_id}/hosting/pull-requests": {
+      "get": {
+        "tags": [
+          "hosting"
+        ],
+        "operationId": "get_repo_pull_request_statuses",
+        "parameters": [
+          {
+            "name": "repo_root_id",
+            "in": "path",
+            "description": "Repo root ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "description": "Set to 1 to request a refresh (10s floor); default 0 serves the 60s throttle window",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Branch-scoped pull request statuses for the repo root's active workspace branches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoPullRequestStatusesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Hosting error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Repo root not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/repo-roots/{repo_root_id}/mobility/prepare-destination": {
       "post": {
         "tags": [
@@ -1473,64 +1616,6 @@
           },
           "404": {
             "description": "Review run not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/runtime-config": {
-      "get": {
-        "tags": [
-          "runtime-config"
-        ],
-        "operationId": "get_runtime_config",
-        "responses": {
-          "200": {
-            "description": "Current runtime config",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RuntimeConfigStatusResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "runtime-config"
-        ],
-        "operationId": "apply_runtime_config",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApplyRuntimeConfigRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Applied runtime config",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplyRuntimeConfigResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid runtime config",
             "content": {
               "application/json": {
                 "schema": {
@@ -2029,6 +2114,116 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/goal": {
+      "put": {
+        "tags": [
+          "goals"
+        ],
+        "operationId": "set_session_goal",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionGoalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Goal set through the native mechanism and confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionGoalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take goal mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "goals"
+        ],
+        "operationId": "clear_session_goal",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goal cleared through the native mechanism",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionGoalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take goal mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/interactions/{request_id}/mcp-url/reveal": {
       "post": {
         "tags": [
@@ -2182,6 +2377,273 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/loops": {
+      "get": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "list_session_loops",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session's active loops",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "set_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Loop armed (native cron set, or emulated loop scheduled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "clear_session_loops",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All loops cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionLoopsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/loops/{loop_id}": {
+      "put": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "edit_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loop_id",
+            "in": "path",
+            "description": "Loop ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Loop edited (emulated loops only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or loop not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "clear_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loop_id",
+            "in": "path",
+            "description": "Loop ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The loop was cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionLoopsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
             "content": {
               "application/json": {
                 "schema": {
@@ -4255,6 +4717,60 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "stage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch staged"
+          },
+          "400": {
+            "description": "Patch could not be applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/git/status": {
       "get": {
         "tags": [
@@ -4326,6 +4842,60 @@
         "responses": {
           "200": {
             "description": "Files unstaged"
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "unstage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch unstaged"
+          },
+          "400": {
+            "description": "Patch could not be removed from index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "404": {
             "description": "Workspace not found",
@@ -5790,6 +6360,168 @@
   },
   "components": {
     "schemas": {
+      "ActivityProcess": {
+        "type": "object",
+        "description": "A harness-owned or client-executed process the agent is running in the\nbackground (Claude background bash, Cursor detached terminals, …).\nRead-only roster element — never externally settable.",
+        "required": [
+          "id",
+          "command",
+          "status",
+          "startedAt"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeedRef"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "pid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Cursor provides a real pid; Claude does not.",
+            "minimum": 0
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProcessStatus"
+          }
+        }
+      },
+      "ActivityProcessUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "process"
+        ],
+        "properties": {
+          "process": {
+            "$ref": "#/components/schemas/ActivityProcess"
+          }
+        }
+      },
+      "ActivitySubagent": {
+        "type": "object",
+        "description": "A harness-native subagent (Claude Task agent, Codex collab child thread,\nCursor `cursor/task`). Read-only roster element; the ⑂ chip routes to the\nexisting delegated-work surfaces.",
+        "required": [
+          "id",
+          "background",
+          "status"
+        ],
+        "properties": {
+          "agentType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "background": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeedRef"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "Claude `task_id` / Codex child `threadId` / Cursor `agentId`."
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubagentStatus"
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityUsage"
+              }
+            ]
+          }
+        }
+      },
+      "ActivitySubagentUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "agent"
+        ],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/ActivitySubagent"
+          }
+        }
+      },
+      "ActivityUsage": {
+        "type": "object",
+        "properties": {
+          "durationSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokensUsed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "toolCalls": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "AdvanceReplaySessionResponse": {
         "type": "object",
         "required": [
@@ -5801,224 +6533,14 @@
           }
         }
       },
-      "AgentAuthConfigStatusResponse": {
-        "type": "object",
-        "required": [
-          "status"
-        ],
-        "properties": {
-          "externalAuthScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
-          "revision": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          },
-          "selections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentAuthSelectionStatus"
-            }
-          },
-          "status": {
-            "type": "string"
-          }
-        }
-      },
-      "AgentAuthExternalScope": {
-        "type": "object",
-        "required": [
-          "provider",
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "targetId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "AgentAuthSelectionConfig": {
-        "type": "object",
-        "required": [
-          "agentKind",
-          "materializationMode",
-          "credentialId",
-          "credentialRevision"
-        ],
-        "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "authSlotId": {
-            "type": "string"
-          },
-          "credentialId": {
-            "type": "string"
-          },
-          "credentialRevision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "credentialShareId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "expiresAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "materializationMode": {
-            "type": "string"
-          },
-          "protectedConfig": {
-            "type": "object",
-            "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "protectedEnv": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "supportConfig": {
-            "type": "object",
-            "additionalProperties": {},
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "supportEnv": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
-          "syncedFilePaths": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "AgentAuthSelectionStatus": {
-        "type": "object",
-        "required": [
-          "agentKind",
-          "authSlotId",
-          "materializationMode",
-          "credentialId",
-          "credentialRevision",
-          "protectedEnvKeys",
-          "supportEnvKeys",
-          "protectedConfigKeys",
-          "supportConfigKeys",
-          "syncedFilePaths"
-        ],
-        "properties": {
-          "agentKind": {
-            "type": "string"
-          },
-          "authSlotId": {
-            "type": "string"
-          },
-          "credentialId": {
-            "type": "string"
-          },
-          "credentialRevision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "credentialShareId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "expiresAt": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "materializationMode": {
-            "type": "string"
-          },
-          "protectedConfigKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "protectedEnvKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "status": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "supportConfigKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "supportEnvKeys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "syncedFilePaths": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        }
+      "AgentCliAuthState": {
+        "type": "string",
+        "enum": [
+          "authenticated",
+          "expired",
+          "absent",
+          "unsupported"
+        ]
       },
       "AgentCredentialState": {
         "type": "string",
@@ -6058,14 +6580,62 @@
               "null"
             ]
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "displayName": {
             "type": "string"
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort"
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "id": {
             "type": "string"
           },
           "isDefault": {
             "type": "boolean"
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (joined from the bundled\ncatalog's `controls.mode.values`); absent when the model has no mode\ncontrol (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus"
+              }
+            ]
           }
         }
       },
@@ -6360,6 +6930,16 @@
           "agentProcess": {
             "$ref": "#/components/schemas/ArtifactStatus"
           },
+          "cliAuthState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentCliAuthState"
+              }
+            ]
+          },
           "credentialState": {
             "$ref": "#/components/schemas/AgentCredentialState"
           },
@@ -6411,62 +6991,22 @@
           }
         }
       },
-      "ApplyAgentAuthConfigRequest": {
+      "ApplyAgentAuthStateResponse": {
         "type": "object",
+        "description": "Outcome of pushing an agent-auth state document into the runtime.",
         "required": [
+          "applied",
           "revision"
         ],
         "properties": {
-          "externalAuthScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
-          "revision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "selections": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AgentAuthSelectionConfig"
-            }
-          }
-        }
-      },
-      "ApplyAgentAuthConfigResponse": {
-        "type": "object",
-        "required": [
-          "applied",
-          "revision",
-          "selectionCount",
-          "status"
-        ],
-        "properties": {
           "applied": {
-            "type": "boolean"
-          },
-          "noSelectionKinds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "type": "boolean",
+            "description": "True when the document was persisted to the runtime's state file."
           },
           "revision": {
             "type": "integer",
-            "format": "int64"
-          },
-          "selectionCount": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "status": {
-            "type": "string"
+            "format": "int64",
+            "description": "The persisted document's revision."
           }
         }
       },
@@ -6492,56 +7032,6 @@
               "string",
               "null"
             ]
-          }
-        }
-      },
-      "ApplyRuntimeConfigRequest": {
-        "type": "object",
-        "required": [
-          "revision",
-          "manifest",
-          "source"
-        ],
-        "properties": {
-          "artifactPayloads": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactPayload"
-            }
-          },
-          "credentialValues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeCredentialValue"
-            }
-          },
-          "manifest": {
-            "$ref": "#/components/schemas/RuntimeConfigManifest"
-          },
-          "revision": {
-            "$ref": "#/components/schemas/RuntimeConfigRevision"
-          },
-          "source": {
-            "$ref": "#/components/schemas/RuntimeConfigSource"
-          }
-        }
-      },
-      "ApplyRuntimeConfigResponse": {
-        "type": "object",
-        "required": [
-          "applied",
-          "revision",
-          "status"
-        ],
-        "properties": {
-          "applied": {
-            "type": "boolean"
-          },
-          "revision": {
-            "$ref": "#/components/schemas/RuntimeConfigRevision"
-          },
-          "status": {
-            "type": "string"
           }
         }
       },
@@ -6593,6 +7083,86 @@
           "availableCommands": {
             "type": "array",
             "items": {}
+          }
+        }
+      },
+      "BranchPullRequestStatus": {
+        "type": "object",
+        "description": "One queried head branch. `pullRequest` null/absent means the branch WAS\nqueried and has no PR (authoritative none). Branches missing from\n[`RepoPullRequestStatusesResponse::entries`] were not queried (unknown).",
+        "required": [
+          "headBranch"
+        ],
+        "properties": {
+          "headBranch": {
+            "type": "string"
+          },
+          "pullRequest": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BranchPullRequestSummary"
+              }
+            ]
+          }
+        }
+      },
+      "BranchPullRequestSummary": {
+        "type": "object",
+        "description": "[`PullRequestSummary`] plus reduced check-rollup and review-decision\nfields. Both are optional so new clients deserialize old daemons (and\nvice versa); absent maps to \"none\" at the domain layer.",
+        "required": [
+          "number",
+          "title",
+          "url",
+          "state",
+          "draft",
+          "headBranch",
+          "baseBranch"
+        ],
+        "properties": {
+          "baseBranch": {
+            "type": "string"
+          },
+          "checks": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PullRequestChecksState"
+              }
+            ]
+          },
+          "draft": {
+            "type": "boolean"
+          },
+          "headBranch": {
+            "type": "string"
+          },
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "reviewDecision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PullRequestReviewDecision"
+              }
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/PullRequestState"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
           }
         }
       },
@@ -6674,6 +7244,31 @@
           },
           "wakeScheduled": {
             "type": "boolean"
+          }
+        }
+      },
+      "ClearSessionGoalResponse": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClearSessionLoopsResponse": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many loops were cleared (0 when the target was already gone).",
+            "minimum": 0
           }
         }
       },
@@ -8006,28 +8601,8 @@
           "agentKind"
         ],
         "properties": {
-          "agentAuthScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
           "agentKind": {
             "type": "string"
-          },
-          "expectedRuntimeConfigRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
-              }
-            ]
           },
           "modeId": {
             "type": [
@@ -8050,13 +8625,6 @@
                 "$ref": "#/components/schemas/OriginContext"
               }
             ]
-          },
-          "requiredAgentAuthRevision": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
           },
           "subagentsEnabled": {
             "type": [
@@ -8493,6 +9061,26 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "network_connection"
+                ]
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
           }
         ]
       },
@@ -8553,6 +9141,29 @@
           },
           "requireCleanGitState": {
             "type": "boolean"
+          }
+        }
+      },
+      "FeedKind": {
+        "type": "string",
+        "enum": [
+          "terminal_bytes",
+          "transcript"
+        ]
+      },
+      "FeedRef": {
+        "type": "object",
+        "description": "An opaque handle to a roster element's live content stream. The UI never\nlearns the transport (`tail_file` / `acp_child_demux` / `http_sse`) — that\ndetail stays inside the runtime's `FeedBinding` table and is resolved\nlazily by the `FeedService` only while a panel watches it.",
+        "required": [
+          "feedId",
+          "kind"
+        ],
+        "properties": {
+          "feedId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FeedKind"
           }
         }
       },
@@ -8677,6 +9288,107 @@
         "enum": [
           "before_user_message"
         ]
+      },
+      "GatewayModelEntry": {
+        "type": "object",
+        "description": "One enriched gateway model row (spec §1). Catalog-known ids carry the joined\ndisplay metadata; probe-only ids (the proxy serves it but the bundled\ncatalog doesn't know it) emit just `{ id, provider? }`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog description; absent when the catalog omits one or for probe-only ids."
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog display name; absent for probe-only ids."
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort",
+                "description": "The thinking/effort control (`values` + observed `default`); absent when\nthe model has no effort control or is probe-only."
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the model carries a `fast_mode` control; absent for probe-only ids."
+          },
+          "id": {
+            "type": "string",
+            "description": "The gateway model id (always present — the render plane keys on this)."
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (`controls.mode.values`);\nabsent when the model has no mode control or is probe-only (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent\nwhen no family matches."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus",
+                "description": "Catalog lifecycle status; absent for probe-only ids."
+              }
+            ]
+          }
+        }
+      },
+      "GatewayModelsResponse": {
+        "type": "object",
+        "description": "Resolved gateway model plan for the local surface.",
+        "required": [
+          "models",
+          "source"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GatewayModelEntry"
+            },
+            "description": "The resolved, provider-filtered models — each id enriched with the\nbundled catalog row (or bare `{ id, provider? }` for probe-only ids)."
+          },
+          "probedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When a probe supplied the list (RFC3339); absent for seed."
+          },
+          "source": {
+            "type": "string",
+            "description": "`\"seed\"` (no probe yet) or `\"probe\"` (a live probe supplied the list)."
+          }
+        }
       },
       "GetSessionLiveConfigResponse": {
         "type": "object",
@@ -9219,6 +9931,136 @@
             "type": "integer",
             "format": "int32",
             "minimum": 0
+          }
+        }
+      },
+      "Goal": {
+        "type": "object",
+        "description": "A session goal: a strict mirror of the native harness goal (Codex\n`ThreadGoal`, Claude `/goal`). Mutations flow only through native\nmechanisms; this record transitions only after the native notification\nround-trips.",
+        "required": [
+          "objective",
+          "status",
+          "native",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string"
+          },
+          "iterations": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Claude only."
+          },
+          "metReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Claude evaluator reason; always absent for codex (terminal detail is\nin `native_status`)."
+          },
+          "native": {
+            "type": "boolean"
+          },
+          "nativeStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Raw harness status string, verbatim (e.g. codex `budgetLimited`)."
+          },
+          "objective": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Bumped on every mirrored edit."
+          },
+          "status": {
+            "$ref": "#/components/schemas/GoalStatus"
+          },
+          "timeUsedSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokenBudget": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokensUsed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        }
+      },
+      "GoalArmState": {
+        "type": "string",
+        "description": "The externally settable arm states (`_anyharness/goal/set` accepts only\nthese; the remaining statuses are native-origin transitions).",
+        "enum": [
+          "active",
+          "paused"
+        ]
+      },
+      "GoalClearedPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          }
+        }
+      },
+      "GoalMetPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          }
+        }
+      },
+      "GoalStatus": {
+        "type": "string",
+        "description": "Normalized goal status across harnesses (GoalPort wire contract v1).\nNon-terminal: `active | paused | blocked`; terminal: `met | failed |\ncleared`. Raw harness detail rides `native_status` verbatim.",
+        "enum": [
+          "active",
+          "paused",
+          "blocked",
+          "met",
+          "failed",
+          "cleared"
+        ]
+      },
+      "GoalUpdatedPayload": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
           }
         }
       },
@@ -9807,6 +10649,130 @@
           },
           "program": {
             "type": "string"
+          }
+        }
+      },
+      "Loop": {
+        "type": "object",
+        "description": "A recurring in-session prompt on a schedule: a strict mirror of native\nharness state where it exists (Claude session crons) and a\nruntime-emulated equivalent where it doesn't (Codex — `native: false`).\nUnlike [`super::Goal`], **multiple loops per session are allowed**, keyed\nby `loop_id` (LoopPort wire contract v1).",
+        "required": [
+          "loopId",
+          "prompt",
+          "schedule",
+          "recurring",
+          "status",
+          "native",
+          "fireCount",
+          "updatedAtMs"
+        ],
+        "properties": {
+          "fireCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastFiredAtMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "loopId": {
+            "type": "string"
+          },
+          "native": {
+            "type": "boolean"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "recurring": {
+            "type": "boolean"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/LoopSchedule"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LoopStatus"
+          },
+          "updatedAtMs": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "LoopFiredPayload": {
+        "type": "object",
+        "required": [
+          "loop",
+          "firedAtMs"
+        ],
+        "properties": {
+          "firedAtMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LoopRemovedPayload": {
+        "type": "object",
+        "required": [
+          "loopId"
+        ],
+        "properties": {
+          "loopId": {
+            "type": "string"
+          }
+        }
+      },
+      "LoopSchedule": {
+        "type": "object",
+        "required": [
+          "kind",
+          "expr"
+        ],
+        "properties": {
+          "expr": {
+            "type": "string",
+            "description": "`\"5m\"` sugar or a raw cron expression, per `kind`."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LoopScheduleKind"
+          }
+        }
+      },
+      "LoopScheduleKind": {
+        "type": "string",
+        "enum": [
+          "interval",
+          "cron"
+        ]
+      },
+      "LoopStatus": {
+        "type": "string",
+        "description": "Normalized loop status across harnesses (LoopPort wire contract v1).",
+        "enum": [
+          "active",
+          "cleared"
+        ]
+      },
+      "LoopUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "loop"
+        ],
+        "properties": {
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
           }
         }
       },
@@ -10828,6 +11794,27 @@
           "hidden"
         ]
       },
+      "ModelEffort": {
+        "type": "object",
+        "description": "The thinking/effort control surfaced per model: the values the model\nsupports and the observed default (the runtime joins these from the\nbundled catalog's `controls.effort.{values, observedValue}`).",
+        "required": [
+          "values"
+        ],
+        "properties": {
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "NormalizedSessionControl": {
         "type": "object",
         "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
@@ -11529,12 +12516,6 @@
           "status"
         ],
         "properties": {
-          "agentKind": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "code": {
             "type": [
               "string",
@@ -11553,21 +12534,15 @@
               "null"
             ]
           },
-          "resolutionScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/AgentAuthExternalScope"
-              }
-            ]
-          },
-          "selectionStatus": {
+          "requiredContexts": {
             "type": [
-              "string",
+              "array",
               "null"
-            ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "RFC 7807 extension member: the auth-context ids that would unlock a\ngated selection (the model's `availability.anyOf`). Only set on\n`SESSION_MODEL_GATED` (decisions ledger 16); absent on every other\nerror, so unrelated responses stay byte-identical."
           },
           "status": {
             "type": "integer",
@@ -11581,6 +12556,45 @@
             "type": "string"
           }
         }
+      },
+      "ProcessStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "exitCode": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "exited"
+                ]
+              }
+            }
+          }
+        ]
       },
       "PromptAttachmentSource": {
         "type": "string",
@@ -11965,16 +12979,6 @@
               "$ref": "#/components/schemas/PromptInputBlock"
             }
           },
-          "expectedRuntimeConfigRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
-              }
-            ]
-          },
           "promptId": {
             "type": [
               "string",
@@ -12168,6 +13172,25 @@
             "type": "string"
           }
         }
+      },
+      "PullRequestChecksState": {
+        "type": "string",
+        "description": "Reduced CI-check rollup state for a pull request's head commit.",
+        "enum": [
+          "none",
+          "pending",
+          "passing",
+          "failing"
+        ]
+      },
+      "PullRequestReviewDecision": {
+        "type": "string",
+        "description": "Reduced review decision for a pull request.",
+        "enum": [
+          "none",
+          "approved",
+          "changes_requested"
+        ]
       },
       "PullRequestState": {
         "type": "string",
@@ -12513,6 +13536,27 @@
           "failed"
         ]
       },
+      "RefreshGatewayResponse": {
+        "type": "object",
+        "description": "Result of a manual gateway refresh.",
+        "required": [
+          "models",
+          "probedAt"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The freshly probed model ids (unfiltered — exactly what the gateway\nreturned; the resolver applies provider filtering when building plans)."
+          },
+          "probedAt": {
+            "type": "string",
+            "description": "The probe timestamp (RFC3339)."
+          }
+        }
+      },
       "RenameWorkspaceFileEntryRequest": {
         "type": "object",
         "required": [
@@ -12567,6 +13611,24 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "RepoPullRequestStatusesResponse": {
+        "type": "object",
+        "required": [
+          "entries",
+          "fetchedAt"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BranchPullRequestStatus"
+            }
+          },
+          "fetchedAt": {
+            "type": "string"
           }
         }
       },
@@ -12842,18 +13904,6 @@
       },
       "ResumeSessionRequest": {
         "type": "object",
-        "properties": {
-          "expectedRuntimeConfigRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevisionExpectation"
-              }
-            ]
-          }
-        },
         "additionalProperties": false
       },
       "RetryReviewAssignmentRequest": {
@@ -13533,128 +14583,6 @@
           }
         }
       },
-      "RuntimeArtifactPayload": {
-        "type": "object",
-        "required": [
-          "hash",
-          "contentType",
-          "byteSize",
-          "content"
-        ],
-        "properties": {
-          "byteSize": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "content": {
-            "type": "string"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hash": {
-            "type": "string"
-          },
-          "resourceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sourceRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "RuntimeArtifactRef": {
-        "type": "object",
-        "required": [
-          "hash",
-          "contentType",
-          "byteSize"
-        ],
-        "properties": {
-          "byteSize": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hash": {
-            "type": "string"
-          },
-          "resourceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sourceRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "RuntimeArtifactStatus": {
-        "type": "object",
-        "required": [
-          "hash",
-          "contentType",
-          "byteSize",
-          "cached"
-        ],
-        "properties": {
-          "byteSize": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "cached": {
-            "type": "boolean"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "hash": {
-            "type": "string"
-          },
-          "resourceId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "sourceRef": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "RuntimeCapabilities": {
         "type": "object",
         "required": [
@@ -13663,171 +14591,6 @@
         "properties": {
           "replay": {
             "type": "boolean"
-          }
-        }
-      },
-      "RuntimeConfigExternalScope": {
-        "type": "object",
-        "required": [
-          "provider",
-          "id"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "targetId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
-      "RuntimeConfigManifest": {
-        "type": "object",
-        "properties": {
-          "artifacts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactRef"
-            }
-          },
-          "directAttachAuth": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeDirectAttachAuthConfig"
-              }
-            ]
-          },
-          "mcpBindingSummaries": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionMcpBindingSummary"
-            }
-          },
-          "mcpServers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeMcpServer"
-            }
-          },
-          "skills": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeSkill"
-            }
-          },
-          "warnings": {
-            "type": "array",
-            "items": {}
-          }
-        }
-      },
-      "RuntimeConfigRevision": {
-        "type": "object",
-        "required": [
-          "id",
-          "sequence",
-          "contentHash"
-        ],
-        "properties": {
-          "contentHash": {
-            "type": "string"
-          },
-          "externalScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigExternalScope"
-              }
-            ]
-          },
-          "id": {
-            "type": "string"
-          },
-          "sequence": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "RuntimeConfigRevisionExpectation": {
-        "type": "object",
-        "required": [
-          "revisionId",
-          "contentHash"
-        ],
-        "properties": {
-          "contentHash": {
-            "type": "string"
-          },
-          "externalScope": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigExternalScope"
-              }
-            ]
-          },
-          "revisionId": {
-            "type": "string"
-          },
-          "sequence": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          }
-        }
-      },
-      "RuntimeConfigSource": {
-        "type": "string",
-        "enum": [
-          "desktop",
-          "worker",
-          "test"
-        ]
-      },
-      "RuntimeConfigStatusResponse": {
-        "type": "object",
-        "properties": {
-          "artifacts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactStatus"
-            }
-          },
-          "currentRevision": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigRevision"
-              }
-            ]
-          },
-          "manifest": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RuntimeConfigManifest"
-              }
-            ]
           }
         }
       },
@@ -13858,329 +14621,6 @@
             "format": "double"
           }
         }
-      },
-      "RuntimeCredentialRef": {
-        "type": "object",
-        "required": [
-          "credentialRef",
-          "usedIn",
-          "fieldName"
-        ],
-        "properties": {
-          "credentialRef": {
-            "type": "string"
-          },
-          "fieldName": {
-            "type": "string"
-          },
-          "mcpServerId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "usedIn": {
-            "$ref": "#/components/schemas/RuntimeCredentialUse"
-          }
-        }
-      },
-      "RuntimeCredentialUse": {
-        "type": "string",
-        "enum": [
-          "mcp_launch",
-          "mcp_launch_header",
-          "mcp_launch_query",
-          "mcp_launch_arg",
-          "mcp_launch_env",
-          "skill_binding"
-        ]
-      },
-      "RuntimeCredentialValue": {
-        "type": "object",
-        "required": [
-          "credentialRef",
-          "value"
-        ],
-        "properties": {
-          "credentialRef": {
-            "type": "string"
-          },
-          "value": {
-            "type": "string"
-          }
-        }
-      },
-      "RuntimeDirectAttachAuthConfig": {
-        "type": "object",
-        "required": [
-          "issuer",
-          "audience"
-        ],
-        "properties": {
-          "audience": {
-            "type": "string"
-          },
-          "issuer": {
-            "type": "string"
-          },
-          "targetId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "verificationKeys": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeJwtVerificationKey"
-            }
-          }
-        }
-      },
-      "RuntimeJwtVerificationKey": {
-        "type": "object",
-        "required": [
-          "kid",
-          "algorithm",
-          "publicKeyPem"
-        ],
-        "properties": {
-          "algorithm": {
-            "type": "string"
-          },
-          "kid": {
-            "type": "string"
-          },
-          "publicKeyPem": {
-            "type": "string"
-          }
-        }
-      },
-      "RuntimeMcpLaunch": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "url",
-              "kind"
-            ],
-            "properties": {
-              "headers": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpNamedValue"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "http"
-                ]
-              },
-              "query": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpNamedValue"
-                }
-              },
-              "url": {
-                "$ref": "#/components/schemas/RuntimeMcpValue"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "command",
-              "kind"
-            ],
-            "properties": {
-              "args": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpValue"
-                }
-              },
-              "command": {
-                "$ref": "#/components/schemas/RuntimeMcpValue"
-              },
-              "env": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpNamedValue"
-                }
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "stdio"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "RuntimeMcpNamedValue": {
-        "type": "object",
-        "required": [
-          "name",
-          "value"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "value": {
-            "$ref": "#/components/schemas/RuntimeMcpValue"
-          }
-        }
-      },
-      "RuntimeMcpServer": {
-        "type": "object",
-        "required": [
-          "id",
-          "connectionId",
-          "serverName",
-          "transport",
-          "launch"
-        ],
-        "properties": {
-          "catalogEntryId": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "connectionId": {
-            "type": "string"
-          },
-          "credentialRefs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeCredentialRef"
-            }
-          },
-          "id": {
-            "type": "string"
-          },
-          "launch": {
-            "$ref": "#/components/schemas/RuntimeMcpLaunch"
-          },
-          "serverName": {
-            "type": "string"
-          },
-          "transport": {
-            "$ref": "#/components/schemas/RuntimeMcpTransport"
-          }
-        }
-      },
-      "RuntimeMcpTemplatePart": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "value",
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "literal"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "credentialRef",
-              "kind"
-            ],
-            "properties": {
-              "credentialRef": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "credential"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "RuntimeMcpTransport": {
-        "type": "string",
-        "enum": [
-          "http",
-          "stdio"
-        ]
-      },
-      "RuntimeMcpValue": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "value",
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "literal"
-                ]
-              },
-              "value": {
-                "type": "string"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "credentialRef",
-              "kind"
-            ],
-            "properties": {
-              "credentialRef": {
-                "type": "string"
-              },
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "credential"
-                ]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "parts",
-              "kind"
-            ],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": [
-                  "template"
-                ]
-              },
-              "parts": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/RuntimeMcpTemplatePart"
-                }
-              }
-            }
-          }
-        ]
       },
       "RuntimeMemoryPressure": {
         "type": "object",
@@ -14268,59 +14708,6 @@
           }
         }
       },
-      "RuntimeSkill": {
-        "type": "object",
-        "required": [
-          "id",
-          "sourceKind",
-          "displayName",
-          "description",
-          "instructionArtifact"
-        ],
-        "properties": {
-          "credentialRefs": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "description": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "instructionArtifact": {
-            "$ref": "#/components/schemas/RuntimeArtifactRef"
-          },
-          "requiredMcpServerIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "resources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RuntimeArtifactRef"
-            }
-          },
-          "sourceKind": {
-            "$ref": "#/components/schemas/RuntimeSkillSourceKind"
-          }
-        }
-      },
-      "RuntimeSkillSourceKind": {
-        "type": "string",
-        "enum": [
-          "catalog",
-          "plugin",
-          "user"
-        ]
-      },
       "ScheduleSubagentWakeRequest": {
         "type": "object"
       },
@@ -14384,6 +14771,28 @@
         "properties": {
           "actionCapabilities": {
             "$ref": "#/components/schemas/SessionActionCapabilities"
+          },
+          "activeGoal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Goal",
+                "description": "Deprecated in favor of `activity.goal` — kept for existing SDK\nconsumers; every write still moves this field too."
+              }
+            ]
+          },
+          "activity": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActivity",
+                "description": "`SessionActivity` (turn/goal/loops/processes/agents) — the\nsession-activity-architecture aggregate. `None` when the runtime has\nnot yet assembled it for this read path."
+              }
+            ]
           },
           "agentKind": {
             "type": "string"
@@ -14510,8 +14919,58 @@
           "fork": {
             "type": "boolean"
           },
+          "loopsNative": {
+            "type": "boolean",
+            "description": "Whether loops ride native harness state (Claude session crons) or are\nruntime-emulated (Codex `LoopSchedulerExtension`). Meaningless when\n`supports_loops` is `false`."
+          },
+          "supportsGoals": {
+            "type": "boolean"
+          },
+          "supportsLoops": {
+            "type": "boolean"
+          },
           "targetedFork": {
             "type": "boolean"
+          }
+        }
+      },
+      "SessionActivity": {
+        "type": "object",
+        "description": "One normalized, strictly-typed, per-session aggregate: the single answer\nto \"what is this agent doing right now\" (session-activity-architecture,\nlocked 2026-07-02). Two element classes: mirrors with write paths\n(`goal`, `loops`) and read-only rosters (`processes`, `agents`), each\nroster element carrying an opaque [`FeedRef`] for its live content\nstream — the UI never learns the transport.",
+        "required": [
+          "turn"
+        ],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivitySubagent"
+            }
+          },
+          "goal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Goal"
+              }
+            ]
+          },
+          "loops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Loop"
+            }
+          },
+          "processes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityProcess"
+            }
+          },
+          "turn": {
+            "$ref": "#/components/schemas/TurnState"
           }
         }
       },
@@ -14881,6 +15340,174 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/GoalUpdatedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_updated"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GoalMetPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_met"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GoalClearedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "goal_cleared"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopRemovedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_removed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopFiredPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_fired"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivityProcessUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "process_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivitySubagentUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "subagent_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/PendingPromptAddedPayload"
               },
               {
@@ -15078,6 +15705,17 @@
           }
         }
       },
+      "SessionGoalResponse": {
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/Goal"
+          }
+        }
+      },
       "SessionInfoUpdatePayload": {
         "type": "object",
         "properties": {
@@ -15223,6 +15861,31 @@
           "updatedAt": {
             "type": "string",
             "description": "Timestamp when this snapshot was last updated."
+          }
+        }
+      },
+      "SessionLoopResponse": {
+        "type": "object",
+        "required": [
+          "loop"
+        ],
+        "properties": {
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          }
+        }
+      },
+      "SessionLoopsResponse": {
+        "type": "object",
+        "required": [
+          "loops"
+        ],
+        "properties": {
+          "loops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Loop"
+            }
           }
         }
       },
@@ -15600,6 +16263,63 @@
           }
         }
       },
+      "SetSessionGoalRequest": {
+        "type": "object",
+        "properties": {
+          "objective": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Omitted = status/budget-only patch (codex semantics)."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GoalArmState"
+              }
+            ]
+          },
+          "tokenBudget": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "SetSessionLoopRequest": {
+        "type": "object",
+        "description": "Arm-or-edit a loop through `PUT /v1/sessions/{id}/loops` (create) or\n`PUT /v1/sessions/{id}/loops/{loop_id}` (edit). On native harnesses (Claude\nsession crons) this drives `_anyharness/loop/set`; on emulation-eligible\nharnesses (Codex) it arms a runtime-owned loop (`native: false`) in the\n[`crate::v1`] loop scheduler.",
+        "required": [
+          "prompt",
+          "schedule"
+        ],
+        "properties": {
+          "maxFires": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Optional cap on total fires (emulated loops only). `None` = uncapped."
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "recurring": {
+            "type": "boolean",
+            "description": "Fire indefinitely (default) or once. Native crons are recurring."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/LoopSchedule"
+          }
+        }
+      },
       "SetupHint": {
         "type": "object",
         "required": [
@@ -15676,6 +16396,18 @@
           "succeeded",
           "failed"
         ]
+      },
+      "StagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to apply to the index."
+          }
+        }
       },
       "StagePathsRequest": {
         "type": "object",
@@ -15959,6 +16691,58 @@
             "format": "int64"
           }
         }
+      },
+      "SubagentStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed"
+                ]
+              },
+              "summary": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "failed"
+                ]
+              }
+            }
+          }
+        ]
       },
       "SubagentTurnCompletedPayload": {
         "type": "object",
@@ -16389,6 +17173,58 @@
       },
       "TurnStartedEvent": {
         "type": "object"
+      },
+      "TurnState": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "turnId",
+              "startedAt",
+              "status"
+            ],
+            "properties": {
+              "startedAt": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              },
+              "turnId": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "UnstagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to reverse-apply from the index."
+          }
+        }
       },
       "UnstagePathsRequest": {
         "type": "object",

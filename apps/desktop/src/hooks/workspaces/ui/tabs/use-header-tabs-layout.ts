@@ -9,14 +9,16 @@ import type { WorkspaceShellTabKey } from "@/lib/domain/workspaces/tabs/shell-ta
 export function useHeaderTabsLayout({
   width,
   shellRows,
+  reservedWidth = 0,
 }: {
   width: number;
   shellRows: HeaderWorkspaceShellStripRow[];
+  reservedWidth?: number;
 }) {
   const layout = useMemo(() => {
     return computeHeaderStripLayout({
       containerWidth: width,
-      reservedWidth: 0,
+      reservedWidth,
       rows: shellRows.map((row) => ({
         kind: row.kind === "chat" && row.row.kind === "pill" ? "pill" : "tab",
         maxWidth: row.kind === "chat"
@@ -26,7 +28,7 @@ export function useHeaderTabsLayout({
           : undefined,
       })),
     });
-  }, [shellRows, width]);
+  }, [shellRows, width, reservedWidth]);
 
   const chatGroupUnderlines = useMemo(() => {
     const ranges = new Map<string, {

@@ -1,14 +1,15 @@
 import { useCallback, useMemo } from "react";
 import { useAddRepo } from "@/hooks/workspaces/workflows/use-add-repo";
+import { useAddRepoFlowStore } from "@/stores/ui/add-repo-flow-store";
 import type { AppCommandAction } from "./app-command-action-types";
 
 export function useAppAddRepositoryCommandAction(): AppCommandAction {
   const {
-    addRepoFromPicker,
     canAddRepo,
     addRepoDisabledReason,
     isAddingRepo,
   } = useAddRepo();
+  const openAddRepoFlow = useAddRepoFlowStore((state) => state.openFlow);
 
   const disabledReason = isAddingRepo
     ? "Action already in progress."
@@ -19,8 +20,8 @@ export function useAppAddRepositoryCommandAction(): AppCommandAction {
     if (disabledReason) {
       return;
     }
-    void addRepoFromPicker();
-  }, [addRepoFromPicker, disabledReason]);
+    openAddRepoFlow();
+  }, [disabledReason, openAddRepoFlow]);
 
   return useMemo<AppCommandAction>(() => ({
     execute,

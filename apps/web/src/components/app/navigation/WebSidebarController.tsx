@@ -151,9 +151,6 @@ export function WebSidebarController({
       case "home":
         navigate(routes.home);
         return;
-      case "integrations":
-        navigate(routes.integrations);
-        return;
       case "workflows":
         navigate(routes.workflows);
         return;

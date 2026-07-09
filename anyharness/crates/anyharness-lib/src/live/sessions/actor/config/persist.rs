@@ -90,9 +90,8 @@ pub(in crate::live::sessions::actor) async fn persist_current_config_state_from_
 ) -> anyhow::Result<bool> {
     let mut next = state.clone();
     // Only an OBSERVED value overwrites: a harness that exposes no model or
-    // mode (gemini reports neither) must not null out the selection the
-    // session was created or switched with — that selection is what the
-    // launch env applied.
+    // mode must not null out the selection the session was created or
+    // switched with — that selection is what the launch env applied.
     if startup_state.current_model_id.is_some() {
         next.current_model_id = startup_state.current_model_id.clone();
     }

@@ -75,6 +75,7 @@ export interface BatchedStreamSideEffectPlan {
   persistReconciledModePreferences: ReconciledStreamConfigIntent[];
   invalidateWorkspaceCollections: boolean;
   invalidateGitStatus: boolean;
+  invalidatePrStatus: boolean;
   lastActivityTimestamp: string | null;
   invalidateSessionSubagents: boolean;
   invalidateCowork: boolean;
@@ -92,6 +93,7 @@ export function planBatchedStreamSideEffects(input: {
 }): BatchedStreamSideEffectPlan {
   let invalidateWorkspaceCollections = false;
   let invalidateGitStatus = false;
+  let invalidatePrStatus = false;
   let lastActivityTimestamp: string | null = null;
   let invalidateSessionSubagents = false;
   let invalidateCowork = false;
@@ -136,6 +138,7 @@ export function planBatchedStreamSideEffects(input: {
     }
     if (event.type === "turn_ended" || event.type === "error") {
       invalidateGitStatus = !!input.workspaceId;
+      invalidatePrStatus = invalidateGitStatus;
       orderedEffects.push({
         kind: "notify_turn_end",
         eventType: event.type,
@@ -243,6 +246,7 @@ export function planBatchedStreamSideEffects(input: {
     persistReconciledModePreferences: input.reconciledIntents,
     invalidateWorkspaceCollections,
     invalidateGitStatus,
+    invalidatePrStatus,
     lastActivityTimestamp,
     invalidateSessionSubagents,
     invalidateCowork,
@@ -310,19 +314,18 @@ function shouldScheduleActiveSummaryRefresh(eventType: string): boolean {
   }
 }
 
+/**
+ * Gates the sidebar recency sort and displayed relative date. Only turn
+ * boundaries count — never mid-turn item ticks — so concurrent runs don't
+ * leapfrog each other in the sidebar while agents are working.
+ */
 function shouldTrackWorkspaceWorkActivity(eventType: string): boolean {
   switch (eventType) {
     case "turn_started":
-    case "item_started":
-    case "item_completed":
-    case "interaction_requested":
-    case "interaction_resolved":
     case "turn_ended":
     case "error":
     case "session_ended":
-    case "subagent_turn_completed":
-    case "session_link_turn_completed":
-    case "review_run_updated":
+    case "interaction_requested":
       return true;
     default:
       return false;

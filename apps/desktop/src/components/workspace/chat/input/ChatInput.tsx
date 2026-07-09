@@ -21,7 +21,7 @@ import {
 } from "@/hooks/chat/derived/use-active-session-identity";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useChatComposerKeyboard } from "@/hooks/chat/ui/use-chat-composer-keyboard";
-import { useChatDraftState } from "@/hooks/chat/ui/use-chat-draft-state";
+import { useChatDraftControls } from "@/hooks/chat/ui/use-chat-draft-state";
 import { useChatModelSelectorState } from "@/hooks/chat/facade/use-chat-model-selector-state";
 import { useChatPromptActions } from "@/hooks/chat/workflows/use-chat-prompt-actions";
 import type { PromptAttachmentController } from "@/hooks/chat/ui/use-chat-prompt-attachments";
@@ -40,6 +40,7 @@ import {
   recordMeasurementWorkflowStep,
   startMeasurementOperation,
 } from "@/lib/infra/measurement/debug-measurement";
+import { clearTypingActivity } from "@/lib/infra/interaction/typing-activity-store";
 import {
   PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
   PROMPT_SUBMIT_MEASUREMENT_SURFACES,
@@ -63,9 +64,12 @@ const CHAT_INPUT_ATTACHMENT_ACCEPT =
 export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
+  hasSessionTurns = false,
 }: {
   attachments: PromptAttachmentController;
   suppressActiveSessionState?: boolean;
+  /** Flips the placeholder to the follow-up variant once the transcript has turns. */
+  hasSessionTurns?: boolean;
 }) {
   useDebugRenderCount("chat-composer");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -78,8 +82,11 @@ export function ChatInput({
   const canCancelActiveSession = useActiveSessionCanCancelState();
   const activeSessionIdForUi = suppressActiveSessionState ? null : activeSessionId;
   const isRunningForUi = suppressActiveSessionState ? false : isRunning && canCancelActiveSession;
-  const { workspaceUiKey, materializedWorkspaceId, draft, setDraft, isEmpty } =
-    useChatDraftState();
+  // PERF: no draft-content subscription here — a keystroke must not re-render
+  // the whole composer dock. The draft area subscribes to the live draft
+  // itself; this component only needs the isEmpty gate + a submit-time reader.
+  const { workspaceUiKey, materializedWorkspaceId, getDraft, setDraft, isEmpty } =
+    useChatDraftControls();
   const { isDisabled, areRuntimeControlsDisabled } = useChatAvailabilityState({
     activeSessionId: activeSessionIdForUi,
   });
@@ -116,13 +123,12 @@ export function ChatInput({
     workspaceUiKey,
     sdkWorkspaceId: materializedWorkspaceId,
   });
-  const promptText = serializeChatDraftToPrompt(draft);
   const hasDraftAttachments = attachments.hasAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
     ? editDraft.trim().length === 0
     : isEmpty && !hasDraftAttachments;
   const canSubmit =
-    !effectiveIsEmpty && !isDisabled && !planAttachments.hasUnresolvedPlans && !isSubmitting;
+    !effectiveIsEmpty && !isDisabled && !isSubmitting;
   const canAcceptPastedAttachments =
     !effectiveIsEditingQueuedPrompt
     && !isDisabled
@@ -139,12 +145,12 @@ export function ChatInput({
   });
 
   const onSubmit = useCallback(async () => {
+    // End the typing burst NOW so the transcript renders urgently: the
+    // composer clearing and the sent message appearing must be one frame.
+    clearTypingActivity();
     await runSubmit(async () => {
       if (effectiveIsEditingQueuedPrompt) {
         await commitEdit();
-        return;
-      }
-      if (planAttachments.hasUnresolvedPlans) {
         return;
       }
       const measurementOperationId = startMeasurementOperation({
@@ -152,6 +158,9 @@ export function ChatInput({
         surfaces: PROMPT_SUBMIT_MEASUREMENT_SURFACES,
         maxDurationMs: PROMPT_SUBMIT_MEASUREMENT_MAX_DURATION_MS,
       });
+      // Serialized at submit time (imperative read) so typing keystrokes never
+      // re-render this component just to keep promptText fresh.
+      const promptText = serializeChatDraftToPrompt(getDraft());
       const trimmedPromptText = promptText.trim();
       const blockPrepareStartedAt = performance.now();
       const attachmentSnapshots = attachments.snapshotForSubmit();
@@ -189,9 +198,9 @@ export function ChatInput({
     attachments,
     commitEdit,
     effectiveIsEditingQueuedPrompt,
+    getDraft,
     handleSubmit,
     planAttachments,
-    promptText,
     runSubmit,
   ]);
 
@@ -312,7 +321,7 @@ export function ChatInput({
   return (
     <DebugProfiler id="chat-composer">
       <div className="relative">
-        <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col px-5" />
+        <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col" />
         <ChatComposerSurface
           overflowMode="clip"
           onClick={handleComposerSurfaceClick}
@@ -329,11 +338,12 @@ export function ChatInput({
               accept={CHAT_INPUT_ATTACHMENT_ACCEPT}
             />
             <ChatInputDraftArea
+              hasSessionTurns={hasSessionTurns}
               isEditingQueuedPrompt={effectiveIsEditingQueuedPrompt}
               editDraft={editDraft}
               onEditDraftChange={setEditDraftText}
               textareaRef={textareaRef}
-              draft={draft}
+              workspaceUiKey={workspaceUiKey}
               onDraftChange={setDraft}
               canSubmit={canSubmit}
               isDisabled={isDisabled}
@@ -356,9 +366,6 @@ export function ChatInput({
               supportsAttachments={attachments.supportsAttachments}
               canAttachFiles={attachments.canAttachFiles}
               activeSessionId={activeSessionIdForUi}
-              workspaceUiKey={workspaceUiKey}
-              sdkWorkspaceId={materializedWorkspaceId}
-              hasUnresolvedPlans={planAttachments.hasUnresolvedPlans}
               onAttachFile={() => fileInputRef.current?.click()}
               isRunning={isRunningForUi}
               isEmpty={effectiveIsEmpty}

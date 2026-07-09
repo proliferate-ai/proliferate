@@ -25,6 +25,20 @@ export function ChevronUpDown({ className, ...props }: IconProps) {
   );
 }
 
+/**
+ * Converging double chevron (top points down, bottom points up) — the
+ * "collapse all" affordance. Inverse of {@link ChevronUpDown}, which diverges
+ * for "expand all".
+ */
+export function ChevronDownUp({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="m7 20 5-5 5 5" />
+      <path d="m7 4 5 5 5-5" />
+    </svg>
+  );
+}
+
 export function Minus({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -201,6 +215,16 @@ export function CircleQuestion({ className, ...props }: IconProps) {
   );
 }
 
+export function MessageCircleQuestion({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
 export function LifeBuoy({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -247,6 +271,15 @@ export function ArrowUp({ className, ...props }: IconProps) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="m5 12 7-7 7 7" />
       <path d="M12 19V5" />
+    </svg>
+  );
+}
+
+export function ArrowDown({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M12 5v14" />
+      <path d="m19 12-7 7-7-7" />
     </svg>
   );
 }
@@ -375,6 +408,25 @@ export function SendIcon({ className, ...props }: IconProps) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
       <path d="M5 12h13" />
       <path d="m12 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+export function History({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </svg>
+  );
+}
+
+export function RotateCcw({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
     </svg>
   );
 }

@@ -4,16 +4,40 @@ CREATE TABLE _migrations (
             applied_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
--- table: agent_auth_config
-CREATE TABLE agent_auth_config (
-    scope_key TEXT PRIMARY KEY NOT NULL,
-    scope_provider TEXT NOT NULL,
-    scope_id TEXT NOT NULL,
-    target_id TEXT,
-    revision INTEGER NOT NULL,
-    config_ciphertext TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+-- table: activity_processes
+CREATE TABLE activity_processes (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    process_id TEXT NOT NULL,
+    command TEXT NOT NULL,
+    cwd TEXT,
+    status TEXT NOT NULL,
+    exit_code INTEGER,
+    pid INTEGER,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    feed_id TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, process_id)
+);
+
+-- table: activity_subagents
+CREATE TABLE activity_subagents (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    subagent_id TEXT NOT NULL,
+    agent_type TEXT,
+    description TEXT,
+    model TEXT,
+    background INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    summary TEXT,
+    tokens_used INTEGER,
+    tool_calls INTEGER,
+    duration_seconds INTEGER,
+    feed_id TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, subagent_id)
 );
 
 -- table: agent_model_registry_snapshots
@@ -65,6 +89,70 @@ CREATE TABLE cowork_threads (
     branch_name TEXT NOT NULL,
     created_at TEXT NOT NULL
 , workspace_delegation_enabled INTEGER NOT NULL DEFAULT 1);
+
+-- table: feed_bindings
+CREATE TABLE feed_bindings (
+    feed_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    owner_kind TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    transport_kind TEXT NOT NULL,
+    transport_path TEXT,
+    transport_thread_id TEXT,
+    transport_url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- table: gateway_model_probe
+CREATE TABLE gateway_model_probe (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness_kind TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    models_json TEXT NOT NULL,
+    probed_at TEXT NOT NULL
+);
+
+-- table: goals
+CREATE TABLE goals (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    objective TEXT NOT NULL,
+    status TEXT NOT NULL,
+    native_status TEXT,
+    token_budget INTEGER,
+    tokens_used INTEGER,
+    time_used_seconds INTEGER,
+    met_reason TEXT,
+    iterations INTEGER,
+    native INTEGER NOT NULL DEFAULT 1,
+    pending_op TEXT,
+    revision INTEGER NOT NULL,
+    native_state_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- table: loops
+CREATE TABLE loops (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    loop_id TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    schedule_kind TEXT NOT NULL,
+    schedule_expr TEXT NOT NULL,
+    recurring INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL,
+    native INTEGER NOT NULL DEFAULT 1,
+    last_fired_at_ms INTEGER,
+    fire_count INTEGER NOT NULL DEFAULT 0,
+    native_state_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at_ms INTEGER NOT NULL, max_fires INTEGER, next_fire_at_ms INTEGER,
+    PRIMARY KEY (session_id, loop_id)
+);
 
 -- table: mobility_archive_installs
 CREATE TABLE mobility_archive_installs (
@@ -455,7 +543,7 @@ CREATE TABLE sessions (
     updated_at TEXT NOT NULL,
     last_prompt_at TEXT,
     closed_at TEXT
-, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_scope_provider TEXT, agent_auth_scope_id TEXT, agent_auth_scope_target_id TEXT, required_agent_auth_revision INTEGER, agent_auth_contexts TEXT);
+, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT);
 
 -- table: terminal_command_runs
 CREATE TABLE terminal_command_runs (
@@ -556,6 +644,27 @@ CREATE INDEX idx_cowork_threads_session_id ON cowork_threads(session_id);
 
 -- index: idx_cowork_threads_workspace_id
 CREATE INDEX idx_cowork_threads_workspace_id ON cowork_threads(workspace_id);
+
+-- index: idx_feed_bindings_owner
+CREATE UNIQUE INDEX idx_feed_bindings_owner
+    ON feed_bindings(session_id, owner_kind, owner_id);
+
+-- index: idx_gateway_model_probe_lookup
+CREATE INDEX idx_gateway_model_probe_lookup
+    ON gateway_model_probe(harness_kind, revision, probed_at);
+
+-- index: idx_goals_session_created
+CREATE INDEX idx_goals_session_created
+    ON goals(session_id, created_at DESC);
+
+-- index: idx_goals_single_open_per_session
+CREATE UNIQUE INDEX idx_goals_single_open_per_session
+    ON goals(session_id)
+    WHERE status IN ('active', 'paused', 'blocked');
+
+-- index: idx_loops_session_status
+CREATE INDEX idx_loops_session_status
+    ON loops(session_id, status);
 
 -- index: idx_plan_handoffs_plan
 CREATE INDEX idx_plan_handoffs_plan

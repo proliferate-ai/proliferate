@@ -40,6 +40,51 @@ services:
       timeout: 3s
       retries: 10
 
+  litellm-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: litellm
+    volumes:
+      - litellmpgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    ports:
+      - "14000:4000"
+    environment:
+      DATABASE_URL: postgresql://litellm:localdev@litellm-db:5432/litellm
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-proliferate-local-dev}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      AWS_BEDROCK_REGION: ${AWS_BEDROCK_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${GATEWAY_AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${GATEWAY_AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   migrate:
     build:
       context: ..
@@ -69,5 +114,6 @@ services:
 
 volumes:
   pgdata:
+  litellmpgdata:
   rabbitmqdata:
   redisdata:

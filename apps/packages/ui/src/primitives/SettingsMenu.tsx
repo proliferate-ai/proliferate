@@ -44,7 +44,7 @@ export function SettingsMenu({
           type="button"
           variant="outline"
           size="sm"
-          className={`h-8 justify-between rounded-lg border-transparent bg-foreground/5 px-2.5 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-foreground/10 data-[state=open]:bg-foreground/10 ${className}`}
+          className={`h-8 justify-between rounded-lg border border-input bg-transparent px-2.5 text-sm font-[430] leading-4 text-foreground shadow-none hover:bg-foreground/5 data-[state=open]:bg-foreground/5 ${className}`}
         >
           {leading}
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
@@ -59,7 +59,7 @@ export function SettingsMenu({
             <div key={group.id}>
               {groupIndex > 0 && <div className="my-1 border-t border-border-light" />}
               {group.label && (
-                <div className="min-h-6 truncate px-2 py-1 text-sm leading-4 text-foreground-tertiary">
+                <div className="min-h-6 truncate px-2 py-1 text-ui-sm text-foreground-tertiary">
                   {group.label}
                 </div>
               )}
@@ -76,7 +76,7 @@ export function SettingsMenu({
                   }}
                 >
                   {option.detail && (
-                    <span className="block truncate text-sm leading-4 text-foreground-tertiary">
+                    <span className="block truncate text-ui-sm text-foreground-tertiary">
                       {option.detail}
                     </span>
                   )}

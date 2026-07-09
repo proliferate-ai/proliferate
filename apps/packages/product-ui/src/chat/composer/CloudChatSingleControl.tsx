@@ -48,7 +48,6 @@ export function CloudChatSingleControl({
     return (
       <ComposerControlButton
         disabled
-        tone={control.active ? "accent" : "quiet"}
         active={control.active}
         icon={icon}
         label={displayLabel}
@@ -62,7 +61,7 @@ export function CloudChatSingleControl({
   return (
     <div ref={rootRef} className="relative min-w-0">
       <ComposerControlButton
-        tone={control.active ? "accent" : "neutral"}
+        active={control.active}
         icon={icon}
         label={displayLabel}
         detail={displayDetail}

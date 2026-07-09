@@ -85,14 +85,25 @@ impl SessionStartupStrategy {
 }
 
 /// The named environment layers a session launch carries. Keeping the layers
-/// named (rather than four adjacent maps) removes the positional swap hazard.
+/// named (rather than adjacent maps) removes the positional swap hazard.
+///
+/// Layering at spawn: `workspace` → `session` → `route_auth` (later layers
+/// win), then `route_auth_remove` strips keys from BOTH the merged layers and
+/// the inherited ambient process env — removal always wins (the agent-auth
+/// sanitization contract; see `domains::agents::route_auth::render`).
 #[derive(Debug, Clone, Default)]
 pub struct LaunchEnv {
     pub workspace: BTreeMap<String, String>,
     pub session: BTreeMap<String, String>,
-    pub auth_support: BTreeMap<String, String>,
-    /// Secrets — never logged.
-    pub auth_protected: BTreeMap<String, String>,
+    /// Rendered agent-auth route layer (gateway/api_key credentials, isolated
+    /// homes). Empty for native/legacy launches.
+    pub route_auth: BTreeMap<String, String>,
+    /// Env keys the route-auth render plane requires ABSENT in the spawned
+    /// process (ambient Bedrock/Vertex reroutes, stale provider keys).
+    pub route_auth_remove: Vec<String>,
+    /// Extra CLI args appended to the harness command line, derived from
+    /// catalog settings (e.g. `--chrome` when the chrome setting is true).
+    pub settings_extra_args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -389,11 +400,8 @@ pub trait SessionEventObserver: Send + Sync {
         false
     }
 
-    fn observe(
-        &self,
-        ctx: &SessionObserverContext,
-        obs: SessionObservation<'_>,
-    ) -> ObserverEffects;
+    fn observe(&self, ctx: &SessionObserverContext, obs: SessionObservation<'_>)
+        -> ObserverEffects;
 }
 
 /// A permission request as seen by a [`PermissionAdvisor`], before it is

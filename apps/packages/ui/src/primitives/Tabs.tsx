@@ -1,5 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 export interface TabItem {
   id: string;

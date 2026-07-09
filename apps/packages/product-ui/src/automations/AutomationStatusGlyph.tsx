@@ -1,5 +1,5 @@
 import { type CSSProperties } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import type { AutomationInventoryStatusKind } from "@proliferate/product-domain/automations/inventory";
 
 const STATUS_GLYPH_CLASSES: Record<AutomationInventoryStatusKind, string> = {

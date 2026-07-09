@@ -3,12 +3,10 @@ import { useAgentLaunchOptionsQuery } from "@anyharness/sdk-react";
 import { useShallow } from "zustand/react/shallow";
 import { useAgentCatalog } from "@/hooks/agents/derived/use-agent-catalog";
 import { useCloudLaunchModelRegistries } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useSandboxAgentAuthSelections } from "@proliferate/cloud-sdk-react/hooks/agent-auth";
 import {
   mergeRuntimeLaunchOptionsIntoDesktopLaunchModelRegistries,
   type DesktopLaunchModelRegistry as ModelRegistry,
 } from "@/lib/domain/agents/cloud-launch-catalog";
-import type { SandboxAgentAuthSelection } from "@proliferate/cloud-sdk";
 import type { AgentCatalogSummary } from "@/lib/domain/agents/model-options";
 import { filterVisibleModelRegistries } from "@/lib/domain/chat/models/model-visibility";
 import {
@@ -54,10 +52,6 @@ export function useHomeNextModelSelection({
     chatModelVisibilityOverridesByAgentKind:
       state.chatModelVisibilityOverridesByAgentKind,
   })));
-  const cloudAgentSelectionsQuery = useSandboxAgentAuthSelections(
-    null,
-    false,
-  );
   const visibleModelRegistries = useMemo(
     () => filterVisibleModelRegistries({
       modelRegistries,
@@ -70,12 +64,8 @@ export function useHomeNextModelSelection({
     if (!isCloudLaunchTarget) {
       return readyAgents;
     }
-    return buildCloudReadyAgentSummaries({
-      selections: cloudAgentSelectionsQuery.data ?? [],
-      modelRegistries,
-    });
+    return buildCloudReadyAgentSummaries({ modelRegistries });
   }, [
-    cloudAgentSelectionsQuery.data,
     isCloudLaunchTarget,
     modelRegistries,
     readyAgents,
@@ -113,13 +103,11 @@ export function useHomeNextModelSelection({
   const isLoading =
     agentsLoading
     || modelRegistriesQuery.isLoading
-    || (!isCloudLaunchTarget && runtimeLaunchOptions.isLoading)
-    || (isCloudLaunchTarget && cloudAgentSelectionsQuery.isLoading);
+    || (!isCloudLaunchTarget && runtimeLaunchOptions.isLoading);
   const hasLoadError =
     agentsError
     || modelRegistriesQuery.isError
-    || (!isCloudLaunchTarget && runtimeLaunchOptions.isError)
-    || (isCloudLaunchTarget && cloudAgentSelectionsQuery.isError);
+    || (!isCloudLaunchTarget && runtimeLaunchOptions.isError);
   const hasLaunchableModel =
     modelGroups.length > 0
     && effectiveModelSelection !== null
@@ -144,22 +132,13 @@ export function useHomeNextModelSelection({
 }
 
 function buildCloudReadyAgentSummaries({
-  selections,
   modelRegistries,
 }: {
-  selections: readonly SandboxAgentAuthSelection[];
   modelRegistries: readonly ModelRegistry[];
 }): AgentCatalogSummary[] {
-  const activeKinds = new Set(
-    selections
-      .filter((selection) => selection.status === "active")
-      .map((selection) => selection.agentKind),
-  );
-  return modelRegistries
-    .filter((registry) => activeKinds.has(registry.kind))
-    .map((registry) => ({
-      kind: registry.kind,
-      displayName: registry.displayName,
-      readiness: "ready",
-    }));
+  return modelRegistries.map((registry) => ({
+    kind: registry.kind,
+    displayName: registry.displayName,
+    readiness: "ready",
+  }));
 }

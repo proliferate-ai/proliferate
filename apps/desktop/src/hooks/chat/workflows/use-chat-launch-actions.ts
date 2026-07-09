@@ -31,13 +31,17 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const workspaceUiKey = resolveWorkspaceUiKey(selectedLogicalWorkspaceId, selectedWorkspaceId);
-  const currentDraft = useChatInputStore((state) =>
-    serializeChatDraftToPrompt(
+  // PERF: read the draft imperatively at launch time. A reactive subscription
+  // here re-rendered this hook's consumers (useChatModelSelectorState →
+  // ChatInput, ~20 hooks) on EVERY keystroke — the draft is only needed when
+  // the user actually picks a launch option.
+  const getCurrentDraftText = useCallback((): string => {
+    return serializeChatDraftToPrompt(
       workspaceUiKey
-        ? state.draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT
+        ? useChatInputStore.getState().draftByWorkspaceId[workspaceUiKey] ?? EMPTY_CHAT_DRAFT
         : EMPTY_CHAT_DRAFT,
-    ),
-  );
+    );
+  }, [workspaceUiKey]);
   const { data: workspaceCollections } = useWorkspaces();
   const workspaces = workspaceCollections?.workspaces ?? EMPTY_WORKSPACES;
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
@@ -71,8 +75,8 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       // Same-harness switch always keeps the session (decision 10). The
       // runtime accepts catalog-authorized values beyond the live option
       // list and falls back to relaunching the agent process under the same
-      // session when the harness has no live mechanism (gemini). "model" is
-      // the generic model config id when the session exposes no control.
+      // session when the harness has no live mechanism. "model" is the
+      // generic model config id when the session exposes no control.
       void setActiveSessionConfigOption(scopedCurrentModelConfigId ?? "model", selection.modelId)
         .then(() => {
           setWorkspaceArrivalEvent(null);
@@ -103,7 +107,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       void createThreadFromSelection({
         agentKind: launchSelection.kind,
         modelId: launchSelection.modelId,
-        draftText: currentDraft,
+        draftText: getCurrentDraftText(),
         sourceWorkspaceId: selectedWorkspaceId,
       })
         .then(() => {
@@ -121,10 +125,14 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       source: "model_selector",
       targetWorkspaceId: selectedWorkspaceId,
     });
+    // Pass the current session as replacesSessionId: the creation workflow
+    // cleans up the old empty session synchronously after activating the new
+    // optimistic record, so the tab swap is instant (no ghost tab).
     void createEmptySessionWithResolvedConfig({
       agentKind: launchSelection.kind,
       modelId: launchSelection.modelId,
       latencyFlowId,
+      replacesSessionId: scopedActiveSessionId ?? null,
     })
       .then(() => {
         setWorkspaceArrivalEvent(null);
@@ -137,7 +145,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     configuredLaunch.disabledReason,
     configuredLaunch.launchCatalog.launchAgents,
     createThreadFromSelection,
-    currentDraft,
+    getCurrentDraftText,
     createEmptySessionWithResolvedConfig,
     selectedWorkspace?.surface,
     selectedWorkspaceId,

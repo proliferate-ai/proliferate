@@ -2,9 +2,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
+use crate::domains::agents::catalog::settings::resolve_settings_deltas;
 use crate::domains::agents::readiness::service::resolve_agent_with_env;
 use crate::domains::agents::registry;
-use crate::domains::sessions::extensions::SessionTurnFinishedContext;
+use crate::domains::agents::route_auth::resolve_launch_route_auth;
+use crate::domains::agents::route_auth::state::load_state_file;
+use crate::domains::sessions::extensions::{SessionStartedContext, SessionTurnFinishedContext};
 use crate::domains::sessions::links::model::SessionLinkRelation;
 use crate::domains::sessions::mcp_bindings::assembly::{
     assemble_session_mcp_launch, SessionMcpLaunchAssemblyError,
@@ -157,9 +161,7 @@ impl SessionRuntime {
                 StartSessionError::RestartRequired(detail) => {
                     EnsureLiveSessionError::RestartRequired(detail)
                 }
-                StartSessionError::AgentAuthSelectionRequired(required) => {
-                    EnsureLiveSessionError::AgentAuthSelectionRequired(required)
-                }
+                StartSessionError::RouteAuth(error) => EnsureLiveSessionError::RouteAuth(error),
                 StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
                     EnsureLiveSessionError::Internal(error)
                 }
@@ -310,17 +312,7 @@ impl SessionRuntime {
             .workspace_runtime
             .workspace_env(&workspace)
             .map_err(StartSessionError::Internal)?;
-        let agent_auth_overlay = self
-            .agent_auth_service
-            .launch_overlay(
-                &record.agent_kind,
-                record.agent_auth_scope.as_ref(),
-                record.required_agent_auth_revision,
-            )
-            .map_err(map_agent_auth_launch_error_to_start)?;
-        let mut readiness_env = workspace_env.clone();
-        readiness_env.extend(agent_auth_overlay.support_env.clone());
-        readiness_env.extend(agent_auth_overlay.protected_env.clone());
+        let readiness_env = workspace_env.clone();
         let agent_resolution_started = Instant::now();
         let resolved_agent =
             resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
@@ -333,10 +325,56 @@ impl SessionRuntime {
         let session_launch_env = build_session_launch_env(
             &resolved_agent,
             &self.runtime_home,
-            &agent_auth_overlay.protected_env,
             record.requested_model_id.as_deref(),
         )
         .map_err(StartSessionError::Internal)?;
+        // Agent-auth render plane: read the declarative state file fresh and
+        // render the route layer for this harness. Absent file = empty layer
+        // (legacy/native); a scoped file with no selection fails the launch
+        // closed with a typed error (spec §3).
+        let route_auth = resolve_launch_route_auth(
+            &self.runtime_home,
+            &record.agent_kind,
+            self.gateway_model_resolver.as_ref(),
+        )
+        .map_err(|error| {
+            tracing::warn!(
+                session_id = %record.id,
+                workspace_id = %record.workspace_id,
+                agent_kind = %record.agent_kind,
+                code = error.code(),
+                error = %error,
+                "agent-auth route resolution failed; refusing launch"
+            );
+            StartSessionError::RouteAuth(error)
+        })?;
+        // Launch-time lazy trigger (spec §2c): if the current revision has no
+        // probe row, kick a background probe so the next launch has fresh data.
+        // Never blocks this launch — it already used seed data above.
+        self.gateway_model_resolver
+            .schedule_launch_probe_if_stale(&record.agent_kind, &self.runtime_home);
+        // Catalog settings: resolve persisted toggle values into launch-time
+        // deltas (extra CLI args, extra env vars). The surface is always "local"
+        // for local runtime launches (cloud sandboxes use their own surface).
+        let settings_deltas = {
+            let catalog = bundled_agent_catalog_document();
+            let catalog_settings = catalog
+                .agents
+                .iter()
+                .find(|a| a.kind == record.agent_kind)
+                .map(|a| a.settings.as_slice())
+                .unwrap_or(&[]);
+            let state = load_state_file(&self.runtime_home).ok().flatten();
+            let persisted_settings = state
+                .as_ref()
+                .and_then(|s| {
+                    s.harnesses
+                        .iter()
+                        .find(|h| h.harness_kind == record.agent_kind)
+                })
+                .and_then(|h| h.settings.as_ref());
+            resolve_settings_deltas(catalog_settings, persisted_settings, "local")
+        };
         let mcp_launch = assemble_session_mcp_launch(
             self.session_data_cipher.as_ref(),
             &self.session_extensions,
@@ -359,8 +397,8 @@ impl SessionRuntime {
             workspace_path,
             workspace_env,
             session_env: session_launch_env,
-            auth_support_env: agent_auth_overlay.support_env,
-            auth_protected_env: agent_auth_overlay.protected_env,
+            route_auth,
+            settings_deltas,
             mcp_servers: mcp_launch.mcp_servers,
             startup: startup_strategy,
             every_prompt_append: mcp_launch.system_prompt_append,
@@ -401,6 +439,13 @@ impl SessionRuntime {
             "[workspace-latency] session.runtime.start_live_session.acp_started"
         );
 
+        for extension in &self.session_extensions {
+            extension.on_session_started(SessionStartedContext {
+                session_id: record.id.clone(),
+                agent_kind: record.agent_kind.clone(),
+            });
+        }
+
         Ok((handle, ready.native_session_id))
     }
 }
@@ -416,9 +461,7 @@ pub(super) fn map_start_session_error_to_anyhow(error: StartSessionError) -> any
             anyhow::anyhow!("{}", SessionMcpBindingsError::missing_data_key_detail())
         }
         StartSessionError::RestartRequired(detail) => anyhow::anyhow!(detail),
-        StartSessionError::AgentAuthSelectionRequired(required) => {
-            anyhow::anyhow!(required.detail)
-        }
+        StartSessionError::RouteAuth(error) => anyhow::Error::new(error),
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => error,
     }
 }
@@ -468,23 +511,8 @@ fn map_start_session_error_to_create(error: StartSessionError) -> CreateAndStart
         StartSessionError::RestartRequired(detail) => {
             CreateAndStartSessionError::Internal(anyhow::anyhow!(detail))
         }
-        StartSessionError::AgentAuthSelectionRequired(required) => {
-            CreateAndStartSessionError::AgentAuthSelectionRequired(required)
-        }
+        StartSessionError::RouteAuth(error) => CreateAndStartSessionError::RouteAuth(error),
         StartSessionError::Internal(error) => CreateAndStartSessionError::Internal(error),
         StartSessionError::AcpStart(error) => CreateAndStartSessionError::StartFailed(error),
-    }
-}
-
-fn map_agent_auth_launch_error_to_start(
-    error: crate::domains::agents::auth::AgentAuthLaunchOverlayError,
-) -> StartSessionError {
-    match error {
-        crate::domains::agents::auth::AgentAuthLaunchOverlayError::SelectionRequired(required) => {
-            StartSessionError::AgentAuthSelectionRequired(required)
-        }
-        crate::domains::agents::auth::AgentAuthLaunchOverlayError::Internal(error) => {
-            StartSessionError::Internal(error)
-        }
     }
 }

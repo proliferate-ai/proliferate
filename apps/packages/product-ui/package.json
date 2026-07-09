@@ -7,6 +7,58 @@
     "dist"
   ],
   "exports": {
+    "./code/code-theme-tokens": {
+      "types": "./dist/code/code-theme-tokens.d.ts",
+      "import": "./dist/code/code-theme-tokens.js"
+    },
+    "./code/types": {
+      "types": "./dist/code/types.d.ts",
+      "import": "./dist/code/types.js"
+    },
+    "./code/CodeTokenLine": {
+      "types": "./dist/code/CodeTokenLine.d.ts",
+      "import": "./dist/code/CodeTokenLine.js"
+    },
+    "./code/CodeBlock": {
+      "types": "./dist/code/CodeBlock.d.ts",
+      "import": "./dist/code/CodeBlock.js"
+    },
+    "./code/CodeBlockTokenContent": {
+      "types": "./dist/code/CodeBlockTokenContent.d.ts",
+      "import": "./dist/code/CodeBlockTokenContent.js"
+    },
+    "./code/VirtualizedCodeContent": {
+      "types": "./dist/code/VirtualizedCodeContent.d.ts",
+      "import": "./dist/code/VirtualizedCodeContent.js"
+    },
+    "./activity/GoalBar": {
+      "types": "./dist/activity/GoalBar.d.ts",
+      "import": "./dist/activity/GoalBar.js"
+    },
+    "./activity/ActivityChips": {
+      "types": "./dist/activity/ActivityChips.d.ts",
+      "import": "./dist/activity/ActivityChips.js"
+    },
+    "./activity/LoopsPanel": {
+      "types": "./dist/activity/LoopsPanel.d.ts",
+      "import": "./dist/activity/LoopsPanel.js"
+    },
+    "./activity/TerminalRosterRow": {
+      "types": "./dist/activity/TerminalRosterRow.d.ts",
+      "import": "./dist/activity/TerminalRosterRow.js"
+    },
+    "./activity/TerminalsRosterPanel": {
+      "types": "./dist/activity/TerminalsRosterPanel.d.ts",
+      "import": "./dist/activity/TerminalsRosterPanel.js"
+    },
+    "./activity/SubagentRosterRow": {
+      "types": "./dist/activity/SubagentRosterRow.d.ts",
+      "import": "./dist/activity/SubagentRosterRow.js"
+    },
+    "./activity/AgentsRosterPanel": {
+      "types": "./dist/activity/AgentsRosterPanel.d.ts",
+      "import": "./dist/activity/AgentsRosterPanel.js"
+    },
     "./account/AccountIdentityCard": {
       "types": "./dist/account/AccountIdentityCard.d.ts",
       "import": "./dist/account/AccountIdentityCard.js"
@@ -143,6 +195,10 @@
       "types": "./dist/chat/transcript/AssistantMessage.d.ts",
       "import": "./dist/chat/transcript/AssistantMessage.js"
     },
+    "./chat/transcript/CloudChatTranscriptRowItems": {
+      "types": "./dist/chat/transcript/CloudChatTranscriptRowItems.d.ts",
+      "import": "./dist/chat/transcript/CloudChatTranscriptRowItems.js"
+    },
     "./chat/transcript/MarkdownBody": {
       "types": "./dist/chat/transcript/MarkdownBody.d.ts",
       "import": "./dist/chat/transcript/MarkdownBody.js"
@@ -158,6 +214,14 @@
     "./chat/transcript/ProposedPlanCard": {
       "types": "./dist/chat/transcript/ProposedPlanCard.d.ts",
       "import": "./dist/chat/transcript/ProposedPlanCard.js"
+    },
+    "./chat/transcript/CollapsiblePlanCard": {
+      "types": "./dist/chat/transcript/CollapsiblePlanCard.d.ts",
+      "import": "./dist/chat/transcript/CollapsiblePlanCard.js"
+    },
+    "./chat/transcript/PlanMarkdownBody": {
+      "types": "./dist/chat/transcript/PlanMarkdownBody.d.ts",
+      "import": "./dist/chat/transcript/PlanMarkdownBody.js"
     },
     "./chat/transcript/CopyMessageButton": {
       "types": "./dist/chat/transcript/CopyMessageButton.d.ts",
@@ -179,25 +243,49 @@
       "types": "./dist/layout/ProductPageShell.d.ts",
       "import": "./dist/layout/ProductPageShell.js"
     },
-    "./plugins/PluginsSurface": {
-      "types": "./dist/plugins/PluginsSurface.d.ts",
-      "import": "./dist/plugins/PluginsSurface.js"
+    "./settings/InstallGate": {
+      "types": "./dist/settings/InstallGate.d.ts",
+      "import": "./dist/settings/InstallGate.js"
     },
-    "./plugins/OrganizationIntegrationsPolicySurface": {
-      "types": "./dist/plugins/OrganizationIntegrationsPolicySurface.d.ts",
-      "import": "./dist/plugins/OrganizationIntegrationsPolicySurface.js"
+    "./settings/ModelConfigGrid": {
+      "types": "./dist/settings/ModelConfigGrid.d.ts",
+      "import": "./dist/settings/ModelConfigGrid.js"
     },
-    "./settings/SettingsCard": {
-      "types": "./dist/settings/SettingsCard.d.ts",
-      "import": "./dist/settings/SettingsCard.js"
-    },
-    "./settings/SettingsCardRow": {
-      "types": "./dist/settings/SettingsCardRow.d.ts",
-      "import": "./dist/settings/SettingsCardRow.js"
+    "./settings/ModelTable": {
+      "types": "./dist/settings/ModelTable.d.ts",
+      "import": "./dist/settings/ModelTable.js"
     },
     "./settings/SettingsPageHeader": {
       "types": "./dist/settings/SettingsPageHeader.d.ts",
       "import": "./dist/settings/SettingsPageHeader.js"
+    },
+    "./settings/SettingsRow": {
+      "types": "./dist/settings/SettingsRow.d.ts",
+      "import": "./dist/settings/SettingsRow.js"
+    },
+    "./settings/SettingsSection": {
+      "types": "./dist/settings/SettingsSection.d.ts",
+      "import": "./dist/settings/SettingsSection.js"
+    },
+    "./settings/SettingsEmptyState": {
+      "types": "./dist/settings/SettingsEmptyState.d.ts",
+      "import": "./dist/settings/SettingsEmptyState.js"
+    },
+    "./settings/SettingsEyebrow": {
+      "types": "./dist/settings/SettingsEyebrow.d.ts",
+      "import": "./dist/settings/SettingsEyebrow.js"
+    },
+    "./settings/SettingsScopeTabs": {
+      "types": "./dist/settings/SettingsScopeTabs.d.ts",
+      "import": "./dist/settings/SettingsScopeTabs.js"
+    },
+    "./settings/RepoPicker": {
+      "types": "./dist/settings/RepoPicker.d.ts",
+      "import": "./dist/settings/RepoPicker.js"
+    },
+    "./settings/SettingsSaveFooter": {
+      "types": "./dist/settings/SettingsSaveFooter.d.ts",
+      "import": "./dist/settings/SettingsSaveFooter.js"
     },
     "./settings/SettingsShell": {
       "types": "./dist/settings/SettingsShell.d.ts",
@@ -247,21 +335,25 @@
       "types": "./dist/new-chat/NewChatSurface.d.ts",
       "import": "./dist/new-chat/NewChatSurface.js"
     },
-    "./repos/AddCloudRepoDialog": {
-      "types": "./dist/repos/AddCloudRepoDialog.d.ts",
-      "import": "./dist/repos/AddCloudRepoDialog.js"
+    "./repos/AddRepoFlow": {
+      "types": "./dist/repos/AddRepoFlow.d.ts",
+      "import": "./dist/repos/AddRepoFlow.js"
     },
-    "./environments/AddCloudEnvironmentDialog": {
-      "types": "./dist/environments/AddCloudEnvironmentDialog.d.ts",
-      "import": "./dist/environments/AddCloudEnvironmentDialog.js"
+    "./repos/CloudRepoPicker": {
+      "types": "./dist/repos/CloudRepoPicker.d.ts",
+      "import": "./dist/repos/CloudRepoPicker.js"
     },
     "./environments/CloudEnvironmentList": {
       "types": "./dist/environments/CloudEnvironmentList.d.ts",
       "import": "./dist/environments/CloudEnvironmentList.js"
     },
-    "./environments/CloudEnvironmentEditor": {
-      "types": "./dist/environments/CloudEnvironmentEditor.d.ts",
-      "import": "./dist/environments/CloudEnvironmentEditor.js"
+    "./environments/CloudEnvironmentConfigSection": {
+      "types": "./dist/environments/CloudEnvironmentConfigSection.d.ts",
+      "import": "./dist/environments/CloudEnvironmentConfigSection.js"
+    },
+    "./environments/ScriptBlock": {
+      "types": "./dist/environments/ScriptBlock.d.ts",
+      "import": "./dist/environments/ScriptBlock.js"
     },
     "./workspaces/WorkspaceRow": {
       "types": "./dist/workspaces/WorkspaceRow.d.ts",
@@ -270,6 +362,10 @@
     "./workspaces/RecentWorkStatusDot": {
       "types": "./dist/workspaces/RecentWorkStatusDot.d.ts",
       "import": "./dist/workspaces/RecentWorkStatusDot.js"
+    },
+    "./workspaces/PrStatusBadge": {
+      "types": "./dist/workspaces/PrStatusBadge.d.ts",
+      "import": "./dist/workspaces/PrStatusBadge.js"
     },
     "./workspaces/CloudWorkspaceList": {
       "types": "./dist/workspaces/CloudWorkspaceList.d.ts",
@@ -282,6 +378,10 @@
     "./workspaces/WorkspacesSurface": {
       "types": "./dist/workspaces/WorkspacesSurface.d.ts",
       "import": "./dist/workspaces/WorkspacesSurface.js"
+    },
+    "./workspaces/WorkspacesCommandList": {
+      "types": "./dist/workspaces/WorkspacesCommandList.d.ts",
+      "import": "./dist/workspaces/WorkspacesCommandList.js"
     },
     "./support/SupportSurface": {
       "types": "./dist/support/SupportSurface.d.ts",

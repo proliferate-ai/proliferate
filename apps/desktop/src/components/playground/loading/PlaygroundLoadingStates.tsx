@@ -1,8 +1,13 @@
+import {
+  CloudChatAssistantLoadingRow,
+  CloudChatThoughtRow,
+} from "@proliferate/product-ui/chat/transcript/CloudChatTranscriptRowItems";
 import { SessionCheckScreen } from "@/components/auth/SessionCheckScreen";
-import { SkeletonBlock } from "@/components/feedback/Skeleton";
+import { SkeletonBlock, shimmerDelay } from "@/components/feedback/Skeleton";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { PlaygroundThinkingTimingControls } from "@/components/playground/loading/PlaygroundThinkingTimingControls";
+import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 import { renderChatTabIcon } from "@/components/workspace/shell/tabs/tab-rendering";
 
 export function PlaygroundLoadingStates() {
@@ -12,10 +17,55 @@ export function PlaygroundLoadingStates() {
         <SessionCheckScreen resolving className="min-h-[20rem] p-6" />
       </section>
 
+      {/* One motion family, side by side: the thinking-text band sweep and
+          the skeleton block sweep share direction, softness, and pacing. */}
       <section className="space-y-3">
-        <h2 className="text-sm font-medium text-foreground">Agent thinking</h2>
-        <div className="flex h-12 items-center rounded-md border border-border px-4">
-          <ThinkingText />
+        <h2 className="text-sm font-medium text-foreground">
+          Shimmer + staggered skeletons
+        </h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col justify-center gap-4 rounded-md border border-border p-4">
+            <ThinkingText />
+            <ThinkingText text="Searching the codebase" />
+            <StreamingIndicator
+              startedAt={new Date(Date.now() - 34_000).toISOString()}
+            />
+          </div>
+          <div className="flex flex-col justify-center gap-2 rounded-md border border-border p-4">
+            <SkeletonBlock className="h-3 w-3/4" style={shimmerDelay(0)} />
+            <SkeletonBlock className="h-3 w-2/3 bg-muted/45" style={shimmerDelay(1)} />
+            <SkeletonBlock className="h-3 w-5/6 bg-muted/45" style={shimmerDelay(2)} />
+            <SkeletonBlock className="h-3 w-1/2 bg-muted/35" style={shimmerDelay(3)} />
+          </div>
+        </div>
+      </section>
+
+      {/* The REAL shared cloud-transcript rows (product-ui): the assistant
+          loading row and a live thought row both ride the same ThinkingText
+          band sweep as the desktop transcript. */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-foreground">
+          Cloud transcript thinking rows
+        </h2>
+        <div className="flex flex-col gap-1 rounded-md border border-border p-4">
+          <CloudChatAssistantLoadingRow
+            row={{ id: "playground-loading", kind: "assistant", streaming: true }}
+          />
+          <CloudChatThoughtRow
+            row={{
+              id: "playground-thought-live",
+              kind: "thought",
+              streaming: true,
+              body: "Weighing the trade-offs between the two dock-slot owners.",
+            }}
+          />
+          <CloudChatThoughtRow
+            row={{
+              id: "playground-thought-done",
+              kind: "thought",
+              body: "Chose the compact row migration.",
+            }}
+          />
         </div>
       </section>
 

@@ -526,10 +526,9 @@ describe("sidebar indicators", () => {
 
     expect(groups[0]?.items[0]?.needsReview).toBe(true);
     expect(groups[0]?.items[0]?.lastInteracted).toBe("2026-04-13T10:10:00.000Z");
-    expect(groups[0]?.items[0]?.statusIndicator).toMatchObject({
-      kind: "needs_review",
-      tooltip: "Needs review",
-    });
+    // needs_review is no longer a status-indicator kind — it renders as the
+    // trailing unread dot driven by `needsReview` (§3.4).
+    expect(groups[0]?.items[0]?.statusIndicator).toBeNull();
   });
 
   it("keeps the needs-review marker for the selected workspace after work completes", () => {
@@ -552,7 +551,7 @@ describe("sidebar indicators", () => {
 
     expect(groups[0]?.items[0]?.active).toBe(true);
     expect(groups[0]?.items[0]?.needsReview).toBe(true);
-    expect(groups[0]?.items[0]?.statusIndicator?.kind).toBe("needs_review");
+    expect(groups[0]?.items[0]?.statusIndicator).toBeNull();
   });
 
   it("suppresses needs-review for the selected workspace while the window is focused", () => {
@@ -587,7 +586,7 @@ describe("sidebar indicators", () => {
     expect(selectedItem?.needsReview).toBe(false);
     expect(selectedItem?.statusIndicator).toBeNull();
     expect(otherItem?.needsReview).toBe(true);
-    expect(otherItem?.statusIndicator?.kind).toBe("needs_review");
+    expect(otherItem?.statusIndicator).toBeNull();
   });
 
   it("uses materialization view timestamps to avoid stale needs-review markers", () => {

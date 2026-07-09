@@ -17,10 +17,6 @@ export function getAgentsNeedingSetup(
   );
 }
 
-export function getNotReadyAgents(agents: AgentSummary[]): AgentSummary[] {
-  return agents.filter((agent) => agent.readiness !== "ready");
-}
-
 export function getReadyAgentKinds(agents: AgentSummary[]): Set<string> {
   return new Set(getReadyAgents(agents).map((agent) => agent.kind));
 }

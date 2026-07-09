@@ -1,4 +1,4 @@
-import type { AgentAuthAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
+import type { CloudAgentKind, CloudWorkspaceDetail } from "@/lib/access/cloud/client";
 import type { TerminalWebSocketAuthTransport } from "@anyharness/sdk";
 import { resolveCloudSandboxGatewayConnectionForWorkspace } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { getCloudWorkspaceWithRetry } from "@/lib/access/cloud/workspace-connection-retry";
@@ -22,8 +22,8 @@ export interface RuntimeTarget {
   runtimeAccessKind?: "direct" | "proliferate-gateway";
   cloudWorkspaceId?: string;
   targetId?: string;
-  allowedAgentKinds?: AgentAuthAgentKind[];
-  readyAgentKinds?: AgentAuthAgentKind[];
+  allowedAgentKinds?: CloudAgentKind[];
+  readyAgentKinds?: CloudAgentKind[];
 }
 
 export async function resolveRuntimeTargetForWorkspace(
@@ -93,10 +93,9 @@ export async function resolveRuntimeTargetForWorkspace(
   };
 }
 
-function isCloudAgentRuntimeKind(value: string): value is AgentAuthAgentKind {
+function isCloudAgentRuntimeKind(value: string): value is CloudAgentKind {
   return value === "claude"
     || value === "codex"
     || value === "opencode"
-    || value === "gemini"
     || value === "grok";
 }

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { ChatDiffViewer } from "@/components/content/ui/diff/ChatDiffViewer";
 import { SplitDiffViewer } from "@/components/content/ui/diff/SplitDiffViewer";
-import { UnifiedDiffViewer } from "@/components/content/ui/diff/UnifiedDiffViewer";
+import { UnifiedDiffViewer, type UnifiedDiffHunkActions } from "@/components/content/ui/diff/UnifiedDiffViewer";
 import { useDiffHighlight } from "@/hooks/ui/highlighting/use-diff-highlight";
 import type { MeasurementOperationId } from "@/lib/domain/telemetry/debug-measurement-catalog";
 import { useChatDiffPreferencesStore } from "@/stores/chat/chat-diff-preferences-store";
@@ -21,10 +21,27 @@ interface DiffViewerProps {
   overscrollBehaviorX?: CSSProperties["overscrollBehaviorX"];
   overscrollBehaviorY?: CSSProperties["overscrollBehaviorY"];
   chainVerticalWheel?: boolean;
+  /**
+   * Full file content (new-side) split into lines. When provided, enables
+   * Codex-style per-gap context expansion. Without this, gap separators
+   * are still rendered but expansion is disabled.
+   */
+  fileLines?: string[];
+  /**
+   * Lazy fetch trigger for `fileLines`, invoked on the first expander
+   * interaction. When provided, expanders are interactive even before
+   * `fileLines` arrives.
+   */
+  onRequestFileLines?: () => void;
+  /**
+   * When provided, enables hunk-level action pills (revert/stage/unstage)
+   * on each hunk in unified layout.
+   */
+  hunkActions?: UnifiedDiffHunkActions | null;
 }
 
 const ROOT_CLASS =
-  "font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)]";
+  "font-mono text-[length:var(--diffs-font-size)] leading-[var(--diffs-line-height)]";
 
 export function DiffViewer({
   patch,
@@ -40,6 +57,9 @@ export function DiffViewer({
   overscrollBehaviorX,
   overscrollBehaviorY,
   chainVerticalWheel,
+  fileLines,
+  onRequestFileLines,
+  hunkActions,
 }: DiffViewerProps) {
   const { parsed, tokens } = useDiffHighlight(patch, filePath, operationId);
   const chatWrapLongLines = useChatDiffPreferencesStore((state) =>
@@ -62,6 +82,9 @@ export function DiffViewer({
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}
           chainVerticalWheel={chainVerticalWheel}
+          fileLines={fileLines}
+          onRequestFileLines={onRequestFileLines}
+          hunkActions={hunkActions}
         />
       </DebugProfiler>
     );
@@ -82,6 +105,8 @@ export function DiffViewer({
           overscrollBehaviorX={overscrollBehaviorX}
           overscrollBehaviorY={overscrollBehaviorY}
           chainVerticalWheel={chainVerticalWheel}
+          fileLines={fileLines}
+          onRequestFileLines={onRequestFileLines}
         />
       </DebugProfiler>
     );
@@ -100,6 +125,9 @@ export function DiffViewer({
         overscrollBehaviorX={overscrollBehaviorX}
         overscrollBehaviorY={overscrollBehaviorY}
         chainVerticalWheel={chainVerticalWheel}
+        fileLines={fileLines}
+        onRequestFileLines={onRequestFileLines}
+        hunkActions={hunkActions}
       />
     </DebugProfiler>
   );

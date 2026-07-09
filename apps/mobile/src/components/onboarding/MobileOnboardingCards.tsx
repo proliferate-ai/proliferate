@@ -21,7 +21,6 @@ export function MobileOnboardingAgentsCard() {
   const agents: { name: string; icon: MobileIconName }[] = [
     { name: "Claude Code", icon: "claude" },
     { name: "Codex", icon: "openai" },
-    { name: "Gemini", icon: "gemini" },
     { name: "OpenCode", icon: "sparkles" },
     { name: "Cursor", icon: "sparkles" },
   ];
@@ -32,7 +31,7 @@ export function MobileOnboardingAgentsCard() {
       </View>
       <Text style={styles.cardTitle}>Bring any agent.</Text>
       <Text style={styles.cardBody}>
-        Use Claude Code, Codex, Gemini, OpenCode, or Cursor. Switch per chat. Same workspace, same files.
+        Use Claude Code, Codex, OpenCode, or Cursor. Switch per chat. Same workspace, same files.
       </Text>
       <View style={styles.agentGrid}>
         {agents.map((agent) => (

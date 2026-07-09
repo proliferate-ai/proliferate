@@ -7,12 +7,16 @@ export function renderActiveSlot(scenario: ScenarioKey): ReactNode | null {
     case "todos-short":
     case "todos-mid":
     case "todos-long":
+    case "todo-strip-with-approval":
     case "execute-approval":
     case "edit-approval":
+    case "interaction-motion":
+    case "interaction-marker-permission":
+    case "interaction-marker-question":
     case "pending-prompts-with-approval":
     case "subagents-queued-wake-with-approval":
-    case "gemini-mcp-approval-options":
-    case "gemini-tool-before-approval":
+    case "opencode-mcp-approval-options":
+    case "opencode-tool-before-approval":
     case "user-input-single-option":
     case "user-input-single-freeform":
     case "user-input-option-plus-other":

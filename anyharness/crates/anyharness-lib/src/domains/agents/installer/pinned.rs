@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn npm_adapter_pin_bakes_acp_launch_args() {
-        // A registry-backed npm adapter (e.g. gemini) must bake its ACP-mode
+        // A registry-backed npm adapter must bake its ACP-mode
         // args (`--acp`) into the managed launcher — this is the bug an earlier
         // pass introduced by baking session default_args instead.
         let scratch = temp_dir("npm-adapter");
@@ -302,7 +302,7 @@ mod tests {
         let result = install_agent_process_from_pin(
             &source,
             Some("0.46.0"),
-            &AgentKind::Gemini,
+            &AgentKind::Grok,
             "fake-acp-agent",
             &home,
             true,
@@ -347,7 +347,10 @@ mod tests {
 
         let mut targets = BTreeMap::new();
         targets.insert(
-            Platform::detect().expect("platform").registry_key().to_string(),
+            Platform::detect()
+                .expect("platform")
+                .registry_key()
+                .to_string(),
             ResolvedPinTarget {
                 url: format!("file://{}", archive.display()),
                 sha256: sha,
@@ -373,13 +376,19 @@ mod tests {
 
         let storage = artifact_root(&home, &AgentKind::Cursor, &ArtifactRole::AgentProcess)
             .join("registry_binary");
-        assert!(storage.join("pkg/agent").exists(), "entry binary must survive");
+        assert!(
+            storage.join("pkg/agent").exists(),
+            "entry binary must survive"
+        );
         assert!(
             storage.join("pkg/helper").exists(),
             "sibling file must survive — the cursor regression this guards"
         );
         let launcher = std::fs::read_to_string(&result.path).expect("read launcher");
-        assert!(launcher.contains("acp"), "ACP arg must be baked: {launcher}");
+        assert!(
+            launcher.contains("acp"),
+            "ACP arg must be baked: {launcher}"
+        );
         let _ = std::fs::remove_dir_all(&scratch);
     }
 }

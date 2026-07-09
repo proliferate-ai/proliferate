@@ -40,7 +40,9 @@ export function useOrganizationJoinInvitationFlow() {
     writePendingOrganizationJoinTarget(joinOrganizationId);
     signInStartedRef.current = false;
     setTransientJoinOrganizationId(joinOrganizationId);
-    navigate(buildSettingsHref({ section: "organization-members" }), { replace: true });
+    // Account is reachable by every signed-in user (Members is admin-only),
+    // so this is where a non-admin invitee can actually see and accept.
+    navigate(buildSettingsHref({ section: "account" }), { replace: true });
   }, [joinOrganizationId, navigate]);
 
   const clearJoinTarget = useCallback(() => {

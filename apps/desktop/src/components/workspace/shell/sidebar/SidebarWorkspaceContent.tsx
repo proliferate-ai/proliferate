@@ -38,6 +38,7 @@ interface SidebarWorkspaceContentProps {
   onOpenCloudRepoSettings: (target: CloudWorkspaceRepoTarget) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onIndicatorAction: (action: SidebarIndicatorAction) => void;
+  onOpenPullRequest: (url: string) => void;
   onMarkWorkspaceDone: (workspaceId: string, logicalWorkspaceId: string) => void;
   onWorkspaceHover?: () => void;
   shortcutRevealVisible: boolean;
@@ -81,6 +82,7 @@ export function SidebarWorkspaceContent({
   onOpenCloudRepoSettings,
   onSelectWorkspace,
   onIndicatorAction,
+  onOpenPullRequest,
   onMarkWorkspaceDone,
   onWorkspaceHover,
   shortcutRevealVisible,
@@ -205,11 +207,15 @@ export function SidebarWorkspaceContent({
                 statusIndicator={item.statusIndicator}
                 detailIndicators={item.detailIndicators}
                 cloudStatus={item.cloudStatus}
+                branchName={item.branchName}
                 lastInteracted={item.lastInteracted}
+                gitStatus={item.gitStatus}
+                needsReview={item.needsReview}
                 shortcutLabel={shortcutLabelByWorkspaceId.get(item.id) ?? null}
                 shortcutRevealVisible={shortcutRevealVisible}
                 onSelect={() => onSelectWorkspace(item.id)}
                 onIndicatorAction={onIndicatorAction}
+                onOpenPullRequest={onOpenPullRequest}
                 workspaceLocationCopyLabel={item.workspaceLocationCopyLabel}
                 onCopyWorkspaceLocation={
                   item.workspaceLocationCopyValue && item.workspaceLocationCopyToastLabel

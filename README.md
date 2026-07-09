@@ -15,12 +15,12 @@
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat" /></a>
   <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
   <a href="https://proliferate.com"><img alt="Website" src="https://img.shields.io/badge/website-visit-0969DA?style=flat" /></a>
-  <a href="https://discord.gg/wCEgUnEuF"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
+  <a href="https://discord.gg/7b5afMTqW"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
 </p>
 
 <br />
 
-Run Claude Code, Codex, Gemini, and any other coding agent in parallel, in one workspace.<br />
+Run Claude Code, Codex, OpenCode, and any other coding agent in parallel, in one workspace.<br />
 Move running sessions between your machine and the cloud. Works solo or across a team.
 
 <br />
@@ -32,7 +32,7 @@ Move running sessions between your machine and the cloud. Works solo or across a
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/changelog">Changelog</a>
   &nbsp;&bull;&nbsp;
-  <a href="https://discord.gg/wCEgUnEuF">Discord</a>
+  <a href="https://discord.gg/7b5afMTqW">Discord</a>
 </p>
 
 <img width="full" alt="Proliferate" src="./specs/developing/assets/readme/hero.png" />
@@ -65,10 +65,6 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
       <strong>Codex</strong>
     </td>
     <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/gemini.svg" width="40" height="40" alt="Gemini" /><br />
-      <strong>Gemini CLI</strong>
-    </td>
-    <td align="center" width="120">
       <img src="./apps/desktop/public/provider-icons/opencode.png" width="40" height="40" alt="OpenCode" /><br />
       <strong>OpenCode</strong>
     </td>
@@ -84,7 +80,7 @@ Each agent runs through its native harness, so auth, tools, models, permissions,
 
 ## Features
 
-- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** - Claude Code, Codex, Gemini CLI, OpenCode, Cursor, and more
+- 🤖 **[Native harnesses](https://proliferate.com/docs/concepts/agents-and-harnesses)** - Claude Code, Codex, OpenCode, Cursor, and more
 - 🌳 **[Worktree workspaces](https://proliferate.com/docs/concepts/workspaces)** - an isolated branch and working directory for every task
 - 🔍 **[Git & diff review](https://proliferate.com/docs/concepts/review)** - inspect and edit agent changes without leaving the app
 - 🛡️ **[Plan & code review agents](https://proliferate.com/docs/concepts/review)** - reviewer agents check plans, diffs, risks, and branch readiness before you do
@@ -169,7 +165,7 @@ on the way.
 
 Point the desktop app at your control plane by setting `apiBaseUrl` in
 `~/.proliferate/config.json`. Expect rough edges — [open an issue](../../issues/new/choose) or ask in
-[Discord](https://discord.gg/wCEgUnEuF) if you hit problems, and see
+[Discord](https://discord.gg/7b5afMTqW) if you hit problems, and see
 [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
 </details>
@@ -197,7 +193,7 @@ self-host experience will be polished as Cloud moves toward GA.
 
 ## Community
 
-Join our community on [Discord](https://discord.gg/wCEgUnEuF)!
+Join our community on [Discord](https://discord.gg/7b5afMTqW)!
 
 ## Contributing
 

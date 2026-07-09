@@ -423,6 +423,45 @@ describe("transcript reducer", () => {
     expect(state.lastSeq).toBe(1);
   });
 
+  it("treats goal mirror events as metadata, not transcript content", () => {
+    const goal = {
+      objective: "make CI green",
+      status: "active",
+      native: true,
+      revision: 1,
+      createdAt: "2026-07-02T00:00:00Z",
+      updatedAt: "2026-07-02T00:00:01Z",
+    };
+    const state = reduceEvents(
+      [
+        {
+          sessionId: "session-1",
+          seq: 1,
+          timestamp: "2026-07-02T00:00:01Z",
+          event: { type: "goal_updated", goal },
+        },
+        {
+          sessionId: "session-1",
+          seq: 2,
+          timestamp: "2026-07-02T00:00:02Z",
+          event: { type: "goal_met", goal: { ...goal, status: "met" } },
+        },
+        {
+          sessionId: "session-1",
+          seq: 3,
+          timestamp: "2026-07-02T00:00:03Z",
+          event: { type: "goal_cleared", goal: { ...goal, status: "cleared" } },
+        },
+      ] as unknown as SessionEventEnvelope[],
+      "session-1",
+    );
+
+    expect(Object.keys(state.itemsById)).toEqual([]);
+    expect(state.turnOrder).toEqual([]);
+    expect(state.unknownEvents).toEqual([]);
+    expect(state.lastSeq).toBe(3);
+  });
+
   it("closes orphaned assistant and reasoning streams when a turn ends", () => {
     const state = reduceEvents(
       [

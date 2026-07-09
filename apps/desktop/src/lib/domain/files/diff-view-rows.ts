@@ -1,6 +1,7 @@
 import type {
   CollapsedContext,
   DiffLine,
+  InterHunkGap,
   ParsedPatch,
 } from "@/lib/domain/files/diff-parser";
 
@@ -10,8 +11,9 @@ export type DiffLineDisplayType =
   | "change-deletion";
 
 export type ChatDiffRow =
-  | { kind: "line"; key: string; line: DiffLine }
-  | { kind: "collapsed"; key: string; section: CollapsedContext };
+  | { kind: "line"; key: string; line: DiffLine; hunkIndex: number; isHunkFirstRow: boolean }
+  | { kind: "collapsed"; key: string; section: CollapsedContext; hunkIndex: number }
+  | { kind: "gap"; key: string; gap: InterHunkGap; gapIndex: number };
 
 export type SplitSide = "old" | "new";
 
@@ -22,7 +24,8 @@ export type SplitDiffRow =
       oldLine: DiffLine | null;
       newLine: DiffLine | null;
     }
-  | { kind: "collapsed"; key: string; section: CollapsedContext };
+  | { kind: "collapsed"; key: string; section: CollapsedContext }
+  | { kind: "gap"; key: string; gap: InterHunkGap; gapIndex: number };
 
 export function getDiffLineNumberColumnWidth(lineNumberDigits: number): string {
   return `max(40px, calc(${lineNumberDigits}ch + 1.5rem))`;
@@ -55,8 +58,18 @@ export function getChatDiffRows(
   expandedCollapsedKeys: ReadonlySet<string>,
 ): ChatDiffRow[] {
   const rows: ChatDiffRow[] = [];
+  const gaps = parsed.interHunkGaps;
 
   parsed.hunks.forEach((hunk, hunkIndex) => {
+    // Gap before this hunk
+    if (gaps.length > 0) {
+      const gap = gaps[hunkIndex];
+      if (gap && gap.lineCount !== 0) {
+        rows.push({ kind: "gap", key: `gap-${hunkIndex}`, gap, gapIndex: hunkIndex });
+      }
+    }
+
+    let emittedHunkRow = false;
     hunk.items.forEach((item, itemIndex) => {
       const key = `${hunkIndex}-${itemIndex}`;
       if ("kind" in item && item.kind === "collapsed") {
@@ -66,10 +79,14 @@ export function getChatDiffRows(
               kind: "line",
               key: `${key}-${line.tokenIndex}`,
               line,
+              hunkIndex,
+              isHunkFirstRow: !emittedHunkRow,
             });
+            emittedHunkRow = true;
           });
         } else {
-          rows.push({ kind: "collapsed", key, section: item });
+          rows.push({ kind: "collapsed", key, section: item, hunkIndex });
+          emittedHunkRow = true;
         }
         return;
       }
@@ -79,9 +96,20 @@ export function getChatDiffRows(
         kind: "line",
         key: `${key}-${line.tokenIndex}`,
         line,
+        hunkIndex,
+        isHunkFirstRow: !emittedHunkRow,
       });
+      emittedHunkRow = true;
     });
   });
+
+  // Gap after last hunk
+  if (gaps.length > parsed.hunks.length) {
+    const gap = gaps[parsed.hunks.length];
+    if (gap && gap.lineCount !== 0) {
+      rows.push({ kind: "gap", key: `gap-${parsed.hunks.length}`, gap, gapIndex: parsed.hunks.length });
+    }
+  }
 
   return rows;
 }
@@ -134,8 +162,17 @@ export function getSplitDiffRows(
   expandedCollapsedKeys: ReadonlySet<string>,
 ): SplitDiffRow[] {
   const rows: SplitDiffRow[] = [];
+  const gaps = parsed.interHunkGaps;
 
   parsed.hunks.forEach((hunk, hunkIndex) => {
+    // Gap before this hunk
+    if (gaps.length > 0) {
+      const gap = gaps[hunkIndex];
+      if (gap && gap.lineCount !== 0) {
+        rows.push({ kind: "gap", key: `gap-${hunkIndex}`, gap, gapIndex: hunkIndex });
+      }
+    }
+
     hunk.items.forEach((item, itemIndex) => {
       const key = `${hunkIndex}-${itemIndex}`;
       if ("kind" in item && item.kind === "collapsed") {
@@ -163,6 +200,14 @@ export function getSplitDiffRows(
       });
     });
   });
+
+  // Gap after last hunk
+  if (gaps.length > parsed.hunks.length) {
+    const gap = gaps[parsed.hunks.length];
+    if (gap && gap.lineCount !== 0) {
+      rows.push({ kind: "gap", key: `gap-${parsed.hunks.length}`, gap, gapIndex: parsed.hunks.length });
+    }
+  }
 
   return rows;
 }

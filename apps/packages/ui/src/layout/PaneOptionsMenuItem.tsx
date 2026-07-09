@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 import { Button } from "../primitives/Button";
 
 interface PaneOptionsMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -32,7 +32,9 @@ export function PaneOptionsMenuItem({
       {...props}
     >
       {reserveIconSlot && (
-        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-75 transition-opacity group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100 [&>svg]:size-3.5 [&>svg]:shrink-0">
+        // Color-token hover promotion, not opacity — partial-opacity hover
+        // transitions re-rasterize glyphs and read as shimmer (styling.md).
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/75 transition-colors group-hover/menu-item:text-muted-foreground group-focus/menu-item:text-muted-foreground [&>svg]:size-3.5 [&>svg]:shrink-0">
           {icon}
         </span>
       )}

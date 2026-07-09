@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn advertised_auth_is_preserved_for_non_codex_agents() {
         assert!(should_attempt_advertised_auth(AgentKind::Claude.as_str()));
-        assert!(should_attempt_advertised_auth(AgentKind::Gemini.as_str()));
+        assert!(should_attempt_advertised_auth(AgentKind::Grok.as_str()));
     }
 
     #[test]
@@ -315,6 +315,7 @@ mod tests {
             status: ResolvedAgentStatus::Ready,
             credential_state: CredentialState::Ready,
             auth_slots: Vec::new(),
+            cli_auth_state: None,
             native: None,
             agent_process: ResolvedArtifact {
                 role: ArtifactRole::AgentProcess,

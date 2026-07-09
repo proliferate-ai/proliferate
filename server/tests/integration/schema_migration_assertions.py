@@ -14,18 +14,26 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "billing_entitlement",
         "billing_grant",
         "billing_subject",
+        "cloud_integration_account",
+        "cloud_integration_definition",
+        "cloud_integration_gateway_token",
+        "cloud_integration_oauth_client",
+        "cloud_integration_oauth_flow",
+        "cloud_integration_policy",
+        "cloud_integration_tool_schema_cache",
         "cloud_repo_environment_materialization",
+        "cloud_runtime_worker",
+        "cloud_runtime_worker_enrollment",
         "cloud_sandbox",
         "cloud_secret_env_var",
         "cloud_secret_file",
         "cloud_secret_set",
         "cloud_workspace",
-        "cloud_workspace_mobility",
-        "cloud_workspace_mobility_event",
         "desktop_auth_code",
         "github_app_authorizations",
         "github_app_installations",
         "github_app_installation_repositories",
+        "instance_setup_token",
         "oauth_account",
         "organization",
         "organization_invitation",
@@ -50,10 +58,49 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "sandbox_profile",
         "sandbox_profile_target_state",
         "github_app_installation_links",
+        "cloud_mcp_connection",
+        "cloud_mcp_connection_auth",
+        "cloud_mcp_connection_event",
+        "cloud_mcp_oauth_client",
+        "cloud_mcp_oauth_flow",
+        "cloud_organization_integration_policy",
+        "cloud_skill_configured_item",
+        "cloud_plugin_configured_item",
+        "cloud_repo_routing_profile",
+        "cloud_workspace_mobility",
+        "cloud_workspace_mobility_event",
+        "cloud_workspace_handoff_op",
+        "cloud_workspace_move_cleanup_item",
+        "slack_workspace_connection",
+        "slack_bot_config",
+        "slack_thread_work",
+        "slack_event_envelope_seen",
+        "slack_inbound_event_job",
+        "slack_outbound_message_queue",
     }.isdisjoint(tables)
 
     await assert_background_outbox_schema(conn)
     await assert_sso_schema(conn)
+
+    organization_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("organization")
+        }
+    )
+    assert "is_instance" in organization_columns
+    organization_indexes = await conn.run_sync(
+        lambda sync_conn: {
+            index["name"] for index in inspect(sync_conn).get_indexes("organization")
+        }
+    )
+    assert "ux_organization_instance" in organization_indexes
+
+    setup_token_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("instance_setup_token")
+        }
+    )
+    assert {"id", "token_hash", "created_at", "updated_at"} <= setup_token_columns
 
     repo_config_columns = await conn.run_sync(
         lambda sync_conn: {
@@ -184,6 +231,26 @@ async def assert_current_schema(conn: AsyncConnection, head_revision: str) -> No
         "updated_at",
     } <= secret_set_columns
     assert "cloud_repo_config_id" not in secret_set_columns
+
+    runtime_worker_columns = await conn.run_sync(
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("cloud_runtime_worker")
+        }
+    )
+    assert {
+        "worker_version",
+        "anyharness_version",
+        "hostname",
+        "machine_fingerprint",
+    } <= runtime_worker_columns
+
+    tool_cache_foreign_keys = await conn.run_sync(
+        lambda sync_conn: {
+            fk["referred_table"]
+            for fk in inspect(sync_conn).get_foreign_keys("cloud_integration_tool_schema_cache")
+        }
+    )
+    assert "cloud_integration_account" in tool_cache_foreign_keys
 
     github_app_installation_columns = await conn.run_sync(
         lambda sync_conn: {

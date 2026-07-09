@@ -109,6 +109,33 @@ export type ForkSessionResponse = Omit<
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
 export type EditPendingPromptRequest =
   components["schemas"]["EditPendingPromptRequest"];
+export type Goal = components["schemas"]["Goal"];
+export type GoalStatus = components["schemas"]["GoalStatus"];
+export type GoalArmState = components["schemas"]["GoalArmState"];
+export type SetSessionGoalRequest =
+  components["schemas"]["SetSessionGoalRequest"];
+export type SessionGoalResponse = components["schemas"]["SessionGoalResponse"];
+export type ClearSessionGoalResponse =
+  components["schemas"]["ClearSessionGoalResponse"];
+export type Loop = components["schemas"]["Loop"];
+export type LoopSchedule = components["schemas"]["LoopSchedule"];
+export type LoopScheduleKind = components["schemas"]["LoopScheduleKind"];
+export type LoopStatus = components["schemas"]["LoopStatus"];
+export type SetSessionLoopRequest =
+  components["schemas"]["SetSessionLoopRequest"];
+export type SessionLoopResponse = components["schemas"]["SessionLoopResponse"];
+export type SessionLoopsResponse = components["schemas"]["SessionLoopsResponse"];
+export type ClearSessionLoopsResponse =
+  components["schemas"]["ClearSessionLoopsResponse"];
+export type SessionActivity = components["schemas"]["SessionActivity"];
+export type TurnState = components["schemas"]["TurnState"];
+export type ActivityProcess = components["schemas"]["ActivityProcess"];
+export type ProcessStatus = components["schemas"]["ProcessStatus"];
+export type ActivitySubagent = components["schemas"]["ActivitySubagent"];
+export type SubagentStatus = components["schemas"]["SubagentStatus"];
+export type ActivityUsage = components["schemas"]["ActivityUsage"];
+export type FeedRef = components["schemas"]["FeedRef"];
+export type FeedKind = components["schemas"]["FeedKind"];
 export type SessionSubagentsResponse =
   components["schemas"]["SessionSubagentsResponse"];
 export type ScheduleSubagentWakeRequest =

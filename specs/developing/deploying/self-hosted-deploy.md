@@ -59,6 +59,12 @@ server/deploy/
   wait-for-health.sh
 ```
 
+Every `server-v*` GitHub release also publishes this directory as a
+standalone bundle, `proliferate-deploy.tar.gz` (checksummed in
+`self-hosted-assets.SHA256SUMS`), so operators do not need to clone the
+monorepo. The bundle extracts to a `proliferate-deploy/` directory with the
+files above plus a `VERSION` file stamped with the release version.
+
 Services:
 
 - `caddy`: public HTTPS endpoint
@@ -86,23 +92,40 @@ Desktop -> https://api.company.com -> Caddy -> API
 Cloud workspace runtimes are still provider-hosted. The control plane returns a
 `runtimeUrl`, and the desktop talks to that runtime directly.
 
-The agent LLM gateway uses a Bifrost inference endpoint for sandbox model
+The agent LLM gateway is the bundled LiteLLM proxy (compose services
+`litellm` + `litellm-db`, behind `--profile agent-gateway`) for sandbox model
 traffic:
 
 ```text
-Sandbox harness -> https://llm.company.com/anthropic/... -> Bifrost -> provider API
+Sandbox harness -> https://llm.company.com/anthropic/... -> LiteLLM -> provider API
 ```
 
-The Proliferate API talks to the protected Bifrost management API through
-`AGENT_GATEWAY_BIFROST_BASE_URL`. Sandboxes receive only virtual keys and
-`AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL`.
+The Proliferate API talks to LiteLLM's management API through
+`AGENT_GATEWAY_LITELLM_BASE_URL` (authenticated with
+`AGENT_GATEWAY_LITELLM_MASTER_KEY`). Sandboxes receive only short-lived
+virtual keys and `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL`.
 
 ## First-Time Setup
 
 1. Provision a Linux host with Docker and Docker Compose v2.
 2. Point DNS for `api.company.com` at that host.
-3. Copy `server/deploy/.env.production.example` to `server/deploy/.env.static`.
-4. Fill in the required values:
+3. Fetch the deploy bundle for the release you want to run and create your
+   env file (no repo clone needed):
+
+```bash
+curl -fsSL https://github.com/proliferate-ai/proliferate/releases/download/server-vX.Y.Z/proliferate-deploy.tar.gz | tar xz
+cd proliferate-deploy
+cp .env.production.example .env.static
+```
+
+To verify the download first, fetch `self-hosted-assets.SHA256SUMS` from the
+same release and run `sha256sum -c --ignore-missing` against it before
+extracting. The sums file also covers the runtime binaries and the AWS
+template, so without `--ignore-missing` the check always fails on this
+bundle-only download. Working from a monorepo checkout instead?
+`server/deploy/` is the same directory; run the steps below from there.
+
+4. Fill in the required values in `.env.static`:
    - `SITE_ADDRESS`
    - `PROLIFERATE_TELEMETRY_MODE`
    - `PROLIFERATE_HOST_BIN_DIR`
@@ -112,13 +135,15 @@ The Proliferate API talks to the protected Bifrost management API through
    - `GITHUB_OAUTH_CLIENT_SECRET`
    - `E2B_API_KEY`
    - `E2B_TEMPLATE_NAME`
-   - optional agent gateway:
+   - optional agent gateway (also requires starting the profiled services:
+     `docker compose --profile agent-gateway up -d`):
      - `AGENT_GATEWAY_ENABLED=true`
-     - `AGENT_GATEWAY_BIFROST_BASE_URL=https://bifrost-admin.company.com`
-     - `AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=https://llm.company.com`
-     - `AGENT_GATEWAY_RECONCILER_ENABLED=true`
-     - `AGENT_GATEWAY_DEFAULT_MANAGED_BUDGET_USD` if managed credits should be
-       available
+     - `AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000`
+     - `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://llm.company.com`
+     - `AGENT_GATEWAY_LITELLM_MASTER_KEY` = `LITELLM_MASTER_KEY`, plus
+       `LITELLM_POSTGRES_PASSWORD`
+     - `AGENT_GATEWAY_DEFAULT_USER_BUDGET_USD` /
+       `AGENT_GATEWAY_DEFAULT_ORG_BUDGET_USD` for limits
    - `CLOUD_RUNTIME_SOURCE_BINARY_PATH`,
      `CLOUD_WORKER_SOURCE_BINARY_PATH`, and
      `CLOUD_SUPERVISOR_SOURCE_BINARY_PATH` if you want cloud workspaces
@@ -126,9 +151,9 @@ The Proliferate API talks to the protected Bifrost management API through
      overrides, add the extra env vars manually from
      [env-secrets-matrix.md](../reference/env-secrets-matrix.md)
 5. Leave `POSTGRES_PASSWORD`, `JWT_SECRET`, and `CLOUD_SECRET_KEY` blank if you
-   want `bootstrap.sh` to generate and persist them in
-   `server/deploy/.env.generated` on first startup.
-6. Optionally put host-local overrides in `server/deploy/.env.local`.
+   want `bootstrap.sh` to generate and persist them in `.env.generated`
+   (next to `.env.static`) on first startup.
+6. Optionally put host-local overrides in `.env.local` in the same directory.
    `ensure-secrets.sh` merges `.env.static` with `.env.local` into
    `.env.runtime`, and `.env.local` wins for non-secret operator settings. This
    is mainly useful for generated/self-hosted stacks where `.env.static` may be
@@ -160,10 +185,10 @@ after the local API passes health, also set:
 PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://api.company.com/health
 ```
 
-8. Run:
+8. Run, from the deploy directory:
 
 ```bash
-./server/deploy/bootstrap.sh
+./bootstrap.sh
 ```
 
 9. Give desktop users this config:
@@ -176,10 +201,10 @@ PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://api.company.com/health
 
 ## Update Flow
 
-The canonical self-hosted update flow is:
+The canonical self-hosted update flow is, from the deploy directory:
 
 ```bash
-./server/deploy/update.sh
+./update.sh
 ```
 
 That script runs:
@@ -190,9 +215,11 @@ docker compose -f docker-compose.production.yml run --rm migrate
 docker compose -f docker-compose.production.yml up -d
 ```
 
-When `AGENT_GATEWAY_ENABLED=true`, `bootstrap.sh` and `update.sh` start the same
-API stack and expect the configured Bifrost endpoints to be reachable. The
-Compose stack no longer creates a bundled gateway service.
+When `AGENT_GATEWAY_ENABLED=true`, `bootstrap.sh` and `update.sh` still start
+only the base API stack: the bundled `litellm`/`litellm-db` services sit
+behind the compose `agent-gateway` profile and must be started explicitly
+with `docker compose --env-file .env.runtime -f docker-compose.production.yml
+--profile agent-gateway up -d`.
 
 Recommended image strategy:
 

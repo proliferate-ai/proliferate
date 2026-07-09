@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+
+/** Classification of a viewport scroll event: our own snap vs the user. */
+export interface TranscriptScrollSample {
+  programmatic: boolean;
+}
 import { resolveVirtualBottomDistance } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
 import {
   DIRECTION_EPSILON_PX,
@@ -24,7 +29,7 @@ export interface UseTranscriptStickToBottomOptions {
   /** The real scroll element ref (AutoHideScrollArea forwards its viewport here). */
   scrollRef: RefObject<HTMLDivElement | null>;
   /** Perf probe; must run on every scroll, user or programmatic. */
-  onScrollSample: () => void;
+  onScrollSample: (sample?: TranscriptScrollSample) => void;
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
 }
@@ -127,7 +132,19 @@ export function useTranscriptStickToBottom({
       // Our own snap — don't touch pin state or direction, but still probe perf.
       cancelAnimationFrame(pending.frame);
       programmaticRef.current = null;
-      onScrollSample();
+      onScrollSample({ programmatic: true });
+      return;
+    }
+
+    // H2 hardening: when a programmatic marker is pending but the tolerance
+    // missed (scrollHeight changed between our write and this event, or a
+    // second snap overwrote the marker before the first event dispatched),
+    // treat the event as programmatic if the scroll moved downward. Unpinning
+    // here would be a false positive — the user never scrolled.
+    if (pending && pinnedRef.current && top >= pending.expectedTop - PROGRAMMATIC_MATCH_TOL_PX) {
+      cancelAnimationFrame(pending.frame);
+      programmaticRef.current = null;
+      onScrollSample({ programmatic: true });
       return;
     }
 
@@ -146,18 +163,8 @@ export function useTranscriptStickToBottom({
       // Within the band but still moving up — the user is leaving.
       setPinned(false);
     }
-    onScrollSample();
-  }, [onScrollSample, repinThresholdPx, setPinned]);
-
-  const resetForSession = useCallback(() => {
-    if (programmaticRef.current?.frame != null) {
-      cancelAnimationFrame(programmaticRef.current.frame);
-    }
-    programmaticRef.current = null;
-    lastScrollTopRef.current = 0;
-    setPinned(true);
-    scrollToBottom();
-  }, [scrollToBottom, setPinned]);
+    onScrollSample({ programmatic: false });
+  }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
   const startGlueLoop = useCallback(() => {
     if (typeof window === "undefined") {
@@ -195,6 +202,21 @@ export function useTranscriptStickToBottom({
     };
     glueFrameRef.current = requestAnimationFrame(tick);
   }, [notifyProgrammaticScroll, scrollRef]);
+
+  // Session re-entry: snap instantly, then glue for a few frames so the
+  // measurement backlog of freshly mounted rows (virtualizer estimates
+  // correcting to real heights) lands as one silent jump instead of a visible
+  // scroll from an old position to the bottom.
+  const resetForSession = useCallback(() => {
+    if (programmaticRef.current?.frame != null) {
+      cancelAnimationFrame(programmaticRef.current.frame);
+    }
+    programmaticRef.current = null;
+    lastScrollTopRef.current = 0;
+    setPinned(true);
+    scrollToBottom();
+    startGlueLoop();
+  }, [scrollToBottom, setPinned, startGlueLoop]);
 
   // Pre-emptive intent-to-leave: flip the pin ref synchronously when the user
   // acts, BEFORE the next per-frame snap effect reads it, so the snap bails and

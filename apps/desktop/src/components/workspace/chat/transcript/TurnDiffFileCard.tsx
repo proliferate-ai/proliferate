@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { DiffViewer } from "@/components/content/ui/DiffViewer";
 import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { useTurnCurrentFilePatch } from "@/hooks/chat/cache/use-turn-current-file-diffs";
+import { useLazyDiffFileLines } from "@/hooks/ui/diff/use-lazy-diff-file-lines";
 import type { GitPanelReviewFile } from "@/lib/domain/workspaces/changes/git-panel-diff";
 import { CircleAlert, FileCode, FileIcon, RefreshCw } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
@@ -54,6 +55,13 @@ export function TurnDiffFileCard({
     baseRef,
     enabled: isRuntimeReady && isExpanded,
   });
+  // Turn diffs use scope=base_worktree (worktree vs merge-base), so the
+  // diff's NEW side is the current worktree file — safe for gap expansion.
+  const { fileLines, requestFileLines } = useLazyDiffFileLines({
+    workspaceId,
+    path: file.path,
+    enabled: isRuntimeReady,
+  });
   const emptyDiffState = formatEmptyDiffState({
     binary: Boolean(diffQuery.data?.binary || currentDiff?.binary),
     truncated: Boolean(diffQuery.data?.truncated && !patch),
@@ -76,7 +84,7 @@ export function TurnDiffFileCard({
     >
       {!isRuntimeReady ? (
         <TurnDiffInlineState
-          icon={<RefreshCw className="size-3.5" />}
+          icon={<RefreshCw className="size-4" />}
           title="Diff unavailable"
           description={runtimeBlockedReason ?? "The workspace runtime is not ready."}
         />
@@ -88,14 +96,14 @@ export function TurnDiffFileCard({
         />
       ) : metadataErrorMessage && !currentDiff ? (
         <TurnDiffInlineState
-          icon={<CircleAlert className="size-3.5" />}
+          icon={<CircleAlert className="size-4" />}
           title="Diff unavailable"
           description={metadataErrorMessage}
           onOpenFile={onOpenFile}
         />
       ) : !currentDiff ? (
         <TurnDiffInlineState
-          icon={<FileIcon className="size-3.5" />}
+          icon={<FileIcon className="size-4" />}
           title="No current diff"
           description="This file was touched, but there are no current changes to review against the selected base."
           onOpenFile={onOpenFile}
@@ -113,7 +121,7 @@ export function TurnDiffFileCard({
         />
       ) : diffErrorMessage ? (
         <TurnDiffInlineState
-          icon={<CircleAlert className="size-3.5" />}
+          icon={<CircleAlert className="size-4" />}
           title="Diff unavailable"
           description={diffErrorMessage}
           onOpenFile={onOpenFile}
@@ -132,6 +140,8 @@ export function TurnDiffFileCard({
               contentSearchUnitId={`diff:${turnId}:${file.path}`}
               viewportClassName={TURN_DIFF_VIEWPORT_CLASS}
               variant="chat"
+              fileLines={fileLines}
+              onRequestFileLines={requestFileLines}
             />
             {diffQuery.data?.truncated ? (
               <p className="px-3 py-2 text-center text-xs text-muted-foreground">

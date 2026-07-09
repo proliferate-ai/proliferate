@@ -15,7 +15,10 @@ export function desktopNavigationTarget(url: string): string | null {
     const segments = parsed.pathname.split("/").filter(Boolean);
     if (segments.length === 1) {
       const organizationId = decodeRoutePart(segments[0]);
-      const params = new URLSearchParams({ section: "organization-members" });
+      // Lands on Account (every signed-in user can reach it), not the
+      // admin-gated Members pane — a non-admin invitee must be able to
+      // follow this link and see/accept their invitation.
+      const params = new URLSearchParams({ section: "account" });
       params.set("joinOrganizationId", organizationId);
       return `/settings?${params.toString()}`;
     }
@@ -66,7 +69,12 @@ export function desktopNavigationTarget(url: string): string | null {
     (parsed.hostname === "integrations" || parsed.hostname === "plugins" || parsed.hostname === "powers")
     && (parsed.pathname === "" || parsed.pathname === "/")
   ) {
-    return parsed.search ? `/integrations${parsed.search}` : "/integrations";
+    // Integration OAuth browser returns (and legacy plugins/powers links) land on
+    // the user Integrations pane, carrying flowId/status/failureCode so the pane
+    // can toast the flow outcome on arrival.
+    const params = new URLSearchParams(parsed.search);
+    params.set("section", "integrations");
+    return `/settings?${params.toString()}`;
   }
 
   if (parsed.hostname === "workspaces") {

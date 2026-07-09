@@ -458,7 +458,8 @@ mod tests {
         // those are managed-only, never on system PATH — so installed-only reconcile must
         // SKIP every agent and never attempt a (network) install.
         let service = AgentReconcileService::new();
-        let home = std::env::temp_dir().join(format!("anyharness-installed-only-{}", Uuid::new_v4()));
+        let home =
+            std::env::temp_dir().join(format!("anyharness-installed-only-{}", Uuid::new_v4()));
         let registry = crate::domains::agents::registry::built_in_registry();
         assert!(!registry.is_empty(), "built-in registry must have agents");
 
@@ -529,7 +530,10 @@ mod tests {
             Some("startup-installed-only"),
             "full reconcile must supersede the in-flight installed-only job, not reuse it"
         );
-        assert!(!snapshot.installed_only, "the superseding job is full-scope");
+        assert!(
+            !snapshot.installed_only,
+            "the superseding job is full-scope"
+        );
     }
 
     #[tokio::test]

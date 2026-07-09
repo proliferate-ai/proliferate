@@ -154,13 +154,17 @@ async def list_agent_run_configs(
     usable_in: str | None = None,
     status: str | None = CLOUD_AGENT_RUN_CONFIG_STATUS_ACTIVE,
 ) -> list[CloudAgentRunConfigRecord]:
-    if owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION:
-        if organization_id is None:
-            raise CloudApiError(
-                "organization_required",
-                "organizationId is required for organization configs.",
-                status_code=400,
-            )
+    if owner_scope == CLOUD_AGENT_RUN_CONFIG_OWNER_SCOPE_ORGANIZATION and organization_id is None:
+        raise CloudApiError(
+            "organization_required",
+            "organizationId is required for organization configs.",
+            status_code=400,
+        )
+    # Require membership whenever an organization is scoped, regardless of owner_scope.
+    # The store ORs org-scoped rows into results for any non-None organization_id, so the
+    # guard must run even when owner_scope is omitted (otherwise a non-member could
+    # enumerate a victim org's configs via `?organizationId=<uuid>` with no ownerScope).
+    if organization_id is not None:
         await _require_org_member(db, user_id=user.id, organization_id=organization_id)
     return list(
         await config_store.list_configs(

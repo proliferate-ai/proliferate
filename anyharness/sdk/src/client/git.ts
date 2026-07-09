@@ -14,7 +14,9 @@ import type {
   PushResponse,
   RenameBranchRequest,
   RenameBranchResponse,
+  StagePatchRequest,
   StagePathsRequest,
+  UnstagePatchRequest,
   UnstagePathsRequest,
 } from "../types/git.js";
 import { withTimingCategory, type AnyHarnessRequestOptions, type AnyHarnessTransport } from "./core.js";
@@ -131,6 +133,20 @@ export class GitClient {
     await this.transport.post<void>(
       `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/unstage`,
       { paths } satisfies UnstagePathsRequest,
+    );
+  }
+
+  async stagePatch(workspaceId: string, patch: string): Promise<void> {
+    await this.transport.post<void>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/stage-patch`,
+      { patch } satisfies StagePatchRequest,
+    );
+  }
+
+  async unstagePatch(workspaceId: string, patch: string): Promise<void> {
+    await this.transport.post<void>(
+      `/v1/workspaces/${encodeURIComponent(workspaceId)}/git/unstage-patch`,
+      { patch } satisfies UnstagePatchRequest,
     );
   }
 

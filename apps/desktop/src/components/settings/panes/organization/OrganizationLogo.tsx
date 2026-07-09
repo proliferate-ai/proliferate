@@ -1,8 +1,7 @@
-import type { ReactNode } from "react";
+import { OrganizationAvatar } from "@/components/organizations/OrganizationAvatar";
 
 interface OrganizationLogoRecord {
   name: string;
-  logoDomain?: string | null;
 }
 
 interface OrganizationAvatarMember {
@@ -18,26 +17,12 @@ export function OrganizationLogo({
   organization: OrganizationLogoRecord;
   logoImage?: string | null;
 }) {
-  const initials = organization.name.trim().slice(0, 2).toUpperCase() || "OR";
-  if (logoImage) {
-    return (
-      <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border-light bg-foreground/5">
-        <img src={logoImage} alt="" className="size-full object-cover" />
-      </div>
-    );
-  }
-  if (!organization.logoDomain) {
-    return (
-      <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border-light bg-foreground/5 text-sm font-medium text-muted-foreground">
-        {initials}
-      </div>
-    );
-  }
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(organization.logoDomain)}&sz=64`;
   return (
-    <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border-light bg-foreground/5">
-      <img src={faviconUrl} alt="" className="size-6" />
-    </div>
+    <OrganizationAvatar
+      name={organization.name}
+      logoImage={logoImage}
+      className="size-12"
+    />
   );
 }
 
@@ -56,27 +41,5 @@ export function Avatar({ member }: { member: OrganizationAvatarMember }) {
     <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-border-light bg-foreground/5 text-xs font-medium text-muted-foreground">
       {initials || "U"}
     </div>
-  );
-}
-
-export function OrganizationSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="space-y-3">
-      <div className="space-y-1">
-        <h2 className="text-sm font-medium text-foreground">{title}</h2>
-        {description ? (
-          <p className="max-w-xl text-sm leading-6 text-muted-foreground">{description}</p>
-        ) : null}
-      </div>
-      {children}
-    </section>
   );
 }

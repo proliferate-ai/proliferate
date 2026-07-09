@@ -109,6 +109,7 @@ module = [
     "proliferate.server.cloud.worker.models",
     "proliferate.server.cloud.workspaces.models",
     "proliferate.server.catalogs.models",
+    "proliferate.server.meta",
     "proliferate.server.cloud.events.models",
     "proliferate.server.cloud.live.models",
     "proliferate.server.cloud.managed_sandboxes.models",
@@ -125,7 +126,6 @@ markers = [
     "cloud_e2e: live cloud lifecycle tests that require real provider credentials",
     "e2b: tests specific to the E2B provider",
     "live_webhook: tests that require a real externally reachable E2B webhook target",
-    "live_bifrost: tests that require a live Bifrost deployment and provider credentials",
 ]
 
 [tool.hatch.build.targets.wheel]

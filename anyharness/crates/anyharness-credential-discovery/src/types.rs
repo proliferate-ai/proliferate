@@ -4,13 +4,14 @@ use std::path::PathBuf;
 pub enum ProviderId {
     Claude,
     Codex,
-    Gemini,
     Xai,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalAuthState {
     Present(LocalAuthSource),
+    /// Credentials exist but have expired (OAuth token past its `expiresAt`).
+    Expired(LocalAuthSource),
     Absent,
 }
 

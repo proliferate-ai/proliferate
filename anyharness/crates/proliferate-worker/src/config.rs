@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -12,25 +12,53 @@ pub struct WorkerConfig {
     pub cloud_base_url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enrollment_token: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub anyharness_base_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub anyharness_bearer_token: Option<String>,
     pub worker_db_path: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub materialization_root: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_update_request_dir: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supervisor_version: Option<String>,
+    pub integration_gateway_home: Option<PathBuf>,
     #[serde(default = "default_heartbeat_interval_seconds")]
     pub heartbeat_interval_seconds: u64,
+    /// Whether this worker converges its own binary onto the server's pinned
+    /// version (heartbeat `desiredVersions`). Default false: only launchers
+    /// that own no update mechanism of their own (the sandbox sidecar) opt
+    /// in. The desktop app bundle owns its worker binary and must leave this
+    /// off.
+    #[serde(default)]
+    pub self_update_enabled: bool,
+    /// Base URL of the co-located AnyHarness runtime HTTP API. Required for
+    /// catalog sync (pushing fetched catalogs to the runtime). Defaults to
+    /// `http://127.0.0.1:8457` when absent — the standard runtime port on
+    /// the same host.
+    #[serde(default = "default_runtime_base_url")]
+    pub runtime_base_url: String,
+    /// Bearer token for authenticating to the runtime's HTTP API. Read from
+    /// `ANYHARNESS_BEARER_TOKEN` env at startup when not set in config.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_bearer_token: Option<String>,
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
 }
 
+fn default_runtime_base_url() -> String {
+    "http://127.0.0.1:8457".to_string()
+}
+
 fn default_heartbeat_interval_seconds() -> u64 {
-    60
+    30
+}
+
+/// Directory into which the worker writes the integration-gateway dotfile when
+/// `integration_gateway_home` is not set in config. Mirrors
+/// `anyharness-lib::default_runtime_home()` so the runtime and worker agree.
+pub fn default_integration_gateway_home() -> PathBuf {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".into());
+    let dir = if std::env::var_os("PROLIFERATE_DEV").is_some() || cfg!(debug_assertions) {
+        ".proliferate-local"
+    } else {
+        ".proliferate"
+    };
+    PathBuf::from(home).join(dir).join("anyharness")
 }
 
 impl WorkerConfig {
@@ -68,6 +96,20 @@ impl WorkerConfig {
 }
 
 fn write_private_config(path: &Path, contents: String) -> Result<(), WorkerError> {
+    write_private_file(path, contents.as_bytes(), "config.toml", |path, source| {
+        WorkerError::WriteConfig { path, source }
+    })
+}
+
+/// Atomically write `contents` to `path` with 0600 perms, creating the parent
+/// directory (0700) if needed. Shared by config + integration-gateway dotfile.
+/// `write_err` maps write/rename failures to the caller's error variant.
+pub(crate) fn write_private_file(
+    path: &Path,
+    contents: &[u8],
+    fallback_name: &str,
+    write_err: fn(PathBuf, io::Error) -> WorkerError,
+) -> Result<(), WorkerError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|source| WorkerError::CreateParent {
             path: parent.to_path_buf(),
@@ -78,17 +120,11 @@ fn write_private_config(path: &Path, contents: String) -> Result<(), WorkerError
     let file_name = path
         .file_name()
         .and_then(|value| value.to_str())
-        .unwrap_or("config.toml");
+        .unwrap_or(fallback_name);
     let tmp_path = path.with_file_name(format!(".{file_name}.tmp.{}", std::process::id()));
-    fs::write(&tmp_path, contents).map_err(|source| WorkerError::WriteConfig {
-        path: tmp_path.clone(),
-        source,
-    })?;
+    fs::write(&tmp_path, contents).map_err(|source| write_err(tmp_path.clone(), source))?;
     set_private_file_permissions(&tmp_path)?;
-    fs::rename(&tmp_path, path).map_err(|source| WorkerError::WriteConfig {
-        path: path.to_path_buf(),
-        source,
-    })
+    fs::rename(&tmp_path, path).map_err(|source| write_err(path.to_path_buf(), source))
 }
 
 #[cfg(unix)]
@@ -129,4 +165,45 @@ fn default_config_path() -> PathBuf {
         .join(".proliferate")
         .join("worker")
         .join("config.toml")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WorkerConfig;
+
+    const MINIMAL_CONFIG: &str = r#"
+cloud_base_url = "https://cloud.test"
+worker_db_path = "/tmp/worker.sqlite3"
+"#;
+
+    #[test]
+    fn self_update_defaults_off() {
+        // Desktop configs predate (and must never enable) self-update.
+        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
+        assert!(!config.self_update_enabled);
+    }
+
+    #[test]
+    fn self_update_opt_in_parses() {
+        let contents = format!("{MINIMAL_CONFIG}self_update_enabled = true\n");
+        let config: WorkerConfig = toml::from_str(&contents).expect("opt-in config");
+        assert!(config.self_update_enabled);
+    }
+
+    #[test]
+    fn runtime_base_url_defaults_to_localhost() {
+        let config: WorkerConfig = toml::from_str(MINIMAL_CONFIG).expect("minimal config");
+        assert_eq!(config.runtime_base_url, "http://127.0.0.1:8457");
+        assert_eq!(config.runtime_bearer_token, None);
+    }
+
+    #[test]
+    fn runtime_base_url_overridable() {
+        let contents = format!(
+            "{MINIMAL_CONFIG}runtime_base_url = \"http://10.0.0.5:9000\"\nruntime_bearer_token = \"secret\"\n"
+        );
+        let config: WorkerConfig = toml::from_str(&contents).expect("config with runtime url");
+        assert_eq!(config.runtime_base_url, "http://10.0.0.5:9000");
+        assert_eq!(config.runtime_bearer_token.as_deref(), Some("secret"));
+    }
 }

@@ -13,6 +13,8 @@ packages:
   - "apps/packages/ui"
   - "server/artifact-runtime"
   - "apps/web"
+  - "tests/intent"
+  - "tests/release"
 
 allowBuilds:
   "@sentry/cli": true

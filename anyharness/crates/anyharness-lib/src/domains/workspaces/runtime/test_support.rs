@@ -64,8 +64,6 @@ pub(super) fn session_record(id: &str, workspace_id: &str) -> SessionRecord {
         workspace_id: workspace_id.to_string(),
         agent_kind: "claude".to_string(),
         native_session_id: None,
-        agent_auth_scope: None,
-        required_agent_auth_revision: None,
         agent_auth_contexts: None,
         requested_model_id: None,
         current_model_id: None,

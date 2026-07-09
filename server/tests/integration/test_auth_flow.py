@@ -265,13 +265,8 @@ class TestPasswordAuthFlow:
         assert protected.status_code == 403
         assert protected.json()["detail"]["code"] == "github_link_required"
 
-        sandbox_profile = await client.post(
-            "/v1/cloud/sandbox-profiles/personal",
-            headers={"Authorization": f"Bearer {payload['accessToken']}"},
-        )
-        assert sandbox_profile.status_code == 403
-        assert sandbox_profile.json()["detail"]["code"] == "github_link_required"
-
+        # /v1/cloud/sandbox-profiles/* was removed from the cloud API by the
+        # #803/#809 cutover; re-add coverage when the router is remounted.
         ai_magic = await client.post(
             "/v1/ai_magic/session-titles/generate",
             headers={"Authorization": f"Bearer {payload['accessToken']}"},
@@ -393,6 +388,72 @@ class TestPasswordAuthFlow:
         assert new_login.status_code == 200
 
     @pytest.mark.asyncio
+    async def test_password_change_revokes_old_tokens_and_remints_acting_session(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A password change revokes every prior token but keeps the caller in.
+
+        The acting bearer session is re-minted at the new token generation and
+        returned in the response body, so a real desktop client stays logged in
+        while every previously issued access and refresh token (including a
+        captured one) is rejected on next use.
+        """
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        user_id = await _create_password_user("revoke-on-change@example.com", self.password)
+
+        # Establish a session (access + refresh) via the desktop token flow.
+        verifier, challenge = _make_pkce_pair()
+        code = await _create_desktop_auth_code_for_user(
+            user_id=user_id, state="revoke-state", code_challenge=challenge
+        )
+        token = await client.post(
+            "/auth/desktop/token",
+            json={"code": code, "code_verifier": verifier, "grant_type": "authorization_code"},
+        )
+        assert token.status_code == 200
+        old_access = token.json()["access_token"]
+        old_refresh = token.json()["refresh_token"]
+
+        # The freshly minted access token authenticates.
+        me = await client.get("/users/me", headers={"Authorization": f"Bearer {old_access}"})
+        assert me.status_code == 200
+
+        # Change the password using the acting bearer token.
+        change = await client.put(
+            "/auth/password",
+            headers={"Authorization": f"Bearer {old_access}"},
+            json={"currentPassword": self.password, "newPassword": "a new correct horse"},
+        )
+        assert change.status_code == 200
+        body = change.json()
+        # The acting (bearer) caller is re-minted a fresh session in the body.
+        new_access = body["accessToken"]
+        new_refresh = body["refreshToken"]
+        assert new_access and new_refresh
+
+        # Every previously issued token is revoked...
+        revoked_me = await client.get(
+            "/users/me", headers={"Authorization": f"Bearer {old_access}"}
+        )
+        assert revoked_me.status_code == 401
+        revoked_refresh = await client.post(
+            "/auth/desktop/refresh",
+            json={"refresh_token": old_refresh, "grant_type": "refresh_token"},
+        )
+        assert revoked_refresh.status_code == 401
+
+        # ...but the re-minted session keeps the caller logged in.
+        kept_me = await client.get("/users/me", headers={"Authorization": f"Bearer {new_access}"})
+        assert kept_me.status_code == 200
+        kept_refresh = await client.post(
+            "/auth/desktop/refresh",
+            json={"refresh_token": new_refresh, "grant_type": "refresh_token"},
+        )
+        assert kept_refresh.status_code == 200
+
+    @pytest.mark.asyncio
     async def test_users_me_is_read_only_for_password_changes(
         self,
         client: AsyncClient,
@@ -419,7 +480,19 @@ class TestPasswordAuthFlow:
             headers={"Authorization": f"Bearer {token}"},
             json={"password": "short"},
         )
-        assert bypass.status_code == 405
+        assert bypass.status_code == 422
+
+        # Prove the password was not changed.
+        original_login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "users-me-password@example.com", "password": self.password},
+        )
+        assert original_login.status_code == 200
+        short_login = await client.post(
+            "/auth/mobile/password/login",
+            json={"email": "users-me-password@example.com", "password": "short"},
+        )
+        assert short_login.status_code == 401
 
     @pytest.mark.asyncio
     async def test_password_login_throttles_repeated_failures(
@@ -456,6 +529,96 @@ class TestPasswordAuthFlow:
             json={"email": "disabled@example.com", "password": self.password},
         )
         assert response.status_code == 404
+
+
+class TestSingleOrgProductUserBypass:
+    """current_product_user's single-org carve-out (mirrors current_organization_actor).
+
+    Self-hosted single-org instances have no GitHub OAuth app configured, so a
+    password-only account must be able to reach product surfaces. Hosted keeps
+    the gate. Endpoints that genuinely need a GitHub token still fail cleanly
+    at their own point of use, regardless of org mode.
+    """
+
+    password = "correct horse battery"
+
+    @pytest.mark.asyncio
+    async def test_single_org_password_only_user_passes_product_gate(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        monkeypatch.setattr(settings, "single_org_mode_override", True)
+        await _create_password_user("single-org-password@example.com", self.password)
+
+        login = await client.post(
+            "/auth/web/password/login",
+            json={"email": "single-org-password@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+        access_token = login.json()["accessToken"]
+
+        response = await client.get(
+            "/v1/cloud/workspaces",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_hosted_mode_still_enforces_product_gate_for_password_only_user(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        monkeypatch.setattr(settings, "single_org_mode_override", False)
+        await _create_password_user("hosted-password@example.com", self.password)
+
+        login = await client.post(
+            "/auth/web/password/login",
+            json={"email": "hosted-password@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+        access_token = login.json()["accessToken"]
+
+        response = await client.get(
+            "/v1/cloud/workspaces",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"]["code"] == "github_link_required"
+
+    @pytest.mark.asyncio
+    async def test_single_org_repo_endpoint_still_rejects_user_without_github(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The single-org bypass only lifts the blanket product gate.
+
+        A repo-import surface that genuinely needs a GitHub connection keeps
+        its own point-of-use guard (proliferate/server/cloud/repos/service.py's
+        ``_require_github_access_token`` / the GitHub App authorization check),
+        so it still fails cleanly instead of silently granting access.
+        """
+        monkeypatch.setattr(settings, "password_auth_enabled", True)
+        monkeypatch.setattr(settings, "single_org_mode_override", True)
+        await _create_password_user("single-org-no-github@example.com", self.password)
+
+        login = await client.post(
+            "/auth/web/password/login",
+            json={"email": "single-org-no-github@example.com", "password": self.password},
+        )
+        assert login.status_code == 200
+        access_token = login.json()["accessToken"]
+
+        response = await client.get(
+            "/v1/cloud/repositories/catalog",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "github_app_authorization_required"
 
 
 class TestDesktopPKCEFlow:

@@ -55,12 +55,12 @@ describe("useUserPreferencesLifecycle", () => {
     });
 
     act(() => {
-      useUserPreferencesStore.getState().set("themePreset", "ship");
+      useUserPreferencesStore.getState().set("colorMode", "light");
     });
 
     await waitFor(() => {
       const persistedRecord = storeMocks.values.get("user_preferences") as Record<string, unknown>;
-      expect(persistedRecord.themePreset).toBe("ship");
+      expect(persistedRecord.colorMode).toBe("light");
       expect(persistedRecord.worktreeAutoDeleteLimit).toBeUndefined();
       expect(persistedRecord.worktreeAutoDeleteLimitBackfilled).toBe(true);
     });

@@ -5,7 +5,6 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.store import support_diagnostics as diagnostics_store
 from proliferate.db.store import support_reports
 from proliferate.integrations.aws import (
     AwsIntegrationError,
@@ -21,7 +20,6 @@ from proliferate.middleware.request_context import (
 )
 from proliferate.server.support.domain.message import normalize_support_message
 from proliferate.server.support.domain.report_records import (
-    cloud_workspace_ids_from_refs,
     expected_manifest_entries,
     expected_manifest_keys,
     expected_upload_keys,
@@ -41,7 +39,6 @@ from proliferate.server.support.errors import (
     SupportReportUploadConflict,
     SupportReportUploadInvalid,
 )
-from proliferate.server.support.jobs import schedule_support_tracker_after_commit
 from proliferate.server.support.models import (
     SupportMessageRequest,
     SupportMessageResponse,
@@ -49,13 +46,11 @@ from proliferate.server.support.models import (
     SupportReportCompleteResponse,
     SupportReportCreateRequest,
     SupportReportCreateResponse,
-    SupportReportTrackerResponse,
     SupportReportUploadRequest,
     SupportReportUploadResponse,
     SupportReportUploadTargetsRequest,
     support_report_correlation_record,
     support_report_create_response,
-    support_report_tracker_response,
 )
 from proliferate.server.support.notifications import (
     notify_support_report,
@@ -70,7 +65,6 @@ from proliferate.server.support.upload_lifecycle import (
     report_prefix,
     support_report_bucket,
     support_report_region,
-    tracker_initial_statuses,
     validate_report_scope,
     validate_report_upload_request,
     validate_upload_target_request,
@@ -105,6 +99,8 @@ async def create_support_message_report(
             workspaceRefs=[],
             expectedClientUploads={"diagnostics": False, "attachmentCount": 0},
             publicContentConsent=False,
+            kind="bug",
+            creditConsent=False,
         ),
     )
     report = await support_reports.get_report_by_id(db, create_response.report_id)
@@ -178,7 +174,14 @@ async def create_support_report(
                 else {}
             ),
             expected_uploads=body.expected_client_uploads.model_dump(by_alias=True),
-            public_content_consent=body.public_content_consent is True,
+            public_content_consent=False,
+            kind=body.kind,
+            credit_consent=body.credit_consent,
+            # Credit consent is available on both the bug and prompt modals
+            # (previously prompt-only); gate on consent alone.
+            credit_name=(body.credit_name if body.credit_consent else None),
+            urgent=body.urgent,
+            notify_me=body.notify_me,
             request_id=get_request_id(),
             cloud_diagnostics_status="pending" if authorized_cloud_refs else "not_applicable",
         )
@@ -297,7 +300,9 @@ async def create_support_report_upload(
                 "diagnostics": body.diagnostics is not None,
                 "attachmentCount": len(body.attachments),
             },
-            publicContentConsent=body.public_content_consent is True,
+            publicContentConsent=False,
+            kind=body.kind,
+            creditConsent=body.credit_consent,
         ),
     )
     return await create_support_report_upload_targets(
@@ -439,7 +444,6 @@ async def _complete_db_backed_report(
         report_id=report.id,
         complete_request_id=get_request_id(),
         object_manifest={**manifest, "completed": complete_record},
-        **tracker_initial_statuses(),
     )
     logger.info(
         "Support report completed.",
@@ -459,11 +463,14 @@ async def _complete_db_backed_report(
             context=completed_report.source_context,
             diagnostics_included=body.diagnostics is not None,
             attachment_count=len(body.attachments),
+            kind=completed_report.kind,
+            credit_consent=completed_report.credit_consent,
+            credit_name=completed_report.credit_name,
+            urgent=completed_report.urgent,
+            notify_me=completed_report.notify_me,
             correlation=support_report_correlation_record(completed_report),
         )
         await support_reports.mark_report_slack_notified(db, report_id=completed_report.id)
-    if completed_report.tracker_status == "pending":
-        await schedule_support_tracker_after_commit(db, completed_report.id)
     return SupportReportCompleteResponse(reportId=report.id)
 
 
@@ -551,26 +558,14 @@ async def _complete_legacy_report(
         context=context_record if isinstance(context_record, dict) else None,
         diagnostics_included=body.diagnostics is not None,
         attachment_count=len(body.attachments),
+        kind="bug",
+        credit_consent=False,
+        urgent=bool(request_record.get("urgent")),
+        notify_me=bool(request_record.get("notifyMe")),
         correlation=None,
     )
 
     return SupportReportCompleteResponse(reportId=report_id)
-
-
-async def ensure_support_report_tracker(
-    *,
-    db: AsyncSession,
-    sender_user_id: UUID,
-    report_id: str,
-) -> SupportReportTrackerResponse:
-    report = await support_reports.get_report_by_id(db, report_id)
-    if report is None or report.owner_user_id != sender_user_id:
-        raise SupportReportUploadInvalid("Unknown support report upload.")
-    if report.status != "completed":
-        raise SupportReportUploadInvalid("Support report upload is not completed.")
-    if report.tracker_status in {"pending", "partial", "failed_retryable"}:
-        await schedule_support_tracker_after_commit(db, report.id)
-    return support_report_tracker_response(report)
 
 
 async def _authorized_cloud_refs(
@@ -578,14 +573,15 @@ async def _authorized_cloud_refs(
     *,
     sender_user_id: UUID,
     workspace_refs: tuple[dict[str, object], ...],
-) -> tuple[diagnostics_store.AuthorizedCloudWorkspaceSnapshot, ...]:
-    workspace_ids = cloud_workspace_ids_from_refs(workspace_refs)
-    return await diagnostics_store.list_authorized_cloud_workspaces(
-        db,
-        user_id=sender_user_id,
-        workspace_ids=workspace_ids,
-        limit=5,
-    )
+) -> tuple[object, ...]:
+    # Server-side cloud-workspace diagnostics enrichment is disabled: the
+    # cloud target / runtime-access / sandbox / exposure tables it queried were
+    # removed in the sandbox-model cutover (#803/#846), taking the
+    # support_diagnostics store with them. The desktop client uploads its own
+    # diagnostics bundle, so reports still carry logs; only the extra
+    # server-side cloud enrichment is gone. Returning empty keeps every report
+    # cloud_diagnostics_status="not_applicable" and skips the after-commit job.
+    return ()
 
 
 def _install_report_correlation(report: support_reports.SupportReportSnapshot) -> None:

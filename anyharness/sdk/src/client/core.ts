@@ -1,4 +1,6 @@
 import type { ProblemDetails } from "../types/runtime.js";
+import { AgentAuthClient } from "./agent-auth.js";
+import { AgentGatewayCatalogClient } from "./agent-gateway-catalog.js";
 import { AgentsClient } from "./agents.js";
 import { CoworkClient } from "./cowork.js";
 import { FilesClient } from "./files.js";
@@ -10,7 +12,6 @@ import { PullRequestsClient } from "./pull-requests.js";
 import { RepoRootsClient } from "./repo-roots.js";
 import { ReplayClient } from "./replay.js";
 import { ReviewsClient } from "./reviews.js";
-import { RuntimeConfigClient } from "./runtime-config.js";
 import { RuntimeClient } from "./runtime.js";
 import { SessionsClient } from "./sessions.js";
 import { TerminalsClient } from "./terminals.js";
@@ -59,6 +60,13 @@ export type AnyHarnessTimingCategory =
   | "session.events.list"
   | "session.resume"
   | "session.title.update"
+  | "session.goal.set"
+  | "session.goal.clear"
+  | "session.loop.set"
+  | "session.loop.edit"
+  | "session.loop.list"
+  | "session.loop.clear"
+  | "session.loop.clear_one"
   | "session.stream"
   | "file.list"
   | "file.search"
@@ -364,8 +372,9 @@ export function hashTimingScope(value: string): string {
 
 export class AnyHarnessClient {
   readonly runtime: RuntimeClient;
-  readonly runtimeConfig: RuntimeConfigClient;
   readonly agents: AgentsClient;
+  readonly agentAuth: AgentAuthClient;
+  readonly agentGatewayCatalog: AgentGatewayCatalogClient;
   readonly mobility: MobilityClient;
   readonly plans: PlansClient;
   readonly repoRoots: RepoRootsClient;
@@ -384,8 +393,9 @@ export class AnyHarnessClient {
   constructor(options: AnyHarnessClientOptions) {
     const transport = new AnyHarnessTransport(options);
     this.runtime = new RuntimeClient(transport);
-    this.runtimeConfig = new RuntimeConfigClient(transport);
     this.agents = new AgentsClient(transport);
+    this.agentAuth = new AgentAuthClient(transport);
+    this.agentGatewayCatalog = new AgentGatewayCatalogClient(transport);
     this.mobility = new MobilityClient(transport);
     this.plans = new PlansClient(transport);
     this.repoRoots = new RepoRootsClient(transport);

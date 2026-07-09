@@ -5,10 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
 import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
-import {
-  CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS,
-  HOME_CHAT_COMPOSER_INPUT,
-} from "@/config/chat";
+import { HOME_CHAT_COMPOSER_INPUT } from "@/config/chat";
 
 const screenMocks = vi.hoisted(() => {
   const handleHomeAction = vi.fn();
@@ -51,6 +48,8 @@ const screenMocks = vi.hoisted(() => {
     homeNext,
     homeNextStateArgs: null as any,
     targetPickerProps: null as any,
+    leadingControlsProps: null as any,
+    trailingControlsProps: null as any,
   };
 });
 
@@ -122,12 +121,15 @@ vi.mock("@/components/home/screen/HomeTargetPicker", () => ({
   },
 }));
 
-vi.mock("@/components/home/screen/HomeModelPicker", () => ({
-  HomeModelPicker: () => <div data-testid="model-picker" />,
-}));
-
-vi.mock("@/components/home/screen/HomeModePicker", () => ({
-  HomeModePicker: () => <div data-testid="mode-picker" />,
+vi.mock("@/components/workspace/chat/input/ChatInputControlRow", () => ({
+  ComposerLeadingControls: (props: any) => {
+    screenMocks.leadingControlsProps = props;
+    return <div data-testid="composer-leading-controls" />;
+  },
+  ComposerTrailingControls: (props: any) => {
+    screenMocks.trailingControlsProps = props;
+    return <div data-testid="composer-trailing-controls" />;
+  },
 }));
 
 vi.mock("@proliferate/product-ui/chat/composer/ChatComposerSurface", () => ({
@@ -195,6 +197,8 @@ function resetHomeNext() {
   screenMocks.homeNext.sshTargetsLoading = false;
   screenMocks.homeNextStateArgs = null;
   screenMocks.targetPickerProps = null;
+  screenMocks.leadingControlsProps = null;
+  screenMocks.trailingControlsProps = null;
 }
 
 describe("HomeNextScreen model availability notices", () => {
@@ -259,8 +263,10 @@ describe("HomeNextScreen model availability notices", () => {
     render(<HomeNextScreen />);
 
     const textarea = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+    // jsdom does not collapse var() calcs, so assert the literal calc string
+    // that ties the cap to the --text-composer--line-height scale token.
     const expectedMaxHeight =
-      `calc(${CHAT_COMPOSER_INPUT_LINE_HEIGHT_CSS} * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
+      `calc(var(--text-composer--line-height) * ${HOME_CHAT_COMPOSER_INPUT.maxRows})`;
 
     expect(textarea.style.maxHeight).toBe(expectedMaxHeight);
     expect(textarea.parentElement?.style.maxHeight).toBe(expectedMaxHeight);
@@ -332,6 +338,52 @@ describe("HomeNextScreen model availability notices", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Configure default harnesses" }));
     expect(screenMocks.handleHomeAction).toHaveBeenCalledWith("agent-defaults");
+  });
+});
+
+describe("HomeNextScreen composer control-row parity", () => {
+  beforeEach(() => {
+    installLocalStorageMock();
+    resetHomeNext();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders the shared leading and trailing composer control clusters", () => {
+    render(<HomeNextScreen />);
+
+    expect(screen.getByTestId("composer-leading-controls")).toBeTruthy();
+    expect(screen.getByTestId("composer-trailing-controls")).toBeTruthy();
+  });
+
+  it("feeds the clusters sessionless chat-equivalent props", () => {
+    render(<HomeNextScreen />);
+
+    expect(screenMocks.leadingControlsProps).toMatchObject({
+      runtimeControlsDisabled: false,
+      agentKind: "codex",
+      activeSessionId: null,
+    });
+    expect(screenMocks.leadingControlsProps.modelSelectorProps).toMatchObject({
+      connectionState: "healthy",
+      hasAgents: false,
+      isLoading: false,
+    });
+    expect(screenMocks.trailingControlsProps).toMatchObject({
+      runtimeControlsDisabled: false,
+      agentKind: "codex",
+      activeSessionId: null,
+      isEditingQueuedPrompt: false,
+      chatDisabled: false,
+      isSubmitting: false,
+      // Home has no attachments infra pre-session; the shared cluster shows
+      // chat's exact pre-session disabled state for these.
+      supportsAttachments: false,
+      canAttachFiles: false,
+    });
   });
 });
 

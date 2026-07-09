@@ -1,7 +1,7 @@
 import type { GitStatusSnapshot } from "@anyharness/sdk";
 import type { Workspace } from "@anyharness/sdk";
 import type { RepoConfigResponse } from "@proliferate/cloud-sdk";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
   type SidebarSessionActivityState,
@@ -21,7 +21,9 @@ import {
 } from "@/hooks/ui/document/use-document-focus-visibility";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { useStandardRepoProjection } from "@/hooks/workspaces/derived/use-standard-repo-projection";
+import { useWorkspaceGitStatuses } from "@/hooks/workspaces/derived/use-workspace-git-statuses";
 import { useWorkspaceMetadataSync } from "@/hooks/workspaces/lifecycle/use-workspace-metadata-sync";
+import { useDebouncedWorkspaceCollectionsInvalidation } from "@/hooks/workspaces/cache/use-workspace-collections-invalidation";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useWorkspaceSidebarActivityStatesWithErrorAttention } from "@/hooks/workspaces/derived/use-workspace-sidebar-activities";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
@@ -67,6 +69,34 @@ export function useWorkspaceSidebarState({
   const workspaceActivities = useWorkspaceSidebarActivityStatesWithErrorAttention(
     lastViewedSessionErrorAtBySession,
   );
+  // SPINNER STALENESS FIX: the sidebar 'iterating' spinner can be pinned by
+  // the server-side executionSummary, which lives in the cached workspace
+  // collections and refreshes only on collections sync — after a turn ended,
+  // nothing refetched it, so the spinner ran on stale 'running' data
+  // indefinitely (measured via sidebar_activity.summary_override
+  // diagnostics). Refetch the collections whenever any workspace's LIVE
+  // activity transitions to idle, so the summary self-corrects within one
+  // roundtrip. The invalidation lives in the cache-owner hook and is
+  // debounced so several agents finishing at once coalesce into one refetch.
+  const invalidateWorkspaceCollections = useDebouncedWorkspaceCollectionsInvalidation();
+  const previousActivitiesRef = useRef<Record<string, SidebarSessionActivityState> | null>(null);
+  useEffect(() => {
+    const previous = previousActivitiesRef.current;
+    previousActivitiesRef.current = workspaceActivities;
+    if (!previous) {
+      return;
+    }
+    const anyWentIdle = Object.entries(workspaceActivities).some(([id, activity]) => {
+      const before = previous[id];
+      return (activity === "idle" || activity === "closed")
+        && before !== undefined
+        && before !== "idle"
+        && before !== "closed";
+    });
+    if (anyWentIdle) {
+      invalidateWorkspaceCollections();
+    }
+  }, [invalidateWorkspaceCollections, workspaceActivities]);
   const deferredLaunchesById = useDeferredHomeLaunchStore((state) => state.launches);
   const activeSessionTitle = useSessionDirectoryStore((state) => {
     const entry = activeSessionId ? state.entriesById[activeSessionId] : null;
@@ -105,6 +135,7 @@ export function useWorkspaceSidebarState({
     workspaceCollections?.cleanupAttentionWorkspaces ?? EMPTY_WORKSPACES;
   const { repoRoots } = useStandardRepoProjection();
   const { data: gitStatus } = useWorkspaceMetadataSync();
+  const { statusesByLogicalId: gitStatusesByLogicalId } = useWorkspaceGitStatuses();
   const computeTargets = useComputeTargetOptions();
 
   const sessionWorkspaceIds = useSessionDirectoryStore(useShallow((state) => {
@@ -149,6 +180,7 @@ export function useWorkspaceSidebarState({
       "pendingWorkspaceEntry",
       "workspaceActivities",
       "gitStatus",
+      "gitStatuses",
       "targetAppearance",
     ],
     count: (value) => value.length,
@@ -166,6 +198,7 @@ export function useWorkspaceSidebarState({
       workspaceActivities,
       pendingPromptCounts,
       gitStatus,
+      gitStatusesByLogicalId,
       activeSessionTitle,
       lastViewedAt,
       workspaceLastInteracted,
@@ -179,6 +212,7 @@ export function useWorkspaceSidebarState({
     archivedSet,
     computeTargets.targetAppearanceById,
     gitStatus,
+    gitStatusesByLogicalId,
     hiddenRepoRootSet,
     lastViewedAt,
     logicalWorkspaces,

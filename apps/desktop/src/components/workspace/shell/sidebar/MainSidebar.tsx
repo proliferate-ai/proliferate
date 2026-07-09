@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
-import { SidebarFooter } from "./SidebarFooter";
+import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
 import { SidebarPrimaryNavigation } from "./SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "./SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
@@ -59,7 +59,7 @@ export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
   const actions = useWorkspaceSidebarActions();
-  const handleOpenSupport = useOpenSupportReportWindow({ source: "sidebar" });
+  const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const sidebarShortcutTargetIds = useSidebarShortcutTargets();
   const {
@@ -100,8 +100,8 @@ export const MainSidebar = memo(function MainSidebar() {
     restoreCloudWorkspace: restoreCloudWorkspaceRequest,
   } = useCloudWorkspaceActions();
 
-  const isOnIntegrations = location.pathname === APP_ROUTES.integrations;
   const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
+  const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
   const hideRepoRoot = useWorkspaceUiStore((s) => s.hideRepoRoot);
@@ -257,7 +257,7 @@ export const MainSidebar = memo(function MainSidebar() {
     [sidebarShortcutTargetIds],
   );
   const primaryNavShortcutLabels = useMemo(() => ({
-    home: getShortcutDisplayLabel(SHORTCUTS.goHome),
+    newChat: getShortcutDisplayLabel(SHORTCUTS.newDefault),
     support: getShortcutDisplayLabel(SHORTCUTS.openSupport),
   }), []);
 
@@ -265,18 +265,18 @@ export const MainSidebar = memo(function MainSidebar() {
     <DebugProfiler id="workspace-sidebar">
       <ProductSidebarFrame footer={(
         <DebugProfiler id="workspace-sidebar-footer">
-          <SidebarFooter />
+          <SidebarAccountFooter />
         </DebugProfiler>
       )}>
       <ProductSidebarBody>
         <DebugProfiler id="workspace-sidebar-primary-nav">
           <SidebarPrimaryNavigation
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
-            integrationsActive={isOnIntegrations}
+            workspacesActive={isOnWorkspaces}
             workflowsActive={isOnWorkflows}
             supportActive={false}
             onGoHome={actions.handleGoHome}
-            onGoIntegrations={actions.handleGoIntegrations}
+            onGoWorkspaces={actions.handleGoWorkspaces}
             onGoWorkflows={actions.handleGoWorkflows}
             onOpenSupport={handleOpenSupport}
             shortcutRevealVisible={shortcutRevealVisible}
@@ -319,6 +319,7 @@ export const MainSidebar = memo(function MainSidebar() {
               onOpenCloudRepoSettings={handleOpenCloudRepoSettings}
               onSelectWorkspace={actions.handleSelectWorkspace}
               onIndicatorAction={actions.handleSidebarIndicatorAction}
+              onOpenPullRequest={actions.handleOpenPullRequest}
               onMarkWorkspaceDone={actions.handleMarkWorkspaceDone}
               onWorkspaceHover={handleWorkspaceHover}
               shortcutRevealVisible={shortcutRevealVisible}

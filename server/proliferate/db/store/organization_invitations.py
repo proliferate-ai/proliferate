@@ -432,6 +432,47 @@ async def has_live_pending_invitation_for_organization_email(
     ).first() is not None
 
 
+async def get_live_pending_invitation_for_organization_email(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    email: str,
+) -> InvitationRecord | None:
+    """Load the live (pending, unexpired) invitation for an email, or None."""
+    normalized_email = normalize_invitation_email(email)
+    invitation = (
+        await db.execute(
+            select(OrganizationInvitation).where(
+                OrganizationInvitation.organization_id == organization_id,
+                OrganizationInvitation.email == normalized_email,
+                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+                OrganizationInvitation.expires_at > utcnow(),
+            )
+        )
+    ).scalar_one_or_none()
+    return invitation_record(invitation) if invitation is not None else None
+
+
+async def get_live_pending_invitation_by_id(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    invitation_id: UUID,
+) -> InvitationRecord | None:
+    """Load a live (pending, unexpired) invitation by id, or None."""
+    invitation = (
+        await db.execute(
+            select(OrganizationInvitation).where(
+                OrganizationInvitation.id == invitation_id,
+                OrganizationInvitation.organization_id == organization_id,
+                OrganizationInvitation.status == ORGANIZATION_INVITATION_STATUS_PENDING,
+                OrganizationInvitation.expires_at > utcnow(),
+            )
+        )
+    ).scalar_one_or_none()
+    return invitation_record(invitation) if invitation is not None else None
+
+
 async def _accept_locked_invitation(
     db: AsyncSession,
     *,

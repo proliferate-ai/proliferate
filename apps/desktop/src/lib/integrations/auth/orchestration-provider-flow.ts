@@ -28,6 +28,7 @@ import {
   discoverDesktopSso,
 } from "@/lib/integrations/auth/proliferate-sso-auth";
 import { checkControlPlaneReachable } from "@/lib/access/cloud/health";
+import { revokeDesktopWorkerServerSide } from "@/lib/workflows/cloud/ensure-desktop-worker";
 import {
   applyAnonymousState,
   applyAuthenticatedState,
@@ -347,6 +348,11 @@ export async function signOut(deps: AuthOrchestrationDeps): Promise<{
     };
   }
 
+  // Revoke the desktop worker + gateway token server-side while the auth
+  // session is still valid; once applyAnonymousState clears it the request
+  // can only fail. The enrollment hook's teardown (fired by the store
+  // flipping to anonymous) handles the local process + dotfile cleanup.
+  await revokeDesktopWorkerServerSide();
   await clearPendingGitHubAuth();
   await applyAnonymousState(deps, { clearPendingAuth: true });
   return {

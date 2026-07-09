@@ -4266,9 +4266,8 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.2.24"
+version = "0.3.10"
 dependencies = [
- "anyharness-credential-discovery",
  "base64 0.22.1",
  "chrono",
  "file-rotate",
@@ -4342,9 +4341,7 @@ dependencies = [
 name = "proliferate-worker"
 version = "0.1.0"
 dependencies = [
- "anyharness-contract",
  "anyhow",
- "chrono",
  "clap",
  "dirs",
  "fs2",

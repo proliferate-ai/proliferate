@@ -1,8 +1,6 @@
 use std::time::Instant;
 
-use anyharness_contract::v1::{
-    AgentAuthExternalScope, RuntimeConfigRevisionExpectation, SessionMcpBindingSummary,
-};
+use anyharness_contract::v1::SessionMcpBindingSummary;
 
 use crate::domains::sessions::mcp_bindings::assembly::join_system_prompt_append;
 use crate::domains::sessions::mcp_bindings::crypto::{encrypt_bindings, SessionMcpBindingsError};
@@ -26,10 +24,7 @@ impl SessionRuntime {
         system_prompt_append: Option<Vec<String>>,
         mcp_servers: Vec<SessionMcpServer>,
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
-        expected_runtime_config_revision: Option<RuntimeConfigRevisionExpectation>,
         subagents_enabled: bool,
-        agent_auth_scope: Option<AgentAuthExternalScope>,
-        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         self.access_gate
@@ -59,15 +54,8 @@ impl SessionRuntime {
             mcp_binding_summaries,
             SessionMcpBindingPolicy::InheritWorkspace,
             subagents_enabled,
-            agent_auth_scope,
-            required_agent_auth_revision,
             origin,
         )?;
-        if let Some(expected) = expected_runtime_config_revision.as_ref() {
-            self.runtime_config_service
-                .bind_session_to_expected(&record.id, expected)
-                .map_err(|error| CreateAndStartSessionError::Invalid(error.to_string()))?;
-        }
         tracing::info!(
             workspace_id = %workspace_id,
             session_id = %record.id,
@@ -97,8 +85,6 @@ impl SessionRuntime {
         mcp_binding_summaries: Option<Vec<SessionMcpBindingSummary>>,
         mcp_binding_policy: SessionMcpBindingPolicy,
         subagents_enabled: bool,
-        agent_auth_scope: Option<AgentAuthExternalScope>,
-        required_agent_auth_revision: Option<i64>,
         origin: OriginContext,
     ) -> Result<SessionRecord, CreateAndStartSessionError> {
         let system_prompt_append = join_system_prompt_append(system_prompt_append);
@@ -118,8 +104,6 @@ impl SessionRuntime {
                 mcp_binding_policy,
                 system_prompt_append,
                 subagents_enabled,
-                agent_auth_scope,
-                required_agent_auth_revision,
                 origin,
             )
             .map_err(map_create_session_service_error)
@@ -166,6 +150,15 @@ fn map_create_session_service_error(
             agent_kind,
             model_id,
         },
+        crate::domains::sessions::service::CreateSessionError::ModelGated {
+            agent_kind,
+            model_id,
+            required_contexts,
+        } => CreateAndStartSessionError::ModelGated {
+            agent_kind,
+            model_id,
+            required_contexts,
+        },
         crate::domains::sessions::service::CreateSessionError::ModeUnsupported {
             agent_kind,
             mode_id,
@@ -173,9 +166,6 @@ fn map_create_session_service_error(
             agent_kind,
             mode_id,
         },
-        crate::domains::sessions::service::CreateSessionError::AgentAuthSelectionRequired(
-            required,
-        ) => CreateAndStartSessionError::AgentAuthSelectionRequired(required),
         crate::domains::sessions::service::CreateSessionError::Invalid(detail) => {
             CreateAndStartSessionError::Invalid(detail)
         }

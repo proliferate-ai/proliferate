@@ -63,6 +63,13 @@ class OAuthAvailabilityResponse(BaseModel):
     client_id: str | None = None
 
 
+class AuthMethodsResponse(BaseModel):
+    """Sign-in methods this server offers the desktop app (public probe)."""
+
+    password_login: bool
+    github: bool
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
     grant_type: str = "refresh_token"

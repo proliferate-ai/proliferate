@@ -6,6 +6,9 @@ use anyharness_contract::v1::{
     McpElicitationSubmittedField, SessionMcpBindingSummary, UserInputSubmittedAnswer,
 };
 
+use super::active_activity_roster::ActivityRosterResolver;
+use super::active_goals::ActiveGoalResolver;
+use super::active_loops::LoopsResolver;
 use super::links::model::SessionLinkRecord;
 use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
@@ -14,8 +17,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
-use crate::domains::agents::auth::{AgentAuthSelectionRequired, AgentAuthService};
-use crate::domains::runtime_config::service::RuntimeConfigService;
+use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -32,9 +34,9 @@ mod pending_prompts;
 mod prompt;
 mod replay;
 mod startup;
-pub(crate) mod view;
 #[cfg(test)]
 mod tests;
+pub(crate) mod view;
 
 pub struct SessionRuntime {
     session_service: Arc<SessionService>,
@@ -45,11 +47,15 @@ pub struct SessionRuntime {
     session_data_cipher: Option<SessionDataCipher>,
     session_extensions: Vec<Arc<dyn SessionExtension>>,
     product_mcp_launch_catalog: ProductMcpLaunchCatalog,
-    runtime_config_service: Arc<RuntimeConfigService>,
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-    agent_auth_service: Arc<AgentAuthService>,
+    /// Catalog-driven gateway model resolver (spec §3): supplies the render
+    /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
+    gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+    active_goal_resolver: Arc<dyn ActiveGoalResolver>,
+    loops_resolver: Arc<dyn LoopsResolver>,
+    activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
 }
 
 impl SessionRuntime {
@@ -65,16 +71,26 @@ pub enum CreateAndStartSessionError {
         agent_kind: String,
         model_id: String,
     },
+    /// The model is gated behind inactive auth contexts (decisions ledger 16).
+    /// Carries the unlock condition (`required_contexts`) for the API layer.
+    ModelGated {
+        agent_kind: String,
+        model_id: String,
+        required_contexts: Vec<String>,
+    },
     ModeUnsupported {
         agent_kind: String,
         mode_id: String,
     },
-    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     WorkspaceNotFound,
     WorkspaceSingleSession {
         session_id: String,
     },
     MissingDataKey,
+    /// Agent-auth route resolution refused the launch (fail-closed selection
+    /// missing, malformed state file, unsupported route, ...). Typed so the
+    /// API layer surfaces the stable machine code (`AGENT_ROUTE_*`).
+    RouteAuth(RouteAuthError),
     StartFailed(anyhow::Error),
     Internal(anyhow::Error),
 }
@@ -84,9 +100,10 @@ pub enum EnsureLiveSessionError {
     SessionNotFound(String),
     SessionClosed,
     RestartRequired(String),
-    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
     Invalid(String),
     MissingDataKey,
+    /// See [`CreateAndStartSessionError::RouteAuth`].
+    RouteAuth(RouteAuthError),
     Internal(anyhow::Error),
 }
 
@@ -248,7 +265,8 @@ pub(super) enum StartSessionError {
     Closed,
     MissingDataKey,
     RestartRequired(String),
-    AgentAuthSelectionRequired(AgentAuthSelectionRequired),
+    /// Agent-auth route resolution refused the launch (fail-closed, spec §3).
+    RouteAuth(RouteAuthError),
     Internal(anyhow::Error),
     AcpStart(anyhow::Error),
 }
@@ -263,11 +281,13 @@ impl SessionRuntime {
         session_data_cipher: Option<SessionDataCipher>,
         session_extensions: Vec<Arc<dyn SessionExtension>>,
         product_mcp_launch_catalog: ProductMcpLaunchCatalog,
-        runtime_config_service: Arc<RuntimeConfigService>,
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
-        agent_auth_service: Arc<AgentAuthService>,
+        gateway_model_resolver: Arc<dyn GatewayModelResolve>,
+        active_goal_resolver: Arc<dyn ActiveGoalResolver>,
+        loops_resolver: Arc<dyn LoopsResolver>,
+        activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
     ) -> Self {
         Self {
             session_service,
@@ -278,11 +298,13 @@ impl SessionRuntime {
             session_data_cipher,
             session_extensions,
             product_mcp_launch_catalog,
-            runtime_config_service,
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
-            agent_auth_service,
+            gateway_model_resolver,
+            active_goal_resolver,
+            loops_resolver,
+            activity_roster_resolver,
         }
     }
 

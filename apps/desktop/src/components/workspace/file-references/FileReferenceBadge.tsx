@@ -118,7 +118,7 @@ function resolveBadgeClassName(
 ): string {
   if (variant === "chip") {
     return [
-      "inline-flex h-auto min-w-0 max-w-full items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-[0.625rem] leading-none text-foreground/90 shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border",
+      "inline-flex h-auto min-w-0 max-w-full items-center gap-px rounded-sm border border-border/60 bg-muted/45 px-1 py-px font-mono text-sm leading-none text-foreground/90 shadow-none transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border",
       className,
     ].filter(Boolean).join(" ");
   }

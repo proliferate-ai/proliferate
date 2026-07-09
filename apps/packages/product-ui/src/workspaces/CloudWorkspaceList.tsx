@@ -1,7 +1,8 @@
 import { Cloud, GitBranch } from "lucide-react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { SkeletonBlock, shimmerDelay } from "@proliferate/ui/primitives/Skeleton";
 
 export interface CloudWorkspaceItemView {
   id: string;
@@ -57,7 +58,7 @@ export function CloudWorkspaceList({
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-3 animate-content-fade-in">
       {items.map((workspace) => (
         <article key={workspace.id} className="rounded-lg border border-border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -93,25 +94,16 @@ function WorkspaceListSkeletonRow({ widthClassName = "w-full" }: { widthClassNam
   return (
     <div className={twMerge("rounded-lg bg-foreground/5 p-4", widthClassName)}>
       <div className="flex items-center gap-2">
-        <SkeletonBlock className="size-8 rounded-md" />
+        <SkeletonBlock className="size-8 rounded-md" style={shimmerDelay(0)} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <SkeletonBlock className="h-2 w-40" />
-          <SkeletonBlock className="h-2 w-28 bg-muted/45" />
+          <SkeletonBlock className="h-2 w-40" style={shimmerDelay(1)} />
+          <SkeletonBlock className="h-2 w-28 bg-muted/45" style={shimmerDelay(2)} />
         </div>
       </div>
       <div className="mt-4 flex gap-2">
-        <SkeletonBlock className="h-6 w-24 bg-muted/45" />
-        <SkeletonBlock className="h-6 w-20 bg-muted/45" />
+        <SkeletonBlock className="h-6 w-24 bg-muted/45" style={shimmerDelay(3)} />
+        <SkeletonBlock className="h-6 w-20 bg-muted/45" style={shimmerDelay(4)} />
       </div>
     </div>
-  );
-}
-
-function SkeletonBlock({ className }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={twMerge("block rounded-md bg-muted/60 motion-safe:animate-pulse", className)}
-    />
   );
 }

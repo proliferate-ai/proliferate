@@ -75,6 +75,30 @@ Do not use generic `bg-accent` or `hover:bg-muted` inside sidebar surfaces —
 those resolve to different colors and look wrong against the sidebar
 background.
 
+## No Partial-Opacity Hover Transitions on Glyphs
+
+Never animate `opacity` between two visible values (e.g. `opacity-75` →
+`hover:opacity-100`) on always-visible text or icons. The opacity animation
+creates a compositing layer that collapses at 1.0, re-rasterizing the glyph's
+anti-aliasing on every hover — which reads as shimmer/jitter even though
+nothing moves. Express the same muted→prominent promotion as a **color**
+change instead:
+
+```tsx
+{/* BAD: shimmer on every hover */}
+<span className="opacity-75 transition-opacity group-hover:opacity-100" />
+
+{/* GOOD: same visual weight, no re-rasterization */}
+<span className="text-current/75 transition-colors group-hover:text-current" />
+{/* or with explicit tokens: */}
+<span className="text-muted-foreground/75 transition-colors group-hover:text-muted-foreground" />
+```
+
+`text-current/75` (a color-mix on currentColor) preserves inheritance so
+tinted rows (`text-destructive`) still color their glyphs. This rule is only
+about *transitions between two visible states* — the 0→100 hover-reveal
+pattern below is fine because the element starts invisible.
+
 ## Hover Reveal Pattern
 
 Use `group` + `opacity-0 group-hover:opacity-100` for actions that should

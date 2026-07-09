@@ -16,7 +16,7 @@ import type { GitPanelMode } from "@/lib/domain/workspaces/changes/git-panel-dif
 type GitReviewBaseMode = Exclude<GitPanelMode, "working_tree_composite">;
 
 const GIT_REVIEW_SELECTOR_TRIGGER_CLASS =
-  "h-6 min-w-0 gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-[10px] leading-[18px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
+  "h-6 min-w-0 gap-1 rounded-lg border border-transparent bg-transparent px-2 py-0 text-sm leading-[18px] text-sidebar-foreground hover:bg-surface-elevated-secondary hover:text-sidebar-foreground data-[state=open]:bg-surface-elevated-secondary data-[state=open]:text-sidebar-foreground";
 
 const GIT_REVIEW_BASE_OPTIONS: {
   id: GitReviewBaseMode;
@@ -95,7 +95,6 @@ export function GitReviewBaseSelector({
                   onSelect(option.id);
                   close();
                 }}
-                trailingClassName="opacity-75 group-hover/menu-item:opacity-100 group-focus/menu-item:opacity-100"
               />
             );
           })}
@@ -117,7 +116,7 @@ function GitReviewBaseOptionContent({
       <span className="min-w-0 truncate">{label}</span>
       <span className="flex min-w-0 justify-start">
         {count && count > 0 ? (
-          <span className="inline-flex h-5 items-center rounded-sm bg-muted px-1.5 text-[10px] font-medium leading-none text-muted-foreground tabular-nums">
+          <span className="inline-flex h-5 items-center rounded-sm bg-muted px-1.5 text-sm font-medium leading-none text-muted-foreground tabular-nums">
             {count}
           </span>
         ) : (

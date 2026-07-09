@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ProliferateLivingMark } from "../brand/ProliferateLivingMark";
@@ -62,7 +62,6 @@ export function RedirectCallbackScreen({
                 <ProliferateLivingMark
                   testIds={{
                     root: "redirect-callback-living-mark",
-                    brailleLayer: "redirect-callback-braille-layer",
                     iconLayer: "redirect-callback-icon-layer",
                   }}
                 />

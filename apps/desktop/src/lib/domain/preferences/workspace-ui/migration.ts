@@ -7,6 +7,9 @@ import {
   sanitizeSessionIdArrayRecord,
 } from "@/lib/domain/preferences/workspace-ui/persisted-chat-sessions";
 import {
+  sanitizeGitStatusSnapshotsByWorkspace,
+} from "@/lib/domain/preferences/workspace-ui/persisted-git-status";
+import {
   migrateLegacyRightPanelPreferences,
   sanitizeRightPanelDurableByWorkspace,
   sanitizeRightPanelMaterializedByWorkspace,
@@ -197,6 +200,17 @@ export function migrateWorkspaceUiState(
     !== JSON.stringify(state.lastViewedSessionByWorkspace)
   ) {
     state.lastViewedSessionByWorkspace = sanitizedLastViewedSessions;
+    didMigrate = true;
+  }
+
+  const sanitizedGitStatusSnapshots = sanitizeGitStatusSnapshotsByWorkspace(
+    state.gitStatusSnapshotByWorkspace,
+  );
+  if (
+    JSON.stringify(sanitizedGitStatusSnapshots)
+    !== JSON.stringify(state.gitStatusSnapshotByWorkspace)
+  ) {
+    state.gitStatusSnapshotByWorkspace = sanitizedGitStatusSnapshots;
     didMigrate = true;
   }
 

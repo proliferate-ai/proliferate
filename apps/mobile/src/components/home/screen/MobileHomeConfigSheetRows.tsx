@@ -21,8 +21,6 @@ export function mobileHomeConfigControlIcon(
       return "openai";
     case "claude":
       return "claude";
-    case "gemini":
-      return "gemini";
     case "opencodeBuild":
     case "bot":
       return "sparkles";

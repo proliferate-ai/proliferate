@@ -8,7 +8,6 @@ import {
   completeSupportReportUpload,
   createSupportReport,
   createSupportReportUploadTargets,
-  ensureSupportReportTracker,
 } from "@proliferate/cloud-sdk/client/support";
 import type {
   SupportReportCompleteRequest,
@@ -219,13 +218,17 @@ async function uploadSupportReport(
   const report = await createSupportReport(buildCreateReportRequest(job, job.attachments.length));
   const serverCorrelation = toLocalServerCorrelation(report);
   if (report.status === "completed") {
-    void nudgeSupportReportTracker(report.reportId);
     trackSupportReportSubmitted(job, serverCorrelation, job.attachments.length);
     await deleteSupportReportJobAttachments(job);
     return {
       reportId: report.reportId,
     };
   }
+
+  // "Include app logs" toggle (bug modal): when OFF, we neither collect nor
+  // upload diagnostics.json for this job. Defaults to ON for jobs persisted
+  // before the toggle existed.
+  const includeLogs = job.includeLogs !== false;
 
   const attachmentBlobs = await Promise.all(job.attachments.map(async (attachment) => ({
     attachment,
@@ -235,27 +238,61 @@ async function uploadSupportReport(
     sha256Hex(await blob.arrayBuffer())
   ));
 
-  const reportPackage = await buildSupportReportPackage(job, dependencies, serverCorrelation);
-  const diagnosticsBlob = jsonBlob(reportPackage);
-  if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
-    throw new Error("Diagnostics are too large to upload.");
+  // Only collect/build the diagnostics package when logs are included.
+  let diagnosticsUpload:
+    | { blob: Blob; sha256: string; generatedAt: string }
+    | null = null;
+  if (includeLogs) {
+    const reportPackage = await buildSupportReportPackage(job, dependencies, serverCorrelation);
+    const diagnosticsBlob = jsonBlob(reportPackage);
+    if (diagnosticsBlob.size > DIAGNOSTICS_MAX_BYTES) {
+      throw new Error("Diagnostics are too large to upload.");
+    }
+    diagnosticsUpload = {
+      blob: diagnosticsBlob,
+      sha256: await sha256Hex(await diagnosticsBlob.arrayBuffer()),
+      generatedAt: reportPackage.generatedAt,
+    };
   }
-  const diagnosticsSha256 = await sha256Hex(await diagnosticsBlob.arrayBuffer());
+
+  // Logs off + no attachments: nothing to upload. Complete directly — the
+  // server allows completion without an upload-target manifest when the
+  // expected upload intent is diagnostics=false and attachmentCount=0.
+  if (!diagnosticsUpload && attachmentBlobs.length === 0) {
+    const completeRequest = completeRequestForUpload({
+      job,
+      reportId: report.reportId,
+      diagnostics: undefined,
+      generatedAt: dependencies.now().toISOString(),
+      cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
+      attachments: [],
+    });
+    await completeSupportReportUpload(report.reportId, completeRequest);
+    trackSupportReportSubmitted(job, serverCorrelation, 0);
+    await deleteSupportReportJobAttachments(job);
+    return {
+      reportId: report.reportId,
+    };
+  }
 
   const uploadRequest: SupportReportUploadTargetsRequest = {
-    diagnostics: {
-      contentType: "application/json",
-      sizeBytes: diagnosticsBlob.size,
-      sha256: diagnosticsSha256,
-    },
+    diagnostics: diagnosticsUpload
+      ? {
+          contentType: "application/json",
+          sizeBytes: diagnosticsUpload.blob.size,
+          sha256: diagnosticsUpload.sha256,
+        }
+      : undefined,
     attachments: attachmentUploadFiles(attachmentBlobs, attachmentHashes),
   };
 
   const upload = await createSupportReportUploadTargets(report.reportId, uploadRequest);
-  if (!upload.diagnostics) {
-    throw new Error("Cloud did not return a diagnostics upload URL.");
+  if (diagnosticsUpload) {
+    if (!upload.diagnostics) {
+      throw new Error("Cloud did not return a diagnostics upload URL.");
+    }
+    await putPresignedObject(upload.diagnostics, diagnosticsUpload.blob);
   }
-  await putPresignedObject(upload.diagnostics, diagnosticsBlob);
 
   const completedAttachments: NonNullable<SupportReportCompleteRequest["attachments"]> = [];
   for (const [index, item] of attachmentBlobs.entries()) {
@@ -276,22 +313,21 @@ async function uploadSupportReport(
   const completeRequest = completeRequestForUpload({
     job,
     reportId: report.reportId,
-    diagnosticsObjectKey: upload.diagnostics.objectKey,
-    diagnosticsSha256,
-    diagnosticsBytes: diagnosticsBlob.size,
-    generatedAt: reportPackage.generatedAt,
+    diagnostics: diagnosticsUpload && upload.diagnostics
+      ? {
+          objectKey: upload.diagnostics.objectKey,
+          sha256: diagnosticsUpload.sha256,
+          sizeBytes: diagnosticsUpload.blob.size,
+        }
+      : undefined,
+    generatedAt: diagnosticsUpload?.generatedAt ?? dependencies.now().toISOString(),
     cloudDiagnosticsStatus: report.cloudDiagnosticsStatus,
     attachments: completedAttachments,
   });
   await completeSupportReportUpload(upload.reportId, completeRequest);
-  void nudgeSupportReportTracker(upload.reportId);
   trackSupportReportSubmitted(job, serverCorrelation, completedAttachments.length);
   await deleteSupportReportJobAttachments(job);
   return {
     reportId: upload.reportId,
   };
-}
-
-async function nudgeSupportReportTracker(reportId: string): Promise<void> {
-  await ensureSupportReportTracker(reportId).catch(() => null);
 }

@@ -1,5 +1,5 @@
 import { type HTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { Button } from "@proliferate/ui/primitives/Button";
 
 interface ConnectGitHubPanelProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {

@@ -59,12 +59,6 @@ pub async fn prompt_session(
             WorkspaceOperationKind::SessionPrompt,
         )
         .await?;
-        if let Some(expected) = req.expected_runtime_config_revision.as_ref() {
-            state
-                .runtime_config_service
-                .assert_session_context_matches(&session_id, expected)
-                .map_err(super::runtime_config::map_runtime_config_error)?;
-        }
         let outcome = state
             .session_runtime
             .send_prompt(&session_id, req.blocks, prompt_id)

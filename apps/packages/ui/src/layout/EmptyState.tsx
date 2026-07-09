@@ -1,5 +1,5 @@
 import { type HTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title: ReactNode;

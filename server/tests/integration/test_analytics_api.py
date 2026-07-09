@@ -7,13 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.analytics import (
-    ClientDailyActivity,
-    CloudMcpConnectionEvent,
-    CloudWorkspaceMobilityEvent,
-)
-from proliferate.db.models.cloud.mobility import CloudWorkspaceMobility
-from proliferate.db.store.cloud_mobility.handoffs import create_cloud_workspace_handoff_op
+from proliferate.db.models.analytics import ClientDailyActivity
 from tests.helpers.desktop_auth import mint_desktop_token_payload
 
 
@@ -166,87 +160,3 @@ async def test_client_daily_activity_sanitizes_route_or_screen(
         )
     ).scalar_one()
     assert row.route_or_screen == "unknown"
-
-
-@pytest.mark.asyncio
-async def test_mcp_connection_create_and_delete_write_lifecycle_events(
-    client: AsyncClient,
-    db_session: AsyncSession,
-) -> None:
-    session = await _register_and_login(client, "analytics-mcp@example.com")
-    headers = {"Authorization": f"Bearer {session['access_token']}"}
-
-    created = await client.post(
-        "/v1/cloud/mcp/connections",
-        headers=headers,
-        json={"catalogEntryId": "linear", "enabled": True},
-    )
-    assert created.status_code == 200
-    deleted = await client.delete(
-        f"/v1/cloud/mcp/connections/{created.json()['connectionId']}",
-        headers=headers,
-    )
-    assert deleted.status_code == 200
-
-    events = (
-        (
-            await db_session.execute(
-                select(CloudMcpConnectionEvent)
-                .where(CloudMcpConnectionEvent.user_id == uuid.UUID(session["user_id"]))
-                .order_by(CloudMcpConnectionEvent.created_at)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    assert [event.event_type for event in events] == ["connection_created", "deleted"]
-    assert events[0].catalog_entry_id == "linear"
-
-
-@pytest.mark.asyncio
-async def test_mobility_handoff_store_writes_started_event(
-    db_session: AsyncSession,
-) -> None:
-    user_id = uuid.uuid4()
-    mobility_workspace = CloudWorkspaceMobility(
-        user_id=user_id,
-        display_name="Analytics",
-        git_provider="github",
-        git_owner="proliferate-ai",
-        git_repo_name="proliferate",
-        git_branch="analytics",
-        owner="local",
-        lifecycle_state="local_active",
-        status_detail=None,
-        last_error=None,
-        cloud_workspace_id=None,
-        active_handoff_op_id=None,
-        last_handoff_op_id=None,
-        cloud_lost_at=None,
-        cloud_lost_reason=None,
-    )
-    db_session.add(mobility_workspace)
-    await db_session.commit()
-
-    handoff = await create_cloud_workspace_handoff_op(
-        db_session,
-        mobility_workspace=mobility_workspace,
-        direction="local_to_cloud",
-        source_owner="local",
-        target_owner="cloud",
-        moving_lifecycle_state="moving_to_cloud",
-        requested_branch="analytics",
-        requested_base_sha=None,
-        exclude_paths=[],
-    )
-
-    event = (
-        await db_session.execute(
-            select(CloudWorkspaceMobilityEvent).where(
-                CloudWorkspaceMobilityEvent.handoff_op_id == handoff.id
-            )
-        )
-    ).scalar_one()
-    assert event.event_type == "handoff_started"
-    assert event.direction == "local_to_cloud"
-    assert event.to_phase == "start_requested"

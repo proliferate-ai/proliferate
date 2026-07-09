@@ -16,7 +16,7 @@ describe("computeChromeTabWidths", () => {
       containerWidth: 503,
       reservedWidth: 20,
       tabCount: 4,
-    })).toEqual([119, 119, 118, 118]);
+    })).toEqual([136, 136, 136, 136]);
   });
 
   it("clamps tabs between Chrome-like min and max widths", () => {
@@ -38,7 +38,7 @@ describe("computeChromeTabWidths", () => {
       CHROME_TAB_MAX_WIDTH,
       CHROME_TAB_MAX_WIDTH,
       CHROME_TAB_MAX_WIDTH,
-    ])).toEqual([0, 163, 326]);
+    ])).toEqual([0, 159, 318]);
   });
 });
 
@@ -50,7 +50,7 @@ describe("computeHeaderStripLayout", () => {
     });
 
     expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, CHROME_TAB_MAX_WIDTH, CHROME_TAB_MAX_WIDTH]);
-    expect(layout.positions).toEqual([0, 52, 215]);
+    expect(layout.positions).toEqual([0, 52, 211]);
   });
 
   it("does not overlap pills with adjacent tabs", () => {
@@ -60,7 +60,7 @@ describe("computeHeaderStripLayout", () => {
     });
 
     expect(layout.widths).toEqual([CHROME_TAB_MAX_WIDTH, TAB_GROUP_PILL_WIDTH, CHROME_TAB_MAX_WIDTH]);
-    expect(layout.positions).toEqual([0, 164, 216]);
+    expect(layout.positions).toEqual([0, 160, 212]);
   });
 
   it("clamps tabs to the soft squish floor when pill rows leave little room", () => {
@@ -70,7 +70,7 @@ describe("computeHeaderStripLayout", () => {
     });
 
     expect(layout.widths).toEqual([TAB_GROUP_PILL_WIDTH, CHROME_TAB_MIN_WIDTH, CHROME_TAB_MIN_WIDTH]);
-    expect(layout.positions).toEqual([0, 52, 139]);
+    expect(layout.positions).toEqual([0, 52, 191]);
   });
 
   it("overflows the container width when too many tabs would squish below the floor", () => {

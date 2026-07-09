@@ -105,7 +105,7 @@ function CloudTranscriptActionRowContent({
         <div className="min-w-0 shrink-0 text-inherit">{label}</div>
         {renderInlineHint(hint)}
         {statusLabel ? (
-          <span className="shrink-0 text-xs text-muted-foreground/80">
+          <span className="shrink-0 text-muted-foreground/80">
             {statusLabel}
           </span>
         ) : null}
@@ -235,7 +235,7 @@ function renderInlineHint(hint?: ReactNode) {
     return (
       <span
         title={value}
-        className="max-w-[260px] min-w-0 shrink truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 font-mono text-[0.6rem] leading-none text-muted-foreground"
+        className="max-w-[260px] min-w-0 shrink truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground"
         data-telemetry-mask
       >
         {value}

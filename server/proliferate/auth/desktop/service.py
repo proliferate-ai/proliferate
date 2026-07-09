@@ -17,10 +17,7 @@ from fastapi import HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from fastapi_users import exceptions as fastapi_users_exceptions
 from fastapi_users.jwt import decode_jwt, generate_jwt
-from fastapi_users.router.oauth import (
-    CSRF_TOKEN_KEY,
-    STATE_TOKEN_AUDIENCE,
-)
+from fastapi_users.router.oauth import CSRF_TOKEN_KEY, STATE_TOKEN_AUDIENCE
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.desktop.models import (
@@ -48,6 +45,11 @@ from proliferate.auth.identity.types import VerifiedProviderIdentity
 from proliferate.auth.jwt import get_jwt_strategy
 from proliferate.auth.oauth import github_oauth_client
 from proliferate.auth.pkce import build_code_challenge, verify_pkce
+from proliferate.auth.tokens import (
+    REFRESH_TOKEN_AUDIENCE,
+    claimed_token_generation,
+    user_token_generation,
+)
 from proliferate.config import settings
 from proliferate.constants.auth import (
     DESKTOP_DEEP_LINK_LAUNCH_ENABLED,
@@ -56,7 +58,6 @@ from proliferate.constants.auth import (
     REFRESH_TOKEN_LIFETIME_SECONDS,
     SUPPORTED_CODE_CHALLENGE_METHODS,
 )
-from proliferate.db.engine import async_session_factory
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth import (
     consume_auth_code,
@@ -64,26 +65,26 @@ from proliferate.db.store.auth import (
     create_auth_code,
 )
 from proliferate.db.store.users import (
-    claim_customerio_welcome_send,
-    clear_customerio_welcome_send,
     get_active_user_by_id,
     github_oauth_account_or_email_exists,
     update_user_github_profile,
 )
 from proliferate.integrations.customerio import (
-    customerio_welcome_email_enabled,
     identify_customerio_user,
-    send_customerio_welcome_email,
     track_customerio_desktop_authenticated,
 )
 from proliferate.integrations.github import (
     GitHubIntegrationError,
     get_github_user_profile,
 )
+from proliferate.server.cloud.agent_gateway.signup_hook import (
+    schedule_agent_gateway_user_enrollment,
+)
 from proliferate.server.notifications import (
     SignupSlackNotification,
     schedule_signup_slack_notification,
 )
+from proliferate.server.organizations.admin_emails import ensure_admin_email_role
 
 if TYPE_CHECKING:
     from proliferate.auth.users import UserManager
@@ -118,12 +119,10 @@ def build_github_callback_url(request: Request) -> str:
     api_parsed = urlparse(api_base_url)
     request_host = request.url.hostname
 
-    # When both the configured API base and the incoming request resolve to
-    # loopback but use different hostnames (e.g. ``localhost`` vs
-    # ``127.0.0.1``), the CSRF cookie set during ``/authorize`` won't be sent
-    # back on the ``/callback`` redirect because the browser treats them as
-    # different origins.  In that case, rewrite the callback URL to use the
-    # request's origin so the cookie domain stays consistent.
+    # When the configured API base and the incoming request both resolve to
+    # loopback but use different hostnames (e.g. ``localhost`` vs ``127.0.0.1``), the
+    # browser treats them as different origins and drops the ``/authorize`` CSRF cookie
+    # on the ``/callback`` redirect, so rewrite the callback URL to the request origin.
     if (
         request_host
         and api_parsed.hostname
@@ -190,7 +189,11 @@ async def mint_desktop_tokens(user: User) -> TokenResponse:
     strategy = get_jwt_strategy()
     access_token = await strategy.write_token(user)
     refresh_token = generate_jwt(
-        data={"sub": str(user.id), "aud": "proliferate:refresh"},
+        data={
+            "sub": str(user.id),
+            "aud": REFRESH_TOKEN_AUDIENCE,
+            "token_generation": user_token_generation(user),
+        },
         secret=settings.jwt_secret,
         lifetime_seconds=REFRESH_TOKEN_LIFETIME_SECONDS,
     )
@@ -222,41 +225,6 @@ async def sync_customerio_desktop_authenticated_user(user: User) -> None:
         created_at=user.created_at,
     )
     await track_customerio_desktop_authenticated(user_id=user_id)
-    await _send_customerio_welcome_email_once(user)
-
-
-async def _send_customerio_welcome_email_once(user: User) -> None:
-    """Send the Customer.io welcome email exactly once per user.
-
-    Uses a DB-backed claim on ``user.customerio_welcome_sent_at`` to dedupe
-    across concurrent desktop auths. The claim is always cleared when the
-    send does not return success, including on any raised exception or
-    cancellation — otherwise a process crash between claim and send would
-    permanently flag the user as sent without ever delivering an email.
-
-    Gated on `customerio_welcome_email_enabled()` first so a missing-config
-    environment does not burn the claim slot and churn the row on every auth.
-    """
-    if not customerio_welcome_email_enabled():
-        return
-
-    async with async_session_factory() as db, db.begin():
-        claimed = await claim_customerio_welcome_send(db, user.id)
-    if not claimed:
-        return
-
-    sent = False
-    try:
-        sent = await send_customerio_welcome_email(
-            user_id=str(user.id),
-            email=user.email,
-            display_name=user.display_name,
-            github_login=user.github_login,
-        )
-    finally:
-        if not sent:
-            async with async_session_factory() as db, db.begin():
-                await clear_customerio_welcome_send(db, user.id)
 
 
 def _handle_customerio_sync_task_completion(task: asyncio.Task[None]) -> None:
@@ -457,6 +425,11 @@ async def finish_github_desktop_callback(
         ),
     )
 
+    # ADMIN_EMAILS floor: asserted at every login. This legacy desktop GitHub
+    # callback resolves its user outside resolve_provider_user, so it hooks
+    # the shared helper itself.
+    await ensure_admin_email_role(db, user)
+
     auth_code = await create_auth_code(
         db,
         user_id=user.id,
@@ -466,6 +439,7 @@ async def finish_github_desktop_callback(
         redirect_uri=state_data["redirect_uri"],
     )
     schedule_customerio_desktop_authenticated_user_sync(user)
+    schedule_agent_gateway_user_enrollment(user.id, db=db)
     if not github_account_or_email_exists:
         schedule_signup_slack_notification(
             SignupSlackNotification(
@@ -556,7 +530,7 @@ async def refresh_desktop_access_token(
         payload = decode_jwt(
             body.refresh_token,
             secret=settings.jwt_secret,
-            audience=["proliferate:refresh"],
+            audience=[REFRESH_TOKEN_AUDIENCE],
         )
     except Exception as exc:
         raise HTTPException(
@@ -580,4 +554,9 @@ async def refresh_desktop_access_token(
         ) from None
 
     user = await get_active_user_or_400(db, user_id)
+    if claimed_token_generation(payload) != user_token_generation(user):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has been revoked",
+        )
     return await mint_desktop_tokens(user)

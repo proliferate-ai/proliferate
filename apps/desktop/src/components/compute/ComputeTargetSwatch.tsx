@@ -1,5 +1,5 @@
 import type { ComponentType, CSSProperties, SVGProps } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import {
   Blocks,
   CloudIcon,

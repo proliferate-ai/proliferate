@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { THEME_PRESETS } from "@/config/theme";
 import {
   clearWorktreeAutoDeleteLimitAdoption,
   hasAppliedModelVisibilityDefaultsReset,
@@ -92,7 +91,7 @@ describe("user preference migration", () => {
     await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
-    expect(preferences.themePreset).toBe("ship");
+    expect(preferences.themePreset).toBe("mono");
     expect(preferences.transparentChromeEnabled).toBe(true);
     expect(preferences.defaultChatAgentKind).toBe("claude");
   });
@@ -123,7 +122,7 @@ describe("user preference migration", () => {
     await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
-    expect(preferences.themePreset).toBe("ship");
+    expect(preferences.themePreset).toBe("mono");
     expect(preferences.transparentChromeEnabled).toBe(true);
   });
 
@@ -166,18 +165,31 @@ describe("user preference migration", () => {
     expect(result.preferences.worktreeAutoDeleteLimit).toBe(20);
   });
 
-  it("preserves explicit persisted Ship preferences", async () => {
+  it("normalizes retired theme presets to mono on read", async () => {
     storeMocks.values.set("user_preferences", {
       ...USER_PREFERENCE_DEFAULTS,
       themePreset: "ship",
       transparentChromeEnabled: true,
-    } satisfies UserPreferences);
+    } as unknown as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
 
     const preferences = useUserPreferencesStore.getState();
-    expect(preferences.themePreset).toBe("ship");
+    expect(preferences.themePreset).toBe("mono");
     expect(preferences.transparentChromeEnabled).toBe(true);
+
+    const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
+    expect(persisted.themePreset).toBe("mono");
+  });
+
+  it("retires the tbpn-only gong turn-end sound to ding", () => {
+    const result = migrateUserPreferences({
+      ...USER_PREFERENCE_DEFAULTS,
+      turnEndSoundId: "gong",
+    } as unknown as UserPreferences);
+
+    expect(result.changed).toBe(true);
+    expect(result.preferences.turnEndSoundId).toBe("ding");
   });
 
   it("strips deprecated onboarding keys from existing unified preferences", async () => {
@@ -220,7 +232,7 @@ describe("user preference migration", () => {
 
     await bootstrapUserPreferencesForTest();
     const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
-    expect(persisted.themePreset).toBe("ship");
+    expect(persisted.themePreset).toBe("mono");
     expect(persisted.futurePreference).toBe(true);
   });
 
@@ -263,7 +275,7 @@ describe("user preference migration", () => {
       defaultChatModelIdByAgentKind: {
         claude: "sonnet",
         codex: " gpt-5.4 ",
-        gemini: "",
+        opencode: "",
         cursor: null,
       },
     });
@@ -349,15 +361,11 @@ describe("user preference migration", () => {
     });
   });
 
-  it("orders Mono before Dominic in theme preset options", () => {
-    expect(THEME_PRESETS.indexOf("mono")).toBeLessThan(THEME_PRESETS.indexOf("ship"));
-  });
-
   it("keeps existing-record backfills distinct from new-user defaults", () => {
     expect(USER_PREFERENCE_DEFAULTS.themePreset).toBe("mono");
     expect(USER_PREFERENCE_DEFAULTS.defaultChatAgentKind).toBe("claude");
     expect(USER_PREFERENCE_DEFAULTS.transparentChromeEnabled).toBe(false);
-    expect(PERSISTED_RECORD_BACKFILL.themePreset).toBe("ship");
+    expect(PERSISTED_RECORD_BACKFILL.themePreset).toBe("mono");
     expect(PERSISTED_RECORD_BACKFILL.defaultChatAgentKind).toBe("");
     expect(PERSISTED_RECORD_BACKFILL.transparentChromeEnabled).toBe(true);
   });
@@ -383,10 +391,6 @@ describe("user preference migration", () => {
     );
   });
 
-  it("defaults runtime input sync off", () => {
-    expect(USER_PREFERENCE_DEFAULTS.cloudRuntimeInputSyncEnabled).toBe(false);
-  });
-
   it("defaults long-paste attachments on", () => {
     expect(USER_PREFERENCE_DEFAULTS.pasteAttachmentsEnabled).toBe(true);
   });
@@ -398,18 +402,6 @@ describe("user preference migration", () => {
     expect(PERSISTED_RECORD_BACKFILL.uiFontSizeId).toBe("default");
     expect(PERSISTED_RECORD_BACKFILL.readableCodeFontSizeId).toBe("default");
     expect(PERSISTED_RECORD_BACKFILL.windowZoomId).toBe("default");
-  });
-
-  it("migrates missing runtime input sync preference to false", () => {
-    const legacy = {
-      ...USER_PREFERENCE_DEFAULTS,
-      cloudRuntimeInputSyncEnabled: undefined,
-    } as unknown as UserPreferences;
-
-    const result = migrateUserPreferences(legacy);
-
-    expect(result.changed).toBe(true);
-    expect(result.preferences.cloudRuntimeInputSyncEnabled).toBe(false);
   });
 
   it("migrates missing long-paste attachment preference to on", () => {

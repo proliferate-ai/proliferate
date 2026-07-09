@@ -29,6 +29,13 @@ export function anyHarnessAgentReconcileStatusKey(
   return [...anyHarnessAgentsKey(runtimeUrl), "reconcile-status"] as const;
 }
 
+export function anyHarnessAgentGatewayModelsKey(
+  runtimeUrl: string | null | undefined,
+  kind: string | null | undefined,
+) {
+  return [...anyHarnessAgentsKey(runtimeUrl), "gateway-models", kind ?? null] as const;
+}
+
 export function anyHarnessReconcileAgentsMutationKey(
   runtimeUrl: string | null | undefined,
 ) {
@@ -63,6 +70,13 @@ export function anyHarnessWorktreesRetentionPolicyKey(runtimeUrl: string | null 
 
 export function anyHarnessRepoRootsKey(runtimeUrl: string | null | undefined) {
   return [...anyHarnessRuntimeKey(runtimeUrl), "repo-roots"] as const;
+}
+
+export function anyHarnessRepoRootPullRequestsKey(
+  runtimeUrl: string | null | undefined,
+  repoRootId: string | null | undefined,
+) {
+  return [...anyHarnessRepoRootsKey(runtimeUrl), repoRootId ?? null, "pull-requests"] as const;
 }
 
 export function anyHarnessRepoRootGitBranchesKey(

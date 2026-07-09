@@ -134,15 +134,6 @@ export function buildWorkspaceDisplayName(prompt: string): string {
   return firstLine.length > 120 ? `${firstLine.slice(0, 117)}...` : firstLine;
 }
 
-export function normalizeAgentAuthAgentKind(agentKind: string) {
-  return agentKind === "claude"
-    || agentKind === "codex"
-    || agentKind === "opencode"
-    || agentKind === "gemini"
-    ? agentKind
-    : null;
-}
-
 function addUniqueBranch(options: string[], branch: string | null | undefined): void {
   const trimmed = branch?.trim();
   if (trimmed && !options.includes(trimmed)) {

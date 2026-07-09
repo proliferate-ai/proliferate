@@ -1,59 +1,64 @@
 import {
-  Blocks,
-  Home,
+  LayoutGrid,
   LifeBuoy,
+  SquarePen,
   Zap,
-} from "@proliferate/ui/icons";
+} from "lucide-react";
 import type { SidebarNavItemView } from "@proliferate/product-ui/sidebar/ProductSidebarModel";
 import { ProductSidebarPrimaryNavigation } from "@proliferate/product-ui/sidebar/ProductSidebarNavigation";
 
 interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
-  integrationsActive: boolean;
+  workspacesActive: boolean;
   workflowsActive: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
   shortcutLabels: {
-    home: string;
+    newChat: string;
     support: string;
   };
   onGoHome: () => void;
-  onGoIntegrations: () => void;
+  onGoWorkspaces: () => void;
   onGoWorkflows: () => void;
   onOpenSupport: () => void;
 }
 
 export function SidebarPrimaryNavigation({
   homeActive,
-  integrationsActive,
+  workspacesActive,
   workflowsActive,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
   onGoHome,
-  onGoIntegrations,
+  onGoWorkspaces,
   onGoWorkflows,
   onOpenSupport,
 }: SidebarPrimaryNavigationProps) {
   const navItems: SidebarNavItemView[] = [
     {
-      id: "home",
+      id: "new-chat",
       active: homeActive,
-      icon: <Home className="size-4" />,
-      label: "Home",
-      shortcutLabel: shortcutLabels.home,
+      icon: <SquarePen className="size-4" />,
+      label: "New chat",
+      shortcutLabel: shortcutLabels.newChat,
     },
     {
-      id: "integrations",
-      active: integrationsActive,
-      icon: <Blocks className="size-4" />,
-      label: "Integrations",
+      id: "workspaces",
+      active: workspacesActive,
+      icon: <LayoutGrid className="size-4" />,
+      label: "Workspaces",
     },
     {
       id: "workflows",
       active: workflowsActive,
       icon: <Zap className="size-4" />,
       label: "Workflows",
+      status: (
+        <span className="font-mono text-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
+          beta
+        </span>
+      ),
     },
     {
       id: "support",
@@ -66,11 +71,11 @@ export function SidebarPrimaryNavigation({
 
   const handleNavSelect = (id: string) => {
     switch (id) {
-      case "home":
+      case "new-chat":
         onGoHome();
         break;
-      case "integrations":
-        onGoIntegrations();
+      case "workspaces":
+        onGoWorkspaces();
         break;
       case "workflows":
         onGoWorkflows();

@@ -87,8 +87,7 @@ impl SessionRuntime {
         // Must stay in lockstep with the resume-side strategy: a child forked on
         // the child actor (process-local fork id) is the one that can later land
         // in the zero-turn "stale native id" state handled by `launch_policy`.
-        let child_actor_forks =
-            super::launch_policy::fork_id_is_process_local(&parent.agent_kind);
+        let child_actor_forks = super::launch_policy::fork_id_is_process_local(&parent.agent_kind);
         let forked = if child_actor_forks {
             handle.verify_fork_ready().await.map_err(|error| {
                 map_live_fork_command_error(error, "session actor dropped fork readiness response")
@@ -108,8 +107,6 @@ impl SessionRuntime {
             native_session_id: forked
                 .as_ref()
                 .map(|forked| forked.native_session_id.clone()),
-            agent_auth_scope: parent.agent_auth_scope.clone(),
-            required_agent_auth_revision: parent.required_agent_auth_revision,
             // Forks inherit the parent's launch selection wholesale; the
             // classified-context provenance rides along with it.
             agent_auth_contexts: parent.agent_auth_contexts.clone(),
@@ -262,9 +259,7 @@ fn map_start_error_to_fork(error: StartSessionError) -> ForkSessionError {
         StartSessionError::Closed => ForkSessionError::Invalid("session is closed".to_string()),
         StartSessionError::MissingDataKey => ForkSessionError::MissingDataKey,
         StartSessionError::RestartRequired(detail) => ForkSessionError::Invalid(detail),
-        StartSessionError::AgentAuthSelectionRequired(required) => {
-            ForkSessionError::Invalid(required.detail)
-        }
+        StartSessionError::RouteAuth(error) => ForkSessionError::Invalid(error.to_string()),
         StartSessionError::Internal(error) | StartSessionError::AcpStart(error) => {
             ForkSessionError::Internal(error)
         }

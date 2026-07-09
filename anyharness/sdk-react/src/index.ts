@@ -28,6 +28,7 @@ export {
   anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessReconcileAgentsMutationKey,
+  anyHarnessAgentGatewayModelsKey,
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
@@ -61,6 +62,7 @@ export {
   anyHarnessGitBaseWorktreeDiffFilesKey,
   anyHarnessGitBranchesKey,
   anyHarnessPullRequestKey,
+  anyHarnessRepoRootPullRequestsKey,
   anyHarnessWorkspaceFilesScopeKey,
   anyHarnessWorkspaceFileTreeKey,
   anyHarnessWorkspaceFileSearchScopeKey,
@@ -87,6 +89,11 @@ export {
   useCloseAgentLoginTerminalMutation,
   useReconcileAgentsMutation,
 } from "./hooks/agents.js";
+export {
+  useAgentGatewayModelsQuery,
+  useAgentGatewayModelsQueries,
+  useRefreshAgentGatewayModelsMutation,
+} from "./hooks/agent-gateway-catalog.js";
 export {
   useRepoRootsQuery,
   useReadRepoRootFileMutation,
@@ -154,6 +161,10 @@ export {
   useDeletePendingPromptMutation,
   useResumeSessionMutation,
   useUpdateSessionTitleMutation,
+  useSetSessionGoalMutation,
+  useClearSessionGoalMutation,
+  useSetSessionLoopMutation,
+  useClearSessionLoopMutation,
   useCancelSessionMutation,
   useDismissSessionMutation,
   useCloseSessionMutation,
@@ -190,6 +201,8 @@ export {
   useGitBranchesQuery,
   useStageGitPathsMutation,
   useUnstageGitPathsMutation,
+  useStagePatchMutation,
+  useUnstagePatchMutation,
   useRevertGitPatchesMutation,
   useCommitGitMutation,
   usePushGitMutation,
@@ -197,6 +210,7 @@ export {
 } from "./hooks/git.js";
 export {
   useCurrentPullRequestQuery,
+  useRepoPullRequestStatusesQuery,
   useCreatePullRequestMutation,
 } from "./hooks/pull-requests.js";
 export {

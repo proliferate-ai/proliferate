@@ -1,6 +1,6 @@
 import { Check, ListFilter, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "@proliferate/ui/utils/tw-merge";
 
 import { ProductNotice } from "../layout/ProductNotice";
 import { ProductPageShell } from "../layout/ProductPageShell";
@@ -312,7 +312,7 @@ function WorkspaceMenuSection({ label, children }: { label: string; children: Re
     <div role="group" aria-label={label} className="space-y-0.5">
       <div
         aria-hidden
-        className="px-2 py-1 text-[10px] font-semibold uppercase leading-3 text-muted-foreground/70"
+        className="px-2 py-1 text-sm font-semibold uppercase leading-3 text-muted-foreground/70"
       >
         {label}
       </div>

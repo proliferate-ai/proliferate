@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-actions";
 
 const hookMocks = vi.hoisted(() => ({
-  addRepoFromPicker: vi.fn(),
   copyBranchName: vi.fn(),
   copyWorkspaceLocation: vi.fn(),
   createCloudWorkspaceAndEnter: vi.fn(() => Promise.resolve()),
@@ -114,7 +113,6 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-entry-actions", () => ({
 
 vi.mock("@/hooks/workspaces/workflows/use-add-repo", () => ({
   useAddRepo: () => ({
-    addRepoFromPicker: hookMocks.addRepoFromPicker,
     canAddRepo: true,
     addRepoDisabledReason: null,
     isAddingRepo: false,
@@ -170,7 +168,6 @@ function wrapper({ children }: { children: ReactNode }) {
 
 describe("useAppCommandActions", () => {
   beforeEach(() => {
-    hookMocks.addRepoFromPicker.mockClear();
     hookMocks.copyBranchName.mockClear();
     hookMocks.copyWorkspaceLocation.mockClear();
     hookMocks.createCloudWorkspaceAndEnter.mockClear();

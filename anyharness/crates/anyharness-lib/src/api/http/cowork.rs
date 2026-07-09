@@ -231,6 +231,17 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
                 format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
                 "SESSION_MODEL_UNSUPPORTED",
             ),
+            crate::domains::sessions::runtime::CreateAndStartSessionError::ModelGated {
+                agent_kind,
+                model_id,
+                required_contexts,
+            } => ApiError::model_gated(
+                format!(
+                    "model '{model_id}' for agent '{agent_kind}' is gated behind auth contexts \
+                     {required_contexts:?}"
+                ),
+                required_contexts,
+            ),
             crate::domains::sessions::runtime::CreateAndStartSessionError::ModeUnsupported {
                 agent_kind,
                 mode_id,
@@ -238,11 +249,13 @@ fn map_create_cowork_thread_error(error: CoworkCreateThreadError) -> ApiError {
                 format!("mode '{mode_id}' is not supported for agent '{agent_kind}'"),
                 "SESSION_MODE_UNSUPPORTED",
             ),
-            crate::domains::sessions::runtime::CreateAndStartSessionError::AgentAuthSelectionRequired(
-                required,
-            ) => ApiError::agent_auth_selection_required(required),
             crate::domains::sessions::runtime::CreateAndStartSessionError::MissingDataKey => {
                 ApiError::internal(SessionMcpBindingsError::missing_data_key_detail())
+            }
+            crate::domains::sessions::runtime::CreateAndStartSessionError::RouteAuth(error) => {
+                // Malformed-state / materialization IO are 500s; selection/route
+                // shape problems are 409s — same split as the sessions API.
+                super::sessions_errors::map_route_auth_error(&error)
             }
             crate::domains::sessions::runtime::CreateAndStartSessionError::StartFailed(error) => {
                 ApiError::internal(format!("ACP session start failed: {error}"))
@@ -472,4 +485,40 @@ async fn load_workspace(state: &AppState, workspace_id: &str) -> Result<Workspac
             })
     })
     .await?
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    use super::CoworkCreateThreadError;
+    use crate::domains::agents::route_auth::RouteAuthError;
+    use crate::domains::sessions::runtime::CreateAndStartSessionError;
+
+    /// Materialization IO / malformed-state route-auth failures are server-side
+    /// problems → 500, matching the sessions API (not a client 409).
+    #[test]
+    fn route_auth_materialize_failure_maps_to_internal_error() {
+        let error = CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::RouteAuth(
+            RouteAuthError::Materialize {
+                detail: "disk full".into(),
+            },
+        ));
+        let response = super::map_create_cowork_thread_error(error).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    /// Selection-shape route-auth failures remain a 409 (launch precondition).
+    #[test]
+    fn route_auth_selection_missing_maps_to_conflict() {
+        let error = CoworkCreateThreadError::CreateSession(CreateAndStartSessionError::RouteAuth(
+            RouteAuthError::SelectionMissing {
+                harness_kind: "claude".into(),
+                revision: 1,
+            },
+        ));
+        let response = super::map_create_cowork_thread_error(error).into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
 }

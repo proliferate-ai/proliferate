@@ -1,0 +1,254 @@
+# Deploys the LiteLLM agent-gateway proxy as a separate ECS Fargate service
+# in the same cluster as the server.
+#
+# Prerequisites (managed out-of-band, like the server's RDS instance):
+#   - A dedicated RDS Postgres instance for LiteLLM key/spend state.
+#   - The ECS service + an initial task definition already registered
+#     (this workflow re-renders the latest task definition; it does not
+#     create the service).
+#   - For Bedrock access: the ECS task role must have the attached policy
+#     arn:aws:iam::157466816238:policy/proliferate-gateway-bedrock-invoke.
+#
+# Required GitHub environment configuration:
+#   vars:    AWS_DEPLOY_ROLE_ARN, ECS_CLUSTER, ECS_LITELLM_SERVICE,
+#            ECS_LITELLM_CONTAINER_NAME (default: litellm),
+#            ECR_LITELLM_REPOSITORY (default: proliferate-litellm),
+#            LITELLM_DEPLOY_ENABLED (set "true" once the RDS + ECS service exist),
+#            AWS_BEDROCK_REGION (default: us-east-1)
+#   secrets: LITELLM_DATABASE_URL, LITELLM_MASTER_KEY,
+#            AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY,
+#            AGENT_GATEWAY_MANAGED_OPENAI_API_KEY,
+#            AGENT_GATEWAY_MANAGED_XAI_API_KEY
+name: Deploy LiteLLM
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      git_sha:
+        required: true
+        type: string
+      enabled:
+        default: true
+        type: boolean
+    outputs:
+      image_uri:
+        value: ${{ jobs.deploy.outputs.image_uri }}
+      task_definition_arn:
+        value: ${{ jobs.deploy.outputs.task_definition_arn }}
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    if: ${{ inputs.enabled }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      image_uri: ${{ steps.image.outputs.image_uri }}
+      task_definition_arn: ${{ steps.task.outputs.task_definition_arn }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      ECR_LITELLM_REPOSITORY: ${{ vars.ECR_LITELLM_REPOSITORY || 'proliferate-litellm' }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_LITELLM_SERVICE: ${{ vars.ECS_LITELLM_SERVICE }}
+      ECS_LITELLM_CONTAINER_NAME: ${{ vars.ECS_LITELLM_CONTAINER_NAME || 'litellm' }}
+      LITELLM_DEPLOY_ENABLED: ${{ vars.LITELLM_DEPLOY_ENABLED || 'false' }}
+      LITELLM_DATABASE_URL: ${{ secrets.LITELLM_DATABASE_URL }}
+      LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+      AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY: ${{ secrets.AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY }}
+      AGENT_GATEWAY_MANAGED_OPENAI_API_KEY: ${{ secrets.AGENT_GATEWAY_MANAGED_OPENAI_API_KEY }}
+      AGENT_GATEWAY_MANAGED_XAI_API_KEY: ${{ secrets.AGENT_GATEWAY_MANAGED_XAI_API_KEY }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      GIT_SHA: ${{ inputs.git_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      - name: Check LiteLLM deploy switch
+        id: switch
+        run: |
+          set -euo pipefail
+          if [[ "$LITELLM_DEPLOY_ENABLED" != "true" ]]; then
+            echo "LITELLM_DEPLOY_ENABLED is not true for this environment; skipping LiteLLM deploy."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
+
+      - name: Validate LiteLLM deploy config
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        run: |
+          set -euo pipefail
+          : "${AWS_DEPLOY_ROLE_ARN:?Set AWS_DEPLOY_ROLE_ARN on the GitHub environment.}"
+          : "${ECS_CLUSTER:?Set ECS_CLUSTER on the GitHub environment.}"
+          : "${ECS_LITELLM_SERVICE:?Set ECS_LITELLM_SERVICE on the GitHub environment.}"
+          : "${LITELLM_DATABASE_URL:?Set the LITELLM_DATABASE_URL secret on the GitHub environment.}"
+          : "${LITELLM_MASTER_KEY:?Set the LITELLM_MASTER_KEY secret on the GitHub environment.}"
+          : "${AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY:?Set the AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY secret on the GitHub environment.}"
+          : "${AGENT_GATEWAY_MANAGED_OPENAI_API_KEY:?Set the AGENT_GATEWAY_MANAGED_OPENAI_API_KEY secret on the GitHub environment.}"
+          : "${AGENT_GATEWAY_MANAGED_XAI_API_KEY:?Set the AGENT_GATEWAY_MANAGED_XAI_API_KEY secret on the GitHub environment.}"
+
+      - name: Configure AWS credentials
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolve image URI
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        id: image
+        run: |
+          set -euo pipefail
+          short_sha="${GIT_SHA:0:12}"
+          image_uri="${{ steps.ecr.outputs.registry }}/${ECR_LITELLM_REPOSITORY}:${short_sha}"
+          echo "image_uri=$image_uri" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push LiteLLM image
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: server/litellm/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.image_uri }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_LITELLM_REPOSITORY }}:${{ inputs.environment }}-latest
+
+      - name: Render ECS task definition
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        id: task
+        run: |
+          set -euo pipefail
+          task_definition_arn="$(
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_LITELLM_SERVICE" \
+              --query 'services[0].taskDefinition' \
+              --output text
+          )"
+          test "$task_definition_arn" != "None"
+
+          aws ecs describe-task-definition \
+            --task-definition "$task_definition_arn" \
+            --query taskDefinition \
+            > task-definition.raw.json
+
+          parameter_prefix="/proliferate/${DEPLOY_ENVIRONMENT}/litellm"
+          aws ssm put-parameter --name "${parameter_prefix}/database-url" \
+            --type SecureString --value "$LITELLM_DATABASE_URL" --overwrite >/dev/null
+          aws ssm put-parameter --name "${parameter_prefix}/master-key" \
+            --type SecureString --value "$LITELLM_MASTER_KEY" --overwrite >/dev/null
+          aws ssm put-parameter --name "${parameter_prefix}/anthropic-api-key" \
+            --type SecureString --value "$AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY" --overwrite >/dev/null
+          aws ssm put-parameter --name "${parameter_prefix}/openai-api-key" \
+            --type SecureString --value "$AGENT_GATEWAY_MANAGED_OPENAI_API_KEY" --overwrite >/dev/null
+          aws ssm put-parameter --name "${parameter_prefix}/xai-api-key" \
+            --type SecureString --value "$AGENT_GATEWAY_MANAGED_XAI_API_KEY" --overwrite >/dev/null
+
+          jq -n \
+            --arg region "${AWS_BEDROCK_REGION:-us-east-1}" \
+            '[
+              {"name":"AWS_BEDROCK_REGION","value":$region}
+            ]' > env-updates.json
+
+          jq -n \
+            --arg prefix "$parameter_prefix" \
+            '[
+              {"name":"DATABASE_URL","valueFrom":($prefix + "/database-url")},
+              {"name":"LITELLM_MASTER_KEY","valueFrom":($prefix + "/master-key")},
+              {"name":"ANTHROPIC_API_KEY","valueFrom":($prefix + "/anthropic-api-key")},
+              {"name":"OPENAI_API_KEY","valueFrom":($prefix + "/openai-api-key")},
+              {"name":"XAI_API_KEY","valueFrom":($prefix + "/xai-api-key")}
+            ]' > secret-updates.json
+
+          jq \
+            --arg container "$ECS_LITELLM_CONTAINER_NAME" \
+            --arg image "${{ steps.image.outputs.image_uri }}" \
+            --slurpfile updates env-updates.json \
+            --slurpfile secret_updates secret-updates.json \
+            '
+              def merge_environment($updates):
+                (.environment // []) as $current
+                | ($updates[0] | map(.name)) as $updated_names
+                | ["DATABASE_URL", "LITELLM_MASTER_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY"] as $secret_names
+                | ($current | map(select(
+                    .name as $name
+                    | (($updated_names + $secret_names) | index($name) | not)
+                  ))) + $updates[0];
+
+              def merge_secrets($updates):
+                (.secrets // []) as $current
+                | ($updates[0] | map(.name)) as $updated_names
+                | ($current | map(select(.name as $name | ($updated_names | index($name) | not)))) + $updates[0];
+
+              del(
+                .taskDefinitionArn,
+                .revision,
+                .status,
+                .requiresAttributes,
+                .compatibilities,
+                .registeredAt,
+                .registeredBy
+              )
+              | .containerDefinitions |= map(
+                  if .name == $container then
+                    .image = $image
+                    | .environment = merge_environment($updates)
+                    | .secrets = merge_secrets($secret_updates)
+                  else
+                    .
+                  end
+                )
+            ' task-definition.raw.json > task-definition.json
+
+          new_task_definition_arn="$(
+            aws ecs register-task-definition \
+              --cli-input-json file://task-definition.json \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text
+          )"
+          echo "task_definition_arn=$new_task_definition_arn" >> "$GITHUB_OUTPUT"
+
+      - name: Roll ECS service
+        if: ${{ steps.switch.outputs.deploy == 'true' }}
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_LITELLM_SERVICE" \
+            --task-definition "${{ steps.task.outputs.task_definition_arn }}" \
+            --force-new-deployment \
+            > /tmp/service-update.json
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_LITELLM_SERVICE"
+
+      - name: Summarize LiteLLM deploy
+        if: always()
+        run: |
+          {
+            echo "### LiteLLM"
+            echo "- Environment: $DEPLOY_ENVIRONMENT"
+            echo "- Deploy switch: \`$LITELLM_DEPLOY_ENABLED\`"
+            if [[ "${{ steps.switch.outputs.deploy }}" == "true" ]]; then
+              echo "- Image: \`${{ steps.image.outputs.image_uri }}\`"
+              echo "- Task definition: \`${{ steps.task.outputs.task_definition_arn }}\`"
+              echo "- Service: \`$ECS_CLUSTER/$ECS_LITELLM_SERVICE\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

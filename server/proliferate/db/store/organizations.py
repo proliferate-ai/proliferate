@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 from datetime import datetime
 from uuid import UUID
 
@@ -24,6 +25,7 @@ from proliferate.constants.organizations import (
     ORGANIZATION_CURRENT_STATUSES,
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_MEMBERSHIP_STATUS_REMOVED,
+    ORGANIZATION_ROLE_ADMIN,
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
     ORGANIZATION_STATUS_ARCHIVED,
@@ -48,7 +50,50 @@ from proliferate.db.store.organization_records import (
     membership_record,
     organization_record,
 )
+from proliferate.utils.slug import slugify
 from proliferate.utils.time import utcnow
+
+# Bound the numeric-suffix search before falling back to a random token so a
+# pathological name never spins; the partial unique index is the backstop.
+_SLUG_NUMERIC_ATTEMPTS = 50
+
+
+async def _slug_taken(db: AsyncSession, slug: str) -> bool:
+    existing = await db.scalar(select(Organization.id).where(Organization.slug == slug).limit(1))
+    return existing is not None
+
+
+async def allocate_organization_slug(db: AsyncSession, name: str) -> str:
+    """Pick a unique, human-friendly slug derived from the org name.
+
+    Tries the bare slug first (so a team named "Acme" gets ``acme``), then a
+    numeric suffix, then a short random token. The partial unique index on
+    ``organization.slug`` remains the ultimate guard against the rare race.
+    """
+    base = slugify(name)
+    if not await _slug_taken(db, base):
+        return base
+    for suffix in range(2, _SLUG_NUMERIC_ATTEMPTS + 1):
+        candidate = f"{base}-{suffix}"
+        if not await _slug_taken(db, candidate):
+            return candidate
+    while True:
+        candidate = f"{base}-{secrets.token_hex(3)}"
+        if not await _slug_taken(db, candidate):
+            return candidate
+
+
+async def get_organization_by_slug(db: AsyncSession, slug: str) -> OrganizationRecord | None:
+    normalized = slugify(slug)
+    organization = (
+        await db.execute(
+            select(Organization).where(
+                Organization.slug == normalized,
+                Organization.status.in_(tuple(ORGANIZATION_CURRENT_STATUSES)),
+            )
+        )
+    ).scalar_one_or_none()
+    return organization_record(organization) if organization is not None else None
 
 
 async def acquire_membership_activation_lock(db: AsyncSession, user_id: UUID) -> None:
@@ -71,6 +116,22 @@ async def _active_owner_count(db: AsyncSession, organization_id: UUID) -> int:
             select(func.count(OrganizationMembership.id)).where(
                 OrganizationMembership.organization_id == organization_id,
                 OrganizationMembership.role == ORGANIZATION_ROLE_OWNER,
+                OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
+            )
+        )
+        or 0
+    )
+
+
+async def count_active_admin_memberships(db: AsyncSession, organization_id: UUID) -> int:
+    """Count active memberships holding an admin-capable role (owner or admin)."""
+    return int(
+        await db.scalar(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.organization_id == organization_id,
+                OrganizationMembership.role.in_(
+                    (ORGANIZATION_ROLE_OWNER, ORGANIZATION_ROLE_ADMIN)
+                ),
                 OrganizationMembership.status == ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
             )
         )
@@ -158,6 +219,7 @@ async def ensure_default_organization_for_user(
 
     organization = Organization(
         name=name,
+        slug=await allocate_organization_slug(db, name),
         logo_domain=logo_domain,
         logo_image=None,
         created_at=now,
@@ -254,6 +316,7 @@ async def create_pending_team_checkout_intent(
     now = utcnow()
     organization = Organization(
         name=team_name,
+        slug=await allocate_organization_slug(db, team_name),
         logo_domain=logo_domain,
         logo_image=None,
         status=ORGANIZATION_STATUS_PENDING_CHECKOUT,
@@ -526,6 +589,34 @@ async def list_organization_members(
         )
         for membership, user in rows
     ]
+
+
+async def get_organization_member(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    membership_id: UUID,
+) -> MemberRecord | None:
+    """Load one membership (any status) with its user's email, or None."""
+    row = (
+        await db.execute(
+            select(OrganizationMembership, User)
+            .join(User, User.id == OrganizationMembership.user_id)
+            .where(
+                OrganizationMembership.id == membership_id,
+                OrganizationMembership.organization_id == organization_id,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    membership, user = row
+    return MemberRecord(
+        membership=membership_record(membership),
+        email=user.email,
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+    )
 
 
 async def update_organization_membership(

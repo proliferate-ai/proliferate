@@ -8,8 +8,9 @@ use std::collections::HashSet;
 use chrono::DateTime;
 
 use super::schema::{
-    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource, AgentCatalogAuthContext,
-    AgentCatalogAuthSignal, AgentCatalogDocument, AgentCatalogModel,
+    AgentCatalogAgent, AgentCatalogArtifactPin, AgentCatalogArtifactSource,
+    AgentCatalogAuthContext, AgentCatalogAuthSignal, AgentCatalogDocument, AgentCatalogModel,
+    AgentCatalogSetting,
 };
 use crate::domains::agents::model::AgentKind;
 
@@ -80,13 +81,60 @@ fn validate_agent(
     for model in &agent.session.models {
         validate_model(&agent.kind, model, &context_ids, &mut seen_models)?;
     }
+
+    validate_gateway_seed_models(agent)?;
+    validate_settings(&agent.kind, &agent.settings)?;
+    Ok(())
+}
+
+/// Reserved auth-context id for the enrolled gateway route.
+const GATEWAY_AUTH_CONTEXT_ID: &str = "gateway";
+
+/// Build invariant (decisions ledger 14): every `gatewayPolicy.seedModels` id
+/// must be a first-class `session.models` row tagged with `gateway`
+/// availability. Gateway models are catalog rows, not launch-time side
+/// effects — a seed the renderer would inject but the menu cannot advertise is
+/// a curation bug, so it fails the build (validator + this Rust check).
+fn validate_gateway_seed_models(agent: &AgentCatalogAgent) -> anyhow::Result<()> {
+    let Some(policy) = agent.session.gateway_policy.as_ref() else {
+        return Ok(());
+    };
+    if policy.seed_models.is_empty() {
+        return Ok(());
+    }
+    let gateway_rows: HashSet<&str> = agent
+        .session
+        .models
+        .iter()
+        .filter(|model| {
+            model
+                .availability
+                .any_of
+                .iter()
+                .any(|id| id == GATEWAY_AUTH_CONTEXT_ID)
+        })
+        .map(|model| model.id.as_str())
+        .collect();
+    for seed in &policy.seed_models {
+        if !gateway_rows.contains(seed.as_str()) {
+            anyhow::bail!(
+                "agent catalog agent '{}' gatewayPolicy.seedModels entry '{seed}' has no \
+                 session.models row tagged with gateway availability",
+                agent.kind
+            );
+        }
+    }
     Ok(())
 }
 
 /// A resolved pin source is the lockfile's executable truth, so its fields must
 /// be materializable: per-target downloads need a url and the trust-anchor
 /// sha256; npm/git need a package/ref. A pin with no source is fine (legacy).
-fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) -> anyhow::Result<()> {
+fn validate_artifact_pin(
+    kind: &str,
+    role: &str,
+    pin: &AgentCatalogArtifactPin,
+) -> anyhow::Result<()> {
     let Some(source) = &pin.source else {
         return Ok(());
     };
@@ -105,7 +153,9 @@ fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) 
                 }
             }
         }
-        AgentCatalogArtifactSource::Npm { package, sha256, .. } => {
+        AgentCatalogArtifactSource::Npm {
+            package, sha256, ..
+        } => {
             if package.trim().is_empty() {
                 anyhow::bail!("agent '{kind}' {role} npm source has empty package");
             }
@@ -126,8 +176,8 @@ fn validate_artifact_pin(kind: &str, role: &str, pin: &AgentCatalogArtifactPin) 
             }
             // A mutable ref (branch/tag) is not a trust anchor — only a full
             // commit SHA is content-addressed.
-            let is_commit_sha = matches!(git_ref.len(), 40 | 64)
-                && git_ref.bytes().all(|b| b.is_ascii_hexdigit());
+            let is_commit_sha =
+                matches!(git_ref.len(), 40 | 64) && git_ref.bytes().all(|b| b.is_ascii_hexdigit());
             if !is_commit_sha {
                 anyhow::bail!(
                     "agent '{kind}' {role} git source ref must be a full commit SHA, got '{git_ref}'"
@@ -217,6 +267,13 @@ fn validate_signal(
                 );
             }
         }
+        AgentCatalogAuthSignal::Route(kind) => {
+            if kind.trim().is_empty() {
+                anyhow::bail!(
+                    "agent catalog agent '{agent_kind}' auth context '{context_id}' has empty route signal"
+                );
+            }
+        }
         AgentCatalogAuthSignal::AnyOf(children) | AgentCatalogAuthSignal::AllOf(children) => {
             if children.is_empty() {
                 anyhow::bail!(
@@ -279,6 +336,81 @@ fn validate_model(
                     "agent catalog agent '{agent_kind}' model '{}' control '{control_key}' default '{default}' is not a value",
                     model.id
                 );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Valid setting types (v1: boolean only).
+const VALID_SETTING_TYPES: &[&str] = &["boolean"];
+/// Valid delivery surfaces for settings.
+const VALID_SETTING_SURFACES: &[&str] = &["local", "cloud"];
+/// Valid mapping kinds.
+const VALID_SETTING_MAPPING_KINDS: &[&str] = &["cli_flag", "env"];
+
+fn validate_settings(agent_kind: &str, settings: &[AgentCatalogSetting]) -> anyhow::Result<()> {
+    let mut seen_keys = HashSet::new();
+    for setting in settings {
+        if setting.key.trim().is_empty() {
+            anyhow::bail!("agent catalog agent '{agent_kind}' has setting with empty key");
+        }
+        if !seen_keys.insert(setting.key.clone()) {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' is duplicated",
+                setting.key
+            );
+        }
+        if !VALID_SETTING_TYPES.contains(&setting.setting_type.as_str()) {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has unsupported type '{}'",
+                setting.key,
+                setting.setting_type
+            );
+        }
+        if setting.label.trim().is_empty() {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has empty label",
+                setting.key
+            );
+        }
+        if setting.surfaces.is_empty() {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has no surfaces",
+                setting.key
+            );
+        }
+        for surface in &setting.surfaces {
+            if !VALID_SETTING_SURFACES.contains(&surface.as_str()) {
+                anyhow::bail!(
+                    "agent catalog agent '{agent_kind}' setting '{}' has invalid surface '{surface}'",
+                    setting.key
+                );
+            }
+        }
+        if !VALID_SETTING_MAPPING_KINDS.contains(&setting.mapping.kind.as_str()) {
+            anyhow::bail!(
+                "agent catalog agent '{agent_kind}' setting '{}' has unsupported mapping kind '{}'",
+                setting.key,
+                setting.mapping.kind
+            );
+        }
+        if setting.mapping.kind == "cli_flag" {
+            match setting.mapping.flag.as_deref() {
+                Some(flag) if !flag.trim().is_empty() => {}
+                _ => anyhow::bail!(
+                    "agent catalog agent '{agent_kind}' setting '{}' cli_flag mapping is missing flag",
+                    setting.key
+                ),
+            }
+        }
+        if setting.mapping.kind == "env" {
+            match setting.mapping.env.as_deref() {
+                Some(env) if !env.trim().is_empty() => {}
+                _ => anyhow::bail!(
+                    "agent catalog agent '{agent_kind}' setting '{}' env mapping is missing env",
+                    setting.key
+                ),
             }
         }
     }
@@ -378,7 +510,7 @@ mod tests {
     #[test]
     fn rejects_baseline_auth_context_with_slot_id_or_signals() {
         let mut catalog = draft_catalog();
-        let baseline = catalog.agents[5]
+        let baseline = catalog.agents[4]
             .auth_contexts
             .iter_mut()
             .find(|context| context.id == BASELINE_AUTH_CONTEXT_ID)
@@ -387,7 +519,7 @@ mod tests {
         expect_invalid(&catalog, "baseline auth context must not have authSlotId");
 
         let mut catalog = draft_catalog();
-        let baseline = catalog.agents[5]
+        let baseline = catalog.agents[4]
             .auth_contexts
             .iter_mut()
             .find(|context| context.id == BASELINE_AUTH_CONTEXT_ID)
@@ -428,5 +560,39 @@ mod tests {
         let effort = model.controls.get_mut("effort").expect("effort control");
         effort.default = Some("ultra".to_string());
         expect_invalid(&catalog, "default 'ultra' is not a value");
+    }
+
+    #[test]
+    fn accepts_route_signal() {
+        let mut catalog = draft_catalog();
+        catalog.agents[0].auth_contexts[0].signals =
+            Some(signal(serde_json::json!({ "route": "gateway" })));
+        validate_agent_catalog_document(&catalog).expect("route signal is valid");
+    }
+
+    #[test]
+    fn rejects_empty_route_signal() {
+        let mut catalog = draft_catalog();
+        catalog.agents[0].auth_contexts[0].signals =
+            Some(signal(serde_json::json!({ "route": "   " })));
+        expect_invalid(&catalog, "has empty route signal");
+    }
+
+    #[test]
+    fn rejects_seed_model_without_gateway_tagged_row() {
+        // Decision 14 invariant: a seedModel with no gateway-tagged
+        // session.models row fails the build.
+        let mut catalog = draft_catalog();
+        catalog.agents[0]
+            .session
+            .gateway_policy
+            .as_mut()
+            .expect("claude gatewayPolicy")
+            .seed_models
+            .push("claude-nonexistent-9-9".to_string());
+        expect_invalid(
+            &catalog,
+            "gatewayPolicy.seedModels entry 'claude-nonexistent-9-9' has no session.models row",
+        );
     }
 }

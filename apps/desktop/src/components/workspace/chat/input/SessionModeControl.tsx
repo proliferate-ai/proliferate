@@ -6,7 +6,7 @@ import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-con
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Check, ChevronDown } from "@proliferate/ui/icons";
+import { Check } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
@@ -41,7 +41,7 @@ export function SessionModeControl({
     return (
       <ComposerControlButton
         disabled
-        tone={currentPresentation.tone}
+        emphasizeLabel={triggerStyle === "value"}
         icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
         label={triggerLabel}
         detail={triggerDetail}
@@ -55,16 +55,11 @@ export function SessionModeControl({
     <PopoverButton
       trigger={
         <ComposerControlButton
-          tone={currentPresentation.tone}
+          emphasizeLabel={triggerStyle === "value"}
           icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
           label={triggerLabel}
           detail={triggerDetail}
-          trailing={
-            <span className="flex items-center gap-1">
-              <PendingConfigIndicator pendingState={control.pendingState} />
-              <ChevronDown className="size-3 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]" />
-            </span>
-          }
+          trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
           aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
           className="max-w-[12rem]"

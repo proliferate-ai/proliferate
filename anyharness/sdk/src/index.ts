@@ -33,33 +33,6 @@ export type {
 } from "./types/runtime.js";
 
 export type {
-  RuntimeConfigSource,
-  RuntimeConfigExternalScope,
-  RuntimeConfigRevision,
-  RuntimeConfigRevisionExpectation,
-  ApplyRuntimeConfigRequest,
-  ApplyRuntimeConfigResponse,
-  RuntimeConfigStatusResponse,
-  RuntimeConfigManifest,
-  RuntimeDirectAttachAuthConfig,
-  RuntimeJwtVerificationKey,
-  RuntimeMcpServer,
-  RuntimeMcpTransport,
-  RuntimeMcpLaunch,
-  RuntimeMcpNamedValue,
-  RuntimeMcpValue,
-  RuntimeMcpTemplatePart,
-  RuntimeSkill,
-  RuntimeSkillSourceKind,
-  RuntimeArtifactRef,
-  RuntimeArtifactPayload,
-  RuntimeArtifactStatus,
-  RuntimeCredentialRef,
-  RuntimeCredentialUse,
-  RuntimeCredentialValue,
-} from "./types/runtime-config.js";
-
-export type {
   ReplayRecordingSummary,
   ListReplayRecordingsResponse,
   ExportReplayRecordingRequest,
@@ -70,15 +43,17 @@ export type {
 } from "./types/replay.js";
 
 export type {
+  AgentAuthStateSource,
+  AgentAuthStateHarness,
+  AgentAuthStateDocument,
+  ApplyAgentAuthStateResponse,
+} from "./types/agent-auth.js";
+
+export type {
   AgentInstallState,
   AgentCredentialState,
+  AgentCliAuthState,
   AgentReadinessState,
-  AgentAuthExternalScope,
-  AgentAuthSelectionConfig,
-  AgentAuthSelectionStatus,
-  AgentAuthConfigStatusResponse,
-  ApplyAgentAuthConfigRequest,
-  ApplyAgentAuthConfigResponse,
   AgentLaunchOptionsResponse,
   ArtifactStatus,
   AgentSummary,
@@ -95,6 +70,14 @@ export type {
   ReconcileAgentResult,
   ReconcileAgentsResponse,
 } from "./types/agents.js";
+
+export type {
+  GatewayModelEntry,
+  GatewayModelSource,
+  GatewayModelsResponse,
+  ModelEffort,
+  RefreshGatewayModelsResponse,
+} from "./types/agent-gateway-catalog.js";
 
 export type {
   RepoRootKind,
@@ -254,6 +237,29 @@ export type {
   ListSessionEventsOptions,
   McpElicitationUrlRevealResponse,
   ResolveInteractionRequest,
+  Goal,
+  GoalStatus,
+  GoalArmState,
+  SetSessionGoalRequest,
+  SessionGoalResponse,
+  ClearSessionGoalResponse,
+  Loop,
+  LoopSchedule,
+  LoopScheduleKind,
+  LoopStatus,
+  SetSessionLoopRequest,
+  SessionLoopResponse,
+  SessionLoopsResponse,
+  ClearSessionLoopsResponse,
+  SessionActivity,
+  TurnState,
+  ActivityProcess,
+  ProcessStatus,
+  ActivitySubagent,
+  SubagentStatus,
+  ActivityUsage,
+  FeedRef,
+  FeedKind,
 } from "./types/sessions.js";
 
 export type {
@@ -337,6 +343,14 @@ export type {
   SessionStateUpdateEvent,
   SessionInfoUpdateEvent,
   UsageUpdateEvent,
+  GoalUpdatedEvent,
+  GoalMetEvent,
+  GoalClearedEvent,
+  LoopUpsertedEvent,
+  LoopRemovedEvent,
+  LoopFiredEvent,
+  ActivityProcessUpsertedEvent,
+  ActivitySubagentUpsertedEvent,
   PendingPromptAddedEvent,
   PendingPromptUpdatedEvent,
   PendingPromptRemovedEvent,
@@ -459,6 +473,8 @@ export type {
   RenameBranchResponse,
   StagePathsRequest,
   UnstagePathsRequest,
+  StagePatchRequest,
+  UnstagePatchRequest,
   GitRevertPatchEntry,
   GitRevertPatchesRequest,
   GitRevertPatchesResponse,
@@ -474,6 +490,11 @@ export type {
   CurrentPullRequestResponse,
   CreatePullRequestRequest,
   CreatePullRequestResponse,
+  PullRequestChecksState,
+  PullRequestReviewDecision,
+  BranchPullRequestSummary,
+  BranchPullRequestStatus,
+  RepoPullRequestStatusesResponse,
 } from "./types/hosting.js";
 
 export type {
@@ -513,3 +534,13 @@ export type {
 
 export { streamSession } from "./streams/sessions.js";
 export type { SessionStreamOptions, SessionStreamHandle } from "./streams/sessions.js";
+
+export { connectFeed } from "./streams/feeds.js";
+export type {
+  FeedStreamOptions,
+  FeedStreamHandle,
+  FeedFrame,
+  FeedBytesFrame,
+  FeedTextFrame,
+  FeedWebSocketAuthTransport,
+} from "./streams/feeds.js";

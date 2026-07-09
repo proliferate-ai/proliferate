@@ -1,5 +1,4 @@
 use std::{
-    fmt,
     fs::OpenOptions,
     io,
     path::{Path, PathBuf},
@@ -10,16 +9,16 @@ use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 use tokio::{
-    process::{Child, Command},
+    process::Child,
     sync::Mutex,
     time::{sleep, Duration},
 };
 
-use crate::{
-    agent_seed_env::current_target_triple,
-    app_config,
-    sidecar::{resolve_shell_path, RuntimeStatus, SharedSidecar},
-};
+use crate::{app_config, sidecar::resolve_shell_path};
+
+mod launcher;
+
+use launcher::find_proliferate_worker_launcher;
 
 #[derive(Default)]
 pub struct CloudWorkerState {
@@ -65,6 +64,12 @@ pub struct EnsureDesktopDispatchWorkerResult {
     config_path: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StopDesktopDispatchWorkerResult {
+    stopped: bool,
+}
+
 pub fn create_cloud_worker_state() -> SharedCloudWorkerState {
     Arc::new(CloudWorkerState::default())
 }
@@ -73,11 +78,10 @@ pub fn create_cloud_worker_state() -> SharedCloudWorkerState {
 pub async fn ensure_desktop_dispatch_worker(
     input: EnsureDesktopDispatchWorkerInput,
     state: State<'_, SharedCloudWorkerState>,
-    sidecar: State<'_, SharedSidecar>,
 ) -> Result<EnsureDesktopDispatchWorkerResult, String> {
     let target_id = non_empty("targetId", input.target_id)?;
     let cloud_base_url = configured_cloud_base_url()?;
-    let anyharness_base_url = current_anyharness_base_url(&sidecar).await?;
+    let integration_gateway_home = app_config::anyharness_runtime_home_path()?;
     let enrollment_token = input
         .enrollment_token
         .map(|value| value.trim().to_string())
@@ -86,7 +90,11 @@ pub async fn ensure_desktop_dispatch_worker(
     let mut guard = state.process.lock().await;
     if let Some(process) = guard.as_mut() {
         match process.child.try_wait() {
-            Ok(None) if process.target_id == target_id => {
+            // A fresh enrollment token is a rotation request (e.g. a different
+            // user signed in on this machine): fall through to kill the tracked
+            // worker and re-enroll instead of keeping the predecessor's worker
+            // + gateway credentials alive under the new user.
+            Ok(None) if process.target_id == target_id && enrollment_token.is_none() => {
                 return Ok(EnsureDesktopDispatchWorkerResult {
                     target_id,
                     status: "running",
@@ -135,31 +143,52 @@ pub async fn ensure_desktop_dispatch_worker(
         &paths.config,
         &cloud_base_url,
         enrollment_token.as_deref(),
-        &anyharness_base_url,
         &paths.database,
+        &integration_gateway_home,
     )?;
     drop(mutation_lock);
+
+    let (log_stdout, log_stderr) = open_worker_log(&paths.log)?;
+    tracing::info!(
+        launcher = %launcher,
+        config_path = %paths.config.display(),
+        log_path = %paths.log.display(),
+        "Starting Proliferate Worker"
+    );
 
     let mut command = launcher.command(&paths.config);
     command
         .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::from(log_stdout))
+        .stderr(std::process::Stdio::from(log_stderr))
         .kill_on_drop(true);
     if let Some(path) = resolve_shell_path() {
         command.env("PATH", path);
     }
 
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("Failed to start Proliferate Worker with {launcher}: {error}"))?;
+    let mut child = command.spawn().map_err(|error| {
+        tracing::error!(launcher = %launcher, %error, "Failed to start Proliferate Worker");
+        format!("Failed to start Proliferate Worker with {launcher}: {error}")
+    })?;
+    tracing::info!(
+        launcher = %launcher,
+        pid = child.id(),
+        "Proliferate Worker spawned"
+    );
     sleep(Duration::from_millis(150)).await;
     if let Some(status) = child
         .try_wait()
         .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
     {
+        tracing::error!(
+            launcher = %launcher,
+            %status,
+            log_path = %paths.log.display(),
+            "Proliferate Worker exited during startup"
+        );
         return Err(format!(
-            "Proliferate Worker exited during startup with {status}."
+            "Proliferate Worker exited during startup with {status}. See {} for output.",
+            paths.log.display()
         ));
     }
 
@@ -174,6 +203,37 @@ pub async fn ensure_desktop_dispatch_worker(
         config_path: paths.config,
     });
     Ok(result)
+}
+
+/// Stops the tracked dispatch worker (if any) and removes the
+/// integration-gateway dotfile so local sessions lose access to the departed
+/// user's integrations. Safe to call when nothing is running.
+#[tauri::command]
+pub async fn stop_desktop_dispatch_worker(
+    state: State<'_, SharedCloudWorkerState>,
+) -> Result<StopDesktopDispatchWorkerResult, String> {
+    let mut guard = state.process.lock().await;
+    let mut stopped = false;
+    if let Some(process) = guard.as_mut() {
+        let _ = process.child.start_kill();
+        let _ = process.child.wait().await;
+        stopped = true;
+    }
+    *guard = None;
+    drop(guard);
+
+    let dotfile = app_config::anyharness_runtime_home_path()?.join("integration-gateway.json");
+    match std::fs::remove_file(&dotfile) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(format!(
+                "Failed to remove integration gateway credentials at {}: {error}",
+                dotfile.display()
+            ));
+        }
+    }
+    Ok(StopDesktopDispatchWorkerResult { stopped })
 }
 
 fn non_empty(name: &str, value: String) -> Result<String, String> {
@@ -196,18 +256,10 @@ fn configured_cloud_base_url() -> Result<String, String> {
         .map(|value| value.trim_end_matches('/').to_string())
 }
 
-async fn current_anyharness_base_url(sidecar: &State<'_, SharedSidecar>) -> Result<String, String> {
-    let guard = sidecar.lock().await;
-    if guard.info.status != RuntimeStatus::Healthy {
-        return Err("AnyHarness must be healthy before remote access can start.".to_string());
-    }
-    non_empty("AnyHarness base URL", guard.info.url.clone())
-        .map(|value| value.trim_end_matches('/').to_string())
-}
-
 struct WorkerPaths {
     config: PathBuf,
     database: PathBuf,
+    log: PathBuf,
 }
 
 fn worker_paths(target_id: &str) -> Result<WorkerPaths, String> {
@@ -217,6 +269,7 @@ fn worker_paths(target_id: &str) -> Result<WorkerPaths, String> {
     Ok(WorkerPaths {
         config: root.join("config.toml"),
         database: root.join("worker.sqlite3"),
+        log: root.join("worker.log"),
     })
 }
 
@@ -323,28 +376,49 @@ fn write_worker_config(
     path: &Path,
     cloud_base_url: &str,
     enrollment_token: Option<&str>,
-    anyharness_base_url: &str,
     worker_db_path: &Path,
+    integration_gateway_home: &Path,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
         set_private_dir_permissions(parent)?;
     }
-    let mut lines = vec![
-        format!("cloud_base_url = {}", toml_string(cloud_base_url)),
-        format!("anyharness_base_url = {}", toml_string(anyharness_base_url)),
-        format!(
-            "worker_db_path = {}",
-            toml_string(&worker_db_path.to_string_lossy())
-        ),
-        "heartbeat_interval_seconds = 15".to_string(),
-    ];
+    let mut lines = vec![format!("cloud_base_url = {}", toml_string(cloud_base_url))];
     if let Some(token) = enrollment_token {
-        lines.insert(1, format!("enrollment_token = {}", toml_string(token)));
+        lines.push(format!("enrollment_token = {}", toml_string(token)));
     }
+    lines.push(format!(
+        "worker_db_path = {}",
+        toml_string(&worker_db_path.to_string_lossy())
+    ));
+    lines.push("heartbeat_interval_seconds = 30".to_string());
+    lines.push(format!(
+        "integration_gateway_home = {}",
+        toml_string(&integration_gateway_home.to_string_lossy())
+    ));
+    // The desktop app bundle owns the worker binary; the worker must never
+    // self-swap here. Explicit (the worker also defaults to false) so the
+    // on-disk config documents the gate.
+    lines.push("self_update_enabled = false".to_string());
     app_config::write_string_file_atomic(path, &format!("{}\n", lines.join("\n")))?;
     set_private_file_permissions(path)
+}
+
+/// Opens (and truncates) the worker log file, returning independent handles
+/// for the child's stdout and stderr so both streams land in the same file.
+fn open_worker_log(path: &Path) -> Result<(std::fs::File, std::fs::File), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create {}: {error}", parent.display()))?;
+    }
+    let file = std::fs::File::create(path)
+        .map_err(|error| format!("Failed to open worker log at {}: {error}", path.display()))?;
+    set_private_file_permissions(path)?;
+    let clone = file
+        .try_clone()
+        .map_err(|error| format!("Failed to open worker log at {}: {error}", path.display()))?;
+    Ok((file, clone))
 }
 
 fn toml_string(value: &str) -> String {
@@ -369,159 +443,6 @@ fn sanitize_path_segment(value: &str) -> String {
             }
         })
         .collect()
-}
-
-enum WorkerLauncher {
-    Binary(PathBuf),
-    CargoRun {
-        cargo: PathBuf,
-        workspace_root: PathBuf,
-    },
-}
-
-impl WorkerLauncher {
-    fn command(&self, config_path: &Path) -> Command {
-        match self {
-            Self::Binary(binary) => {
-                let mut command = Command::new(binary);
-                command.arg("--config").arg(config_path);
-                command
-            }
-            Self::CargoRun {
-                cargo,
-                workspace_root,
-            } => {
-                let mut command = Command::new(cargo);
-                command
-                    .current_dir(workspace_root)
-                    .arg("run")
-                    .arg("-p")
-                    .arg("proliferate-worker")
-                    .arg("--")
-                    .arg("--config")
-                    .arg(config_path);
-                command
-            }
-        }
-    }
-}
-
-impl fmt::Display for WorkerLauncher {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Binary(binary) => write!(f, "{}", binary.display()),
-            Self::CargoRun {
-                cargo,
-                workspace_root,
-            } => write!(
-                f,
-                "{} run -p proliferate-worker from {}",
-                cargo.display(),
-                workspace_root.display()
-            ),
-        }
-    }
-}
-
-fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
-    if let Ok(value) = std::env::var("PROLIFERATE_WORKER_BIN") {
-        let path = PathBuf::from(value);
-        if is_usable_worker_binary(&path) {
-            return Some(WorkerLauncher::Binary(path));
-        }
-    }
-
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let target = current_target_triple();
-            for candidate in [
-                exe_dir.join(format!("proliferate-worker-{target}")),
-                exe_dir.join("proliferate-worker"),
-            ] {
-                if is_usable_worker_binary(&candidate) {
-                    return Some(WorkerLauncher::Binary(candidate));
-                }
-            }
-        }
-    }
-
-    for candidate in development_worker_candidates() {
-        if is_usable_worker_binary(&candidate) {
-            return Some(WorkerLauncher::Binary(candidate));
-        }
-    }
-
-    if let Ok(path) = which::which("proliferate-worker") {
-        if is_usable_worker_binary(&path) {
-            return Some(WorkerLauncher::Binary(path));
-        }
-    }
-
-    if cfg!(debug_assertions) {
-        if let (Some(cargo), Some(workspace_root)) = (which::which("cargo").ok(), workspace_root())
-        {
-            return Some(WorkerLauncher::CargoRun {
-                cargo,
-                workspace_root,
-            });
-        }
-    }
-
-    None
-}
-
-fn development_worker_candidates() -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    let target = current_target_triple();
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let repos = [
-        manifest_dir.join("../../.."),
-        manifest_dir.join("../../anyharness"),
-        manifest_dir.join("../../../anyharness"),
-    ];
-    for repo in repos {
-        candidates.push(
-            repo.join("target")
-                .join(&target)
-                .join("debug")
-                .join("proliferate-worker"),
-        );
-        candidates.push(
-            repo.join("target")
-                .join(&target)
-                .join("release")
-                .join("proliferate-worker"),
-        );
-        candidates.push(repo.join("target").join("debug").join("proliferate-worker"));
-        candidates.push(
-            repo.join("target")
-                .join("release")
-                .join("proliferate-worker"),
-        );
-    }
-    candidates
-}
-
-fn workspace_root() -> Option<PathBuf> {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest_dir.join("../../..");
-    if root.join("Cargo.toml").is_file() {
-        Some(root)
-    } else {
-        None
-    }
-}
-
-fn is_usable_worker_binary(path: &Path) -> bool {
-    path.is_file() && !is_placeholder_sidecar(path)
-}
-
-fn is_placeholder_sidecar(path: &Path) -> bool {
-    let Ok(bytes) = std::fs::read(path) else {
-        return false;
-    };
-    let text = String::from_utf8_lossy(&bytes);
-    text.contains("sidecar is not available") || text.contains("unsupported target placeholder")
 }
 
 #[cfg(unix)]

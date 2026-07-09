@@ -1,0 +1,10 @@
+{
+  "Arn": "arn:aws:ecs:us-east-1:157466816238:cluster/proliferate-prod",
+  "RoleArn": "arn:aws:iam::157466816238:role/proliferate-analytics-ingest-scheduler",
+  "EcsParameters": {
+    "TaskDefinitionArn": "arn:aws:ecs:us-east-1:157466816238:task-definition/proliferate-analytics-ingest:2",
+    "TaskCount": 1,
+    "LaunchType": "FARGATE",
+    "NetworkConfiguration": {"awsvpcConfiguration": {"Subnets": ["subnet-09207f5ce65ea006c","subnet-0608c451bf16b6913"],"SecurityGroups": ["sg-043efce5792a8ce80"],"AssignPublicIp": "ENABLED"}}
+  }
+}

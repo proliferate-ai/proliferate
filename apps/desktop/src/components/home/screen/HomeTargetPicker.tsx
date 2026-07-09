@@ -4,15 +4,11 @@ import {
   PickerEmptyRow,
   PickerPopoverContent,
 } from "@proliferate/ui/primitives/PickerPopoverContent";
-import { PillControlButton } from "@proliferate/ui/primitives/PillControlButton";
-import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import {
   Check,
-  ChevronRight,
-  FolderPlus,
+  ProjectNotebook,
   GitBranchIcon,
-  Sparkles,
-  X,
 } from "@proliferate/ui/icons";
 import { matchesPickerSearch } from "@proliferate/ui/utils/search";
 import type { ComputeLaunchTargetOption } from "@/lib/domain/compute/target-options";
@@ -32,12 +28,13 @@ import {
 import {
   BranchSearchField,
   homeTargetLaunchKindIcon,
-  ProjectSearchField,
+  HomeTargetRowItem,
   TARGET_PICKER_DIVIDER_CLASS,
   TARGET_PICKER_SURFACE_CLASS,
   TargetPickerMenuItem,
   TargetSection,
 } from "@/components/home/screen/HomeTargetPickerParts";
+import { HomeProjectMenu } from "@/components/home/screen/HomeProjectMenu";
 
 interface HomeTargetPickerProps {
   destination: HomeNextDestination;
@@ -78,11 +75,7 @@ export function HomeTargetPicker({
   onAddRepository,
   onConfigureCloud,
 }: HomeTargetPickerProps) {
-  const [projectSearchValue, setProjectSearchValue] = useState("");
   const [runtimeSearchValue, setRuntimeSearchValue] = useState("");
-  const filteredRepositories = repositories.filter((repository) =>
-    matchesPickerSearch([repository.name, repository.sourceRoot], projectSearchValue)
-  );
   const filteredBranches = branchOptions.filter((branch) =>
     matchesPickerSearch([branch], runtimeSearchValue)
   );
@@ -95,7 +88,6 @@ export function HomeTargetPicker({
     sshTargetOptions.find((target) => target.id === selectedSshTargetId) ?? null;
   const filteredSshTargetOptions = sshTargetOptions;
   const clearSearch = () => {
-    setProjectSearchValue("");
     setRuntimeSearchValue("");
   };
   const runtimeLabel = repoLaunchKind === "ssh"
@@ -107,9 +99,9 @@ export function HomeTargetPicker({
     })
     : homeRepoLaunchKindLabel(repoLaunchKind);
   const runtimeButton = (
-    <PillControlButton
+    <HomeTargetRowItem
       icon={homeTargetLaunchKindIcon(repoLaunchKind, selectedSshTarget)}
-      label={destination === "cowork" ? "No repository" : runtimeLabel}
+      value={destination === "cowork" ? "No repository" : runtimeLabel}
       disabled={!selectedRepository || destination === "cowork"}
       disclosure={!!selectedRepository && destination === "repository"}
       aria-label={homeTargetRuntimeAriaLabel({
@@ -117,83 +109,27 @@ export function HomeTargetPicker({
         selectedRepository,
         destination,
       })}
-      className="max-w-[13rem]"
     />
   );
 
   return (
     <>
-      <PopoverButton
+      <HomeProjectMenu
         trigger={(
-          <PillControlButton
-            icon={destination === "cowork" ? <Sparkles className="size-3.5" /> : null}
-            label={homeTargetProjectLabel({ destination, selectedRepository })}
-            disclosure
+          <HomeTargetRowItem
+            icon={<ProjectNotebook className="size-4" />}
+            value={homeTargetProjectLabel({ destination, selectedRepository })}
+            disclosure={false}
             aria-label={homeTargetProjectAriaLabel({ destination, selectedRepository })}
-            className="max-w-[14rem]"
           />
         )}
-        side="top"
-        className="w-[23rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
-      >
-        {(close) => (
-          <div className="flex max-h-[20rem] min-h-0 flex-col">
-            <ProjectSearchField
-              value={projectSearchValue}
-              onChange={setProjectSearchValue}
-            />
-            <div className="min-h-0 overflow-y-auto py-1">
-              {filteredRepositories.map((repository) => {
-                const isSelected =
-                  destination === "repository"
-                  && selectedRepository?.sourceRoot === repository.sourceRoot;
-                return (
-                  <PopoverMenuItem
-                    key={repository.sourceRoot}
-                    label={repository.name}
-                    trailing={isSelected ? <Check className="size-4" /> : null}
-                    className="rounded-lg px-3 py-1.5 text-sm"
-                    onClick={() => {
-                      onSelectRepository(repository.sourceRoot);
-                      clearSearch();
-                      close();
-                    }}
-                  />
-                );
-              })}
-              {filteredRepositories.length === 0 ? (
-                <PickerEmptyRow label="No projects found" />
-              ) : null}
-            </div>
-
-            <div className="mx-2.5 my-1 border-t border-border/70" />
-            <div className="pb-1">
-              <PopoverMenuItem
-                icon={<FolderPlus className="size-3.5" />}
-                label="Add new project"
-                trailing={<ChevronRight className="size-3.5" />}
-                className="rounded-lg px-2.5 py-1.5 text-sm"
-                onClick={() => {
-                  onAddRepository();
-                  clearSearch();
-                  close();
-                }}
-              />
-              <PopoverMenuItem
-                icon={<X className="size-3.5" />}
-                label="Don't work in a project"
-                trailing={destination === "cowork" ? <Check className="size-3.5" /> : null}
-                className="rounded-lg px-2.5 py-1.5 text-sm"
-                onClick={() => {
-                  onSelectCowork();
-                  clearSearch();
-                  close();
-                }}
-              />
-            </div>
-          </div>
-        )}
-      </PopoverButton>
+        destination={destination}
+        repositories={repositories}
+        selectedRepository={selectedRepository}
+        onSelectRepository={onSelectRepository}
+        onSelectCowork={onSelectCowork}
+        onAddRepository={onAddRepository}
+      />
 
       {selectedRepository && destination === "repository" ? (
         <PopoverButton
@@ -271,16 +207,14 @@ export function HomeTargetPicker({
       {selectedRepository && destination === "repository" && canShowBranchChoices ? (
         <PopoverButton
           trigger={(
-            <PillControlButton
-              icon={<GitBranchIcon className="size-3.5" />}
-              label={selectedBranchName ?? "Base branch"}
-              disclosure
+            <HomeTargetRowItem
+              icon={<GitBranchIcon className="size-4" />}
+              value={selectedBranchName ?? "base branch"}
               aria-label={`Branch: ${selectedBranchName ?? "base branch"}`}
-              className="max-w-[15rem]"
             />
           )}
           side="top"
-          className="w-[22rem] rounded-xl border border-border bg-popover p-1 shadow-floating"
+          className={`w-72 min-w-[175px] ${POPOVER_SURFACE_CLASS}`}
         >
           {(close) => (
             <PickerPopoverContent>
@@ -295,7 +229,7 @@ export function HomeTargetPicker({
                 filteredBranches.map((branch) => (
                   <PopoverMenuItem
                     key={branch}
-                    icon={<GitBranchIcon className="size-3.5" />}
+                    icon={<GitBranchIcon className="size-4" />}
                     label={branch}
                     trailing={selectedBranchName === branch ? <Check className="size-3.5" /> : null}
                     onClick={() => {

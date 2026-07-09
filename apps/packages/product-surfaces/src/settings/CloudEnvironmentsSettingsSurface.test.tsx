@@ -4,6 +4,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CloudEnvironmentsSettingsSurface } from "./CloudEnvironmentsSettingsSurface";
 
+class TestResizeObserver {
+  observe() {}
+
+  unobserve() {}
+
+  disconnect() {}
+}
+
+vi.stubGlobal("ResizeObserver", TestResizeObserver);
+
 const cloudHooks = vi.hoisted(() => ({
   useRepositories: vi.fn(),
   useCloudRepoBranches: vi.fn(),
@@ -59,6 +69,11 @@ const repoConfigs = [
       defaultBranch: "main",
       setupScript: "",
       runCommand: "",
+      materialization: {
+        status: "ready",
+        lastError: null,
+        materializedAt: null,
+      },
     }],
   },
   {
@@ -73,9 +88,10 @@ const repoConfigs = [
       kind: "cloud",
       desktopInstallId: null,
       localPath: null,
-      defaultBranch: "main",
+      defaultBranch: null,
       setupScript: "npm ci",
       runCommand: "",
+      materialization: null,
     }],
   },
 ];
@@ -184,13 +200,15 @@ describe("CloudEnvironmentsSettingsSurface", () => {
 
     render(
       <CloudEnvironmentsSettingsSurface
-        mode="cloud-only"
         onSelectCloudEnvironment={onSelectCloudEnvironment}
         onBackToList={vi.fn()}
       />,
     );
 
     expect(screen.queryByText("octo/desktop-cloud")).not.toBeNull();
+    expect(screen.queryAllByText("Cloud")).toHaveLength(2);
+    expect(screen.queryByText("Cloud enabled")).toBeNull();
+    expect(screen.queryByText("Cloud disabled")).toBeNull();
     fireEvent.click(screen.getAllByRole("button", { name: "Configure" })[0]);
 
     expect(onSelectCloudEnvironment).toHaveBeenCalledWith({
@@ -199,33 +217,108 @@ describe("CloudEnvironmentsSettingsSurface", () => {
     });
   });
 
-  it("renders hybrid local and cloud rows as one repository list", () => {
+  it("flags failed materialization on list rows", () => {
+    cloudHooks.useRepositories.mockReturnValue({
+      data: {
+        repositories: [{
+          ...repoConfigs[0],
+          environments: [{
+            ...repoConfigs[0].environments[0],
+            materialization: {
+              status: "error",
+              lastError: "setup exploded",
+              materializedAt: null,
+            },
+          }],
+        }],
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
     render(
       <CloudEnvironmentsSettingsSurface
-        mode="hybrid"
-        localCheckouts={[{
-          id: "/Users/dev/project",
-          name: "project",
-          description: "/Users/dev/project",
-          gitOwner: "octo",
-          gitRepoName: "desktop-cloud",
-        }]}
         onSelectCloudEnvironment={vi.fn()}
-        onSelectLocalCheckout={vi.fn()}
         onBackToList={vi.fn()}
       />,
     );
 
-    expect(screen.queryByText("Repositories")).not.toBeNull();
-    expect(screen.queryByText("octo/desktop-cloud")).not.toBeNull();
-    expect(screen.queryByText("Local")).not.toBeNull();
-    expect(screen.queryAllByText("Cloud enabled")).toHaveLength(2);
+    expect(screen.queryByText("Setup failed")).not.toBeNull();
   });
 
-  it("saves cloud-only detail edits without legacy secret fields", async () => {
+  it("explains the unavailable state when cloud is disabled", () => {
+    cloudHooks.useRepositories.mockImplementation((enabled?: boolean) => (
+      enabled
+        ? {
+            data: { repositories: repoConfigs },
+            isLoading: false,
+            isError: false,
+            refetch: vi.fn(),
+          }
+        : {
+            data: undefined,
+            isLoading: false,
+            isError: false,
+            refetch: vi.fn(),
+          }
+    ));
+
     render(
       <CloudEnvironmentsSettingsSurface
-        mode="cloud-only"
+        enabled={false}
+        cloudUnavailableReason="Sign in to Proliferate Cloud to manage cloud environments."
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Cloud environments unavailable")).not.toBeNull();
+    expect(
+      screen.queryByText("Sign in to Proliferate Cloud to manage cloud environments."),
+    ).not.toBeNull();
+    expect(screen.queryByText("Add cloud environment")).toBeNull();
+  });
+
+  it("offers a retry row when the cloud list fails to load", () => {
+    const refetch = vi.fn();
+    cloudHooks.useRepositories.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch,
+    });
+
+    render(
+      <CloudEnvironmentsSettingsSurface
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Couldn't load cloud environments")).not.toBeNull();
+    expect(screen.queryByText("Cloud environments could not be loaded.")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the add flow from the dashed add row", () => {
+    render(
+      <CloudEnvironmentsSettingsSurface
+        organizationId="org-1"
+        onSelectCloudEnvironment={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add cloud environment" }));
+
+    expect(screen.queryByLabelText("Search GitHub repositories")).not.toBeNull();
+  });
+
+  it("saves cloud-only detail edits through the config section", async () => {
+    render(
+      <CloudEnvironmentsSettingsSurface
         selectedCloudRepo={{
           gitOwner: "octo",
           gitRepoName: "web-only",
@@ -235,6 +328,12 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "GitHub default (main)" }));
+    fireEvent.click(await screen.findByText("develop"));
+
+    fireEvent.change(screen.getByLabelText("Cloud run command"), {
+      target: { value: "make dev" },
+    });
     fireEvent.change(screen.getByLabelText("Cloud setup script"), {
       target: { value: "npm test" },
     });
@@ -249,9 +348,9 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       body: {
         kind: "cloud",
         gitProvider: "github",
-        defaultBranch: "main",
+        defaultBranch: "develop",
         setupScript: "npm test",
-        runCommand: "",
+        runCommand: "make dev",
       },
     });
   });
@@ -265,7 +364,6 @@ describe("CloudEnvironmentsSettingsSurface", () => {
 
     render(
       <CloudEnvironmentsSettingsSurface
-        mode="cloud-only"
         organizationId="org-1"
         userAuthorizationReturnTo="proliferate://settings/environments"
         onOpenExternalUrl={onOpenExternalUrl}
@@ -274,7 +372,7 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add GitHub repo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add cloud environment" }));
 
     expect(screen.queryByRole("heading", { name: "Authorize GitHub App" })).not.toBeNull();
     expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();
@@ -298,7 +396,6 @@ describe("CloudEnvironmentsSettingsSurface", () => {
 
     render(
       <CloudEnvironmentsSettingsSurface
-        mode="cloud-only"
         organizationId="org-1"
         canManageGitHubAppInstallation
         installationReturnTo="proliferate://settings/environments"
@@ -308,7 +405,7 @@ describe("CloudEnvironmentsSettingsSurface", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Add GitHub repo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add cloud environment" }));
 
     expect(screen.queryByRole("heading", { name: "Install GitHub App" })).not.toBeNull();
     expect(screen.queryByLabelText("Search GitHub repositories")).toBeNull();

@@ -14,16 +14,65 @@ export function controlPlaneHealthKey(apiBaseUrl: string) {
   return [...cloudRootKey(), "control-plane-health", apiBaseUrl] as const;
 }
 
-export function agentAuthRootKey() {
-  return [...cloudRootKey(), "agent-auth"] as const;
-}
-
-export function cloudCapabilitiesKey() {
-  return [...cloudRootKey(), "capabilities"] as const;
-}
-
 export function cloudAgentCatalogKey() {
   return [...cloudRootKey(), "agent-catalog", "v1"] as const;
+}
+
+export function agentGatewayRootKey() {
+  return [...cloudRootKey(), "agent-gateway"] as const;
+}
+
+export function agentApiKeysKey() {
+  return [...agentGatewayRootKey(), "keys"] as const;
+}
+
+export function agentAuthSelectionsRootKey() {
+  return [...agentGatewayRootKey(), "selections"] as const;
+}
+
+export function agentAuthSelectionsKey(surface: string | null = null) {
+  return [...agentAuthSelectionsRootKey(), surface ?? "all"] as const;
+}
+
+export function agentAuthStateRootKey() {
+  return [...agentGatewayRootKey(), "state"] as const;
+}
+
+export function agentAuthStateKey(surface: string) {
+  return [...agentAuthStateRootKey(), surface] as const;
+}
+
+export function agentGatewayCapabilitiesKey() {
+  return [...agentGatewayRootKey(), "capabilities"] as const;
+}
+
+export function agentGatewayEnrollmentKey() {
+  return [...agentGatewayRootKey(), "enrollment"] as const;
+}
+
+export function agentGatewayCatalogRootKey() {
+  return [...agentGatewayRootKey(), "catalog"] as const;
+}
+
+export function agentGatewayCatalogKey(
+  harnessKind: string,
+  surface: string,
+  route: string,
+) {
+  return [...agentGatewayCatalogRootKey(), harnessKind, surface, route] as const;
+}
+
+export function orgAgentPolicyKey(organizationId: string) {
+  return [...agentGatewayRootKey(), "org-policy", organizationId] as const;
+}
+
+export function orgAgentPolicyViolationsKey(organizationId: string) {
+  return [
+    ...agentGatewayRootKey(),
+    "org-policy",
+    organizationId,
+    "violations",
+  ] as const;
 }
 
 export function cloudPluginInventoryRootKey() {
@@ -42,6 +91,26 @@ export function cloudOrganizationIntegrationPolicyKey(
     "organization-integration-policy",
     organizationId,
   ] as const;
+}
+
+export function cloudIntegrationsRootKey() {
+  return [...cloudRootKey(), "integrations"] as const;
+}
+
+export function cloudIntegrationsCatalogKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "catalog", organizationId] as const;
+}
+
+export function cloudIntegrationsHealthKey(organizationId: string | null = null) {
+  return [...cloudIntegrationsRootKey(), "health", organizationId] as const;
+}
+
+export function cloudIntegrationOauthFlowKey(flowId: string | null) {
+  return [...cloudIntegrationsRootKey(), "oauth-flow", flowId] as const;
+}
+
+export function cloudIntegrationAdminDefinitionsKey(organizationId: string | null) {
+  return [...cloudIntegrationsRootKey(), "admin-definitions", organizationId] as const;
 }
 
 export function organizationSsoConnectionsKey(organizationId: string | null) {
@@ -64,40 +133,12 @@ export function cloudConfiguredSkillsKey() {
   return [...cloudPluginInventoryRootKey(), "configured-skills"] as const;
 }
 
-export function agentAuthCredentialsKey(
-  organizationId: string | null = null,
-  credentialProviderId: string | null = null,
-) {
-  return [
-    ...agentAuthRootKey(),
-    "credentials",
-    organizationId,
-    credentialProviderId,
-  ] as const;
-}
-
 export function sandboxProfileKey(sandboxProfileId: string | null) {
-  return [...agentAuthRootKey(), "sandbox-profile", sandboxProfileId] as const;
-}
-
-export function sandboxAgentAuthSelectionsKey(sandboxProfileId: string | null) {
-  return [...sandboxProfileKey(sandboxProfileId), "selections"] as const;
-}
-
-export function sandboxAgentAuthTargetStatesKey(sandboxProfileId: string | null) {
-  return [...sandboxProfileKey(sandboxProfileId), "target-states"] as const;
-}
-
-export function sandboxProfileTargetStateKey(sandboxProfileId: string | null) {
-  return [...sandboxProfileKey(sandboxProfileId), "target-state"] as const;
+  return [...cloudRootKey(), "sandbox-profile", sandboxProfileId] as const;
 }
 
 export function sandboxProfileRuntimeConfigKey(sandboxProfileId: string | null) {
   return [...sandboxProfileKey(sandboxProfileId), "runtime-config"] as const;
-}
-
-export function agentAuthManagedCreditsKey(organizationId: string | null) {
-  return [...agentAuthRootKey(), "managed-credits", organizationId] as const;
 }
 
 export type CloudOwnerScope = "personal" | "organization";
@@ -115,6 +156,73 @@ export function cloudBillingKey(
   owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
 ) {
   return [...cloudRootKey(), "billing", owner.ownerScope, owner.organizationId] as const;
+}
+
+export function usageRootKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...cloudRootKey(), "usage", owner.ownerScope, owner.organizationId] as const;
+}
+
+export function usageSummaryKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...usageRootKey(owner), "summary"] as const;
+}
+
+export interface UsageTimeseriesKeyOptions {
+  granularity?: string | null;
+  days?: number | null;
+  kind?: string | null;
+}
+
+export function usageTimeseriesKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+  options: UsageTimeseriesKeyOptions = {},
+) {
+  return [
+    ...usageRootKey(owner),
+    "timeseries",
+    options.granularity ?? "day",
+    options.days ?? 30,
+    options.kind ?? "all",
+  ] as const;
+}
+
+export function llmBalanceKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...usageRootKey(owner), "llm-balance"] as const;
+}
+
+export function orgUsageByUserRootKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "usage", "by-user"] as const;
+}
+
+export function orgUsageByUserKey(organizationId: string | null, days: number | null = null) {
+  return [...orgUsageByUserRootKey(organizationId), days ?? 30] as const;
+}
+
+export function orgUserUsageTimeseriesKey(
+  organizationId: string | null,
+  userId: string | null,
+  options: UsageTimeseriesKeyOptions = {},
+) {
+  return [
+    ...organizationsRootKey(),
+    organizationId,
+    "usage",
+    "users",
+    userId,
+    "timeseries",
+    options.granularity ?? "day",
+    options.days ?? 30,
+    options.kind ?? "all",
+  ] as const;
+}
+
+export function orgLimitsKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "limits"] as const;
 }
 
 export function cloudRepoBranchesKey(gitOwner: string, gitRepoName: string) {

@@ -81,7 +81,7 @@ export function CloudChatComposerFooter({
   }
 
   return (
-    <div className="rounded-[var(--radius-composer,1.5rem)] px-2 pt-2">
+    <div className="rounded-[var(--radius-composer,1rem)] px-2 pt-2">
       <div className="flex min-w-0 flex-wrap items-center gap-1">
         {composerControls.map((control) => (
           <CloudChatSingleControl
@@ -103,7 +103,6 @@ export function CloudChatComposerFooter({
               type="button"
               disabled={control.disabled || control.pending}
               active={control.active}
-              tone={control.active ? "accent" : "neutral"}
               icon={copied ? <Check size={14} /> : <Icon size={14} />}
               label={control.label}
               detail={control.detail}

@@ -1,18 +1,17 @@
 import {
   resolveSessionControlTooltip,
   resolveSessionToggleControlPresentation,
-  resolveSessionToggleControlStateIndicator,
+  resolveSessionToggleControlStateLabel,
 } from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
-import { Brain, Check, ChevronDown, Zap } from "@proliferate/ui/icons";
+import { Brain, Check, Zap } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 import { SessionModeControl } from "./SessionModeControl";
-import { SessionReasoningEffortControl } from "./SessionReasoningEffortControl";
 
 interface SessionConfigControlsProps {
   agentKind: string | null;
@@ -27,8 +26,6 @@ export function SessionConfigControls({ agentKind, controls }: SessionConfigCont
       {uniqueControls.map((control) => (
         isConfiguredModeControl(control) ? (
           <SessionModeControl key={control.key} agentKind={agentKind} control={control} />
-        ) : control.key === "effort" ? (
-          <SessionReasoningEffortControl key={control.key} control={control} />
         ) : control.kind === "toggle" ? (
           <ToggleControl key={control.key} control={control} />
         ) : (
@@ -70,19 +67,18 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
   if (control.key === "reasoning" || control.key === "fast_mode") {
     const presentation = resolveSessionToggleControlPresentation(control.key);
     const Icon = presentation.icon === "brain" ? Brain : Zap;
-    const indicator = resolveSessionToggleControlStateIndicator(control.key, !!control.isEnabled);
+    const stateLabel = resolveSessionToggleControlStateLabel(control.key, !!control.isEnabled);
     const tooltip = resolveSessionControlTooltip(
       control.label,
       control.detail,
       selectedOption?.description,
     );
-    const triggerLabel = control.key === "fast_mode" ? indicator.label : control.label;
+    const triggerLabel = control.key === "fast_mode" ? stateLabel : control.label;
 
     return (
       <Tooltip content={tooltip}>
         <ComposerControlButton
           disabled={!control.settable || !nextValue}
-          tone={control.isEnabled ? presentation.tone : "quiet"}
           active={!!control.isEnabled}
           icon={<Icon className={`size-3.5 ${control.isEnabled ? "" : "opacity-65"}`} />}
           label={triggerLabel}
@@ -102,7 +98,7 @@ function ToggleControl({ control }: { control: LiveSessionControlDescriptor }) {
   return (
     <ComposerControlButton
       disabled={!control.settable || !nextValue}
-      tone={control.isEnabled ? "accent" : "neutral"}
+      active={!!control.isEnabled}
       label={control.label}
       detail={control.detail}
       trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
@@ -121,7 +117,6 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
     return (
       <ComposerControlButton
         disabled
-        tone="quiet"
         label={control.label}
         detail={control.detail}
       />
@@ -134,12 +129,7 @@ function SelectControl({ control }: { control: LiveSessionControlDescriptor }) {
         <ComposerControlButton
           label={control.label}
           detail={control.detail}
-          trailing={
-            <span className="flex items-center gap-1">
-              <PendingConfigIndicator pendingState={control.pendingState} />
-              <ChevronDown className="size-3 text-[color:var(--color-composer-control-muted-foreground)]" />
-            </span>
-          }
+          trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
           className="max-w-[14rem]"
         />
       }

@@ -1,5 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 export type ComposerTextareaFrameTopInset = "standard" | "none";
 
@@ -18,7 +18,8 @@ export function ComposerTextareaFrame({
     <div
       {...props}
       className={twMerge(
-        "mb-1 flex-grow select-text px-4",
+        // UX_SPEC §5: input area px-12.
+        "mb-1 flex-grow select-text px-3",
         topInset === "standard" ? "pt-3" : "",
         className,
       )}

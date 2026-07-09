@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type {
   ToolCallItem,
   TranscriptState,
@@ -13,19 +12,19 @@ import {
 } from "@proliferate/product-domain/chats/tools/cowork-artifact-tool-presentation";
 import {
   blockBelongsToCompletedHistory,
-  collectToolCallIdsWithProposedPlanForBlocks,
 } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import type { TurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
   TurnDisplayBlockNode,
 } from "./ScopedTranscriptBlocks";
-import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContext";
 import { TranscriptTreeNode } from "./TranscriptTreeNode";
 import {
   buildCollapsedSummaryIcons,
   formatCollapsedSummary,
 } from "./TranscriptToolGroupUtils";
+import { MessageBoundary } from "./MessageBoundary";
+import { Fragment } from "react";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -57,18 +56,14 @@ export function TurnItemSequence({
     ? artifactToolCalls.filter((item) => item.status === "completed")
     : [];
   const completedHistoryRootIdSet = new Set(presentation.completedHistoryRootIds);
-  const toolCallIdsWithProposedPlan = useMemo(
-    () => collectToolCallIdsWithProposedPlanForBlocks(
-      presentation.displayBlocks,
-      transcript,
-      presentation.childrenByParentId,
-    ),
-    [presentation.childrenByParentId, presentation.displayBlocks, transcript],
-  );
+  // The ExitPlanMode suppression index is derived transcript-wide once (see
+  // MessageList → ProposedPlanToolCallIdsProvider) so a proposed_plan landing in
+  // a different turn than its ExitPlanMode tool call still suppresses the
+  // footerless fallback card. This sequence only consumes that index.
   let hasRenderedCompletedHistory = false;
 
   return (
-    <ProposedPlanToolCallIdsProvider value={toolCallIdsWithProposedPlan}>
+    <>
       {presentation.displayBlocks.map((block) => {
         if (
           presentation.completedHistorySummary
@@ -117,26 +112,32 @@ export function TurnItemSequence({
           );
         }
 
+        const showMessageBoundary =
+          block.kind === "item"
+          && presentation.messageBoundaryItemIds.has(block.itemId);
+
         return (
-          <TurnDisplayBlockNode
-            key={getTurnDisplayBlockKey(block)}
-            block={block}
-            transcript={transcript}
-            autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
-            renderItem={(itemId) => (
-              <FragmentWithArtifacts
-                itemId={itemId}
-                transcript={transcript}
-                childrenByParentId={presentation.childrenByParentId}
-                artifactToolCalls={
-                  itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
-                }
-                workspaceId={workspaceId}
-                onOpenArtifact={onOpenArtifact}
-                onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-              />
-            )}
-          />
+          <Fragment key={getTurnDisplayBlockKey(block)}>
+            {showMessageBoundary && <MessageBoundary />}
+            <TurnDisplayBlockNode
+              block={block}
+              transcript={transcript}
+              autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+              renderItem={(itemId) => (
+                <FragmentWithArtifacts
+                  itemId={itemId}
+                  transcript={transcript}
+                  childrenByParentId={presentation.childrenByParentId}
+                  artifactToolCalls={
+                    itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
+                  }
+                  workspaceId={workspaceId}
+                  onOpenArtifact={onOpenArtifact}
+                  onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+                />
+              )}
+            />
+          </Fragment>
         );
       })}
       {showCompletedArtifactFallback && tailAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (
@@ -152,7 +153,7 @@ export function TurnItemSequence({
           ))}
         </div>
       )}
-    </ProposedPlanToolCallIdsProvider>
+    </>
   );
 }
 

@@ -23,7 +23,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const generatedDir = join(here, "generated");
 const outPath = join(here, "catalog.draft.json");
 
-const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
+const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
 // Which registry auth slot satisfies each probe auth context (curation-owned).
 // Per-agent context -> registry auth slot. Slot ids MUST be slots the
 // registry declares for that agent (the runtime classifier skips contexts
@@ -33,7 +33,6 @@ const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", gemini: "Gemini"
 const AUTH_CONTEXT_SLOTS = {
   claude: { "anthropic-api": "anthropic", "anthropic-oauth": "anthropic", "bedrock": "anthropic" },
   codex: { "openai-api": "openai", "openai-oauth": "openai", "bedrock": "openai" },
-  gemini: { "gemini-api": "gemini", "google-oauth": "gemini" },
   cursor: { "cursor-login": "cursor" },
   opencode: {
     "anthropic-api": "anthropic",
@@ -52,17 +51,23 @@ const AUTH_CONTEXT_SLOTS = {
 // the registry slot's envVars/discoveryKinds (validation_pairing.rs).
 const AUTH_CONTEXT_SIGNALS = {
   claude: {
-    "bedrock": { allOf: [{ envFlag: "CLAUDE_CODE_USE_BEDROCK=1" }, { discovery: "aws-credential-chain" }] },
+    // CLAUDE_CODE_USE_BEDROCK=1 is the routing switch: when set, the CLI
+    // routes to Bedrock and only serves us.anthropic.* inference-profile ids,
+    // whichever credential source it uses. We key bedrock on the flag alone
+    // and do NOT also require aws-credential-chain — that discovery covers only
+    // the passive sources (env pair, bearer token, ~/.aws profile, SSO cache)
+    // and deliberately misses the exotic tail (IMDS / task-role / container
+    // creds, decisions ledger 12). A production Bedrock deployment on an ECS
+    // task role sets the flag but has no passively detectable creds, so an
+    // allOf would misclassify it as oauth/api and then accept bare ids the
+    // account 400s on. The flag is the honest, sufficient signal.
+    "bedrock": { envFlag: "CLAUDE_CODE_USE_BEDROCK=1" },
     "anthropic-api": { anyOf: [{ env: "ANTHROPIC_API_KEY" }, { env: "ANTHROPIC_AUTH_TOKEN" }] },
     "anthropic-oauth": { anyOf: [{ discovery: "claude-oauth-creds" }, { discovery: "claude-keychain" }] },
   },
   codex: {
     "openai-oauth": { anyOf: [{ discovery: "codex-auth-json-oauth" }, { discovery: "codex-keychain" }] },
     "openai-api": { anyOf: [{ env: "OPENAI_API_KEY" }, { env: "CODEX_API_KEY" }, { discovery: "codex-auth-json-api-key" }] },
-  },
-  gemini: {
-    "gemini-api": { anyOf: [{ env: "GEMINI_API_KEY" }, { env: "GOOGLE_API_KEY" }] },
-    "google-oauth": { anyOf: [{ discovery: "gemini-oauth-creds" }, { discovery: "gemini-keychain" }] },
   },
   cursor: {
     "cursor-login": { anyOf: [{ env: "CURSOR_API_KEY" }, { discovery: "cursor-keychain" }] },
@@ -93,10 +98,19 @@ const AGENT_SESSION_DEFAULTS = {
     "openai-oauth": "gpt-5.5",
     "bedrock": "openai.gpt-5.5",
   },
-  gemini: { "gemini-api": "auto", "google-oauth": "auto" },
   cursor: { "cursor-login": "default" },
   opencode: { "baseline": "opencode/big-pickle" },
   grok: { "xai-api": "grok-4.20-0309-non-reasoning" },
+};
+
+// Native goal support per harness (session.supportsGoals, curation-owned):
+// the pinned harness version implements the GoalPort (claude >= 2.1.139,
+// codex >= 0.133). The runtime capability stays ACP-advertised at initialize;
+// this flag is the version-level declaration for surfaces without a live
+// handshake.
+const AGENT_SUPPORTS_GOALS = {
+  claude: true,
+  codex: true,
 };
 
 // Display-name curation: probe snapshots carry pretty names for some models
@@ -123,7 +137,6 @@ const CONTROL_MAPPINGS = {
     reasoning_effort: { liveConfigId: "reasoning_effort" },
     fast_mode: { liveConfigId: "fast_mode" },
   },
-  gemini: { mode: { createField: "modeId", liveConfigId: "mode" } },
   cursor: { mode: { createField: "modeId", liveConfigId: "mode" } },
   opencode: { mode: { createField: "modeId", liveConfigId: "mode" } },
   grok: { mode: { createField: "modeId", liveConfigId: "mode" } },
@@ -136,9 +149,13 @@ const CONTROL_MAPPINGS = {
 // the probe can prove a model launches.
 const MODEL_VISIBILITY_OPT_OUTS = {
   claude: [
-    // trial-id duplicate of menu id "opus" (Opus 4.8)
-    "claude-opus-4-8",
-    // global-region duplicate of us.anthropic.claude-fable-5 (bedrock)
+    // Only opt out GENUINE same-context duplicates. The bare current-gen ids
+    // (claude-fable-5, claude-opus-4-8) are oauth/api-only — never gateway-
+    // reachable — so they are NOT duplicates of the us.anthropic.* Bedrock
+    // entries and must stay visible on the native/api surfaces (that's the
+    // only form of those models an OAuth/API login can use). Only the
+    // global-region id duplicates its us.anthropic.* sibling WITHIN the
+    // bedrock context, so it alone stays opted out.
     "global.anthropic.claude-fable-5",
   ],
   grok: [
@@ -150,9 +167,50 @@ const MODEL_VISIBILITY_OPT_OUTS = {
   ],
 };
 
+// Availability stays the OBSERVED SET (menu or accepted trial per context)
+// with ONE sanctioned correction. Bedrock serves only region-prefixed
+// inference-profile ids (us.anthropic.* / global.anthropic.*). The Claude CLI
+// still lists the bare current-gen ids (default / haiku / opus) on its menu
+// during a bedrock probe run, so the raw observed set tags them
+// bedrock-available — but the CLI 400s those bare ids on use ("Try --model to
+// switch to us.anthropic.claude-opus-4-7 ..."). Menu presence is not
+// serve-ability: this is a menu-lie. Strip bedrock from any claude id that is
+// not a region-prefixed inference profile so validate_launch never accepts a
+// bare id a Bedrock-routed account cannot serve. The us.anthropic.* rows stay
+// the account's real menu; a normal oauth/api login (no bedrock context) is
+// untouched. Provenance keeps the honest observation.
+function correctAvailability(kind, modelId, contexts) {
+  if (kind === "claude" && !modelId.includes(".anthropic.")) {
+    return contexts.filter((context) => context !== "bedrock");
+  }
+  return contexts;
+}
+
+// Per-harness advanced settings: declared here (curation-owned), emitted onto
+// the agent entry, and applied at launch per the mapping kind. v1 supports
+// boolean-only, surfaces ⊆ {local, cloud}, mapping.kind ∈ {cli_flag, env}.
+const HARNESS_SETTINGS = {
+  claude: [
+    {
+      key: "chrome",
+      type: "boolean",
+      label: "Use Claude Code with Chrome",
+      description: "Allow Claude Code to control your Chrome browser. Requires the Claude Code Chrome extension.",
+      default: false,
+      surfaces: ["local"],
+      mapping: { kind: "cli_flag", flag: "--chrome" },
+    },
+  ],
+};
+
 // Explicit display overrides where prettifying alone is ambiguous (two
 // "GPT-5.4" rows when the bedrock CMB models sit beside the API ones).
 const MODEL_DISPLAY_OVERRIDES = {
+  claude: {
+    "claude-fable-5": "Fable 5",
+    "claude-opus-4-8": "Opus 4.8",
+    "global.anthropic.claude-fable-5": "Fable 5",
+  },
   codex: {
     "openai.gpt-5.4-cmb": "GPT-5.4 on Bedrock",
     "openai.gpt-5.4-cmb/xhigh": "GPT-5.4 (xhigh) on Bedrock",
@@ -190,7 +248,6 @@ function prettifyDisplayName(name) {
 const AUTH_CONTEXT_PRECEDENCE = {
   claude: ["bedrock", "anthropic-api", "anthropic-oauth"],
   codex: ["bedrock", "openai-oauth", "openai-api"],
-  gemini: ["gemini-api", "google-oauth"],
   cursor: ["cursor-login"],
   opencode: ["anthropic-api", "openai-api", "gemini-api", "opencode-zen", "baseline"],
   grok: ["xai-api"],
@@ -254,8 +311,8 @@ function versionedDisplayName(name, description, modelId) {
     : `${name.slice(0, paren)} ${version}${name.slice(paren)}`;
 }
 
-// Derive a `mode` control from the legacy ACP modes block (harnesses like
-// gemini report modes there and have no config options at all).
+// Derive a `mode` control from the legacy ACP modes block (some harnesses
+// report modes there and have no config options at all).
 function modesBlockMatrix(modes) {
   if (!modes?.availableModes?.length) return {};
   return {
@@ -421,8 +478,8 @@ for (const [kind, runs] of byAgent) {
   let variantSyntax = null;
   for (const run of runs) {
     const ctx = run.data.authContext;
-    // Harnesses that never re-emit config options on model switch (cursor,
-    // gemini) leave per-model captures null — fall back to the session
+    // Harnesses that never re-emit config options on model switch (e.g.
+    // cursor) leave per-model captures null — fall back to the session
     // baseline options, then to the legacy modes block, so uniform controls
     // (e.g. cursor's agent/plan/ask modes) still reach the catalog.
     const fallback = run.data.baselineConfigOptions
@@ -480,14 +537,15 @@ for (const [kind, runs] of byAgent) {
     const matrix = entry.mergedMatrix ?? {};
     // Observed-set semantics: exactly the contexts that saw this model.
     // 'baseline' is a first-class context; no always/anyOf inference.
-    const contexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
+    const observedContexts = [...new Set(entry.observedIn.map((r) => r.split(".").slice(1).join(".")))];
+    const availabilityContexts = correctAvailability(kind, modelId, observedContexts);
     return {
       id: modelId,
       displayName:
         MODEL_DISPLAY_OVERRIDES[kind]?.[modelId] ??
         prettifyDisplayName(versionedDisplayName(entry.name, entry.description, modelId)),
       ...(entry.description ? { description: entry.description } : {}),
-      availability: { anyOf: contexts },
+      availability: { anyOf: availabilityContexts },
       // On a harness menu somewhere -> advertised; trial-only -> available
       // but hidden unless curation opts it in.
       defaultVisible: !(MODEL_VISIBILITY_OPT_OUTS[kind] ?? []).includes(modelId),
@@ -495,7 +553,7 @@ for (const [kind, runs] of byAgent) {
       status: "active",
       provenance: {
         observedIn: [...new Set(entry.observedIn)],
-        observedInAllContexts: contexts.length === probedContexts.length,
+        observedInAllContexts: observedContexts.length === probedContexts.length,
         viaTrialOnly: !entry.onMenu,
         ...(entry.variants ? { variantIds: entry.variants } : {}),
       },
@@ -570,7 +628,14 @@ for (const [kind, runs] of byAgent) {
           ? { signals: AUTH_CONTEXT_SIGNALS[kind][run.data.authContext] }
           : {}),
       })),
-    session: { controls, models, defaults: AGENT_SESSION_DEFAULTS[kind] ?? {}, observedDefaults },
+    session: {
+      supportsGoals: AGENT_SUPPORTS_GOALS[kind] ?? false,
+      controls,
+      models,
+      defaults: AGENT_SESSION_DEFAULTS[kind] ?? {},
+      observedDefaults,
+    },
+    ...(HARNESS_SETTINGS[kind] ? { settings: HARNESS_SETTINGS[kind] } : {}),
     provenance: {
       probedAt: runs.map((r) => r.data.probedAt).sort().at(-1),
       attestation,

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import type { BillingReturnSurface } from "@proliferate/cloud-sdk";
+import type { BillingReturnSurface, LlmBalance } from "@proliferate/cloud-sdk";
 import {
   useCloudBilling,
   useCloudBillingActions,
+  useLlmBalance,
 } from "@proliferate/cloud-sdk-react";
 import {
   BillingSettingsPane,
@@ -52,18 +53,6 @@ const MOCK_COMPUTE_BALANCE: BillingUnitBalancePresentation = {
   lowBalanceCopy: "Need more runtime capacity? Add compute units any time.",
 };
 
-const MOCK_LLM_BALANCE: BillingUnitBalancePresentation = {
-  kind: "llm",
-  title: "LLM credits",
-  description: "Used by model gateway calls, inference-backed tools, and managed model access.",
-  purchased: "12,000 LLM credits",
-  available: "4,600 LLM credits",
-  used: "7,400 LLM credits",
-  availablePercent: 38,
-  topUpLabel: "Add LLM credits",
-  lowBalanceCopy: "Need more model usage? Add LLM credits any time.",
-};
-
 export function BillingSettingsSurface({
   organization,
   organizationLoading = organization?.loading ?? false,
@@ -79,6 +68,7 @@ export function BillingSettingsSurface({
     ? { ownerScope: "organization" as const, organizationId: organization.id }
     : undefined;
   const comparisonBilling = useCloudBilling(comparisonOwner, enabled);
+  const llmBalance = useLlmBalance(comparisonOwner, enabled);
   const comparisonActions = useCloudBillingActions(comparisonOwner, billingReturnOptions);
   const [comparisonActionError, setComparisonActionError] = useState<string | null>(null);
   const [planManagementOpen, setPlanManagementOpen] = useState(false);
@@ -138,7 +128,7 @@ export function BillingSettingsSurface({
   const billingPlan = comparisonBilling.data;
   const currentPlanKey = planKeyForBilling(billingPlan);
   const plan = planSummary(currentPlanKey, billingPlan);
-  const unitBalances = billingUnitBalances(billingPlan);
+  const unitBalances = billingUnitBalances(billingPlan, llmBalance.data, llmBalance.isLoading);
   const topUpEnabled = Boolean(
     billingPlan?.managedCloudOverageEnabled || billingPlan?.overageEnabled,
   );
@@ -153,7 +143,7 @@ export function BillingSettingsSurface({
     : comparisonActions.creatingCloudCheckout;
 
   return (
-    <section className="max-w-[820px] space-y-6">
+    <section className="space-y-6">
       <SettingsPageHeader
         title="Billing"
         description="Manage usage and billing details."
@@ -294,11 +284,34 @@ function planSummary(
 
 function billingUnitBalances(
   plan: BillingPlanView | null | undefined,
+  llmBalance: LlmBalance | null | undefined,
+  llmBalanceLoading: boolean,
 ): BillingUnitBalancePresentation[] {
   return [
     computeBalanceSummary(plan),
-    MOCK_LLM_BALANCE,
+    llmBalanceSummary(llmBalance, llmBalanceLoading),
   ];
+}
+
+function llmBalanceSummary(
+  llmBalance: LlmBalance | null | undefined,
+  loading: boolean,
+): BillingUnitBalancePresentation {
+  const granted = Math.max(llmBalance?.grantedUsd ?? 0, 0);
+  const used = Math.max(llmBalance?.usedUsd ?? 0, 0);
+  const remaining = Math.max(llmBalance?.remainingUsd ?? 0, 0);
+  return {
+    kind: "llm",
+    title: "LLM credits",
+    description: "Used by model gateway calls, inference-backed tools, and managed model access.",
+    purchased: formatUsd(granted),
+    available: formatUsd(remaining),
+    used: formatUsd(used),
+    availablePercent: granted > 0 ? Math.round((remaining / granted) * 100) : null,
+    topUpLabel: "Add LLM credits",
+    lowBalanceCopy: "Need more model usage? Add LLM credits any time.",
+    loading: loading && !llmBalance,
+  };
 }
 
 function computeBalanceSummary(
@@ -338,6 +351,16 @@ function computeBalanceSummary(
 
 function secondsToCredits(seconds: number | null | undefined): number {
   return Math.max(seconds ?? 0, 0) / 3600;
+}
+
+function formatUsd(value: number | null | undefined): string {
+  if (value === null || value === undefined) {
+    return "Unlimited";
+  }
+  return `$${Math.max(value, 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function formatCredits(value: number | null | undefined): string {

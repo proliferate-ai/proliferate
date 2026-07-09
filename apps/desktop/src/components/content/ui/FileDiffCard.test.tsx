@@ -38,7 +38,8 @@ describe("FileChangesCard and FileDiffCard", () => {
     expect(html).toContain("codex-review-diff-card");
     expect(html).toContain("--codex-diffs-header-surface:var(--color-diff-sidebar-file-header-surface)");
     expect(html).toContain("--codex-diffs-separator-surface:var(--color-diff-sidebar-file-header-hover-surface)");
-    expect(html).toContain("bg-[var(--codex-diffs-header-surface)]");
+    expect(html).toContain("sticky top-0 bg-[color-mix(in_srgb,var(--codex-diffs-header-surface)_97%,transparent)]");
+    expect(html).not.toContain("backdrop-blur");
     expect(html).not.toContain("#1c1c1c");
     expect(html).toContain("data-app-action-review-file-expanded=\"true\"");
     expect(html).toContain("data-app-action-review-file-toggle=\"\"");

@@ -2,24 +2,22 @@ import type { AgentSummary } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { RefreshCw } from "@proliferate/ui/icons";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { AgentSetupModal } from "@/components/agents/AgentSetupModal";
-import { LoadingState } from "@/components/feedback/LoadingIllustration";
 import { AgentDefaultComposer } from "@/components/settings/panes/AgentDefaultComposer";
 import { ModelRegistryPane } from "@/components/settings/panes/ModelRegistryPane";
 import {
   AgentConfigurationIssuesSection,
   type AgentConfigurationIssueAction,
 } from "@/components/settings/panes/agent-defaults/AgentConfigurationIssuesSection";
-import { AgentDefaultsSection } from "@/components/settings/panes/agent-defaults/AgentDefaultsSection";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsRow, SETTINGS_CONTROL_WIDTH_CLASS } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { SettingsMenu } from "@proliferate/ui/primitives/SettingsMenu";
 import { AGENT_SETUP_COPY } from "@/copy/agents/agents-copy";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
-import { useAgentAuthTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-auth-terminal-workflow";
+import { useAgentLoginTerminalWorkflow } from "@/hooks/agents/workflows/use-agent-login-terminal-workflow";
 import { useAgentInstallationActions } from "@/hooks/agents/workflows/use-agent-installation-actions";
 import { useModelRegistrySettings } from "@/hooks/settings/workflows/use-model-registry-settings";
 import {
@@ -28,15 +26,13 @@ import {
 import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-options";
 import { withUpdatedModelVisibilityOverride } from "@/lib/domain/chat/models/model-visibility";
 import { isReadyAgent } from "@/lib/domain/agents/status";
-import { buildSettingsHref } from "@/lib/domain/settings/navigation";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { buildPrimaryHarnessPreferenceUpdate } from "@/lib/domain/settings/chat-defaults";
 
 export function AgentDefaultsPane() {
-  const navigate = useNavigate();
   const [setupAgent, setSetupAgent] = useState<AgentSummary | null>(null);
   const showToast = useToastStore((state) => state.show);
-  const authTerminalWorkflow = useAgentAuthTerminalWorkflow();
+  const authTerminalWorkflow = useAgentLoginTerminalWorkflow();
   const { reconcileAgents } = useAgentInstallationActions();
   const {
     connectionState,
@@ -120,10 +116,8 @@ export function AgentDefaultsPane() {
       const authTerminalSession = authTerminalWorkflow.sessionsByKind[agent.kind] ?? null;
       const canOpenInlineAuth = agent.readiness === "login_required"
         && agent.supportsLogin;
-      const usesAuthenticationPage = agent.readiness === "credentials_required"
-        || (agent.readiness === "login_required" && !agent.supportsLogin);
       const authActionLabel = authTerminalSession?.isStarting
-        ? "Opening..."
+        ? "Opening…"
         : authTerminalSession?.terminal
           ? "Restart auth"
           : authTerminalSession?.errorMessage
@@ -131,24 +125,13 @@ export function AgentDefaultsPane() {
             : "Open auth";
 
       actions[agent.kind] = {
-        label: canOpenInlineAuth
-          ? authActionLabel
-          : usesAuthenticationPage
-            ? "Open auth"
-            : "Review setup",
+        label: canOpenInlineAuth ? authActionLabel : "Review setup",
         loading: authTerminalSession?.isStarting ?? false,
         onClick: () => {
           if (canOpenInlineAuth) {
             void authTerminalWorkflow.openAuthTerminal(agent, {
               restart: Boolean(authTerminalSession),
             });
-            return;
-          }
-          if (usesAuthenticationPage) {
-            navigate(buildSettingsHref({
-              section: "agent-authentication",
-              kind: agent.kind,
-            }));
             return;
           }
           setSetupAgent(agent);
@@ -161,17 +144,16 @@ export function AgentDefaultsPane() {
     agentsNeedingSetup,
     authTerminalWorkflow.openAuthTerminal,
     authTerminalWorkflow.sessionsByKind,
-    navigate,
   ]);
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-6">
       <SettingsPageHeader
-        title="Agent Defaults"
-        description="Configure default harness launch behavior. Local installs and sign-in repair live here; shared credentials live in Agent Authentication."
+        title="Agent defaults"
+        description="Defaults for how new chats launch each agent."
         action={
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             type="button"
             disabled={!canUpdateLocalInstalls}
@@ -186,45 +168,32 @@ export function AgentDefaultsPane() {
         }
       />
 
-      <AgentDefaultsSection title="Default harness">
-        <SettingsCard>
+      <SettingsSection title="Default agent">
           {connectionState === "connecting" ? (
-            <div className="p-3">
-              <LoadingState
-                message="Connecting"
-                subtext="Waiting for the runtime before loading agent defaults..."
-              />
-            </div>
+            <div className="text-ui-sm text-muted-foreground">Waiting for the runtime…</div>
           ) : connectionState === "failed" ? (
-            <div className="space-y-1 p-3">
-              <p className="text-sm font-medium text-foreground">Agent defaults are unavailable</p>
-              <p className="text-sm text-muted-foreground">
-                {runtimeError ?? "Reconnect the runtime to edit launch defaults."}
-              </p>
-            </div>
+            <SettingsEmptyState
+              size="compact"
+              title="Could not load agent defaults"
+              description={runtimeError ?? "Reconnect the runtime to edit launch defaults."}
+            />
           ) : ((agentsLoading || modelRegistriesLoading || runtimeLaunchOptions.isLoading) && (agents.length === 0 || modelRegistries.length === 0)) ? (
-            <div className="p-3">
-              <LoadingState
-                message="Loading agent defaults"
-                subtext="Fetching available agents and model registries..."
-              />
-            </div>
+            <div className="text-ui-sm text-muted-foreground">Loading agent defaults…</div>
           ) : agentDefaultRows.length === 0 ? (
-            <div className="space-y-1 p-3">
-              <p className="text-sm font-medium text-foreground">No agent defaults are available</p>
-              <p className="text-sm text-muted-foreground">
-                Install and configure a harness before editing launch defaults.
-              </p>
-            </div>
+            <SettingsEmptyState
+              size="compact"
+              title="No agent defaults yet"
+              description="Install and configure an agent before editing launch defaults."
+            />
           ) : (
-            <SettingsCardRow
-              label="Harness"
+            <SettingsRow
+              label="Agent"
               description="Launch identity for new chats"
             >
               <SettingsMenu
                 label={primaryHarnessLabel}
-                className="w-[240px]"
-                menuClassName="w-64"
+                className={SETTINGS_CONTROL_WIDTH_CLASS}
+                menuClassName={SETTINGS_CONTROL_WIDTH_CLASS}
                 groups={[{
                   id: "harnesses",
                   options: agentDefaultRows.map((row) => ({
@@ -242,13 +211,12 @@ export function AgentDefaultsPane() {
                   })),
                 }]}
               />
-            </SettingsCardRow>
+            </SettingsRow>
           )}
-        </SettingsCard>
-      </AgentDefaultsSection>
+      </SettingsSection>
 
       {connectionState !== "failed" && orderedAgentDefaultRows.map((row) => (
-        <AgentDefaultsSection key={row.kind} title={`${row.displayName} defaults`}>
+        <SettingsSection key={row.kind} title={`${row.displayName} defaults`}>
           <div className="space-y-2">
             <AgentDefaultComposer
               row={row}
@@ -308,7 +276,7 @@ export function AgentDefaultsPane() {
               />
             ) : null}
           </div>
-        </AgentDefaultsSection>
+        </SettingsSection>
       ))}
 
       {connectionState !== "failed" && agentsNeedingSetup.length > 0 ? (

@@ -1,0 +1,1 @@
+"""Integration gateway domain helpers."""

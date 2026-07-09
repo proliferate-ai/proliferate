@@ -9,6 +9,7 @@ import {
   createTranscriptRowModelCache,
 } from "@proliferate/product-domain/chats/transcript/transcript-row-model";
 import type { TranscriptVirtualRow } from "@proliferate/product-domain/chats/transcript/transcript-virtual-rows";
+import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
 
 export function useSharedTranscriptRowModel(input: {
   activeSessionId: string;
@@ -17,6 +18,7 @@ export function useSharedTranscriptRowModel(input: {
   visibleOutboxEntries: readonly PromptOutboxEntry[];
   latestTurnId: string | null;
   latestTurnHasAssistantRenderableContent: boolean;
+  goalEvents?: readonly GoalTranscriptEvent[];
 }): readonly TranscriptVirtualRow[] {
   const cacheRef = useRef(createTranscriptRowModelCache());
 
@@ -29,6 +31,7 @@ export function useSharedTranscriptRowModel(input: {
       input.transcript,
       input.visibleOptimisticPrompt,
       input.visibleOutboxEntries,
+      input.goalEvents,
     ],
   );
 }

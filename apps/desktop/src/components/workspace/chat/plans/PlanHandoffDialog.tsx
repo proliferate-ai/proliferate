@@ -8,7 +8,7 @@ import {
   type PlanHandoffModePickerProps,
 } from "@/components/workspace/chat/plans/PlanHandoffModePicker";
 import { PlanReferencePreviewDialog } from "@/components/workspace/chat/plans/PlanReferencePreviewDialog";
-import { ModelSelector } from "@/components/workspace/chat/input/ModelSelector";
+import { ComposerModelSelectorControl } from "@/components/workspace/chat/input/ComposerModelSelectorControl";
 import type { PromptDisplayPlanPart } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
@@ -86,7 +86,7 @@ export function PlanHandoffDialog({
         <div className="flex flex-col gap-3.5" data-telemetry-mask>
           {plan && (
             <div>
-              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">
+              <div className="mb-1.5 text-base font-medium text-muted-foreground">
                 Attached plan
               </div>
               <Button
@@ -118,7 +118,7 @@ export function PlanHandoffDialog({
 
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <ModelSelector {...modelSelectorProps} />
+              <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
               <PlanHandoffModePicker
                 options={modePickerProps.options}
                 value={modePickerProps.value}

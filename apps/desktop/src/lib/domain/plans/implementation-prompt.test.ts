@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { PLAN_IMPLEMENT_HERE_PROMPT } from "@/copy/plans/plan-prompts";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
-import { buildPlanImplementationPrompt } from "./implementation-prompt";
+import {
+  buildPlanImplementationPrompt,
+  isPlanImplementationPromptMessage,
+} from "./implementation-prompt";
 
 describe("buildPlanImplementationPrompt", () => {
   it("builds text and trusted plan reference prompt blocks", () => {
@@ -36,6 +39,34 @@ describe("buildPlanImplementationPrompt", () => {
         sourceToolCallId: null,
       },
     ]);
+  });
+});
+
+describe("isPlanImplementationPromptMessage", () => {
+  it("tags the exact canned text with a plan reference attached", () => {
+    const prompt = buildPlanImplementationPrompt(plan());
+
+    expect(isPlanImplementationPromptMessage(
+      prompt.text,
+      prompt.optimisticContentParts,
+    )).toBe(true);
+  });
+
+  it("ignores the canned text without a plan reference", () => {
+    expect(isPlanImplementationPromptMessage(
+      PLAN_IMPLEMENT_HERE_PROMPT,
+      [{ type: "text", text: PLAN_IMPLEMENT_HERE_PROMPT }],
+    )).toBe(false);
+  });
+
+  it("ignores other prompts that carry a plan reference", () => {
+    const prompt = buildPlanImplementationPrompt(plan());
+
+    expect(isPlanImplementationPromptMessage(
+      "Use the attached plan as background context.",
+      prompt.optimisticContentParts,
+    )).toBe(false);
+    expect(isPlanImplementationPromptMessage(null, prompt.optimisticContentParts)).toBe(false);
   });
 });
 

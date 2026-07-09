@@ -24,6 +24,34 @@ export const AUTH_LOGIN_LABELS = {
   cancelSignIn: "Cancel sign-in",
   continueLocally: "Start locally",
   continueLocallyInline: "start locally",
+  // Email/password sign-in (default surface when GitHub OAuth is not
+  // configured on the connected server, e.g. self-hosted instances).
+  emailFieldLabel: "Email",
+  emailFieldPlaceholder: "you@company.com",
+  passwordFieldLabel: "Password",
+  passwordFieldPlaceholder: "Password",
+  passwordSignIn: "Sign in",
+  passwordWaiting: "Signing in...",
+} as const;
+
+// Connect-to-a-self-hosted-server flow (self-hosting-v1 §3.5, B4-desktop):
+// the sign-in screen's quiet secondary affordance + its dialog copy.
+export const CONNECT_SERVER_LABELS = {
+  connectAffordance: "Connect to a server",
+  connectedPrefix: "Connected to",
+  reset: "Reset",
+  dialogTitle: "Connect to a server",
+  entryDescription: "Point this app at a self-hosted Proliferate server.",
+  addressFieldLabel: "Server address",
+  addressFieldPlaceholder: "https://proliferate.corp.example",
+  continue: "Continue",
+  checking: "Checking…",
+  cancel: "Cancel",
+  trustDescription: (host: string) => `You're connecting to ${host}.`,
+  serverVersionLabel: (version: string) => `Server version ${version}`,
+  connect: "Connect",
+  connecting: "Connecting…",
+  useDifferentAddress: "Use a different address",
 } as const;
 
 export const AUTH_ACCOUNT_LABELS = {
@@ -39,17 +67,17 @@ export const AUTH_ACCOUNT_LABELS = {
     "Local workspaces are available without an account. Sign in to use cloud workspaces and credential sync.",
   localPill: "Local",
   signIn: "Sign in",
-  checkingSignIn: "Checking GitHub...",
-  signingIn: "Waiting for GitHub...",
+  checkingSignIn: "Checking GitHub…",
+  signingIn: "Waiting for GitHub…",
   connectGitHub: "Connect GitHub",
-  connectingGitHub: "Waiting for GitHub...",
+  connectingGitHub: "Waiting for GitHub…",
   reconnect: "Reconnect",
-  reconnecting: "Reconnecting...",
+  reconnecting: "Reconnecting…",
   manageAccess: "Manage access",
   signOut: "Sign out",
-  signingOut: "Signing out...",
+  signingOut: "Signing out…",
   sync: "Sync",
-  syncing: "Syncing...",
+  syncing: "Syncing…",
   clear: "Clear",
-  clearing: "Clearing...",
+  clearing: "Clearing…",
 } as const;

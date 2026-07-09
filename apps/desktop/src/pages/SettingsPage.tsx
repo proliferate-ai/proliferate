@@ -12,6 +12,7 @@ export function SettingsPage({ returnTo = "/" }: { returnTo?: string }) {
     focus,
     selectSection,
     selectRepo,
+    selectRepoContext,
     selectCloudEnvironment,
   } = useSettingsNavigation({ repositories });
 
@@ -24,6 +25,7 @@ export function SettingsPage({ returnTo = "/" }: { returnTo?: string }) {
       onNavigateHome={() => navigate(returnTo || "/")}
       onSelectSection={selectSection}
       onSelectRepo={selectRepo}
+      onSelectRepoContext={selectRepoContext}
       onSelectCloudEnvironment={selectCloudEnvironment}
     />
   );

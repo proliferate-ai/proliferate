@@ -10,14 +10,14 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::domains::sessions::model::SessionRecord;
 use crate::domains::sessions::runtime_event::RuntimeEventInjectionError;
-use crate::live::sessions::model::{EventPersist, SessionStateDurable};
 use crate::live::sessions::actor::command::{
     ForkSessionCommandError, PromptAcceptError, QueueMutationError, ResolveInteractionCommandError,
     SessionCommand, SetConfigOptionCommandError,
 };
 use crate::live::sessions::actor::spawn::ActorReadyResult;
-use crate::live::sessions::sink::publish::publish_session_event;
 use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::model::{EventPersist, SessionStateDurable};
+use crate::live::sessions::sink::publish::publish_session_event;
 
 const MAX_REPLAY_GAP: Duration = Duration::from_millis(1500);
 
@@ -373,6 +373,12 @@ async fn handle_non_replay_command(
             // Replay sessions carry no live domain state; dropping the
             // responder surfaces ResponseDropped to the submitter.
             drop(respond_to);
+            None
+        }
+        SessionCommand::CallAgentExtMethod { respond_to, .. } => {
+            let _ = respond_to.send(Err(anyhow::anyhow!(
+                "replay sessions have no live agent connection"
+            )));
             None
         }
         SessionCommand::VerifyForkReady { respond_to } => {

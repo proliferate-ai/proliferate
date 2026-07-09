@@ -15,7 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
+from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
+from proliferate.server.billing.authorization import (
+    assert_cloud_sandbox_resume_allowed_for_owner,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.crypto import decrypt_text
 
@@ -35,6 +39,15 @@ async def ensure_cloud_sandbox_ready(
     db: AsyncSession,
     user: _UserWithId,
 ) -> CloudSandboxValue:
+    # LIVE billing gate (spec §4.3): an exhausted owner must not wake or ensure a
+    # cloud sandbox. Gate BEFORE ensure_personal_cloud_sandbox_exists stages a
+    # new-row INSERT, since the gate commits its audit row before raising. No-op
+    # unless CLOUD_BILLING_MODE=enforce. wake_cloud_sandbox delegates here, so
+    # both /cloud-sandbox/wake and /cloud-sandbox/ensure inherit this gate; the
+    # GitHub-App trigger path calls ensure_personal_cloud_sandbox_exists directly
+    # and is intentionally left ungated so a brand-new user's initial row still
+    # gets created.
+    await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=user.id)
     return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id)
 
 
@@ -71,6 +84,9 @@ async def destroy_cloud_sandbox(
     sandbox = await sandbox_store.load_personal_cloud_sandbox(db, user.id, lock_row=True)
     if sandbox is None:
         return None
+    # Retire the sandbox's worker + gateway token so a destroyed sandbox can
+    # never keep authenticating back to Cloud.
+    await runtime_workers_store.revoke_active_workers_for_identity(db, cloud_sandbox_id=sandbox.id)
     return await sandbox_store.mark_cloud_sandbox_destroyed(db, sandbox.id)
 
 

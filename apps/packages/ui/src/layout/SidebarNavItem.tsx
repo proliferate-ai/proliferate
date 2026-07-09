@@ -1,5 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { twMerge } from "tailwind-merge";
+import { twMerge } from "../utils/tw-merge";
 
 interface SidebarNavItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;

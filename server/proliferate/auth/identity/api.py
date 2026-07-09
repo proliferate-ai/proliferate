@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from ipaddress import ip_address, ip_network
 from typing import Annotated
 
 from fastapi import (
@@ -34,6 +33,7 @@ from proliferate.auth.identity.models import (
 )
 from proliferate.auth.identity.password import (
     authenticate_password_login,
+    request_client_ip,
     set_password_credential,
 )
 from proliferate.auth.identity.routing import auth_route_path
@@ -52,6 +52,7 @@ from proliferate.auth.identity.sessions import (
     auth_session_response,
     exchange_auth_code,
     refresh_auth_session,
+    revoke_sessions_for_refresh_token,
 )
 from proliferate.auth.identity.types import AuthProviderName
 from proliferate.auth.identity.web_beta import (
@@ -64,41 +65,6 @@ from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 
 router = APIRouter(tags=["auth"])
-
-
-def _request_client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded and _request_from_trusted_proxy(request):
-        return forwarded.split(",", 1)[0].strip() or None
-    return request.client.host if request.client is not None else None
-
-
-def _request_from_trusted_proxy(request: Request) -> bool:
-    host = request.client.host if request.client is not None else None
-    if host in {"127.0.0.1", "::1", "localhost"}:
-        return True
-    if not host:
-        return False
-    try:
-        remote_ip = ip_address(host)
-    except ValueError:
-        return host in _trusted_proxy_entries()
-    for entry in _trusted_proxy_entries():
-        try:
-            if remote_ip in ip_network(entry, strict=False):
-                return True
-        except ValueError:
-            if host == entry:
-                return True
-    return False
-
-
-def _trusted_proxy_entries() -> set[str]:
-    return {
-        entry.strip()
-        for entry in settings.password_auth_trusted_proxy_hosts.split(",")
-        if entry.strip()
-    }
 
 
 @router.post("/github/link/start", response_model=StartAuthResponse)
@@ -318,7 +284,7 @@ async def web_password_login(
             db,
             email=body.email,
             password=body.password,
-            client_ip=_request_client_ip(request),
+            client_ip=request_client_ip(request),
         )
         ensure_web_beta_email_allowed(session.email)
     except WebBetaAccessDenied:
@@ -343,7 +309,7 @@ async def mobile_password_login(
             db,
             email=body.email,
             password=body.password,
-            client_ip=_request_client_ip(request),
+            client_ip=request_client_ip(request),
         )
     except HTTPException:
         await db.commit()
@@ -355,16 +321,46 @@ async def mobile_password_login(
 @router.put("/password", response_model=PasswordCredentialResponse)
 async def set_password(
     body: PasswordSetRequest,
+    response: Response,
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_limited_user),
+    web_refresh_token: Annotated[str | None, Cookie(alias=WEB_REFRESH_COOKIE)] = None,
 ) -> PasswordCredentialResponse:
-    credential = await set_password_credential(
+    credential, reminted = await set_password_credential(
         db,
         user=user,
         current_password=body.current_password,
         new_password=body.new_password,
     )
     await db.commit()
+    if reminted is not None:
+        # A password change bumped the user's token generation, revoking every
+        # previously issued token (all surfaces, incl. any captured one). Hand
+        # the acting caller a freshly minted session at the new generation so
+        # they stay logged in:
+        #   - web (httpOnly refresh cookie present): refresh the cookie in place;
+        #     the browser adopts it transparently and never sees the refresh
+        #     token in a response body.
+        #   - desktop/bearer: return the fresh access + refresh tokens in the
+        #     body for the client to persist.
+        if web_refresh_token is not None:
+            _set_web_session_cookies(response, reminted.refresh_token)
+            credential = credential.model_copy(
+                update={
+                    "access_token": reminted.access_token,
+                    "expires_in": reminted.expires_in,
+                    "token_type": "bearer",
+                }
+            )
+        else:
+            credential = credential.model_copy(
+                update={
+                    "access_token": reminted.access_token,
+                    "refresh_token": reminted.refresh_token,
+                    "expires_in": reminted.expires_in,
+                    "token_type": "bearer",
+                }
+            )
     return credential
 
 
@@ -425,10 +421,16 @@ async def web_session_refresh(
 @router.post("/web/session/logout")
 async def web_session_logout(
     response: Response,
+    refresh_token: Annotated[str | None, Cookie(alias=WEB_REFRESH_COOKIE)] = None,
     csrf_cookie: Annotated[str | None, Cookie(alias=WEB_CSRF_COOKIE)] = None,
     csrf_header: Annotated[str | None, Header(alias=WEB_CSRF_HEADER)] = None,
+    db: AsyncSession = Depends(get_async_session),
 ) -> dict[str, bool]:
     _validate_csrf(csrf_cookie=csrf_cookie, csrf_header=csrf_header)
+    # Bump the user's token generation so logout revokes every previously issued
+    # access and refresh token (all surfaces), not just this browser's cookies.
+    await revoke_sessions_for_refresh_token(db, refresh_token=refresh_token)
+    await db.commit()
     response.delete_cookie(WEB_REFRESH_COOKIE, path=_web_session_cookie_path())
     response.delete_cookie(WEB_CSRF_COOKIE, path="/")
     return {"ok": True}

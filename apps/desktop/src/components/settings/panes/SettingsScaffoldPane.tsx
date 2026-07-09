@@ -1,31 +1,35 @@
 import {
   SETTINGS_SCAFFOLD_COPY,
+  type SettingsScaffoldPageCopy,
   type SettingsScaffoldPageId,
 } from "@/copy/settings/settings-scaffold-copy";
-import { SettingsCard } from "@/components/settings/shared/SettingsCard";
-import { SettingsCardRow } from "@/components/settings/shared/SettingsCardRow";
-import { SettingsPageHeader } from "@/components/settings/shared/SettingsPageHeader";
+import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
+import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
+import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
 
 interface SettingsScaffoldPaneProps {
   pageId: SettingsScaffoldPageId;
 }
 
 export function SettingsScaffoldPane({ pageId }: SettingsScaffoldPaneProps) {
-  const copy = SETTINGS_SCAFFOLD_COPY[pageId];
+  const copy = (SETTINGS_SCAFFOLD_COPY as Record<string, SettingsScaffoldPageCopy>)[pageId];
+  if (!copy) {
+    return null;
+  }
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader title={copy.title} description={copy.description} />
 
-      <SettingsCard>
+      <SettingsSection>
         {copy.rows.map((row) => (
-          <SettingsCardRow
+          <SettingsRow
             key={row.label}
             label={row.label}
             description={row.description}
           />
         ))}
-      </SettingsCard>
+      </SettingsSection>
     </section>
   );
 }

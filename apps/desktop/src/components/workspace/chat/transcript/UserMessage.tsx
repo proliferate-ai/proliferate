@@ -1,9 +1,14 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { ContentPart } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { CarryOutPlanRow } from "./CarryOutPlanRow";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { PromptContentRenderer } from "@/components/workspace/chat/content/PromptContentRenderer";
-import { normalizeContentParts } from "@proliferate/product-domain/chats/composer/prompt-display-parts";
+import { isPlanImplementationPromptMessage } from "@/lib/domain/plans/implementation-prompt";
+import {
+  normalizeContentParts,
+  type PromptDisplayPlanPart,
+} from "@proliferate/product-domain/chats/composer/prompt-display-parts";
 
 export interface UserMessageProps {
   sessionId: string | null;
@@ -26,6 +31,13 @@ export function UserMessage({
   const [needsToggle, setNeedsToggle] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const displayParts = normalizeContentParts(contentParts, content);
+  // The canned 'Run here' carry-out prompt renders as a compact system-style
+  // row + plan chip — a full bubble would repeat the whole plan again.
+  const carryOutPlanPart = isPlanImplementationPromptMessage(content, contentParts)
+    ? displayParts.find(
+      (part): part is PromptDisplayPlanPart => part.type === "plan_reference",
+    ) ?? null
+    : null;
   const hasAttachments = displayParts.some((part) => part.type !== "text");
   const hasTextPart = displayParts.some((part) => (
     part.type === "text" && part.text.trim().length > 0
@@ -42,6 +54,10 @@ export function UserMessage({
     if (!el) return;
     setNeedsToggle(el.scrollHeight > el.clientHeight);
   }, [content, contentParts, shouldRenderTextBubble]);
+
+  if (carryOutPlanPart) {
+    return <CarryOutPlanRow plan={carryOutPlanPart} />;
+  }
 
   return (
     <div
@@ -68,7 +84,7 @@ export function UserMessage({
           >
             <div
               ref={textRef}
-              className={`break-words select-text${
+              className={`[--prose-text-size:var(--text-message)] [--prose-text-line-height:var(--text-message--line-height)] break-words select-text${
                 !expanded ? " line-clamp-5" : ""
               }`}
             >
@@ -87,7 +103,7 @@ export function UserMessage({
                   size="sm"
                   data-chat-transcript-ignore
                   onClick={() => setExpanded((v) => !v)}
-                  className="h-auto px-1 py-0 text-[11px] text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  className="h-auto px-1 py-0 text-base text-muted-foreground hover:bg-transparent hover:text-foreground"
                 >
                   {expanded ? "Show less" : "Show more"}
                 </Button>

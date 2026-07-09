@@ -17,14 +17,34 @@ export type ComposerDockAmbientSlot =
   | { kind: "workspace_status" }
   | { kind: "cloud_runtime" };
 
+/**
+ * Slim companion rendered directly below the active interaction card so plan
+ * progress is not evicted entirely while a permission/question/MCP form
+ * holds the dock's single active slot.
+ */
+export type ComposerDockActiveSlotCompanion = { kind: "todo_strip" };
+
 export interface ComposerDockAttachedSlot {
   ambientSlot: ComposerDockAmbientSlot | null;
   delegatedWork: boolean;
+  /**
+   * Session goal bar — ever-present ambient context while goal state is
+   * live, rendered last so it docks directly against the composer surface.
+   */
+  sessionGoal: boolean;
+  /**
+   * Compact activity chips (loops/terminals/agents) that stack on the same
+   * bar row as the goal (session-activity-architecture §Locked decisions
+   * #5). Independent from `sessionGoal` — activity can be live with no goal
+   * set, so the bar must still mount.
+   */
+  sessionActivity: boolean;
 }
 
 export interface ComposerDockSlotResolution {
   outboundSlot: ComposerDockOutboundSlot | null;
   activeSlot: ComposerDockActiveSlot | null;
+  activeSlotCompanion: ComposerDockActiveSlotCompanion | null;
   attachedSlot: ComposerDockAttachedSlot | null;
 }
 
@@ -35,6 +55,8 @@ export interface ResolveComposerDockSlotsInput {
   primaryPendingInteractionKind: ComposerDockInteractionKind | null;
   hasActiveTodoTracker: boolean;
   hasDelegatedWork: boolean;
+  hasSessionGoal: boolean;
+  hasSessionActivity?: boolean;
   hasWorkspaceStatusPanel: boolean;
   hasCloudRuntimePanel: boolean;
 }
@@ -46,6 +68,8 @@ export function resolveComposerDockSlots({
   primaryPendingInteractionKind,
   hasActiveTodoTracker,
   hasDelegatedWork,
+  hasSessionGoal,
+  hasSessionActivity = false,
   hasWorkspaceStatusPanel,
   hasCloudRuntimePanel,
 }: ResolveComposerDockSlotsInput): ComposerDockSlotResolution {
@@ -56,21 +80,30 @@ export function resolveComposerDockSlots({
   const activeSlot = !suppressSessionSlots
     ? resolveActiveSlot(primaryPendingInteractionKind, hasActiveTodoTracker)
     : null;
+  const activeSlotCompanion =
+    activeSlot && activeSlot.kind !== "todo_tracker" && hasActiveTodoTracker
+      ? { kind: "todo_strip" as const }
+      : null;
   const ambientSlot = !suppressWorkspaceStatusPanels
     ? resolveAmbientSlot(hasWorkspaceStatusPanel, hasCloudRuntimePanel)
     : null;
   const attachedDelegatedWork = !suppressSessionSlots && hasDelegatedWork;
+  const attachedSessionGoal = !suppressSessionSlots && hasSessionGoal;
+  const attachedSessionActivity = !suppressSessionSlots && hasSessionActivity;
   const attachedSlot =
-    ambientSlot || attachedDelegatedWork
+    ambientSlot || attachedDelegatedWork || attachedSessionGoal || attachedSessionActivity
       ? {
         ambientSlot,
         delegatedWork: attachedDelegatedWork,
+        sessionGoal: attachedSessionGoal,
+        sessionActivity: attachedSessionActivity,
       }
       : null;
 
   return {
     outboundSlot,
     activeSlot,
+    activeSlotCompanion,
     attachedSlot,
   };
 }

@@ -108,7 +108,6 @@ export function AgentDefaultComposer({
         })),
       }]}
       controls={controls}
-      placeholder="Describe a task"
       onSelectModel={(_agentKind, modelId) => {
         preferences.set(
           "defaultChatModelIdByAgentKind",

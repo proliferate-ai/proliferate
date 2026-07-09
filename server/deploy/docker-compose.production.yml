@@ -30,6 +30,53 @@ services:
       timeout: 3s
       retries: 10
 
+  # litellm-db and litellm are both `profiles: [agent-gateway]`: only needed
+  # when AGENT_GATEWAY_ENABLED=true. Bare `up -d`/`pull` (what bootstrap.sh
+  # and update.sh run) skip profiled services entirely, so self-hosters who
+  # leave the gateway disabled never pull or start these. Bring the gateway
+  # up explicitly with:
+  #   docker compose --profile agent-gateway -f docker-compose.production.yml up -d
+  litellm-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    profiles: ["agent-gateway"]
+    environment:
+      POSTGRES_DB: ${LITELLM_POSTGRES_DB:-litellm}
+      POSTGRES_USER: ${LITELLM_POSTGRES_USER:-litellm}
+      POSTGRES_PASSWORD: ${LITELLM_POSTGRES_PASSWORD}
+    volumes:
+      - litellmpgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  litellm:
+    image: ${PROLIFERATE_LITELLM_IMAGE:-ghcr.io/proliferate-ai/proliferate-litellm}:${PROLIFERATE_LITELLM_IMAGE_TAG:-stable}
+    restart: unless-stopped
+    profiles: ["agent-gateway"]
+    environment:
+      DATABASE_URL: postgresql://${LITELLM_POSTGRES_USER:-litellm}:${LITELLM_POSTGRES_PASSWORD}@litellm-db:5432/${LITELLM_POSTGRES_DB:-litellm}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+    depends_on:
+      litellm-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   migrate:
     image: ${PROLIFERATE_SERVER_IMAGE:-ghcr.io/proliferate-ai/proliferate-server}:${PROLIFERATE_SERVER_IMAGE_TAG:-stable}
     restart: "no"
@@ -49,6 +96,9 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - ${PROLIFERATE_HOST_BIN_DIR:-/opt/proliferate/bin}:/opt/proliferate/bin:ro
+      # First-run setup token plaintext lives here until the instance is
+      # claimed. A named volume so restarts and image updates do not rotate it.
+      - setup_state:/var/lib/proliferate/setup
     depends_on:
       db:
         condition: service_healthy
@@ -67,5 +117,7 @@ services:
 
 volumes:
   pgdata:
+  litellmpgdata:
   caddy_data:
   caddy_config:
+  setup_state:

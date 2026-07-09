@@ -1,6 +1,7 @@
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
-import { MarkdownRenderer } from "@/components/content/ui/MarkdownRenderer";
+import { MarkdownBody } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { renderDesktopCodeBlock } from "@/components/content/ui/desktop-markdown-code-block";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import type { SkillsToolResultPresentation } from "@proliferate/product-domain/chats/tools/skills-tool-result";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
@@ -86,9 +87,10 @@ function SkillsToolResultDetails({
               resourceCount={presentation.resources.length}
             />
           </div>
-          <MarkdownRenderer
+          <MarkdownBody
             content={presentation.instructions}
             className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            renderCodeBlock={renderDesktopCodeBlock}
           />
           {presentation.resources.length > 0 ? (
             <div className="flex flex-wrap gap-1.5 border-t border-border/60 pt-2">
@@ -111,9 +113,10 @@ function SkillsToolResultDetails({
             <MetadataPill>{`${presentation.skillId}/${presentation.resourceId}`}</MetadataPill>
           </div>
           {presentation.contentType.includes("markdown") ? (
-            <MarkdownRenderer
+            <MarkdownBody
               content={presentation.content}
               className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+              renderCodeBlock={renderDesktopCodeBlock}
             />
           ) : (
             <pre className="m-0 whitespace-pre-wrap font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground">
@@ -157,7 +160,7 @@ function MetadataPill({ children }: { children: string }) {
   return (
     <span
       title={children}
-      className="max-w-[260px] truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 font-mono text-[0.625rem] leading-none text-muted-foreground"
+      className="max-w-[260px] truncate rounded-sm border border-border/60 bg-muted/45 px-1.5 py-0.5 text-sm leading-none text-muted-foreground"
     >
       {children}
     </span>

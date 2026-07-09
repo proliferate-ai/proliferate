@@ -3,5 +3,4 @@
 export const COWORK_DEFAULT_MODE_ID_BY_AGENT_KIND: Partial<Record<string, string>> = {
   claude: "bypassPermissions",
   codex: "full-access",
-  gemini: "yolo",
 };

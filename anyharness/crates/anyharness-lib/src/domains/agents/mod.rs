@@ -5,4 +5,5 @@ pub mod model;
 pub mod portability;
 pub mod readiness;
 pub mod registry;
+pub mod route_auth;
 pub mod runtime;

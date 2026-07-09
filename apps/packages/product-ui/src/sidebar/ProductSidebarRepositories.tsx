@@ -2,6 +2,9 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 import { ShortcutBadge } from "@proliferate/ui/layout/ShortcutBadge";
 import { SidebarRowSurface } from "@proliferate/ui/layout/SidebarRowSurface";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+
+import { PrStatusIconOverlay, type PrStatusView } from "../workspaces/PrStatusBadge";
 
 export interface ProductSidebarRepoGroupHeaderProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick"> {
   label: string;
@@ -48,12 +51,12 @@ export function ProductSidebarRepoGroupHeader({
             {hoverIconNode}
           </span>
         </span>
-        <span className="min-w-0 flex-1 truncate text-base leading-5 text-current">
+        <span className="min-w-0 flex-1 truncate text-ui leading-5 text-current">
           {label}
         </span>
 
         <div className="relative ml-auto size-6 shrink-0">
-          <span className={`absolute inset-0 flex items-center justify-center font-mono text-[0.625rem] text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
+          <span className={`absolute inset-0 flex items-center justify-center font-mono text-sm text-sidebar-muted-foreground transition-opacity ${hasAction ? "group-hover/folder-row:opacity-0" : ""
             }`}>
             {count}
           </span>
@@ -71,15 +74,43 @@ export function ProductSidebarRepoGroupHeader({
 export interface ProductSidebarWorkspaceRowProps extends Omit<HTMLAttributes<HTMLElement>, "children" | "onClick" | "onSelect"> {
   active?: boolean;
   archived?: boolean;
+  /**
+   * Activity indicator rendered in the LEADING well, owning it alone when
+   * present. Legacy slot kept for row-view consumers (web sidebar); desktop
+   * workspace rows put activity in `trailingStatus` instead.
+   */
   status?: ReactNode;
+  /**
+   * Git glyph (PR icon) in the leading well. Decorated by the PR dot when
+   * `prStatus` is set (§3.2). Rows without a real PR leave the well empty.
+   */
+  leadingGlyph?: ReactNode;
   attentionStatus?: ReactNode;
   label: string;
   subtitle?: string | null;
   detail?: ReactNode;
   trailingLabel?: string | null;
+  /**
+   * Activity indicator (spinner / waiting / error) in the TRAILING cell.
+   * Right-slot precedence: shortcut reveal and hover actions win (it fades
+   * out like the other trailing content), then `trailingStatus`, then
+   * `unreadDot`, then `trailingLabel`.
+   */
+  trailingStatus?: ReactNode;
   shortcutLabel?: string | null;
   shortcutRevealVisible?: boolean;
   hoverAction?: ReactNode;
+  /**
+   * PR status rendered codex-style as a dot anchored on the idle git glyph
+   * (§3.3). Rendered only when present — omit when PR data is not available
+   * for the row.
+   */
+  prStatus?: PrStatusView | null;
+  /**
+   * Unseen-activity dot in the trailing cell (codex pattern, §3.4). Yields
+   * to `trailingStatus` (live activity wins) and to hover actions.
+   */
+  unreadDot?: boolean;
   onSelect?: () => void;
 }
 
@@ -87,14 +118,18 @@ export function ProductSidebarWorkspaceRow({
   active = false,
   archived = false,
   status = null,
+  leadingGlyph = null,
   attentionStatus = null,
   label,
   subtitle = null,
   detail = null,
   trailingLabel = null,
+  trailingStatus = null,
   shortcutLabel = null,
   shortcutRevealVisible = false,
   hoverAction = null,
+  prStatus = null,
+  unreadDot = false,
   onSelect,
   className = "",
   ...props
@@ -109,13 +144,17 @@ export function ProductSidebarWorkspaceRow({
       {...props}
     >
       {hoverAction ? (
-        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="absolute right-0 top-0 z-10 mr-0.5 flex h-full items-center justify-center pr-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
           {hoverAction}
         </div>
       ) : null}
       <div className="flex h-full w-full items-center text-sm leading-4">
         <div className="flex w-4 shrink-0 items-center justify-center">
-          {status}
+          {status ?? (
+            <PrStatusIconOverlay status={prStatus}>
+              {leadingGlyph}
+            </PrStatusIconOverlay>
+          )}
         </div>
 
         {attentionStatus ? (
@@ -125,7 +164,7 @@ export function ProductSidebarWorkspaceRow({
         ) : null}
 
         <div className={`${attentionStatus ? "ml-1" : "ml-1.5"} flex min-w-0 flex-1 items-center gap-2 pl-0.5`}>
-          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-base leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
+          <div className={`flex min-w-0 flex-1 self-stretch ${hasSubtitle ? "flex-col items-start justify-center gap-0.5" : "items-center gap-2"} text-ui leading-5 ${archived ? "text-sidebar-muted-foreground/60" : "text-sidebar-foreground"
             }`}>
             <span
               className={`${hasSubtitle ? "max-w-full" : "min-w-0 flex-1"} truncate select-none`}
@@ -146,12 +185,35 @@ export function ProductSidebarWorkspaceRow({
           ) : null}
         </div>
 
-        {(trailingLabel || shortcutLabel || hoverAction) ? (
+        {(trailingLabel || trailingStatus || shortcutLabel || hoverAction || unreadDot) ? (
           <div className={`grid h-5 min-w-[26px] shrink-0 items-center justify-items-end ${detail ? "ml-[5px]" : "ml-1.5"
             }`}>
 
-            {trailingLabel ? (
-              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-sm leading-4 tabular-nums text-sidebar-muted-foreground transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+            {trailingStatus ? (
+              <div
+                className={`col-start-1 row-start-1 flex size-5 items-center justify-center transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+                    ? "opacity-0"
+                    : "group-hover:opacity-0 group-focus-within:opacity-0"
+                  }`}
+              >
+                {trailingStatus}
+              </div>
+            ) : unreadDot ? (
+              <Tooltip
+                content="Unseen activity"
+                className={`col-start-1 row-start-1 flex size-5 items-center justify-center transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
+                    ? "opacity-0"
+                    : "group-hover:opacity-0 group-focus-within:opacity-0"
+                  }`}
+              >
+                <span
+                  role="img"
+                  aria-label="Unseen activity"
+                  className="block size-2 rounded-full bg-info"
+                />
+              </Tooltip>
+            ) : trailingLabel ? (
+              <div className={`col-start-1 row-start-1 flex items-center justify-end overflow-visible truncate whitespace-nowrap text-right text-ui-sm tabular-nums text-faint transition-opacity duration-150 ${shortcutLabel && shortcutRevealVisible
                   ? "opacity-0"
                   : "group-hover:opacity-0 group-focus-within:opacity-0"
                 }`}>

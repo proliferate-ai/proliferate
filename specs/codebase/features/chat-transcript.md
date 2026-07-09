@@ -236,9 +236,14 @@ Additional dependencies:
 - Prompt submit should clear the chat input before awaiting prompt delivery;
   otherwise the same message can appear in the composer and transcript at the
   same time.
-- `lastTopLevelItemIsProse` controls whether the trailing status renders. Once
-  the last top-level turn item is prose with text, the prose itself is the
-  placeholder and a separate spinner is not needed.
+- `lastTopLevelItemIsStreamingAssistantProse` controls whether the trailing
+  status renders. Only prose that is *actively streaming* suppresses the
+  indicator: while text streams, the growing prose is the placeholder. The
+  moment the prose completes with the turn still in progress (thinking,
+  preparing a tool call), the trailing indicator must return immediately —
+  a completed-looking transcript with silent background work is the worst UX.
+  Both indicator variants render inside the same fixed-height (`h-6`) slot as
+  the reserved copy-button row so the swap is a zero-delta layout change.
 - The `h-6` copy-button slot in `AssistantMessage` is gated on content, not on
   `showCopyButton`, so the prose-owned slot remains stable while turns stream.
 

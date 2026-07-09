@@ -46,9 +46,10 @@ BILLING_PERIOD_ROLLOVER_GRACE_SECONDS = 24 * 60 * 60
 STRIPE_METER_EVENT_MAX_PAST_SECONDS = 35 * 24 * 60 * 60
 STRIPE_METER_EVENT_MAX_FUTURE_SECONDS = 5 * 60
 
-ACTIVE_SANDBOX_STATUSES: frozenset[str] = frozenset(
-    {"allocating", "creating", "provisioning", "running"}
-)
+# CloudSandboxStatus values ("creating"/"ready") that consume compute; the
+# pre-#803/#809 lifecycle names (allocating/provisioning/running) no longer
+# exist on cloud_sandbox rows.
+ACTIVE_SANDBOX_STATUSES: frozenset[str] = frozenset({"creating", "ready"})
 
 USAGE_SEGMENT_OPENED_BY_PROVISION = "provision"
 USAGE_SEGMENT_OPENED_BY_RESUME = "resume"
@@ -109,6 +110,10 @@ WORKSPACE_ACTION_BLOCK_KIND_EXTERNAL_BILLING_HOLD = "external_billing_hold"
 BILLING_DECISION_AUTHORIZE_START = "authorize_start"
 BILLING_DECISION_ENFORCE_ACTIVE_SPEND = "enforce_active_spend"
 BILLING_DECISION_OVERAGE_EXPORT = "overage_export"
+# Org budget-limit (billing_budget_limit) compute-cap pauses, distinct from the
+# grant/overage ``enforce_active_spend`` hold.
+BILLING_DECISION_USER_LIMIT_PAUSE = "user_limit_pause"
+BILLING_DECISION_ORG_LIMIT_PAUSE = "org_limit_pause"
 
 BILLING_USAGE_EXPORT_STATUS_PENDING = "pending"
 BILLING_USAGE_EXPORT_STATUS_OBSERVED = "observed"

@@ -1,9 +1,6 @@
 import type {
   AgentSummary,
-  AgentAuthConfigStatusResponse,
   AgentLaunchOptionsResponse,
-  ApplyAgentAuthConfigRequest,
-  ApplyAgentAuthConfigResponse,
   InstallAgentRequest,
   InstallAgentResponse,
   ReconcileAgentsRequest,
@@ -24,26 +21,6 @@ export class AgentsClient {
   async get(kind: string, options?: AnyHarnessRequestOptions): Promise<AgentSummary> {
     return this.transport.get<AgentSummary>(
       `/v1/agents/${encodeURIComponent(kind)}`,
-      options,
-    );
-  }
-
-  async applyAuthConfig(
-    request: ApplyAgentAuthConfigRequest,
-    options?: AnyHarnessRequestOptions,
-  ): Promise<ApplyAgentAuthConfigResponse> {
-    return this.transport.put<ApplyAgentAuthConfigResponse>(
-      "/v1/agents/auth-config",
-      request,
-      options,
-    );
-  }
-
-  async getAuthConfigStatus(
-    options?: AnyHarnessRequestOptions,
-  ): Promise<AgentAuthConfigStatusResponse> {
-    return this.transport.get<AgentAuthConfigStatusResponse>(
-      "/v1/agents/auth-config/status",
       options,
     );
   }

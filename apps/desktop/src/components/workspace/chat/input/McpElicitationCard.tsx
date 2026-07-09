@@ -5,6 +5,7 @@ import type {
 } from "@anyharness/sdk";
 import { useState } from "react";
 import { useActivePendingInteractionState } from "@/hooks/chat/derived/use-active-pending-session-interactions";
+import { useHeldInteractionPayload } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useChatMcpElicitationActions } from "@/hooks/chat/workflows/use-chat-mcp-elicitation-actions";
 import { ComposerAttachedPanel } from "./ComposerAttachedPanel";
 import { McpElicitationFormPanel } from "./McpElicitationFormPanel";
@@ -36,17 +37,6 @@ export function McpElicitationCard({
   const [error, setError] = useState<string | null>(null);
   const [revealedUrl, setRevealedUrl] = useState<string | null>(null);
 
-  const header = (
-    <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-      <div className="text-chat min-w-0 truncate font-medium leading-[var(--text-chat--line-height)] text-foreground">
-        {title}
-      </div>
-      <div className="shrink-0 text-xs text-muted-foreground">
-        {payload.serverName}
-      </div>
-    </div>
-  );
-
   const runAction = async (action: () => Promise<void>) => {
     setError(null);
     try {
@@ -68,7 +58,7 @@ export function McpElicitationCard({
     };
 
     return (
-      <ComposerAttachedPanel header={header}>
+      <ComposerAttachedPanel title={title} context={payload.serverName}>
         <McpElicitationUrlPanel
           message={payload.mode.message}
           urlDisplay={payload.mode.urlDisplay}
@@ -104,7 +94,7 @@ export function McpElicitationCard({
   };
 
   return (
-    <ComposerAttachedPanel header={header}>
+    <ComposerAttachedPanel title={title} context={payload.serverName}>
       <McpElicitationFormPanel
         message={formMode.message}
         fields={formFields}
@@ -210,6 +200,9 @@ function buildSubmittedFields(
 
 export function ConnectedMcpElicitationCard() {
   const { pendingMcpElicitation } = useActivePendingInteractionState();
+  // Hold the last payload so the card can still render while the dock slot
+  // plays its 150ms exit fade after the elicitation resolves.
+  const held = useHeldInteractionPayload(pendingMcpElicitation);
   const {
     handleAcceptMcpElicitation,
     handleCancelMcpElicitation,
@@ -217,15 +210,15 @@ export function ConnectedMcpElicitationCard() {
     handleRevealMcpElicitationUrl,
   } = useChatMcpElicitationActions();
 
-  if (!pendingMcpElicitation) {
+  if (!held) {
     return null;
   }
 
   return (
     <McpElicitationCard
-      key={pendingMcpElicitation.requestId}
-      title={pendingMcpElicitation.title}
-      payload={pendingMcpElicitation.mcpElicitation}
+      key={held.requestId}
+      title={held.title}
+      payload={held.mcpElicitation}
       onAccept={handleAcceptMcpElicitation}
       onCancel={handleCancelMcpElicitation}
       onDecline={handleDeclineMcpElicitation}

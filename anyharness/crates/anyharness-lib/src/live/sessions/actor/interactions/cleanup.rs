@@ -5,9 +5,9 @@ use tokio::sync::Mutex;
 use crate::live::sessions::actor::command::Resolution;
 use crate::live::sessions::actor::interactions::outcomes::broker_outcome_to_interaction_event;
 use crate::live::sessions::actor::state::SessionActor;
-use crate::live::sessions::sink::SessionEventSink;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, InteractionCancelOutcome};
+use crate::live::sessions::rendezvous::broker::{InteractionCancelOutcome, InteractionRendezvous};
+use crate::live::sessions::sink::SessionEventSink;
 
 impl SessionActor {
     pub(in crate::live::sessions::actor) async fn resolve_pending_interactions(

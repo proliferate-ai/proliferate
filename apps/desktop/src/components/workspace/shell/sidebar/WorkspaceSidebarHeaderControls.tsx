@@ -1,7 +1,7 @@
 import { SidebarUpdatePill } from "@/components/workspace/shell/sidebar/SidebarUpdatePill";
 import type { UpdaterPhase } from "@/stores/updater/updater-store";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
-import { SplitPanel } from "@proliferate/ui/icons";
+import { SplitPanelLeft } from "@proliferate/ui/icons";
 
 interface WorkspaceSidebarHeaderControlsProps {
   className: string;
@@ -9,6 +9,7 @@ interface WorkspaceSidebarHeaderControlsProps {
   iconTone?: "sidebar";
   phase: UpdaterPhase;
   downloadProgress: number | null;
+  restartWhenIdle: boolean;
   onToggleSidebar: () => void;
   onDownloadUpdate: () => void;
   onOpenRestartPrompt: () => void;
@@ -20,6 +21,7 @@ export function WorkspaceSidebarHeaderControls({
   iconTone,
   phase,
   downloadProgress,
+  restartWhenIdle,
   onToggleSidebar,
   onDownloadUpdate,
   onOpenRestartPrompt,
@@ -33,11 +35,15 @@ export function WorkspaceSidebarHeaderControls({
         title={toggleTitle}
         className="rounded-md"
       >
-        <SplitPanel className="size-4" />
+        <SplitPanelLeft className="size-4" />
       </IconButton>
+      {/* The update pill's single home is the top-left, next to the sidebar
+          toggle — it covers every updater phase whether the sidebar is open
+          or hidden. */}
       <SidebarUpdatePill
         phase={phase}
         downloadProgress={downloadProgress}
+        restartWhenIdle={restartWhenIdle}
         onDownloadUpdate={onDownloadUpdate}
         onOpenRestartPrompt={onOpenRestartPrompt}
       />

@@ -115,23 +115,18 @@ export type CloudRuntimeStatus =
   | "error"
   | "disabled";
 
-export type CloudRuntimeAuthState =
-  Schema<"WorkspaceRuntimeAuthState">;
-export type CloudRuntimeAuthStatus = CloudRuntimeAuthState["status"];
-
 export interface CloudWorkspaceRuntimeSummary {
   environmentId: string | null;
   status: CloudRuntimeStatus;
   generation: number;
-  runtimeAuth?: CloudRuntimeAuthState | null;
   actionBlockKind?: string | null;
   actionBlockReason?: string | null;
 }
 
-export type CloudAgentKind = "claude" | "codex" | "opencode" | "gemini" | "grok";
+export type CloudAgentKind = "claude" | "codex" | "opencode" | "grok";
 
 export function isCloudAgentKind(value: string): value is CloudAgentKind {
-  return value === "claude" || value === "codex" || value === "opencode" || value === "gemini" || value === "grok";
+  return value === "claude" || value === "codex" || value === "opencode" || value === "grok";
 }
 
 // Generated type aliases — names preserved so all existing import sites are unchanged.
@@ -141,6 +136,18 @@ export type BillingPlanInfo           = Schema<"CloudPlanInfo">;
 export type BillingUrlResponse        = Schema<"BillingUrlResponse">;
 export type OverageSettingsResponse   = Schema<"OverageSettingsResponse">;
 export type BillingOwnerSelection     = Schema<"BillingOwnerSelection">;
+export type UsageSummary              = Schema<"UsageSummary">;
+export type UsageTimeseries           = Schema<"UsageTimeseries">;
+export type UsageTimeseriesBucket     = Schema<"UsageTimeseriesBucket">;
+export type BudgetLimitWindowUsage    = Schema<"BudgetLimitWindowUsage">;
+export type LlmBalance                = Schema<"LlmBalance">;
+export type BudgetLimit               = Schema<"BudgetLimit">;
+export type BudgetLimitInput          = Schema<"BudgetLimitInput">;
+export type BudgetLimitsResponse      = Schema<"BudgetLimitsResponse">;
+export type OrgUserUsageRow           = Schema<"OrgUserUsageRow">;
+export type OrgUsageByUserResponse    = Schema<"OrgUsageByUserResponse">;
+export type OrgUserUsageTimeseriesResponse =
+  Schema<"OrgUserUsageTimeseriesResponse">;
 export type OrganizationUpdateRequest = Schema<"OrganizationUpdateRequest">;
 export type OrganizationInviteRequest = Schema<"OrganizationInviteRequest">;
 export type OrganizationMembershipUpdateRequest =
@@ -265,7 +272,6 @@ export interface CloudConnectionInfo {
   runtimeGeneration: number;
   allowedAgentKinds: CloudAgentKind[];
   readyAgentKinds: string[];
-  runtimeAuth: CloudRuntimeAuthState;
 }
 export type CloudGitRepositorySummary = Schema<"CloudGitRepositorySummary">;
 export type CloudGitRepositoriesResponse =
@@ -621,6 +627,8 @@ export type GenerateSessionTitleRequest = Schema<"GenerateSessionTitleRequest">;
 export type GenerateSessionTitleResponse = Schema<"GenerateSessionTitleResponse">;
 export type GenerateWorkspaceNameRequest = Schema<"GenerateWorkspaceNameRequest">;
 export type GenerateWorkspaceNameResponse = Schema<"GenerateWorkspaceNameResponse">;
+export type UserRead              = Schema<"UserRead">;
+export type ProfileUpdateRequest  = Schema<"ProfileUpdateRequest">;
 export type SupportMessageContext     = Schema<"SupportMessageContext">;
 export type SendSupportMessageRequest = Schema<"SupportMessageRequest">;
 export type SupportReportCompleteRequest =
@@ -657,11 +665,11 @@ export interface SupportReportUploadResponse {
   attachments?: SupportReportUploadTarget[];
 }
 export interface SupportReportUploadTargetsRequest {
-  diagnostics: {
+  diagnostics?: {
     contentType: string;
     sizeBytes: number;
     sha256: string;
-  };
+  } | null;
   attachments?: Array<{
     clientFileId: string;
     fileName: string;

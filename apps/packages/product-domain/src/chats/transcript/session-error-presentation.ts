@@ -12,6 +12,18 @@ const GENERIC_ERROR_DESCRIPTION = "The session stopped before it could continue.
 const MAX_DESCRIPTION_LENGTH = 180;
 
 export function presentSessionError(item: ErrorItem): SessionErrorPresentation {
+  // Defensively feature-detect the "network_connection" kind string — the Rust
+  // contract variant may ship after this code, so we check by string value.
+  if ((item.details as { kind?: string } | null)?.kind === "network_connection") {
+    return {
+      title: "Connection interrupted",
+      description:
+        "The connection to the model was lost. Your work is saved — retry to continue.",
+      technicalDetail: normalizeTechnicalDetail(item.message),
+      fallbackModelLabel: null,
+    };
+  }
+
   if (item.details?.kind === "provider_rate_limit") {
     const provider = formatProviderLabel(item.details.provider);
     const model = formatModelLabel(item.details.providerModel);

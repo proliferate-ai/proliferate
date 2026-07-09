@@ -11,9 +11,8 @@ import { BillingReturnHandoffPage } from "./pages/BillingReturnHandoffPage";
 import { ChatPage } from "./pages/ChatPage";
 import { DesktopHandoffPage } from "./pages/DesktopHandoffPage";
 import { HomePage } from "./pages/HomePage";
-import { IntegrationsPage } from "./pages/IntegrationsPage";
+import { LoginSsoPage } from "./pages/LoginSsoPage";
 import { OrganizationJoinPage } from "./pages/OrganizationJoinPage";
-import { PluginConnectCompletePage } from "./pages/PluginConnectCompletePage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SettingsModalPage } from "./pages/SettingsModalPage";
 import { SupportPage } from "./pages/SupportPage";
@@ -31,13 +30,14 @@ export function App() {
     <>
       <InstrumentedRoutes location={backgroundLocation ?? location}>
         <Route path="auth" element={<AuthScreen />} />
+        <Route path="login" element={<LoginSsoPage />} />
+        <Route path="login/:slug" element={<LoginSsoPage />} />
         <Route path="auth/callback" element={<AuthCallbackPage />} />
         <Route path="auth/desktop/handoff" element={<DesktopHandoffPage />} />
         <Route path="auth/error" element={<AuthErrorPage />} />
         <Route path="connect-github" element={<ConnectGitHubScreen />} />
         <Route path="join/:organizationId" element={<OrganizationJoinPage />} />
         <Route path="settings/cloud" element={<BillingReturnHandoffPage />} />
-        <Route path="plugins/connect/complete" element={<PluginConnectCompletePage />} />
         <Route
           element={
             <AuthGate>
@@ -47,12 +47,10 @@ export function App() {
         >
           <Route index element={<HomePage />} />
           <Route path="workspaces" element={<Navigate to={routes.home} replace />} />
-          <Route path="integrations" element={<IntegrationsPage />} />
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={routes.workflows} />} />
           <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} extractLastSegment />} />
-          <Route path="plugins" element={<LegacyRouteRedirect to={routes.integrations} />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/:sectionId" element={<SettingsPage />} />

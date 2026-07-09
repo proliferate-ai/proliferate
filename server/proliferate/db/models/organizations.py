@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -25,10 +26,26 @@ class Organization(Base):
             "status IN ('pending_checkout', 'active', 'suspended', 'archived')",
             name="ck_organization_status",
         ),
+        Index(
+            "ux_organization_instance",
+            "is_instance",
+            unique=True,
+            postgresql_where=text("is_instance"),
+        ),
+        Index(
+            "ux_organization_slug",
+            "slug",
+            unique=True,
+            postgresql_where=text("slug IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255))
+    # Human-friendly, URL-safe handle used for per-org SSO login links
+    # (``/login/<slug>``). Nullable so legacy rows and races never block a
+    # write; a partial unique index keeps live slugs unambiguous.
+    slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     logo_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_image: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
@@ -36,6 +53,14 @@ class Organization(Base):
         default="active",
         server_default=text("'active'"),
         index=True,
+    )
+    # Marks the single instance organization for single-org-mode deployments.
+    # A partial unique index guarantees at most one row has this set to true.
+    is_instance: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(

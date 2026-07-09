@@ -1,19 +1,10 @@
 use super::HeartbeatRequest;
+use crate::versions;
 
-pub fn report(
-    status: impl Into<String>,
-    status_detail: Option<String>,
-    worker_version: Option<String>,
-    anyharness_version: Option<String>,
-    supervisor_version: Option<String>,
-    catalog_version: Option<String>,
-) -> HeartbeatRequest {
+pub fn report(status: impl Into<String>) -> HeartbeatRequest {
     HeartbeatRequest {
-        status: status.into(),
-        status_detail,
-        worker_version,
-        anyharness_version,
-        supervisor_version,
-        catalog_version,
+        status: Some(status.into()),
+        worker_version: versions::worker_version(),
+        anyharness_version: versions::anyharness_version(),
     }
 }

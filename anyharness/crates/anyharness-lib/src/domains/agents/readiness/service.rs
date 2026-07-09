@@ -8,7 +8,9 @@ use super::artifacts::{
 use super::compatibility::detect_runtime_compatibility_issue;
 use super::overrides::resolve_agent_process_override;
 use super::status::compute_readiness;
-use crate::domains::agents::auth::credentials::{detect_auth_slots, detect_auth_slots_with_env};
+use crate::domains::agents::auth::credentials::{
+    detect_auth_slots, detect_auth_slots_with_env, detect_cli_auth_state,
+};
 use crate::domains::agents::model::*;
 
 #[cfg(test)]
@@ -77,6 +79,8 @@ pub fn resolve_agent_with_env(
         detect_auth_slots_with_env(&descriptor.auth, &home_dir, additional_env)
     };
 
+    let cli_auth_state = detect_cli_auth_state(&descriptor.auth, &home_dir);
+
     let status = compute_readiness(
         &native,
         &agent_process,
@@ -102,6 +106,7 @@ pub fn resolve_agent_with_env(
         status,
         credential_state,
         auth_slots,
+        cli_auth_state,
         native,
         agent_process,
         spawn,
@@ -276,22 +281,19 @@ mod tests {
     #[test]
     fn managed_registry_npm_binary_for_names_finds_npm_bin() {
         let runtime_home = make_temp_dir("anyharness-registry-npm-binary-test");
-        let binary_path = artifact_root(
-            &runtime_home,
-            &AgentKind::Gemini,
-            &ArtifactRole::AgentProcess,
-        )
-        .join("registry_npm")
-        .join("node_modules")
-        .join(".bin")
-        .join("gemini");
+        let binary_path =
+            artifact_root(&runtime_home, &AgentKind::Grok, &ArtifactRole::AgentProcess)
+                .join("registry_npm")
+                .join("node_modules")
+                .join(".bin")
+                .join("grok");
         std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
             .expect("create registry npm bin dir");
         std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
         make_executable(&binary_path).expect("make binary executable");
 
         assert_eq!(
-            managed_registry_npm_binary_for_names(&runtime_home, &AgentKind::Gemini, &["gemini"]),
+            managed_registry_npm_binary_for_names(&runtime_home, &AgentKind::Grok, &["grok"]),
             Some(binary_path)
         );
 

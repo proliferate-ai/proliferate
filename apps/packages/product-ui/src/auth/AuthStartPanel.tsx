@@ -69,7 +69,7 @@ function AuthDivider() {
   return (
     <div className="flex items-center gap-3" aria-hidden="true">
       <div className="h-px flex-1 bg-border-light" />
-      <span className="text-[11px] uppercase tracking-wide text-faint">or</span>
+      <span className="text-base uppercase tracking-wide text-faint">or</span>
       <div className="h-px flex-1 bg-border-light" />
     </div>
   );

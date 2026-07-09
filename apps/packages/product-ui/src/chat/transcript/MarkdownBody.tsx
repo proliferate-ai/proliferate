@@ -1,16 +1,26 @@
 import {
+  Children,
+  cloneElement,
   createElement,
+  isValidElement,
   memo,
+  useContext,
   useMemo,
-  useState,
   type HTMLAttributes,
+  type ReactElement,
   type ReactNode,
 } from "react";
+import {
+  type HastNode,
+  type MarkdownRevealState,
+  MarkdownRevealContext,
+  REVEAL_DISABLED,
+  revealChildren,
+} from "./MarkdownRevealText";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { Check, Copy } from "@proliferate/ui/icons";
 import { ProviderLinkMention } from "./ProviderLinkMention";
+import { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 
 interface MarkdownBodyProps {
   content: string;
@@ -18,7 +28,19 @@ interface MarkdownBodyProps {
   renderLink?: MarkdownLinkRenderer;
   renderInlineCode?: MarkdownInlineCodeRenderer;
   renderCodeBlock?: MarkdownCodeBlockRenderer;
+  taskListItems?: MarkdownTaskListItemPresentation;
+  revealText?: boolean;
+  /** Character offset into the source string: text before this was already rendered. */
+  revealedUpTo?: number;
 }
+
+/**
+ * "inline" keeps GFM task-list checkboxes in the text flow (default chat
+ * prose). "grid" restructures each task item into a two-column grid —
+ * checkbox column auto, content column minmax(0,1fr) — so wrapped lines and
+ * nested blocks stay aligned under the label (codex plan treatment).
+ */
+export type MarkdownTaskListItemPresentation = "inline" | "grid";
 
 export interface MarkdownLinkRenderInput {
   href: string;
@@ -74,38 +96,44 @@ type MdCodeProps = MdElementProps & {
   renderCodeBlock?: MarkdownCodeBlockRenderer;
 };
 
+// Message prose reads at --prose-text-size, which the assistant/user message
+// wrappers set to --text-message (the composer size). Every other MarkdownBody
+// context — tool-row detail bodies, plan cards, work history — leaves the var
+// unset, so the fallback keeps that secondary chrome on --text-chat while
+// conversation bodies grow to match the composer.
+const PROSE_TEXT =
+  "text-[length:var(--prose-text-size,var(--text-chat))] leading-[var(--prose-text-line-height,var(--text-chat--line-height))]";
+
+const LI_CLASSNAME = `pl-0.5 ${PROSE_TEXT}`;
+
 // Markdown component overrides are the React element *types* for every
 // rendered node. They must be referentially stable across renders: a fresh
 // arrow function per render is a new component type, which makes React
 // unmount and remount the whole markdown DOM (visible as transcript jumps
-// while streams/sends re-render rows).
+// while streams/sends re-render rows). The reveal context is read inside each
+// component via useContext — the component identity stays stable, and the
+// context value flows from MarkdownBody's provider without rebuilding the map.
+
+// Factory: creates a stable component that reads reveal context and delegates.
+function mdComponent(tag: MdTag, className: string) {
+  return (props: MdElementProps) => {
+    const ctx = useContext(MarkdownRevealContext);
+    return mdHtmlElement(tag, className, props, ctx);
+  };
+}
+
 const STATIC_MARKDOWN_COMPONENTS = {
-  h1: (props: MdElementProps) =>
-    mdHtmlElement("h1", "mb-2.5 mt-5 text-[24px] font-semibold leading-[1.25] text-foreground", props),
-  h2: (props: MdElementProps) =>
-    mdHtmlElement("h2", "mb-2.5 mt-5 text-[20px] font-semibold leading-[1.25] text-foreground", props),
-  h3: (props: MdElementProps) =>
-    mdHtmlElement("h3", "mb-2.5 mt-5 text-[17px] font-semibold leading-[22px] text-foreground", props),
-  h4: (props: MdElementProps) =>
-    mdHtmlElement("h4", "mb-2 mt-4 text-[15px] font-semibold leading-[1.3] text-foreground", props),
-  h5: (props: MdElementProps) =>
-    mdHtmlElement("h5", "mb-1.5 mt-4 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground", props),
-  h6: (props: MdElementProps) =>
-    mdHtmlElement("h6", "mb-1.5 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground", props),
-  p: (props: MdElementProps) =>
-    mdHtmlElement("p", "mb-[0.6875rem] mt-0 text-chat leading-[var(--text-chat--line-height)] text-foreground", props),
-  ul: (props: MdElementProps) =>
-    mdHtmlElement("ul", "my-0 list-disc pl-[1.3125rem] text-chat leading-[var(--text-chat--line-height)] text-foreground [&>li+li]:mt-2", props),
-  ol: (props: MdElementProps) =>
-    mdHtmlElement("ol", "my-0 list-decimal pl-[1.3125rem] text-chat leading-[var(--text-chat--line-height)] text-foreground [&>li+li]:mt-2", props),
-  li: (props: MdElementProps) =>
-    mdHtmlElement("li", "pl-0.5 text-chat leading-[var(--text-chat--line-height)]", props),
-  blockquote: (props: MdElementProps) =>
-    mdHtmlElement(
-      "blockquote",
-      "my-3 border-l-2 border-border pl-4 text-chat italic leading-[var(--text-chat--line-height)] text-foreground",
-      props,
-    ),
+  h1: mdComponent("h1", "mb-2.5 mt-5 text-[24px] font-semibold leading-[1.25] text-foreground"),
+  h2: mdComponent("h2", "mb-2.5 mt-5 text-[20px] font-semibold leading-[1.25] text-foreground"),
+  h3: mdComponent("h3", "mb-2.5 mt-5 text-[17px] font-semibold leading-[22px] text-foreground"),
+  h4: mdComponent("h4", "mb-2 mt-4 text-[15px] font-semibold leading-[1.3] text-foreground"),
+  h5: mdComponent("h5", "mb-1.5 mt-4 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground"),
+  h6: mdComponent("h6", "mb-1.5 mt-4 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground"),
+  p: mdComponent("p", `mb-[0.6875rem] mt-0 ${PROSE_TEXT} text-foreground`),
+  ul: mdComponent("ul", `mb-[0.6875rem] mt-0 list-disc pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
+  ol: mdComponent("ol", `mb-[0.6875rem] mt-0 list-decimal pl-[1.3125rem] ${PROSE_TEXT} text-foreground [&>li+li]:mt-2`),
+  li: mdComponent("li", LI_CLASSNAME),
+  blockquote: mdComponent("blockquote", `my-3 border-l-2 border-border pl-4 ${PROSE_TEXT} italic text-foreground`),
   hr: () => <hr className="my-3 border-border" />,
   table: (props: MdElementProps) => (
     <div
@@ -116,16 +144,14 @@ const STATIC_MARKDOWN_COMPONENTS = {
       <div className="overflow-x-auto">
         {mdHtmlElement(
           "table",
-          "w-max min-w-full border-collapse text-chat leading-[var(--text-chat--line-height)] [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.02] [&_tbody_tr:last-child_td]:border-b-0",
+          `w-max min-w-full border-collapse ${PROSE_TEXT} [&_tbody_tr:nth-child(2n)]:bg-foreground/[0.02] [&_tbody_tr:last-child_td]:border-b-0`,
           props,
         )}
       </div>
     </div>
   ),
-  th: (props: MdElementProps) =>
-    mdHtmlElement("th", "border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left text-chat font-semibold leading-[var(--text-chat--line-height)] text-foreground", props),
-  td: (props: MdElementProps) =>
-    mdHtmlElement("td", "border-b border-border px-2.5 py-1.5 align-top text-chat leading-[var(--text-chat--line-height)]", props),
+  th: mdComponent("th", `border-b border-border bg-foreground/5 px-2.5 py-1.5 text-left ${PROSE_TEXT} font-semibold text-foreground`),
+  td: mdComponent("td", `border-b border-border px-2.5 py-1.5 align-top ${PROSE_TEXT}`),
   pre: ({ children, dangerouslySetInnerHTML, node: _node, ...rest }: MdElementProps & { children?: ReactNode }) => {
     if (dangerouslySetInnerHTML) {
       return <pre {...rest} dangerouslySetInnerHTML={dangerouslySetInnerHTML} />;
@@ -183,20 +209,104 @@ function createMarkdownAnchor(renderLink: MarkdownLinkRenderer | undefined) {
   };
 }
 
+// Codex plan task-list grid: checkbox column sized auto, content column
+// minmax(0,1fr). react-markdown emits tight task items as
+// `li > input + <inline content>` (and loose ones with the input inside the
+// leading <p>), so a pure-CSS grid would scatter the inline runs across
+// cells; instead the item is restructured into checkbox + content wrapper.
+function GridTaskListItem(props: MdElementProps & { children?: ReactNode }) {
+  const { children, dangerouslySetInnerHTML, className, node: _node, ...rest } = props;
+  const isTaskListItem =
+    typeof className === "string" && className.includes("task-list-item");
+  const split = isTaskListItem && !dangerouslySetInnerHTML
+    ? splitTaskListItemChildren(children)
+    : null;
+  if (!split) {
+    return mdHtmlElement("li", LI_CLASSNAME, props);
+  }
+  const mergedClassName = [
+    LI_CLASSNAME,
+    "grid grid-cols-[auto_minmax(0,1fr)]",
+    className,
+  ].filter(Boolean).join(" ");
+  return (
+    <li {...rest} className={mergedClassName}>
+      {cloneElement(split.checkbox, {
+        // Codex nudge: drop the checkbox 0.25rem so it optically centers on
+        // the first text line.
+        className: [split.checkbox.props.className, "mt-1"].filter(Boolean).join(" "),
+      })}
+      <div className="min-w-0">{split.content}</div>
+    </li>
+  );
+}
+
+interface SplitTaskListItem {
+  checkbox: ReactElement<{ className?: string }>;
+  content: ReactNode[];
+}
+
+function splitTaskListItemChildren(children: ReactNode): SplitTaskListItem | null {
+  const nodes = Children.toArray(children);
+  // Tight items: the checkbox input is a direct child of the <li>.
+  const inputIndex = nodes.findIndex(isCheckboxElement);
+  if (inputIndex >= 0) {
+    return {
+      checkbox: nodes[inputIndex] as SplitTaskListItem["checkbox"],
+      content: [...nodes.slice(0, inputIndex), ...nodes.slice(inputIndex + 1)],
+    };
+  }
+  // Loose items: the checkbox sits at the head of the leading paragraph.
+  const paragraphIndex = nodes.findIndex(
+    (node) => isValidElement(node) && hastTagName(node) === "p",
+  );
+  if (paragraphIndex < 0) {
+    return null;
+  }
+  const paragraph = nodes[paragraphIndex] as ReactElement<{ children?: ReactNode }>;
+  const paragraphChildren = Children.toArray(paragraph.props.children);
+  const nestedInputIndex = paragraphChildren.findIndex(isCheckboxElement);
+  if (nestedInputIndex < 0) {
+    return null;
+  }
+  const strippedParagraph = cloneElement(paragraph, undefined, ...[
+    ...paragraphChildren.slice(0, nestedInputIndex),
+    ...paragraphChildren.slice(nestedInputIndex + 1),
+  ]);
+  return {
+    checkbox: paragraphChildren[nestedInputIndex] as SplitTaskListItem["checkbox"],
+    content: [
+      ...nodes.slice(0, paragraphIndex),
+      strippedParagraph,
+      ...nodes.slice(paragraphIndex + 1),
+    ],
+  };
+}
+
+function isCheckboxElement(node: ReactNode): boolean {
+  return isValidElement(node) && node.type === "input";
+}
+
+function hastTagName(node: ReactElement): string | null {
+  const hast = (node.props as { node?: { tagName?: unknown } }).node;
+  return typeof hast?.tagName === "string" ? hast.tagName : null;
+}
+
 export const MarkdownBody = memo(function MarkdownBody({
   content,
   className = "",
   renderLink,
   renderInlineCode,
   renderCodeBlock,
+  taskListItems = "inline",
+  revealText = false,
+  revealedUpTo = 0,
 }: MarkdownBodyProps) {
   const markdownClassName = [
-    "text-chat leading-[var(--text-chat--line-height)] text-foreground break-words",
+    `${PROSE_TEXT} text-foreground break-words`,
     "[&_li>p]:my-0",
-    "[&_li>ol]:mt-2",
-    "[&_li>ul]:mt-2",
-    "[&>ol+p]:mt-4",
-    "[&>ul+p]:mt-4",
+    "[&_li>ol]:mt-2 [&_li>ol]:mb-0",
+    "[&_li>ul]:mt-2 [&_li>ul]:mb-0",
     // GFM task lists: drop the stray disc bullet and align the checkbox inline.
     // Descendant selector (not `>input`) so it also matches loose lists where
     // the checkbox sits inside a <p>; avoid flex so nested blocks still stack.
@@ -208,6 +318,7 @@ export const MarkdownBody = memo(function MarkdownBody({
 
   const components = useMemo(() => ({
     ...STATIC_MARKDOWN_COMPONENTS,
+    ...(taskListItems === "grid" ? { li: GridTaskListItem } : null),
     a: createMarkdownAnchor(renderLink),
     code: (props: MdCodeProps) => (
       <MarkdownCode
@@ -216,18 +327,28 @@ export const MarkdownBody = memo(function MarkdownBody({
         renderCodeBlock={renderCodeBlock}
       />
     ),
-  }), [renderCodeBlock, renderInlineCode, renderLink]);
+  }), [renderCodeBlock, renderInlineCode, renderLink, taskListItems]);
+
+  // Build reveal context value. Memoized so a re-render that changes neither
+  // flag nor offset doesn't push a fresh object through context; the disabled
+  // case shares one module-level reference.
+  const revealState: MarkdownRevealState | null = useMemo(
+    () => (revealText ? { enabled: true, revealedUpTo } : REVEAL_DISABLED),
+    [revealText, revealedUpTo],
+  );
 
   return (
-    <div className={markdownClassName}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        urlTransform={markdownUrlTransform}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
+    <MarkdownRevealContext.Provider value={revealState}>
+      <div className={markdownClassName}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          urlTransform={markdownUrlTransform}
+          components={components}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+    </MarkdownRevealContext.Provider>
   );
 });
 
@@ -280,103 +401,24 @@ function markdownUrlTransform(value: string): string {
   return value;
 }
 
-/**
- * Codex-style code block card: bordered rounded shell with a header carrying
- * the language label and an always-visible copy icon button. `children`
- * overrides the rendered code content (e.g. app-injected highlighted HTML);
- * `code` remains the copy payload and the plain-text fallback.
- */
-export function MarkdownCodeBlockShell({
-  code,
-  label,
-  children,
-}: {
-  code: string;
-  label?: string | null;
-  children?: ReactNode;
-}) {
-  const [copied, setCopied] = useState(false);
+// Re-export for downstream consumers that import from this module.
+export { MarkdownCodeBlockShell } from "./MarkdownCodeBlock";
 
-  function copyCode() {
-    void writeClipboardText(code)
-      .then((copiedSuccessfully) => {
-        if (!copiedSuccessfully) {
-          return;
-        }
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1600);
-      });
-  }
-
-  return (
-    <div className="relative my-[14px] w-full min-w-0 overflow-clip rounded-lg border border-transparent bg-[var(--color-code-block-background,var(--color-card))]">
-      <div className="flex select-none items-center justify-between gap-2 py-1 pl-2 pr-1.5 text-[length:var(--text-chat-meta,11px)] text-muted-foreground">
-        {label ? <span className="min-w-0 flex-1 truncate">{label}</span> : <span className="min-w-0 flex-1" />}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={copyCode}
-          className="size-6 shrink-0 rounded-md bg-transparent text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          aria-label="Copy code"
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        </Button>
-      </div>
-      <div className="overflow-x-auto overflow-y-auto p-2 font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] [&_.shiki]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:!bg-transparent [&_code]:text-[length:var(--text-chat)] [&_code]:leading-[1.5]">
-        {children ?? (
-          <pre className="m-0 p-0">
-            <code className="whitespace-pre font-mono text-[length:var(--text-chat)] font-normal leading-[1.5] text-foreground">
-              {code}
-            </code>
-          </pre>
-        )}
-      </div>
-    </div>
-  );
-}
-
-async function writeClipboardText(value: string): Promise<boolean> {
-  if (writeClipboardTextFallback(value)) {
-    return true;
-  }
-  const clipboard = navigator.clipboard;
-  if (clipboard?.writeText) {
-    try {
-      await clipboard.writeText(value);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  return false;
-}
-
-function writeClipboardTextFallback(value: string): boolean {
-  const input = document.createElement("textarea");
-  input.value = value;
-  input.setAttribute("readonly", "true");
-  input.style.position = "fixed";
-  input.style.left = "-9999px";
-  input.style.top = "0";
-  document.body.appendChild(input);
-  input.focus();
-  input.select();
-  try {
-    return document.execCommand("copy");
-  } catch {
-    return false;
-  } finally {
-    document.body.removeChild(input);
-  }
-}
-
-function mdHtmlElement(tag: MdTag, baseClassName: string, props: MdElementProps) {
+// mdHtmlElement is called from within STATIC_MARKDOWN_COMPONENTS entries,
+// which ARE React component functions (hooks-valid call site). Each entry
+// calls useContext(MarkdownRevealContext) and passes the context state so
+// word spans can be applied without rebuilding the components map per render.
+function mdHtmlElement(
+  tag: MdTag,
+  baseClassName: string,
+  props: MdElementProps,
+  ctx: MarkdownRevealState | null = null,
+) {
   const {
     children,
     dangerouslySetInnerHTML,
     className,
-    node: _node,
+    node,
     ...rest
   } = props;
   const mergedClassName = [baseClassName, className].filter(Boolean).join(" ");
@@ -388,5 +430,8 @@ function mdHtmlElement(tag: MdTag, baseClassName: string, props: MdElementProps)
       dangerouslySetInnerHTML,
     });
   }
-  return createElement(tag, { ...rest, className: mergedClassName }, children);
+  const finalChildren = ctx?.enabled
+    ? revealChildren(children, node as HastNode | undefined, ctx)
+    : children;
+  return createElement(tag, { ...rest, className: mergedClassName }, finalChildren);
 }

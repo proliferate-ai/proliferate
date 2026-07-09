@@ -87,9 +87,10 @@ export function SessionContentSearchOverlay({
   const inputLabel = surface === "file" ? "Find in file" : "Find in chat";
   const offsetClassName = surface === "file" ? "top-12" : "top-2";
   const resultRowColumnClass = "col-[1/3]";
+  const isFileSurface = surface === "file";
   const resultLabel = hasMatches
-    ? `${activeMatchIndex + 1} / ${matchCount} results`
-    : "0 results";
+    ? `${activeMatchIndex + 1} of ${matchCount}`
+    : "No results";
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
@@ -114,15 +115,15 @@ export function SessionContentSearchOverlay({
       data-content-search-overlay
       data-content-search-surface={surface}
     >
-      <div className="pointer-events-auto grid w-[340px] max-w-[70vw] grid-cols-[minmax(0,1fr)_auto] overflow-hidden rounded-[20px] border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)]">
-        <div className="col-[1/2] row-[1] flex h-[44px] min-w-0 items-center gap-2 pl-4">
-          <Search className="size-4 shrink-0 text-foreground" />
+      <div className={`pointer-events-auto grid max-w-[70vw] grid-cols-[minmax(0,1fr)_auto] overflow-hidden border-[0.5px] border-border bg-sidebar-background shadow-[0px_8px_16px_-4px_rgba(0,0,0,0.12)] ${isFileSurface ? "w-[300px] rounded-lg" : "w-[340px] rounded-[20px]"}`}>
+        <div className={`col-[1/2] row-[1] flex min-w-0 items-center gap-2 ${isFileSurface ? "h-7 pl-2.5" : "h-[44px] pl-4"}`}>
+          <Search className={`shrink-0 ${isFileSurface ? "size-4 text-muted-foreground" : "size-4 text-foreground"}`} />
           <Input
             ref={inputRef}
             id="content-search-input"
             aria-label={inputLabel}
             placeholder={placeholder}
-            className="h-6 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-base leading-6 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
+            className={`min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0 ${isFileSurface ? "h-5 text-[13px] leading-5" : "h-6 text-base leading-6"}`}
             type="text"
             value={query}
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
@@ -133,7 +134,7 @@ export function SessionContentSearchOverlay({
         </div>
         {hasQuery && (
           <>
-            <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border px-4 py-2 text-base leading-6 transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100`}>
+            <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100 ${isFileSurface ? "px-2.5 py-1 text-[13px] leading-5" : "px-4 py-2 text-base leading-6"}`}>
               <div className="flex items-center gap-3">
                 <SearchNavigationButton
                   label="Previous result"
@@ -148,13 +149,13 @@ export function SessionContentSearchOverlay({
                 />
               </div>
             </div>
-            <span className={`pointer-events-none ${resultRowColumnClass} row-[2] min-w-0 px-4 py-2 text-right text-base leading-6 text-muted-foreground transition-[max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100`}>
+            <span className={`pointer-events-none ${resultRowColumnClass} row-[2] min-w-0 text-right text-muted-foreground transition-[max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100 ${isFileSurface ? "px-2.5 py-1 text-[13px] leading-5" : "px-4 py-2 text-base leading-6"}`}>
               {resultLabel}
             </span>
           </>
         )}
-        <div className="col-[2/3] row-[1] flex h-[44px] items-center pr-4">
-          <div className="mr-2 ml-2 h-4 w-px bg-border" />
+        <div className={`col-[2/3] row-[1] flex items-center ${isFileSurface ? "h-7 pr-2" : "h-[44px] pr-4"}`}>
+          <div className={`h-4 w-px bg-border ${isFileSurface ? "mx-1.5" : "mr-2 ml-2"}`} />
           <Button
             type="button"
             variant="unstyled"

@@ -70,7 +70,12 @@ export type MeasurementSurface =
   | "header-tab"
   | "sidebar-workspace-row"
   | "changes-pane"
-  | "diff-viewer";
+  | "diff-viewer"
+  | "home-screen"
+  | "home-composer"
+  | "home-composer-controls"
+  | "home-target-picker"
+  | "home-onboarding";
 
 export type MeasurementSampleKey =
   | "composer"

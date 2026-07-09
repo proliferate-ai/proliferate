@@ -95,6 +95,13 @@ BILLING_SLACK_ACTIVE_STATUSES = {"active", "trialing"}
 BILLING_SLACK_CANCELLED_STATUSES = {"canceled"}
 BILLING_SLACK_PRE_START_STATUSES = {"incomplete"}
 
+# Prior subscription statuses that indicate a customer.subscription.deleted
+# event was reached via failed-payment dunning rather than a voluntary cancel.
+DUNNING_PRIOR_STATUSES = {"past_due", "unpaid"}
+# cancellation_details.reason values Stripe sets when Stripe itself (rather
+# than the customer) ended the subscription because payment collection failed.
+PAYMENT_DRIVEN_CANCELLATION_REASONS = {"payment_failed", "payment_disputed"}
+
 logger = logging.getLogger(__name__)
 
 
@@ -191,11 +198,18 @@ async def _dispatch_stripe_event(event: dict[str, Any]) -> tuple[BillingSlackNot
         )
         return result.notifications
     elif event_type == "customer.subscription.deleted":
+        subscription_id = stripe_object.get("id")
+        previous = (
+            await _load_billing_subscription_by_stripe_subscription_id(subscription_id)
+            if isinstance(subscription_id, str)
+            else None
+        )
         result = await _sync_subscription_for_billing_notifications(
             stripe_object,
             event_type=event_type,
         )
-        await _apply_payment_hold_for_subscription(stripe_object)
+        if _subscription_deletion_is_payment_driven(stripe_object, previous):
+            await _apply_payment_hold_for_subscription(stripe_object)
         return result.notifications
     elif event_type == "invoice.paid":
         return await _handle_invoice_paid(stripe_object)
@@ -318,20 +332,7 @@ async def _sync_subscription(subscription: dict[str, Any]) -> BillingSubscriptio
         ),
     )
     record = await reconcile_initial_org_subscription_seats(record)
-    await _sync_managed_credit_budget_for_subscription_subject(subject)
     return record
-
-
-async def _sync_managed_credit_budget_for_subscription_subject(
-    subject: BillingSubject,
-) -> None:
-    if subject.organization_id is None:
-        return
-    from proliferate.server.cloud.agent_auth.service import (
-        sync_managed_credit_budget_for_organization,
-    )
-
-    await sync_managed_credit_budget_for_organization(subject.organization_id)
 
 
 async def _sync_subscription_for_billing_notifications(
@@ -541,3 +542,29 @@ async def _apply_payment_hold_for_subscription(subscription: dict[str, Any]) -> 
         source=PAYMENT_HOLD_SOURCE,
         source_ref=_id_from_expandable(subscription.get("id")),
     )
+
+
+def _subscription_deletion_is_payment_driven(
+    subscription: dict[str, Any],
+    previous: BillingSubscription | None,
+) -> bool:
+    """Decide whether a customer.subscription.deleted event is dunning-driven.
+
+    A voluntary cancellation (the customer or an admin cancels; Stripe sets
+    cancellation_details.reason to 'cancellation_requested' or leaves it
+    unset) should terminate entitlements at period end with no
+    payment_failed hold. A deletion caused by exhausted payment retries
+    keeps the hold: either Stripe reports it directly via
+    cancellation_details.reason ('payment_failed' / 'payment_disputed'), or
+    the subscription had already moved to past_due/unpaid before Stripe
+    deleted it.
+    """
+    cancellation_details = subscription.get("cancellation_details")
+    reason = cancellation_details.get("reason") if isinstance(cancellation_details, dict) else None
+    if reason in PAYMENT_DRIVEN_CANCELLATION_REASONS:
+        return True
+    if reason is not None:
+        # Any other explicit reason (e.g. 'cancellation_requested') is a
+        # voluntary cancel signal straight from Stripe; trust it.
+        return False
+    return previous is not None and previous.status in DUNNING_PRIOR_STATUSES

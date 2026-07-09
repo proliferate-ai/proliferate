@@ -9,7 +9,9 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::domains::agents::catalog::settings::ResolvedSettingsDeltas;
 use crate::domains::agents::model::{AgentKind, ResolvedAgent};
+use crate::domains::agents::route_auth::RenderedRouteAuth;
 use crate::domains::sessions::mcp_bindings::model::SessionMcpServer;
 use crate::domains::sessions::model::SessionRecord;
 use crate::live::sessions::model::{LaunchEnv, SessionLaunch, SystemPromptAppends};
@@ -171,9 +173,12 @@ pub(super) struct SessionLaunchContext {
     pub workspace_path: PathBuf,
     pub workspace_env: BTreeMap<String, String>,
     pub session_env: BTreeMap<String, String>,
-    pub auth_support_env: BTreeMap<String, String>,
-    /// Secrets — never logged.
-    pub auth_protected_env: BTreeMap<String, String>,
+    /// Rendered agent-auth route layer for this launch (empty for
+    /// native/legacy). See `domains::agents::route_auth`.
+    pub route_auth: RenderedRouteAuth,
+    /// Catalog settings deltas (extra CLI args and env vars from persisted
+    /// per-harness settings). See `domains::agents::catalog::settings`.
+    pub settings_deltas: ResolvedSettingsDeltas,
     pub mcp_servers: Vec<SessionMcpServer>,
     pub startup: SessionStartupStrategy,
     pub every_prompt_append: Option<String>,
@@ -182,6 +187,12 @@ pub(super) struct SessionLaunchContext {
 
 /// Pure assembly of the launch bundle from already-resolved facts.
 pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunch {
+    // Merge settings env deltas into the route_auth layer (settings env wins
+    // over nothing, but route_auth is a good home — it lands after session env).
+    let mut route_auth_set = ctx.route_auth.set;
+    for (key, value) in ctx.settings_deltas.extra_env {
+        route_auth_set.insert(key, value);
+    }
     SessionLaunch {
         session: ctx.record,
         agent: ctx.agent,
@@ -189,8 +200,9 @@ pub(super) fn assemble_session_launch(ctx: SessionLaunchContext) -> SessionLaunc
         env: LaunchEnv {
             workspace: ctx.workspace_env,
             session: ctx.session_env,
-            auth_support: ctx.auth_support_env,
-            auth_protected: ctx.auth_protected_env,
+            route_auth: route_auth_set,
+            route_auth_remove: ctx.route_auth.remove,
+            settings_extra_args: ctx.settings_deltas.extra_args,
         },
         mcp_servers: ctx.mcp_servers,
         startup: ctx.startup,
@@ -388,11 +400,17 @@ mod tests {
         facts.fork_parent_native_session_id = Some(Some("   ".to_string()));
 
         let error = choose_startup_strategy(&facts).expect_err("blank parent native id");
-        assert_eq!(error.to_string(), "fork parent is missing native session id");
+        assert_eq!(
+            error.to_string(),
+            "fork parent is missing native session id"
+        );
 
         facts.fork_parent_native_session_id = Some(None);
         let error = choose_startup_strategy(&facts).expect_err("absent parent native id");
-        assert_eq!(error.to_string(), "fork parent is missing native session id");
+        assert_eq!(
+            error.to_string(),
+            "fork parent is missing native session id"
+        );
     }
 
     #[test]
