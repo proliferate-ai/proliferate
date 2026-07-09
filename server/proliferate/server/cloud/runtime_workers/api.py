@@ -35,6 +35,7 @@ from proliferate.server.cloud.runtime_workers.service import (
     enroll_worker,
     record_heartbeat,
     revoke_desktop_worker,
+    runtime_artifact_redirect_url,
     worker_artifact_redirect_url,
 )
 
@@ -73,6 +74,18 @@ async def worker_artifact_download_endpoint(target: str, asset: str) -> Redirect
     artifacts are public.
     """
     url = await worker_artifact_redirect_url(target=target, asset=asset)
+    return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
+
+
+@worker_router.get("/runtime/download/{target}/{asset}")
+async def runtime_artifact_download_endpoint(target: str, asset: str) -> RedirectResponse:
+    """302 to the pinned AnyHarness binary (or its ``.sha256``) on the downloads CDN.
+
+    Unauthenticated by design, like the worker artifact redirect: the sandbox
+    worker fetches the runtime binary over a public CDN URL behind this 302, so
+    the sandbox never needs GitHub egress or credentials.
+    """
+    url = await runtime_artifact_redirect_url(target=target, asset=asset)
     return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
 
 

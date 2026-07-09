@@ -9,6 +9,7 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
+from proliferate.server.version import runtime_version_pin
 from proliferate.utils.telemetry_mode import is_vendor_telemetry_enabled
 
 _ANYHARNESS_DEFER_STARTUP_RETENTION_ENV = "ANYHARNESS_DEFER_STARTUP_RETENTION"
@@ -88,6 +89,16 @@ def build_runtime_env(
         env["ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"] = str(_runtime_sentry_traces_sample_rate())
     env["ANYHARNESS_BEARER_TOKEN"] = runtime_token
     env["ANYHARNESS_DATA_KEY"] = anyharness_data_key
+    # The version being launched (the binary staged into the sandbox). The
+    # launcher exports it, the runtime inherits it, and the sibling worker
+    # reads it via `versions::anyharness_version()` to report what actually
+    # runs. Absent on unstamped deployments (local dev / plain docker build):
+    # the worker then reports no anyharness version and the server pins none,
+    # so the two stay consistent. Kept in lockstep with `runtime_version_pin()`,
+    # which the heartbeat advertises as `desiredVersions.anyharness`.
+    runtime_pin = runtime_version_pin()
+    if runtime_pin:
+        env["PROLIFERATE_ANYHARNESS_VERSION"] = runtime_pin
     if target_id is not None:
         env["ANYHARNESS_RUNTIME_TARGET_ID"] = str(target_id)
     env.update(
@@ -172,6 +183,11 @@ def build_worker_config(
     runtime_context: SandboxRuntimeContext,
     runtime_bearer_token: str | None = None,
 ) -> str:
+    # Local import to avoid a module-load cycle (sandbox_exec imports nothing
+    # from bootstrap, but keeping the launcher-path helper's home here is
+    # cleaner than a top-level cross-import for a single call).
+    from proliferate.server.cloud.runtime.sandbox_exec import runtime_launcher_path
+
     worker_dir = f"{runtime_context.home_dir}/.proliferate/worker"
     values: dict[str, str | int | bool] = {
         "cloud_base_url": cloud_base_url,
@@ -183,6 +199,17 @@ def build_worker_config(
         # so it converges its own binary onto the heartbeat's desiredVersions.
         # Desktop workers must never set this: the app bundle owns updates.
         "self_update_enabled": True,
+        # The sandbox worker also owns the in-place swap of the AnyHarness
+        # runtime binary onto the heartbeat's desiredVersions.anyharness. This
+        # gate is independent of self_update_enabled so the two tracks are
+        # separately controllable; desktop leaves it off (app bundle owns it).
+        "anyharness_update_enabled": True,
+        # Paths the worker acts on for the swap (all already known here):
+        # the fixed runtime binary path, the on-disk launcher to relaunch, and
+        # the workdir to relaunch in.
+        "anyharness_binary_path": runtime_context.runtime_binary_path,
+        "anyharness_launcher_path": runtime_launcher_path(runtime_context),
+        "anyharness_workdir": runtime_context.runtime_workdir,
     }
     if runtime_bearer_token:
         values["runtime_bearer_token"] = runtime_bearer_token

@@ -29,15 +29,25 @@ from proliferate.server.cloud.runtime_workers.service import (
     create_cloud_sandbox_enrollment,
     worker_cloud_base_url,
 )
+from proliferate.server.version import runtime_version_pin
 
 
 def _detached_worker_launch_command(runtime_context: SandboxRuntimeContext) -> str:
     binary = shlex.quote(worker_binary_path(runtime_context))
     config = shlex.quote(worker_config_path(runtime_context))
     log = shlex.quote(worker_log_path(runtime_context))
+    # Export the launched runtime version into the worker's own environment so
+    # `versions::anyharness_version()` reports what actually runs alongside it
+    # (the worker is a sibling process, not a child of the runtime launcher, so
+    # it does not otherwise inherit the runtime's env). Omitted on unstamped
+    # deployments, matching the server pin and the runtime launcher.
+    prefix = ""
+    runtime_pin = runtime_version_pin()
+    if runtime_pin:
+        prefix = f"export PROLIFERATE_ANYHARNESS_VERSION={shlex.quote(runtime_pin)}; "
     # A stale binary (e.g. an older template) simply means no worker this run.
     return "bash -lc " + shlex.quote(
-        f"test -x {binary} && nohup {binary} --config {config} > {log} 2>&1 < /dev/null &"
+        f"{prefix}test -x {binary} && nohup {binary} --config {config} > {log} 2>&1 < /dev/null &"
     )
 
 

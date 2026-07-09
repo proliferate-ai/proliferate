@@ -176,11 +176,22 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      - name: Generate SHA256SUMS
+      - name: Generate SHA256SUMS + per-asset checksums
         run: |
           cd artifacts
           sha256sum anyharness-* > SHA256SUMS
           cat SHA256SUMS
+          # Also emit a per-asset `<asset>.sha256` next to each artifact. The
+          # sandbox worker's runtime self-update derives the checksum URL from
+          # the binary's resolved CDN location (`<binary>.sha256`) rather than
+          # parsing SHA256SUMS, matching the worker binary path — so the CDN
+          # mirror needs a sibling checksum per asset.
+          for asset in anyharness-*; do
+            case "$asset" in
+              *.sha256) continue ;;
+            esac
+            sha256sum "$asset" | cut -d' ' -f1 > "${asset}.sha256"
+          done
 
       - name: Ensure runtime release tag exists
         if: github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run

@@ -72,6 +72,21 @@ def worker_version() -> str:
     return _env("WORKER_VERSION") or server_version()
 
 
+def runtime_version_pin() -> str | None:
+    """The runtime version this server pins for AnyHarness self-updates, or ``None``.
+
+    Unlike :func:`runtime_version` (a display fallback), this pin actively
+    drives binary swaps: a sandbox worker downloads and relaunches whatever it
+    names when it diverges from the AnyHarness binary actually running in the
+    sandbox. When ``RUNTIME_VERSION`` was not stamped (local dev, a plain
+    ``docker build``, self-hosted images) the server-version fallback could
+    never match any published runtime artifact, so it would drive perpetual
+    update attempts against an artifact no release produced — an unstamped
+    deployment therefore pins nothing. Same rationale as :func:`worker_version_pin`.
+    """
+    return _env("RUNTIME_VERSION")
+
+
 def worker_version_pin() -> str | None:
     """The worker version this server pins for self-updates, or ``None``.
 
