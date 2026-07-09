@@ -56,6 +56,31 @@ buttons; with env set, buttons render. (Real Google/GitHub round-trips are
 tier 3 — their endpoints are not overridable, so they cannot be mocked
 without product changes we are not making.)
 
+### T2-AUTH-5: org SSO login entry points (PR #1048)
+The user-facing ways *in* to org SSO: a slug login page (`/login`,
+`/login/<slug>`), the cold-login "Sign in with SSO" affordance, and
+`/join/<orgId>` web sign-in. All resolve an org **slug or id** to that org's
+SSO connection via `GET /auth/sso/discover`, then hand off to the existing
+start flow. This is the **entry-point seam**, distinct from the OIDC
+round-trip (T2-AUTH-3): discover reads the connection's stored state and never
+contacts the IdP, so the seam is fully assertable without one.
+Assert (server seam, driven directly): unknown slug AND an existing org with
+no SSO both return the identical generic answer (`enabled:false`,
+`reason:"not_available"`, no ids) so slugs can't be cycled to enumerate orgs;
+a slug (and an org id, the `/join` input) resolving to an ENABLED connection
+returns exactly the start ids (`organizationId`, `connectionId`, `protocol`,
+`displayName`). Setup seeds an enabled org-scope OIDC `sso_connection` row
+directly (same spirit as the invitation-expiry direct-DB seed) since discover
+never calls the IdP.
+Assert (desktop web build): the `OrgSsoLoginLink` affordance on `/login`
+expands to a slug field; submitting an unavailable slug (unknown, or an
+existing org with no SSO) surfaces the one generic error and does not start
+SSO.
+Surface note: the tier-2 stack boots the **desktop web build** (`apps/desktop`),
+so the `apps/web` pages (`LoginSsoPage`, the auth-screen link, `/join`) are not
+rendered here; their logic sits on the same discover seam these cases pin. The
+positive kickoff redirect and the full round-trip are T2-AUTH-3's.
+
 ---
 
 ## Tier 2 — organization
