@@ -15,7 +15,10 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user, optional_current_active_user
-from proliferate.constants.workflows import WORKFLOW_TARGET_MODE_PERSONAL_CLOUD
+from proliferate.constants.workflows import (
+    WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
+    WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+)
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_workflows as store
@@ -29,11 +32,16 @@ from proliferate.server.cloud.workflows.delivery import (
     refresh_cloud_run,
 )
 from proliferate.server.cloud.workflows.models import (
+    PollInputSpecResponse,
+    PollInspectRequest,
+    PollInspectResponse,
+    PollSkippedFieldResponse,
     RunStatusRequest,
     SlackChannelResponse,
     SlackChannelsResponse,
     StartRunRequest,
     StepActionResponse,
+    TriggerPollRequest,
     WorkflowCreateRequest,
     WorkflowDetailResponse,
     WorkflowListResponse,
@@ -61,6 +69,7 @@ from proliferate.server.cloud.workflows.service import (
     get_run,
     get_trigger,
     get_workflow_detail,
+    inspect_poll_endpoint,
     list_runs,
     list_trigger_items,
     list_triggers,
@@ -331,6 +340,43 @@ async def list_slack_channels_endpoint(
     return SlackChannelsResponse(
         channels=[SlackChannelResponse(id=c.id, name=c.name) for c in channels],
         connected=True,
+    )
+
+
+# --- poll setup: workflow-from-poll (flow 1, mental-model §5) ------------------
+# Literal path declared BEFORE the "/{workflow_id}" param routes so it is not
+# swallowed as a workflow lookup (same reason the "/runs" routes lead).
+
+
+@router.post("/poll/inspect", response_model=PollInspectResponse)
+async def inspect_poll_endpoint_route(
+    body: PollInspectRequest,
+    _user: User = Depends(current_product_user),
+) -> PollInspectResponse:
+    """Flow 1: probe an endpoint's reserved ``/init`` path and derive a new
+    workflow's starting inputs from the sample item. No workflow/DB needed — this
+    is a pure, bounded network probe; a bad ``/init`` raises ``poll_probe_failed``.
+    """
+
+    result = await inspect_poll_endpoint(
+        TriggerPollRequest(
+            url=body.url,
+            authHeader=body.auth_header,
+            authValue=body.auth_value,
+            intervalSecs=WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
+        )
+    )
+    return PollInspectResponse(
+        sampleItemId=result.sample_item_id,
+        sampleData=result.sample_data,
+        derivedInputs=[
+            PollInputSpecResponse(name=i["name"], type=i["type"], required=i["required"])
+            for i in result.derived_inputs
+        ],
+        skippedFields=[
+            PollSkippedFieldResponse(name=f["name"], reason=f["reason"])
+            for f in result.skipped_fields
+        ],
     )
 
 

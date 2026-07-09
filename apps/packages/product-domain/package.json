@@ -79,6 +79,10 @@
       "types": "./dist/workflows/effective-config.d.ts",
       "import": "./dist/workflows/effective-config.js"
     },
+    "./workflows/poll-setup": {
+      "types": "./dist/workflows/poll-setup.d.ts",
+      "import": "./dist/workflows/poll-setup.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

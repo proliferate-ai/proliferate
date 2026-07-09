@@ -239,6 +239,20 @@ def _factory(test_engine) -> async_sessionmaker:  # type: ignore[no-untyped-def]
     return async_sessionmaker(test_engine, expire_on_commit=False)
 
 
+def _mock_client_factory(transport: httpx.MockTransport):  # type: ignore[no-untyped-def]
+    """Return a drop-in for ``httpx.AsyncClient`` that routes through ``transport``
+    while preserving the kwargs ``fetch_poll_page`` sets (timeout, follow_redirects).
+    Captures the REAL client class before the patch is installed."""
+
+    real_client = httpx.AsyncClient
+
+    def factory(**kwargs):  # type: ignore[no-untyped-def]
+        kwargs.setdefault("transport", transport)
+        return real_client(**kwargs)
+
+    return factory
+
+
 async def _run_poller_with_page(session_factory, trigger_id, page: PollPage, *, now=None) -> int:
     now = now or utcnow()
     with patch.object(
@@ -683,6 +697,527 @@ def test_poll_config_encrypts_auth_value() -> None:
     assert decrypt_text(config.auth_ciphertext) == "Bearer sekret"
 
 
+# --- reserved /init path + field-by-field diff (1d, mental-model §5) ------------
+
+
+def test_init_probe_url_derivation() -> None:
+    from proliferate.server.cloud.workflows.domain.poll_contract import init_probe_url
+
+    assert init_probe_url("https://issues.example/poll") == "https://issues.example/poll/init"
+    # A trailing slash on the feed URL must not double up.
+    assert init_probe_url("https://issues.example/poll/") == "https://issues.example/poll/init"
+
+
+def test_init_probe_url_drops_fragment_and_appends_to_path() -> None:
+    """Finding 1: /init is appended to the PATH via urlsplit/urlunsplit and any
+    fragment is dropped — a naive concat would bury /init inside the fragment
+    (never sent on the wire), so the "probe" would silently GET the real feed."""
+    from proliferate.server.cloud.workflows.domain.poll_contract import init_probe_url
+
+    # A fragment is dropped entirely; /init lands on the path.
+    assert init_probe_url("https://issues.example/poll#frag") == "https://issues.example/poll/init"
+    assert (
+        init_probe_url("https://issues.example/poll/#/app/section")
+        == "https://issues.example/poll/init"
+    )
+    # An existing query string is preserved; /init still lands on the path.
+    assert (
+        init_probe_url("https://issues.example/poll?team=core")
+        == "https://issues.example/poll/init?team=core"
+    )
+
+
+def test_poll_config_rejects_fragment_url() -> None:
+    """Finding 1: a poll url carrying a fragment is rejected at save so the stored
+    feed URL is always wire-faithful."""
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.service import _validate_poll_config
+
+    with pytest.raises(CloudApiError) as exc:
+        _validate_poll_config(
+            TriggerPollRequest.model_validate(
+                {"url": "https://issues.example/poll#/init", "intervalSecs": 60}
+            ),
+            is_update=False,
+        )
+    assert exc.value.code == "invalid_poll_config"
+    assert "fragment" in exc.value.message
+
+
+def test_poll_config_rejects_userinfo_url() -> None:
+    """Finding 1: a poll url embedding credentials (user:pass@host) is rejected."""
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.service import _validate_poll_config
+
+    with pytest.raises(CloudApiError) as exc:
+        _validate_poll_config(
+            TriggerPollRequest.model_validate(
+                {"url": "https://user:pass@issues.example/poll", "intervalSecs": 60}
+            ),
+            is_update=False,
+        )
+    assert exc.value.code == "invalid_poll_config"
+
+
+def test_diff_item_against_schema_lists_every_field() -> None:
+    from proliferate.server.cloud.workflows.domain.poll_contract import (
+        diff_item_against_schema,
+    )
+
+    # "n" missing (required) + "title" wrong type -> BOTH surfaced, not just the first.
+    mismatches = diff_item_against_schema({"title": 42}, _ITEM_SCHEMA)
+    assert len(mismatches) == 2
+    joined = "; ".join(mismatches)
+    assert "'n'" in joined
+    assert "title" in joined
+    # A conforming item yields no mismatches.
+    assert diff_item_against_schema({"n": 1, "title": "ok"}, _ITEM_SCHEMA) == []
+
+
+async def test_probe_hits_reserved_init_path(test_engine) -> None:  # type: ignore[no-untyped-def]
+    """Setup-time probe GETs ``<endpoint>/init``, NOT the feed URL (poll cycles hit
+    the feed URL only — mental-model §5)."""
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        await _make_ready_cloud_workspace(db, user)
+        await db.commit()
+        actor = _Actor(user.id)
+
+        good_page = _page([_item("probe_ok", n=1, title="ok")])
+        fetch_mock = AsyncMock(return_value=good_page)
+        with patch.object(poller_module, "fetch_poll_page", new=fetch_mock):
+            await _service_create(
+                db, actor, wf.id, _poll_body(poll={"url": "https://issues.example/feed"})
+            )
+    assert fetch_mock.call_args.kwargs["url"] == "https://issues.example/feed/init"
+
+
+async def test_signature_mismatch_surfaces_all_fields(test_engine) -> None:  # type: ignore[no-untyped-def]
+    """DENY-PATH (b): a sample mismatching the workflow's inputs raises a
+    field-by-field diff carried as a STRUCTURED list on the wire (extra_detail),
+    the whole list — not just the first miss — and the trigger is NOT saved."""
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        await _make_ready_cloud_workspace(db, user)
+        await db.commit()
+        actor = _Actor(user.id)
+
+        # "n" missing + "title" wrong type -> TWO mismatches.
+        bad_page = _page([_item("probe_bad", title=42)])
+        with (
+            patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=bad_page)),
+            pytest.raises(CloudApiError) as exc,
+        ):
+            await _service_create(db, actor, wf.id, _poll_body())
+    assert exc.value.code == "poll_signature_mismatch"
+    assert "'n'" in exc.value.message
+    assert "title" in exc.value.message
+    # The FULL structured diff rides the wire (the ProliferateError handler merges
+    # extra_detail into the response detail) so the UI renders every field.
+    mismatches = exc.value.extra_detail["mismatches"]
+    assert isinstance(mismatches, list)
+    assert len(mismatches) == 2
+    assert exc.value.extra_detail["item_id"] == "probe_bad"
+
+    # DENY-PATH (b, cont.): the trigger was NOT persisted.
+    async with factory() as db:
+        rows = (
+            await db.execute(select(WorkflowTrigger).where(WorkflowTrigger.workflow_id == wf.id))
+        ).scalars().all()
+        assert rows == []
+
+
+# --- DENY-PATH (a): a bad /init response hard-fails and saves nothing -----------
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.TimeoutException("init timed out"),
+        httpx.ConnectError("init unreachable"),
+        httpx.HTTPStatusError(
+            "500",
+            request=httpx.Request("GET", "http://x/poll/init"),
+            response=httpx.Response(500, request=httpx.Request("GET", "http://x/poll/init")),
+        ),
+        ValueError("malformed page"),  # stands in for a pydantic ValidationError
+    ],
+)
+async def test_bad_init_response_hard_fails_and_saves_nothing(test_engine, failure) -> None:  # type: ignore[no-untyped-def]
+    """A non-200 / malformed / timeout / unreachable /init raises a structured
+    ``poll_probe_failed`` and NO trigger row is created or activated."""
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        await _make_ready_cloud_workspace(db, user)
+        await db.commit()
+        actor = _Actor(user.id)
+
+        with (
+            patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=failure)),
+            pytest.raises(CloudApiError) as exc,
+        ):
+            await _service_create(db, actor, wf.id, _poll_body())
+    assert exc.value.code == "poll_probe_failed"
+    assert exc.value.status_code == 400
+
+    async with factory() as db:
+        rows = (
+            await db.execute(select(WorkflowTrigger).where(WorkflowTrigger.workflow_id == wf.id))
+        ).scalars().all()
+        assert rows == []
+
+
+# --- DENY-PATH (d): poll cycles hit ONLY the feed URL, never /init --------------
+
+
+async def test_poll_cycle_hits_feed_url_not_init(test_engine) -> None:  # type: ignore[no-untyped-def]
+    """The runtime poller GETs the feed URL verbatim (no ``/init`` suffix) — /init
+    is a setup/re-validation-only path (mental-model §5)."""
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        trigger = await _make_poll_trigger(db, wf, user)
+        trigger_id = trigger.id
+        feed_url = trigger.poll_url
+        await db.commit()
+
+    page = _page([_item("cyc_1", n=1, title="x")])
+    fetch_mock = AsyncMock(return_value=page)
+    with patch.object(poller_module, "fetch_poll_page", new=fetch_mock):
+        await _poll_one_trigger(factory, trigger_id=trigger_id, now=utcnow())
+    called_url = fetch_mock.call_args.kwargs["url"]
+    assert called_url == feed_url
+    assert not called_url.endswith("/init")
+
+
+# --- DENY-PATH (c) + flow 1: derive-inputs from a sample /init item -------------
+
+
+def test_derive_inputs_from_sample_types_and_sanitizes() -> None:
+    from proliferate.server.cloud.workflows.domain.poll_contract import (
+        derive_inputs_from_sample,
+        skipped_sample_fields,
+    )
+
+    sample = {
+        "title": "Fix the bug",  # text
+        "count": 7,  # number
+        "done": True,  # boolean (bool checked before number)
+        "score": 3.5,  # number
+        "labels": ["a", "b"],  # non-scalar (array) -> SKIPPED, not mistyped
+        "meta": {"k": "v"},  # non-scalar (object) -> SKIPPED
+        "due": None,  # null -> SKIPPED (type can't be inferred)
+        "issue-id": "X",  # non-identifier name -> sanitized to issue_id
+    }
+    inputs = derive_inputs_from_sample(sample)
+    by_name = {i["name"]: i["type"] for i in inputs}
+    assert by_name == {
+        "title": "text",
+        "count": "number",
+        "done": "boolean",
+        "score": "number",
+        "issue_id": "text",  # "issue-id" sanitized
+    }
+    assert all(i["required"] is True for i in inputs)
+    # Non-scalar fields are skipped (never coerced to "text") and surfaced with a
+    # reason so the UI can show what didn't become an input.
+    skipped = {f["name"]: f["reason"] for f in skipped_sample_fields(sample)}
+    assert set(skipped) == {"labels", "meta", "due"}
+    assert all(reason for reason in skipped.values())
+    # A non-dict sample derives nothing and skips nothing.
+    assert derive_inputs_from_sample(["not", "a", "dict"]) == []
+    assert skipped_sample_fields(["not", "a", "dict"]) == []
+
+
+def test_derive_skip_round_trips_through_diff() -> None:
+    """The derived schema validates the ORIGINAL sample cleanly (finding 2 round
+    trip): scalar fields become inputs, non-scalars are skipped, and diffing the
+    sample against the schema derived from those inputs yields zero mismatches."""
+    from proliferate.server.cloud.workflows.domain.definition import parse_definition
+    from proliferate.server.cloud.workflows.domain.interpolation import ArgSpec
+    from proliferate.server.cloud.workflows.domain.poll_contract import (
+        derive_inputs_from_sample,
+        derive_item_schema,
+        diff_item_against_schema,
+    )
+
+    sample = {"title": "x", "labels": ["a"], "meta": {"k": "v"}, "due": None}
+    derived = derive_inputs_from_sample(sample)
+    assert [i["name"] for i in derived] == ["title"]  # only the scalar became an input
+
+    # Project the derived inputs into arg specs -> the derived item schema, exactly
+    # as the service does, then diff the ORIGINAL sample against it.
+    _canonical, arg_specs = parse_definition(
+        {"version": 1, "inputs": derived, "agents": []}, require_steps=False
+    )
+    assert isinstance(arg_specs[0], ArgSpec)
+    schema = derive_item_schema(arg_specs)
+    assert diff_item_against_schema(sample, schema) == []
+
+
+def test_diff_null_optional_field_is_ok_but_required_fails() -> None:
+    """A null sample value is treated like an absent one: it only fails when the
+    field is required (finding 2 null consistency)."""
+    from proliferate.server.cloud.workflows.domain.poll_contract import (
+        diff_item_against_schema,
+    )
+
+    required_schema = {
+        "type": "object",
+        "properties": {"title": {"type": "string"}},
+        "required": ["title"],
+    }
+    optional_schema = {"type": "object", "properties": {"title": {"type": "string"}}}
+    # Required + null -> a mismatch (must not be null).
+    assert diff_item_against_schema({"title": None}, required_schema) != []
+    # Optional + null -> no mismatch (null tolerated like an absent optional field).
+    assert diff_item_against_schema({"title": None}, optional_schema) == []
+
+
+def test_derived_inputs_pass_the_real_definition_validator() -> None:
+    """DENY-PATH (c): a derived inputs block is a valid v2 ``inputs`` — it passes
+    the REAL definition validator (parse_definition), so the client can seed a new
+    workflow definition with it directly."""
+    from proliferate.server.cloud.workflows.domain.definition import parse_definition
+    from proliferate.server.cloud.workflows.domain.poll_contract import (
+        derive_inputs_from_sample,
+    )
+
+    derived = derive_inputs_from_sample(
+        {"title": "t", "count": 1, "done": False, "1bad name!": "x"}
+    )
+    canonical, arg_specs = parse_definition(
+        {"version": 1, "inputs": derived, "agents": []}, require_steps=False
+    )
+    # Every derived input survived validation (names sanitized to identifiers).
+    assert {i["name"] for i in derived} == {s.name for s in arg_specs}
+    assert len(canonical["inputs"]) == len(derived)
+
+
+async def test_inspect_poll_endpoint_derives_inputs(test_engine) -> None:  # type: ignore[no-untyped-def]
+    """Flow 1 (workflow-from-poll): the service probes /init and returns the sample
+    + a derived inputs skeleton; the probe hits ``<endpoint>/init``, not the feed."""
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+
+    good_page = _page([_item("seed_1", title="hello", count=3, done=True)])
+    fetch_mock = AsyncMock(return_value=good_page)
+    with patch.object(poller_module, "fetch_poll_page", new=fetch_mock):
+        result = await inspect_poll_endpoint(
+            TriggerPollRequest.model_validate(
+                {"url": "https://issues.example/feed", "intervalSecs": 60}
+            )
+        )
+    assert fetch_mock.call_args.kwargs["url"] == "https://issues.example/feed/init"
+    assert result.sample_item_id == "seed_1"
+    by_name = {i["name"]: i["type"] for i in result.derived_inputs}
+    assert by_name == {"title": "text", "count": "number", "done": "boolean"}
+
+
+async def test_inspect_poll_endpoint_bad_init_hard_errors() -> None:  # type: ignore[no-untyped-def]
+    """Flow 1: a bad /init response is a hard, structured ``poll_probe_failed``."""
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+
+    with (
+        patch.object(
+            poller_module,
+            "fetch_poll_page",
+            new=AsyncMock(side_effect=httpx.TimeoutException("nope")),
+        ),
+        pytest.raises(CloudApiError) as exc,
+    ):
+        await inspect_poll_endpoint(
+            TriggerPollRequest.model_validate(
+                {"url": "https://issues.example/feed", "intervalSecs": 60}
+            )
+        )
+    assert exc.value.code == "poll_probe_failed"
+
+
+async def test_inspect_poll_endpoint_no_items_derives_nothing() -> None:  # type: ignore[no-untyped-def]
+    """An /init that serves no sample derives nothing (author declares inputs by
+    hand); not an error."""
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+
+    with patch.object(
+        poller_module, "fetch_poll_page", new=AsyncMock(return_value=_page([]))
+    ):
+        result = await inspect_poll_endpoint(
+            TriggerPollRequest.model_validate(
+                {"url": "https://issues.example/feed", "intervalSecs": 60}
+            )
+        )
+    assert result.sample_item_id is None
+    assert result.derived_inputs == []
+
+
+# --- re-validation fires when the workflow's inputs change (§5) -----------------
+
+
+async def test_update_reprobes_when_inputs_change(test_engine) -> None:  # type: ignore[no-untyped-def]
+    """§5: /init re-validation is re-checked when the workflow's inputs change. A
+    trigger update with NO poll block still re-probes /init once the derived item
+    schema drifts from the stored one (a new workflow version changed the inputs)."""
+    from proliferate.server.cloud.workflows.models import WorkflowTriggerUpdateRequest
+    from proliferate.server.cloud.workflows.service import update_trigger
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        await _make_ready_cloud_workspace(db, user)
+        await db.commit()
+        actor = _Actor(user.id)
+
+        good_page = _page([_item("probe_ok", n=1, title="ok")])
+        with patch.object(
+            poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
+        ):
+            trigger = await _service_create(db, actor, wf.id, _poll_body())
+
+        # The workflow's inputs change: publish a new version adding a required
+        # input, and point the workflow at it.
+        new_def = {
+            "version": 1,
+            "inputs": [
+                {"name": "n", "type": "number", "required": True},
+                {"name": "title", "type": "text", "required": True},
+                {"name": "extra", "type": "text", "required": True},
+            ],
+            "agents": _DEF["agents"],
+        }
+        new_ver = WorkflowVersion(
+            workflow_id=wf.id,
+            version_n=2,
+            definition_json=new_def,
+            created_by_user_id=user.id,
+            created_at=utcnow(),
+        )
+        db.add(new_ver)
+        await db.flush()
+        wf.current_version_id = new_ver.id
+        await db.flush()
+
+        # A no-poll-block update (just re-enabling) must re-probe /init because the
+        # inputs changed. The new sample carries "extra" so the probe passes.
+        reprobe_page = _page([_item("probe_ok2", n=1, title="ok", extra="present")])
+        fetch_mock = AsyncMock(return_value=reprobe_page)
+        with patch.object(poller_module, "fetch_poll_page", new=fetch_mock):
+            await update_trigger(
+                db,
+                actor,
+                wf.id,
+                trigger.id,
+                WorkflowTriggerUpdateRequest.model_validate({"enabled": True}),
+            )
+    assert fetch_mock.call_count == 1
+    assert fetch_mock.call_args.kwargs["url"].endswith("/init")
+
+
+async def test_update_skips_reprobe_when_inputs_unchanged(test_engine) -> None:  # type: ignore[no-untyped-def]
+    """A no-poll-block update that does not change the inputs does NOT re-probe the
+    endpoint (bounded — /init is a setup/re-validation-only call)."""
+    from proliferate.server.cloud.workflows.models import WorkflowTriggerUpdateRequest
+    from proliferate.server.cloud.workflows.service import update_trigger
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        await _make_ready_cloud_workspace(db, user)
+        await db.commit()
+        actor = _Actor(user.id)
+
+        good_page = _page([_item("probe_ok", n=1, title="ok")])
+        with patch.object(
+            poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
+        ):
+            trigger = await _service_create(db, actor, wf.id, _poll_body())
+
+        fetch_mock = AsyncMock(return_value=good_page)
+        with patch.object(poller_module, "fetch_poll_page", new=fetch_mock):
+            await update_trigger(
+                db,
+                actor,
+                wf.id,
+                trigger.id,
+                WorkflowTriggerUpdateRequest.model_validate({"concurrencyPolicy": "skip"}),
+            )
+    assert fetch_mock.call_count == 0
+
+
+# --- §11 risk profile: fetch_poll_page is bounded (size cap + no redirect) ------
+
+
+async def test_fetch_poll_page_caps_response_size() -> None:
+    from proliferate.constants.workflows import WORKFLOW_POLL_MAX_RESPONSE_BYTES
+    from proliferate.server.cloud.workflows.poller import (
+        PollResponseTooLargeError,
+        fetch_poll_page,
+    )
+
+    oversize = b'{"items": [], "cursor": "c", "has_more": false, "pad": "' + (
+        b"x" * (WORKFLOW_POLL_MAX_RESPONSE_BYTES + 16)
+    ) + b'"}'
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=oversize)
+
+    transport = httpx.MockTransport(handler)
+    with (
+        patch.object(httpx, "AsyncClient", _mock_client_factory(transport)),
+        pytest.raises(PollResponseTooLargeError),
+    ):
+        await fetch_poll_page(
+            url="https://issues.example/feed",
+            auth_header=None,
+            auth_value=None,
+            cursor=None,
+        )
+
+
+async def test_fetch_poll_page_does_not_follow_redirects() -> None:
+    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+
+    hits: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hits.append(str(request.url))
+        if request.url.path.endswith("/feed"):
+            return httpx.Response(302, headers={"location": "https://evil.example/steal"})
+        return httpx.Response(200, json={"items": [], "cursor": None, "has_more": False})
+
+    transport = httpx.MockTransport(handler)
+    # follow_redirects=False: the 302 is surfaced (raise_for_status) rather than
+    # silently chased to the redirect target.
+    with (
+        patch.object(httpx, "AsyncClient", _mock_client_factory(transport)),
+        pytest.raises(httpx.HTTPStatusError),
+    ):
+        await fetch_poll_page(
+            url="https://issues.example/feed",
+            auth_header=None,
+            auth_value=None,
+            cursor=None,
+        )
+    # The redirect target was never fetched — only the authored feed URL was hit.
+    assert not any("evil.example" in h for h in hits)
+    assert any("issues.example" in h for h in hits)
+
+
 async def test_trigger_record_hides_secret_exposes_has_auth(test_engine) -> None:  # type: ignore[no-untyped-def]
     """A read of a poll trigger surfaces poll_has_auth but never the ciphertext."""
     from proliferate.utils.crypto import encrypt_text
@@ -704,3 +1239,123 @@ async def test_trigger_record_hides_secret_exposes_has_auth(test_engine) -> None
     assert record.poll_has_auth is True
     assert record.poll_auth_header == "Authorization"
     assert not hasattr(record, "poll_auth_ciphertext")  # secret never on the record
+
+
+# --- finding 3: disabling a poll trigger never reprobes /init (no disable-brick) -
+
+
+async def test_disable_poll_trigger_skips_reprobe_when_endpoint_down(test_engine) -> None:  # type: ignore[no-untyped-def]
+    """Finding 3: ``PATCH {enabled: false}`` must succeed even when the endpoint is
+    down and the inputs have drifted (which would otherwise force a reprobe). A
+    disabled trigger never polls, so its endpoint shape is irrelevant while off."""
+    from proliferate.server.cloud.workflows.models import WorkflowTriggerUpdateRequest
+    from proliferate.server.cloud.workflows.service import update_trigger
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        await _make_ready_cloud_workspace(db, user)
+        await db.commit()
+        actor = _Actor(user.id)
+
+        good_page = _page([_item("probe_ok", n=1, title="ok")])
+        with patch.object(
+            poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
+        ):
+            trigger = await _service_create(db, actor, wf.id, _poll_body())
+
+        # The workflow's inputs change (adds a required "extra") so the derived item
+        # schema drifts from the stored one — this is exactly the condition that
+        # forces a reprobe on an ENABLED edit.
+        new_def = {
+            "version": 1,
+            "inputs": [
+                {"name": "n", "type": "number", "required": True},
+                {"name": "title", "type": "text", "required": True},
+                {"name": "extra", "type": "text", "required": True},
+            ],
+            "agents": _DEF["agents"],
+        }
+        new_ver = WorkflowVersion(
+            workflow_id=wf.id,
+            version_n=2,
+            definition_json=new_def,
+            created_by_user_id=user.id,
+            created_at=utcnow(),
+        )
+        db.add(new_ver)
+        await db.flush()
+        wf.current_version_id = new_ver.id
+        await db.flush()
+
+        # Endpoint is down: any reprobe would raise poll_probe_failed and brick the
+        # disable. With the fix, disabling skips the reprobe entirely.
+        down = AsyncMock(side_effect=httpx.ConnectError("endpoint down"))
+        with patch.object(poller_module, "fetch_poll_page", new=down):
+            updated = await update_trigger(
+                db,
+                actor,
+                wf.id,
+                trigger.id,
+                WorkflowTriggerUpdateRequest.model_validate({"enabled": False}),
+            )
+    assert updated.enabled is False
+    assert down.call_count == 0  # never reprobed on a disable
+
+
+# --- finding 4: SSRF guard on the /init probe (private/metadata addrs blocked) --
+
+
+@pytest.mark.parametrize(
+    "private_url",
+    [
+        "http://10.0.0.1/poll",  # RFC1918 private
+        "http://169.254.169.254/latest/meta-data",  # link-local cloud metadata
+        "http://100.64.0.1/poll",  # RFC6598 CGNAT / Tailscale
+    ],
+)
+async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-untyped-def]
+    monkeypatch, private_url
+) -> None:
+    """Finding 4: the stateless probe refuses a URL whose host is a private,
+    metadata, or CGNAT address — a structured error, and ZERO outbound (the guard
+    raises before fetch_poll_page is ever called)."""
+    from proliferate.server.cloud.workflows import service as service_module
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+
+    # The guard is bypassed under settings.debug (local/self-host dev); flip it off
+    # so the guard is active for this test.
+    monkeypatch.setattr(service_module.settings, "debug", False)
+
+    # A sentinel that FAILS the test if any outbound request is attempted.
+    sentinel = AsyncMock(side_effect=AssertionError("no outbound request may be issued"))
+    with (
+        patch.object(poller_module, "fetch_poll_page", new=sentinel),
+        pytest.raises(CloudApiError) as exc,
+    ):
+        await inspect_poll_endpoint(
+            TriggerPollRequest.model_validate({"url": private_url, "intervalSecs": 60})
+        )
+    assert exc.value.code == "poll_endpoint_blocked"
+    assert exc.value.status_code == 400
+    assert sentinel.await_count == 0  # zero outbound
+
+
+async def test_inspect_poll_endpoint_guard_bypassed_in_debug(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Under settings.debug (local/self-host dev), a localhost feed is NOT blocked —
+    the guard is skipped so dev feeds keep working."""
+    from proliferate.server.cloud.workflows import service as service_module
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+
+    monkeypatch.setattr(service_module.settings, "debug", True)
+    good_page = _page([_item("seed_1", title="hi")])
+    with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
+        result = await inspect_poll_endpoint(
+            TriggerPollRequest.model_validate(
+                {"url": "http://127.0.0.1:9000/feed", "intervalSecs": 60}
+            )
+        )
+    assert result.sample_item_id == "seed_1"

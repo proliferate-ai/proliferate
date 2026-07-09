@@ -34,6 +34,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_POLL_DEFAULT_LIMIT,
     WORKFLOW_POLL_ERROR_MAX_LENGTH,
     WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS,
+    WORKFLOW_POLL_MAX_RESPONSE_BYTES,
     WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
     WORKFLOW_TRIGGER_ITEM_STATUS_ERROR,
     WORKFLOW_TRIGGER_ITEM_STATUS_INVALID,
@@ -102,6 +103,15 @@ def decrypt_poll_auth(trigger: DuePollTrigger) -> tuple[str, str] | None:
     return trigger.poll_auth_header, decrypt_text(trigger.poll_auth_ciphertext)
 
 
+class PollResponseTooLargeError(Exception):
+    """The poll/init endpoint's body exceeded ``WORKFLOW_POLL_MAX_RESPONSE_BYTES``.
+
+    A third-party endpoint could stream unbounded bytes; the read is aborted the
+    moment the cap is crossed so a hostile/broken feed can't exhaust memory. Both
+    the poller (runtime) and the /init setup probe surface this as a trigger error.
+    """
+
+
 async def fetch_poll_page(
     *,
     url: str,
@@ -112,8 +122,17 @@ async def fetch_poll_page(
 ) -> PollPage:
     """GET one page from a conforming poll endpoint and parse it (spec 4.2).
 
-    Raises ``httpx.HTTPError`` on transport/status failure and pydantic
-    ``ValidationError`` on a malformed page — both surface as a trigger error.
+    The request is bounded against a third-party endpoint (mental-model §11 risk
+    profile — this is the first network call inside trigger CRUD): a fixed timeout,
+    ``follow_redirects=False`` (a poll/init URL is authored explicitly; a redirect
+    to a different host is a misconfiguration, never followed silently), and a hard
+    body-size cap enforced *while streaming* so an unbounded response is aborted
+    early rather than buffered whole.
+
+    Raises ``httpx.HTTPError`` on transport/status failure, ``pydantic``
+    ``ValidationError`` on a malformed page, and ``PollResponseTooLargeError`` when
+    the body exceeds the cap — all surface as a trigger error (and, at setup time,
+    as a clean structured ``poll_probe_failed``).
     """
 
     headers: dict[str, str] = {}
@@ -122,17 +141,32 @@ async def fetch_poll_page(
     params: dict[str, str | int] = {"limit": limit}
     if cursor:
         params["cursor"] = cursor
-    async with httpx.AsyncClient(timeout=WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS) as client:
-        response = await client.get(url, params=params, headers=headers)
-    response.raise_for_status()
-    return PollPage.model_validate(response.json())
+    async with httpx.AsyncClient(
+        timeout=WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS, follow_redirects=False
+    ) as client:
+        async with client.stream("GET", url, params=params, headers=headers) as response:
+            response.raise_for_status()
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > WORKFLOW_POLL_MAX_RESPONSE_BYTES:
+                    raise PollResponseTooLargeError(
+                        f"Poll response exceeded the {WORKFLOW_POLL_MAX_RESPONSE_BYTES}-byte cap."
+                    )
+    return PollPage.model_validate_json(bytes(body))
 
 
 def _poll_error(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         message = f"HTTP {exc.response.status_code} from poll endpoint."
+    elif isinstance(exc, PollResponseTooLargeError):
+        message = str(exc)
     elif isinstance(exc, httpx.HTTPError):
         message = f"Poll request failed: {exc.__class__.__name__}: {exc}"
+    elif isinstance(exc, CloudApiError):
+        # The SSRF guard's structured denial (poll_endpoint_blocked) — surface its
+        # message verbatim rather than the generic "not a valid page" fallback.
+        message = exc.message
     else:
         message = f"Poll response was not a valid page: {exc}"
     normalized = " ".join(message.split())
@@ -175,6 +209,11 @@ async def _poll_one_trigger(
             auth = decrypt_poll_auth(trigger)
             auth_header, auth_value = auth if auth is not None else (None, None)
             try:
+                # SSRF guard on the runtime fetch too: a cloud-hosted server polling
+                # a private/metadata address is the same SSRF as the setup probe.
+                # Bypassed under settings.debug (local/self-host dev). A block here is
+                # recorded like any poll error — cursor kept, trigger stays enabled.
+                service.guard_poll_endpoint(trigger.poll_url)
                 page = await fetch_poll_page(
                     url=trigger.poll_url,
                     auth_header=auth_header,

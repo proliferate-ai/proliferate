@@ -242,6 +242,18 @@ async def get_trigger(db: AsyncSession, trigger_id: UUID) -> WorkflowTriggerReco
     return None if row is None else _record(row)
 
 
+async def get_poll_auth_ciphertext(db: AsyncSession, trigger_id: UUID) -> str | None:
+    """The stored (write-only) poll auth ciphertext for a trigger, or ``None``.
+
+    The read record (``WorkflowTriggerRecord``) intentionally omits the secret, but
+    the service must decrypt it to re-probe ``/init`` on an update that keeps the
+    existing secret (mental-model §5 re-validation). This is the one narrow reader.
+    """
+
+    row = await db.get(WorkflowTrigger, trigger_id)
+    return None if row is None else row.poll_auth_ciphertext
+
+
 async def list_triggers_for_workflow(
     db: AsyncSession, *, workflow_id: UUID
 ) -> tuple[WorkflowTriggerRecord, ...]:

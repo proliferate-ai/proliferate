@@ -263,6 +263,11 @@ WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS: Final = frozenset(
 WORKFLOW_POLL_MIN_INTERVAL_SECONDS: Final = 60
 WORKFLOW_POLL_DEFAULT_LIMIT: Final = 50
 WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS: Final = 10.0
+# Hard cap on a poll/init response body. The endpoint is third-party; without a
+# ceiling a hostile or broken feed could stream unbounded bytes into memory. The
+# poller aborts the read (and the /init setup probe fails with a clean error)
+# once this many bytes arrive. 8 MiB comfortably fits a full page of items.
+WORKFLOW_POLL_MAX_RESPONSE_BYTES: Final = 8 * 1024 * 1024
 WORKFLOW_POLL_ITEM_ID_MAX_LENGTH: Final = 255
 WORKFLOW_POLL_ERROR_MAX_LENGTH: Final = 480
 # The poller runs alongside the schedule beat (spec 4.1: same worker process).

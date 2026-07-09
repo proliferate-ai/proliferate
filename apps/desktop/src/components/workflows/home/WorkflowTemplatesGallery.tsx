@@ -2,22 +2,25 @@ import { WORKFLOW_TEMPLATES, type WorkflowTemplate } from "@proliferate/product-
 import { workflowStepStrip } from "@proliferate/product-domain/workflows/presentation";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { WorkflowStepGlyphStrip } from "@proliferate/product-ui/workflows/WorkflowStepGlyphStrip";
-import { Plus } from "@proliferate/ui/icons";
+import { Plus, RefreshCw } from "@proliferate/ui/icons";
 
 export interface WorkflowTemplatesGalleryProps {
   busy?: boolean;
   onUseTemplate: (template: WorkflowTemplate) => void;
   onStartFromScratch: () => void;
+  /** Flow 1 (workflow-from-poll, mental-model §5) entry point. */
+  onStartFromPoll: () => void;
 }
 
 /**
  * The templates gallery that IS the empty state (spec 3.6): 5 curated starters
- * plus "start from scratch".
+ * plus "start from scratch" and "start from a poll feed".
  */
 export function WorkflowTemplatesGallery({
   busy = false,
   onUseTemplate,
   onStartFromScratch,
+  onStartFromPoll,
 }: WorkflowTemplatesGalleryProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -28,10 +31,16 @@ export function WorkflowTemplatesGallery({
             Curated starters, or build your own from scratch.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={onStartFromScratch} disabled={busy}>
-          <Plus className="size-3.5" />
-          From scratch
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onStartFromPoll} disabled={busy}>
+            <RefreshCw className="size-3.5" />
+            From a poll feed
+          </Button>
+          <Button variant="secondary" size="sm" onClick={onStartFromScratch} disabled={busy}>
+            <Plus className="size-3.5" />
+            From scratch
+          </Button>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {WORKFLOW_TEMPLATES.map((template) => (

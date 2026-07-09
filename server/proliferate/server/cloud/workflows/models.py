@@ -306,6 +306,47 @@ class TriggerPollRequest(WorkflowBaseModel):
     interval_secs: int = Field(alias="intervalSecs")
 
 
+class PollInspectRequest(WorkflowBaseModel):
+    """Flow 1 (workflow-from-poll, mental-model §5): probe a poll endpoint's
+    reserved ``/init`` path to derive a new workflow's starting inputs. Carries no
+    interval — no trigger exists yet; ``auth_value`` is the header VALUE, sent once
+    for the probe and never stored by this call."""
+
+    url: str
+    auth_header: str | None = Field(default=None, alias="authHeader")
+    auth_value: str | None = Field(default=None, alias="authValue")
+
+
+class PollInputSpecResponse(WorkflowBaseModel):
+    """One derived v2 input spec (``{name, type, required}``) — the same canonical
+    shape the definition validator accepts, so the client seeds a definition's
+    ``inputs`` directly."""
+
+    name: str
+    type: str
+    required: bool
+
+
+class PollSkippedFieldResponse(WorkflowBaseModel):
+    """One sample field that could NOT become a derived input (a non-scalar
+    array/object/null value), with a human ``reason``. Surfaced so the flow-1 UI
+    can tell the author which sample fields didn't become inputs."""
+
+    name: str
+    reason: str
+
+
+class PollInspectResponse(WorkflowBaseModel):
+    """Flow 1 result: the /init sample item (if any), the derived inputs skeleton,
+    and the sample fields that couldn't become inputs. A bad /init response never
+    reaches here — it raises a structured ``poll_probe_failed`` error instead."""
+
+    sample_item_id: str | None = Field(alias="sampleItemId")
+    sample_data: dict[str, object] | None = Field(alias="sampleData")
+    derived_inputs: list[PollInputSpecResponse] = Field(alias="derivedInputs")
+    skipped_fields: list[PollSkippedFieldResponse] = Field(alias="skippedFields")
+
+
 class WorkflowTriggerCreateRequest(WorkflowBaseModel):
     # v1 vocabulary is schedule + poll; the field stays open so webhook/api slot in.
     kind: Literal["schedule", "poll"] = "schedule"

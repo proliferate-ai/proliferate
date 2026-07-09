@@ -22,17 +22,19 @@ import {
   type WorkflowRunTargetRecord,
 } from "@proliferate/product-domain/workflows/run-launch";
 import type { WorkflowTemplate } from "@proliferate/product-domain/workflows/templates";
+import { deriveWorkflowInputsFromPollSample } from "@proliferate/product-domain/workflows/poll-setup";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { useWorkflowRunPillStore } from "@/stores/workflows/workflow-run-pill-store";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Plus } from "@proliferate/ui/icons";
+import { Plus, RefreshCw } from "@proliferate/ui/icons";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useWorkflows, useWorkflowRuns } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
 import { useLaunchWorkflowRun } from "@/hooks/access/cloud/workflows/use-launch-workflow-run";
+import { useInspectPollEndpoint } from "@/hooks/access/cloud/workflows/use-inspect-poll-endpoint";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import type { WorkflowResponse } from "@/hooks/access/cloud/workflows/types";
@@ -44,6 +46,11 @@ import {
   type WorkflowRunTargetOption,
 } from "../home/WorkflowRunArgsModal";
 import { WorkflowTemplatesGallery } from "../home/WorkflowTemplatesGallery";
+import {
+  WorkflowPollInspectModal,
+  type WorkflowPollInspectSubmit,
+} from "../home/WorkflowPollInspectModal";
+import type { PollInspectResponse } from "@/lib/access/cloud/workflows";
 
 type HomeTab = "workflows" | "runs";
 
@@ -142,6 +149,9 @@ export function WorkflowsHomeScreen() {
   } | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
+  const [pollModalOpen, setPollModalOpen] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [pollResult, setPollResult] = useState<PollInspectResponse | null>(null);
 
   const workflowsQuery = useWorkflows();
   const runsQuery = useWorkflowRuns(null);
@@ -151,6 +161,7 @@ export function WorkflowsHomeScreen() {
   const { createMutation } = useWorkflowMutations();
   const launchMutation = useLaunchWorkflowRun();
   const showRunPill = useWorkflowRunPillStore((state) => state.show);
+  const inspectPollMutation = useInspectPollEndpoint();
 
   const workflows = workflowsQuery.data?.workflows ?? [];
   const runs = runsQuery.data?.runs ?? [];
@@ -283,6 +294,48 @@ export function WorkflowsHomeScreen() {
   const useTemplate = (template: WorkflowTemplate) =>
     createAndEdit(template.name, template.description, withDefaultAgent(template.definition, agents));
 
+  // Flow 1 (workflow-from-poll, mental-model §5): probe /init, derive a starting
+  // `inputs` skeleton from the sample, then hand off into the editor exactly like
+  // any other creation path (`createAndEdit`) — a bad /init is a hard error shown
+  // in the modal, nothing is created.
+  const openPollModal = () => {
+    setPollError(null);
+    setPollResult(null);
+    setPollModalOpen(true);
+  };
+
+  const closePollModal = () => {
+    setPollModalOpen(false);
+    setPollError(null);
+    setPollResult(null);
+  };
+
+  // Phase 1: probe /init and hold the result so the modal can review it (derived
+  // inputs + any sample fields that couldn't become inputs) before hand-off.
+  const startFromPoll = (submit: WorkflowPollInspectSubmit) => {
+    setPollError(null);
+    inspectPollMutation.mutate(
+      { url: submit.url, authHeader: submit.authHeader, authValue: submit.authValue },
+      {
+        onSuccess: (result) => setPollResult(result),
+        onError: (error) => setPollError(error.message),
+      },
+    );
+  };
+
+  // Phase 2: seed a new definition with the derived inputs and hand off into the
+  // editor exactly like any other creation path (`createAndEdit`).
+  const confirmFromPoll = () => {
+    if (!pollResult) return;
+    const inputs = deriveWorkflowInputsFromPollSample(pollResult.derivedInputs);
+    const definition = {
+      ...createEmptyDefinition(defaultNodeFromCatalog(agents)),
+      inputs,
+    };
+    closePollModal();
+    createAndEdit("Untitled workflow", null, definition);
+  };
+
   const showEmptyGallery = tab === "workflows" && !workflowsQuery.isLoading && workflows.length === 0;
 
   return (
@@ -295,10 +348,21 @@ export function WorkflowsHomeScreen() {
             <div className="flex items-center gap-2">
               <TabToggle tab={tab} onChange={setTab} />
               {tab === "workflows" && workflows.length > 0 ? (
-                <Button size="sm" onClick={startFromScratch} disabled={!canCreate || createMutation.isPending}>
-                  <Plus className="size-3.5" />
-                  New
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={openPollModal}
+                    disabled={!canCreate || createMutation.isPending}
+                  >
+                    <RefreshCw className="size-3.5" />
+                    From a poll feed
+                  </Button>
+                  <Button size="sm" onClick={startFromScratch} disabled={!canCreate || createMutation.isPending}>
+                    <Plus className="size-3.5" />
+                    New
+                  </Button>
+                </>
               ) : null}
             </div>
           }
@@ -335,6 +399,7 @@ export function WorkflowsHomeScreen() {
               busy={createMutation.isPending}
               onUseTemplate={useTemplate}
               onStartFromScratch={startFromScratch}
+              onStartFromPoll={openPollModal}
             />
           ) : (
             <>
@@ -400,6 +465,23 @@ export function WorkflowsHomeScreen() {
           );
         })()
       ) : null}
+
+      <WorkflowPollInspectModal
+        open={pollModalOpen}
+        busy={inspectPollMutation.isPending || createMutation.isPending}
+        error={pollError}
+        review={
+          pollResult
+            ? {
+                derivedCount: pollResult.derivedInputs.length,
+                skippedFields: pollResult.skippedFields,
+              }
+            : null
+        }
+        onClose={closePollModal}
+        onSubmit={startFromPoll}
+        onConfirm={confirmFromPoll}
+      />
     </MainSidebarPageShell>
   );
 }

@@ -31,7 +31,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
-import socket
+import socket  # noqa: F401 — re-exported so tests can monkeypatch functions.socket.getaddrinfo
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID
 
@@ -45,19 +45,16 @@ from proliferate.constants.workflows import (
 )
 from proliferate.db.store import function_invocations as invocations_store
 from proliferate.db.store.function_invocations import FunctionInvocationRecord
+from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
 
-IpAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
-
-# Ranges the stdlib ``is_*`` classifiers do NOT flag but that we still refuse.
-# 100.64.0.0/10 is RFC 6598 shared/CGNAT space — also Tailscale's default tailnet
-# range — so an endpoint on a shared-CGNAT or tailnet host would otherwise slip
-# past ``is_private``. NAT64's well-known prefix is denied wholesale (its embedded
-# v4 is unwrapped below, but the prefix itself has no legitimate outbound use).
-_EXTRA_DENIED_NETWORKS: tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...] = (
-    ipaddress.ip_network("100.64.0.0/10"),  # RFC 6598 CGNAT / Tailscale
-    ipaddress.ip_network("64:ff9b::/96"),  # NAT64 well-known prefix (RFC 6052)
-)
+# The SSRF classification + resolve-and-pin logic is shared with the workflow
+# poll/init probes (server/proliferate/server/cloud/net_guard.py). Kept as thin
+# re-exports here so this module's public surface (and its tests) is unchanged.
+IpAddress = net_guard.IpAddress
+_EXTRA_DENIED_NETWORKS = net_guard.EXTRA_DENIED_NETWORKS
+_unwrap_ip = net_guard.unwrap_ip
+_is_blocked_ip = net_guard.is_blocked_ip
 
 
 class InvocationSafetyError(CloudApiError):
@@ -68,72 +65,17 @@ class InvocationSafetyError(CloudApiError):
         super().__init__("function_invocation_blocked", message, status_code=400)
 
 
-def _unwrap_ip(ip: IpAddress) -> IpAddress:
-    """Collapse IPv4-in-IPv6 encodings to the underlying v4 so a private v4 can't
-    dodge classification by being wrapped in a v6 literal — ``::ffff:10.0.0.0``
-    (IPv4-mapped), ``2002:V4::`` (6to4), ``64:ff9b::V4`` (NAT64)."""
-    if isinstance(ip, ipaddress.IPv6Address):
-        if ip.ipv4_mapped is not None:
-            return ip.ipv4_mapped
-        if ip.sixtofour is not None:
-            return ip.sixtofour
-        if ip in ipaddress.ip_network("64:ff9b::/96"):
-            return ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
-    return ip
-
-
-def _is_blocked_ip(ip: IpAddress) -> bool:
-    """True if an address is non-public per the stdlib classifiers OR falls in one
-    of our extra denied networks (checked on the unwrapped address)."""
-    effective = _unwrap_ip(ip)
-    if (
-        effective.is_private
-        or effective.is_loopback
-        or effective.is_link_local
-        or effective.is_reserved
-        or effective.is_multicast
-        or effective.is_unspecified
-    ):
-        return True
-    # ``addr in net`` is False across IP versions, so mixed-version checks are safe.
-    return any(effective in net or ip in net for net in _EXTRA_DENIED_NETWORKS)
-
-
 def _guard_endpoint_or_raise(url: str) -> str:
     """SSRF pre-flight: reject non-http(s), userinfo, and hosts that resolve to any
     non-public address. Returns the ONE vetted IP literal the dispatch must pin to
     (prefer IPv4), so the connection can't be re-resolved to a different (internal)
     address after this check — the DNS-rebinding TOCTOU. Raises
-    ``InvocationSafetyError`` (no outbound call) on any denial."""
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https"):
-        raise InvocationSafetyError("Endpoint must be an http(s) URL.")
-    if parts.username or parts.password:
-        raise InvocationSafetyError("Endpoint URL must not embed credentials.")
-    host = parts.hostname
-    if not host:
-        raise InvocationSafetyError("Endpoint URL has no host.")
-    # Resolve to every candidate address and reject if ANY is non-public — a name
-    # that resolves to a mix (DNS rebinding) is refused wholesale.
+    ``InvocationSafetyError`` (no outbound call) on any denial. Delegates the pure
+    classification/resolution to the shared ``net_guard`` module."""
     try:
-        infos = socket.getaddrinfo(host, parts.port or (443 if parts.scheme == "https" else 80))
-    except socket.gaierror as exc:
-        raise InvocationSafetyError(f"Endpoint host did not resolve: {exc}") from None
-    addresses = {info[4][0] for info in infos}
-    if not addresses:
-        raise InvocationSafetyError("Endpoint host did not resolve.")
-    vetted: list[IpAddress] = []
-    for raw in addresses:
-        ip = ipaddress.ip_address(raw.split("%", 1)[0])  # strip any zone id
-        if _is_blocked_ip(ip):
-            raise InvocationSafetyError(
-                "Endpoint resolves to a private, loopback, link-local, reserved, or "
-                "otherwise disallowed (CGNAT/NAT64) address, which is not allowed."
-            )
-        vetted.append(ip)
-    # Pin to ONE vetted address; prefer IPv4 for URL-literal simplicity.
-    vetted.sort(key=lambda a: a.version)
-    return str(vetted[0])
+        return net_guard.resolve_and_pin(url)
+    except net_guard.NetGuardError as exc:
+        raise InvocationSafetyError(str(exc)) from None
 
 
 def validate_args_or_raise(

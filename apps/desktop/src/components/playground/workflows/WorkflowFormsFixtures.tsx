@@ -187,6 +187,7 @@ export function WorkflowFormsFixtures() {
             args={args}
             repoOptions={REPO_OPTIONS}
             error={null}
+            errorMismatches={null}
             busy={false}
             isEdit
             canDelete
@@ -205,6 +206,7 @@ export function WorkflowFormsFixtures() {
             args={args}
             repoOptions={REPO_OPTIONS}
             error={null}
+            errorMismatches={null}
             busy={false}
             isEdit
             canDelete

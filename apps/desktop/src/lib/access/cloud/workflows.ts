@@ -33,6 +33,8 @@ export type WorkflowTriggerItemResponse = Schemas["WorkflowTriggerItemResponse"]
 export type WorkflowTriggerItemListResponse = Schemas["WorkflowTriggerItemListResponse"];
 export type SlackChannelResponse = Schemas["SlackChannelResponse"];
 export type SlackChannelsResponse = Schemas["SlackChannelsResponse"];
+export type PollInspectRequest = Schemas["PollInspectRequest"];
+export type PollInspectResponse = Schemas["PollInspectResponse"];
 
 export async function listWorkflows(includeArchived = false): Promise<WorkflowListResponse> {
   return getProliferateClient().requestJson<WorkflowListResponse>({
@@ -170,6 +172,22 @@ export async function listSlackChannels(): Promise<SlackChannelsResponse> {
   return getProliferateClient().requestJson<SlackChannelsResponse>({
     method: "GET",
     path: "/v1/cloud/workflows/slack/channels",
+  });
+}
+
+/**
+ * Flow 1 (workflow-from-poll, mental-model §5): probe an endpoint's reserved
+ * `/init` path and derive a new workflow's starting inputs from the sample
+ * item. No workflow/trigger exists yet — a bad `/init` response throws a
+ * structured `poll_probe_failed` `ProliferateClientError`.
+ */
+export async function inspectPollEndpoint(
+  body: PollInspectRequest,
+): Promise<PollInspectResponse> {
+  return getProliferateClient().requestJson<PollInspectResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/poll/inspect",
+    body,
   });
 }
 

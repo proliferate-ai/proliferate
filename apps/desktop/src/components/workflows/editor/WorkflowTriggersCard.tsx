@@ -1,11 +1,16 @@
 import { useState } from "react";
 import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
+import {
+  parsePollSignatureMismatches,
+  type PollFieldMismatch,
+} from "@proliferate/product-domain/workflows/poll-setup";
 // v2 (D17): args → inputs; the card consumes the workflow's declared inputs.
 import type {
   WorkflowTriggerCreateRequest,
   WorkflowTriggerItemResponse,
   WorkflowTriggerResponse,
 } from "@/lib/access/cloud/workflows";
+import { ProliferateClientError } from "@/lib/access/cloud/client";
 import {
   useWorkflowTriggers,
   useWorkflowTriggerMutations,
@@ -163,9 +168,22 @@ export function WorkflowTriggersCard({
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
   const [draft, setDraft] = useState<TriggerDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Flow 2 (poll-trigger-from-workflow, mental-model §5): the field-by-field
+  // diff from a poll_signature_mismatch's structured `extra_detail.mismatches`
+  // (mirrored to the client as `ProliferateClientError.details`) — null for
+  // every other error (validation messages, poll_probe_failed, schedule errors).
+  const [errorMismatches, setErrorMismatches] = useState<readonly PollFieldMismatch[] | null>(
+    null,
+  );
+
+  const setFormError = (message: string, mismatches: readonly PollFieldMismatch[] | null = null) => {
+    setError(message);
+    setErrorMismatches(mismatches);
+  };
 
   const openForm = (trigger: WorkflowTriggerResponse | null, kind: TriggerKind = "schedule") => {
     setError(null);
+    setErrorMismatches(null);
     setEditing({ id: trigger?.id ?? null });
     setDraft(draftFromTrigger(trigger, args, repoOptions, kind));
   };
@@ -174,6 +192,7 @@ export function WorkflowTriggersCard({
     setEditing(null);
     setDraft(null);
     setError(null);
+    setErrorMismatches(null);
   };
 
   const patchDraft = (patch: Partial<TriggerDraft>) =>
@@ -184,24 +203,24 @@ export function WorkflowTriggersCard({
   const submit = () => {
     if (!draft) return;
     if (!draft.repoFullName) {
-      setError(`Pin a repository for the ${draft.kind === "poll" ? "polled" : "scheduled"} run.`);
+      setFormError(`Pin a repository for the ${draft.kind === "poll" ? "polled" : "scheduled"} run.`);
       return;
     }
 
     if (draft.kind === "poll") {
       const url = draft.pollUrl.trim();
       if (!url || !(url.startsWith("http://") || url.startsWith("https://"))) {
-        setError("Enter a valid poll URL (http:// or https://).");
+        setFormError("Enter a valid poll URL (http:// or https://).");
         return;
       }
       if (draft.pollIntervalSecs < POLL_MIN_INTERVAL_SECS) {
-        setError(`Poll interval must be at least ${POLL_MIN_INTERVAL_SECS} seconds.`);
+        setFormError(`Poll interval must be at least ${POLL_MIN_INTERVAL_SECS} seconds.`);
         return;
       }
       const authHeader = draft.pollAuthHeader.trim();
       const isCreate = editing?.id === null;
       if (authHeader && !draft.pollAuthValue && (isCreate || draft.pollReplaceAuth)) {
-        setError("Provide a value for the auth header, or leave the header name blank.");
+        setFormError("Provide a value for the auth header, or leave the header name blank.");
         return;
       }
       // Required inputs not supplied as a static preset are expected to arrive
@@ -233,7 +252,22 @@ export function WorkflowTriggersCard({
         },
         args: staticArgs,
       };
-      const onDone = { onSuccess: closeForm, onError: (e: Error) => setError(e.message) };
+      // Flow 2 (mental-model §5): a poll_signature_mismatch's structured diff rides
+      // ProliferateClientError.details.mismatches — extracted here so the setup UI
+      // renders every mismatched field instead of re-parsing the human message.
+      const onDone = {
+        onSuccess: closeForm,
+        onError: (e: Error) => {
+          const rawMismatches =
+            e instanceof ProliferateClientError ? e.details.mismatches : undefined;
+          setFormError(
+            e.message,
+            Array.isArray(rawMismatches)
+              ? parsePollSignatureMismatches(rawMismatches as string[])
+              : null,
+          );
+        },
+      };
       if (editing?.id) {
         updateMutation.mutate({ triggerId: editing.id, body }, onDone);
       } else {
@@ -248,7 +282,7 @@ export function WorkflowTriggersCard({
       (arg) => arg.required && (draft.argValues[arg.name] === "" || draft.argValues[arg.name] === undefined),
     );
     if (draft.enabled && missing) {
-      setError(`Preset the required input "${missing.name}" before enabling this schedule.`);
+      setFormError(`Preset the required input "${missing.name}" before enabling this schedule.`);
       return;
     }
     const argsBody: Record<string, ArgValue> = {};
@@ -266,7 +300,8 @@ export function WorkflowTriggersCard({
       schedule: { rrule: draft.rrule, timezone: draft.timezone },
       args: argsBody,
     };
-    const onDone = { onSuccess: closeForm, onError: (e: Error) => setError(e.message) };
+    // Schedule triggers never carry a poll-signature diff.
+    const onDone = { onSuccess: closeForm, onError: (e: Error) => setFormError(e.message) };
     if (editing?.id) {
       updateMutation.mutate({ triggerId: editing.id, body }, onDone);
     } else {
@@ -315,6 +350,7 @@ export function WorkflowTriggersCard({
           args={args}
           repoOptions={repoOptions}
           error={error}
+          errorMismatches={errorMismatches}
           busy={busy}
           isEdit={editing.id !== null}
           canDelete={editing.id !== null}
@@ -574,6 +610,9 @@ interface TriggerFormProps {
   args: readonly WorkflowInputSpec[];
   repoOptions: readonly WorkflowTriggerRepoOption[];
   error: string | null;
+  /** Flow 2's structured field-by-field diff (poll_signature_mismatch's
+   * `extra_detail.mismatches`), if `error` is that kind of failure. */
+  errorMismatches: readonly PollFieldMismatch[] | null;
   busy: boolean;
   isEdit: boolean;
   canDelete: boolean;
@@ -584,6 +623,47 @@ interface TriggerFormProps {
   onDelete: () => void;
 }
 
+// The heading that precedes the structured diff in the server's
+// poll_signature_mismatch message (service.py _probe_poll_signature):
+// "Poll item '<id>' does not match the workflow's declared inputs:". Used only
+// to label the list below — the list itself renders `errorMismatches`
+// (mental-model §5 flow 2: "render exactly how their response doesn't track —
+// field-by-field diff"), not a re-split of this message.
+const POLL_SIGNATURE_HEADING_RE = /^(Poll item '.*?' does not match the workflow's declared inputs:)/;
+
+function PollSetupError({
+  error,
+  mismatches,
+}: {
+  error: string;
+  mismatches: readonly PollFieldMismatch[] | null;
+}) {
+  if (!mismatches || mismatches.length === 0) {
+    // Save-time errors with no field diff (timeouts, poll_probe_failed, plain
+    // validation messages) — the structured message from the backend, verbatim.
+    return (
+      <p className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+        {error}
+      </p>
+    );
+  }
+  const heading = error.match(POLL_SIGNATURE_HEADING_RE)?.[1] ?? error;
+  return (
+    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+      <p>{heading}</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+        {mismatches.map((mismatch, index) => (
+          <li key={index}>
+            {mismatch.field ? <span className="font-mono">{mismatch.field}</span> : null}
+            {mismatch.field ? " — " : ""}
+            {mismatch.message}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** The inline trigger editor — shared form rhythm, aligned rows, one size. Renders
  * the schedule or poll field group depending on `draft.kind`. */
 export function TriggerForm({
@@ -591,6 +671,7 @@ export function TriggerForm({
   args,
   repoOptions,
   error,
+  errorMismatches,
   busy,
   isEdit,
   canDelete,
@@ -602,11 +683,7 @@ export function TriggerForm({
 }: TriggerFormProps) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-elevated-secondary/40 p-3">
-      {error ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
+      {error ? <PollSetupError error={error} mismatches={errorMismatches} /> : null}
 
       {draft.kind === "poll" ? (
         <PollFields draft={draft} repoOptions={repoOptions} isEdit={isEdit} onPatch={onPatch} />

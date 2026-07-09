@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from proliferate.auth.authorization import ActorIdentity
+from proliferate.config import settings
 from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES,
     SUPPORTED_WORKFLOW_MISSED_RUN_POLICIES,
@@ -56,6 +58,7 @@ from proliferate.server.automations.domain.schedule import (
     ParsedAutomationSchedule,
     normalize_schedule,
 )
+from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows.domain.composition import (
     WorkflowCompositionError,
@@ -77,8 +80,11 @@ from proliferate.server.cloud.workflows.domain.policy import (
     workflow_create_allowed,
 )
 from proliferate.server.cloud.workflows.domain.poll_contract import (
+    derive_inputs_from_sample,
     derive_item_schema,
-    validate_item_data,
+    diff_item_against_schema,
+    init_probe_url,
+    skipped_sample_fields,
 )
 from proliferate.server.cloud.workflows.domain.run_status import (
     RunTransitionError,
@@ -927,6 +933,26 @@ def _validate_poll_config(poll: TriggerPollRequest, *, is_update: bool) -> _Vali
         raise CloudApiError(
             "invalid_poll_config", "poll url must be an http(s) URL.", status_code=400
         )
+    # The stored feed URL must be WIRE-FAITHFUL: what we store is exactly what the
+    # poller (and the /init probe) send. A fragment (``#...``) is never sent on the
+    # wire, so ``init_probe_url`` would otherwise append ``/init`` inside the
+    # fragment and the "probe" would silently GET the real feed — reject it here so
+    # the stored URL can never carry one. Userinfo (``user:pass@host``) is likewise
+    # rejected: credentials belong in the auth header, not baked into the URL (and
+    # the SSRF guard refuses them too).
+    parsed = urlsplit(url)
+    if parsed.fragment:
+        raise CloudApiError(
+            "invalid_poll_config",
+            "poll url must not contain a URL fragment ('#...').",
+            status_code=400,
+        )
+    if parsed.username or parsed.password:
+        raise CloudApiError(
+            "invalid_poll_config",
+            "poll url must not embed credentials ('user:pass@host'); use an auth header.",
+            status_code=400,
+        )
     if poll.interval_secs < WORKFLOW_POLL_MIN_INTERVAL_SECONDS:
         raise CloudApiError(
             "invalid_poll_interval",
@@ -998,22 +1024,52 @@ def _validate_poll_static_inputs(
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
 
+def guard_poll_endpoint(url: str) -> None:
+    """SSRF pre-flight for every server-issued poll/init request (§11 risk profile).
+
+    A cloud-hosted server GETting an operator-supplied URL is an SSRF surface —
+    the same one the function-invocation dispatch faces — so it goes through the
+    SAME shared guard (``net_guard.resolve_and_pin``): private, loopback,
+    link-local (incl. 169.254.169.254 metadata), reserved, multicast, CGNAT
+    (100.64/10) and NAT64 hosts are refused before any packet leaves. Applied on
+    the PROBE path (trigger create/update re-validation + the stateless
+    ``/poll/inspect`` endpoint) AND the runtime poller's fetch.
+
+    Bypassed under ``settings.debug`` (local/self-host dev) so a developer can
+    point a poll trigger at ``http://localhost`` feeds. Tests flip ``debug`` off to
+    exercise the guard. Raises ``CloudApiError('poll_endpoint_blocked')`` — no
+    outbound request — on any denial."""
+
+    if settings.debug:
+        return
+    try:
+        net_guard.resolve_and_pin(url)
+    except net_guard.NetGuardError as exc:
+        raise CloudApiError("poll_endpoint_blocked", str(exc), status_code=400) from None
+
+
 async def _probe_poll_signature(
     config: _ValidatedPollConfig,
     *,
     item_schema: dict[str, object],
     existing_ciphertext: str | None = None,
 ) -> None:
-    """Init-time inputs-signature check (contract §2.2, amending L33a).
+    """Init-time inputs-signature check (contract §2.2, amending L33a; mental-model
+    §5 /init reserved path, RULED 2026-07-09).
 
-    GET the endpoint once and validate that returned items' ``data`` carries
-    fields named and typed exactly like the workflow's declared inputs (the
-    derived ``item_schema``). A shape mismatch fails the trigger create/update so
-    a misconfigured endpoint is caught before the poller ever fires. An endpoint
-    with no items to sample passes (nothing to contradict the signature).
+    GET the reserved ``<endpoint>/init`` path once (NOT the feed URL — that is hit
+    only by poll cycles) and validate that the returned sample items' ``data``
+    carries fields named and typed exactly like the workflow's declared inputs (the
+    derived ``item_schema``). A shape mismatch fails the trigger create/update so a
+    misconfigured endpoint is caught before the poller ever fires — surfaced
+    field-by-field so the setup UI can render the whole diff, not just the first
+    miss. An ``/init`` that serves no sample item passes (nothing to contradict).
     """
 
     from proliferate.server.cloud.workflows.poller import fetch_poll_page
+
+    # SSRF pre-flight BEFORE any outbound request (no packet leaves on a denial).
+    guard_poll_endpoint(init_probe_url(config.url))
 
     if config.auth_value_plaintext is not None:
         auth_value: str | None = config.auth_value_plaintext
@@ -1023,7 +1079,7 @@ async def _probe_poll_signature(
         auth_value = None
     try:
         page = await fetch_poll_page(
-            url=config.url,
+            url=init_probe_url(config.url),
             auth_header=config.auth_header,
             auth_value=auth_value,
             cursor=None,
@@ -1031,17 +1087,90 @@ async def _probe_poll_signature(
     except Exception as exc:
         raise CloudApiError(
             "poll_probe_failed",
-            f"Could not reach the poll endpoint to verify its item shape: {exc}",
+            f"Could not reach the poll endpoint's /init path to verify its item shape: {exc}",
             status_code=400,
         ) from exc
     for item in page.items:
-        error = validate_item_data(item.data, item_schema)
-        if error is not None:
+        mismatches = diff_item_against_schema(item.data, item_schema)
+        if mismatches:
+            detail = "; ".join(mismatches)
+            # The FULL field-by-field diff rides the wire in ``extra_detail`` (merged
+            # into the error ``detail`` by the ProliferateError handler), so the setup
+            # UI renders every mismatched field — not just the first, and without
+            # re-parsing the human message (mental-model §5 flow 2).
             raise CloudApiError(
                 "poll_signature_mismatch",
-                f"Poll item '{item.id}' does not match the workflow's declared inputs: {error}",
+                f"Poll item '{item.id}' does not match the workflow's declared inputs: {detail}",
                 status_code=400,
+                extra_detail={"item_id": item.id, "mismatches": mismatches},
             )
+
+
+@dataclass(frozen=True)
+class PollInspectResult:
+    """Flow 1 (workflow-from-poll) probe result: the /init sample, the v2 ``inputs``
+    skeleton derived from it, and the sample fields that could NOT become inputs
+    (mental-model §5)."""
+
+    sample_item_id: str | None
+    sample_data: dict[str, object] | None
+    derived_inputs: list[dict[str, object]]
+    # Non-scalar sample fields (arrays/objects/null) that were skipped, each as
+    # ``{"name", "reason"}`` — the UI shows these so the author knows which fields
+    # didn't become inputs.
+    skipped_fields: list[dict[str, str]]
+
+
+async def inspect_poll_endpoint(poll: TriggerPollRequest) -> PollInspectResult:
+    """Flow 1 — workflow-from-poll (mental-model §5, RULED 2026-07-09).
+
+    "Enter API key + endpoint → we call ``/init`` → derive the starting inputs from
+    the sample → hard error on bad response." Given an endpoint + optional auth, GET
+    the reserved ``<endpoint>/init`` path (NOT the feed URL — poll cycles hit the
+    feed only), take the first sample item, and project its ``data`` fields into a
+    v2 ``inputs`` block the client seeds a brand-new workflow with. There is no
+    workflow yet, so there is nothing to diff against — this only *derives*.
+
+    A bad ``/init`` response (non-200, malformed, timeout, oversize, unreachable)
+    raises a structured ``poll_probe_failed`` the setup UI renders. This is the same
+    bounded network call as the signature probe (§11 risk profile: timeout,
+    no redirect-following, response-size cap — enforced in ``fetch_poll_page``).
+    An ``/init`` that serves no sample item derives nothing (empty inputs), leaving
+    the author to declare inputs by hand.
+    """
+
+    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+
+    config = _validate_poll_config(poll, is_update=False)
+    # SSRF pre-flight BEFORE any outbound request — this endpoint is stateless and
+    # callable by any authed user with an arbitrary URL, so it is the sharpest edge
+    # of the probe surface.
+    guard_poll_endpoint(init_probe_url(config.url))
+    try:
+        page = await fetch_poll_page(
+            url=init_probe_url(config.url),
+            auth_header=config.auth_header,
+            auth_value=config.auth_value_plaintext,
+            cursor=None,
+        )
+    except Exception as exc:
+        raise CloudApiError(
+            "poll_probe_failed",
+            f"Could not reach the poll endpoint's /init path to derive inputs: {exc}",
+            status_code=400,
+        ) from exc
+
+    if not page.items:
+        return PollInspectResult(
+            sample_item_id=None, sample_data=None, derived_inputs=[], skipped_fields=[]
+        )
+    sample = page.items[0]
+    return PollInspectResult(
+        sample_item_id=sample.id,
+        sample_data=dict(sample.data),
+        derived_inputs=derive_inputs_from_sample(sample.data),
+        skipped_fields=skipped_sample_fields(sample.data),
+    )
 
 
 async def _visible_trigger(
@@ -1302,12 +1431,39 @@ async def _update_poll_trigger(
     # Re-derive the item schema whenever the inputs' static coverage may have moved.
     item_schema = derive_item_schema(arg_specs, covered_names=coerced_static.keys())
 
-    # Re-probe the endpoint on any poll-block edit (config could reshape auth/url).
-    # An inputs/preset edit that reshapes the derived schema is still persisted, but
-    # the endpoint the poller hits is unchanged so no fresh probe is warranted.
-    if config is not None:
+    # Re-probe the reserved /init path when EITHER the endpoint config changed (a
+    # poll-block edit could reshape auth/url) OR the workflow's inputs changed since
+    # this trigger was last validated. The derived item_schema drifting from the
+    # stored one IS "the workflow's inputs changed" (mental-model §5: re-checked when
+    # the workflow's inputs change — D17's init-time check mechanism). When only the
+    # inputs moved, the endpoint config is unchanged, so probe it from the existing
+    # config + stored secret. Either way a signature mismatch hard-fails the update.
+    inputs_changed = item_schema != (existing.poll_item_schema_json or {})
+    probe_config = config
+    if probe_config is None and inputs_changed:
+        probe_config = _ValidatedPollConfig(
+            url=existing.poll_url,
+            auth_header=existing.poll_auth_header,
+            interval_secs=existing.poll_interval_secs,
+            auth_ciphertext=None,
+            update_auth=False,
+            auth_value_plaintext=None,
+        )
+    # Never let the /init reprobe block a transition to disabled. A disabled trigger
+    # never polls, so its endpoint shape is irrelevant while off — and forcing a
+    # live probe here would BRICK ``PATCH {enabled:false}`` whenever the endpoint is
+    # down (the very time an operator most wants to disable it). The reprobe still
+    # fires for an enabled trigger whose config/inputs changed; a re-enable later
+    # that changes the config/inputs re-validates then.
+    if probe_config is not None and enabled:
+        # The read record omits the write-only secret; the probe decrypts the stored
+        # ciphertext when no fresh auth value was supplied (config-kept-secret or an
+        # inputs-only re-validation).
+        existing_ciphertext = await trigger_store.get_poll_auth_ciphertext(db, existing.id)
         await _probe_poll_signature(
-            config, item_schema=item_schema, existing_ciphertext=existing.poll_auth_ciphertext
+            probe_config,
+            item_schema=item_schema,
+            existing_ciphertext=existing_ciphertext,
         )
 
     # Always rewrite the derived item schema (inputs may have changed); pass the

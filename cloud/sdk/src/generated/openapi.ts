@@ -1759,6 +1759,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workflows/poll/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect Poll Endpoint Route
+         * @description Flow 1: probe an endpoint's reserved ``/init`` path and derive a new
+         *     workflow's starting inputs from the sample item. No workflow/DB needed — this
+         *     is a pure, bounded network probe; a bad ``/init`` raises ``poll_probe_failed``.
+         */
+        post: operations["inspect_poll_endpoint_route_v1_cloud_workflows_poll_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workflows/{workflow_id}": {
         parameters: {
             query?: never;
@@ -5028,6 +5050,65 @@ export interface components {
             usageMinutes: number;
             /** Probillingenabled */
             proBillingEnabled: boolean;
+        };
+        /**
+         * PollInputSpecResponse
+         * @description One derived v2 input spec (``{name, type, required}``) — the same canonical
+         *     shape the definition validator accepts, so the client seeds a definition's
+         *     ``inputs`` directly.
+         */
+        PollInputSpecResponse: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Required */
+            required: boolean;
+        };
+        /**
+         * PollInspectRequest
+         * @description Flow 1 (workflow-from-poll, mental-model §5): probe a poll endpoint's
+         *     reserved ``/init`` path to derive a new workflow's starting inputs. Carries no
+         *     interval — no trigger exists yet; ``auth_value`` is the header VALUE, sent once
+         *     for the probe and never stored by this call.
+         */
+        PollInspectRequest: {
+            /** Url */
+            url: string;
+            /** Authheader */
+            authHeader?: string | null;
+            /** Authvalue */
+            authValue?: string | null;
+        };
+        /**
+         * PollInspectResponse
+         * @description Flow 1 result: the /init sample item (if any) plus the derived inputs
+         *     skeleton. A bad /init response never reaches here — it raises a structured
+         *     ``poll_probe_failed`` error instead.
+         */
+        PollInspectResponse: {
+            /** Sampleitemid */
+            sampleItemId: string | null;
+            /** Sampledata */
+            sampleData: {
+                [key: string]: unknown;
+            } | null;
+            /** Derivedinputs */
+            derivedInputs: components["schemas"]["PollInputSpecResponse"][];
+            /** Skippedfields */
+            skippedFields: components["schemas"]["PollSkippedFieldResponse"][];
+        };
+        /**
+         * PollSkippedFieldResponse
+         * @description One sample field that could NOT become a derived input (a non-scalar
+         *     array/object/null value), with a human ``reason``. Surfaced so the flow-1 UI
+         *     can tell the author which sample fields didn't become inputs.
+         */
+        PollSkippedFieldResponse: {
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
         };
         /** PutCloudSecretEnvVarRequest */
         PutCloudSecretEnvVarRequest: {
@@ -9802,6 +9883,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SlackChannelsResponse"];
+                };
+            };
+        };
+    };
+    inspect_poll_endpoint_route_v1_cloud_workflows_poll_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PollInspectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollInspectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
