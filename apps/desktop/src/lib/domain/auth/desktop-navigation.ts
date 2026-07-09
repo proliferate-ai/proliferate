@@ -20,6 +20,16 @@ export function desktopNavigationTarget(url: string): string | null {
       // follow this link and see/accept their invitation.
       const params = new URLSearchParams({ section: "account" });
       params.set("joinOrganizationId", organizationId);
+      // The issuing server stamps its own origin so a self-hosted invite can
+      // point the desktop at the right server (the org id is meaningless on
+      // Cloud). Any web page can fire this deep link with an attacker-supplied
+      // origin, so we validate hard and DROP anything untrusted — a dropped
+      // origin degrades to today's behavior (resolve against the current
+      // server), never a silent server switch.
+      const joinServerOrigin = parseJoinServerOrigin(parsed.searchParams.get("origin"));
+      if (joinServerOrigin) {
+        params.set("joinServerOrigin", joinServerOrigin);
+      }
       return `/settings?${params.toString()}`;
     }
   }
@@ -93,4 +103,49 @@ function decodeRoutePart(value: string): string {
   } catch {
     return value;
   }
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+/**
+ * Validate the `origin` embedded in a `proliferate://join/<id>` deep link.
+ * This is the parser-side half of the trust boundary: the desktop must never
+ * treat an unvalidated origin as a server address. Returns the normalized
+ * origin (scheme + host, no trailing slash) only when it is:
+ * - a well-formed absolute URL,
+ * - https (http tolerated solely for loopback dev servers),
+ * - free of embedded credentials (no `user:pass@` phishing vector).
+ * Anything else returns null so the caller drops the param.
+ */
+function parseJoinServerOrigin(raw: string | null): string | null {
+  if (!raw) {
+    return null;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  if (parsed.username || parsed.password) {
+    return null;
+  }
+
+  if (!parsed.hostname) {
+    return null;
+  }
+
+  if (parsed.protocol === "https:") {
+    return parsed.origin;
+  }
+
+  if (parsed.protocol === "http:" && isLoopbackHostname(parsed.hostname)) {
+    return parsed.origin;
+  }
+
+  return null;
 }

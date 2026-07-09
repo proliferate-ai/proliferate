@@ -12,8 +12,9 @@ import {
 } from "@proliferate/cloud-sdk-react";
 import { ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
+import { ConnectServerDialog } from "@/components/auth/ConnectServerDialog";
 import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
-import { AUTH_ACCOUNT_LABELS } from "@/copy/auth/auth-copy";
+import { AUTH_ACCOUNT_LABELS, CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
 import { CAPABILITY_COPY } from "@/copy/capabilities/capability-copy";
 import { useAuthViewer } from "@/hooks/access/cloud/auth/use-auth-viewer";
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
@@ -356,6 +357,14 @@ export function AccountPane() {
             : undefined,
         }}
         error={signInError || providerLinkError}
+      />
+
+      {/* Invite links from a different server open this trust-confirm dialog
+          before the app is ever repointed (join-invitation flow's security
+          boundary). No-op when no server switch is pending. */}
+      <ConnectServerDialog
+        controller={joinFlow.connectServer}
+        context={CONNECT_SERVER_LABELS.inviteContext}
       />
     </section>
   );
