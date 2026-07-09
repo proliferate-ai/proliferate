@@ -79,7 +79,7 @@ impl SessionService {
                 continue;
             }
 
-            let facts = collect_launch_env_facts(&agent.kind, &readiness_env);
+            let facts = collect_launch_env_facts(&agent.kind, &readiness_env, &self.runtime_home);
             let active = classify(&descriptor, &agent.auth_contexts, &facts);
             let default_model_id = catalog
                 .validate_launch(&agent.kind, &active, None, None)

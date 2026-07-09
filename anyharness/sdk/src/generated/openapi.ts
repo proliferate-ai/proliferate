@@ -3369,6 +3369,13 @@ export interface components {
             code?: string | null;
             detail?: string | null;
             instance?: string | null;
+            /**
+             * @description RFC 7807 extension member: the auth-context ids that would unlock a
+             *     gated selection (the model's `availability.anyOf`). Only set on
+             *     `SESSION_MODEL_GATED` (decisions ledger 16); absent on every other
+             *     error, so unrelated responses stay byte-identical.
+             */
+            requiredContexts?: string[] | null;
             /** Format: int32 */
             status: number;
             title: string;

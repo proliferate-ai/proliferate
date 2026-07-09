@@ -22,6 +22,7 @@ impl ApiError {
                 detail,
                 instance: None,
                 code: code.map(String::from),
+                required_contexts: None,
             },
         )
     }
@@ -36,6 +37,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                required_contexts: None,
             },
         )
     }
@@ -50,6 +52,26 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                required_contexts: None,
+            },
+        )
+    }
+
+    /// A model gated behind inactive auth contexts (decisions ledger 16). A
+    /// 400 like the other selection rejections, but with its own machine code
+    /// (`SESSION_MODEL_GATED`) and the unlock condition (`required_contexts`,
+    /// the model's `availability.anyOf`) carried as an RFC 7807 extension.
+    pub fn model_gated(detail: impl Into<String>, required_contexts: Vec<String>) -> Self {
+        Self(
+            StatusCode::BAD_REQUEST,
+            ProblemDetails {
+                type_url: "about:blank".into(),
+                title: "Bad request".into(),
+                status: 400,
+                detail: Some(detail.into()),
+                instance: None,
+                code: Some("SESSION_MODEL_GATED".into()),
+                required_contexts: Some(required_contexts),
             },
         )
     }
@@ -64,6 +86,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                required_contexts: None,
             },
         )
     }
@@ -78,6 +101,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                required_contexts: None,
             },
         )
     }
@@ -92,6 +116,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                required_contexts: None,
             },
         )
     }
@@ -106,6 +131,7 @@ impl ApiError {
                 detail: Some(detail.into()),
                 instance: None,
                 code: Some(code.into()),
+                required_contexts: None,
             },
         )
     }
@@ -125,6 +151,7 @@ impl ApiError {
                 detail: Some(detail),
                 instance: None,
                 code: None,
+                required_contexts: None,
             },
         )
     }
@@ -133,5 +160,35 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (self.0, Json(self.1)).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_gated_carries_code_and_required_contexts() {
+        let err = ApiError::model_gated(
+            "gated",
+            vec!["anthropic-api".to_string(), "gateway".to_string()],
+        );
+        assert_eq!(err.0, StatusCode::BAD_REQUEST);
+        assert_eq!(err.1.code.as_deref(), Some("SESSION_MODEL_GATED"));
+        assert_eq!(
+            err.1.required_contexts.as_deref(),
+            Some(&["anthropic-api".to_string(), "gateway".to_string()][..])
+        );
+    }
+
+    #[test]
+    fn ordinary_errors_omit_required_contexts() {
+        // Only the gated error carries the extension member; everything else
+        // stays byte-identical to before the amendment.
+        assert!(ApiError::bad_request("x", "SOME_CODE")
+            .1
+            .required_contexts
+            .is_none());
+        assert!(ApiError::internal("y").1.required_contexts.is_none());
     }
 }

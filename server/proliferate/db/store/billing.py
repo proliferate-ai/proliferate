@@ -407,6 +407,39 @@ async def compute_usage_seconds_in_window(
     return float(result or 0.0)
 
 
+async def compute_usage_seconds_in_window_for_org(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    start: datetime,
+    end: datetime,
+    now: datetime,
+    user_id: UUID | None = None,
+) -> float:
+    """Total billable compute seconds over ``[start, end)`` scoped to an org.
+
+    Sums by ``UsageSegment.organization_id`` (not by billing subject) so an
+    org's compute usage aggregates across every member's segments regardless of
+    which personal subject each one is invoiced to. ``user_id=None`` sums the
+    whole org (org-wide cap); otherwise it filters to that member (per-user cap).
+    Segment attribution uses ``started_at`` (see the timeseries note).
+    """
+    window_start = coerce_utc(start) or start
+    window_end = coerce_utc(end) or end
+    conditions = [
+        UsageSegment.organization_id == organization_id,
+        UsageSegment.is_billable.is_(True),
+        UsageSegment.started_at >= window_start,
+        UsageSegment.started_at < window_end,
+    ]
+    if user_id is not None:
+        conditions.append(UsageSegment.user_id == user_id)
+    result = await db.scalar(
+        select(func.coalesce(func.sum(_clipped_segment_seconds(now)), 0.0)).where(*conditions)
+    )
+    return float(result or 0.0)
+
+
 @dataclass(frozen=True)
 class BudgetLimitInput:
     """A single limit in a full-replace limit set."""

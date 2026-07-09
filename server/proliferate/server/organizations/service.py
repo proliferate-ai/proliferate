@@ -465,6 +465,7 @@ async def list_invitations(
     db: AsyncSession,
     org_user: CurrentOrgUser,
 ) -> list[InvitationRecord]:
+    _require_current_org_role(org_user, organization_admin_roles())
     return await invitation_store.list_organization_invitations(db, org_user.organization_id)
 
 

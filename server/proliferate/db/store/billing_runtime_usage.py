@@ -16,6 +16,7 @@ from proliferate.constants.billing import BILLING_RECONCILER_LOCK_KEY
 from proliferate.db.models.billing import BillingDecisionEvent, UsageSegment, WebhookEventReceipt
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.organizations import get_current_membership_for_user
 from proliferate.utils.time import utcnow
 
 T = TypeVar("T")
@@ -50,6 +51,21 @@ async def get_open_usage_segment(
             )
         )
     ).scalar_one_or_none()
+
+
+async def resolve_organization_id_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> UUID | None:
+    """The org a user's compute belongs to, or None if they are org-less.
+
+    Resolves the user's current (first active) membership — the same resolution
+    the resume gate uses (``get_current_membership_for_user``). This is the org
+    context stamped onto a usage segment so org-scoped compute budget limits can
+    be evaluated; it does not change ``billing_subject_id`` (who pays).
+    """
+    membership = await get_current_membership_for_user(db, user_id)
+    return membership.organization.id if membership is not None else None
 
 
 async def _get_workspace_billing_subject(
@@ -87,6 +103,7 @@ async def create_usage_segment(
     *,
     user_id: UUID,
     billing_subject_id: UUID,
+    organization_id: UUID | None,
     runtime_environment_id: UUID | None,
     workspace_id: UUID | None,
     sandbox_id: UUID,
@@ -102,6 +119,7 @@ async def create_usage_segment(
         .values(
             user_id=user_id,
             billing_subject_id=billing_subject_id,
+            organization_id=organization_id,
             runtime_environment_id=runtime_environment_id,
             workspace_id=workspace_id,
             sandbox_id=sandbox_id,
@@ -392,10 +410,16 @@ async def ensure_sandbox_usage_started(
         owner_user_id = actor_user_id
     else:
         raise RuntimeError("Usage segment requires a runtime environment, workspace, or user.")
+    # Stamp the org the segment belongs to (owner's current membership) so
+    # org-scoped compute budget limits can be enforced. The paying subject
+    # (``billing_subject_id``) is unchanged — invoicing stays on the personal
+    # subject.
+    organization_id = await resolve_organization_id_for_user(db, owner_user_id)
     return await create_usage_segment(
         db,
         user_id=actor_user_id or owner_user_id,
         billing_subject_id=billing_subject_id,
+        organization_id=organization_id,
         runtime_environment_id=runtime_environment_id,
         workspace_id=workspace_id,
         sandbox_id=sandbox_id,

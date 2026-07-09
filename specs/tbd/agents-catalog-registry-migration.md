@@ -302,6 +302,21 @@ residual cases:         never-connected target → no menu needed (no sessions
                         self-heals on next heartbeat.
 ```
 
+Route facts (amendment, decisions 13-16). Classification consumes detection
+facts AND route facts. The gateway is not detected, it is *enrolled*:
+`agent-auth/state.json` records the route and `route_auth/render.rs` injects
+provider config + models at launch. A `Route { kind: "gateway" }` fact is
+emitted in layer 1 when the SAME resolution `route_auth` uses at launch
+(`resolve_profile`) yields an engaged gateway source for the harness — one
+reader, two consumers, workspace-scoped, never ambient. The catalog's
+`gateway` context carries the signal `{"route": "gateway"}`; the algebra grows
+one leaf operator (`route`), probe-testable like the rest. `classify()` stays
+pure — the route reader lives beside the env-fact collectors, not inside it.
+Signal-less contexts still never match; the gateway context is no longer
+signal-less. Gateway models are first-class `session.models` rows tagged
+`availability.anyOf: ["gateway"]` in the gateway id namespace (raw ids the
+injected provider accepts), resolved probe-else-seed the way the renderer does.
+
 ### 5.5 Optimistic UI + session actor
 
 ```text
@@ -357,6 +372,33 @@ LIVE SWITCHING (hard rule):
 12. **AWS chain: three passive sources only** (env pair, shared-credentials
     profile, SSO cache); the exotic tail (IMDS, process creds) is proven by
     launch/trial, not detection — "menus lie, inference proves."
+13. **Enrolled routes are classification inputs** (amendment, #1024).
+    Classification consumes detection facts AND route facts. A
+    `Route { kind: "gateway" }` fact is emitted when `agent-auth/state.json`
+    resolves to an engaged gateway profile for the harness (same
+    `resolve_profile` the renderer uses — one reader, two consumers). The
+    `gateway` context gains the signal `{"route": "gateway"}`; the algebra
+    grows one leaf operator (`route`). Purity holds: the route reader lives in
+    layer 1 beside the env collectors, never inside `classify()`. Signal-less
+    contexts still never match — the gateway context is no longer signal-less.
+14. **Gateway models are catalog rows, not launch-time side effects.** Each
+    harness's `gatewayPolicy.seedModels` is mirrored as first-class
+    `session.models` rows with `availability.anyOf: ["gateway"]` in the gateway
+    id namespace (raw ids the injected provider accepts). No aliasing between
+    native and gateway rows: a model reachable both ways is a row available
+    under both contexts. Build invariant: seedModels ⊆ gateway-tagged
+    `session.models` ids (JS validator + Rust test). `defaults["gateway"]` is
+    set per harness (cheapest good model).
+15. **Validation resolves gateway models the way the renderer does.** The
+    validated set for the `gateway` context is probe-else-seed (latest gateway
+    probe revision, else seedModels — `gateway_resolver`'s rule), so the menu
+    never advertises a model the injected config lacks. Probe-added models
+    beyond the seeded rows stay launchable-but-unadvertised (availability beats
+    visibility).
+16. **Distinct error for gated vs unknown.** `SelectionUnsupported::ModelGated`
+    maps to its own HTTP error (`SESSION_MODEL_GATED`) carrying
+    `required_contexts` (the model's `availability.anyOf`), no longer collapsed
+    into `SESSION_MODEL_UNSUPPORTED`.
 
 ## 7. The PR stack
 
@@ -429,3 +471,56 @@ claude thin-fork — per ~/delete/acp-protocol-and-forks-handoff.md.
   validates the standard (per the adoption backlog).
 - Worked example spec: written from the merged PR-1 diff (agents as the
   canonical annotated domain).
+
+## 9. Amendment 2026-07-09: bare Claude ids never validate on Bedrock (#1037, #1038)
+
+Ruled by Pablo. A Bedrock-routed Claude account 400s on bare model ids
+(`default`/`haiku`/`opus`/`sonnet`/`claude-opus-4-8`) with the CLI's own
+"Try --model to switch to us.anthropic.claude-opus-4-7 ..." — Bedrock serves
+only region-prefixed inference-profile ids (`us.anthropic.*` /
+`global.anthropic.*`). Validation accepted the bare id, the session was created,
+then the first prompt errored (any conn_failed → `SessionExecutionPhase::Errored`).
+The rule: validation must never accept a model the account cannot serve.
+
+Two coordinated defects, one root cause (menu presence taken as serve-ability):
+
+1. Detection (the pre-flight signal). The `bedrock` auth context keyed on
+   `allOf[CLAUDE_CODE_USE_BEDROCK=1, aws-credential-chain]`. `aws-credential-chain`
+   covers only the passive sources (ledger 12) and deliberately misses the
+   exotic tail (IMDS / task-role / container creds). A production Bedrock
+   deployment on an ECS task role sets the flag but exposes no passively
+   detectable creds, so the `allOf` failed and the account classified as
+   `anthropic-oauth`, where bare ids validate. Fix: key `bedrock` on the flag
+   alone. The flag is the routing switch — when set, the CLI routes to Bedrock
+   and only serves `us.anthropic.*`, whichever credential source it uses — so
+   the flag is the honest, sufficient signal and is the detection contract.
+   Absent the flag, an OAuth login stays `anthropic-oauth` even with AWS creds
+   present for other tools.
+
+2. Availability (the menu-lie). The Claude CLI lists the bare current-gen ids
+   on its menu during a bedrock probe run, so the observed-set availability
+   tagged `default`/`haiku`/`opus` `bedrock`-available — but the CLI 400s them
+   on use. Menu presence is not serve-ability. `build-catalog.mjs` now strips
+   `bedrock` from any Claude id that is not a region-prefixed inference profile
+   (the one sanctioned correction to observed-set availability; provenance keeps
+   the raw observation). So under the `bedrock` context the bare ids are
+   `ModelGated` and `visible_models` is the `us.anthropic.*` rows only, with the
+   no-selection default resolving via `defaults["bedrock"]` =
+   `us.anthropic.claude-sonnet-4-6`.
+
+Shape chosen: menu-level flavor gating, not transparent resolution. Transparent
+`haiku` → `us.anthropic.*` resolution is infeasible and ambiguous — the catalog
+carries no `us.anthropic.*` haiku row at all, and multiple `us.anthropic.*` opus
+generations exist. Gating is honest and keeps the one-computation invariant
+(`models` = `visible_models` = `validate_launch` = live-switch authority all run
+through `model_is_available`).
+
+This does not regress #975: a normal `claude.ai` OAuth or API login (no flag,
+so no `bedrock` context) is untouched — it still sees and launches the bare ids,
+which remain the only form it can use.
+
+Residual gap: an account that presents pure OAuth AND does not set
+`CLAUDE_CODE_USE_BEDROCK=1` yet is Anthropic-side Bedrock-enrolled has no
+pre-flight signal. Without the flag the CLI does not route to Bedrock, so this
+case is theoretical today; if it appears, the only remedies are a runtime
+error-string downgrade or a per-account model-list probe (neither is built).

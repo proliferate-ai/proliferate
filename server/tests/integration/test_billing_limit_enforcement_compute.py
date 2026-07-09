@@ -42,7 +42,6 @@ from proliferate.db.models.organizations import Organization
 from proliferate.db.store.billing import BudgetLimitInput, replace_budget_limits
 from proliferate.db.store.billing_subjects import (
     ensure_free_included_grant,
-    ensure_organization_billing_subject,
     ensure_personal_billing_subject,
 )
 from proliferate.integrations.sandbox.base import ProviderSandboxState
@@ -72,11 +71,18 @@ async def _create_user(db_session: AsyncSession) -> uuid.UUID:
     return user.id
 
 
-def _segment(*, subject_id: uuid.UUID, user_id: uuid.UUID, seconds: float) -> UsageSegment:
+def _segment(
+    *,
+    subject_id: uuid.UUID,
+    user_id: uuid.UUID,
+    seconds: float,
+    organization_id: uuid.UUID | None = None,
+) -> UsageSegment:
     started = NOW - timedelta(seconds=seconds)
     return UsageSegment(
         user_id=user_id,
         billing_subject_id=subject_id,
+        organization_id=organization_id,
         workspace_id=uuid.uuid4(),
         sandbox_id=uuid.uuid4(),
         external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",
@@ -94,12 +100,25 @@ async def _seed_org_with_usage(
     make_limits: Callable[[uuid.UUID], list[BudgetLimitInput]],
     used_seconds: float,
 ) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
+    """Seed an org, a member, and one closed segment attributed to the org.
+
+    The segment carries the member's personal ``billing_subject_id`` (who pays,
+    unchanged) and the org's ``organization_id`` (the attribution the fix adds),
+    which is what compute enforcement now sums against.
+    """
     org = Organization(name=f"org-{uuid.uuid4().hex[:8]}", status="active")
     db_session.add(org)
     await db_session.flush()
-    subject = await ensure_organization_billing_subject(db_session, org.id)
     user_id = await _create_user(db_session)
-    db_session.add(_segment(subject_id=subject.id, user_id=user_id, seconds=used_seconds))
+    subject = await ensure_personal_billing_subject(db_session, user_id)
+    db_session.add(
+        _segment(
+            subject_id=subject.id,
+            user_id=user_id,
+            seconds=used_seconds,
+            organization_id=org.id,
+        )
+    )
     await replace_budget_limits(db_session, organization_id=org.id, limits=make_limits(user_id))
     await db_session.commit()
     return org.id, subject.id, user_id
@@ -123,13 +142,12 @@ async def test_resolve_per_user_cap_breach(
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    _org, subject_id, user_id = await _seed_org_with_usage(
+    org_id, subject_id, user_id = await _seed_org_with_usage(
         db_session, make_limits=lambda uid: [_compute_limit(uid, 60.0)], used_seconds=3600.0
     )
-    segment = SimpleNamespace(billing_subject_id=subject_id, user_id=user_id)
+    segment = SimpleNamespace(organization_id=org_id, user_id=user_id)
     decision = await _resolve_compute_limit_pause(
         segment=segment,
-        org_id_by_subject={},
         compute_limits_by_org={},
         spend_cache={},
         now=NOW,
@@ -145,13 +163,12 @@ async def test_resolve_org_wide_cap_breach(
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    _org, subject_id, user_id = await _seed_org_with_usage(
+    org_id, subject_id, user_id = await _seed_org_with_usage(
         db_session, make_limits=lambda _uid: [_compute_limit(None, 60.0)], used_seconds=3600.0
     )
-    segment = SimpleNamespace(billing_subject_id=subject_id, user_id=user_id)
+    segment = SimpleNamespace(organization_id=org_id, user_id=user_id)
     decision = await _resolve_compute_limit_pause(
         segment=segment,
-        org_id_by_subject={},
         compute_limits_by_org={},
         spend_cache={},
         now=NOW,
@@ -167,13 +184,12 @@ async def test_resolve_under_cap_returns_none(
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    _org, subject_id, user_id = await _seed_org_with_usage(
+    org_id, subject_id, user_id = await _seed_org_with_usage(
         db_session, make_limits=lambda uid: [_compute_limit(uid, 100000.0)], used_seconds=3600.0
     )
-    segment = SimpleNamespace(billing_subject_id=subject_id, user_id=user_id)
+    segment = SimpleNamespace(organization_id=org_id, user_id=user_id)
     decision = await _resolve_compute_limit_pause(
         segment=segment,
-        org_id_by_subject={},
         compute_limits_by_org={},
         spend_cache={},
         now=NOW,
@@ -189,13 +205,12 @@ async def test_resolve_skips_observe_mode(
 ) -> None:
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_OBSERVE)
-    _org, subject_id, user_id = await _seed_org_with_usage(
+    org_id, subject_id, user_id = await _seed_org_with_usage(
         db_session, make_limits=lambda uid: [_compute_limit(uid, 60.0)], used_seconds=3600.0
     )
-    segment = SimpleNamespace(billing_subject_id=subject_id, user_id=user_id)
+    segment = SimpleNamespace(organization_id=org_id, user_id=user_id)
     decision = await _resolve_compute_limit_pause(
         segment=segment,
-        org_id_by_subject={},
         compute_limits_by_org={},
         spend_cache={},
         now=NOW,
@@ -209,19 +224,18 @@ async def test_resolve_skips_personal_subject(
     test_engine: Any,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A subject with no organization (personal) never binds an org limit."""
+    """A segment with no organization (org-less owner) never binds an org limit."""
     patch_global_session_factory(test_engine, monkeypatch)
     monkeypatch.setattr(settings, "cloud_billing_mode", BILLING_MODE_ENFORCE)
-    from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
-
     user_id = await _create_user(db_session)
     subject = await ensure_personal_billing_subject(db_session, user_id)
-    db_session.add(_segment(subject_id=subject.id, user_id=user_id, seconds=3600.0))
+    db_session.add(
+        _segment(subject_id=subject.id, user_id=user_id, seconds=3600.0, organization_id=None)
+    )
     await db_session.commit()
-    segment = SimpleNamespace(billing_subject_id=subject.id, user_id=user_id)
+    segment = SimpleNamespace(organization_id=None, user_id=user_id)
     decision = await _resolve_compute_limit_pause(
         segment=segment,
-        org_id_by_subject={},
         compute_limits_by_org={},
         spend_cache={},
         now=NOW,

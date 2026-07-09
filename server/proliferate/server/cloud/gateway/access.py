@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.identity.store import get_account_readiness
 from proliferate.auth.jwt import get_jwt_strategy
 from proliferate.auth.users import UserManager
+from proliferate.config import settings
 from proliferate.db.models.auth import OAuthAccount, User
 from proliferate.integrations.sentry import set_server_sentry_user
 from proliferate.middleware.request_context import set_authenticated_user_context
@@ -84,9 +85,16 @@ async def authenticate_product_user_for_gateway_websocket(
     if user is None or not user.is_active:
         raise GatewayWebSocketAuthError("Invalid gateway access token.")
 
-    readiness = await get_account_readiness(db, user_id=user.id)
-    if not readiness.product_ready:
-        raise GatewayWebSocketAuthError("GitHub must be connected before gateway access.")
+    # This is the WebSocket sibling of the ``current_product_user`` HTTP gate,
+    # so it carries the same single-org carve-out (see #1023). Hosted keeps the
+    # GitHub product-readiness gate; single-org (self-hosted) instances admit
+    # password-only accounts, because reaching your own cloud sandbox over the
+    # gateway must work with no GitHub OAuth app configured. Endpoints that
+    # genuinely need a GitHub token still enforce that at the point of use.
+    if not settings.single_org_mode:
+        readiness = await get_account_readiness(db, user_id=user.id)
+        if not readiness.product_ready:
+            raise GatewayWebSocketAuthError("GitHub must be connected before gateway access.")
 
     set_authenticated_user_context(str(user.id))
     set_rls_actor_context(user.id)
