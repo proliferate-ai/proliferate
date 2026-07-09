@@ -21,10 +21,10 @@
     "@proliferate/product-surfaces": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
-    "@sentry/react": "^10.58.0",
-    "@tanstack/react-query": "^5.101.0",
+    "@sentry/react": "^10.64.0",
+    "@tanstack/react-query": "^5.101.2",
     "lucide-react": "^0.577.0",
-    "posthog-js": "^1.386.8",
+    "posthog-js": "^1.399.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-router-dom": "^7",
@@ -39,6 +39,6 @@
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }

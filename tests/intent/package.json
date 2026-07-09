@@ -19,7 +19,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.51.1",
-    "@types/node": "^24.13.2",
+    "@types/node": "^24.13.3",
     "@types/pg": "^8.11.10",
     "oauth2-mock-server": "^9.1.0",
     "typescript": "^5.7.0"

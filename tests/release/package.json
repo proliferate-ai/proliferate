@@ -9,8 +9,8 @@
     "test": "tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
-    "@types/node": "^24.13.2",
-    "tsx": "^4.22.4",
+    "@types/node": "^24.13.3",
+    "tsx": "^4.23.0",
     "typescript": "^5.7.0"
   }
 }

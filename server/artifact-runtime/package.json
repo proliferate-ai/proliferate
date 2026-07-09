@@ -8,7 +8,7 @@
     "dev": "vite"
   },
   "dependencies": {
-    "dompurify": "^3.4.10",
+    "dompurify": "^3.4.11",
     "marked": "^16.4.1",
     "sucrase": "^3.35.0"
   },

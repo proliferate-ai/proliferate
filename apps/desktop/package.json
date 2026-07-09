@@ -17,11 +17,11 @@
   "dependencies": {
     "@anyharness/sdk": "workspace:*",
     "@anyharness/sdk-react": "workspace:*",
-    "@codemirror/commands": "^6.10.3",
+    "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-markdown": "^6.5.0",
-    "@codemirror/language": "^6.12.3",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.43.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.6",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/manrope": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.2.10",
@@ -35,9 +35,9 @@
     "@proliferate/product-surfaces": "workspace:*",
     "@proliferate/product-ui": "workspace:*",
     "@proliferate/ui": "workspace:*",
-    "@sentry/react": "^10.58.0",
-    "@tanstack/react-query": "^5.101.0",
-    "@tanstack/react-virtual": "3.14.3",
+    "@sentry/react": "^10.64.0",
+    "@tanstack/react-query": "^5.101.2",
+    "@tanstack/react-virtual": "3.14.5",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-deep-link": "^2.4.9",
     "@tauri-apps/plugin-process": "^2",
@@ -52,13 +52,13 @@
     "geist": "^1.7.2",
     "lucide-react": "0.577.0",
     "openapi-fetch": "^0.17.0",
-    "posthog-js": "^1.386.8",
+    "posthog-js": "^1.399.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-markdown": "^9",
     "react-router-dom": "^7",
     "remark-gfm": "^4",
-    "shiki": "^4.2.0",
+    "shiki": "^4.3.1",
     "tailwind-merge": "^3.6.0",
     "use-sync-external-store": "^1.6.0",
     "zustand": "^5"
@@ -78,6 +78,6 @@
     "tailwindcss": "^4",
     "typescript": "^5.7",
     "vite": "^6",
-    "vitest": "^3.2.6"
+    "vitest": "^3.2.7"
   }
 }
