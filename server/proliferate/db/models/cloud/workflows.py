@@ -136,7 +136,8 @@ class WorkflowRun(Base):
             "'waiting_approval', "
             "'completed', "
             "'failed', "
-            "'cancelled'"
+            "'cancelled', "
+            "'missed'"
             ")",
             name="ck_workflow_run_status",
         ),
@@ -244,6 +245,10 @@ class WorkflowTrigger(Base):
             name="ck_workflow_trigger_concurrency_policy",
         ),
         CheckConstraint(
+            "missed_run_policy IN ('run_latest', 'skip_all', 'replay_all')",
+            name="ck_workflow_trigger_missed_run_policy",
+        ),
+        CheckConstraint(
             "target_mode IN ('local', 'personal_cloud')",
             name="ck_workflow_trigger_target_mode",
         ),
@@ -302,6 +307,12 @@ class WorkflowTrigger(Base):
     # Concurrency + target are pinned on the trigger, not per-run: two schedule
     # triggers on one workflow may target different workspaces and run in parallel.
     concurrency_policy: Mapped[str] = mapped_column(String(16))
+    # Missed-run policy (1c; schedule triggers): run_latest | skip_all | replay_all.
+    # Governs how a catch-up tick treats occurrences that came due while the
+    # scheduler was down (mental-model §4). Defaults to run_latest.
+    missed_run_policy: Mapped[str] = mapped_column(
+        String(16), default="run_latest", server_default=text("'run_latest'")
+    )
     target_mode: Mapped[str] = mapped_column(String(32))
     # D16: the authored "where" for an unattended run — a "org/repo" pin. Required
     # for schedule/poll by ck_workflow_trigger_repo_full_name; target_workspace_id

@@ -8,6 +8,7 @@ import {
   formatRunDuration,
   isTerminalRunStatus,
   workflowArgChips,
+  workflowRunStatusDetail,
   workflowRunStatusLabel,
   workflowRunStatusTone,
   type WorkflowStepActionSummary,
@@ -101,8 +102,9 @@ export function WorkflowRunView({
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold text-foreground">{workflowName ?? "Run"}</h1>
           <WorkflowStatusPill
-            label={workflowRunStatusLabel(status, run.status)}
+            label={workflowRunStatusLabel(status, status === "unknown" ? run.status : run.errorCode)}
             tone={workflowRunStatusTone(status)}
+            title={workflowRunStatusDetail(status, run.errorCode)}
             live={!terminal}
           />
         </div>

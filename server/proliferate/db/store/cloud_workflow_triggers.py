@@ -45,6 +45,7 @@ class WorkflowTriggerRecord:
     kind: str
     enabled: bool
     concurrency_policy: str
+    missed_run_policy: str
     target_mode: str
     repo_full_name: str | None
     target_workspace_id: UUID | None
@@ -79,13 +80,21 @@ class DueScheduleTrigger:
     workflow_id: UUID
     workflow_owner_user_id: UUID
     workflow_organization_id: UUID | None
+    workflow_current_version_id: UUID | None
     workflow_archived: bool
     concurrency_policy: str
+    missed_run_policy: str
     target_mode: str
     target_workspace_id: UUID | None
     schedule_rrule: str
     schedule_timezone: str
     args_json: dict[str, object]
+    # The slot the scheduler was *awaiting* (the trigger's stored cursor at claim
+    # time) — the lower bound of the missed-occurrence window. When the worker is
+    # healthy the only due occurrence is this one; when it was down, every RRULE
+    # slot in ``[expected_run_at, now]`` came due and the missed-run policy decides
+    # which fire and which are recorded ``missed`` (mental-model §4).
+    expected_run_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -129,6 +138,7 @@ def _record(row: WorkflowTrigger) -> WorkflowTriggerRecord:
         kind=row.kind,
         enabled=row.enabled,
         concurrency_policy=row.concurrency_policy,
+        missed_run_policy=row.missed_run_policy,
         target_mode=row.target_mode,
         repo_full_name=row.repo_full_name,
         target_workspace_id=row.target_workspace_id,
@@ -179,6 +189,7 @@ async def create_trigger(
     created_by_user_id: UUID,
     kind: str,
     concurrency_policy: str,
+    missed_run_policy: str = "run_latest",
     target_mode: str,
     repo_full_name: str | None = None,
     target_workspace_id: UUID | None,
@@ -202,6 +213,7 @@ async def create_trigger(
         kind=kind,
         enabled=enabled,
         concurrency_policy=concurrency_policy,
+        missed_run_policy=missed_run_policy,
         target_mode=target_mode,
         repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
@@ -253,6 +265,7 @@ async def update_trigger(
     trigger_id: UUID,
     enabled: bool | None = None,
     concurrency_policy: str | None = None,
+    missed_run_policy: str | None = None,
     target_mode: str | None = None,
     repo_full_name: str | None = None,
     target_workspace_id: UUID | None = None,
@@ -292,6 +305,8 @@ async def update_trigger(
         row.enabled = enabled
     if concurrency_policy is not None:
         row.concurrency_policy = concurrency_policy
+    if missed_run_policy is not None:
+        row.missed_run_policy = missed_run_policy
     if target_mode is not None:
         row.target_mode = target_mode
     if repo_full_name is not None:
@@ -397,13 +412,16 @@ async def claim_due_schedule_trigger(
         workflow_id=row.workflow_id,
         workflow_owner_user_id=workflow.owner_user_id,
         workflow_organization_id=organization_id,
+        workflow_current_version_id=workflow.current_version_id,
         workflow_archived=workflow.archived_at is not None,
         concurrency_policy=row.concurrency_policy,
+        missed_run_policy=row.missed_run_policy,
         target_mode=row.target_mode,
         target_workspace_id=row.target_workspace_id,
         schedule_rrule=row.schedule_rrule,
         schedule_timezone=row.schedule_timezone,
         args_json=dict(row.args_json or {}),
+        expected_run_at=row.next_run_at,
     )
 
 
@@ -429,16 +447,26 @@ async def mark_trigger_skipped(
     trigger_id: UUID,
     now: datetime,
     reason: str,
-    next_run_at: datetime,
+    next_run_at: datetime | None = None,
 ) -> None:
-    """A slot was dropped (concurrency skip or a fire-time error): record + advance."""
+    """A slot was dropped (concurrency skip or a fire-time error): record + optionally
+    advance the cursor.
+
+    ``next_run_at=None`` records the skip marker but leaves ``next_run_at`` where it
+    is. That's how a concurrency skip holds the cursor stationary while a prior run
+    is still active: the same missed window is re-enumerated on the next tick and
+    routed through the missed-run policy once the prior run terminates, so no slot
+    silently vanishes past the cursor. The ck_workflow_trigger_schedule_fields CHECK
+    forbids a NULL cursor, so leaving the existing (non-NULL) value untouched is safe.
+    """
 
     row = await db.get(WorkflowTrigger, trigger_id)
     if row is None:
         return
     row.last_skipped_at = now
     row.last_skip_reason = reason
-    row.next_run_at = next_run_at
+    if next_run_at is not None:
+        row.next_run_at = next_run_at
     row.updated_at = utcnow()
     await db.flush()
 

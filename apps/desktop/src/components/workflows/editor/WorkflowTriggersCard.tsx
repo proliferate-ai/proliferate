@@ -34,6 +34,11 @@ export type { WorkflowTriggerResponse };
 type ArgValue = string | number | boolean;
 type Concurrency = "skip" | "queue";
 export type TriggerKind = "schedule" | "poll";
+/** Per-trigger catch-up policy for occurrences missed while the scheduler was
+ * down (mental-model §4, RULED). Schedule-only — meaningless for poll triggers,
+ * which have no RRULE occurrences to miss. Mirrors the server default. */
+export type MissedRunPolicy = "run_latest" | "skip_all" | "replay_all";
+const DEFAULT_MISSED_RUN_POLICY: MissedRunPolicy = "run_latest";
 
 /** D16: a repo the trigger can pin ("owner/name"). The server derives + owns the
  * cloud workspace from it; the definition never names a workspace. */
@@ -88,6 +93,7 @@ export interface TriggerDraft {
   // no item-schema or args-mapping authoring surface here.
   // common
   concurrency: Concurrency;
+  missedRunPolicy: MissedRunPolicy;
   enabled: boolean;
   repoFullName: string;
   argValues: Record<string, ArgValue>;
@@ -118,6 +124,7 @@ function draftFromTrigger(
     pollAuthValue: "",
     pollIntervalSecs: trigger?.poll?.intervalSecs ?? POLL_MIN_INTERVAL_SECS,
     concurrency: (trigger?.concurrencyPolicy as Concurrency) ?? "skip",
+    missedRunPolicy: (trigger?.missedRunPolicy as MissedRunPolicy) ?? DEFAULT_MISSED_RUN_POLICY,
     enabled: trigger?.enabled ?? true,
     repoFullName: trigger?.repoFullName ?? repoOptions[0]?.fullName ?? "",
     argValues,
@@ -210,6 +217,9 @@ export function WorkflowTriggersCard({
         kind: "poll",
         enabled: draft.enabled,
         concurrencyPolicy: draft.concurrency,
+        // Not user-configurable for poll (no RRULE occurrences to miss) — the
+        // server requires the field regardless, so send the shared default.
+        missedRunPolicy: DEFAULT_MISSED_RUN_POLICY,
         targetMode: "personal_cloud",
         repoFullName: draft.repoFullName,
         poll: {
@@ -250,6 +260,7 @@ export function WorkflowTriggersCard({
       kind: "schedule",
       enabled: draft.enabled,
       concurrencyPolicy: draft.concurrency,
+      missedRunPolicy: draft.missedRunPolicy,
       targetMode: "personal_cloud",
       repoFullName: draft.repoFullName,
       schedule: { rrule: draft.rrule, timezone: draft.timezone },
@@ -615,6 +626,26 @@ export function TriggerForm({
           {args.map((arg) => (
             <ScheduleArgRow key={arg.name} arg={arg} draft={draft} onPatch={onPatch} />
           ))}
+        </div>
+      ) : null}
+
+      {draft.kind === "schedule" ? (
+        <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
+          <Label>If a run was missed while offline</Label>
+          <WorkflowSelect
+            ariaLabel="Missed-run policy"
+            value={draft.missedRunPolicy}
+            options={[
+              { value: "run_latest", label: "Run the latest occurrence, skip older ones" },
+              { value: "skip_all", label: "Skip every missed occurrence" },
+              { value: "replay_all", label: "Replay every missed occurrence" },
+            ]}
+            onChange={(value) => onPatch({ missedRunPolicy: value as MissedRunPolicy })}
+          />
+          <span className="text-xs text-faint">
+            Applies when the scheduler was down and this trigger came due more than once. Every
+            occurrence — fired or not — is kept in the run history below.
+          </span>
         </div>
       ) : null}
 

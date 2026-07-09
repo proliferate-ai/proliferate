@@ -208,6 +208,7 @@ export function WorkflowsHomeScreen() {
           workflowName: nameById.get(run.workflowId) ?? null,
           triggerKind: run.triggerKind,
           status: run.status,
+          errorCode: run.errorCode,
           startedAt: run.startedAt,
           finishedAt: run.finishedAt,
           costUsd: run.costUsd,

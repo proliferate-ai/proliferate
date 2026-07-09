@@ -35,13 +35,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
     WORKFLOW_CONCURRENCY_SKIP,
+    WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL,
+    WORKFLOW_MISSED_RUN_POLICY_SKIP_ALL,
     WORKFLOW_RUN_STATUS_DELIVERED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE,
+    WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS,
     WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK,
     WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
     WORKFLOW_TRIGGER_KIND_SCHEDULE,
@@ -56,7 +60,7 @@ from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.automations.domain.schedule import (
     AutomationScheduleError,
-    due_and_next_occurrences,
+    due_occurrences_since,
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import service
@@ -94,6 +98,30 @@ def _skip_reason(message: str) -> str:
     return normalized[: WORKFLOW_TRIGGER_SKIP_REASON_MAX_LENGTH - 1] + "…"
 
 
+# The partial unique index that dedupes (trigger_id, scheduled_for) — a re-tick
+# over an already-fired/recorded slot conflicts here (migration b2d4f6a8c0e1).
+_SLOT_DEDUP_INDEX = "uq_workflow_run_trigger_slot"
+
+
+def _is_slot_dedup_conflict(exc: IntegrityError) -> bool:
+    """True only when this IntegrityError is the (trigger_id, scheduled_for) dedup
+    index firing — the one conflict the fire loop may safely swallow as "already
+    recorded". Any other constraint (FK, a real bug) must propagate.
+
+    We read the violated constraint/index name defensively: asyncpg populates
+    ``constraint_name`` on the wrapped error (psycopg would carry it under
+    ``.diag``); if none is exposed we fall back to matching the index name in the
+    stringified error (asyncpg's message is ``... unique constraint "<index>"``).
+    """
+
+    orig = getattr(exc, "orig", None)
+    for candidate in (orig, getattr(orig, "__cause__", None), getattr(orig, "diag", None)):
+        name = getattr(candidate, "constraint_name", None)
+        if name:
+            return name == _SLOT_DEDUP_INDEX
+    return _SLOT_DEDUP_INDEX in str(exc)
+
+
 # --- Phase 1: fire due triggers ------------------------------------------------
 
 
@@ -121,10 +149,16 @@ async def _fire_one_trigger(
                 )
                 return 0
 
+            # Enumerate the missed window (cursor .. now]. When the worker was
+            # healthy this is a single slot; when it was down every RRULE
+            # occurrence that came due meanwhile is here, and the missed-run policy
+            # decides which fire vs are recorded `missed` (mental-model §4).
+            since = trigger.expected_run_at or now
             try:
-                scheduled_for, next_run_at = due_and_next_occurrences(
+                occurrences, next_run_at = due_occurrences_since(
                     rrule_text=trigger.schedule_rrule,
                     timezone=trigger.schedule_timezone,
+                    since=since,
                     now=now,
                 )
             except AutomationScheduleError as exc:
@@ -136,7 +170,9 @@ async def _fire_one_trigger(
                 )
                 return 0
 
-            if scheduled_for is None:
+            if not occurrences:
+                # The cursor sits in the future (e.g. a just-re-enabled trigger):
+                # nothing is due this tick. Record + advance to the next slot.
                 await trigger_store.mark_trigger_skipped(
                     db,
                     trigger_id=trigger_id,
@@ -146,7 +182,15 @@ async def _fire_one_trigger(
                 )
                 return 0
 
-            # Concurrency: skip drops the slot while a prior run is still non-terminal.
+            # Concurrency skip: fire nothing this tick while a prior run of this
+            # trigger is still non-terminal, and hold the cursor STATIONARY (do not
+            # advance past the enumerated window). Advancing to the future
+            # ``next_run_at`` here would silently discard every occurrence in
+            # ``occurrences`` without a `missed` row. Leaving the cursor put means
+            # the next tick re-enumerates the same window (cheap: a skip-tick writes
+            # no rows) and, once the prior run terminates, routes the full backlog
+            # through the normal missed-run policy partition below. The LOCKED
+            # semantics hold: a skip-tick still fires nothing.
             if trigger.concurrency_policy == WORKFLOW_CONCURRENCY_SKIP and (
                 await store.has_non_terminal_run_for_trigger(db, trigger_id=trigger_id)
             ):
@@ -155,41 +199,160 @@ async def _fire_one_trigger(
                     trigger_id=trigger_id,
                     now=now,
                     reason=WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY,
-                    next_run_at=next_run_at,
+                    next_run_at=None,  # stationary: re-enumerate this window next tick
                 )
                 return 0
 
-            actor = _SchedulerActor(id=trigger.workflow_owner_user_id)
-            try:
-                # Savepoint: a StartRun error (e.g. workspace de-provisioned) rolls
-                # back just the run insert so we can still record the skip + advance
-                # below.
-                async with db.begin_nested():
-                    await service.start_run(
-                        db,
-                        actor,
-                        trigger.workflow_id,
-                        inputs=trigger.args_json,
-                        target_mode=trigger.target_mode,
-                        trigger_kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
-                        target_workspace_id=trigger.target_workspace_id,
-                        trigger_id=trigger_id,
-                        scheduled_for=scheduled_for,
+            # Partition the FULL window per the trigger's missed-run policy FIRST,
+            # then bound only the fire list. Truncating `occurrences` before the
+            # partition (the old order) dropped over-cap slots under every policy —
+            # they were neither fired nor recorded, a silent gap. The invariant we
+            # restore: the cursor NEVER advances past a slot that is neither fired
+            # nor recorded `missed`.
+            if trigger.missed_run_policy == WORKFLOW_MISSED_RUN_POLICY_SKIP_ALL:
+                fire_slots: list[datetime] = []
+                missed_slots: list[datetime] = list(occurrences)
+            elif trigger.missed_run_policy == WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL:
+                fire_slots = list(occurrences)
+                missed_slots = []
+            else:  # run_latest (default): the newest fires; older recorded missed.
+                fire_slots = [occurrences[-1]]
+                missed_slots = list(occurrences[:-1])
+
+            # Safety valve: bound the per-tick FIRE work (each fire wakes a sandbox
+            # via delivery). replay_all can enumerate a huge backfill; fire the
+            # OLDEST cap slots this tick and leave the remainder for later ticks.
+            # `fire_overflow` (the un-fired tail) holds the cursor behind so those
+            # slots replay next tick instead of vanishing. Missed-row recording is a
+            # cheap ON CONFLICT DO NOTHING insert, so it is NOT truncated.
+            fire_overflow: list[datetime] = []
+            if len(fire_slots) > WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS:
+                logger.warning(
+                    "workflow schedule catch-up truncated trigger_id=%s fire_due=%s fired_now=%s deferred=%s",
+                    trigger_id,
+                    len(fire_slots),
+                    WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS,
+                    len(fire_slots) - WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS,
+                )
+                fire_overflow = fire_slots[WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS:]
+                fire_slots = fire_slots[:WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS]
+
+            # Where the cursor lands this tick. If we deferred fire slots, it must
+            # NOT jump past them: park it on the oldest un-fired slot so the next
+            # tick re-enumerates from there. Otherwise advance to the next future
+            # occurrence as usual.
+            advance_to = fire_overflow[0] if fire_overflow else next_run_at
+
+            # Record un-fired slots as honest terminal `missed` history rows (no
+            # sandbox, no delivery), deduped by the (trigger_id, scheduled_for)
+            # index. Needs the workflow's current version for the run FK.
+            missed_recorded = 0
+            missed_skip_reason: str | None = None
+            if missed_slots:
+                if trigger.workflow_current_version_id is None:
+                    # Mirror the fire path, which surfaces this loudly as a
+                    # workflow_no_version CloudApiError: log + carry a skip reason so
+                    # the gap is not silent. (Without a current version there is no
+                    # run FK to hang a `missed` row on.)
+                    missed_skip_reason = _skip_reason(
+                        f"workflow_no_version: {len(missed_slots)} missed slot(s) not recorded"
                     )
-            except CloudApiError as exc:
+                    logger.warning(
+                        "workflow schedule missed rows not recorded (no current version) "
+                        "trigger_id=%s missed=%s",
+                        trigger_id,
+                        len(missed_slots),
+                    )
+                else:
+                    for slot in missed_slots:
+                        if await store.create_missed_run(
+                            db,
+                            workflow_id=trigger.workflow_id,
+                            workflow_version_id=trigger.workflow_current_version_id,
+                            executor_user_id=trigger.workflow_owner_user_id,
+                            trigger_id=trigger_id,
+                            scheduled_for=slot,
+                            trigger_kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
+                            target_mode=trigger.target_mode,
+                            args_json=trigger.args_json,
+                        ):
+                            missed_recorded += 1
+
+            actor = _SchedulerActor(id=trigger.workflow_owner_user_id)
+            created = 0
+            last_fired: datetime | None = None
+            fire_error: str | None = None
+            for slot in fire_slots:
+                try:
+                    # Savepoint per fire: a StartRun error (workspace de-provisioned)
+                    # or a unique-index conflict (the slot already has a row, e.g. a
+                    # re-tick) rolls back just this insert, never the whole tick.
+                    async with db.begin_nested():
+                        await service.start_run(
+                            db,
+                            actor,
+                            trigger.workflow_id,
+                            inputs=trigger.args_json,
+                            target_mode=trigger.target_mode,
+                            trigger_kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
+                            target_workspace_id=trigger.target_workspace_id,
+                            trigger_id=trigger_id,
+                            scheduled_for=slot,
+                        )
+                    created += 1
+                    last_fired = slot
+                except IntegrityError as exc:
+                    if not _is_slot_dedup_conflict(exc):
+                        # Some OTHER constraint fired (e.g. an FK or a real data
+                        # bug). Swallowing it as "already recorded" would mask a
+                        # genuine failure, so let it propagate to the per-trigger
+                        # isolation handler in _fire_due_triggers.
+                        raise
+                    # The (trigger_id, slot) row already exists — the dedup
+                    # guarantee held; this slot was fired/recorded on an earlier tick.
+                    logger.info(
+                        "workflow schedule slot already recorded trigger_id=%s slot=%s",
+                        trigger_id,
+                        slot,
+                    )
+                except CloudApiError as exc:
+                    fire_error = _skip_reason(f"{exc.code}: {exc.message}")
+                    logger.warning(
+                        "workflow schedule fire failed trigger_id=%s slot=%s code=%s",
+                        trigger_id,
+                        slot,
+                        exc.code,
+                    )
+
+            if last_fired is not None:
+                # Advance to `advance_to`: the next future occurrence, or — when a
+                # replay backfill overflowed this tick's cap — the oldest un-fired
+                # slot, so the deferred remainder replays next tick.
+                await trigger_store.mark_trigger_fired(
+                    db, trigger_id=trigger_id, scheduled_for=last_fired, next_run_at=advance_to
+                )
+            else:
+                # Nothing fired (skip_all, or every fire errored / was already
+                # recorded): advance the cursor (past only fired-or-recorded slots)
+                # and surface why. A missed-recording gap (no current version) is
+                # surfaced ahead of the generic count, mirroring the fire path.
+                reason = (
+                    fire_error
+                    or missed_skip_reason
+                    or (
+                        f"{missed_recorded} occurrence(s) recorded missed."
+                        if missed_recorded
+                        else "No run fired this slot."
+                    )
+                )
                 await trigger_store.mark_trigger_skipped(
                     db,
                     trigger_id=trigger_id,
                     now=now,
-                    reason=_skip_reason(f"{exc.code}: {exc.message}"),
-                    next_run_at=next_run_at,
+                    reason=_skip_reason(reason),
+                    next_run_at=advance_to,
                 )
-                return 0
-
-            await trigger_store.mark_trigger_fired(
-                db, trigger_id=trigger_id, scheduled_for=scheduled_for, next_run_at=next_run_at
-            )
-            return 1
+            return created
 
 
 async def _fire_due_triggers(

@@ -5804,6 +5804,12 @@ export interface components {
              */
             concurrencyPolicy: "skip" | "queue";
             /**
+             * Missedrunpolicy
+             * @default run_latest
+             * @enum {string}
+             */
+            missedRunPolicy: "run_latest" | "skip_all" | "replay_all";
+            /**
              * Targetmode
              * @enum {string}
              */
@@ -5855,6 +5861,8 @@ export interface components {
             enabled: boolean;
             /** Concurrencypolicy */
             concurrencyPolicy: string;
+            /** Missedrunpolicy */
+            missedRunPolicy: string;
             /** Targetmode */
             targetMode: string;
             /** Repofullname */
@@ -5894,6 +5902,8 @@ export interface components {
             enabled?: boolean | null;
             /** Concurrencypolicy */
             concurrencyPolicy?: ("skip" | "queue") | null;
+            /** Missedrunpolicy */
+            missedRunPolicy?: ("run_latest" | "skip_all" | "replay_all") | null;
             /** Targetmode */
             targetMode?: ("local" | "personal_cloud") | null;
             /** Repofullname */

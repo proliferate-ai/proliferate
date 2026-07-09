@@ -25,6 +25,7 @@ WorkflowRunObservableStatus = Literal[
     "running", "waiting_approval", "completed", "failed", "cancelled"
 ]
 WorkflowTriggerConcurrency = Literal["skip", "queue"]
+WorkflowMissedRunPolicy = Literal["run_latest", "skip_all", "replay_all"]
 WorkflowTriggerTargetMode = Literal["local", "personal_cloud"]
 
 
@@ -310,6 +311,10 @@ class WorkflowTriggerCreateRequest(WorkflowBaseModel):
     kind: Literal["schedule", "poll"] = "schedule"
     enabled: bool = True
     concurrency_policy: WorkflowTriggerConcurrency = Field(alias="concurrencyPolicy")
+    # Missed-run policy (schedule triggers; mental-model §4). Defaults run_latest.
+    missed_run_policy: WorkflowMissedRunPolicy = Field(
+        default="run_latest", alias="missedRunPolicy"
+    )
     target_mode: WorkflowTriggerTargetMode = Field(alias="targetMode")
     # D16: the authored "where" is a repo pin ("org/repo"), not a workspace id.
     # The server derives + owns the dedicated cloud workspace. Required for
@@ -329,6 +334,9 @@ class WorkflowTriggerUpdateRequest(WorkflowBaseModel):
     enabled: bool | None = None
     concurrency_policy: WorkflowTriggerConcurrency | None = Field(
         default=None, alias="concurrencyPolicy"
+    )
+    missed_run_policy: WorkflowMissedRunPolicy | None = Field(
+        default=None, alias="missedRunPolicy"
     )
     target_mode: WorkflowTriggerTargetMode | None = Field(default=None, alias="targetMode")
     # D16: re-pinning the repo re-derives the workspace. None = no change.
@@ -365,6 +373,7 @@ class WorkflowTriggerResponse(WorkflowBaseModel):
     kind: str
     enabled: bool
     concurrency_policy: str = Field(alias="concurrencyPolicy")
+    missed_run_policy: str = Field(alias="missedRunPolicy")
     target_mode: str = Field(alias="targetMode")
     # D16: the authored repo pin + the derived (server-owned) workspace it maps to.
     repo_full_name: str | None = Field(alias="repoFullName")
@@ -429,6 +438,7 @@ def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
         kind=record.kind,
         enabled=record.enabled,
         concurrency_policy=record.concurrency_policy,
+        missed_run_policy=record.missed_run_policy,
         target_mode=record.target_mode,
         repo_full_name=record.repo_full_name,
         target_workspace_id=(

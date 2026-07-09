@@ -48,6 +48,12 @@ WORKFLOW_RUN_STATUS_WAITING_APPROVAL: Final = "waiting_approval"
 WORKFLOW_RUN_STATUS_COMPLETED: Final = "completed"
 WORKFLOW_RUN_STATUS_FAILED: Final = "failed"
 WORKFLOW_RUN_STATUS_CANCELLED: Final = "cancelled"
+# Missed-run policy (1c): a terminal, server-created history row for a schedule
+# occurrence that was NOT fired (an older slot under run_latest, or every slot
+# under skip_all) because the scheduler was down while it came due. No sandbox is
+# launched, no plan delivered — it exists only so run history has no silent gaps
+# (mental-model §4). The runtime never sees or reports this status.
+WORKFLOW_RUN_STATUS_MISSED: Final = "missed"
 
 SUPPORTED_WORKFLOW_RUN_STATUSES: Final = frozenset(
     {
@@ -58,6 +64,7 @@ SUPPORTED_WORKFLOW_RUN_STATUSES: Final = frozenset(
         WORKFLOW_RUN_STATUS_COMPLETED,
         WORKFLOW_RUN_STATUS_FAILED,
         WORKFLOW_RUN_STATUS_CANCELLED,
+        WORKFLOW_RUN_STATUS_MISSED,
     }
 )
 
@@ -66,6 +73,9 @@ WORKFLOW_RUN_TERMINAL_STATUSES: Final = frozenset(
         WORKFLOW_RUN_STATUS_COMPLETED,
         WORKFLOW_RUN_STATUS_FAILED,
         WORKFLOW_RUN_STATUS_CANCELLED,
+        # A missed row is born terminal: it never delivers, so the concurrency +
+        # FIFO-delivery scans (which key off "non-terminal") must treat it as inert.
+        WORKFLOW_RUN_STATUS_MISSED,
     }
 )
 
@@ -74,7 +84,16 @@ WORKFLOW_RUN_TERMINAL_STATUSES: Final = frozenset(
 # state; both funnel through the same guard so an out-of-order report is rejected.
 WORKFLOW_RUN_STATUS_TRANSITIONS: Final[dict[str, frozenset[str]]] = {
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY: frozenset(
-        {WORKFLOW_RUN_STATUS_DELIVERED, WORKFLOW_RUN_STATUS_CANCELLED}
+        {
+            WORKFLOW_RUN_STATUS_DELIVERED,
+            WORKFLOW_RUN_STATUS_CANCELLED,
+            # A server-side pre-dispatch gate (e.g. budget_blocked, D-002) lands a
+            # pending_delivery run terminal without ever waking a sandbox. The
+            # runtime cannot reach this edge — it only self-reports from delivered
+            # onward (WORKFLOW_RUN_OBSERVABLE_STATUSES) and never sees a
+            # pending_delivery run.
+            WORKFLOW_RUN_STATUS_FAILED,
+        }
     ),
     WORKFLOW_RUN_STATUS_DELIVERED: frozenset(
         {WORKFLOW_RUN_STATUS_RUNNING, WORKFLOW_RUN_STATUS_CANCELLED}
@@ -98,6 +117,8 @@ WORKFLOW_RUN_STATUS_TRANSITIONS: Final[dict[str, frozenset[str]]] = {
     WORKFLOW_RUN_STATUS_COMPLETED: frozenset(),
     WORKFLOW_RUN_STATUS_FAILED: frozenset(),
     WORKFLOW_RUN_STATUS_CANCELLED: frozenset(),
+    # Terminal on creation — a missed row is inserted directly, never transitioned.
+    WORKFLOW_RUN_STATUS_MISSED: frozenset(),
 }
 
 # Statuses the runtime is allowed to self-report through the /status endpoint.
@@ -111,6 +132,12 @@ WORKFLOW_RUN_OBSERVABLE_STATUSES: Final = frozenset(
         WORKFLOW_RUN_STATUS_CANCELLED,
     }
 )
+
+# Distinct run error kind (not a status): a scheduled/unattended run that fired
+# while the owner's billing subject was over budget lands terminal (status=failed)
+# with this error_code so run history shows *why* it never dispatched (D-002).
+# Reverse path: swap the terminal error for a `deferred` status + retry-on-reset.
+WORKFLOW_RUN_ERROR_BUDGET_BLOCKED: Final = "budget_blocked"
 
 # --- Step kinds (definition format v2; data-contract §1.2). --------------------
 # human.approval is REMOVED (E1); agent.emit and branch are NEW (A3/C11). The
@@ -254,6 +281,33 @@ WORKFLOW_CONCURRENCY_QUEUE: Final = "queue"
 SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES: Final = frozenset(
     {WORKFLOW_CONCURRENCY_SKIP, WORKFLOW_CONCURRENCY_QUEUE}
 )
+
+# --- Missed-run policy (per schedule trigger; mental-model §4, RULED 2026-07-09).
+# When the scheduler was down while occurrences came due, this decides how the
+# catch-up tick treats the slots in the missed window (cursor .. now]:
+#   run_latest (default): fire ONLY the newest missed occurrence; every OLDER slot
+#       is recorded as a terminal `missed` run row (honest history, no fire).
+#   skip_all:  fire NOTHING; ALL missed slots recorded as `missed` rows.
+#   replay_all: fire EVERY missed slot in order (the (trigger_id, scheduled_for)
+#       unique index dedupes a re-tick).
+# All three record honest history — no silent gaps (the amnesia the old hardcoded
+# run_latest left behind).
+WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST: Final = "run_latest"
+WORKFLOW_MISSED_RUN_POLICY_SKIP_ALL: Final = "skip_all"
+WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL: Final = "replay_all"
+SUPPORTED_WORKFLOW_MISSED_RUN_POLICIES: Final = frozenset(
+    {
+        WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST,
+        WORKFLOW_MISSED_RUN_POLICY_SKIP_ALL,
+        WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL,
+    }
+)
+WORKFLOW_MISSED_RUN_POLICY_DEFAULT: Final = WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST
+# Safety valve: the most catch-up slots one trigger processes in a single tick.
+# A trigger whose worker was down for a pathological stretch keeps the most-recent
+# slots (so run_latest still fires the true newest) and logs the truncation, rather
+# than materialising an unbounded backfill in one transaction.
+WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS: Final = 500
 
 # Skip-tick surfacing is stored inline on the trigger (last_skipped_at +
 # last_skip_reason) rather than a separate tick log — one row, no fan-out.

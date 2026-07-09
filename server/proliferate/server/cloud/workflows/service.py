@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES,
+    SUPPORTED_WORKFLOW_MISSED_RUN_POLICIES,
     SUPPORTED_WORKFLOW_TARGET_MODES,
     SUPPORTED_WORKFLOW_TRIGGER_KINDS,
     SUPPORTED_WORKFLOW_TRIGGER_TYPES,
@@ -810,6 +811,16 @@ def _validate_concurrency(policy: str) -> None:
         )
 
 
+def _validate_missed_run_policy(policy: str) -> None:
+    if policy not in SUPPORTED_WORKFLOW_MISSED_RUN_POLICIES:
+        allowed = sorted(SUPPORTED_WORKFLOW_MISSED_RUN_POLICIES)
+        raise CloudApiError(
+            "invalid_missed_run_policy",
+            f"missed_run_policy must be one of {allowed}.",
+            status_code=400,
+        )
+
+
 def _validate_trigger_target_mode(
     mode: str, *, kind: str = WORKFLOW_TRIGGER_KIND_SCHEDULE
 ) -> None:
@@ -1056,6 +1067,7 @@ async def create_trigger(
         )
     _validate_trigger_kind(body.kind)
     _validate_concurrency(body.concurrency_policy)
+    _validate_missed_run_policy(body.missed_run_policy)
     _validate_trigger_target_mode(body.target_mode, kind=body.kind)
     # D16: the repo pin is the authored "where"; the server derives + owns the
     # workspace it maps to.
@@ -1080,6 +1092,7 @@ async def create_trigger(
         created_by_user_id=user.id,
         kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
         concurrency_policy=body.concurrency_policy,
+        missed_run_policy=body.missed_run_policy,
         target_mode=body.target_mode,
         repo_full_name=body.repo_full_name,
         target_workspace_id=target_workspace_id,
@@ -1174,8 +1187,14 @@ async def update_trigger(
         if body.concurrency_policy is not None
         else existing.concurrency_policy
     )
+    missed_run_policy = (
+        body.missed_run_policy
+        if body.missed_run_policy is not None
+        else existing.missed_run_policy
+    )
     enabled = body.enabled if body.enabled is not None else existing.enabled
     _validate_concurrency(concurrency)
+    _validate_missed_run_policy(missed_run_policy)
     _validate_trigger_target_mode(target_mode, kind=existing.kind)
 
     # D16: re-pinning the repo re-derives a fresh server-owned workspace; leaving
@@ -1237,6 +1256,7 @@ async def update_trigger(
         trigger_id=trigger_id,
         enabled=enabled,
         concurrency_policy=concurrency,
+        missed_run_policy=missed_run_policy,
         target_mode=target_mode,
         repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,

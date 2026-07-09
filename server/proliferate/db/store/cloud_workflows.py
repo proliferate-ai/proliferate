@@ -7,12 +7,14 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
     WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
     WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED,
+    WORKFLOW_RUN_STATUS_MISSED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_TERMINAL_STATUSES,
     WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
@@ -446,6 +448,56 @@ async def create_run(
     db.add(row)
     await db.flush()
     return _run_record(row)
+
+
+async def create_missed_run(
+    db: AsyncSession,
+    *,
+    workflow_id: UUID,
+    workflow_version_id: UUID,
+    executor_user_id: UUID,
+    trigger_id: UUID,
+    scheduled_for: datetime,
+    trigger_kind: str,
+    target_mode: str,
+    args_json: dict[str, object],
+) -> bool:
+    """Record a terminal ``missed`` history row for an un-fired schedule slot (1c).
+
+    An honest run-history marker for an occurrence the scheduler could not fire on
+    time (an older slot under ``run_latest``, every slot under ``skip_all``). It
+    wakes no sandbox and delivers no plan, so it carries an empty ``resolved_plan``
+    and is born ``finished``. Deduped by the ``(trigger_id, scheduled_for)`` partial
+    unique index via ``ON CONFLICT DO NOTHING`` — a re-tick over the same slot is a
+    no-op. Returns ``True`` when this call inserted the row.
+    """
+
+    now = utcnow()
+    stmt = (
+        pg_insert(WorkflowRun)
+        .values(
+            id=uuid4(),
+            workflow_id=workflow_id,
+            workflow_version_id=workflow_version_id,
+            trigger_kind=trigger_kind,
+            trigger_id=trigger_id,
+            scheduled_for=scheduled_for,
+            executor_user_id=executor_user_id,
+            args_json=args_json,
+            target_mode=target_mode,
+            resolved_plan_json={},
+            status=WORKFLOW_RUN_STATUS_MISSED,
+            created_at=now,
+            updated_at=now,
+            finished_at=now,
+        )
+        .on_conflict_do_nothing(
+            index_elements=["trigger_id", "scheduled_for"],
+            index_where=text("trigger_id IS NOT NULL AND scheduled_for IS NOT NULL"),
+        )
+        .returning(WorkflowRun.id)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none() is not None
 
 
 async def get_run(db: AsyncSession, run_id: UUID) -> WorkflowRunRecord | None:

@@ -21,12 +21,15 @@ export const WORKFLOW_RUN_STATUSES = [
   "completed",
   "failed",
   "cancelled",
+  // 1c: a terminal, server-created history row for a schedule occurrence that was
+  // never fired (an older slot under run_latest, or every slot under skip_all).
+  // No sandbox is launched, no plan delivered — honest history, not a failure.
+  "missed",
 ] as const;
 
 /**
  * Known wire statuses plus a client-side `"unknown"` sentinel. The run-status
- * enum is still growing server-side (1c's `missed`, billing's
- * `budget_blocked`) — a client build older than the server must render
+ * enum is still growing server-side — a client build older than the server must render
  * whatever comes over the wire without crashing or lying. `coerceRunStatus`
  * never invents a false "running": an unrecognized status renders as a
  * blocked/attention state and stops polling (see `isTerminalRunStatus`)
@@ -38,8 +41,16 @@ const TERMINAL_RUN_STATUSES: ReadonlySet<WorkflowRunStatus> = new Set([
   "completed",
   "failed",
   "cancelled",
+  "missed",
   "unknown",
 ]);
+
+// Distinct run error kind (not a status), mirrors the server's
+// WORKFLOW_RUN_ERROR_BUDGET_BLOCKED (D-002): a scheduled/unattended run that
+// fired while the owner's billing subject was over budget lands terminal
+// (status=failed) with this error_code so run history shows *why* it never
+// dispatched, instead of a generic "Failed".
+export const WORKFLOW_RUN_ERROR_BUDGET_BLOCKED = "budget_blocked";
 
 export type WorkflowStatusTone = "muted" | "running" | "positive" | "attention" | "danger";
 
@@ -53,11 +64,16 @@ export function shouldPollRun(status: WorkflowRunStatus): boolean {
 }
 
 /**
- * `rawValue` is the original (possibly-unrecognized) wire value, only used to
- * render a readable fallback for `status === "unknown"` — e.g. a future
- * `budget_blocked` renders "Budget blocked" instead of a generic "Unknown".
+ * `detail` is contextual: for a `failed` run it is the error_code, letting the
+ * label report a more specific cause (D-002: budget_blocked → "Over budget" —
+ * same tone, no new chip atom); for `status === "unknown"` it is the original
+ * unrecognized wire value, humanized into a readable fallback (e.g. a future
+ * server-side status renders as its own words instead of a generic "Unknown").
  */
-export function workflowRunStatusLabel(status: WorkflowRunStatus, rawValue?: unknown): string {
+export function workflowRunStatusLabel(status: WorkflowRunStatus, detail?: unknown): string {
+  if (status === "failed" && detail === WORKFLOW_RUN_ERROR_BUDGET_BLOCKED) {
+    return "Over budget";
+  }
   switch (status) {
     case "pending_delivery":
       return "Queued";
@@ -73,8 +89,10 @@ export function workflowRunStatusLabel(status: WorkflowRunStatus, rawValue?: unk
       return "Failed";
     case "cancelled":
       return "Cancelled";
+    case "missed":
+      return "Missed";
     case "unknown":
-      return humanizeUnknownStatus(rawValue);
+      return humanizeUnknownStatus(detail);
   }
 }
 
@@ -93,12 +111,16 @@ export function workflowRunStatusTone(status: WorkflowRunStatus): WorkflowStatus
       return "danger";
     case "cancelled":
       return "muted";
+    case "missed":
+      // Honest history, not a failure (mental-model §4) — quiet, not danger.
+      return "muted";
     case "unknown":
       return "attention";
   }
 }
 
-/** `"budget_blocked"` -> `"Budget blocked"`; a non-string/blank value -> `"Unknown"`. */
+/** A future wire value -> readable words ("budget_blocked" -> "Budget blocked");
+ * a non-string/blank value -> "Unknown". */
 function humanizeUnknownStatus(rawValue: unknown): string {
   if (typeof rawValue !== "string") {
     return "Unknown";
@@ -110,6 +132,22 @@ function humanizeUnknownStatus(rawValue: unknown): string {
   return words
     .map((word, index) => (index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word))
     .join(" ");
+}
+
+/** A one-line explanation for the status pill's `title` (tooltip) — null when
+ * the label alone is self-explanatory. Never a new visual affordance, just the
+ * existing pill's native title attribute. */
+export function workflowRunStatusDetail(
+  status: WorkflowRunStatus,
+  errorCode?: string | null,
+): string | null {
+  if (status === "failed" && errorCode === WORKFLOW_RUN_ERROR_BUDGET_BLOCKED) {
+    return "This run didn't start — the workspace was over its usage budget when it came due.";
+  }
+  if (status === "missed") {
+    return "This scheduled occurrence wasn't run — kept for history only, no sandbox launched.";
+  }
+  return null;
 }
 
 export function isWorkflowRunStatus(value: unknown): value is WorkflowRunStatus {
@@ -372,12 +410,16 @@ function baseStepStatus(
     case "delivered":
     case "pending_delivery":
       return "pending";
+    case "missed":
+      // Never actually reached — a missed run has no resolved plan/timeline to
+      // derive steps from (callers short-circuit before this). Kept exhaustive.
+      return "skipped";
     case "unknown":
-      // A future status this client build doesn't recognize (e.g.
-      // budget_blocked, missed) — render the live step as blocked/attention
-      // rather than a false "running" or "completed". Later steps still fall
-      // through the >cursor ternary above to "pending" (not "skipped"): an
-      // unrecognized status might still resume, unlike a terminal failure.
+      // A future status this client build doesn't recognize — render the live
+      // step as blocked/attention rather than a false "running" or "completed".
+      // Later steps still fall through the >cursor ternary above to "pending"
+      // (not "skipped"): an unrecognized status might still resume, unlike a
+      // terminal failure.
       return "blocked";
   }
 }

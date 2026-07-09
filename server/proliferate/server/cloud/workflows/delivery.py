@@ -28,13 +28,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from proliferate.auth.authorization import ActorIdentity
+from proliferate.config import settings
+from proliferate.constants.billing import BILLING_MODE_ENFORCE
 from proliferate.constants.cloud import CLOUD_SANDBOX_PURPOSE_WORKFLOW_RUN
 from proliferate.constants.workflows import (
     WORKFLOW_CLOUD_DELIVERY_TIMEOUT_SECONDS,
     WORKFLOW_CLOUD_REFRESH_TIMEOUT_SECONDS,
     WORKFLOW_DELIVERY_ERROR_CODE,
+    WORKFLOW_RUN_ERROR_BUDGET_BLOCKED,
     WORKFLOW_RUN_OBSERVABLE_STATUSES,
     WORKFLOW_RUN_STATUS_CANCELLED,
+    WORKFLOW_RUN_STATUS_FAILED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_STATUS_RUNNING,
     WORKFLOW_TARGET_MODE_LOCAL,
@@ -90,6 +94,68 @@ async def _record_delivery_failure(
     return updated
 
 
+async def _budget_block_reason(db: AsyncSession, *, owner_user_id: UUID) -> str | None:
+    """Return a block reason if the run owner's billing subject is over budget.
+
+    Mirrors the interactive sandbox-start gate (billing.authorization): in
+    ``enforce`` mode a ``start_blocked`` snapshot denies the start. v1 scheduled
+    runs execute as the workflow owner on their personal cloud, so we gate on the
+    owner's personal billing subject (the same snapshot the overview + reconciler
+    build). Read-only against the caller's session; the terminal run row itself is
+    the durable record of the block, so no separate decision event is emitted.
+    """
+
+    if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
+        return None
+    # Imported lazily: the billing snapshot module pulls in a wide slice of the
+    # billing store, and delivery.py is imported by the scheduler at boot.
+    from proliferate.server.billing import snapshot_state
+    from proliferate.server.billing.snapshots import (
+        build_billing_snapshot,
+        state_with_overage_usage,
+    )
+
+    state = await snapshot_state.load_snapshot_state_for_user(db, owner_user_id)
+    state = await state_with_overage_usage(db, state)
+    snapshot = build_billing_snapshot(state)
+    if not snapshot.start_blocked:
+        return None
+    return snapshot.start_block_reason or "Organization is over its usage budget."
+
+
+async def _land_budget_blocked(
+    db: AsyncSession, run: WorkflowRunRecord, reason: str
+) -> WorkflowRunRecord:
+    """Land a terminal ``budget_blocked`` run WITHOUT waking a sandbox (D-002).
+
+    A scheduled/unattended run that fires while the owner is over budget must fail
+    fast and visibly, never hang or silently retry. This is the pre-dispatch gate:
+    it runs before ``ensure_cloud_sandbox_gateway_access`` (the sandbox wake), so
+    no sandbox is launched and no agent is dispatched. Reuses the shared terminal
+    side effects (expire the per-run gateway token, then run step actions so a
+    notify-on-finish still fires) exactly like cancel/report-terminal.
+    """
+
+    now = utcnow()
+    updated = await store.update_run(
+        db,
+        run_id=run.id,
+        status=WORKFLOW_RUN_STATUS_FAILED,
+        error_code=WORKFLOW_RUN_ERROR_BUDGET_BLOCKED,
+        error_message=_truncate(reason),
+        finished_at=now,
+    )
+    assert updated is not None
+    await store.expire_run_gateway_tokens_for_run(db, workflow_run_id=run.id)
+    try:
+        from proliferate.server.cloud.workflows.actions import apply_step_actions
+
+        await apply_step_actions(db, run=updated)
+    except Exception:
+        logger.exception("apply_step_actions failed on budget_blocked run_id=%s", run.id)
+    return updated
+
+
 async def deliver_cloud_run(
     db: AsyncSession, user: ActorIdentity, run: WorkflowRunRecord
 ) -> WorkflowRunRecord:
@@ -117,6 +183,16 @@ async def deliver_cloud_run(
             "The cloud workspace for this run is not ready.",
             status_code=409,
         )
+
+    # D-002 pre-dispatch budget gate: if the owner is over budget, land a terminal
+    # budget_blocked run BEFORE the sandbox wake below. This is the dispatch
+    # boundary — no sandbox is launched, no agent dispatched, no silent retry.
+    budget_reason = await _budget_block_reason(db, owner_user_id=run.executor_user_id)
+    if budget_reason is not None:
+        logger.info(
+            "workflow scheduled run budget_blocked run_id=%s reason=%s", run.id, budget_reason
+        )
+        return await _land_budget_blocked(db, run, budget_reason)
 
     try:
         # L26: waking the sandbox for a workflow run stamps 'workflow-run' iff this

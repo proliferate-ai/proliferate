@@ -49,7 +49,11 @@ export function WorkflowRunsTable({ rows, loading = false, onRunSelect }: Workfl
             <span className="truncate font-medium text-foreground">{row.workflowName}</span>
             <span className="text-muted-foreground">{row.triggerLabel}</span>
             <span>
-              <WorkflowStatusPill label={row.statusLabel} tone={row.statusTone} />
+              <WorkflowStatusPill
+                label={row.statusLabel}
+                tone={row.statusTone}
+                title={row.statusDetail}
+              />
             </span>
             <span className="tabular-nums text-muted-foreground">{row.durationLabel ?? "—"}</span>
             <span className="truncate text-muted-foreground">{formatStarted(row.startedLabel)}</span>

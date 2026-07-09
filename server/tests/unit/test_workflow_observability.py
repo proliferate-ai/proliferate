@@ -31,6 +31,7 @@ from proliferate.server.cloud.workflows import scheduler as scheduler_module
 from proliferate.server.cloud.workflows.poller import _poll_one_trigger, run_workflow_poller_tick
 from proliferate.server.cloud.workflows.scheduler import _fire_one_trigger
 from proliferate.server.cloud.workflows.domain.poll_contract import PollItem, PollPage
+from proliferate.server.automations.domain.schedule import latest_due_occurrence
 from proliferate.utils.time import utcnow
 
 _DEF = {
@@ -116,7 +117,11 @@ async def _make_schedule_trigger(db: AsyncSession, wf: Workflow, user: User) -> 
         target_workspace_id=None,
         schedule_rrule="FREQ=HOURLY",
         schedule_timezone="UTC",
-        next_run_at=utcnow(),
+        # A real recent occurrence (the missed-window scan keys off the cursor,
+        # which is always a genuine RRULE slot in production).
+        next_run_at=latest_due_occurrence(
+            rrule_text="FREQ=HOURLY", timezone="UTC", now=utcnow()
+        ),
         args_json={},
         created_by_user_id=user.id,
         created_at=utcnow(),

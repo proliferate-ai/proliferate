@@ -14,13 +14,21 @@ export interface WorkflowStatusPillProps {
   tone: WorkflowStatusTone;
   /** Show a leading pulsing dot while the run is live. */
   live?: boolean;
+  /** Native tooltip text (e.g. why a budget_blocked/missed run reads as it does). */
+  title?: string | null;
   className?: string;
 }
 
 /** Small run-status pill (run header + Runs table). Presentational. */
-export function WorkflowStatusPill({ label, tone, live = false, className = "" }: WorkflowStatusPillProps) {
+export function WorkflowStatusPill({
+  label,
+  tone,
+  live = false,
+  title,
+  className = "",
+}: WorkflowStatusPillProps) {
   return (
-    <Badge tone={TONE_TO_BADGE[tone]} className={`gap-1.5 text-xs ${className}`}>
+    <Badge tone={TONE_TO_BADGE[tone]} title={title ?? undefined} className={`gap-1.5 text-xs ${className}`}>
       {live ? (
         <span
           aria-hidden="true"

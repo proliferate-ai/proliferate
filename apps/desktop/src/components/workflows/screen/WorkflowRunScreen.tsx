@@ -16,6 +16,7 @@ import { useCloudRunRefreshPoll } from "@/hooks/access/cloud/workflows/use-cloud
 import { useResolveWorkflowApproval } from "@/hooks/access/cloud/workflows/use-workflow-approval";
 import { useCancelWorkflowRun } from "@/hooks/access/cloud/workflows/use-cancel-workflow-run";
 import { WorkflowRunView } from "../run/WorkflowRunView";
+import { WorkflowMissedRunSummary } from "../run/WorkflowMissedRunSummary";
 
 export interface WorkflowRunScreenProps {
   workflowId: string;
@@ -36,6 +37,10 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
   const isCloudRun = run?.targetMode === "personal_cloud";
   const isLocalRun = run?.targetMode === "local";
   const terminal = run ? isTerminalRunStatus(coerceRunStatus(run.status)) : false;
+  // 1c: a `missed` row never delivered a plan (resolved_plan is empty) — it has
+  // no step timeline to render, so it gets its own quiet summary below instead
+  // of going through WorkflowRunView's definition/timeline path at all.
+  const isMissed = run?.status === "missed";
 
   // Cloud runs have no push channel — poll the refresh endpoint while non-terminal
   // (local runs stay fresh via the desktop relay writing the server /status).
@@ -44,8 +49,8 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
   // The resolved plan carried by the run IS the (interpolated) definition, so
   // the timeline needs no separate version fetch.
   const definition = useMemo<WorkflowDefinition | null>(
-    () => (run ? parseWorkflowDefinition(run.resolvedPlan) : null),
-    [run],
+    () => (run && !isMissed ? parseWorkflowDefinition(run.resolvedPlan) : null),
+    [run, isMissed],
   );
 
   return (
@@ -55,7 +60,18 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Spinner />
           </div>
-        ) : runQuery.isError || run === null || definition === null ? (
+        ) : runQuery.isError || run === null ? (
+          <EmptyState
+            title="Run not found"
+            description="This run may have been removed or is not accessible."
+          />
+        ) : isMissed ? (
+          <WorkflowMissedRunSummary
+            run={run}
+            workflowName={workflowName}
+            onBack={() => navigate("/workflows")}
+          />
+        ) : definition === null ? (
           <EmptyState
             title="Run not found"
             description="This run may have been removed or is not accessible."

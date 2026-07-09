@@ -11,6 +11,7 @@ import {
   formatRunCostTokens,
   formatRunCostUsd,
   formatRunDuration,
+  workflowRunStatusDetail,
   workflowRunStatusLabel,
   workflowRunStatusTone,
   type WorkflowStatusTone,
@@ -48,6 +49,8 @@ export interface WorkflowRunRowView {
   triggerLabel: string;
   statusLabel: string;
   statusTone: WorkflowStatusTone;
+  /** Tooltip text for the status pill (budget_blocked / missed); null otherwise. */
+  statusDetail: string | null;
   durationLabel: string | null;
   costLabel: string | null;
   startedLabel: string | null;
@@ -60,6 +63,8 @@ export interface BuildWorkflowRunRowInput {
   workflowName: string | null;
   triggerKind: string;
   status: string;
+  /** D-002: distinguishes a generic failure from a budget_blocked deny-path. */
+  errorCode?: string | null;
   startedAt: string | null;
   finishedAt: string | null;
   costUsd: string | null;
@@ -75,8 +80,11 @@ export function buildWorkflowRunRow(input: BuildWorkflowRunRowInput): WorkflowRu
     workflowId: input.workflowId,
     workflowName: input.workflowName ?? input.workflowId,
     triggerLabel: workflowTriggerLabel(input.triggerKind),
-    statusLabel: workflowRunStatusLabel(status, input.status),
+    // Contextual detail: the raw wire value humanizes an unknown status; the
+    // error_code specializes a failed one (budget_blocked -> "Over budget").
+    statusLabel: workflowRunStatusLabel(status, status === "unknown" ? input.status : input.errorCode),
     statusTone: workflowRunStatusTone(status),
+    statusDetail: workflowRunStatusDetail(status, input.errorCode),
     durationLabel: formatRunDuration(input.startedAt, input.finishedAt, input.nowMs),
     costLabel: cost,
     startedLabel: input.startedAt,

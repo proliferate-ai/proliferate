@@ -11,10 +11,18 @@ import {
   validateStringReferences,
 } from "./interpolation";
 import { validateWorkflowDefinition } from "./validation";
-import { coerceRunStatus, deriveStepRunViews, workflowRunStatusLabel, workflowRunStatusTone } from "./run-status";
+import {
+  coerceRunStatus,
+  deriveStepRunViews,
+  isTerminalRunStatus,
+  workflowRunStatusDetail,
+  workflowRunStatusLabel,
+  workflowRunStatusTone,
+} from "./run-status";
 import { WORKFLOW_TEMPLATES } from "./templates";
 import { goalRailLine, workflowStepStrip } from "./presentation";
 import { deriveEffectiveConfigs, deriveScopeGroups } from "./effective-config";
+import { buildWorkflowRunRow } from "./model";
 
 describe("interpolation", () => {
   it("parses input and emit references", () => {
@@ -461,10 +469,13 @@ describe("run-status derivation", () => {
   });
 });
 
-describe("run-status: unrecognized wire status (1c missed / billing budget_blocked readiness)", () => {
+describe("run-status: unrecognized wire status (future-status readiness)", () => {
   it("coerces to unknown instead of a false running", () => {
+    // budget_blocked is an error_code on a failed run, never a status; a truly
+    // novel wire status must land on the unknown sentinel. `missed` became a
+    // first-class status in 1c and now round-trips.
     expect(coerceRunStatus("budget_blocked")).toBe("unknown");
-    expect(coerceRunStatus("missed")).toBe("unknown");
+    expect(coerceRunStatus("missed")).toBe("missed");
     expect(coerceRunStatus("running")).toBe("running");
   });
 
@@ -477,6 +488,64 @@ describe("run-status: unrecognized wire status (1c missed / billing budget_block
   it("falls back to a generic label when there is no usable raw value", () => {
     expect(workflowRunStatusLabel("unknown")).toBe("Unknown");
     expect(workflowRunStatusLabel("unknown", 42)).toBe("Unknown");
+  });
+});
+
+// 1c: scheduling UX — missed-run history rows + the budget_blocked deny-path
+// (D-002) read as distinct, quiet statuses through the same chip atoms.
+describe("run status presentation — missed + budget_blocked (1c)", () => {
+  it("labels a missed run quietly and treats it as terminal, not a failure", () => {
+    expect(workflowRunStatusLabel("missed")).toBe("Missed");
+    expect(workflowRunStatusTone("missed")).toBe("muted");
+    expect(isTerminalRunStatus("missed")).toBe(true);
+    expect(workflowRunStatusDetail("missed")).toMatch(/wasn't run/);
+  });
+
+  it("labels a budget_blocked failure distinctly from a generic failure, same tone", () => {
+    expect(workflowRunStatusLabel("failed", "budget_blocked")).toBe("Over budget");
+    expect(workflowRunStatusLabel("failed", "some_other_code")).toBe("Failed");
+    expect(workflowRunStatusLabel("failed")).toBe("Failed");
+    expect(workflowRunStatusTone("failed")).toBe("danger");
+    expect(workflowRunStatusDetail("failed", "budget_blocked")).toMatch(/usage budget/);
+    expect(workflowRunStatusDetail("failed")).toBeNull();
+  });
+
+  it("leaves every other status's label/detail unaffected by a stray errorCode", () => {
+    expect(workflowRunStatusLabel("completed", "budget_blocked")).toBe("Completed");
+    expect(workflowRunStatusDetail("completed")).toBeNull();
+  });
+});
+
+describe("buildWorkflowRunRow — missed + budget_blocked round-trip (1c)", () => {
+  const base = {
+    id: "run-1",
+    workflowId: "wf-1",
+    workflowName: "Triage new Sentry issues",
+    triggerKind: "schedule",
+    startedAt: null,
+    finishedAt: "2026-07-09T00:00:00Z",
+    costUsd: null,
+    costTokens: null,
+  };
+
+  it("surfaces a budget_blocked run as 'Over budget', danger tone, with a detail tooltip", () => {
+    const row = buildWorkflowRunRow({ ...base, status: "failed", errorCode: "budget_blocked" });
+    expect(row.statusLabel).toBe("Over budget");
+    expect(row.statusTone).toBe("danger");
+    expect(row.statusDetail).toMatch(/usage budget/);
+  });
+
+  it("surfaces a missed run as 'Missed', muted tone, no error banner", () => {
+    const row = buildWorkflowRunRow({ ...base, status: "missed", errorCode: null });
+    expect(row.statusLabel).toBe("Missed");
+    expect(row.statusTone).toBe("muted");
+    expect(row.statusDetail).toMatch(/wasn't run/);
+  });
+
+  it("leaves a plain failure as the generic 'Failed' label", () => {
+    const row = buildWorkflowRunRow({ ...base, status: "failed", errorCode: null });
+    expect(row.statusLabel).toBe("Failed");
+    expect(row.statusDetail).toBeNull();
   });
 });
 
