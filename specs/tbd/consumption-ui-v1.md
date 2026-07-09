@@ -14,8 +14,10 @@ Two fully distinct meters. Keep them distinct.
 
 **Compute (seconds).** E2B webhooks open/close `usage_segment` rows
 (`server/proliferate/db/models/billing.py`: `user_id`, `billing_subject_id`, `organization_id`,
-`sandbox_id`, `started_at`, `ended_at`, `is_billable`). `billing_subject_id` is who pays (the
-owner's personal subject); `organization_id` is the enforcement/attribution scope (§4.2). A
+`sandbox_id`, `started_at`, `ended_at`, `is_billable`). `billing_subject_id` is who pays and
+`organization_id` is the enforcement/attribution scope (§4.2); both are resolved from the owner's
+current membership at segment-open time, so an owner acting under an org bills the org subject and
+an org-less owner bills personal (see §4.2, matching the LLM track). A
 15-min accounting pass drains
 `billing_grant.remaining_seconds`; overage exports to a Stripe meter. Enforcement that is LIVE:
 the reconciler (`server/proliferate/server/billing/reconciler.py:271-365`) pauses open segments
@@ -125,7 +127,11 @@ Nested-router pattern with `current_path_org_admin` (copy the SSO router shape,
             "computeLimitCapSeconds": 36000.0 | null, "llmLimitCapUsd": 10.0 | null}, ...]}
 ```
 
-Sorted by combined consumption descending. Include members with zero usage.
+Sorted by combined consumption descending. Include members with zero usage. `computeSeconds` is
+summed by `usage_segment.organization_id` (`billing.compute_usage_seconds_by_user_for_org`), not by
+the org billing subject, so it aggregates every member's org compute regardless of which subject
+each segment is invoiced to — the same scope §4.2 enforces. `llmCostUsd` stays keyed off the org
+billing subject because org gateway enrollments are minted against it.
 
 ### 3.4 `GET /organizations/{organization_id}/usage/users/{user_id}/timeseries` — org admin
 
@@ -176,16 +182,33 @@ with the existing `USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT` and recording a
 `BillingDecisionEvent` with a new decision type `user_limit_pause` (or `org_limit_pause`).
 Only when `CLOUD_BILLING_MODE=enforce`, same as today's behavior.
 
-**Attribution (fixed — the org-subject segment attribution gap).** `usage_segment` carries an
-`organization_id` column (owner's current membership, or `None` for an org-less owner), stamped
-at segment-open time (`billing_runtime_usage.resolve_organization_id_for_user`). Enforcement
-resolves the org directly from `segment.organization_id` and sums window usage by
-`organization_id` (`billing.compute_usage_seconds_in_window_for_org`) — so org usage aggregates
-across every member regardless of who each segment is invoiced to. This is deliberately separate
-from `billing_subject_id`, which stays the workspace owner's **personal** subject: who pays is
-unchanged (org-owned workspaces are NOT invoiced to the org). Before this fix, segments were
-attributed only to the personal subject and the enforcement path resolved `organization_id=None`,
-so admin-configured compute caps saved in the UI and silently never fired.
+**Attribution.** `usage_segment` carries an `organization_id` column (owner's current membership,
+or `None` for an org-less owner), stamped at segment-open time
+(`billing_runtime_usage.resolve_organization_id_for_user`). Enforcement resolves the org directly
+from `segment.organization_id` and sums window usage by `organization_id`
+(`billing.compute_usage_seconds_in_window_for_org`) — so org usage aggregates across every member
+regardless of which subject each segment is invoiced to. Before #1028, segments were attributed
+only to the personal subject and the enforcement path resolved `organization_id=None`, so
+admin-configured compute caps saved in the UI silently never fired.
+
+**Who pays (ruled 2026-07-09).** Compute run under an org bills the org billing subject (org
+Stripe customer, org grant pool), matching how LLM usage already attributes to the org. At
+segment-open, `billing_runtime_usage.resolve_billing_subject_id_for_user` derives the paying
+subject from the same current-membership lookup that produces `organization_id`: a user with a
+current membership bills the org subject, an org-less user bills personal. Deriving both from one
+lookup means `billing_subject_id` and `organization_id` can never disagree, and it mirrors the LLM
+track exactly (an org member's gateway enrollment is minted against the org billing subject in
+`ensure_org_enrollment`, an org-less user's against their personal one in `ensure_user_enrollment`,
+both keyed off the same membership test). The prior behavior — org compute draining the workspace
+owner's personal credits while org compute budgets watched an empty pool — was the "org-subject
+segment attribution gap" left open by #1028.
+
+Grant drawdown, overage export, and the Stripe metered events all follow `billing_subject_id`
+unchanged (the accounting layer is subject-parametrized), so no accounting code changes; they
+simply now target the org subject for org compute. Compute caps sum by `organization_id`, a
+separate scope, so there is no double-counting. In-flight segments opened before this change keep
+their stamped subject — no retroactive re-attribution — so nothing that was already invoiced to a
+personal subject moves.
 
 ### 4.3 Compute start-side (live)
 
@@ -195,7 +218,9 @@ start/resume gate is `authorization.assert_cloud_sandbox_resume_allowed`, called
 raising a structured 402 (`CloudSandboxResumeBlockedError`) the UI can surface. It resolves the
 owner's org via membership and sums usage by `organization_id`
 (`compute_usage_seconds_in_window_for_org`), mirroring the reconciler's
-`_resolve_compute_limit_pause`.
+`_resolve_compute_limit_pause`. The active-spend-hold snapshot reads the paying subject resolved
+the same way as segment-open (`resolve_billing_subject_id_for_user`) so that a hold on the org
+grant pool blocks an org member's resume, not just the personal pool.
 
 ## 5. SDK
 
