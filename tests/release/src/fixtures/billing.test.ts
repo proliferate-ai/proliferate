@@ -1,19 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ORG_COMPUTE_ATTRIBUTION_FIXED, expectedComputeSubjectKind } from "./billing.js";
+import { ORG_COMPUTE_ATTRIBUTION_FIXED } from "./billing.js";
 
-test("expectedComputeSubjectKind is personal until the org attribution fix lands", () => {
-  assert.equal(expectedComputeSubjectKind(false), "personal");
-});
-
-test("expectedComputeSubjectKind is organization once the fix is flagged on", () => {
-  assert.equal(expectedComputeSubjectKind(true), "organization");
-});
-
-test("ORG_COMPUTE_ATTRIBUTION_FIXED is false while PR #1028 is unmerged", () => {
-  // Guards against flipping the flag without the migration/product change: this
-  // must only become true once usage_segment.organization_id exists (#1028).
-  assert.equal(ORG_COMPUTE_ATTRIBUTION_FIXED, false);
-  assert.equal(expectedComputeSubjectKind(ORG_COMPUTE_ATTRIBUTION_FIXED), "personal");
+test("ORG_COMPUTE_ATTRIBUTION_FIXED is true now that PR #1028 is merged", () => {
+  // Guards against flipping the flag back without the migration/product change:
+  // this must stay true because usage_segment.organization_id exists (#1028,
+  // merged 2026-07-06). The paying subject (billing_subject_id) is unaffected —
+  // #1028 only added attribution/enforcement scope, not who pays.
+  assert.equal(ORG_COMPUTE_ATTRIBUTION_FIXED, true);
 });

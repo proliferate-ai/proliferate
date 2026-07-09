@@ -113,9 +113,10 @@ async def meter_records(email: str, since_seconds: int) -> dict:
         return {
             "userId": str(user.id),
             "subjects": subjects,
-            # usage_segment carries no organization_id on this branch (finding
-            # 6/10; #1028 adds it) — surfaced so the scenario asserts the
-            # as-built personal-subject attribution.
+            # usage_segment carries organization_id since #1028 (merged) —
+            # attribution/enforcement scope only, billing_subject_id on the
+            # segment stays the owner's personal subject. Surfaced so the
+            # scenario asserts the as-built personal-subject attribution.
             "usageSegmentHasOrgColumn": hasattr(UsageSegment, "organization_id"),
             "usageSegments": [
                 {

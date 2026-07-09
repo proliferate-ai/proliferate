@@ -7,29 +7,22 @@ import path from "node:path";
  *
  * `ORG_COMPUTE_ATTRIBUTION_FIXED` is the single flag governing the compute
  * attribution assertion, mirroring `GITHUB_LINK_GATE_WORKAROUND_ACTIVE` in
- * `identity.ts`. It is `false` while PR #1028 (org compute attribution —
- * nullable `usage_segment.organization_id` stamped at segment-open) is not
- * merged: on this branch `usage_segment` has no `organization_id` column at
- * all, so compute segments bill the workspace owner's *personal* billing
- * subject and org/per-user compute caps never fire (findings 6/10 in
- * ~/notes/testing-open-rulings.md). Flip to `true` once #1028 merges and the
- * scenario starts asserting org-attributed compute instead — no other change.
+ * `identity.ts`. PR #1028 (org compute attribution — nullable
+ * `usage_segment.organization_id`, stamped at segment-open from the owner's
+ * membership) merged 2026-07-06: `usage_segment` now carries `organization_id`
+ * and org/per-user compute-budget caps enforce off it. That is attribution and
+ * enforcement *scope* only — who pays did not change. `billing_subject_id` on
+ * the segment stays the workspace owner's *personal* billing subject in both
+ * the pre- and post-#1028 worlds; #1028's PR body explicitly defers "invoice
+ * org compute to the org subject" as an open question. `true` here just means
+ * the org-attribution column/enforcement exists to assert against.
  *
- * LLM events are unaffected: they carry `organization_id` today and are
- * correctly org-attributed where the subject is enrolled.
+ * LLM events are unaffected by any of this: they carry `organization_id`
+ * today and are correctly org-attributed where the subject is enrolled.
  */
-export const ORG_COMPUTE_ATTRIBUTION_FIXED = false;
+export const ORG_COMPUTE_ATTRIBUTION_FIXED = true;
 
 export type BillingSubjectKind = "personal" | "organization";
-
-/**
- * The subject kind a closed `usage_segment` is expected to bill, per the
- * current-behavior / post-#1028 split above. Pure so it is unit-testable
- * without a DB.
- */
-export function expectedComputeSubjectKind(orgAttributionFixed: boolean): BillingSubjectKind {
-  return orgAttributionFixed ? "organization" : "personal";
-}
 
 export interface MeterRecords {
   userId: string;

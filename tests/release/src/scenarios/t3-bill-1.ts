@@ -2,12 +2,7 @@ import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
 import { ScenarioBlockedError } from "./types.js";
-import {
-  ORG_COMPUTE_ATTRIBUTION_FIXED,
-  expectedComputeSubjectKind,
-  runBillingProbe,
-  type MeterRecords,
-} from "../fixtures/billing.js";
+import { ORG_COMPUTE_ATTRIBUTION_FIXED, runBillingProbe, type MeterRecords } from "../fixtures/billing.js";
 
 /**
  * T3-BILL-1 — real consumption is metered: LLM and compute.
@@ -19,26 +14,30 @@ import {
  * with the credit balance decremented, and (b) a closed `usage_segment`
  * (opened/closed by the E2B webhooks, not a timer) with the accounting pass
  * draining the corresponding grant seconds. Attribution must be asserted
- * as-built: compute → the workspace owner's PERSONAL subject; LLM → the ORG
- * subject where enrolled (the org compute-attribution fix is #1028, tracked by
- * ORG_COMPUTE_ATTRIBUTION_FIXED — false on this branch).
+ * as-built: compute → the workspace owner's PERSONAL subject (unchanged by
+ * #1028 — invoicing org compute to the org subject is an explicitly deferred
+ * open question there); LLM → the ORG subject where enrolled.
+ * ORG_COMPUTE_ATTRIBUTION_FIXED tracks the org-attribution *column/enforcement*
+ * capability (#1028, merged) — true on this branch.
  *
  * Reachable now (real, cheap): the ledger reader
  * (`tests/release/scripts/billing_probe.py`) reads the durable user's meter
  * records and grants directly from the profile DB, and this scenario asserts
- * the branch's compute-attribution *capability* (`usage_segment` has no
- * `organization_id` column until #1028) against ORG_COMPUTE_ATTRIBUTION_FIXED —
- * the "assert current behavior as-built" the contract requires.
+ * the branch's compute-attribution *capability* (`usage_segment` has an
+ * `organization_id` column, per merged #1028) against
+ * ORG_COMPUTE_ATTRIBUTION_FIXED — the "assert current behavior as-built" the
+ * contract requires.
  *
  * Blocked (per lane, reported not skipped) for PRODUCING new consumption:
  * - local lane / LLM half: no `RELEASE_E2E_GATEWAY_TEST_KEY` exists, so a local
  *   session uses native CLI login and emits zero gateway `agent_llm_usage_event`
  *   rows — there is nothing to meter. Blocked-on-credential.
  * - sandbox lane / compute half: `usage_segment` rows are opened/closed by real
- *   E2B webhooks, which require a running cloud sandbox (the durable user is
- *   `github_link_required`-gated off the cloud path, PR #1023) AND a publicly
- *   reachable server URL for E2B to deliver the created/resumed/paused webhooks
- *   to. Blocked on both.
+ *   E2B webhooks, which require a running cloud sandbox for the durable user
+ *   AND a publicly reachable server URL for E2B to deliver the
+ *   created/resumed/paused webhooks to. Blocked on both (the
+ *   `github_link_required` gate itself is cleared — PR #1023 merged and
+ *   `GITHUB_LINK_GATE_WORKAROUND_ACTIVE` is already `false` on this branch).
  */
 export const t3Bill1: ScenarioDefinition = {
   id: "T3-BILL-1",
@@ -73,12 +72,15 @@ export const t3Bill1: ScenarioDefinition = {
       meter.usageSegmentHasOrgColumn,
       ORG_COMPUTE_ATTRIBUTION_FIXED,
       `T3-BILL-1: usage_segment.organization_id presence (${meter.usageSegmentHasOrgColumn}) must match ` +
-        `ORG_COMPUTE_ATTRIBUTION_FIXED (${ORG_COMPUTE_ATTRIBUTION_FIXED}) — flip the flag when #1028 merges`,
+        `ORG_COMPUTE_ATTRIBUTION_FIXED (${ORG_COMPUTE_ATTRIBUTION_FIXED}) — #1028 is merged so this must be true`,
     );
     console.log(
       `[T3-BILL-1/${ctx.runtimeLane}] baseline: ${meter.usageSegments.length} segment(s), ` +
         `${meter.llmUsageEvents.length} llm event(s), ${meter.grants.length} grant(s); ` +
-        `compute bills the ${expectedComputeSubjectKind(ORG_COMPUTE_ATTRIBUTION_FIXED)} subject`,
+        // #1028 added org attribution/enforcement scope only — compute still
+        // bills the personal subject (invoicing org compute to the org
+        // subject is an explicitly deferred open question in #1028).
+        `compute bills the personal subject`,
     );
 
     if (ctx.runtimeLane === "local") {
@@ -92,10 +94,11 @@ export const t3Bill1: ScenarioDefinition = {
     }
     throw new ScenarioBlockedError(
       "T3-BILL-1/sandbox (compute half): blocked — a closed usage_segment is opened/closed by real E2B " +
-        "webhooks, which need (1) a running cloud sandbox for the durable user (blocked on " +
-        "github_link_required until PR #1023 merges; flip GITHUB_LINK_GATE_WORKAROUND_ACTIVE) and " +
+        "webhooks, which need (1) a running cloud sandbox for the durable user and " +
         "(2) a publicly reachable RELEASE_E2E_SERVER_URL for E2B to deliver created/resumed/paused " +
-        "webhooks to (the local profile is on 127.0.0.1; needs a tunnel).",
+        "webhooks to (the local profile is on 127.0.0.1; needs a tunnel). The github_link_required gate " +
+        "itself is cleared (PR #1023 merged, GITHUB_LINK_GATE_WORKAROUND_ACTIVE already false); the " +
+        "remaining blocker for this lane is the sandbox + tunnel above.",
     );
   },
 };
