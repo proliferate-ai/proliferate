@@ -6,9 +6,11 @@ import {
   buildNextCloudWorkspaceAttempt,
   collectTakenCloudWorkspaceSlugs,
   getCloudWorkspaceRepoTarget,
+  isCloudWorkspaceBillingBlockError,
   isCloudWorkspaceBranchConflictError,
   isCreateCloudWorkspaceRequest,
   resolveCloudRepoActionState,
+  resolveCloudWorkspaceCreateFailureMessage,
 } from "./cloud-workspace-creation";
 
 describe("cloud workspace creation helpers", () => {
@@ -205,6 +207,70 @@ describe("cloud workspace creation helpers", () => {
     expect(isCloudWorkspaceBranchConflictError(
       cloudError("bad", "github_branch_not_found"),
     )).toBe(false);
+  });
+
+  it("recognizes server-reported billing blocks", () => {
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("out of hours", "billing_credits_exhausted"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("blocked", "billing_start_blocked"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("legacy", "billing_resume_blocked"),
+    )).toBe(true);
+    expect(isCloudWorkspaceBillingBlockError(
+      cloudError("nope", "github_branch_not_found"),
+    )).toBe(false);
+    expect(isCloudWorkspaceBillingBlockError(new Error("no code"))).toBe(false);
+  });
+
+  it("surfaces the server billing message with an upgrade pointer when exhausted", () => {
+    const message = resolveCloudWorkspaceCreateFailureMessage(
+      cloudError(
+        "Cloud usage is paused because your included sandbox hours are exhausted.",
+        "billing_credits_exhausted",
+      ),
+      "Failed to create cloud workspace.",
+    );
+    expect(message).toBe(
+      "Cloud usage is paused because your included sandbox hours are exhausted. "
+      + "Upgrade your plan in Settings → Billing.",
+    );
+  });
+
+  it("surfaces other billing block messages verbatim (no upgrade pointer)", () => {
+    const message = resolveCloudWorkspaceCreateFailureMessage(
+      cloudError("Cloud usage is paused because billing needs attention.", "billing_start_blocked"),
+      "Failed to create cloud workspace.",
+    );
+    expect(message).toBe("Cloud usage is paused because billing needs attention.");
+  });
+
+  it("falls back to the provided message for non-Error / message-less failures", () => {
+    expect(resolveCloudWorkspaceCreateFailureMessage("boom", "fallback")).toBe("fallback");
+    expect(resolveCloudWorkspaceCreateFailureMessage(new Error(""), "fallback")).toBe("fallback");
+  });
+
+  it("propagates an interrupted failureMessage into the home-launch toast text", () => {
+    // Mirrors use-create-cloud-workspace's interrupted result and the toast
+    // template in use-home-next-launch: an out-of-credits 402 must surface the
+    // real reason, not "Cloud workspace creation was interrupted."
+    const failureMessage = resolveCloudWorkspaceCreateFailureMessage(
+      cloudError(
+        "Cloud usage is paused because your included sandbox hours are exhausted.",
+        "billing_credits_exhausted",
+      ),
+      "Failed to create cloud workspace.",
+    );
+    const result = { status: "interrupted", failureMessage } as const;
+    const thrown = new Error(
+      result.failureMessage ?? "Cloud workspace creation was interrupted.",
+    );
+    expect(`Failed to start work: ${thrown.message}`).toBe(
+      "Failed to start work: Cloud usage is paused because your included sandbox hours "
+      + "are exhausted. Upgrade your plan in Settings → Billing.",
+    );
   });
 });
 
