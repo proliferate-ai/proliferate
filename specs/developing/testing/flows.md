@@ -35,7 +35,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Invite users; promote/demote roles | 2 | — |
 | Admin-only surfaces gated: member cannot see/do admin actions | 2 | — |
 | Member visibility boundaries (sees own work, not others' private state) | 2 | — |
-| Remove user; access ends | 2 | — |
+| Remove user; access ends | 2 | tests/intent/specs/organization-roles.spec.ts (T2-ORG-1; "remove a member -> membership status 'removed' -> their next org-scoped call fails" — 200 while active, 404 organization_not_found on the next org-scoped call post-removal, gone from the active roster, and a later relist 403s instance_access_removed rather than silently re-adding them) |
 
 ## Workspaces
 
