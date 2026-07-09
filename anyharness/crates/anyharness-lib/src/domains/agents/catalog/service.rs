@@ -46,21 +46,47 @@ impl AgentCatalogService {
     pub fn pin_overrides(&self, kind: &str) -> Option<PinOverrides> {
         let active = self.active_catalog();
         let pins = active.pins(kind)?;
-        // Placeholder pins ("unknown" — e.g. cursor pre manifest-provenance)
-        // must not drive drift: an unknowable pin is no pin.
-        let usable = |version: &str| {
-            (!version.is_empty() && version != "unknown").then(|| version.to_string())
-        };
+        let agent_process_source = project_source(&pins.agent_process);
+        let native_source = pins.native.as_ref().and_then(project_source);
         Some(PinOverrides {
-            agent_process: usable(&pins.agent_process.version),
-            native: pins.native.as_ref().and_then(|pin| usable(&pin.version)),
-            agent_process_source: project_source(&pins.agent_process),
-            native_source: pins.native.as_ref().and_then(project_source),
+            agent_process: pin_identity(&pins.agent_process.version, agent_process_source.as_ref()),
+            native: pins
+                .native
+                .as_ref()
+                .and_then(|pin| pin_identity(&pin.version, native_source.as_ref())),
+            agent_process_source,
+            native_source,
         })
     }
 
     pub fn active_catalog(&self) -> ActiveCatalog {
         ActiveCatalog::new(self.sync.active().document)
+    }
+}
+
+/// Placeholder pins ("unknown" — e.g. cursor pre manifest-provenance) must
+/// not drive drift: an unknowable pin is no pin.
+fn usable_version(version: &str) -> Option<String> {
+    (!version.is_empty() && version != "unknown").then(|| version.to_string())
+}
+
+/// The comparable install identity used for version-drift detection.
+///
+/// Git-sourced pins are materialized and recorded by their resolved commit
+/// sha, not the catalog's human-readable `version` label — see
+/// `installer::managed_npm::npm_package_version`'s non-registry-spec
+/// handling (git/github/file/http(s) specs), which treats the text after `#`
+/// as the installed artifact's recorded "version". Comparing that recorded
+/// sha against a semver-looking label like `"0.44.0"` never converges: it
+/// would force a reinstall on every startup reconcile pass forever. Use the
+/// same git ref on the pinned side so the comparison can actually match once
+/// installed. Non-git sources are unaffected: they already record the
+/// declared label (Binary/Archive install it verbatim; registry Npm specs
+/// read a matching version back from the installed package.json).
+fn pin_identity(declared_version: &str, source: Option<&ResolvedPinSource>) -> Option<String> {
+    match source {
+        Some(ResolvedPinSource::Git { git_ref, .. }) => usable_version(git_ref),
+        _ => usable_version(declared_version),
     }
 }
 
@@ -476,4 +502,57 @@ fn validate_mode(
         .any(|value| value == mode_id)
         .then(|| Some(mode_id.to_string()))
         .ok_or_else(unsupported)
+}
+
+#[cfg(test)]
+mod pin_identity_tests {
+    use super::*;
+
+    fn git_source(git_ref: &str) -> ResolvedPinSource {
+        ResolvedPinSource::Git {
+            repo: "https://github.com/proliferate-ai/claude-agent-acp.git".into(),
+            git_ref: git_ref.into(),
+            package_subdir: None,
+            executable_relpath: "node_modules/.bin/claude-agent-acp".into(),
+        }
+    }
+
+    #[test]
+    fn git_sourced_pin_identity_is_the_commit_sha_not_the_display_version() {
+        // Regression for the claude agent_process reinstall loop: the catalog
+        // pin's declared "version" is a display label ("0.44.0"), but a
+        // git-sourced install records the resolved commit sha as its
+        // installed version (see managed_npm::npm_package_version's
+        // non-registry-spec handling). Comparing the label against the sha
+        // never converges, forcing a reinstall on every startup reconcile.
+        let sha = "3ff484e671de5fe9275d2e7596d683df06b99e14";
+        let source = git_source(sha);
+        assert_eq!(
+            pin_identity("0.44.0", Some(&source)),
+            Some(sha.to_string())
+        );
+    }
+
+    #[test]
+    fn non_git_sourced_pin_identity_keeps_the_declared_label() {
+        let source = ResolvedPinSource::Binary {
+            targets: Default::default(),
+        };
+        assert_eq!(
+            pin_identity("2.1.181", Some(&source)),
+            Some("2.1.181".to_string())
+        );
+    }
+
+    #[test]
+    fn no_source_falls_back_to_declared_label() {
+        assert_eq!(pin_identity("1.0.0", None), Some("1.0.0".to_string()));
+    }
+
+    #[test]
+    fn placeholder_versions_are_not_usable_pins() {
+        let source = git_source("");
+        assert_eq!(pin_identity("unknown", Some(&source)), None);
+        assert_eq!(pin_identity("", None), None);
+    }
 }
