@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { assertResolved, MissingEnvVarsError, resolveEnv } from "./env-resolution.js";
+import {
+  assertResolved,
+  blockedReasonForMissingEnv,
+  missingRequiredForLane,
+  MissingEnvVarsError,
+  resolveEnv,
+} from "./env-resolution.js";
+
+const NONE: ReadonlySet<string> = new Set<string>();
 
 test("resolveEnv marks a declared var present when set to a non-empty value", () => {
   const resolution = resolveEnv(["RELEASE_E2E_SERVER_URL"], { RELEASE_E2E_SERVER_URL: "http://example.test" });
@@ -48,4 +56,41 @@ test("assertResolved throws a named-variable error outside --dry-run", () => {
     assert.match(error.message, /RELEASE_E2E_SERVER_URL/);
     return true;
   });
+});
+
+test("missingRequiredForLane reports an absent required var as unsatisfied", () => {
+  const resolution = resolveEnv(["RELEASE_E2E_DURABLE_USER_EMAIL"], {});
+  const missing = missingRequiredForLane(["RELEASE_E2E_DURABLE_USER_EMAIL"], "local", resolution, NONE);
+  assert.deepEqual(missing, ["RELEASE_E2E_DURABLE_USER_EMAIL"]);
+});
+
+test("missingRequiredForLane treats a present var as satisfied on any lane", () => {
+  const resolution = resolveEnv(["RELEASE_E2E_DURABLE_USER_EMAIL"], {
+    RELEASE_E2E_DURABLE_USER_EMAIL: "durable@example.dev",
+  });
+  assert.deepEqual(missingRequiredForLane(["RELEASE_E2E_DURABLE_USER_EMAIL"], "local", resolution, NONE), []);
+  assert.deepEqual(missingRequiredForLane(["RELEASE_E2E_DURABLE_USER_EMAIL"], "sandbox", resolution, NONE), []);
+});
+
+test("a locally-seeded var satisfies the local lane but not the sandbox lane", () => {
+  const resolution = resolveEnv(["RELEASE_E2E_DURABLE_USER_EMAIL"], {
+    RELEASE_E2E_DURABLE_USER_EMAIL: "durable@example.dev",
+  });
+  const seeded = new Set(["RELEASE_E2E_DURABLE_USER_EMAIL"]);
+  assert.deepEqual(missingRequiredForLane(["RELEASE_E2E_DURABLE_USER_EMAIL"], "local", resolution, seeded), []);
+  assert.deepEqual(missingRequiredForLane(["RELEASE_E2E_DURABLE_USER_EMAIL"], "sandbox", resolution, seeded), [
+    "RELEASE_E2E_DURABLE_USER_EMAIL",
+  ]);
+});
+
+test("blockedReasonForMissingEnv names the scenario, lane, and where each var lives", () => {
+  const reason = blockedReasonForMissingEnv(
+    "T3-PROV-2",
+    "sandbox",
+    ["RELEASE_E2E_DURABLE_USER_EMAIL"],
+    new Set(["RELEASE_E2E_DURABLE_USER_EMAIL"]),
+  );
+  assert.match(reason, /T3-PROV-2\/sandbox: blocked on absent credential/);
+  assert.match(reason, /RELEASE_E2E_DURABLE_USER_EMAIL/);
+  assert.match(reason, /does not satisfy the sandbox lane/);
 });

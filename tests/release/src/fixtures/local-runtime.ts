@@ -142,6 +142,21 @@ export class LocalRuntimeClient {
     return response.agent;
   }
 
+  /**
+   * The runtime's probed gateway model list for a harness
+   * (`GET /v1/agents/{kind}/catalog/gateway-models`) — the models the pushed
+   * gateway key can actually serve, recorded by the runtime's own probe after
+   * an agent-auth state push. Empty when no gateway auth is configured (a
+   * native-login laptop), so callers fall back to catalog-derived candidates.
+   */
+  async getGatewayModels(kind: string): Promise<Array<{ id: string }>> {
+    const response = await this.request<{ models: Array<{ id: string }> }>(
+      "GET",
+      `/v1/agents/${kind}/catalog/gateway-models`,
+    );
+    return response.models;
+  }
+
   async createLocalWorkspace(path: string): Promise<CreateWorkspaceResponse> {
     return this.request<CreateWorkspaceResponse>("POST", "/v1/workspaces", { path });
   }

@@ -1,4 +1,5 @@
-import { ENV_MANIFEST, type EnvVarSpec } from "./env-manifest.js";
+import { ENV_MANIFEST, findEnvVarSpec, type EnvVarSpec } from "./env-manifest.js";
+import type { RuntimeLane } from "./types.js";
 
 export interface ResolvedEnvVar {
   spec: EnvVarSpec;
@@ -89,9 +90,11 @@ export class MissingEnvVarsError extends Error {
 }
 
 /**
- * Fails fast on missing vars unless `dryRun` is set, per the tier-3 README
- * contract ("the runner fails fast with a named-variable error when one is
- * missing"; dry-run only reports).
+ * Utility that throws a named-variable error when any resolved var is missing
+ * (a no-op under `dryRun`). Retained for callers that genuinely cannot proceed
+ * without a var; the runner itself (`src/cli/run.ts`) no longer uses it as a
+ * global gate — a missing credential blocks only the dependent scenarios/lanes
+ * (#1069) rather than failing the whole run.
  */
 export function assertResolved(resolution: EnvResolution, options: { dryRun: boolean }): void {
   if (resolution.missing.length === 0) {
@@ -101,4 +104,46 @@ export function assertResolved(resolution: EnvResolution, options: { dryRun: boo
     return;
   }
   throw new MissingEnvVarsError(resolution.missing);
+}
+
+/**
+ * The subset of `requiredEnv` that is not satisfied for a scenario running on
+ * `runtimeLane` (#1069). A var is unsatisfied when it is absent, OR when it was
+ * supplied only by this run's local durable-user seeding but the lane is not
+ * `local`: a per-run seeded fresh user cannot stand in for the sandbox lane's
+ * needs (the durable staging identity's warm, persistent sandbox plus E2B + a
+ * publicly reachable server URL), so sandbox-lane durable-dependent scenarios
+ * stay blocked even after the local seed runs. Callers report the result as a
+ * blocked run, the same convention as an out-of-band gate.
+ */
+export function missingRequiredForLane(
+  requiredEnv: readonly string[],
+  runtimeLane: RuntimeLane,
+  resolution: EnvResolution,
+  locallySeeded: ReadonlySet<string>,
+): string[] {
+  return requiredEnv.filter((name) => {
+    if (!resolution.present(name)) {
+      return true;
+    }
+    return runtimeLane !== "local" && locallySeeded.has(name);
+  });
+}
+
+/** Human-readable blocked reason naming each unsatisfied var and where it lives. */
+export function blockedReasonForMissingEnv(
+  scenarioId: string,
+  runtimeLane: RuntimeLane,
+  missing: readonly string[],
+  locallySeeded: ReadonlySet<string>,
+): string {
+  const lines = missing.map((name) => {
+    const spec = findEnvVarSpec(name);
+    const seededNote = locallySeeded.has(name)
+      ? " [set for this run by local durable-user seeding, which does not satisfy the sandbox lane]"
+      : "";
+    const suffix = spec ? ` — ${spec.description} (${spec.whereItLives})` : "";
+    return `      - ${name}${seededNote}${suffix}`;
+  });
+  return `${scenarioId}/${runtimeLane}: blocked on absent credential(s) — set the following to run it for real:\n${lines.join("\n")}`;
 }

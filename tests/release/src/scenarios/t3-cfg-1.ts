@@ -5,7 +5,7 @@ import { ScenarioExpectedFailError } from "./types.js";
 import { DEFAULT_GITHUB_TEST_REPO, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { ensureLocalClone } from "../fixtures/git.js";
 import { LocalRuntimeClient, LocalRuntimeError } from "../fixtures/local-runtime.js";
-import { catalogHarnesses } from "./t3-chat-1.js";
+import { catalogHarnesses, withGatewayProbedCandidates } from "./t3-chat-1.js";
 
 /**
  * T3-CFG-1 — live config options apply in an existing session.
@@ -154,7 +154,7 @@ async function createClaudeSession(
   workspaceId: string,
 ): Promise<{ id: string }> {
   const choice = (await catalogHarnesses(["claude"])).get("claude");
-  const candidates = choice?.modelCandidates ?? [];
+  const candidates = await withGatewayProbedCandidates(client, "claude", choice?.modelCandidates ?? []);
   if (candidates.length === 0) {
     throw new Error("T3-CFG-1: no claude model candidate found in catalogs/agents/catalog.json");
   }

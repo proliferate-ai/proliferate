@@ -192,6 +192,19 @@ async function findMemberByEmail(
 }
 
 /**
+ * Fixed local-lane durable identity, used when RELEASE_E2E_DURABLE_USER_EMAIL /
+ * _PASSWORD are absent (the CI local lane, which boots a fresh, ephemeral
+ * server per run). "Durable" here means seeded-per-run via the real first-run
+ * `/setup` claim — the ephemeral stack has no pre-existing account, so the
+ * runner mints one deterministically instead of depending on a repo secret.
+ * Only ever used against a `--lane local` target (never staging). The domain is
+ * fake-but-not-special-use for the same reason `FIXTURE_EMAIL_DOMAIN` is (see
+ * `mintFreshUser`).
+ */
+export const DEFAULT_LOCAL_DURABLE_USER_EMAIL = `durable@${FIXTURE_EMAIL_DOMAIN}`;
+export const DEFAULT_LOCAL_DURABLE_USER_PASSWORD = "release-e2e-DurableUser!Aa1";
+
+/**
  * One-time durable-user seeding for the **local** target, only. The local
  * profile boots with an empty Postgres DB, so unlike staging (where the
  * `e2e-tests` org/user is provisioned once, out of band, by ops), a fresh

@@ -1,14 +1,12 @@
 /**
  * Declared manifest of every environment variable the tier-3 release-e2e
  * runner needs. Per specs/developing/testing/README.md ("Running tier 3/4
- * locally"): every key is inventoried here with where to obtain it, and the
- * runner fails fast with a named-variable error when one is missing. No
- * scenario ever embeds a credential directly — everything is read through
- * `resolveEnv` in `./env-resolution.ts`.
- *
- * None of these credentials exist yet (tracked as a follow-up: provisioning
- * the e2e-tests org, the gateway test key, and the E2B test team). Until then
- * this manifest only powers `--dry-run` reporting.
+ * locally"): every key is inventoried here with where to obtain it. A missing
+ * credential does not fail the whole run — the runner reports just the
+ * scenarios/lanes that require it as blocked (see `src/cli/run.ts`), so a
+ * partially-credentialed environment still produces signal for everything it
+ * can reach. No scenario ever embeds a credential directly — everything is
+ * read through `resolveEnv` in `./env-resolution.ts`.
  */
 
 import type { RuntimeLane } from "./types.js";
@@ -50,6 +48,22 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "Local dev: `~/.proliferate-local/dev/release-e2e.env`. CI: GitHub Actions secret " +
       "of the same name.",
     secret: true,
+  },
+  {
+    name: "RELEASE_E2E_GATEWAY_BASE_URL",
+    description:
+      "Public inference base URL of the LiteLLM gateway RELEASE_E2E_GATEWAY_TEST_KEY was issued " +
+      "against (the deployment's AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL). When both are set for a " +
+      "--lane local run, the runner pushes a gateway-keyed agent-auth state document to the local " +
+      "AnyHarness runtime (PUT /v1/agent-auth/state) so harnesses can chat with no native CLI " +
+      "login — the CI path. Without it, local chat scenarios rely on whatever credential the " +
+      "runtime already resolves (native CLI login on a laptop).",
+    whereItLives:
+      "The gateway deployment's public URL (same place the key was minted). " +
+      "Local dev: `~/.proliferate-local/dev/release-e2e.env`. CI: GitHub Actions secret " +
+      "alongside RELEASE_E2E_GATEWAY_TEST_KEY.",
+    secret: false,
+    lanes: ["local"],
   },
   {
     name: "RELEASE_E2E_E2B_API_KEY",

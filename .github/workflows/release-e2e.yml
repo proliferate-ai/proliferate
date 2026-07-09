@@ -114,7 +114,7 @@ jobs:
             enabled=false
           fi
           if [ -z "$DURABLE_USER_EMAIL" ] || [ -z "$DURABLE_USER_PASSWORD" ]; then
-            echo "::notice title=Tier-3 durable identity absent::RELEASE_E2E_DURABLE_USER_EMAIL / _PASSWORD not set — server-mediated scenarios (T3-PROV-*, T3-REPO-1, T3-INT-1, T3-SEC-MAT-1, T3-BILL-*) will report blocked. Seed the durable e2e-tests account and add the secrets to run them."
+            echo "::notice title=Tier-3 durable identity self-seeded::RELEASE_E2E_DURABLE_USER_EMAIL / _PASSWORD not set — the runner seeds a per-run durable user through the real /setup claim (the stack is ephemeral), so local-lane server-mediated scenarios still run. Sandbox-lane scenarios that need the real persistent identity report blocked."
           fi
           if [ -z "$E2B_API_KEY" ]; then
             echo "::notice title=Tier-3 sandbox lane absent::E2B_API_KEY not set — sandbox-lane scenarios will report blocked. (Note: even with the key, the sandbox lane needs a publicly reachable server URL / tunnel for E2B webhooks.)"
@@ -189,6 +189,15 @@ jobs:
           # Absent secrets expand to empty; the runner reports those scenarios
           # blocked rather than failing (env-resolution.ts).
           RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+          # Public base URL of the gateway the test key was issued against
+          # (staging's AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL). With both set the
+          # runner pushes gateway agent-auth to the local runtime so harnesses
+          # chat with no native CLI login (env-manifest.ts).
+          RELEASE_E2E_GATEWAY_BASE_URL: ${{ secrets.RELEASE_E2E_GATEWAY_BASE_URL || 'https://staging-gateway.proliferate.com' }}
+          # Durable-user secrets are OPTIONAL for this lane: when absent the
+          # runner self-seeds a per-run durable user through the real /setup
+          # claim (the stack is ephemeral), and sandbox-lane scenarios that
+          # need the real persistent identity report blocked (#1069).
           RELEASE_E2E_DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
           RELEASE_E2E_DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
           RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID }}
@@ -208,8 +217,16 @@ jobs:
           ( cd server && .venv/bin/alembic upgrade head )
           ( cd server && .venv/bin/uvicorn proliferate.main:app --host 127.0.0.1 --port 8086 ) &
           SERVER_PID=$!
-          # Boot the AnyHarness runtime built above.
-          ./target/runtime-local/debug/anyharness serve --host 127.0.0.1 --port 8542 &
+          # Boot the AnyHarness runtime built above. ANTHROPIC_AUTH_TOKEN is
+          # exported to the runtime process because its session-create
+          # readiness gate reads only process env / native login files — it
+          # does not consult the gateway agent-auth state the runner pushes
+          # (PUT /v1/agent-auth/state), so a gateway-only environment would
+          # report claude LoginRequired. At launch the gateway render overrides
+          # ANTHROPIC_AUTH_TOKEN/_BASE_URL with the same key anyway, so this
+          # only satisfies the readiness check, never routes traffic.
+          ANTHROPIC_AUTH_TOKEN="$RELEASE_E2E_GATEWAY_TEST_KEY" \
+            ./target/runtime-local/debug/anyharness serve --host 127.0.0.1 --port 8542 &
           RUNTIME_PID=$!
           trap 'kill $SERVER_PID $RUNTIME_PID 2>/dev/null || true' EXIT
 
@@ -225,12 +242,17 @@ jobs:
           make release-e2e LANE="$LANE" DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
 
       - name: Upload failure reports
-        if: steps.preflight.outputs.enabled == 'true' && failure()
+        # always() (not failure()): the runner step is continue-on-error, so a
+        # red runner never flips the job to "failed" and failure() would skip
+        # this. Upload whenever the job ran the runner; the step no-ops when
+        # there are no reports.
+        if: always() && steps.preflight.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-e2e-reports
           path: tests/release/.output/
           retention-days: 7
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   # Staging lane — the README's documented tier-3 CI target (real deployment,
