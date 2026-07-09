@@ -89,7 +89,7 @@ async def test_wake_denied_when_exhausted(
         await wake_cloud_sandbox(db_session, SimpleNamespace(id=user_id))
 
     assert excinfo.value.status_code == 402
-    assert excinfo.value.code == "billing_resume_blocked"
+    assert excinfo.value.code == "billing_start_blocked"
     # The gate must run before ensure_personal_cloud_sandbox_exists stages a row.
     await db_session.rollback()
     assert await sandbox_store.load_personal_cloud_sandbox(db_session, user_id) is None
@@ -108,7 +108,7 @@ async def test_ensure_denied_when_exhausted(
         await ensure_cloud_sandbox_ready(db_session, SimpleNamespace(id=user_id))
 
     assert excinfo.value.status_code == 402
-    assert excinfo.value.code == "billing_resume_blocked"
+    assert excinfo.value.code == "billing_start_blocked"
     await db_session.rollback()
     assert await sandbox_store.load_personal_cloud_sandbox(db_session, user_id) is None
 
