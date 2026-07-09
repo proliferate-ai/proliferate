@@ -1,10 +1,8 @@
 import { HELP_TEXT, parseArgs } from "./args.js";
-import { resolveEnv, type EnvResolution } from "../config/env-resolution.js";
-import { envVarNames, findEnvVarSpec } from "../config/env-manifest.js";
+import { resolveEnv, missingRequiredForLane, blockedReasonForMissingEnv } from "../config/env-resolution.js";
+import { envVarNames } from "../config/env-manifest.js";
 import { selectScenarios, allScenarioIds } from "../scenarios/registry.js";
-import type { ScenarioDefinition } from "../scenarios/types.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
-import type { RuntimeLane } from "../config/types.js";
 import {
   DEFAULT_LOCAL_DURABLE_USER_EMAIL,
   DEFAULT_LOCAL_DURABLE_USER_PASSWORD,
@@ -59,9 +57,15 @@ async function main(): Promise<void> {
       // it (#1069), instead of the old run-fatal env gate. Reported as blocked
       // — the same convention as an out-of-band gate — so the run still exits
       // success when everything non-green is blocked/expected-fail.
-      const missingEnv = args.dryRun ? [] : missingEnvForLane(scenario, runtimeLane, neededEnv, locallySeeded);
+      const missingEnv = args.dryRun
+        ? []
+        : missingRequiredForLane(scenario.requiredEnv, runtimeLane, neededEnv, locallySeeded);
       if (missingEnv.length > 0) {
-        blocked.push({ scenarioId: scenario.id, lane: runtimeLane, reason: missingEnvBlockedReason(scenario.id, runtimeLane, missingEnv, locallySeeded) });
+        blocked.push({
+          scenarioId: scenario.id,
+          lane: runtimeLane,
+          reason: blockedReasonForMissingEnv(scenario.id, runtimeLane, missingEnv, locallySeeded),
+        });
         continue;
       }
       try {
@@ -135,48 +139,6 @@ async function main(): Promise<void> {
   } else {
     console.log(`\nNo red scenario runs (${greenCount} green, ${blocked.length} blocked, ${expectedFail.length} expected-fail).`);
   }
-}
-
-/**
- * Required env for `scenario` on `runtimeLane` that is not satisfied. A var is
- * unsatisfied when it is absent, OR when it was only supplied by this run's
- * local durable-user seeding but the lane is not `local`: a per-run seeded
- * fresh user cannot stand in for the sandbox lane's needs (the durable
- * staging identity's warm, persistent sandbox plus E2B + a publicly reachable
- * server URL), so sandbox-lane durable-dependent scenarios stay blocked.
- */
-function missingEnvForLane(
-  scenario: ScenarioDefinition,
-  runtimeLane: RuntimeLane,
-  env: EnvResolution,
-  locallySeeded: ReadonlySet<string>,
-): string[] {
-  return scenario.requiredEnv.filter((name) => {
-    if (!env.present(name)) {
-      return true;
-    }
-    return runtimeLane !== "local" && locallySeeded.has(name);
-  });
-}
-
-function missingEnvBlockedReason(
-  scenarioId: string,
-  runtimeLane: RuntimeLane,
-  missing: readonly string[],
-  locallySeeded: ReadonlySet<string>,
-): string {
-  const lines = missing.map((name) => {
-    const spec = findEnvVarSpec(name);
-    const suffix = spec ? ` — ${spec.description} (${spec.whereItLives})` : "";
-    const seededNote = locallySeeded.has(name)
-      ? " [set for this run by local durable-user seeding, which does not satisfy the sandbox lane]"
-      : "";
-    return `${name}${seededNote}${suffix}`;
-  });
-  return (
-    `${scenarioId}/${runtimeLane}: blocked on absent credential(s) — set the following to run it for real:\n` +
-    lines.map((line) => `      - ${line}`).join("\n")
-  );
 }
 
 /**
