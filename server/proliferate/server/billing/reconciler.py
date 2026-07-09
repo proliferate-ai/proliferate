@@ -37,7 +37,6 @@ from proliferate.db.store.billing_runtime_usage import (
     release_billing_reconciler_lock,
     try_acquire_billing_reconciler_lock,
 )
-from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.db.store.cloud_sandboxes import (
     load_cloud_sandbox_by_id,
     mark_cloud_sandbox_destroyed,
@@ -153,7 +152,6 @@ async def _mark_sandbox_environment_unavailable(
 async def _resolve_compute_limit_pause(
     *,
     segment: UsageSegment,
-    org_id_by_subject: dict[UUID, UUID | None],
     compute_limits_by_org: dict[UUID, list[BillingBudgetLimit]],
     spend_cache: dict[tuple[UUID, str, UUID | None], float],
     now: datetime,
@@ -161,18 +159,14 @@ async def _resolve_compute_limit_pause(
     """Decision type when the segment breaches an org compute cap, else None.
 
     Enforce-mode only, matching the ``active_spend_hold`` path. Compute limits
-    are org-scoped: personal subjects (no ``organization_id``) never bind. A
-    per-user cap is compared against the segment user's window usage and takes
-    precedence over an org-wide cap, which sums the whole subject.
+    are org-scoped: a segment with no ``organization_id`` (org-less owner) never
+    binds. Org usage is summed by ``organization_id`` across every member's
+    segments regardless of who pays for each. A per-user cap is compared against
+    the segment user's window usage and takes precedence over an org-wide cap.
     """
     if settings.cloud_billing_mode != BILLING_MODE_ENFORCE:
         return None
-    subject_id = segment.billing_subject_id
-    if subject_id not in org_id_by_subject:
-        async with db_engine.async_session_factory() as db:
-            subject = await get_billing_subject_by_id(db, subject_id)
-        org_id_by_subject[subject_id] = subject.organization_id if subject is not None else None
-    organization_id = org_id_by_subject[subject_id]
+    organization_id = segment.organization_id
     if organization_id is None:
         return None
     if organization_id not in compute_limits_by_org:
@@ -186,13 +180,13 @@ async def _resolve_compute_limit_pause(
         return None
 
     async def _window_seconds(window: str, scope_user_id: UUID | None) -> float:
-        key = (subject_id, window, scope_user_id)
+        key = (organization_id, window, scope_user_id)
         if key not in spend_cache:
             start, end = window_bounds(window, now)
             async with db_engine.async_session_factory() as db:
-                spend_cache[key] = await billing_store.compute_usage_seconds_in_window(
+                spend_cache[key] = await billing_store.compute_usage_seconds_in_window_for_org(
                     db,
-                    billing_subject_id=subject_id,
+                    organization_id=organization_id,
                     start=start,
                     end=end,
                     now=now,
@@ -304,8 +298,8 @@ async def run_billing_reconcile_pass() -> None:
         snapshots_by_subject: dict[UUID, BillingSnapshot] = {}
         recorded_hold_decision_subjects: set[UUID] = set()
         # Org budget-limit enforcement caches (spec §4.2), scoped to this pass:
-        # subject→org, org→enabled compute limits, and window usage.
-        org_id_by_subject: dict[UUID, UUID | None] = {}
+        # org→enabled compute limits, and org window usage keyed by
+        # (organization_id, window, user_id | None).
         compute_limits_by_org: dict[UUID, list[BillingBudgetLimit]] = {}
         compute_spend_cache: dict[tuple[UUID, str, UUID | None], float] = {}
         recorded_limit_decisions: set[tuple[UUID, UUID | None, str]] = set()
@@ -337,7 +331,6 @@ async def run_billing_reconcile_pass() -> None:
                 recorded_hold_decision_subjects.add(segment.billing_subject_id)
             limit_decision = await _resolve_compute_limit_pause(
                 segment=segment,
-                org_id_by_subject=org_id_by_subject,
                 compute_limits_by_org=compute_limits_by_org,
                 spend_cache=compute_spend_cache,
                 now=now,
