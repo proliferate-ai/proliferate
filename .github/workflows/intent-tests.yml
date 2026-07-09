@@ -90,3 +90,84 @@ jobs:
           name: intent-tests-traces
           path: tests/intent/test-results/
           retention-days: 7
+
+  # Tier-2 BILLING suite (scenarios.md T2-BILL-1..9). Split into its own job
+  # because it boots the stack with Stripe test mode + enforcement on, needs
+  # the Stripe CLI, and self-signs webhook deliveries. Provisional and
+  # non-blocking like the suite above. Requires a Stripe TEST secret key in the
+  # STRIPE_TEST_SECRET_KEY repo secret; with no key the suite skips itself
+  # cleanly (globalSetup detects it and marks every spec skipped, not failed).
+  intent-billing:
+    name: intent-billing (provisional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install server (venv, matches local layout)
+        run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
+      - name: Install Playwright chromium
+        run: pnpm -C tests/intent exec playwright install --with-deps chromium
+
+      - name: Install Stripe CLI
+        run: |
+          curl -fsSL https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" \
+            | sudo tee /etc/apt/sources.list.d/stripe.list
+          sudo apt-get update && sudo apt-get install -y stripe
+
+      - name: Run tier-2 billing suite
+        env:
+          USE_EXISTING_POSTGRES: "1"
+          USE_EXISTING_REDIS: "1"
+          LOCAL_PGHOST: 127.0.0.1
+          TIER2_INTENT_SKIP_RUNTIME: "1"
+          CI: "true"
+          # Stripe TEST key (sk_test_...). Absent → the suite skips itself.
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: pnpm -C tests/intent run test:billing
+
+      - name: Upload Playwright traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: intent-billing-traces
+          path: tests/intent/test-results/
+          retention-days: 7
