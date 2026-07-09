@@ -38,7 +38,6 @@ async function subscribeOrgToPro(organizationId: string, ownerUserId: string, se
   return { subject, subscriptionId: sub.id, fullSub };
 }
 
-const ISSUE_1044 = "https://github.com/proliferate-ai/proliferate/issues/1044";
 
 test.describe("T2-BILL-3: seats — invite/remove/re-invite on a Pro org", () => {
   skipIfNoStripe(test);
@@ -178,12 +177,12 @@ test.describe("T2-BILL-3: seats — invite/remove/re-invite on a Pro org", () =>
   });
 
   test(
-    "ISSUE #1044 (pinned known-bug): two active org subscriptions break every membership change (500 MultipleResultsFound)",
+    "two active org subscriptions no longer break membership changes (issue #1044 fixed)",
     async () => {
-      test.info().annotations.push({
-        type: "known-bug",
-        description: `maybe_create_org_seat_adjustment selects the latest healthy subscription without .limit(1); a second active subscription makes scalar_one_or_none raise and every membership change 500s. ${ISSUE_1044}. When the fix lands, flip this to expect 200.`,
-      });
+      // Formerly the ISSUE #1044 known-bug pin: maybe_create_org_seat_adjustment
+      // now caps its subscription lookup at one row (newest by the
+      // latest_healthy_cloud_subscription ordering), so a second active
+      // subscription no longer raises MultipleResultsFound (issue #1044).
       const { token, organizationId } = await adminContext();
       const ownerId = await userIdFor(token);
       // Two live subscriptions on the same org subject (double-checkout /
@@ -216,16 +215,16 @@ test.describe("T2-BILL-3: seats — invite/remove/re-invite on a Pro org", () =>
       void memberToken;
       const members = await seed.listMembers(token, organizationId);
       const m = members.find((mm) => mm.email === email)!;
-      // Raw fetch: the 500 body is plain text ("Internal Server Error"),
-      // which seed.removeMembership's JSON parse would choke on.
       const removal = await fetch(
         `${process.env.TIER2_BILLING_API_BASE_URL}/v1/organizations/${organizationId}/members/${m.membershipId}`,
         { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
       );
-      expect(removal.status, "pins the current 500 (issue #1044)").toBe(500);
+      expect(
+        [200, 204],
+        "membership change succeeds despite two live subscription rows (issue #1044 fixed)",
+      ).toContain(removal.status);
 
-      // Clean up the org's membership state for later specs: retire the extra
-      // subscription rows, then the removal goes through again.
+      // Clean up the org's subscription state for later specs.
       await b.withDb((db) =>
         db.query(
           `UPDATE billing_subscription SET status = 'canceled', updated_at = now()
@@ -233,8 +232,6 @@ test.describe("T2-BILL-3: seats — invite/remove/re-invite on a Pro org", () =>
           [subject.id],
         ),
       );
-      const retry = await seed.removeMembership(token, organizationId, m.membershipId);
-      expect([200, 204]).toContain(retry.status);
     },
   );
 });
