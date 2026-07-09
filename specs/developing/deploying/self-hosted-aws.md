@@ -125,15 +125,19 @@ overrides should go in `/opt/proliferate/server/deploy/.env.local`:
 
 ```text
 AGENT_GATEWAY_ENABLED=true
-AGENT_GATEWAY_BIFROST_BASE_URL=https://<private-or-protected-bifrost-admin>
-AGENT_GATEWAY_BIFROST_PUBLIC_BASE_URL=https://<public-bifrost-inference>
-AGENT_GATEWAY_RECONCILER_ENABLED=true
+AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000
+AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://<public-litellm-endpoint>
+AGENT_GATEWAY_LITELLM_MASTER_KEY=<same value as LITELLM_MASTER_KEY>
+LITELLM_MASTER_KEY=<openssl rand -hex 32>
+LITELLM_POSTGRES_PASSWORD=<openssl rand -hex 32>
 ```
 
-Then run `/opt/proliferate/server/deploy/update.sh`. The update script merges
-`.env.static` with `.env.local` and preserves the override across later stack
-updates. Self-hosted agent gateway deployments now point at Bifrost; the Compose
-stack no longer includes a bundled LiteLLM service.
+Then run `/opt/proliferate/server/deploy/update.sh` and start the profiled
+services: `docker compose --env-file .env.runtime -f
+docker-compose.production.yml --profile agent-gateway up -d`. The update
+script merges `.env.static` with `.env.local` and preserves the override
+across later stack updates. The gateway is the bundled LiteLLM service
+(compose profile `agent-gateway`).
 
 ## Update Flow
 
