@@ -79,6 +79,27 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | tests/intent/specs/integrations.spec.ts |
 | Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | tests/release/src/scenarios/t3-int-1.ts (T3-INT-1; blocked on credential RELEASE_E2E_INTEGRATION_API_KEY + github_link_required on the gateway route. Finding: cataloged Slack is oauth2/hosted-MCP not api_key, so the contract's Slack-bot-token premise does not fit the catalog — filed; scenario uses an api_key-kind seed (exa)) |
 
+## Self-hosting
+
+Every self-hosted deploy is the production compose bundle (hand-run
+`bootstrap.sh` or the AWS one-click), single-org, claimed once via `/setup`.
+Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md`.
+
+| Flow | Tier | Test pointer |
+| --- | --- | --- |
+| Single-org mode derives from telemetry mode (`!= hosted_product`), override wins both directions | 1 | server/tests/unit/test_telemetry_mode.py (T1-SH-1; self_managed AND local_dev single-org, hosted_product multi-org, `SINGLE_ORG_MODE`/`PROLIFERATE_SINGLE_ORG_MODE` override forces either way) |
+| SSO env-var canonical form: every `SSO_*` ≡ `PROLIFERATE_SSO_*` | 1 | server/tests/unit/test_sso_env_aliases.py (T1-SH-2; structural pair sweep over all 19 SSO fields + functional bare/prefixed equivalence) |
+| `/meta` version wire contract (the connect dialog's trust screen reads it) | 1 | server/tests/unit/test_meta_endpoint.py (T1-SH-3; golden field names + order on the response model and the live JSON — rename/reorder guard) |
+| Connect to a self-hosted server: dialog validation, trust screen, switch A→B | 2 | — (T2-SH-1; the connect affordance is Tauri-gated (LoginScreen.tsx:117) and never renders in the desktop-web build this suite boots, and the `set_app_config` write + relaunch + credential store throw outside Tauri — tier-3 by ruling, self-hosting.md §4. Registered not-yet-implemented rather than faked) |
+| `/setup` claim → claimer is OWNER of the single instance org; re-claim permanently closed (404) | 2 | tests/intent/specs/self-hosting.spec.ts (T2-SH-2; extends T2-AUTH-1 — owner role on the one `is_instance` org, second context gets the closed 404 API + rendered page) |
+| Invite → `/register` with the invitation token → invitee sign-in; wrong-email rejected | 2 | tests/intent/specs/self-hosting.spec.ts (T2-SH-3; token = invitation id, delivery skipped locally; real token + mismatched email → uniform 403, no account minted) |
+| Adaptive sign-in surface driven by `GET /auth/desktop/methods` + github availability | 2 | tests/intent/specs/self-hosting.spec.ts (T2-SH-4; no GitHub env → real password-only surface, no GitHub button; GitHub advertised → the button replaces the password form. With-GitHub asserted at the availability boundary — a real GitHub-configured server for the browser UI is tier-3 per §4, same ruling as T2-AUTH-4) |
+| Cold boot to second user on real infra (bootstrap → claim → invite → register → login over real TLS/DNS) | 3 | — (T3-SH-1; needs standing staging EC2 + DNS/TLS, self-hosting.md §6) |
+| Real (Tauri) desktop connect to alpha/beta: relaunch + config.json + keychain end-to-end | 3 | — (T3-SH-2; the only lane that proves the Tauri connect slice T2-SH-1 can't) |
+| Model gateway add-on: `--profile agent-gateway` + LiteLLM → real agent response | 3 | — (T3-SH-3; staging gateway test key) |
+| Operator update motion: `./update.sh` migrates + restarts, `/meta` reports N, data intact | 4 | — (T4-SH-1) |
+| Desktop artifact chain valid per release (server redirect follows, CDN manifest fresh, every platform artifact HEAD 200, tag contains the SHA) | 4 | — (T4-SH-2; the 2026-07-09 incident test — must run in the release gate, self-hosting.md §5) |
+
 ## Workflows — PARKED (surface being reworked; tests land with the rework PRs)
 
 | Flow | Tier | Test pointer |

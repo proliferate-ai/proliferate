@@ -374,13 +374,51 @@ export async function registerInvitedAccount(params: {
   password: string;
   invitationToken: string;
 }): Promise<void> {
-  const result = await postForm("/register", {
+  const result = await registerInvitedAccountRaw(params);
+  if (result.status !== 200) {
+    throw new Error(`Invited registration failed for ${params.email} (${result.status}): ${result.html.slice(0, 500)}`);
+  }
+}
+
+/**
+ * Non-throwing variant of {@link registerInvitedAccount}: POST the invited
+ * `/register` form and hand back the raw status + rendered HTML. Used for the
+ * negative cases (wrong email against a real token → the uniform 403
+ * `_not_invited` re-render) where the caller asserts on the rejection instead
+ * of treating a non-200 as an error.
+ */
+export async function registerInvitedAccountRaw(params: {
+  email: string;
+  password: string;
+  invitationToken: string;
+}): Promise<{ status: number; html: string }> {
+  return postForm("/register", {
     email: params.email,
     password: params.password,
     invitation_token: params.invitationToken,
   });
-  if (result.status !== 200) {
-    throw new Error(`Invited registration failed for ${params.email} (${result.status}): ${result.html.slice(0, 500)}`);
+}
+
+/**
+ * Read an organization's `is_instance` flag straight from Postgres. Single-org
+ * mode's claim marks THE instance organization with this column and no product
+ * API surfaces it, so this is the same "state the product exposes no API for"
+ * direct-DB read as the slug/invitation-expiry helpers above.
+ */
+export async function getOrganizationIsInstance(organizationId: string): Promise<boolean> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    const result = await client.query<{ is_instance: boolean }>(
+      `SELECT is_instance FROM organization WHERE id = $1`,
+      [organizationId],
+    );
+    if (result.rows.length === 0) {
+      throw new Error(`Organization ${organizationId} not found`);
+    }
+    return result.rows[0].is_instance;
+  } finally {
+    await client.end();
   }
 }
 
