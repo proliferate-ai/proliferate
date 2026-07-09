@@ -120,6 +120,14 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
+      {usageSummary ? (
+        <ConsumptionCard
+          usageSummary={usageSummary}
+          onTopUp={() => {
+            navigate("/settings?section=billing");
+          }}
+        />
+      ) : null}
       <div aria-hidden className="h-[0.5px] bg-sidebar-border" />
       <div className="flex items-center px-2 py-2">
         <PopoverButton
@@ -322,16 +330,6 @@ export function SidebarAccountFooter() {
                   }}
                 />
               </div>
-
-              {usageSummary ? (
-                <ConsumptionCard
-                  usageSummary={usageSummary}
-                  onTopUp={() => {
-                    navigate("/settings?section=billing");
-                    close();
-                  }}
-                />
-              ) : null}
 
               <div className="border-t border-border-light py-1">
                 <PopoverMenuItem
