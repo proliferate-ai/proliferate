@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { HomeComposerForm } from "@/components/home/screen/HomeComposerForm";
 import { HomeOnboardingCards } from "@/components/home/screen/HomeOnboardingCards";
+import { WorkflowRecommendedStrip } from "@/components/workflows/home/WorkflowRecommendedStrip";
 import { HomeProjectMenu } from "@/components/home/screen/HomeProjectMenu";
 import { HomeTargetPicker } from "@/components/home/screen/HomeTargetPicker";
 import { ComposerModelConfigSelector } from "@/components/workspace/chat/input/ComposerModelConfigSelector";
@@ -267,6 +268,13 @@ export function HomeNextScreen() {
               />
             )}
           />
+
+          {/* R5: recommended-workflows strip — one of the three R1 launch
+              doors. Self-contained (own queries + launcher); renders nothing
+              until the org has a workflow, so it stays out of the way. */}
+          <div className="mx-auto mt-8 w-full max-w-2xl">
+            <WorkflowRecommendedStrip />
+          </div>
         </div>
       </main>
     </div>

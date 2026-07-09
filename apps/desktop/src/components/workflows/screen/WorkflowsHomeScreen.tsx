@@ -10,14 +10,20 @@ import {
   buildWorkflowRunRow,
   freePlanWorkflowLimit,
   workflowCreateAllowed,
+  type WorkflowTargetMode,
 } from "@proliferate/product-domain/workflows/model";
 import {
   coerceRunStatus,
   workflowRunStatusTone,
   type WorkflowStatusTone,
 } from "@proliferate/product-domain/workflows/run-status";
+import {
+  deriveLastUsedTarget,
+  type WorkflowRunTargetRecord,
+} from "@proliferate/product-domain/workflows/run-launch";
 import type { WorkflowTemplate } from "@proliferate/product-domain/workflows/templates";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { useWorkflowRunPillStore } from "@/stores/workflows/workflow-run-pill-store";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
@@ -144,6 +150,7 @@ export function WorkflowsHomeScreen() {
   const cloudTargetsQuery = useCloudRunTargetWorkspaces();
   const { createMutation } = useWorkflowMutations();
   const launchMutation = useLaunchWorkflowRun();
+  const showRunPill = useWorkflowRunPillStore((state) => state.show);
 
   const workflows = workflowsQuery.data?.workflows ?? [];
   const runs = runsQuery.data?.runs ?? [];
@@ -212,21 +219,36 @@ export function WorkflowsHomeScreen() {
 
   const canCreate = workflowCreateAllowed(workflows.length, freePlanWorkflowLimit());
 
-  const runNow = (workflowId: string, submit: WorkflowRunSubmit) => {
+  // R6: run rows already store the target they ran in — derive the last-used
+  // workspace per workflow to pre-fill the modal (no new stored shape).
+  const runTargetRecords = useMemo<WorkflowRunTargetRecord[]>(
+    () =>
+      runs.map((run) => ({
+        workflowId: run.workflowId,
+        createdAt: run.startedAt ?? run.createdAt,
+        targetMode: (run.targetMode as WorkflowTargetMode) ?? "local",
+        workspaceId: run.anyharnessWorkspaceId,
+      })),
+    [runs],
+  );
+
+  const runNow = (workflow: WorkflowResponse, submit: WorkflowRunSubmit) => {
     setRunError(null);
     setRunErrorCode(null);
     launchMutation.mutate(
       {
-        workflowId,
+        workflowId: workflow.id,
         args: submit.args,
         targetMode: submit.targetMode,
         localWorkspaceId: submit.localWorkspaceId,
         cloudWorkspaceId: submit.cloudWorkspaceId,
+        sessionBindings: submit.sessionBindings,
       },
       {
         onSuccess: (run) => {
+          // R2: stay put — drop a run pill instead of navigating away.
           setArgsModal(null);
-          navigate(`/workflows/${workflowId}/runs/${run.id}`);
+          showRunPill({ runId: run.id, workflowId: workflow.id, workflowName: workflow.name });
         },
         onError: (error) => {
           setRunError(error.message);
@@ -342,23 +364,40 @@ export function WorkflowsHomeScreen() {
       </div>
 
       {argsModal ? (
-        <WorkflowRunArgsModal
-          open
-          workflowName={argsModal.workflow.name}
-          args={argsModal.definition.inputs}
-          localWorkspaces={localWorkspaceOptions}
-          cloudWorkspaces={cloudWorkspaceOptions}
-          hasIntegrations={argsModal.definition.integrations.length > 0}
-          busy={launchMutation.isPending}
-          error={runError}
-          onOpenIntegrationsSettings={
-            runErrorCode === FUNCTION_PROVIDER_NOT_READY_CODE
-              ? () => navigate("/settings?section=integrations")
-              : undefined
-          }
-          onClose={() => setArgsModal(null)}
-          onSubmit={(submit) => runNow(argsModal.workflow.id, submit)}
-        />
+        (() => {
+          const lastUsed = deriveLastUsedTarget(runTargetRecords, argsModal.workflow.id);
+          return (
+            <WorkflowRunArgsModal
+              open
+              workflowName={argsModal.workflow.name}
+              args={argsModal.definition.inputs}
+              slots={argsModal.definition.agents.map((agent) => ({
+                slot: agent.slot,
+                harness: agent.harness,
+                model: agent.model,
+              }))}
+              localWorkspaces={localWorkspaceOptions}
+              cloudWorkspaces={cloudWorkspaceOptions}
+              defaultTargetMode={lastUsed?.targetMode ?? null}
+              defaultLocalWorkspaceId={
+                lastUsed?.targetMode === "local" ? lastUsed.workspaceId : null
+              }
+              defaultCloudWorkspaceId={
+                lastUsed?.targetMode === "personal_cloud" ? lastUsed.workspaceId : null
+              }
+              hasIntegrations={argsModal.definition.integrations.length > 0}
+              busy={launchMutation.isPending}
+              error={runError}
+              onOpenIntegrationsSettings={
+                runErrorCode === FUNCTION_PROVIDER_NOT_READY_CODE
+                  ? () => navigate("/settings?section=integrations")
+                  : undefined
+              }
+              onClose={() => setArgsModal(null)}
+              onSubmit={(submit) => runNow(argsModal.workflow, submit)}
+            />
+          );
+        })()
       ) : null}
     </MainSidebarPageShell>
   );

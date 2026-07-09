@@ -5,6 +5,7 @@ import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
 import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { ToastContainer } from "@/components/feedback/Toast"
+import { WorkflowRunPillHost } from "@/components/workflows/run/WorkflowRunPillHost"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
@@ -369,6 +370,8 @@ function AppRuntime() {
           {/* Legacy toast store container (non-update toasts) — kept until all
               toast call sites migrate to Sonner. */}
           <ToastContainer />
+          {/* Post-launch workflow run pills (spec run-from-chat R2: stay put). */}
+          <WorkflowRunPillHost />
           {/* Kit Sonner toaster + update lifecycle toasts (UX spec §12). */}
           <Toaster />
           <UpdateToastPresenter />

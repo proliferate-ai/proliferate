@@ -1,12 +1,18 @@
 import { useMemo, useState } from "react";
 import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
 import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
+import {
+  FRESH_SESSION_CHOICE,
+  isExistingSessionChoice,
+  type SlotSessionBinding,
+} from "@proliferate/product-domain/workflows/run-launch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
 import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { CircleAlert } from "@proliferate/ui/icons";
+import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { WorkflowSelect } from "../editor/WorkflowSelect";
 
 type TargetMode = WorkflowTargetMode;
@@ -18,11 +24,32 @@ export interface WorkflowRunTargetOption {
   label: string;
 }
 
+/** One agent slot from the definition — the unit a session binds to (L29). */
+export interface WorkflowRunSlotOption {
+  slot: string;
+  harness: string;
+  model: string;
+}
+
+/** A live session the launcher may bind to a same-harness slot (R3 minority
+ * path). Held sessions render disabled — another run owns them (E8). */
+export interface WorkflowRunSessionCandidate {
+  id: string;
+  title: string;
+  harness: string;
+  /** e.g. "3m ago" — shown when the session is free. */
+  lastActiveLabel?: string;
+  /** Non-null → held by another run; not selectable. */
+  heldByLabel?: string | null;
+}
+
 export interface WorkflowRunSubmit {
   args: Record<string, ArgValue>;
   targetMode: TargetMode;
   localWorkspaceId?: string;
   cloudWorkspaceId?: string;
+  /** One entry per slot; fresh-by-default (`sessionId` = "new"). */
+  sessionBindings: SlotSessionBinding[];
 }
 
 export interface WorkflowRunArgsModalProps {
@@ -31,8 +58,19 @@ export interface WorkflowRunArgsModalProps {
   args: readonly WorkflowInputSpec[];
   localWorkspaces: readonly WorkflowRunTargetOption[];
   cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  /** Agent slots (definition order). Drives the per-slot session-binding rows;
+   * omit for the arg-only modal. */
+  slots?: readonly WorkflowRunSlotOption[];
+  /** Live sessions eligible to bind (any harness). Filtered to the slot's
+   * harness per row; empty = fresh-only (the common case, R3). Chat-origin
+   * launches should list the current session first. */
+  sessionCandidates?: readonly WorkflowRunSessionCandidate[];
   /** Default local workspace (e.g. the currently-open one), if any. */
   defaultLocalWorkspaceId?: string | null;
+  /** Last-used target for this workflow (R6). Pre-selects the run location and
+   * cloud workspace when they still exist. */
+  defaultTargetMode?: TargetMode | null;
+  defaultCloudWorkspaceId?: string | null;
   /** Whether this workflow declares a non-empty `integrations` grant (spec 5.3,
    * E3): drives the local-target warning below — cloud-only in v1, never a
    * block. */
@@ -63,14 +101,63 @@ function initialValue(arg: WorkflowInputSpec): ArgValue {
   }
 }
 
-/** Args form + run-target selection shown before a run (spec 3.2 / 3.6). */
+/** One slot's binding picker: New session (default, R3) + same-harness live
+ * candidates. Held candidates render disabled. */
+function SlotBindingRow({
+  slot,
+  candidates,
+  value,
+  onChange,
+}: {
+  slot: WorkflowRunSlotOption;
+  candidates: readonly WorkflowRunSessionCandidate[];
+  value: string;
+  onChange: (sessionId: string) => void;
+}) {
+  const options = [
+    { value: FRESH_SESSION_CHOICE, label: "New session", triggerLabel: "New session" },
+    ...candidates.map((candidate) => ({
+      value: candidate.id,
+      label: candidate.heldByLabel
+        ? `${candidate.title} · held by ${candidate.heldByLabel}`
+        : candidate.lastActiveLabel
+          ? `${candidate.title} · ${candidate.lastActiveLabel}`
+          : candidate.title,
+      triggerLabel: candidate.title,
+      disabled: Boolean(candidate.heldByLabel),
+    })),
+  ];
+  return (
+    <div className="flex items-center gap-2">
+      <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
+        <ProviderIcon kind={slot.harness} className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="truncate font-mono text-ui-sm text-foreground">{slot.slot}</span>
+        <span className="shrink-0 text-xs text-faint">· {slot.model}</span>
+      </span>
+      <WorkflowSelect
+        ariaLabel={`Session for ${slot.slot}`}
+        className="w-48"
+        value={value}
+        options={options}
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+/** Args form + session binding + run-target selection shown before a run
+ * (spec run-from-chat R2/R3/R6; spec 3.2 / 3.6). */
 export function WorkflowRunArgsModal({
   open,
   workflowName,
   args,
   localWorkspaces,
   cloudWorkspaces,
+  slots,
+  sessionCandidates,
   defaultLocalWorkspaceId,
+  defaultTargetMode,
+  defaultCloudWorkspaceId,
   hasIntegrations = false,
   busy = false,
   error = null,
@@ -88,8 +175,28 @@ export function WorkflowRunArgsModal({
 
   const cloudAvailable = cloudWorkspaces.length > 0;
 
+  // Same-harness, run-agnostic candidate list per slot (spec run-from-chat).
+  const candidatesBySlot = useMemo(() => {
+    const map = new Map<string, WorkflowRunSessionCandidate[]>();
+    for (const slot of slots ?? []) {
+      map.set(
+        slot.slot,
+        (sessionCandidates ?? []).filter((candidate) => candidate.harness === slot.harness),
+      );
+    }
+    return map;
+  }, [slots, sessionCandidates]);
+
+  const bindableSlots = useMemo(
+    () => (slots ?? []).filter((slot) => (candidatesBySlot.get(slot.slot)?.length ?? 0) > 0),
+    [slots, candidatesBySlot],
+  );
+
   const [values, setValues] = useState<Record<string, ArgValue>>(initial);
-  const [targetMode, setTargetMode] = useState<TargetMode>("local");
+  const [bindings, setBindings] = useState<Record<string, string>>({});
+  const [targetMode, setTargetMode] = useState<TargetMode>(
+    () => (defaultTargetMode === "personal_cloud" && cloudAvailable ? "personal_cloud" : "local"),
+  );
   const [localWorkspaceId, setLocalWorkspaceId] = useState<string>(
     () =>
       (defaultLocalWorkspaceId
@@ -98,7 +205,11 @@ export function WorkflowRunArgsModal({
         : localWorkspaces[0]?.id) ?? "",
   );
   const [cloudWorkspaceId, setCloudWorkspaceId] = useState<string>(
-    () => cloudWorkspaces[0]?.id ?? "",
+    () =>
+      (defaultCloudWorkspaceId
+        && cloudWorkspaces.some((w) => w.id === defaultCloudWorkspaceId)
+        ? defaultCloudWorkspaceId
+        : cloudWorkspaces[0]?.id) ?? "",
   );
 
   const setValue = (name: string, value: ArgValue) => {
@@ -111,6 +222,10 @@ export function WorkflowRunArgsModal({
   const missingTarget =
     targetMode === "local" ? localWorkspaceId === "" : cloudWorkspaceId === "";
 
+  const boundCount = (slots ?? []).filter((slot) =>
+    isExistingSessionChoice(bindings[slot.slot]),
+  ).length;
+
   const handleSubmit = () => {
     const resolved: Record<string, ArgValue> = {};
     for (const arg of args) {
@@ -120,11 +235,16 @@ export function WorkflowRunArgsModal({
       }
       resolved[arg.name] = arg.type === "number" ? Number(value) : value;
     }
+    const sessionBindings: SlotSessionBinding[] = (slots ?? []).map((slot) => ({
+      slot: slot.slot,
+      sessionId: bindings[slot.slot] ?? FRESH_SESSION_CHOICE,
+    }));
     onSubmit({
       args: resolved,
       targetMode,
       localWorkspaceId: targetMode === "local" ? localWorkspaceId : undefined,
       cloudWorkspaceId: targetMode === "personal_cloud" ? cloudWorkspaceId : undefined,
+      sessionBindings,
     });
   };
 
@@ -193,6 +313,35 @@ export function WorkflowRunArgsModal({
             )}
           </div>
         ))}
+
+        {bindableSlots.length > 0 ? (
+          <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
+            <Label className="flex items-center gap-1.5">
+              Sessions
+              <span className="text-xs font-normal text-faint">
+                · fresh by default{boundCount > 0 ? ` · ${boundCount} bound` : ""}
+              </span>
+            </Label>
+            <div className="flex flex-col gap-2">
+              {bindableSlots.map((slot) => (
+                <SlotBindingRow
+                  key={slot.slot}
+                  slot={slot}
+                  candidates={candidatesBySlot.get(slot.slot) ?? []}
+                  value={bindings[slot.slot] ?? FRESH_SESSION_CHOICE}
+                  onChange={(sessionId) =>
+                    setBindings((prev) => ({ ...prev, [slot.slot]: sessionId }))
+                  }
+                />
+              ))}
+            </div>
+            {boundCount > 0 ? (
+              <p className="text-xs text-faint">
+                Bound sessions are handed to the run and locked until it finishes or you take over.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
           <Label>Run location</Label>

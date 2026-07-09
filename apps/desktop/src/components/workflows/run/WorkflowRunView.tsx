@@ -32,6 +32,10 @@ export interface WorkflowRunViewProps {
   approvalBusy?: boolean;
   onApprove?: () => void;
   onDeny?: () => void;
+  /** Take-over/stop (spec: cancel endpoint doubles as the UI's take-over action).
+   * Omitted while the run is terminal — there is nothing left to stop. */
+  onCancel?: () => void;
+  cancelBusy?: boolean;
   onBack: () => void;
   onOpenSession: (link: WorkflowStepSessionLink) => void;
 }
@@ -46,6 +50,8 @@ export function WorkflowRunView({
   approvalBusy = false,
   onApprove,
   onDeny,
+  onCancel,
+  cancelBusy = false,
   onBack,
   onOpenSession,
 }: WorkflowRunViewProps) {
@@ -95,7 +101,7 @@ export function WorkflowRunView({
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold text-foreground">{workflowName ?? "Run"}</h1>
           <WorkflowStatusPill
-            label={workflowRunStatusLabel(status)}
+            label={workflowRunStatusLabel(status, run.status)}
             tone={workflowRunStatusTone(status)}
             live={!terminal}
           />
@@ -127,6 +133,14 @@ export function WorkflowRunView({
           <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui-sm text-destructive">
             {run.errorMessage}
           </p>
+        ) : null}
+        {!terminal && onCancel ? (
+          <div className="flex items-center justify-end gap-1.5 border-t border-border/60 pt-3">
+            <span className="text-xs text-faint">Can't be resumed once cancelled</span>
+            <Button size="sm" variant="destructive" loading={cancelBusy} disabled={cancelBusy} onClick={onCancel}>
+              Cancel run
+            </Button>
+          </div>
         ) : null}
       </div>
 

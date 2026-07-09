@@ -11,7 +11,7 @@ import {
   validateStringReferences,
 } from "./interpolation";
 import { validateWorkflowDefinition } from "./validation";
-import { deriveStepRunViews } from "./run-status";
+import { coerceRunStatus, deriveStepRunViews, workflowRunStatusLabel, workflowRunStatusTone } from "./run-status";
 import { WORKFLOW_TEMPLATES } from "./templates";
 import { goalRailLine, workflowStepStrip } from "./presentation";
 import { deriveEffectiveConfigs, deriveScopeGroups } from "./effective-config";
@@ -379,6 +379,104 @@ describe("run-status derivation", () => {
     });
     expect(views.map((v) => v.status)).toEqual(["failed", "skipped", "skipped"]);
     expect(views[0]!.chips).toEqual([{ kind: "exit", label: "exit 1", ok: false }]);
+  });
+
+  // Track 1a phase 2: a 2-agent sequential fixture (flattenWorkflowSteps
+  // concatenates agent nodes in order — L30's per-lane cursor is a later
+  // track), exercising per-slot session links and an unrecognized run
+  // status (1c's `missed` / billing's `budget_blocked` landing ahead of a
+  // client build that doesn't know them yet).
+  const multiAgent: WorkflowDefinition = {
+    version: 1,
+    name: "Two-agent handoff",
+    inputs: [],
+    integrations: [],
+    agents: [
+      {
+        slot: "triage",
+        harness: "claude",
+        model: "sonnet",
+        steps: [
+          {
+            kind: "agent.emit",
+            onFail: { kind: "stop" },
+            prompt: "Summarize the incoming issue.",
+            name: "triage_summary",
+          },
+        ],
+      },
+      {
+        slot: "fixer",
+        harness: "claude",
+        model: "sonnet",
+        steps: [
+          {
+            kind: "shell.run",
+            onFail: { kind: "stop" },
+            command: "make fix",
+          },
+          {
+            kind: "scm.open_pr",
+            onFail: { kind: "stop" },
+            title: "fix: apply triage recommendation",
+          },
+        ],
+      },
+    ],
+  };
+
+  it("flattens multiple agent nodes into one ordered timeline, keyed by nodeIndex.-.stepIndex", () => {
+    const views = deriveStepRunViews({
+      definition: multiAgent,
+      runStatus: "running",
+      stepCursor: 2,
+      stepOutputs: {
+        "0.-.0": { session_id: "sess-triage", workspace_id: "ws-triage" },
+        "1.-.0": { exit_code: 0 },
+        "1.-.1": { session_id: "sess-fixer" },
+      },
+    });
+    expect(views.map((v) => v.status)).toEqual(["completed", "completed", "running"]);
+    // Step 0 belongs to the "triage" agent node; its own session link is
+    // read from that step's own output, distinct from the "fixer" node's
+    // session on step 2 (spec: session links per agent slot).
+    expect(views[0]!.sessionLink).toEqual({ sessionId: "sess-triage", workspaceId: "ws-triage" });
+    expect(views[2]!.sessionLink).toEqual({ sessionId: "sess-fixer", workspaceId: null });
+    expect(views[1]!.chips).toEqual([{ kind: "exit", label: "exit 0", ok: true }]);
+  });
+
+  it("renders an unrecognized run status gracefully instead of a false running/skipped state", () => {
+    // coerceRunStatus (called upstream by the run view) would map an
+    // unmodeled wire status like "budget_blocked" to "unknown" before this
+    // reaches deriveStepRunViews.
+    const views = deriveStepRunViews({
+      definition: multiAgent,
+      runStatus: "unknown",
+      stepCursor: 1,
+    });
+    expect(views.map((v) => v.status)).toEqual(["completed", "blocked", "pending"]);
+    // Later steps stay "pending" (not "skipped"): an unrecognized status
+    // might still resume, unlike a genuine terminal failure.
+    expect(views[2]!.status).toBe("pending");
+  });
+});
+
+describe("run-status: unrecognized wire status (1c missed / billing budget_blocked readiness)", () => {
+  it("coerces to unknown instead of a false running", () => {
+    expect(coerceRunStatus("budget_blocked")).toBe("unknown");
+    expect(coerceRunStatus("missed")).toBe("unknown");
+    expect(coerceRunStatus("running")).toBe("running");
+  });
+
+  it("humanizes the raw value for the label and flags it as attention-toned", () => {
+    const status = coerceRunStatus("budget_blocked");
+    expect(workflowRunStatusLabel(status, "budget_blocked")).toBe("Budget blocked");
+    expect(workflowRunStatusTone(status)).toBe("attention");
+  });
+
+  it("falls back to a generic label when there is no usable raw value", () => {
+    expect(workflowRunStatusLabel("unknown")).toBe("Unknown");
+    expect(workflowRunStatusLabel("unknown", 42)).toBe("Unknown");
   });
 });
 

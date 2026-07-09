@@ -9,6 +9,10 @@ import {
 } from "@/lib/access/cloud/workflows";
 import { createLocalWorkflowRun } from "@/lib/access/anyharness/workflow-runs";
 import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
+import {
+  buildStartRunBody,
+  type SlotSessionBinding,
+} from "@proliferate/product-domain/workflows/run-launch";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useWorkflowRelayStore } from "@/stores/workflows/workflow-relay-store";
 import { workflowRunsKey, workflowsRootKey } from "./query-keys";
@@ -23,6 +27,10 @@ export interface LaunchWorkflowRunInput {
   localWorkspaceId?: string;
   /** Cloud workspace id (server-side) — required for `personal_cloud` runs. */
   cloudWorkspaceId?: string;
+  /** Per-slot session bindings (L29/E8). Fresh-by-default: slots omitted or
+   * bound to `"new"`/null open a new session; only bound slots reach the wire
+   * (spec run-from-chat R3). */
+  sessionBindings?: readonly SlotSessionBinding[];
 }
 
 /**
@@ -41,15 +49,12 @@ export function useLaunchWorkflowRun() {
 
   return useMutation<WorkflowRunResponse, Error, LaunchWorkflowRunInput>({
     mutationFn: async (input) => {
-      const body: StartRunRequest = {
+      const body: StartRunRequest = buildStartRunBody({
         inputs: input.args,
         targetMode: input.targetMode,
-        target: {
-          ...(input.targetMode === "personal_cloud" && input.cloudWorkspaceId
-            ? { workspaceId: input.cloudWorkspaceId }
-            : {}),
-        },
-      };
+        cloudWorkspaceId: input.cloudWorkspaceId,
+        sessionBindings: input.sessionBindings,
+      });
       const run = await startWorkflowRun(input.workflowId, body);
 
       if (input.targetMode === "local") {

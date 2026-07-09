@@ -75,7 +75,7 @@ export function buildWorkflowRunRow(input: BuildWorkflowRunRowInput): WorkflowRu
     workflowId: input.workflowId,
     workflowName: input.workflowName ?? input.workflowId,
     triggerLabel: workflowTriggerLabel(input.triggerKind),
-    statusLabel: workflowRunStatusLabel(status),
+    statusLabel: workflowRunStatusLabel(status, input.status),
     statusTone: workflowRunStatusTone(status),
     durationLabel: formatRunDuration(input.startedAt, input.finishedAt, input.nowMs),
     costLabel: cost,

@@ -1,0 +1,271 @@
+/**
+ * Run-from-chat launch model (spec `workflows-run-from-chat.md`, R1–R6).
+ *
+ * Pure helpers the three launch doors (composer picker, workflows-tab Run,
+ * new-chat recommended strip) render from — no network, no storage. Callers
+ * own persistence (last-used memory) and I/O (StartRun POST).
+ *
+ * - R2/R3 `buildStartRunBody`: the StartRun wire body. Fresh-by-default —
+ *   a slot with no binding (or a `"new"` / null choice) is omitted, so the
+ *   server opens a new session; bind-existing is the explicit minority path
+ *   that emits a `{slot: sessionId}` entry.
+ * - R5 `orderRecommendedWorkflows`: the strip order — most-recently-run
+ *   first, never-run entries (incl. freshly-seeded ones) retained at the
+ *   tail, with per-workflow integration-readiness annotation (honesty rule).
+ * - R6 last-used target: a per-workflow memory record round-trip plus a
+ *   `deriveLastUsedTarget` read over run history for the no-memory fallback.
+ */
+
+import type { WorkflowTargetMode } from "./model";
+
+// --- R2/R3: StartRun payload ---------------------------------------------------
+
+export type WorkflowLaunchArgValue = string | number | boolean;
+
+/** Sentinel a picker uses for the fresh-session choice (R3 default). */
+export const FRESH_SESSION_CHOICE = "new";
+
+/** One slot's session choice. `null`/`"new"` = fresh (default); else an
+ * existing live-session id to bind (L29/E8). */
+export interface SlotSessionBinding {
+  slot: string;
+  sessionId: string | null;
+}
+
+export interface BuildStartRunInput {
+  inputs: Record<string, WorkflowLaunchArgValue>;
+  targetMode: WorkflowTargetMode;
+  /** Cloud workspace id — only carried on the wire for `personal_cloud`
+   * (local runs resolve their workspace client-side, spec 3.2). */
+  cloudWorkspaceId?: string | null;
+  /** Per-slot bindings. Slots absent, or bound to `"new"`/null, run fresh. */
+  sessionBindings?: readonly SlotSessionBinding[];
+  /** Pin a specific published version; omitted = latest. */
+  versionId?: string | null;
+}
+
+/** Mirror of the OpenAPI `StartRunRequest` (camelCase, target XOR). */
+export interface StartRunWireBody {
+  inputs: Record<string, WorkflowLaunchArgValue>;
+  targetMode: WorkflowTargetMode;
+  target: { workspaceId?: string; triggerId?: string };
+  sessionBindings?: Record<string, string>;
+  versionId?: string;
+}
+
+/** Whether a slot choice means "bind this existing session" (vs fresh). */
+export function isExistingSessionChoice(sessionId: string | null | undefined): boolean {
+  return Boolean(sessionId) && sessionId !== FRESH_SESSION_CHOICE;
+}
+
+export function buildStartRunBody(input: BuildStartRunInput): StartRunWireBody {
+  const target: { workspaceId?: string } = {};
+  if (input.targetMode === "personal_cloud" && input.cloudWorkspaceId) {
+    target.workspaceId = input.cloudWorkspaceId;
+  }
+
+  const bindings: Record<string, string> = {};
+  for (const binding of input.sessionBindings ?? []) {
+    if (isExistingSessionChoice(binding.sessionId)) {
+      // narrowed by the guard above
+      bindings[binding.slot] = binding.sessionId as string;
+    }
+  }
+
+  const body: StartRunWireBody = {
+    inputs: input.inputs,
+    targetMode: input.targetMode,
+    target,
+  };
+  if (Object.keys(bindings).length > 0) {
+    body.sessionBindings = bindings;
+  }
+  if (input.versionId) {
+    body.versionId = input.versionId;
+  }
+  return body;
+}
+
+// --- R6: last-used target ------------------------------------------------------
+
+export interface LastUsedTarget {
+  targetMode: WorkflowTargetMode;
+  /** The workspace within the mode; null when none was recorded. */
+  workspaceId: string | null;
+}
+
+/** Per-workflow last-used target, keyed by workflow id (client memory). */
+export type LastUsedTargetMemory = Record<string, LastUsedTarget>;
+
+/** Immutably record the target a workflow last ran with (R6). */
+export function rememberTarget(
+  memory: LastUsedTargetMemory,
+  workflowId: string,
+  target: LastUsedTarget,
+): LastUsedTargetMemory {
+  return { ...memory, [workflowId]: target };
+}
+
+/** Recall a workflow's last-used target, or null if none is remembered. */
+export function recallTarget(
+  memory: LastUsedTargetMemory,
+  workflowId: string,
+): LastUsedTarget | null {
+  return memory[workflowId] ?? null;
+}
+
+export interface WorkflowRunTargetRecord {
+  workflowId: string;
+  /** ISO timestamp; nullish/unparseable rows are ignored. */
+  createdAt: string | null;
+  targetMode: WorkflowTargetMode;
+  workspaceId: string | null;
+}
+
+/**
+ * Derive a workflow's last-used target from run history — the no-memory
+ * fallback (R6: "run rows already store the workspace"). Picks the most
+ * recent parseable run for the workflow.
+ */
+export function deriveLastUsedTarget(
+  runs: readonly WorkflowRunTargetRecord[],
+  workflowId: string,
+): LastUsedTarget | null {
+  let best: { ms: number; target: LastUsedTarget } | null = null;
+  for (const run of runs) {
+    if (run.workflowId !== workflowId) {
+      continue;
+    }
+    const ms = run.createdAt ? Date.parse(run.createdAt) : Number.NaN;
+    if (Number.isNaN(ms)) {
+      continue;
+    }
+    if (!best || ms > best.ms) {
+      best = { ms, target: { targetMode: run.targetMode, workspaceId: run.workspaceId } };
+    }
+  }
+  return best?.target ?? null;
+}
+
+// --- R5: recommended-strip ordering + readiness --------------------------------
+
+export interface IntegrationReadiness {
+  ready: boolean;
+  /** Declared namespaces the org has not connected. */
+  missing: string[];
+}
+
+/**
+ * Pre-check a workflow's declared integrations against the org's connected
+ * providers (honesty rule, arch §8.4). A derived read — no new column.
+ */
+export function annotateIntegrationReadiness(
+  integrations: readonly string[],
+  connectedProviders: Iterable<string>,
+): IntegrationReadiness {
+  const connected = new Set(connectedProviders);
+  const missing = integrations.filter((namespace) => !connected.has(namespace));
+  return { ready: missing.length === 0, missing };
+}
+
+export interface RecommendedWorkflowInput {
+  id: string;
+  name: string;
+  description?: string | null;
+  /** Declared integration namespaces (drives readiness). */
+  integrations?: readonly string[];
+  /** Harness kinds present in the definition, for provider icons. */
+  providers?: readonly string[];
+}
+
+export interface WorkflowRunRecency {
+  workflowId: string;
+  /** ISO timestamp of the run (created/started); nullish = never/unknown. */
+  createdAt: string | null;
+}
+
+export interface RecommendedWorkflowView {
+  id: string;
+  name: string;
+  description: string | null;
+  integrations: string[];
+  providers: string[];
+  /** Epoch ms of the workflow's latest run, or null if never run. */
+  lastRunAtMs: number | null;
+  readiness: IntegrationReadiness;
+}
+
+/** Latest parseable run time per workflow. */
+export function latestRunMsByWorkflow(
+  runs: readonly WorkflowRunRecency[],
+): Map<string, number> {
+  const latest = new Map<string, number>();
+  for (const run of runs) {
+    const ms = run.createdAt ? Date.parse(run.createdAt) : Number.NaN;
+    if (Number.isNaN(ms)) {
+      continue;
+    }
+    const existing = latest.get(run.workflowId);
+    if (existing === undefined || ms > existing) {
+      latest.set(run.workflowId, ms);
+    }
+  }
+  return latest;
+}
+
+export interface OrderRecommendedOptions {
+  /** Org-connected provider namespaces, for readiness annotation. */
+  connectedProviders?: Iterable<string>;
+  /** Cap the strip length; unset = all. */
+  limit?: number;
+}
+
+/**
+ * The R5 recommended strip: org workflows ordered most-recently-run first,
+ * never-run entries (incl. freshly-seeded workflows with no runs yet) kept
+ * at the tail in their incoming order. Stable — equal-recency ties preserve
+ * input order (the caller sorts seeds/recents upstream if it wants a
+ * different tiebreak).
+ */
+export function orderRecommendedWorkflows(
+  workflows: readonly RecommendedWorkflowInput[],
+  runs: readonly WorkflowRunRecency[],
+  options: OrderRecommendedOptions = {},
+): RecommendedWorkflowView[] {
+  const latest = latestRunMsByWorkflow(runs);
+  const connected = options.connectedProviders ?? [];
+  const readinessConnected = new Set(connected);
+
+  const decorated = workflows.map((workflow, index) => {
+    const integrations = [...(workflow.integrations ?? [])];
+    const missing = integrations.filter((namespace) => !readinessConnected.has(namespace));
+    const view: RecommendedWorkflowView = {
+      id: workflow.id,
+      name: workflow.name,
+      description: workflow.description ?? null,
+      integrations,
+      providers: [...(workflow.providers ?? [])],
+      lastRunAtMs: latest.get(workflow.id) ?? null,
+      readiness: { ready: missing.length === 0, missing },
+    };
+    return { view, index };
+  });
+
+  decorated.sort((a, b) => {
+    const ra = a.view.lastRunAtMs;
+    const rb = b.view.lastRunAtMs;
+    if (ra !== null && rb !== null) {
+      if (rb !== ra) {
+        return rb - ra;
+      }
+    } else if (ra !== null) {
+      return -1;
+    } else if (rb !== null) {
+      return 1;
+    }
+    return a.index - b.index; // stable tiebreak
+  });
+
+  const ordered = decorated.map((entry) => entry.view);
+  return options.limit !== undefined ? ordered.slice(0, options.limit) : ordered;
+}

@@ -132,6 +132,21 @@ export async function reportWorkflowRunStatus(
   });
 }
 
+/**
+ * Take over / cancel a run (spec 3.6, server D15): the single human override.
+ * Owner-scoped; works for both target modes — the server performs the
+ * terminal write directly and best-effort nudges the cloud runtime, while a
+ * local run's own desktop relay picks up the now-terminal status on its next
+ * report.
+ */
+export async function cancelWorkflowRun(runId: string): Promise<WorkflowRunResponse> {
+  return getProliferateClient().requestJson<WorkflowRunResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/runs/{run_id}/cancel",
+    pathParams: { run_id: runId },
+  });
+}
+
 /** Cloud lane: retry a stuck (pending_delivery) cloud delivery. */
 export async function redeliverWorkflowRun(runId: string): Promise<WorkflowRunResponse> {
   return getProliferateClient().requestJson<WorkflowRunResponse>({

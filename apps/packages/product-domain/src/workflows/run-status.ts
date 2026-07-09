@@ -22,12 +22,23 @@ export const WORKFLOW_RUN_STATUSES = [
   "failed",
   "cancelled",
 ] as const;
-export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number];
+
+/**
+ * Known wire statuses plus a client-side `"unknown"` sentinel. The run-status
+ * enum is still growing server-side (1c's `missed`, billing's
+ * `budget_blocked`) — a client build older than the server must render
+ * whatever comes over the wire without crashing or lying. `coerceRunStatus`
+ * never invents a false "running": an unrecognized status renders as a
+ * blocked/attention state and stops polling (see `isTerminalRunStatus`)
+ * rather than spinning forever on a status it can't interpret.
+ */
+export type WorkflowRunStatus = (typeof WORKFLOW_RUN_STATUSES)[number] | "unknown";
 
 const TERMINAL_RUN_STATUSES: ReadonlySet<WorkflowRunStatus> = new Set([
   "completed",
   "failed",
   "cancelled",
+  "unknown",
 ]);
 
 export type WorkflowStatusTone = "muted" | "running" | "positive" | "attention" | "danger";
@@ -41,7 +52,12 @@ export function shouldPollRun(status: WorkflowRunStatus): boolean {
   return !isTerminalRunStatus(status);
 }
 
-export function workflowRunStatusLabel(status: WorkflowRunStatus): string {
+/**
+ * `rawValue` is the original (possibly-unrecognized) wire value, only used to
+ * render a readable fallback for `status === "unknown"` — e.g. a future
+ * `budget_blocked` renders "Budget blocked" instead of a generic "Unknown".
+ */
+export function workflowRunStatusLabel(status: WorkflowRunStatus, rawValue?: unknown): string {
   switch (status) {
     case "pending_delivery":
       return "Queued";
@@ -57,6 +73,8 @@ export function workflowRunStatusLabel(status: WorkflowRunStatus): string {
       return "Failed";
     case "cancelled":
       return "Cancelled";
+    case "unknown":
+      return humanizeUnknownStatus(rawValue);
   }
 }
 
@@ -75,7 +93,23 @@ export function workflowRunStatusTone(status: WorkflowRunStatus): WorkflowStatus
       return "danger";
     case "cancelled":
       return "muted";
+    case "unknown":
+      return "attention";
   }
+}
+
+/** `"budget_blocked"` -> `"Budget blocked"`; a non-string/blank value -> `"Unknown"`. */
+function humanizeUnknownStatus(rawValue: unknown): string {
+  if (typeof rawValue !== "string") {
+    return "Unknown";
+  }
+  const words = rawValue.trim().split(/[_\s]+/).filter(Boolean);
+  if (words.length === 0) {
+    return "Unknown";
+  }
+  return words
+    .map((word, index) => (index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(" ");
 }
 
 export function isWorkflowRunStatus(value: unknown): value is WorkflowRunStatus {
@@ -84,9 +118,9 @@ export function isWorkflowRunStatus(value: unknown): value is WorkflowRunStatus 
   );
 }
 
-/** Coerce an unknown wire status string to a known status (defaults to running). */
+/** Coerce an unknown wire status string to a known status, or `"unknown"`. */
 export function coerceRunStatus(value: unknown): WorkflowRunStatus {
-  return isWorkflowRunStatus(value) ? value : "running";
+  return isWorkflowRunStatus(value) ? value : "unknown";
 }
 
 // --- Step-run status -----------------------------------------------------------
@@ -99,7 +133,10 @@ export type WorkflowStepRunStatus =
   | "completed"
   | "failed"
   | "skipped"
-  | "cancelled";
+  | "cancelled"
+  /** The run's own status is unrecognized (see `WorkflowRunStatus`) while this
+   * step is the live one — rendered as attention, not a false "running". */
+  | "blocked";
 
 export type WorkflowStepDotKind =
   | "pending"
@@ -127,6 +164,8 @@ export function stepRunStatusLabel(status: WorkflowStepRunStatus): string {
       return "Skipped";
     case "cancelled":
       return "Cancelled";
+    case "blocked":
+      return "Blocked";
   }
 }
 
@@ -138,6 +177,7 @@ export function stepRunDotKind(status: WorkflowStepRunStatus): WorkflowStepDotKi
     case "goal_iterating":
       return "running";
     case "waiting_approval":
+    case "blocked":
       return "attention";
     case "completed":
       return "success";
@@ -332,6 +372,13 @@ function baseStepStatus(
     case "delivered":
     case "pending_delivery":
       return "pending";
+    case "unknown":
+      // A future status this client build doesn't recognize (e.g.
+      // budget_blocked, missed) — render the live step as blocked/attention
+      // rather than a false "running" or "completed". Later steps still fall
+      // through the >cursor ternary above to "pending" (not "skipped"): an
+      // unrecognized status might still resume, unlike a terminal failure.
+      return "blocked";
   }
 }
 

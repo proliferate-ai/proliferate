@@ -14,6 +14,7 @@ import { Spinner } from "@proliferate/ui/primitives/Spinner";
 import { useWorkflowDetail, useWorkflowRun } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useCloudRunRefreshPoll } from "@/hooks/access/cloud/workflows/use-cloud-run-refresh";
 import { useResolveWorkflowApproval } from "@/hooks/access/cloud/workflows/use-workflow-approval";
+import { useCancelWorkflowRun } from "@/hooks/access/cloud/workflows/use-cancel-workflow-run";
 import { WorkflowRunView } from "../run/WorkflowRunView";
 
 export interface WorkflowRunScreenProps {
@@ -26,6 +27,7 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
   const runQuery = useWorkflowRun(runId);
   const detailQuery = useWorkflowDetail(workflowId);
   const approvalMutation = useResolveWorkflowApproval();
+  const cancelMutation = useCancelWorkflowRun();
 
   const run = runQuery.data?.run ?? null;
   const stepActions = runQuery.data?.stepActions ?? [];
@@ -68,6 +70,8 @@ export function WorkflowRunScreen({ workflowId, runId }: WorkflowRunScreenProps)
             approvalBusy={approvalMutation.isPending}
             onApprove={() => approvalMutation.mutate({ runId, approve: true })}
             onDeny={() => approvalMutation.mutate({ runId, approve: false })}
+            onCancel={() => cancelMutation.mutate({ runId })}
+            cancelBusy={cancelMutation.isPending}
             onBack={() => navigate("/workflows")}
             onOpenSession={(link) => {
               if (link.workspaceId) {

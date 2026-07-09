@@ -63,6 +63,10 @@
       "types": "./dist/workflows/run-status.d.ts",
       "import": "./dist/workflows/run-status.js"
     },
+    "./workflows/run-launch": {
+      "types": "./dist/workflows/run-launch.d.ts",
+      "import": "./dist/workflows/run-launch.js"
+    },
     "./workflows/templates": {
       "types": "./dist/workflows/templates.d.ts",
       "import": "./dist/workflows/templates.js"
