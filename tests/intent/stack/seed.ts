@@ -585,6 +585,76 @@ export async function resetPasswordLoginRateLimits(): Promise<void> {
   }
 }
 
+// ── Org SSO entry points (T2-AUTH-5) ──
+// The web/desktop SSO entry points resolve an org **slug** (or org id) to that
+// org's SSO connection through `GET /sso/discover`, then hand off to the
+// existing start flow. Discover reads the connection's stored state only — it
+// never contacts the IdP (that happens at `start`), so an enabled connection
+// row seeded directly in Postgres is enough to exercise the slug/org-id
+// resolution seam without a live IdP round-trip (the round-trip itself is
+// T2-AUTH-3, landed separately). Slugs are generated per org (lowercase,
+// URL-safe, unique); there is no API that returns an org's slug, so we read it
+// straight from the row the migration/creation path wrote.
+
+/** The org's generated login slug (`/login/<slug>`), read from Postgres. */
+export async function getOrganizationSlug(organizationId: string): Promise<string> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    const result = await client.query<{ slug: string | null }>(
+      `SELECT slug FROM organization WHERE id = $1`,
+      [organizationId],
+    );
+    const slug = result.rows[0]?.slug;
+    if (!slug) {
+      throw new Error(`Organization ${organizationId} has no slug (did the slug migration run?)`);
+    }
+    return slug;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Seed an ENABLED organization-scope OIDC SSO connection directly in Postgres
+ * and return its id. Discover only reads status/scope/protocol/display_name/
+ * organization_id off this row, so the OIDC endpoint fields stay null — a
+ * `start` against it would need a real IdP, which is deliberately out of scope
+ * here (T2-AUTH-3 owns the round-trip). Columns with server defaults
+ * (login_policy, jit_policy, default_role, allowed_domains_json, oidc scopes)
+ * are left to fill themselves.
+ */
+export async function seedEnabledOrgSsoConnection(
+  organizationId: string,
+  displayName = "Acme Okta",
+): Promise<string> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    const result = await client.query<{ id: string }>(
+      `INSERT INTO sso_connection (id, scope, organization_id, protocol, status, display_name, created_at, updated_at)
+       VALUES (gen_random_uuid(), 'organization', $1, 'oidc', 'enabled', $2, now(), now())
+       RETURNING id`,
+      [organizationId, displayName],
+    );
+    return result.rows[0].id;
+  } finally {
+    await client.end();
+  }
+}
+
+/** Remove every SSO connection for an org (test cleanup — keep the seeded
+ * connection from leaking into sibling specs that share this profile DB). */
+export async function deleteOrgSsoConnections(organizationId: string): Promise<void> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    await client.query(`DELETE FROM sso_connection WHERE organization_id = $1`, [organizationId]);
+  } finally {
+    await client.end();
+  }
+}
+
 /** The server uses asyncpg's SQLAlchemy URL scheme; node-postgres needs the
  * plain `postgresql://` scheme, and its resolver chokes on the bracketed
  * `[::1]` host the macOS profile default uses — Docker's Postgres publishes

@@ -24,6 +24,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Invitation negatives: expired / reused / wrong-email token | 2 | — |
 | SSO: OIDC round-trip via mock IdP → user linked, domain policy applied | 2 | — |
 | SSO negatives: disallowed domain, unknown user, audience/issuer mismatch | 2 | — |
+| SSO org entry points: slug + org-id discovery (unknown / no-SSO collapse to one non-enumerating answer; enabled connection returns start ids) and the desktop cold-login affordance | 2 | tests/intent/specs/sso-entry-points.spec.ts (T2-AUTH-5; entry-point seam only — the OIDC round-trip is the row above. The `apps/web` slug/`join` pages are not booted by this suite; their logic sits on the same discover seam asserted here) |
 | Real provider handshakes (Google/GitHub OAuth dance) | 3 | — |
 
 ## Organization — must work, even if basic
