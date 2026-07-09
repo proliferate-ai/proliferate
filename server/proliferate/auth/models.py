@@ -14,6 +14,16 @@ class UserRole(StrEnum):
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
+    # Overrides the inherited ``email: EmailStr`` (fastapi_users.schemas.BaseUser).
+    # Account creation validates the email strictly with EmailStr rules (see
+    # proliferate.server.setup.accounts.normalize_account_email), but this is
+    # the *read* model: it must still serialize any email already stored,
+    # including rows written before that write-side validation existed or via
+    # a path (OAuth/SSO, direct fixtures) that does not go through it. #1012
+    # was exactly this — EmailStr rejects reserved TLDs like ``.test`` at
+    # serialization time, 500ing GET /users/me for an account the product
+    # itself created.
+    email: str
     display_name: str | None = None
     github_login: str | None = None
     avatar_url: str | None = None
