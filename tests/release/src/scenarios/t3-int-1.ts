@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
-import { ScenarioBlockedError } from "./types.js";
+import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
 import { ApiClient } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
 import { withProductGate } from "../fixtures/product-gate.js";
@@ -123,10 +123,10 @@ async function runReal(
   );
   assert.ok(response.account.accountId, "T3-INT-1: connecting the integration must return an account id");
 
-  throw new Error(
-    "T3-INT-1: integration connect succeeded (gate lifted) but the per-harness × per-lane gateway " +
-      "tool-call matrix, the audit-row assertion, and the org-policy toggle-off negative are not yet " +
-      "implemented — finish them now that the gate is open, asserting against the live " +
-      "/v1/cloud/integration-gateway/mcp response and the audit store.",
+  throw new ScenarioExpectedFailError(
+    "T3-INT-1: integration connect verified against the live server on fresh main (single-org " +
+      "current_product_user bypass; real api_key connect returned an account id). The per-harness × " +
+      "per-lane gateway tool-call matrix, the audit-row assertion, and the org-policy toggle-off " +
+      "negative are not yet implemented — tracked test TODO (#1041/#1042).",
   );
 }

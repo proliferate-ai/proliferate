@@ -1,5 +1,5 @@
 import type { ScenarioDefinition } from "./types.js";
-import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
+import { ScenarioExpectedFailError } from "./types.js";
 
 /**
  * T3-UPDATE-1 — harness convergence, both lanes (pre-verification of tier 4).
@@ -55,9 +55,11 @@ export const t3Update1: ScenarioDefinition = {
           "https://github.com/proliferate-ai/proliferate/issues/1025.",
       );
     }
-    throw new ScenarioBlockedError(
-      "T3-UPDATE-1/sandbox: reaching a sandbox to observe convergence needs current_product_user. " +
-        "See src/fixtures/product-gate.ts.",
+    throw new ScenarioExpectedFailError(
+      "T3-UPDATE-1/sandbox: the current_product_user gate is lifted in single-org mode (2026-07-09), " +
+        "but observing catalog convergence needs a running cloud sandbox with a live worker heartbeat " +
+        "and a served catalog-version bump on a reachable server — not yet implemented. Tracked test " +
+        "TODO (#1042).",
     );
   },
 };

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { ScenarioDefinition } from "./types.js";
-import { ScenarioBlockedError } from "./types.js";
+import { ScenarioExpectedFailError } from "./types.js";
 import { DEFAULT_GITHUB_TEST_REPO, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { ensureLocalClone } from "../fixtures/git.js";
 import { LocalRuntimeClient, findErrorEvent, findLastAssistantReply, findTurnEndedEvent } from "../fixtures/local-runtime.js";
@@ -24,14 +24,24 @@ import { LocalRuntimeClient, findErrorEvent, findLastAssistantReply, findTurnEnd
  * Local lane: real, against the local AnyHarness runtime directly, using
  * whichever credential source the runtime already resolves for the harness
  * (native CLI login for Claude on this machine — verified for real
- * 2026-07-08: haiku model, real turn_ended, real "pong" reply). Not yet
- * routed through a dedicated RELEASE_E2E_GATEWAY_TEST_KEY allowlisted test
- * key (that credential does not exist yet, see env-manifest.ts) — tracked as
- * a follow-up, not silently pretended away.
+ * 2026-07-09: on fresh main the t3local account classifies claude to
+ * `["bedrock"]` (the Bedrock flag rides the readiness/auth overlay, not the
+ * profile launch.env), so post-#1046 the bare native ids ("haiku"/"default")
+ * are correctly gated `SESSION_MODEL_GATED` and the account's real cheapest
+ * working model is a gateway/Bedrock id — the candidate resolver below lands
+ * on `us.anthropic.claude-sonnet-4-6` for claude and `anthropic/claude-haiku-
+ * 4-5-20251001` for opencode, both GREEN. This is exactly the "menu excludes
+ * bare ids; pass using the ids the new classification yields" outcome #1046
+ * intended.
  *
- * Sandbox lane: real code, gated by current_product_user until
- * fix/product-user-single-org-bypass merges (the gateway proxy route is
- * current_product_user-gated).
+ * Sandbox lane: the current_product_user gate is now lifted in single-org mode
+ * (`current_product_user` returns the user unconditionally when
+ * `single_org_mode` is true — verified 2026-07-09: the durable user gets HTTP
+ * 200 from `GET /v1/cloud/cloud-sandbox` despite productReady=false). What
+ * remains is a test-implementation gap: driving a full agent chat session
+ * inside a real E2B sandbox through the `/v1/cloud/cloud-sandbox/anyharness/*`
+ * proxy is not yet written (and needs a running sandbox + a publicly reachable
+ * server URL for callbacks). Tracked TODO, not a product gate.
  */
 export const t3Chat1: ScenarioDefinition = {
   id: "T3-CHAT-1",
@@ -60,10 +70,11 @@ export const t3Chat1: ScenarioDefinition = {
       return;
     }
     if (ctx.runtimeLane === "sandbox") {
-      throw new ScenarioBlockedError(
-        "T3-CHAT-1/sandbox: session creation is proxied through " +
-          "/v1/cloud/cloud-sandbox/anyharness/*, which is current_product_user-gated. " +
-          "See src/fixtures/product-gate.ts.",
+      throw new ScenarioExpectedFailError(
+        "T3-CHAT-1/sandbox: the current_product_user gate is lifted in single-org mode (verified " +
+          "2026-07-09), but driving a full agent chat session inside a real E2B sandbox through the " +
+          "/v1/cloud/cloud-sandbox/anyharness/* proxy is not yet implemented — it needs a running " +
+          "durable sandbox and a publicly reachable RELEASE_E2E_SERVER_URL. Tracked test TODO (#1042).",
       );
     }
     await runLocalLane(ctx.agents);
@@ -73,16 +84,18 @@ export const t3Chat1: ScenarioDefinition = {
 interface HarnessModelChoice {
   harnessKind: string;
   /**
-   * Ranked candidates, cheapest-preferred first. More than one candidate
-   * exists because a catalog-declared option is not always accepted by the
-   * runtime — found running this for real 2026-07-08: opencode's catalog
-   * entry `anthropic/claude-3-5-haiku-latest` 400s `SESSION_MODEL_UNSUPPORTED`
-   * even though the catalog lists it as available for opencode. Filed as
-   * https://github.com/proliferate-ai/proliferate/issues/1024 (catalog/runtime
-   * model-id mismatch — every anthropic/claude-* id tried for opencode 400s
-   * the same way, not just the "-latest" alias); this fallback list keeps
-   * the scenario reporting a clear per-harness expected-fail instead of a
-   * confusing red while the product fix lands.
+   * Ranked candidates, cheapest-preferred first. More than one candidate is
+   * kept because which id the runtime accepts depends on the account's
+   * classified auth context: on a Bedrock/gateway-classified account (t3local,
+   * fresh main 2026-07-09) the bare native ids are gated `SESSION_MODEL_GATED`
+   * and a `us.anthropic.*`/`anthropic/claude-*` id is the one that passes, so
+   * trying candidates in order lands on whatever the live classification
+   * yields. #1024 (opencode's `anthropic/claude-*` ids 400ing
+   * `SESSION_MODEL_UNSUPPORTED`) is resolved by #1034 — verified 2026-07-09
+   * opencode goes GREEN with an explicit gateway id
+   * (`anthropic/claude-haiku-4-5-20251001`), so the earlier per-harness
+   * expected-fail tolerance is no longer needed and opencode is treated like
+   * any other harness (a genuine failure is now a real per-harness red).
    */
   modelCandidates: string[];
   catalogPinVersion: string | undefined;

@@ -132,6 +132,35 @@ export function isGithubAppRepoNotCoveredError(error: unknown): boolean {
   return isCloudErrorCode(error, "github_app_repo_not_covered");
 }
 
+/**
+ * The GitHub *user* (the seeded App user-to-server identity) does not have
+ * access to the target repo — distinct from installation coverage. On t3local
+ * the seeded identity is `pablonyx`, which is not a collaborator on
+ * `proliferate-e2e/e2e-fixture`, so the authority chain 409s here once the
+ * authorization + installation gates are both satisfied.
+ */
+export function isGithubRepoAccessRequiredError(error: unknown): boolean {
+  return isCloudErrorCode(error, "github_repo_access_required");
+}
+
+/**
+ * The server could not refresh the seeded App user-to-server authorization
+ * (502 `github_app_refresh_failed`). Seed refresh tokens rotate on every use,
+ * so running multiple seed-consuming scenarios in one suite pass (e.g.
+ * T3-PROV-1 then T3-REPO-1) can leave a later refresh with a stale token.
+ * Environmental/seed-state fragility, not a product bug.
+ */
+export function isGithubAppRefreshFailedError(error: unknown): boolean {
+  if (!(error instanceof ApiRequestError) || error.status !== 502) {
+    return false;
+  }
+  if (typeof error.body !== "object" || error.body === null) {
+    return false;
+  }
+  const body = error.body as { code?: unknown; detail?: { code?: unknown } };
+  return body.code === "github_app_refresh_failed" || body.detail?.code === "github_app_refresh_failed";
+}
+
 interface RunOptions {
   command: GithubAppSeedCommand;
   pollTimeoutSeconds?: number;
