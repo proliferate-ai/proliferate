@@ -1,7 +1,14 @@
 import { HELP_TEXT, parseArgs } from "./args.js";
-import { resolveEnv, missingRequiredForLane, blockedReasonForMissingEnv } from "../config/env-resolution.js";
+import {
+  resolveEnv,
+  missingRequiredForLane,
+  blockedReasonForMissingEnv,
+  requiredEnvForTargetLane,
+  scenarioUsesDurableIdentity,
+} from "../config/env-resolution.js";
 import { envVarNames, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { pushGatewayAuthState } from "../fixtures/agent-auth.js";
+import { stagingSessionAvailable } from "../fixtures/staging-session.js";
 import { selectScenarios, allScenarioIds } from "../scenarios/registry.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
 import {
@@ -55,13 +62,44 @@ async function main(): Promise<void> {
 
   for (const scenario of scenarios) {
     for (const runtimeLane of scenario.lanes) {
+      // The `local` RUNTIME lane drives a local AnyHarness runtime (desktop
+      // web-port mode) that is not paired with any remote server — it creates
+      // local workspaces/sessions on the machine the runner runs on. There is
+      // no such runtime standing up against the staging deployment, so on
+      // `--lane staging` the local runtime lane is reported blocked (run it
+      // under `--lane local`); only the sandbox runtime lane targets staging.
+      if (!args.dryRun && args.lane === "staging" && runtimeLane === "local") {
+        blocked.push({
+          scenarioId: scenario.id,
+          lane: runtimeLane,
+          reason:
+            `${scenario.id}/local: the local runtime lane drives a local AnyHarness runtime on the runner ` +
+            "host, which has no staging pairing — run it under `--lane local`. On `--lane staging` only the " +
+            "sandbox runtime lane targets the staging deployment.",
+        });
+        continue;
+      }
+
       // A missing required credential blocks just the scenarios/lanes that need
       // it (#1069), instead of the old run-fatal env gate. Reported as blocked
       // — the same convention as an out-of-band gate — so the run still exits
       // success when everything non-green is blocked/expected-fail.
+      // `requiredEnvForTargetLane` drops the durable user's email/password on
+      // the staging target (there it authenticates via the rotating product
+      // session, not a password), and the staging session's own availability is
+      // checked right after.
+      const effectiveRequired = requiredEnvForTargetLane(scenario.requiredEnv, args.lane);
       const missingEnv = args.dryRun
         ? []
-        : missingRequiredForLane(scenario.requiredEnv, runtimeLane, neededEnv, locallySeeded);
+        : missingRequiredForLane(effectiveRequired, runtimeLane, neededEnv, locallySeeded);
+      if (
+        !args.dryRun &&
+        args.lane === "staging" &&
+        scenarioUsesDurableIdentity(scenario.requiredEnv) &&
+        !stagingSessionAvailable()
+      ) {
+        missingEnv.push("RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN");
+      }
       if (missingEnv.length > 0) {
         blocked.push({
           scenarioId: scenario.id,

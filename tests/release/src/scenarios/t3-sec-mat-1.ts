@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
-import { ScenarioExpectedFailError } from "./types.js";
+import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
 import { withProductGate } from "../fixtures/product-gate.js";
 import { ApiClient } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
@@ -39,6 +39,20 @@ export const t3SecMat1: ScenarioDefinition = {
   run: async (ctx) => {
     if (ctx.dryRun) {
       return;
+    }
+    if (ctx.targetLane === "staging") {
+      // Deferred from the first staging pass: materialization writes personal +
+      // org + file secrets against the SHARED durable user/org and needs a real
+      // cloud sandbox to observe them land in. To avoid mutating shared staging
+      // secret state (and spinning a sandbox on the shared user) this reports
+      // blocked until a dedicated non-shared staging fixture exists. See
+      // tests/release/README.md (staging-lane runbook).
+      throw new ScenarioBlockedError(
+        "T3-SEC-MAT-1/staging: deferred from the first staging pass — it writes personal/org/file secrets " +
+          "against the SHARED durable user/org and needs a real cloud sandbox to assert they materialize. " +
+          "Both would mutate/charge shared staging state. Needs a dedicated non-shared staging fixture " +
+          "before it can run for real.",
+      );
     }
     await withProductGate("T3-SEC-MAT-1", () => runReal(ctx.env.require("RELEASE_E2E_SERVER_URL")));
   },

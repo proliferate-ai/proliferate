@@ -65,6 +65,20 @@ export const t3Int1: ScenarioDefinition = {
       return;
     }
 
+    if (ctx.targetLane === "staging") {
+      // Deferred from the first staging pass: connecting an integration writes a
+      // real credential/authentication against the SHARED durable user/org, and
+      // the per-harness gateway tool-call matrix needs real sandboxes. To avoid
+      // mutating shared staging integration state this reports blocked until a
+      // dedicated non-shared staging fixture exists. See tests/release/README.md
+      // (staging-lane runbook).
+      throw new ScenarioBlockedError(
+        "T3-INT-1/staging: deferred from the first staging pass — connecting the integration writes a real " +
+          "credential against the SHARED durable user/org and the tool-call matrix needs real sandboxes. " +
+          "Needs a dedicated non-shared staging fixture before it can run for real.",
+      );
+    }
+
     // Blocker 1 (credential) takes priority over the gate: without a real key
     // there is nothing to authenticate, regardless of the gate.
     const integrationApiKey = process.env.RELEASE_E2E_INTEGRATION_API_KEY;
