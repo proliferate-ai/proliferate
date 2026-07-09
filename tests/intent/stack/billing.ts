@@ -30,6 +30,7 @@ import {
   overagePriceId,
   proMonthlyPriceId,
   refillPriceId,
+  robustFetch,
   stripeSecretKey,
   webhookSecret,
 } from "./billing-env.ts";
@@ -132,7 +133,9 @@ export function cancelSubscriptionAtPeriodEnd(subscriptionId: string): any {
 }
 
 export function deleteSubscription(subscriptionId: string): any {
-  return stripeCli(["subscriptions", "cancel", subscriptionId]);
+  // --confirm: `subscriptions cancel` is interactive by default (a DELETE
+  // warning prompt), which hangs/fails under spawnSync with stdin ignored.
+  return stripeCli(["subscriptions", "cancel", subscriptionId, "--confirm"]);
 }
 
 // ── Webhook delivery (self-signed, real objects) ──
@@ -164,7 +167,7 @@ export async function deliverEvent(opts: {
   const payload = JSON.stringify(payloadObj);
   const timestamp = opts.timestamp ?? Math.floor(Date.now() / 1000);
   const signature = signPayload(payload, timestamp);
-  const response = await fetch(`${apiBaseUrl()}/billing/webhooks/stripe`, {
+  const response = await robustFetch(`${apiBaseUrl()}/v1/billing/webhooks/stripe`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Stripe-Signature": signature },
     body: payload,
@@ -191,7 +194,7 @@ export async function deliverEventTwiceConcurrently(opts: {
   const timestamp = Math.floor(Date.now() / 1000);
   const signature = signPayload(payload, timestamp);
   const fire = async (): Promise<DeliverResult> => {
-    const response = await fetch(`${apiBaseUrl()}/billing/webhooks/stripe`, {
+    const response = await robustFetch(`${apiBaseUrl()}/v1/billing/webhooks/stripe`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Stripe-Signature": signature },
       body: payload,
@@ -272,7 +275,9 @@ export function sendPendingUsageExports(): void {
 }
 
 export function runTopupPass(): void {
+  // run_llm_topups requires a db session; run_llm_topups_once is the worker's
+  // own session-wrapping entrypoint (the loop calls exactly this).
   serverPass(
-    "import asyncio; from proliferate.server.cloud.agent_gateway.topups import run_llm_topups; asyncio.run(run_llm_topups())",
+    "import asyncio; from proliferate.server.cloud.agent_gateway.worker import run_llm_topups_once; asyncio.run(run_llm_topups_once())",
   );
 }

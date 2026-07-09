@@ -44,16 +44,24 @@ test.describe("T2-BILL-5: compute overage — bill to cap, write off, then block
   skipIfNoStripe(test);
 
   test("uncovered seconds export as billable cents up to cap, then write off; snapshot flips to cap_exhausted", async () => {
-    const { subject, ownerId, token } = await paidOrgSubjectWithBackdatedPeriod(1);
-    await b.setOverageSettings(subject.id, { enabled: true, capCentsPerSeat: 20 });
+    const { subject, ownerId, token, organizationId } = await paidOrgSubjectWithBackdatedPeriod(1);
+    // The effective cap is per-seat × ACTIVE org members (accounting.py:
+    // max(active_seat_count,1) * overage_cap_cents_per_seat), and the claimed
+    // org's member count grows across runs (profile DB persists) — so compute
+    // the cap from the live seat count instead of assuming one seat.
+    const seats = await activeMemberCount(organizationId);
+    const capPerSeat = 2;
+    const capCents = seats * capPerSeat;
+    await b.setOverageSettings(subject.id, { enabled: true, capCentsPerSeat: capPerSeat });
 
-    // Tiny grant (72s), then a ~40-minute segment inside the period → most of
-    // it is uncovered → converts to cents well past the 20-cent cap.
+    // Tiny grant (72s), then a segment long enough that its uncovered tail
+    // converts to cents well past the cap (overage is 200 cents/hour).
+    const hoursPastCap = capCents / 200 + 0.6;
     await b.seedGrant(subject.id, { userId: ownerId, grantType: "pro_period", hoursGranted: 0.02 });
     await b.seedUsageSegment(subject.id, {
       userId: ownerId,
-      hours: 0.66,
-      startedAt: new Date(Date.now() - 50 * 60 * 1000),
+      hours: hoursPastCap,
+      startedAt: new Date(Date.now() - (hoursPastCap * 60 + 10) * 60 * 1000),
     });
     b.runAccountingPass();
 
@@ -62,17 +70,26 @@ test.describe("T2-BILL-5: compute overage — bill to cap, write off, then block
     const writeoffs = exports.filter((e) => e.writeoff_reason === "overage_cap_exhausted");
     const billableCents = billable.reduce((s, e) => s + (e.meter_quantity_cents ?? 0), 0);
     expect(billable.length, "billable export rows created").toBeGreaterThan(0);
-    expect(billableCents, "billing stops at the cap").toBeLessThanOrEqual(20);
+    expect(billableCents, "billing stops at the cap").toBeLessThanOrEqual(capCents);
     expect(writeoffs.length, "usage past cap is written off").toBeGreaterThan(0);
 
-    const overview = await b.apiRequest<b.BlockState>("/billing/overview", { token });
+    // Owner scope matters: without it /billing/overview resolves the caller's
+    // PERSONAL subject (permissions.py falls back to personal), but this
+    // scenario's state lives on the org subject.
+    const overview = await b.apiRequest<b.BlockState>(
+      `/v1/billing/overview?ownerScope=organization&organizationId=${organizationId}`,
+      { token },
+    );
     expect(overview.body.startBlocked).toBe(true);
     expect((overview.body as any).startBlockReason).toBe("cap_exhausted");
   });
 
   test("overage disabled → immediate cutoff at grant exhaustion, zero export rows", async () => {
-    const { subject, ownerId, token } = await paidOrgSubjectWithBackdatedPeriod(1);
+    const { subject, ownerId, token, organizationId } = await paidOrgSubjectWithBackdatedPeriod(1);
     await b.setOverageSettings(subject.id, { enabled: false });
+    // The org subject is shared with the cap test above (one claimed org →
+    // one org billing subject), so count NEW export rows, not all rows.
+    const exportsBefore = (await b.listUsageExports(subject.id)).length;
 
     await b.seedGrant(subject.id, { userId: ownerId, grantType: "pro_period", hoursGranted: 0.02 });
     await b.seedUsageSegment(subject.id, {
@@ -83,15 +100,18 @@ test.describe("T2-BILL-5: compute overage — bill to cap, write off, then block
     b.runAccountingPass();
 
     const exports = await b.listUsageExports(subject.id);
-    expect(exports.length, "no export rows when overage is disabled").toBe(0);
-    const overview = await b.apiRequest<b.BlockState>("/billing/overview", { token });
+    expect(exports.length - exportsBefore, "no new export rows when overage is disabled").toBe(0);
+    const overview = await b.apiRequest<b.BlockState>(
+      `/v1/billing/overview?ownerScope=organization&organizationId=${organizationId}`,
+      { token },
+    );
     expect(overview.body.startBlocked).toBe(true);
     expect((overview.body as any).startBlockReason).toBe("overage_disabled");
   });
 
   test("overage-settings API validates the cap (invalid_overage_cap outside 0..1,000,000)", async () => {
     const { token } = await adminContext();
-    const res = await b.apiRequest("/billing/overage-settings", {
+    const res = await b.apiRequest("/v1/billing/overage-settings", {
       method: "POST",
       token,
       body: { enabled: true, capCentsPerSeat: 5_000_000, ownerScope: "personal" },
@@ -109,11 +129,11 @@ test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () =
     const userId = await userIdFor(token);
     const subject = await b.ensurePersonalSubject(userId);
 
-    const before = await b.apiRequest<{ usedUsd: number; remainingUsd: number }>("/billing/llm-balance", {
+    const before = await b.apiRequest<{ usedUsd: number; remainingUsd: number }>("/v1/billing/llm-balance", {
       token,
     });
     await b.seedLlmUsageEvent({ subjectId: subject.id, userId, costUsd: 12.5 });
-    const after = await b.apiRequest<{ usedUsd: number; remainingUsd: number }>("/billing/llm-balance", {
+    const after = await b.apiRequest<{ usedUsd: number; remainingUsd: number }>("/v1/billing/llm-balance", {
       token,
     });
     expect(after.body.usedUsd - before.body.usedUsd).toBeCloseTo(12.5, 2);
@@ -137,7 +157,7 @@ test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () =
     await b.seedLlmUsageEvent({ subjectId: subject.id, organizationId, userId, costUsd: 8 });
 
     let limits = await b.apiRequest<{ limits: Array<{ capValue: number; enabled: boolean }> }>(
-      `/organizations/${organizationId}/limits`,
+      `/v1/organizations/${organizationId}/limits`,
       { token },
     );
     const llmCap = limits.body.limits.find((l) => (l as any).kind === "llm");
@@ -147,13 +167,13 @@ test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () =
     // A credit refill does NOT clear the admin cap (deliberate) — the cap row
     // stays enabled regardless of new grants.
     await b.seedGrant(subject.id, { userId, grantType: "refill_10h", hoursGranted: 10 });
-    limits = await b.apiRequest<{ limits: Array<{ capValue: number; enabled: boolean }> }>(`/organizations/${organizationId}/limits`, { token });
+    limits = await b.apiRequest<{ limits: Array<{ capValue: number; enabled: boolean }> }>(`/v1/organizations/${organizationId}/limits`, { token });
     expect(limits.body.limits.find((l) => (l as any).kind === "llm")?.enabled).toBe(true);
 
     // Disabling the cap clears the binding (the quiet-tick sweep would then
     // reactivate the key; here we assert the binding is gone).
     await b.setBudgetLimitEnabled(limitId, false);
-    limits = await b.apiRequest<{ limits: Array<{ capValue: number; enabled: boolean }> }>(`/organizations/${organizationId}/limits`, { token });
+    limits = await b.apiRequest<{ limits: Array<{ capValue: number; enabled: boolean }> }>(`/v1/organizations/${organizationId}/limits`, { token });
     const disabled = limits.body.limits.find((l) => (l as any).kind === "llm");
     expect(disabled === undefined || disabled.enabled === false).toBe(true);
   });
@@ -174,6 +194,17 @@ test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () =
     expect(grants.some((g) => g.grant_type === "topup"), "no topup grant when feature is off").toBe(false);
   });
 });
+
+async function activeMemberCount(organizationId: string): Promise<number> {
+  return b.withDb(async (db) => {
+    const r = await db.query(
+      `SELECT count(*)::int AS n FROM organization_membership
+        WHERE organization_id = $1 AND status = 'active'`,
+      [organizationId],
+    );
+    return Math.max(r.rows[0].n as number, 1);
+  });
+}
 
 async function userIdFor(token: string): Promise<string> {
   const response = await fetch(`${process.env.TIER2_BILLING_API_BASE_URL}/users/me`, {

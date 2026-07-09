@@ -78,7 +78,11 @@ test.describe("T2-BILL-7: webhook robustness", () => {
     expect(updated.status).toBe(200);
     // Final state converges: subscription row present + period grant issued.
     const row = await b.withDb(async (db) => {
-      const r = await db.query(`SELECT status FROM billing_subscription WHERE billing_subject_id = $1`, [subject.id]);
+      const r = await db.query(
+        `SELECT status FROM billing_subscription
+           WHERE billing_subject_id = $1 AND stripe_subscription_id = $2`,
+        [subject.id, fullSub.id],
+      );
       return r.rows[0];
     });
     expect(row?.status).toBe("active");
@@ -97,7 +101,7 @@ test.describe("T2-BILL-8: subscription edge states", () => {
     const failedInvoice = { ...invoice, id: `in_test_failed_${Date.now()}`, customer: customer.id };
     await b.deliverEvent({ type: "invoice.payment_failed", object: failedInvoice });
     expect((await b.listActiveHolds(subject.id)).some((h) => h.kind === "payment_failed")).toBe(true);
-    let overview = await b.apiRequest<b.BlockState>("/billing/overview", { token });
+    let overview = await b.apiRequest<b.BlockState>("/v1/billing/overview", { token });
     expect(overview.body.startBlocked).toBe(true);
     expect((overview.body as any).holdReason ?? (overview.body as any).startBlockReason).toBe("payment_failed");
 
@@ -120,14 +124,15 @@ test.describe("T2-BILL-8: subscription edge states", () => {
     await b.deliverEvent({ type: "customer.subscription.updated", object: cancelled });
     const row = await b.withDb(async (db) => {
       const r = await db.query(
-        `SELECT cancel_at_period_end FROM billing_subscription WHERE billing_subject_id = $1`,
-        [subject.id],
+        `SELECT cancel_at_period_end FROM billing_subscription
+           WHERE billing_subject_id = $1 AND stripe_subscription_id = $2`,
+        [subject.id, sub.id],
       );
       return r.rows[0];
     });
     expect(row.cancel_at_period_end).toBe(true);
     // Access continues through period end.
-    let overview = await b.apiRequest<b.BlockState>("/billing/overview", { token });
+    let overview = await b.apiRequest<b.BlockState>("/v1/billing/overview", { token });
     expect(overview.body.startBlocked).toBe(false);
 
     // Past current_period_end + the 24h rollover grace → hard cutoff. Backdate
@@ -138,7 +143,7 @@ test.describe("T2-BILL-8: subscription edge states", () => {
         [new Date(Date.now() - 48 * 3600 * 1000).toISOString(), subject.id],
       ),
     );
-    overview = await b.apiRequest<b.BlockState>("/billing/overview", { token });
+    overview = await b.apiRequest<b.BlockState>("/v1/billing/overview", { token });
     expect(overview.body.startBlocked, "cut off after the rollover grace elapses").toBe(true);
   });
 
@@ -172,7 +177,7 @@ test.describe("T2-BILL-8: subscription edge states", () => {
     const { token } = await adminContext();
     const userId = await userIdFor(token);
     const subject = await b.ensurePersonalSubject(userId);
-    const overview = await b.apiRequest<b.BlockState>("/billing/overview", { token });
+    const overview = await b.apiRequest<b.BlockState>("/v1/billing/overview", { token });
     expect(overview.status).toBe(200);
     expect(
       (await b.listGrants(subject.id)).some((g) => g.grant_type === "free_trial_v2"),

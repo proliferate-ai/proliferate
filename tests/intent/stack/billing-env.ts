@@ -47,11 +47,34 @@ export interface ApiResult<T> {
   body: T;
 }
 
+/** fetch with one retry on a stale keep-alive socket. The billing specs block
+ * the event loop for seconds at a time in `spawnSync` Stripe CLI calls;
+ * uvicorn meanwhile times out idle keep-alive connections, and undici only
+ * auto-retries dead pooled sockets for idempotent methods — so the first POST
+ * after a long CLI block can surface `TypeError: fetch failed` (cause
+ * ECONNRESET/EPIPE) without the server ever seeing the request. One retry on
+ * exactly that connection-level failure is safe: the request never reached
+ * the app (and webhook delivery is idempotent by event id regardless). */
+export async function robustFetch(
+  url: string,
+  init?: Parameters<typeof fetch>[1],
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string } })?.cause;
+    if (cause?.code === "ECONNRESET" || cause?.code === "EPIPE" || cause?.code === "UND_ERR_SOCKET") {
+      return fetch(url, init);
+    }
+    throw error;
+  }
+}
+
 export async function apiRequest<T = unknown>(
   urlPath: string,
   options: { method?: string; token?: string; body?: unknown } = {},
 ): Promise<ApiResult<T>> {
-  const response = await fetch(`${apiBaseUrl()}${urlPath}`, {
+  const response = await robustFetch(`${apiBaseUrl()}${urlPath}`, {
     method: options.method ?? "GET",
     headers: {
       "Content-Type": "application/json",
@@ -66,13 +89,15 @@ export async function apiRequest<T = unknown>(
 }
 
 /** Shared typed shape for the block-state fields `/billing/overview` and
- * `/billing/cloud-plan` expose (the resume gate's inputs). */
+ * `/billing/cloud-plan` expose (the resume gate's inputs). Field names follow
+ * BillingOverview's camelCase aliases (server billing/models.py) — remaining
+ * credit is exposed in HOURS (`remainingHours`), not seconds. */
 export interface BlockState {
   startBlocked: boolean;
   startBlockReason: string | null;
   activeSpendHold: boolean;
   holdReason: string | null;
-  remainingSeconds: number;
+  remainingHours: number | null;
 }
 
 // ── Postgres (raw seeding + assertion reads) ──

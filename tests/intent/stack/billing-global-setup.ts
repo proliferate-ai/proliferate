@@ -17,6 +17,7 @@ import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
 import { BILLING_PROFILE, bootStack, REPO_ROOT, type StripeBillingEnv } from "./boot.ts";
+import { resetBillingState } from "./billing-seed.ts";
 import { resetPasswordLoginRateLimits } from "./seed.ts";
 
 export class BillingSuiteSkipped extends Error {}
@@ -102,5 +103,9 @@ export default async function billingGlobalSetup(): Promise<() => Promise<void>>
   process.env.TIER2_INTENT_SETUP_TOKEN_FILE = stack.setupTokenFile;
 
   await resetPasswordLoginRateLimits();
+  // Billing rows accumulate in the persistent profile DB; wipe them so this
+  // run's grant/adjustment/export assertions count only their own effects
+  // (accounts and org memberships are preserved — see resetBillingState).
+  await resetBillingState();
   return stack.teardown;
 }

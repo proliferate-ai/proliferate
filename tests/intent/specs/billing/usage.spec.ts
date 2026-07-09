@@ -26,10 +26,10 @@ test.describe("T2-BILL-9: usage surfaces tell the truth", () => {
     const subject = await b.ensurePersonalSubject(userId);
 
     const summaryBefore = await b.apiRequest<{ computeUsedSecondsMtd: number; llmUsedUsdMtd: number }>(
-      "/billing/usage/summary",
+      "/v1/billing/usage/summary",
       { token },
     );
-    const balanceBefore = await b.apiRequest<{ usedUsd: number }>("/billing/llm-balance", { token });
+    const balanceBefore = await b.apiRequest<{ usedUsd: number }>("/v1/billing/llm-balance", { token });
 
     // Seed a precise, known amount: 1 hour compute + $3.25 + $1.75 LLM.
     await b.seedUsageSegment(subject.id, { userId, hours: 1, startedAt: new Date(Date.now() - 30 * 60 * 1000) });
@@ -37,7 +37,7 @@ test.describe("T2-BILL-9: usage surfaces tell the truth", () => {
     await b.seedLlmUsageEvent({ subjectId: subject.id, userId, costUsd: 1.75 });
 
     const summary = await b.apiRequest<{ computeUsedSecondsMtd: number; llmUsedUsdMtd: number }>(
-      "/billing/usage/summary",
+      "/v1/billing/usage/summary",
       { token },
     );
     expect(
@@ -49,11 +49,11 @@ test.describe("T2-BILL-9: usage surfaces tell the truth", () => {
       "summary LLM reflects the seeded $5.00",
     ).toBeCloseTo(5.0, 2);
 
-    const balance = await b.apiRequest<{ usedUsd: number }>("/billing/llm-balance", { token });
+    const balance = await b.apiRequest<{ usedUsd: number }>("/v1/billing/llm-balance", { token });
     expect(balance.body.usedUsd - balanceBefore.body.usedUsd).toBeCloseTo(5.0, 2);
 
     const timeseries = await b.apiRequest<{ buckets: Array<{ computeSeconds?: number; llmCostUsd?: number }> }>(
-      "/billing/usage/timeseries?granularity=day",
+      "/v1/billing/usage/timeseries?granularity=day",
       { token },
     );
     expect(timeseries.status).toBe(200);
@@ -72,7 +72,7 @@ test.describe("T2-BILL-9: usage surfaces tell the truth", () => {
     }
 
     const byUser = await b.apiRequest<{ users: Array<{ userId: string; llmCostUsd: number; computeSeconds: number }> }>(
-      `/organizations/${organizationId}/usage/by-user`,
+      `/v1/organizations/${organizationId}/usage/by-user`,
       { token },
     );
     expect(byUser.status).toBe(200);
