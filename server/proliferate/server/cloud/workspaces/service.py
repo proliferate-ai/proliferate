@@ -179,10 +179,23 @@ async def create_cloud_workspace_for_user(
             status_code=400,
         )
 
-    await materialization_service.materialize_repo_environment(
-        db,
-        repo_environment_id=repo_environment.id,
-    )
+    try:
+        await materialization_service.materialize_repo_environment(
+            db,
+            repo_environment_id=repo_environment.id,
+        )
+    except CloudRuntimeReconnectError as exc:
+        # Waking/relaunching the cloud sandbox runtime failed (e.g. a stale
+        # runtime rejected the bearer token). This is a transient runtime
+        # reconnect problem, not a client error — surface a structured 502 so
+        # the desktop can prompt a retry instead of showing a raw 500. Only the
+        # synchronous create path converts this; background materialization
+        # callers still see CloudRuntimeReconnectError and handle it themselves.
+        raise CloudApiError(
+            "cloud_sandbox_reconnect_failed",
+            "The cloud sandbox runtime could not be reached. Please retry in a moment.",
+            status_code=502,
+        ) from exc
 
     workspace = await _create_workspace_row_with_branch_retry(
         db,
