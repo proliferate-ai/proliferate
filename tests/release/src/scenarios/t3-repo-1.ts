@@ -2,36 +2,47 @@ import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
 import { ScenarioExpectedFailError } from "./types.js";
-import { withProductGate } from "../fixtures/product-gate.js";
-import { ApiClient, ApiRequestError } from "../fixtures/http.js";
+import { ApiClient } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
 import { DEFAULT_GITHUB_TEST_REPO } from "../config/env-manifest.js";
+import {
+  githubAppSeedAvailable,
+  isGithubAppAuthorizationRequiredError,
+  isGithubAppInstallationRequiredError,
+  isGithubAppRepoNotCoveredError,
+  runGithubAppSeed,
+  type SeedResult,
+} from "../fixtures/github-app-seed.js";
 
 /**
  * T3-REPO-1 — repo settings take effect, both lanes.
  * specs/developing/testing/scenarios.md#T3-REPO-1
  *
- * Not in the phase-1 skeleton. `PUT /repositories/{owner}/{repo}/environment`
- * (default branch + setup script) is `current_product_user`-gated for BOTH
- * lanes (confirmed by reading `server/proliferate/server/cloud/repositories/api.py`
- * — every route depends on it, including the ones a local-lane workspace
- * would need to read the configured default branch/setup script from) — so
- * unlike T3-WT-1/T3-CHAT-1/T3-CFG-1, there is no gate-free local-lane path
- * here: repo *environment configuration* is always server-mediated even
- * though workspace *creation* off an already-known path is not.
+ * `PUT /repositories/{owner}/{repo}/environment` (default branch + setup
+ * script) is `current_product_user`-gated for BOTH lanes, and behind that, the
+ * GitHub App authority chain (`require_github_cloud_repo_authority`) gates it
+ * on a real App user authorization + a real installation covering the repo.
  *
- * Real-run finding (2026-07-09, filed as
- * https://github.com/proliferate-ai/proliferate/issues/1043): once the
- * request itself is valid (see issue #1040 — this scenario's own
- * `runCommand: null` bug, now fixed), the PUT still 409s in both lanes with
- * `github_app_authorization_required`. That gate is deeper than
- * `current_product_user`/`github_link_required` (already fixed by #1023 —
- * confirmed live, since the request now gets past it): configuring a
- * GitHub-hosted cloud repo's environment requires a real GitHub App
- * installation authorization, which this runner's password-only durable
- * e2e-tests identity has no way to obtain — the same structural limitation
- * T3-PROV-1 hit with the real OAuth callback. Marked expected-fail rather
- * than retried.
+ * #1043 update (2026-07-09): the originally-pinned blocker was that the
+ * password-only durable identity "has no seedable path to a GitHub App
+ * installation." That is now resolved: github_app_seed.py plants a real
+ * user-to-server authorization for the durable user (a real App token,
+ * refreshed — no browser), so `ensure_fresh_github_app_authorization` passes
+ * and the PUT gets past `github_app_authorization_required`. The expected-fail
+ * pin for that code is therefore lifted.
+ *
+ * Remaining t3local blocker (environmental, NOT the product, NOT #1043's stated
+ * cause): the profile's configured GitHub App is `proliferate-dev` (id
+ * 2486507), installed only on `pablonyx` — it is NOT installed on the fixture
+ * org `proliferate-e2e`, so once authorization passes the authority chain now
+ * 409s `github_app_installation_required` for proliferate-e2e/e2e-fixture. The
+ * fixture doc's `proliferate-cloud-pablo` app + installation 145311006 is
+ * configured nowhere on t3local. This is reported to Pablo (App-credential
+ * availability) and is a fixture/infra provisioning gap, not a code bug — so it
+ * is an expected-fail with an accurate environmental diagnosis, and NO product
+ * issue is filed. When the fixture app is provisioned on the runner profile (or
+ * the target repo is one the configured installation covers) this scenario runs
+ * green with no code change.
  */
 export const t3Repo1: ScenarioDefinition = {
   id: "T3-REPO-1",
@@ -40,6 +51,7 @@ export const t3Repo1: ScenarioDefinition = {
   lanes: ["local", "sandbox"],
   requiredEnv: ["RELEASE_E2E_SERVER_URL", "RELEASE_E2E_DURABLE_USER_EMAIL", "RELEASE_E2E_DURABLE_USER_PASSWORD"],
   plan: ({ runtimeLane }) => [
+    { description: "seed the durable user's real GitHub App authorization (github_app_seed.py seed; no browser)" },
     {
       description: `configure default branch=develop + setup script on the ${
         runtimeLane === "local" ? "local" : "cloud"
@@ -53,7 +65,7 @@ export const t3Repo1: ScenarioDefinition = {
     if (ctx.dryRun) {
       return;
     }
-    await withProductGate("T3-REPO-1", () => runReal(ctx.env.require("RELEASE_E2E_SERVER_URL")));
+    await runReal(ctx.env.require("RELEASE_E2E_SERVER_URL"));
   },
 };
 
@@ -61,6 +73,19 @@ async function runReal(serverUrl: string): Promise<void> {
   const durableEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL as string;
   const durablePassword = process.env.RELEASE_E2E_DURABLE_USER_PASSWORD as string;
   const [owner, repo] = (process.env.RELEASE_E2E_GITHUB_TEST_REPO ?? DEFAULT_GITHUB_TEST_REPO).split("/");
+
+  // Seed the durable user's real App authorization (deliverable A). Without it,
+  // the PUT 409s github_app_authorization_required (the original #1043 pin).
+  if (githubAppSeedAvailable(process.env)) {
+    const seed = await runGithubAppSeed<SeedResult>(durableEmail, { command: "seed" });
+    assert.equal(seed.seeded?.status, "ready", "T3-REPO-1: durable user's GitHub App authorization must be seeded ready");
+  } else {
+    throw new ScenarioExpectedFailError(
+      "T3-REPO-1: GitHub App seed credentials are unavailable (RELEASE_E2E_LOCAL_DATABASE_URL + a seed refresh " +
+        "token / state file) — cannot plant the durable user's App authorization, so the repo-environment PUT " +
+        "would 409 github_app_authorization_required (#1043). Provision the seed to run this for real.",
+    );
+  }
 
   const session = await loginDurableUser({ serverUrl, email: durableEmail, password: durablePassword, organizationId: "" });
   const client = new ApiClient({ baseUrl: serverUrl }).withBearerToken(session.accessToken);
@@ -75,38 +100,35 @@ async function runReal(serverUrl: string): Promise<void> {
         defaultBranch: "develop",
         setupScript: "echo t3-repo-1-setup-ran > /tmp/t3-repo-1-marker",
         // "" (not null) is how the product UI expresses "no run command" — see
-        // apps/desktop/src/lib/domain/settings/environment-draft.ts and
-        // use-cloud-environment-draft.ts. runCommand is a non-optional string on
-        // the server (SaveRepoEnvironmentRequest), so null 422s.
+        // apps/desktop/src/lib/domain/settings/environment-draft.ts. runCommand
+        // is a non-optional string on the server (SaveRepoEnvironmentRequest).
         runCommand: "",
       },
     );
   } catch (error) {
     if (isGithubAppAuthorizationRequiredError(error)) {
+      // Should no longer happen now that we seed — surface loudly if it does.
+      throw new Error(
+        "T3-REPO-1: repo-environment PUT still 409s github_app_authorization_required AFTER seeding a real App " +
+          "authorization — the seed did not take. Investigate github_app_seed.py / the durable user's row.",
+      );
+    }
+    if (isGithubAppInstallationRequiredError(error) || isGithubAppRepoNotCoveredError(error)) {
       throw new ScenarioExpectedFailError(
-        "T3-REPO-1: repo-environment PUT 409s with github_app_authorization_required — the durable " +
-          "e2e-tests identity is password-only and has no way to obtain a real GitHub App " +
-          "installation authorization. Filed as https://github.com/proliferate-ai/proliferate/issues/1043.",
+        `T3-REPO-1: authorization now passes (seed works), but the repo-environment PUT 409s on the installation ` +
+          `gate for ${owner}/${repo}. t3local's configured GitHub App (proliferate-dev, id 2486507) is installed ` +
+          `only on pablonyx, NOT on the fixture org ${owner}; the fixture doc's proliferate-cloud-pablo app + ` +
+          `installation 145311006 is configured nowhere on this profile. Environmental/fixture gap, not a product ` +
+          `bug — provision the fixture app on the runner profile (or point RELEASE_E2E_GITHUB_TEST_REPO at a repo ` +
+          `the configured installation covers) to run this green. See #1043.`,
       );
     }
     throw error;
   }
   assert.equal(response.defaultBranch, "develop", "T3-REPO-1: repo environment default branch must round-trip");
   throw new Error(
-    "T3-REPO-1: repo-environment PUT succeeded (gate lifted) but the rest of this scenario " +
-      "(fresh workspace creation + checkout/setup-script/env-var assertions in both lanes, and " +
-      "teardown reset) is not yet implemented — finish it now that the gate is open.",
+    "T3-REPO-1: repo-environment PUT succeeded (authorization + installation both satisfied) but the rest of this " +
+      "scenario (fresh workspace creation + checkout/setup-script/env-var assertions in both lanes, and teardown " +
+      "reset) is not yet implemented — finish it now that the gate is fully open.",
   );
-}
-
-// FastAPI's default HTTPException envelope wraps the raised detail:
-// `{"detail": {"code": "github_app_authorization_required", "message": "..."}}`
-// (see server/proliferate/server/cloud/github_app/repo_authority.py), mirroring
-// isGithubLinkRequiredError in fixtures/identity.ts.
-function isGithubAppAuthorizationRequiredError(error: unknown): boolean {
-  if (!(error instanceof ApiRequestError) || error.status !== 409 || typeof error.body !== "object" || error.body === null) {
-    return false;
-  }
-  const body = error.body as { code?: unknown; detail?: { code?: unknown } };
-  return body.code === "github_app_authorization_required" || body.detail?.code === "github_app_authorization_required";
 }

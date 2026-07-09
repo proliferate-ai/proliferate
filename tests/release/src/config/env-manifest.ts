@@ -162,6 +162,30 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: true,
   },
   {
+    name: "RELEASE_E2E_GITHUB_APP_SEED_REFRESH_TOKEN",
+    description:
+      "Bootstrap GitHub App user-to-server REFRESH token for the account that authorized the target " +
+      "profile's configured GitHub App. The seed seam (tests/release/scripts/github_app_seed.py) refreshes " +
+      "it into a live access token and plants the real user-to-server authorization + installation cache the " +
+      "OAuth callback would have written — no browser. Refresh tokens rotate on every use, so after the first " +
+      "run the single live token lives in the state file below; this env var is only the initial bootstrap.",
+    whereItLives:
+      "Captured once from a real (browser-completed) authorization of the configured App. Local dev: " +
+      "~/.proliferate-local/dev/release-e2e.env (or seed the state file directly). Never committed.",
+    secret: true,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_GITHUB_APP_SEED_STATE",
+    description:
+      "Path to the JSON state file holding the current (rotating) GitHub App seed refresh token. Optional " +
+      "override; defaults to ~/.proliferate-local/dev/release-e2e-github-seed.json. The seed seam rewrites it " +
+      "atomically after each refresh, so seeding is re-runnable without re-supplying the bootstrap token.",
+    whereItLives: "Written and maintained by tests/release/scripts/github_app_seed.py. Operator override only.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
     name: "RELEASE_E2E_LOCAL_RUNTIME_URL",
     description:
       "Base URL of the LOCAL lane's AnyHarness runtime HTTP API (workspaces/worktrees/sessions/agents) " +
