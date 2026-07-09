@@ -4,7 +4,7 @@ import os from "node:os";
 import { randomUUID } from "node:crypto";
 
 import type { ScenarioDefinition } from "./types.js";
-import { ScenarioBlockedError } from "./types.js";
+import { ScenarioExpectedFailError } from "./types.js";
 import { DEFAULT_GITHUB_TEST_REPO, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { ensureLocalClone } from "../fixtures/git.js";
 import { LocalRuntimeClient } from "../fixtures/local-runtime.js";
@@ -20,9 +20,11 @@ import { LocalRuntimeClient } from "../fixtures/local-runtime.js";
  * already-resolved local repo measured ~90ms in that run, well inside the
  * ruled ≤1s budget.
  *
- * Sandbox lane: real code, gated by the known `current_product_user`
- * blocker (see `src/fixtures/product-gate.ts`) until
- * `fix/product-user-single-org-bypass` merges.
+ * Sandbox lane: the `current_product_user` gate is now lifted in single-org
+ * mode (verified 2026-07-09). What remains is a test-implementation gap:
+ * provisioning a cloud sandbox and creating a worktree inside it off the
+ * sandbox's own checkout is not yet written (needs a running sandbox). Tracked
+ * test TODO, not a product gate.
  */
 export const t3Wt1: ScenarioDefinition = {
   id: "T3-WT-1",
@@ -55,12 +57,13 @@ export const t3Wt1: ScenarioDefinition = {
       await runLocalLane();
       return;
     }
-    // Sandbox lane needs a cloud workspace, which needs current_product_user
-    // — real code path, not yet reachable for real. Left in place (rather
-    // than a stub throw) so it starts asserting the day the gate lifts.
-    throw new ScenarioBlockedError(
-      "T3-WT-1/sandbox: cloud worktree creation goes through POST /v1/workspaces (server-mediated), " +
-        "which is current_product_user-gated. See src/fixtures/product-gate.ts.",
+    // Gate lifted in single-org mode (2026-07-09); the sandbox-lane driver
+    // (provision sandbox → create worktree off its checkout → assert isolation)
+    // is not yet implemented. Tracked test TODO, not a product gate.
+    throw new ScenarioExpectedFailError(
+      "T3-WT-1/sandbox: current_product_user is lifted in single-org mode, but provisioning a cloud " +
+        "sandbox and creating a worktree inside it is not yet implemented (needs a running sandbox). " +
+        "Tracked test TODO (#1041).",
     );
   },
 };

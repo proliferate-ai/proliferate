@@ -17,7 +17,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Google OAuth sign-in (mocked provider per-merge) | 2 | tests/intent/specs/login-methods.spec.ts (T2-AUTH-4; tier-2 owns the login-method availability seam — `/auth/desktop/methods` + `/auth/desktop/github/availability` report password on / GitHub off and the login screen renders the password form; the real Google/GitHub OAuth round-trip is the tier-3 "Real provider handshakes" row per scenarios.md ruling #4) |
+| Google OAuth sign-in (mocked provider per-merge) | 2 | — |
 | `/setup` instance claim → password login → logout → re-login | 2 | — |
 | Session revocation ends access | 2 | — |
 | Invitation: invite → accept in fresh browser → membership + role | 2 | — |
@@ -33,7 +33,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Create organization | 2 | — |
 | Invite users; promote/demote roles | 2 | — |
 | Admin-only surfaces gated: member cannot see/do admin actions | 2 | — |
-| Member visibility boundaries (sees own work, not others' private state) | 2 | tests/intent/specs/member-visibility.spec.ts (T2-ORG-2; member reads their org + the shared roster, but 403s on the invitations list (#1029), the join-link secret, and PATCHing another member — the read boundary being open does not open the write boundary) |
+| Member visibility boundaries (sees own work, not others' private state) | 2 | — |
 | Remove user; access ends | 2 | — |
 
 ## Workspaces
@@ -42,7 +42,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | --- | --- | --- |
 | Local workspace create | 3 | — |
 | Worktree workspace create — locally AND inside a cloud sandbox | 3 | tests/release/src/scenarios/t3-wt-1.ts (T3-WT-1; local lane green, sandbox lane blocked on current_product_user) |
-| Cloud workspace create: request path + UI state up to the provisioning seam | 2 | tests/intent/specs/cloud-workspace.spec.ts (T2-WS-1; request-path seam — happy path past the repo-environment lookup needs a GitHub App fixture, named in the spec header) |
+| Cloud workspace create: request path + UI state up to the provisioning seam | 2 | — |
 | Add-Repo flow entry: local/cloud branches render + desktop-web fallback limits (no native picker outside Tauri) | 2 | tests/intent/specs/workspace-entry.spec.ts |
 | New user cold path: GitHub App authorization triggers first-ever sandbox provisioned from zero, within time budget | 3 | tests/release/src/scenarios/t3-prov-1.ts (T3-PROV-1; REAL trigger — seeds the App-auth callback's outcome via github_app_seed.py, real user token + real installation token, then runs the real post-callback body → real E2B sandbox; asserts positive AND negative trigger contract; fallback seam when seed creds absent) |
 | Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; blocked on current_product_user — no fallback seam for this one, it's specifically the front-door path) |
@@ -66,7 +66,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Secrets CRUD in UI: org, personal, file secrets | 2 | tests/intent/specs/secrets.spec.ts (T2-SEC-1) |
+| Secrets CRUD in UI: org, personal, file secrets | 2 | — |
 | Org secret set → materializes in a new cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (T3-SEC-MAT-1; blocked on current_product_user — no local-lane variant exists in the contract) |
 | Personal secret set → materializes in a new cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario, blocked) |
 | File secret set → lands at the right path in the sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario, blocked) |
@@ -103,6 +103,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Out of credits: sandbox paused and not accessible — **including every bypass route** (direct API resume, stale session, webhook race, pre-exhaustion key, other org member, trigger-driven start) | 3 | tests/release/src/scenarios/t3-bill-2.ts (T3-BILL-2; exhaustion setup via drain-grants green; enforcement + 6-route bypass sweep blocked on github_link_required — cloud routes need a real sandbox + gate lift PR #1023) |
 | Out of credits: gateway LLM access gated; reactivates on refill | 3 | tests/release/src/scenarios/t3-bill-2.ts (T3-BILL-2, LLM side; blocked on RELEASE_E2E_GATEWAY_TEST_KEY — no key to reject) |
 | Overage bills real money correctly: compute metered events + amounts match up to cap then hard-block; LLM auto top-up charges once then fail-closes on payment failure | 3 | — |
+| Plan gates the model list: user sees/uses exactly the models their plan allows | 3 | — |
 
 ## Upgrade & release
 

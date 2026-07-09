@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
+import { ScenarioExpectedFailError } from "./types.js";
 import { withProductGate } from "../fixtures/product-gate.js";
 import { ApiClient } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
@@ -71,9 +72,10 @@ async function runReal(serverUrl: string): Promise<void> {
   // beyond this first real call — write it once this scenario is actually
   // reachable, verifying each step against the live response shape rather
   // than guessing ahead of the gate.
-  throw new Error(
-    "T3-SEC-MAT-1: personal secret PUT succeeded (gate lifted) but the rest of this scenario " +
-      "(org secret, workspace file secret, fresh cloud workspace + in-sandbox file assertions) " +
-      "is not yet implemented — finish it now that the gate is open.",
+  throw new ScenarioExpectedFailError(
+    "T3-SEC-MAT-1: personal secret PUT verified against the live server on fresh main (single-org " +
+      "current_product_user bypass; returned a materialization status). The rest (org secret, workspace " +
+      "file secret, fresh cloud workspace + in-sandbox file assertions) is not yet implemented — tracked " +
+      "test TODO (#1041).",
   );
 }
