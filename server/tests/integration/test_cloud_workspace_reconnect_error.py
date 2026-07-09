@@ -64,12 +64,8 @@ async def test_create_workspace_reconnect_failure_maps_to_502(
         "get_cloud_repo_environment",
         _get_repo_environment,
     )
-    monkeypatch.setattr(
-        workspaces_service, "require_github_cloud_repo_authority", _authority
-    )
-    monkeypatch.setattr(
-        workspaces_service, "get_repo_branches_for_credentials", _branches
-    )
+    monkeypatch.setattr(workspaces_service, "require_github_cloud_repo_authority", _authority)
+    monkeypatch.setattr(workspaces_service, "get_repo_branches_for_credentials", _branches)
     monkeypatch.setattr(
         workspaces_service.cloud_workspace_store,
         "list_active_workspace_branches_for_repo_environment",
