@@ -15,6 +15,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   process.env.TIER2_INTENT_WEB_BASE_URL = stack.webBaseUrl;
   process.env.TIER2_INTENT_DATABASE_URL = stack.databaseUrl;
   process.env.TIER2_INTENT_SETUP_TOKEN_FILE = stack.setupTokenFile;
+  process.env.TIER2_INTENT_INVOCATION_STUB_BASE_URL = stack.invocationStubBaseUrl;
+  process.env.TIER2_INTENT_INVOCATION_STUB_API_KEY = stack.invocationStubApiKey;
   // The profile DB persists between runs; failed-login counters from a prior
   // run's negatives must not 429 this run's logins (5 failures / 15 min / IP).
   await resetPasswordLoginRateLimits();
