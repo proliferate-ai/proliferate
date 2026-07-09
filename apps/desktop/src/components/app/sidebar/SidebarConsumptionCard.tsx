@@ -99,7 +99,8 @@ function ConsumptionMeterRow({
 
 /**
  * Compute + LLM usage meters, personal scope only (an admin's org-wide view
- * lives in Usage & limits settings, not the popover — spec decision).
+ * lives in Usage & limits settings — spec decision). Rendered always-visible
+ * in the sidebar directly above the account footer, not inside its popover.
  */
 export function ConsumptionCard({
   usageSummary,
