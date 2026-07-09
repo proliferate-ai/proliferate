@@ -1,28 +1,25 @@
 // T2-WS-1 (specs/developing/testing/scenarios.md): cloud workspace create
 // request path, to the seam.
 //
-// MAJOR SURVEY CORRECTION, flagged prominently in the PR body (see
-// secrets.spec.ts's header for the full writeup): POST/GET /cloud/workspaces
-// depends on `current_product_user` (auth/dependencies.py), which
-// unconditionally requires a real GitHub OAuth identity + ready provider
-// grant — no single-org-mode bypass exists, unlike
-// `current_organization_actor` (used by T2-ORG-1/T2-INV-1's org endpoints),
-// whose docstring explicitly carves single-org mode out of this exact gate.
+// Formerly-documented GAP, now fixed: this spec used to pin a MAJOR SURVEY
+// CORRECTION — `current_product_user` (auth/dependencies.py) unconditionally
+// required a real GitHub OAuth identity + ready provider grant, with no
+// single-org-mode carve-out, so POST /cloud/workspaces 403'd
+// `github_link_required` for a password-only account before the endpoint
+// body ever ran — a step earlier than the scenario's own negative case. PR
+// #1023 extended the same single-org-mode bypass `current_organization_actor`
+// already had to `current_product_user` too, so a password-only account on a
+// single-org instance now clears the gate and reaches the scenario's
+// original seam.
 //
-// Concretely: even the scenario's own negative case
-// (`cloud_repo_environment_not_found`, raised in
-// cloud/workspaces/service.py create_cloud_workspace_for_user AFTER the repo
-// environment lookup) is unreachable for a password-only account — the
-// request 403s with `github_link_required` before the endpoint body ever
-// runs, verified against the running stack. This is a step earlier than the
-// GitHub-auth wall this wave's brief anticipated (which was scoped to the
-// happy path needing a real GitHub App installation); the wall is now in
-// front of the negative case too.
-//
-// Per this wave's explicit instruction not to fake GitHub auth, this spec
-// pins the AS-BUILT gate rather than the service-layer negative, which stays
-// unverified pending either a product decision or a real GitHub App test
-// fixture.
+// Net effect, verified against the running stack: for a nonexistent repo,
+// `create_cloud_workspace_for_user`
+// (server/proliferate/server/cloud/workspaces/service.py:103-114) looks up
+// the cloud repo environment first and 404s with
+// `cloud_repo_environment_not_found` before any GitHub App call is made.
+// This is exactly the assertion T2-WS-1 originally wanted (per
+// scenarios.md) — this spec now asserts it directly instead of the
+// account-level gate.
 
 import { expect, test } from "@playwright/test";
 import {
@@ -43,24 +40,22 @@ test.beforeAll(async () => {
 });
 
 test.describe("T2-WS-1: cloud workspace create request path (to the seam)", () => {
-  test("documents GAP: POST /cloud/workspaces is unreachable for a password-only account — 403 github_link_required fires before the cloud_repo_environment_not_found check this scenario names", async () => {
+  test("POST /cloud/workspaces 404s cloud_repo_environment_not_found for a repo with no cloud repo environment configured", async () => {
     const result = await createCloudWorkspace(ownerToken, {
       gitOwner: "t2intent-nonexistent-owner",
       gitRepoName: `nonexistent-repo-${Date.now()}`,
       branchName: "feature/does-not-matter",
     });
-    expect(result.status).toBe(403);
+    expect(result.status).toBe(404);
     const detail = (result.body as { detail?: { code?: string } }).detail;
-    expect(detail?.code).toBe("github_link_required");
+    expect(detail?.code).toBe("cloud_repo_environment_not_found");
   });
 });
 
 // NOT COVERED by this wave, named so the gap is loud rather than silent:
-// - cloud_repo_environment_not_found itself (exists in code, unreachable via
-//   this gate for a password-only test account);
 // - the happy path (200, workspace id, status pending|materializing) —
-//   NEEDS-GITHUB-FIXTURE regardless of the gate above, since it also
-//   requires require_github_cloud_repo_authority to succeed against a real
-//   GitHub App installation.
-// Re-scope once Pablo rules on the current_product_user GAP (see
-// secrets.spec.ts), or a GitHub App test fixture exists.
+//   NEEDS-GITHUB-FIXTURE regardless of the gate fix above, since it requires
+//   both a configured cloud repo environment and
+//   require_github_cloud_repo_authority to succeed against a real GitHub App
+//   installation (secrets.spec.ts's header documents the same dependency for
+//   workspace-scope secrets).
