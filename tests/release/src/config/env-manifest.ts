@@ -1,14 +1,12 @@
 /**
  * Declared manifest of every environment variable the tier-3 release-e2e
  * runner needs. Per specs/developing/testing/README.md ("Running tier 3/4
- * locally"): every key is inventoried here with where to obtain it, and the
- * runner fails fast with a named-variable error when one is missing. No
- * scenario ever embeds a credential directly — everything is read through
- * `resolveEnv` in `./env-resolution.ts`.
- *
- * None of these credentials exist yet (tracked as a follow-up: provisioning
- * the e2e-tests org, the gateway test key, and the E2B test team). Until then
- * this manifest only powers `--dry-run` reporting.
+ * locally"): every key is inventoried here with where to obtain it. A missing
+ * credential does not fail the whole run — the runner reports just the
+ * scenarios/lanes that require it as blocked (see `src/cli/run.ts`), so a
+ * partially-credentialed environment still produces signal for everything it
+ * can reach. No scenario ever embeds a credential directly — everything is
+ * read through `resolveEnv` in `./env-resolution.ts`.
  */
 
 import type { RuntimeLane } from "./types.js";

@@ -296,9 +296,14 @@ developed and debugged locally against staging:
   plus tunnel.
 - Every key the runner needs (cheap-LLM key, E2B team, sandbox-mode Stripe,
   test Slack workspace, test provider accounts) is inventoried in
-  `specs/developing/reference/env-vars.yaml` with where to obtain it; the
-  runner fails fast with a named-variable error when one is missing. No
-  scenario ever embeds a credential.
+  `specs/developing/reference/env-vars.yaml` with where to obtain it. A missing
+  key blocks only the scenarios/lanes that require it (reported as blocked, the
+  same as an out-of-band gate) rather than failing the whole run, so a
+  partially-credentialed environment still produces signal. No scenario ever
+  embeds a credential. The CI local lane additionally self-seeds its durable
+  user per run through the real `/setup` claim, so the local-lane server-
+  mediated scenarios run without any repo secret (the durable-user env stays
+  the mechanism for the staging lane).
 - A red CI run must be reproducible by copying the run's lane flags into the
   local command against the same staging deploy.
 

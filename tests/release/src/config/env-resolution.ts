@@ -89,9 +89,11 @@ export class MissingEnvVarsError extends Error {
 }
 
 /**
- * Fails fast on missing vars unless `dryRun` is set, per the tier-3 README
- * contract ("the runner fails fast with a named-variable error when one is
- * missing"; dry-run only reports).
+ * Utility that throws a named-variable error when any resolved var is missing
+ * (a no-op under `dryRun`). Retained for callers that genuinely cannot proceed
+ * without a var; the runner itself (`src/cli/run.ts`) no longer uses it as a
+ * global gate — a missing credential blocks only the dependent scenarios/lanes
+ * (#1069) rather than failing the whole run.
  */
 export function assertResolved(resolution: EnvResolution, options: { dryRun: boolean }): void {
   if (resolution.missing.length === 0) {
