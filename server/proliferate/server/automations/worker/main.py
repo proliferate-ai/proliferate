@@ -14,6 +14,7 @@ from proliferate.integrations.sentry import (
     init_server_sentry,
 )
 from proliferate.server.automations.worker.scheduler import run_scheduler_loop
+from proliferate.server.cloud.workflows.poller import run_workflow_poller_loop
 from proliferate.server.cloud.workflows.scheduler import run_workflow_scheduler_loop
 from proliferate.utils.logging import configure_server_logging
 
@@ -43,10 +44,12 @@ async def _amain(args: argparse.Namespace) -> None:
     stop_event = asyncio.Event()
     _install_signal_handlers(stop_event)
     try:
-        # Two independent beats in one scheduler process: the automation scheduler
-        # (single-prompt runs) and the workflow schedule-trigger scheduler (spec
-        # 3.5). They own different tables and back off independently; the schema is
-        # validated once by the automation loop before either does real work.
+        # Three independent beats in one scheduler process: the automation scheduler
+        # (single-prompt runs), the workflow schedule-trigger scheduler (spec 3.5),
+        # and the workflow poll-trigger poller (spec 4.2/4.3, split out of the
+        # schedule tick so a slow/failing poll endpoint never delays run delivery).
+        # They own different tables and back off independently; the schema is
+        # validated once by the automation loop before any of them does real work.
         await asyncio.gather(
             run_scheduler_loop(
                 interval_seconds=args.interval_seconds,
@@ -55,6 +58,11 @@ async def _amain(args: argparse.Namespace) -> None:
                 validate_schema=_validate_schema,
             ),
             run_workflow_scheduler_loop(
+                interval_seconds=args.interval_seconds,
+                batch_size=args.batch_size,
+                stop_event=stop_event,
+            ),
+            run_workflow_poller_loop(
                 interval_seconds=args.interval_seconds,
                 batch_size=args.batch_size,
                 stop_event=stop_event,

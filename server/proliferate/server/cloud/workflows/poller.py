@@ -19,8 +19,9 @@ advances past items that weren't recorded.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,19 +34,26 @@ from proliferate.constants.workflows import (
     WORKFLOW_POLL_DEFAULT_LIMIT,
     WORKFLOW_POLL_ERROR_MAX_LENGTH,
     WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS,
+    WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
     WORKFLOW_TRIGGER_ITEM_STATUS_ERROR,
     WORKFLOW_TRIGGER_ITEM_STATUS_INVALID,
     WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED,
     WORKFLOW_TRIGGER_KIND_POLL,
 )
+from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_workflow_triggers as trigger_store
 from proliferate.db.store.cloud_workflow_triggers import DuePollTrigger
+from proliferate.integrations.sentry import capture_server_sentry_exception
+from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import service
 from proliferate.server.cloud.workflows.domain.poll_contract import PollPage, validate_item_data
 from proliferate.utils.crypto import decrypt_text
 
 logger = logging.getLogger(__name__)
+
+_FAILURE_ESCALATION_THRESHOLD = 3
+_MAX_FAILURE_BACKOFF_SECONDS = 300.0
 
 # Same shape the schedule scheduler uses; declared here to avoid a circular
 # import (the scheduler imports this module for the poll pass).
@@ -142,119 +150,129 @@ async def _poll_one_trigger(
         )
         if trigger is None:
             return 0  # taken by another beat, disabled, or no longer due
-        if trigger.workflow_archived:
-            # Record the poll (advance last_poll_at, keep the cursor) so a disabled/
-            # archived workflow's trigger stops being re-scanned every beat.
-            await trigger_store.persist_poll_cursor(
-                db,
-                trigger_id=trigger_id,
-                cursor=trigger.poll_cursor,
-                polled_at=now,
-                error="Workflow was archived.",
-            )
-            return 0
 
-        auth = decrypt_poll_auth(trigger)
-        auth_header, auth_value = auth if auth is not None else (None, None)
-        try:
-            page = await fetch_poll_page(
-                url=trigger.poll_url,
-                auth_header=auth_header,
-                auth_value=auth_value,
-                cursor=trigger.poll_cursor,
-                limit=WORKFLOW_POLL_DEFAULT_LIMIT,
-            )
-        except Exception as exc:
-            # HTTP / shape error: record the error, advance last_poll_at, keep the
-            # old cursor (never advance past items we didn't ingest). Trigger stays
-            # enabled — the next due tick retries.
-            await trigger_store.persist_poll_cursor(
-                db,
-                trigger_id=trigger_id,
-                cursor=trigger.poll_cursor,
-                polled_at=now,
-                error=_poll_error(exc),
-            )
-            return 0
-
-        spawned = 0
-        actor = _PollActor(id=trigger.workflow_owner_user_id)
-        for item in page.items:
-            inserted = await trigger_store.insert_trigger_item(
-                db,
-                trigger_id=trigger_id,
-                item_id=item.id,
-                status=WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED,
-            )
-            if not inserted:
-                continue  # replayed item — the seen-set PK dedupes it
-
-            error = validate_item_data(item.data, trigger.poll_item_schema_json)
-            if error is not None:
-                await trigger_store.mark_item(
+        # Bind tenant fields for the rest of this trigger's unit of work (observability
+        # spec §8) so this beat's logs, and every log start_run/service emits below,
+        # carry org/user instead of running anonymously.
+        with with_correlation_context(
+            organization_id=trigger.workflow_organization_id,
+            user_id=trigger.workflow_owner_user_id,
+            worker_id="workflow_poller",
+        ):
+            if trigger.workflow_archived:
+                # Record the poll (advance last_poll_at, keep the cursor) so a
+                # disabled/archived workflow's trigger stops being re-scanned every
+                # beat.
+                await trigger_store.persist_poll_cursor(
                     db,
                     trigger_id=trigger_id,
-                    item_id=item.id,
-                    status=WORKFLOW_TRIGGER_ITEM_STATUS_INVALID,
-                    error_message=error,
+                    cursor=trigger.poll_cursor,
+                    polled_at=now,
+                    error="Workflow was archived.",
                 )
-                continue  # surfaced, never dropped, never spawned
+                return 0
 
-            # Item inputs: static presets overlaid by the item's own fields, taken
-            # directly by name (D17 — no dot-path mapping). Missing/typed-wrong
-            # fields were already caught by validate_item_data above.
-            inputs = overlay_item_inputs(
-                item.data,
-                static_inputs=trigger.args_json,
-                item_schema=trigger.poll_item_schema_json,
-            )
-
-            # Savepoint per item (Pablo amendment 2026-07-07, mirroring the
-            # schedule scheduler's begin_nested around start_run): a start_run
-            # failure rolls back only the run insert, not the whole transaction
-            # (cursor + seen-set). The failure is recorded 'error' and the loop
-            # continues; the seen-set row keeps the item from being retried.
+            auth = decrypt_poll_auth(trigger)
+            auth_header, auth_value = auth if auth is not None else (None, None)
             try:
-                async with db.begin_nested():
-                    run = await service.start_run(
+                page = await fetch_poll_page(
+                    url=trigger.poll_url,
+                    auth_header=auth_header,
+                    auth_value=auth_value,
+                    cursor=trigger.poll_cursor,
+                    limit=WORKFLOW_POLL_DEFAULT_LIMIT,
+                )
+            except Exception as exc:
+                # HTTP / shape error: record the error, advance last_poll_at, keep the
+                # old cursor (never advance past items we didn't ingest). Trigger stays
+                # enabled — the next due tick retries.
+                await trigger_store.persist_poll_cursor(
+                    db,
+                    trigger_id=trigger_id,
+                    cursor=trigger.poll_cursor,
+                    polled_at=now,
+                    error=_poll_error(exc),
+                )
+                return 0
+
+            spawned = 0
+            actor = _PollActor(id=trigger.workflow_owner_user_id)
+            for item in page.items:
+                inserted = await trigger_store.insert_trigger_item(
+                    db,
+                    trigger_id=trigger_id,
+                    item_id=item.id,
+                    status=WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED,
+                )
+                if not inserted:
+                    continue  # replayed item — the seen-set PK dedupes it
+
+                error = validate_item_data(item.data, trigger.poll_item_schema_json)
+                if error is not None:
+                    await trigger_store.mark_item(
                         db,
-                        actor,
-                        trigger.workflow_id,
-                        inputs=inputs,
-                        target_mode=trigger.target_mode,
-                        trigger_kind=WORKFLOW_TRIGGER_KIND_POLL,
-                        target_workspace_id=trigger.target_workspace_id,
                         trigger_id=trigger_id,
+                        item_id=item.id,
+                        status=WORKFLOW_TRIGGER_ITEM_STATUS_INVALID,
+                        error_message=error,
                     )
-            except CloudApiError as exc:
+                    continue  # surfaced, never dropped, never spawned
+
+                # Item inputs: static presets overlaid by the item's own fields, taken
+                # directly by name (D17 — no dot-path mapping). Missing/typed-wrong
+                # fields were already caught by validate_item_data above.
+                inputs = overlay_item_inputs(
+                    item.data,
+                    static_inputs=trigger.args_json,
+                    item_schema=trigger.poll_item_schema_json,
+                )
+
+                # Savepoint per item (Pablo amendment 2026-07-07, mirroring the
+                # schedule scheduler's begin_nested around start_run): a start_run
+                # failure rolls back only the run insert, not the whole transaction
+                # (cursor + seen-set). The failure is recorded 'error' and the loop
+                # continues; the seen-set row keeps the item from being retried.
+                try:
+                    async with db.begin_nested():
+                        run = await service.start_run(
+                            db,
+                            actor,
+                            trigger.workflow_id,
+                            inputs=inputs,
+                            target_mode=trigger.target_mode,
+                            trigger_kind=WORKFLOW_TRIGGER_KIND_POLL,
+                            target_workspace_id=trigger.target_workspace_id,
+                            trigger_id=trigger_id,
+                        )
+                except CloudApiError as exc:
+                    await trigger_store.mark_item(
+                        db,
+                        trigger_id=trigger_id,
+                        item_id=item.id,
+                        status=WORKFLOW_TRIGGER_ITEM_STATUS_ERROR,
+                        error_message=f"{exc.code}: {exc.message}",
+                    )
+                    continue
+
                 await trigger_store.mark_item(
                     db,
                     trigger_id=trigger_id,
                     item_id=item.id,
-                    status=WORKFLOW_TRIGGER_ITEM_STATUS_ERROR,
-                    error_message=f"{exc.code}: {exc.message}",
+                    status=WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED,
+                    run_id=run.id,
                 )
-                continue
+                spawned += 1
 
-            await trigger_store.mark_item(
+            # Cursor persists in the SAME transaction as the item rows. has_more just
+            # means the next due tick drains more — no special casing.
+            await trigger_store.persist_poll_cursor(
                 db,
                 trigger_id=trigger_id,
-                item_id=item.id,
-                status=WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED,
-                run_id=run.id,
+                cursor=page.cursor,
+                polled_at=now,
+                error=None,
             )
-            spawned += 1
-
-        # Cursor persists in the SAME transaction as the item rows. has_more just
-        # means the next due tick drains more — no special casing.
-        await trigger_store.persist_poll_cursor(
-            db,
-            trigger_id=trigger_id,
-            cursor=page.cursor,
-            polled_at=now,
-            error=None,
-        )
-        return spawned
+            return spawned
 
 
 async def run_poll_pass(
@@ -273,3 +291,76 @@ async def run_poll_pass(
         except Exception:
             logger.exception("workflow poll trigger failed trigger_id=%s", trigger_id)
     return spawned
+
+
+# --- beat + loop -----------------------------------------------------------------
+#
+# Split out of the schedule tick (PR 1e): poll triggers used to run INLINE inside
+# run_workflow_scheduler_tick, so a slow/failing poll endpoint delayed run delivery
+# in the same tick. This is now its own gathered coroutine in the automations
+# worker (server/proliferate/server/automations/worker/main.py) — mirrors
+# run_workflow_scheduler_loop's shape (independent backoff + Sentry escalation) so
+# a poll-beat failure never blocks the schedule beat's delivery phase.
+
+
+async def run_workflow_poller_tick(
+    *,
+    session_factory: SchedulerSessionFactory,
+    batch_size: int = WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
+) -> int:
+    from proliferate.utils.time import utcnow
+
+    now = utcnow()
+    return await run_poll_pass(session_factory, now=now, batch_size=batch_size)
+
+
+async def run_workflow_poller_loop(
+    *,
+    interval_seconds: float,
+    batch_size: int = WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
+    stop_event: asyncio.Event,
+    validate_schema: Callable[[], Awaitable[None]] | None = None,
+) -> None:
+    logger.info(
+        "Workflow poller worker started interval_seconds=%s batch_size=%s",
+        interval_seconds,
+        batch_size,
+    )
+    schema_validated = validate_schema is None
+    consecutive_failures = 0
+    while not stop_event.is_set():
+        try:
+            if not schema_validated and validate_schema is not None:
+                await validate_schema()
+                schema_validated = True
+            spawned = await run_workflow_poller_tick(
+                session_factory=db_engine.async_session_factory,
+                batch_size=batch_size,
+            )
+            consecutive_failures = 0
+            if spawned:
+                logger.info("Workflow poller tick spawned=%s", spawned)
+            next_delay = interval_seconds
+        except Exception as exc:
+            consecutive_failures += 1
+            next_delay = min(
+                interval_seconds * (2 ** (consecutive_failures - 1)),
+                _MAX_FAILURE_BACKOFF_SECONDS,
+            )
+            logger.exception(
+                "Workflow poller tick failed consecutive_failures=%s next_delay_seconds=%s",
+                consecutive_failures,
+                next_delay,
+            )
+            if consecutive_failures >= _FAILURE_ESCALATION_THRESHOLD:
+                capture_server_sentry_exception(
+                    exc,
+                    level="error",
+                    tags={"worker": "workflow_poller"},
+                    extras={"consecutive_failures": consecutive_failures},
+                    fingerprint=["workflow-poller", "tick-failed"],
+                )
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=next_delay)
+        except TimeoutError:
+            continue

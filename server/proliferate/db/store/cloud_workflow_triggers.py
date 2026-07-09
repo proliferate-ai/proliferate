@@ -25,7 +25,17 @@ from proliferate.db.models.cloud.workflows import (
     WorkflowTrigger,
     WorkflowTriggerItem,
 )
+from proliferate.db.store import organizations as organizations_store
 from proliferate.utils.time import utcnow
+
+
+async def _organization_id_for_owner(db: AsyncSession, *, owner_user_id: UUID) -> UUID | None:
+    """Workflows are user-scoped today (no ``organization_id`` column on the row) —
+    mirrors ``gateway_grants._organization_id_for_owner``, the house pattern for
+    deriving the owner's org for org-aware lookups/telemetry."""
+
+    membership = await organizations_store.get_current_membership_for_user(db, owner_user_id)
+    return membership.organization.id if membership is not None else None
 
 
 @dataclass(frozen=True)
@@ -68,6 +78,7 @@ class DueScheduleTrigger:
     id: UUID
     workflow_id: UUID
     workflow_owner_user_id: UUID
+    workflow_organization_id: UUID | None
     workflow_archived: bool
     concurrency_policy: str
     target_mode: str
@@ -88,6 +99,7 @@ class DuePollTrigger:
     id: UUID
     workflow_id: UUID
     workflow_owner_user_id: UUID
+    workflow_organization_id: UUID | None
     workflow_archived: bool
     target_mode: str
     target_workspace_id: UUID | None
@@ -379,10 +391,12 @@ async def claim_due_schedule_trigger(
     workflow = await db.get(Workflow, row.workflow_id)
     if workflow is None:
         return None
+    organization_id = await _organization_id_for_owner(db, owner_user_id=workflow.owner_user_id)
     return DueScheduleTrigger(
         id=row.id,
         workflow_id=row.workflow_id,
         workflow_owner_user_id=workflow.owner_user_id,
+        workflow_organization_id=organization_id,
         workflow_archived=workflow.archived_at is not None,
         concurrency_policy=row.concurrency_policy,
         target_mode=row.target_mode,
@@ -520,10 +534,12 @@ async def claim_due_poll_trigger(
     workflow = await db.get(Workflow, row.workflow_id)
     if workflow is None:
         return None
+    organization_id = await _organization_id_for_owner(db, owner_user_id=workflow.owner_user_id)
     return DuePollTrigger(
         id=row.id,
         workflow_id=row.workflow_id,
         workflow_owner_user_id=workflow.owner_user_id,
+        workflow_organization_id=organization_id,
         workflow_archived=workflow.archived_at is not None,
         target_mode=row.target_mode,
         target_workspace_id=row.target_workspace_id,

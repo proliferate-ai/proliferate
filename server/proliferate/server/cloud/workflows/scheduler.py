@@ -39,7 +39,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
     WORKFLOW_CONCURRENCY_SKIP,
-    WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
     WORKFLOW_RUN_STATUS_DELIVERED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE,
@@ -52,7 +51,9 @@ from proliferate.constants.workflows import (
 from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_workflow_triggers as trigger_store
 from proliferate.db.store import cloud_workflows as store
+from proliferate.db.store.cloud_workflow_triggers import _organization_id_for_owner
 from proliferate.integrations.sentry import capture_server_sentry_exception
+from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.automations.domain.schedule import (
     AutomationScheduleError,
     due_and_next_occurrences,
@@ -61,7 +62,6 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import service
 from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.server.cloud.workflows.actions import sweep_pending_actions
-from proliferate.server.cloud.workflows.poller import run_poll_pass
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -106,79 +106,90 @@ async def _fire_one_trigger(
         )
         if trigger is None:
             return 0  # taken by another beat, disabled, or no longer due
-        if trigger.workflow_archived:
-            await trigger_store.disable_trigger_with_reason(
-                db, trigger_id=trigger_id, now=now, reason="Workflow was archived."
-            )
-            return 0
 
-        try:
-            scheduled_for, next_run_at = due_and_next_occurrences(
-                rrule_text=trigger.schedule_rrule,
-                timezone=trigger.schedule_timezone,
-                now=now,
-            )
-        except AutomationScheduleError as exc:
-            # A stored schedule that can no longer be cursored: stop firing it
-            # rather than spin. The owner can re-save a valid schedule to re-enable.
-            await trigger_store.disable_trigger_with_reason(
-                db, trigger_id=trigger_id, now=now, reason=_skip_reason(str(exc))
-            )
-            return 0
-
-        if scheduled_for is None:
-            await trigger_store.mark_trigger_skipped(
-                db,
-                trigger_id=trigger_id,
-                now=now,
-                reason="No due occurrence for this slot.",
-                next_run_at=next_run_at,
-            )
-            return 0
-
-        # Concurrency: skip drops the slot while a prior run is still non-terminal.
-        if trigger.concurrency_policy == WORKFLOW_CONCURRENCY_SKIP and (
-            await store.has_non_terminal_run_for_trigger(db, trigger_id=trigger_id)
+        # Bind tenant fields for the rest of this trigger's unit of work so every
+        # log line it emits (including from service.start_run) is correlated
+        # (observability spec §8 — background loops must not log anonymously).
+        with with_correlation_context(
+            organization_id=trigger.workflow_organization_id,
+            user_id=trigger.workflow_owner_user_id,
+            worker_id="workflow_scheduler",
         ):
-            await trigger_store.mark_trigger_skipped(
-                db,
-                trigger_id=trigger_id,
-                now=now,
-                reason=WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY,
-                next_run_at=next_run_at,
-            )
-            return 0
-
-        actor = _SchedulerActor(id=trigger.workflow_owner_user_id)
-        try:
-            # Savepoint: a StartRun error (e.g. workspace de-provisioned) rolls back
-            # just the run insert so we can still record the skip + advance below.
-            async with db.begin_nested():
-                await service.start_run(
-                    db,
-                    actor,
-                    trigger.workflow_id,
-                    inputs=trigger.args_json,
-                    target_mode=trigger.target_mode,
-                    trigger_kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
-                    target_workspace_id=trigger.target_workspace_id,
-                    trigger_id=trigger_id,
-                    scheduled_for=scheduled_for,
+            if trigger.workflow_archived:
+                await trigger_store.disable_trigger_with_reason(
+                    db, trigger_id=trigger_id, now=now, reason="Workflow was archived."
                 )
-        except CloudApiError as exc:
-            await trigger_store.mark_trigger_skipped(
-                db,
-                trigger_id=trigger_id,
-                now=now,
-                reason=_skip_reason(f"{exc.code}: {exc.message}"),
-                next_run_at=next_run_at,
-            )
-            return 0
+                return 0
 
-        await trigger_store.mark_trigger_fired(
-            db, trigger_id=trigger_id, scheduled_for=scheduled_for, next_run_at=next_run_at
-        )
-        return 1
+            try:
+                scheduled_for, next_run_at = due_and_next_occurrences(
+                    rrule_text=trigger.schedule_rrule,
+                    timezone=trigger.schedule_timezone,
+                    now=now,
+                )
+            except AutomationScheduleError as exc:
+                # A stored schedule that can no longer be cursored: stop firing it
+                # rather than spin. The owner can re-save a valid schedule to
+                # re-enable.
+                await trigger_store.disable_trigger_with_reason(
+                    db, trigger_id=trigger_id, now=now, reason=_skip_reason(str(exc))
+                )
+                return 0
+
+            if scheduled_for is None:
+                await trigger_store.mark_trigger_skipped(
+                    db,
+                    trigger_id=trigger_id,
+                    now=now,
+                    reason="No due occurrence for this slot.",
+                    next_run_at=next_run_at,
+                )
+                return 0
+
+            # Concurrency: skip drops the slot while a prior run is still non-terminal.
+            if trigger.concurrency_policy == WORKFLOW_CONCURRENCY_SKIP and (
+                await store.has_non_terminal_run_for_trigger(db, trigger_id=trigger_id)
+            ):
+                await trigger_store.mark_trigger_skipped(
+                    db,
+                    trigger_id=trigger_id,
+                    now=now,
+                    reason=WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY,
+                    next_run_at=next_run_at,
+                )
+                return 0
+
+            actor = _SchedulerActor(id=trigger.workflow_owner_user_id)
+            try:
+                # Savepoint: a StartRun error (e.g. workspace de-provisioned) rolls
+                # back just the run insert so we can still record the skip + advance
+                # below.
+                async with db.begin_nested():
+                    await service.start_run(
+                        db,
+                        actor,
+                        trigger.workflow_id,
+                        inputs=trigger.args_json,
+                        target_mode=trigger.target_mode,
+                        trigger_kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
+                        target_workspace_id=trigger.target_workspace_id,
+                        trigger_id=trigger_id,
+                        scheduled_for=scheduled_for,
+                    )
+            except CloudApiError as exc:
+                await trigger_store.mark_trigger_skipped(
+                    db,
+                    trigger_id=trigger_id,
+                    now=now,
+                    reason=_skip_reason(f"{exc.code}: {exc.message}"),
+                    next_run_at=next_run_at,
+                )
+                return 0
+
+            await trigger_store.mark_trigger_fired(
+                db, trigger_id=trigger_id, scheduled_for=scheduled_for, next_run_at=next_run_at
+            )
+            return 1
 
 
 async def _fire_due_triggers(
@@ -219,7 +230,13 @@ async def _deliver_one_run(session_factory: SchedulerSessionFactory, *, run_id: 
         if earliest != run.id:
             return 0
         actor = _SchedulerActor(id=run.executor_user_id)
-        result = await deliver_cloud_run(db, actor, run)
+        organization_id = await _organization_id_for_owner(db, owner_user_id=run.executor_user_id)
+        with with_correlation_context(
+            organization_id=organization_id,
+            user_id=run.executor_user_id,
+            worker_id="workflow_scheduler",
+        ):
+            result = await deliver_cloud_run(db, actor, run)
         # A delivery_failed run stays pending_delivery (retried next tick).
         return 1 if result.status == WORKFLOW_RUN_STATUS_DELIVERED else 0
 
@@ -265,7 +282,15 @@ async def _refresh_in_flight_runs(
         try:
             async with session_factory() as db, db.begin():
                 actor = _SchedulerActor(id=run.executor_user_id)
-                await refresh_cloud_run(db, actor, run)
+                organization_id = await _organization_id_for_owner(
+                    db, owner_user_id=run.executor_user_id
+                )
+                with with_correlation_context(
+                    organization_id=organization_id,
+                    user_id=run.executor_user_id,
+                    worker_id="workflow_scheduler",
+                ):
+                    await refresh_cloud_run(db, actor, run)
                 refreshed += 1
         except Exception:
             logger.exception("workflow scheduler refresh failed run_id=%s", run.id)
@@ -289,16 +314,10 @@ async def run_workflow_scheduler_tick(
     now = utcnow()
     created = await _fire_due_triggers(session_factory, now=now, batch_size=batch_size)
 
-    # Poll pass (PR B): poll every due poll trigger and spawn one run per new item.
-    # Runs before delivery so freshly-spawned poll runs are eligible this tick; the
-    # spawned cloud runs ride phase-2 delivery unchanged (they carry trigger_id).
-    try:
-        created += await run_poll_pass(
-            session_factory, now=now, batch_size=WORKFLOW_POLLER_DEFAULT_BATCH_SIZE
-        )
-    except Exception:
-        logger.exception("workflow scheduler poll pass failed")
-
+    # Poll triggers (PR B) are polled by their own gathered coroutine
+    # (run_workflow_poller_loop, see poller.py) rather than inline here — a slow
+    # poll endpoint must not delay run delivery in this tick. Poll-spawned cloud
+    # runs still ride phase-2 delivery below unchanged (they carry trigger_id).
     delivered = await _deliver_pending_runs(session_factory, max_deliveries=max_deliveries)
 
     # Phase 3: refresh in-flight triggered cloud runs + sweep stale actions.
