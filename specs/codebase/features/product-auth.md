@@ -34,6 +34,12 @@ when `settings.single_org_mode` is true, same as its sibling
 unconditionally. Endpoints that genuinely need a GitHub token (repo import,
 etc.) still enforce that at their own point of use, not through this gate.
 
+The cloud sandbox gateway WebSocket authenticates its own product user rather
+than going through `current_product_user` (it reads the bearer token off the
+WebSocket handshake). It carries the same `settings.single_org_mode` carve-out
+so reaching your own sandbox over the gateway works on self-hosted instances;
+hosted still requires GitHub readiness there.
+
 ## Web Beta Access
 
 Hosted web access is beta-gated. The server enforces the gate when issuing or
