@@ -114,9 +114,8 @@ fn render_value(value: &serde_json::Value) -> String {
 /// late-bound against `outputs`.
 pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
     let kind = match &step.kind {
-        // agent.config carries only literal harness/model ids — nothing to bind.
+        // agent.config carries only a literal model id — nothing to bind.
         StepKind::AgentConfig(config) => StepKind::AgentConfig(AgentConfigStep {
-            harness: config.harness.clone(),
             model: config.model.clone(),
         }),
         StepKind::AgentPrompt(agent) => StepKind::AgentPrompt(AgentPromptStep {

@@ -70,8 +70,9 @@ pub struct WorkflowRunView {
     pub workspace_id: String,
     pub status: WorkflowRunStatus,
     pub step_cursor: i64,
+    /// Slot-keyed session map (B7): `slot -> session_id`.
     #[serde(default)]
-    pub session_ids: Vec<String>,
+    pub session_ids: std::collections::BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_code: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -138,7 +139,10 @@ mod tests {
             workspace_id: "ws-1".to_string(),
             status: WorkflowRunStatus::Running,
             step_cursor: 1,
-            session_ids: vec!["session-1".to_string()],
+            session_ids: std::collections::BTreeMap::from([(
+                "triage".to_string(),
+                "session-1".to_string(),
+            )]),
             error_code: None,
             error_message: None,
             created_at: "2026-07-03T00:00:00Z".to_string(),
@@ -159,7 +163,7 @@ mod tests {
         let json = serde_json::to_value(&view).expect("serialize run view");
         assert_eq!(json["runId"], "run-1");
         assert_eq!(json["status"], "running");
-        assert_eq!(json["sessionIds"][0], "session-1");
+        assert_eq!(json["sessionIds"]["triage"], "session-1");
         assert_eq!(json["steps"][0]["kind"], "agent.prompt");
         assert_eq!(json["steps"][0]["status"], "completed");
         assert_eq!(json["steps"][0]["output"]["turnId"], "turn-1");

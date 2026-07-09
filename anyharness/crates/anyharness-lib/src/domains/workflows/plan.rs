@@ -58,31 +58,6 @@ impl ResolvedPlan {
     pub fn step_count(&self) -> usize {
         self.steps.len()
     }
-
-    /// Back-compat single-session view for the current (pre-multi-slot) executor.
-    ///
-    /// TODO(workflows phase C/F, B7): the executor must become slot-keyed —
-    /// a `slot -> session` map, no single "current" session. Until then this
-    /// derives one `PlanSetup` from the session of the first step's slot (falling
-    /// back to any session), preserving today's single-session behavior.
-    pub fn setup(&self) -> PlanSetup {
-        let slot = self.steps.first().map(|s| s.slot.as_str());
-        let session = slot
-            .and_then(|slot| self.sessions.get(slot))
-            .or_else(|| self.sessions.values().next());
-        match session {
-            Some(spec) => PlanSetup {
-                harness: spec.harness.clone(),
-                model: spec.model.clone(),
-                session_binding: spec.session_binding,
-            },
-            None => PlanSetup {
-                harness: String::new(),
-                model: None,
-                session_binding: SessionBinding::Fresh,
-            },
-        }
-    }
 }
 
 /// How one slot's session is provisioned (data-contract §4 `sessions[slot]`).
@@ -96,15 +71,6 @@ pub struct SessionSpec {
     /// L29: bind an existing session instead of creating a fresh one.
     #[serde(default)]
     pub bind_session_id: Option<String>,
-}
-
-/// The single-session view the current executor still consumes. Not deserialized
-/// directly — derived from `sessions` by [`ResolvedPlan::setup`].
-#[derive(Debug, Clone)]
-pub struct PlanSetup {
-    pub harness: String,
-    pub model: Option<String>,
-    pub session_binding: SessionBinding,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -216,13 +182,12 @@ pub struct RequiredInvocation {
     pub tool: String,
 }
 
-/// Sets the active agent harness and/or model for the steps below it. At least
-/// one of `harness` / `model` is present (enforced server-side); it executes
-/// instantly and never opens a session of its own.
+/// Sets the active model for the steps below it in the same slot. Model-only
+/// (A3): harness is fixed per slot, so a different harness is a different slot —
+/// there is no harness-switch. Executes instantly and never opens a session of
+/// its own.
 #[derive(Debug, Clone, Deserialize)]
 pub struct AgentConfigStep {
-    #[serde(default)]
-    pub harness: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
 }
@@ -412,13 +377,12 @@ mod tests {
         assert_eq!(plan.version_n, Some(2));
         assert_eq!(plan.step_count(), 7);
 
-        // sessions map, keyed by slot; setup() derives the first step's slot session.
+        // sessions map, keyed by slot.
         assert_eq!(plan.sessions.len(), 2);
         assert_eq!(plan.sessions["fix"].bind_session_id.as_deref(), Some("sess_abc"));
         assert_eq!(plan.sessions["fix"].session_binding, SessionBinding::Headless);
-        let setup = plan.setup();
-        assert_eq!(setup.harness, "claude");
-        assert_eq!(setup.session_binding, SessionBinding::Fresh);
+        assert_eq!(plan.sessions["triage"].harness, "claude");
+        assert_eq!(plan.sessions["triage"].session_binding, SessionBinding::Fresh);
 
         // steps carry structured key + slot + label.
         assert_eq!(plan.steps[0].key, "0.-.0");
@@ -472,8 +436,8 @@ mod tests {
             }"#,
         )
         .expect("parse minimal plan");
-        assert_eq!(plan.setup().session_binding, SessionBinding::Headless);
-        assert!(plan.setup().model.is_none());
+        assert_eq!(plan.sessions["main"].session_binding, SessionBinding::Headless);
+        assert!(plan.sessions["main"].model.is_none());
         let StepKind::AgentPrompt(agent) = &plan.steps[0].kind else {
             panic!("expected agent.prompt");
         };

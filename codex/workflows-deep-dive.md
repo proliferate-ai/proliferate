@@ -124,7 +124,8 @@ the server *pulling* `/refresh` (no worker→server push channel in v1).
 ```
 run_goal(agent, goal, step_index)                           executor.rs:250
   │
-  ├─ ensure_session()  ──── harness match? reuse : create in bypass mode   :147
+  ├─ ensure_session(slot)  ─ per-slot: reuse the slot's session or create it  :147
+  │     in bypass mode (harness fixed per slot — no harness-switch)
   ├─ arm_goal(session, goal)   ── SetSessionGoalRequest{status:Active,      :368
   │     source_kind:Workflow, source_run_id} → goal_runtime.set_goal
   │     (ONLY place that stamps GoalSourceKind::Workflow)
@@ -152,22 +153,40 @@ Goal-met is model judgment; `verify` is ground truth. The wall-clock deadline is
 backstop for a hung in-flight turn the goals-domain cap guard (fires only on turn
 boundaries) can't see. See [§5](#5-goals-substrate-it-depends-on).
 
-### 1c. `agent.config` → session-switch flow
+### 1c. `agent.config` → per-slot model change (model-only, A3)
 
 ```
-run_agent_config(cfg)   executor.rs:426     (executes instantly, opens NO session)
-  fold {harness?, model?} onto self.active (ActiveConfig)
-    ├─ harness changed  → session_switched:true
-    │      (a NEW session opens at the NEXT agent step, when ensure_session sees
-    │       active.harness != current.harness — NOT here)
-    └─ harness same, model changed → applied LIVE to current session:
+run_agent_config(slot, cfg)   executor.rs     (executes instantly, opens NO session)
+  agent.config is MODEL-ONLY (A3): harness is fixed per slot, so a different
+  harness is a different slot — the harness-switch machinery is DELETED.
+    model changed → fold onto self.models[slot]; applied LIVE to the slot's
+        session if one is already open:
            set_live_session_config_option(session_id, ACP_MODEL_COMPAT_CONFIG_ID, model)
-           (no live session yet ⇒ takes effect at next creation)
-  output: {harness?, model?, session_switched}
+           (slot's session not open yet ⇒ takes effect at its next creation)
+  output: {model?, slot}
 
-On resume: recompute_active_config folds every agent.config in plan prefix
-[0, cursor) over the Setup seed — derived purely from plan+cursor, NO persisted
-config row.   executor.rs:131
+On resume: recompute_models folds every agent.config in the plan prefix
+[0, cursor) over the plan's per-slot `sessions[slot].model` seed — derived purely
+from plan+cursor, NO persisted config row.   executor.rs
+```
+
+### 1d. slot-keyed sessions (B7) + the C14 required-invocation gate
+
+```
+Sessions are SLOT-KEYED: each agent slot owns exactly one session for the run's
+lifetime. `WorkflowStepExecutorImpl.current: HashMap<slot, CurrentSession>` and
+`models: HashMap<slot, Option<String>>` replace the old single pointer.
+`ensure_session(slot)` opens the slot's session lazily (harness from
+`plan.sessions[slot]`), or — if `bind_session_id` is set (L29 / PR F, always
+absent today) — loads an existing one. The slot→session_id map is persisted via
+`set_session_for_slot` into `session_ids_json` (was an ordered list; now a
+{"triage":"sess_…"} object).
+
+C14 gate (arch §7.6): when an `agent.prompt` carries `required_invocation
+{provider,tool}`, run_prompt re-prompts up to MAX_GATE_ATTEMPTS(3), collecting
+the turn's ToolCall native tool names and matching provider+tool
+(`mcp__<provider>__<tool>` and bare spellings). Exhaustion → `invocation_missing`
+(on_fail matrix applies).
 ```
 
 ---
@@ -601,26 +620,26 @@ pub enum StepKind {   // format v2 — human.approval removed (E1), agent.emit +
     #[serde(rename = "branch")]        Branch(BranchStep),      // {on, cases:{v:{to}}, reason?}
 }
 
-// PlanStep now carries key/slot/label; ResolvedPlan.setup is gone — replaced by
-// sessions:{slot -> SessionSpec{harness, model?, session_binding, bind_session_id?}}.
-// ResolvedPlan::setup() derives a single PlanSetup for the current (pre-multi-slot)
-// executor (TODO phase C/F: make the executor slot-keyed).
+// PlanStep carries key/slot/label; there is no single `setup` — the executor is
+// slot-keyed (B7), reading sessions:{slot -> SessionSpec{harness, model?,
+// session_binding, bind_session_id?}} directly.
 pub struct PlanStep { pub key: String, pub slot: String, pub label: String, pub on_fail: OnFail, /* flatten */ kind }
 pub struct AgentPromptStep { pub prompt: String, pub goal: Option<GoalSpec>, pub required_invocation: Option<RequiredInvocation> }
 pub struct AgentEmitStep { pub prompt: String, pub max_attempts: u32 /*default 3*/, pub output_schema: Option<Value> }
-pub struct AgentConfigStep { pub harness: Option<String> /*deprecated; server emits model only*/, pub model: Option<String> }
+pub struct AgentConfigStep { pub model: Option<String> }  // model-only (A3); harness fixed per slot
 pub enum BranchTarget { Continue, End }
 pub enum SessionBinding { Fresh, Headless }
 ```
 <sub>[plan.rs](../anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs)</sub>
 
-The runtime **executor** carries the v2 plan types but its per-kind *behavior* is
-unchanged in this pass: `agent.emit` and `branch` return a `not_implemented`
-failure (execution lands in phase C/F, C11/C12); `notify` is Slack-only.
+The runtime **executor** implements every v2 kind: `agent.emit` runs the
+file-drop re-ask loop (C12, `max_attempts` from the plan), `branch` matches the
+resolved `on` value against `cases` and routes continue/end (C11/E5), `notify` is
+Slack-only.
 
-`PlanStep { on_fail: OnFail, #[serde(flatten)] kind: StepKind }`; `OnFail { kind:
-OnFailKind(Stop|Retry|Continue), n: u32 }`; `ResolvedPlan { run_id, …, setup: PlanSetup,
-args, steps: Vec<PlanStep> }` (line 21).
+`PlanStep { key, slot, label, on_fail: OnFail, #[serde(flatten)] kind: StepKind }`;
+`OnFail { kind: OnFailKind(Stop|Retry|Continue), n: u32 }`; `ResolvedPlan { run_id,
+…, sessions: BTreeMap<String, SessionSpec>, inputs, steps: Vec<PlanStep> }`.
 
 `NotifyStep` (line 183, PR A) gained `#[serde(default)] pub slack_channel_id:
 Option<String>` — old plans without the field still deserialize (defaults to
@@ -659,12 +678,16 @@ and tests fake.
   `apply_decision`.
 - `apply_decision` (line 338) — where the cursor moves: `Complete`/`Continue` →
   advance (Completed at end); `FailRun` → run Failed; `Retry` → step back to Pending
-  (cursor unchanged); `Suspend` → step `Waiting`, output = descriptor, run `WaitingApproval`.
+  (cursor unchanged); `Suspend` → step `Waiting`, output = descriptor, run `WaitingApproval`;
+  `EndRun` (branch `end`, C11/E5) → step Completed with taken-case output, cursor
+  jumps to the end, run `Completed`, and `skip_tail` marks every later still-pending
+  step `Skipped`.
 - `resolve_pending_approval` (line 249) — approve/deny/timeout. For a goal step parked
   on a block, **approve → `Retry`** (re-arm + continue waiting).
 - `record_step_goal_progress` (line 173) — live goal upsert; writes onto a **RUNNING**
   step's `output_json` only (a terminal write is never clobbered by a late snapshot).
-- `append_session_id` (line 154) — append-once, ordered.
+- `set_session_for_slot` (B7) — records `slot -> session_id` into the slot-keyed
+  `session_ids` map (replaces the old append-once ordered `append_session_id`).
 
 Late-binding: [templates.rs](../anyharness/crates/anyharness-lib/src/domains/workflows/templates.rs)
 resolves `{{steps[N].output.KEY.path}}` against completed outputs and unescapes
@@ -684,22 +707,27 @@ silently emptied) — the runtime half of the injection guard.
   `tokio::spawn`: load run, parse plan (bad plan ⇒ `mark_run_terminal(Failed, bad_plan)`),
   build executor, `hydrate_from_run`, `drive_run` (loop while `Advanced`), on
   `SuspendedForApproval` arm the approval-timeout timer.
-- `cancel` (line 105) — signal the live token, best-effort cancel the current session's
-  in-flight turn, directly `mark_run_terminal(Cancelled)` when no actor is driving.
+- `cancel` (line 105) — signal the live token, best-effort cancel every slot
+  session's in-flight turn, directly `mark_run_terminal(Cancelled)` when no actor is driving.
 - `resolve_approval` (line 144) → `resolve_pending_approval`; if it advanced, `spawn_actor`.
 - `spawn_startup_pass` (line 176) — crash-resume: loads non-terminal runs; `Running` ⇒
   respawn at the persisted cursor (re-enter, attempt bumped — idempotency is per-kind);
   `WaitingApproval` ⇒ left parked, timeout timer re-armed.
 
 **Executor** ([executor.rs](../anyharness/crates/anyharness-lib/src/live/workflows/executor.rs)),
-one per run. Holds `current: Option<CurrentSession>` (run session continuity) and
-`active: ActiveConfig{harness, model?}`. `WorkflowExecDeps` bundles session_runtime,
-goal_runtime, session_service, workspace_runtime, workflow_service, acp_manager,
-workflow_owned_sessions.
+one per run. Slot-keyed (B7): holds `current: HashMap<slot, CurrentSession>` (one
+session per agent slot for the run's lifetime) and `models: HashMap<slot,
+Option<String>>` (effective model per slot). `WorkflowExecDeps` bundles
+session_runtime, goal_runtime, session_service, workspace_runtime,
+workflow_service, acp_manager, workflow_owned_sessions.
 
-- `hydrate_from_run` (line 112) / `recompute_active_config` (line 131) — resume.
-- `ensure_session` (line 147) — reuse current session only if harness matches; else
-  create in bypass mode, mark workflow-owned *before* the first prompt, append id.
+- `hydrate_from_run` / `recompute_models` — resume: restore each slot's bound
+  session from the persisted slot map + fold per-slot `agent.config` models.
+- `ensure_session(slot)` — reuse the slot's session or create it in bypass mode
+  (harness from `sessions[slot]`, fixed per slot — no harness match/switch), mark
+  workflow-owned *before* the first prompt, persist via `set_session_for_slot`. A
+  slot carrying `bind_session_id` (L29 / PR F, always absent today) loads an
+  existing session instead of creating one.
 - `subscribe` (line 214) — the **await substrate**: `broadcast::Receiver<SessionEventEnvelope>`;
   every wait subscribes *before* prompting.
 
@@ -707,22 +735,24 @@ workflow_owned_sessions.
 
 | kind | method | summary |
 |---|---|---|
-| `agent.config` | `run_agent_config` :426 | instant; folds harness/model; live model-set or session_switched (see [§1c](#1c-agentconfig--session-switch-flow)) |
-| `agent.prompt` (no goal) | `run_prompt` :227 | ensure_session → subscribe → send_prompt → `await_turn_ended` (TURN_BACKSTOP 30m) |
-| `agent.prompt` (goal) | `run_goal` :250 | arm → await → verify → terminal (see [§1b](#1b-step-execution-for-agentprompt--goal-arm--await--verify--terminal)) |
+| `agent.config` | `run_agent_config(slot,…)` | instant; model-only (A3); folds model onto the slot + live model-set (see [§1c](#1c-agentconfig--per-slot-model-change-model-only-a3)) |
+| `agent.prompt` (no goal) | `run_prompt(slot,…)` | ensure_session(slot) → subscribe → send_prompt → `await_turn_ended`; with `required_invocation` runs the C14 gate loop (MAX_GATE_ATTEMPTS=3, `invocation_missing` on exhaustion) |
+| `agent.prompt` (goal) | `run_goal(slot,…)` | arm → await → verify → terminal (see [§1b](#1b-step-execution-for-agentprompt--goal-arm--await--verify--terminal)) |
 | `shell.run` | [commands.rs](../anyharness/crates/anyharness-lib/src/live/workflows/commands.rs) `run_shell_step` | `/bin/sh -lc` in workspace, scrubbed env, 8 KiB tail, default 600s |
 | `scm.open_pr` | `open_pr_step` | `git push` + `gh pr create`; missing gh → `scm_unavailable` |
-| `agent.emit` | — (phase C/F) | v2 kind; execution (re-ask loop, C12) not yet built — returns `not_implemented` for now |
+| `agent.emit` | `run_emit(slot,…)` | file-drop re-ask loop (C12): prompt → await turn → read `<ws>/.proliferate/emit-<run>-<step>.json` → jsonschema-validate (optional schema) → corrective re-prompt up to plan `max_attempts` → `emit_invalid` on exhaustion; validated object = whole step output |
 | `notify` | [commands.rs](../anyharness/crates/anyharness-lib/src/live/workflows/commands.rs) `notify_step` | Slack-only (E1b); never a hard failure; the runtime emits `{channel:"slack", message, slack_channel_id}`, the server-side effect claims from it |
-| `branch` | — (phase C/F) | v2 kind; continue/end arm (C11) not yet built — returns `not_implemented` for now |
+| `branch` | `run_branch` | match the resolved `on` value against `cases`: `continue` → `Completed` (advance); `end` → `EndRun` (run `completed`, later steps `skipped`, E5); unmatched → `branch_unmatched` (on_fail applies) |
 | ~~`human.approval`~~ | removed (E1) | step kind deleted; the `waiting_approval` status survives via `goal.on_blocked` |
 
 **output_json vocabulary per kind** (consumed by the run view + `{{steps[N].output}}`):
 
 | kind | output keys |
 |---|---|
-| agent.config | `harness?`, `model?`, `session_switched` |
-| agent.prompt (turn) | `turn_id`, `session_id` |
+| agent.config | `model?`, `slot` |
+| agent.prompt (turn) | `turn_id`, `session_id`, `required_invocation?` |
+| agent.emit | the validated JSON object verbatim |
+| branch | `value`, `target` (`continue`\|`end`) |
 | agent.prompt (goal) | `session_id`, `met_reason?`, `verified?`, `verify_attempts?`; while running `{goal:{objective,status,iterations,tokens_used}, session_id}` |
 | shell.run | `output_tail`, `exit_code`, `output_name?` |
 | scm.open_pr | `pr_url` |
@@ -991,9 +1021,10 @@ editor/run UI of its own (drift note #7).
   that doesn't exist; poll inherits the restriction for the same reason (PR B).
   (`service._validate_trigger_target_mode`.)
 - **Zero-step drafts.** `require_steps=False` on save, `True` on StartRun.
-- **`agent.config` as a step (not Setup-only).** Config changes are ordered events
-  (Claude fixes → Codex reviews), folded into the active config; harness switch opens
-  a new session at the next agent step. (`plan.rs::AgentConfigStep`, `run_agent_config`.)
+- **`agent.config` as a step (not Setup-only).** Model changes are ordered events
+  folded onto the step's slot (model-only, A3). Multi-agent chaining (Claude fixes →
+  Codex reviews) is expressed as distinct *slots* — each slot owns its own session;
+  there is no harness-switch. (`plan.rs::AgentConfigStep`, `run_agent_config`.)
 - **Hidden run sessions.** Workflow-run sessions don't appear in the normal session
   list; their home is the run view's "Open session" deep link.
 - **Notify in-app floor.** `notify` is never a hard failure. Slack delivery (PR A)

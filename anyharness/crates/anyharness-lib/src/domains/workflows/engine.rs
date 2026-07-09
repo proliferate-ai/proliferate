@@ -47,6 +47,7 @@ pub struct StepExecContext {
 }
 
 /// The result of executing one step.
+#[derive(Debug)]
 pub enum StepOutcome {
     /// The step succeeded; `output` is the typed step output (also the source
     /// for `{{steps[N].output.*}}` late-binding by later steps).
@@ -63,6 +64,11 @@ pub enum StepOutcome {
     /// `descriptor` is persisted as the waiting step's output (message, kind,
     /// deadline) so the wait survives a restart.
     AwaitApproval { descriptor: serde_json::Value },
+    /// The step succeeded AND requested the run end here (a `branch` step whose
+    /// taken case is `end`, C11/E5): the step is recorded completed with
+    /// `output`, the run goes terminal `completed`, and every later step is
+    /// marked `skipped`. Not subject to the on_fail matrix — `end` is a success.
+    EndRun { output: serde_json::Value },
 }
 
 /// The decision the pure on-fail logic reaches for a completed executor call.
@@ -89,6 +95,11 @@ pub enum StepDecision {
     Suspend {
         descriptor: serde_json::Value,
     },
+    /// Complete this step and end the run early, marking every later step
+    /// `skipped` (branch `end`, C11/E5).
+    EndRun {
+        output: serde_json::Value,
+    },
 }
 
 /// How far the engine got on a single `run_next_step` call.
@@ -108,6 +119,9 @@ pub fn decide_after_step(on_fail: OnFail, attempt: i64, outcome: StepOutcome) ->
     match outcome {
         StepOutcome::Completed { output } => StepDecision::Complete { output },
         StepOutcome::AwaitApproval { descriptor } => StepDecision::Suspend { descriptor },
+        // `end` is a deliberate success route, never a failure — the on_fail
+        // matrix does not apply.
+        StepOutcome::EndRun { output } => StepDecision::EndRun { output },
         StepOutcome::Failed {
             code,
             message,

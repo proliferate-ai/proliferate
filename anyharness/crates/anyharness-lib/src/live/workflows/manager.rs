@@ -120,7 +120,8 @@ impl WorkflowRunManager {
                 false
             }
         };
-        if let Some(session_id) = run.current_session_id() {
+        // Best-effort in-flight-turn teardown across every slot's session.
+        for session_id in run.sessions().values() {
             if let Some(handle) = self.deps.acp_manager.get_handle(session_id).await {
                 handle.cancel().await;
             }
@@ -238,7 +239,7 @@ impl WorkflowRunManager {
                 deps.clone(),
                 run_id.clone(),
                 run.workspace_id.clone(),
-                plan.setup(),
+                plan.sessions.clone(),
             );
             executor.hydrate_from_run(&run);
             let progress =

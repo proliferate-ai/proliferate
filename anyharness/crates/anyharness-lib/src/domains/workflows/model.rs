@@ -1,10 +1,12 @@
+use std::collections::BTreeMap;
+
 use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
 /// The anyharness-local mirror of one delivered workflow run. The resolved plan
 /// is stored verbatim in `plan_json` (the actor never re-fetches a definition —
 /// the StartRun payload is the whole contract). `step_cursor` is the index of
-/// the step the actor is at; `session_ids` is the ordered list of sessions the
-/// run has opened (the harness-switch design opens a new one per harness).
+/// the step the actor is at; `session_ids` is the slot-keyed session map (B7):
+/// `{"triage": "sess_…"}` — one session per agent slot, opened lazily.
 #[derive(Debug, Clone)]
 pub struct WorkflowRunRecord {
     pub run_id: String,
@@ -17,7 +19,8 @@ pub struct WorkflowRunRecord {
     pub plan_json: String,
     pub status: WorkflowRunStatus,
     pub step_cursor: i64,
-    pub session_ids: Vec<String>,
+    /// Slot-keyed session map (B7): `slot -> session_id`.
+    pub session_ids: BTreeMap<String, String>,
     pub error_code: Option<String>,
     pub error_message: Option<String>,
     pub created_at: String,
@@ -29,9 +32,16 @@ impl WorkflowRunRecord {
         run_status_is_terminal(self.status)
     }
 
-    /// The session opened most recently (the run's current session, if any).
+    /// A live session of the run, for best-effort control (e.g. cancel's
+    /// in-flight-turn teardown). With slot-keyed sessions there is no single
+    /// "current" session; any bound session is a valid teardown target.
     pub fn current_session_id(&self) -> Option<&str> {
-        self.session_ids.last().map(String::as_str)
+        self.session_ids.values().next().map(String::as_str)
+    }
+
+    /// The slot-keyed session map (B7).
+    pub fn sessions(&self) -> &BTreeMap<String, String> {
+        &self.session_ids
     }
 }
 

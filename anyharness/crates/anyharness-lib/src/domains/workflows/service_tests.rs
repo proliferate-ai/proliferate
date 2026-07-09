@@ -82,6 +82,10 @@ fn failed(code: &str) -> StepOutcome {
     }
 }
 
+fn end_run(output: serde_json::Value) -> StepOutcome {
+    StepOutcome::EndRun { output }
+}
+
 /// Drive the run to a resting point (terminal or suspended), exactly like the
 /// actor loop.
 async fn drive(
@@ -281,6 +285,61 @@ async fn on_fail_retry_succeeds_on_second_attempt() {
 }
 
 // --------------------------------------------------------------------------
+// Branch continue / end + skipped tail (C11 / E5)
+// --------------------------------------------------------------------------
+
+#[tokio::test]
+async fn branch_continue_advances_to_the_next_step() {
+    let service = test_service();
+    let run_id = create(
+        &service,
+        r#"[{ "kind": "branch", "on": "{{steps[0].output.verdict}}",
+             "cases": { "ship": { "to": "continue" }, "wont_fix": { "to": "end" } } },
+            { "kind": "shell.run", "command": "deploy" }]"#,
+    );
+    // Branch continues (Completed), then the tail step runs.
+    let executor = FakeExecutor::script(vec![
+        completed(serde_json::json!({ "value": "ship", "target": "continue" })),
+        completed(serde_json::json!({ "exit_code": 0 })),
+    ]);
+    let progress = drive(&service, &run_id, &executor).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert_eq!(run.step_cursor, 2);
+    assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+}
+
+#[tokio::test]
+async fn branch_end_completes_run_and_skips_the_tail() {
+    let service = test_service();
+    let run_id = create(
+        &service,
+        r#"[{ "kind": "shell.run", "command": "lint" },
+            { "kind": "branch", "on": "{{steps[0].output.verdict}}",
+              "cases": { "ship": { "to": "continue" }, "wont_fix": { "to": "end" } } },
+            { "kind": "shell.run", "command": "deploy" },
+            { "kind": "notify", "slack_channel_id": "C1", "message": "done" }]"#,
+    );
+    let executor = FakeExecutor::script(vec![
+        completed(serde_json::json!({ "verdict": "wont_fix" })),
+        end_run(serde_json::json!({ "value": "wont_fix", "target": "end" })),
+    ]);
+    let progress = drive(&service, &run_id, &executor).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+
+    let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert_eq!(run.status, WorkflowRunStatus::Completed);
+    // The branch step is recorded Completed with its taken-case output...
+    assert_eq!(steps[1].status, WorkflowStepStatus::Completed);
+    assert_eq!(steps[1].output_value().unwrap()["target"], "end");
+    // ...and every step after the end is Skipped, never executed.
+    assert_eq!(steps[2].status, WorkflowStepStatus::Skipped);
+    assert_eq!(steps[3].status, WorkflowStepStatus::Skipped);
+    // Only the two pre-end steps actually ran.
+    assert_eq!(executor.calls().len(), 2);
+}
+
+// --------------------------------------------------------------------------
 // Approval suspend / resolve / timeout
 // --------------------------------------------------------------------------
 
@@ -383,14 +442,17 @@ async fn resume_reenters_a_step_that_was_running() {
 }
 
 #[test]
-fn append_session_id_is_append_once() {
+fn set_session_for_slot_is_slot_keyed_and_idempotent() {
     let service = test_service();
     let run_id = create(&service, r#"[{ "kind": "shell.run", "command": "x" }]"#);
-    service.append_session_id(&run_id, "session-1").unwrap();
-    service.append_session_id(&run_id, "session-1").unwrap();
-    service.append_session_id(&run_id, "session-2").unwrap();
+    service.set_session_for_slot(&run_id, "triage", "session-1").unwrap();
+    // Same (slot, session) is a no-op; a second slot adds a key.
+    service.set_session_for_slot(&run_id, "triage", "session-1").unwrap();
+    service.set_session_for_slot(&run_id, "fix", "session-2").unwrap();
     let run = service.get_run(&run_id).unwrap().unwrap();
-    assert_eq!(run.session_ids, vec!["session-1".to_string(), "session-2".to_string()]);
+    assert_eq!(run.session_ids.len(), 2);
+    assert_eq!(run.session_ids["triage"], "session-1");
+    assert_eq!(run.session_ids["fix"], "session-2");
 }
 
 #[test]

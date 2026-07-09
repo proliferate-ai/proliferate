@@ -222,11 +222,14 @@ impl WorkflowStore {
     }
 }
 
-fn encode_session_ids(session_ids: &[String]) -> String {
-    serde_json::to_string(session_ids).unwrap_or_else(|_| "[]".to_string())
+fn encode_session_ids(session_ids: &std::collections::BTreeMap<String, String>) -> String {
+    serde_json::to_string(session_ids).unwrap_or_else(|_| "{}".to_string())
 }
 
-fn decode_session_ids(raw: Option<String>) -> Vec<String> {
+/// Decode the slot-keyed session map. Tolerates a legacy JSON array (pre-B7
+/// ordered list) by dropping it to an empty map — no run predates the hard cut
+/// (E4), so this only guards against a hand-edited row.
+fn decode_session_ids(raw: Option<String>) -> std::collections::BTreeMap<String, String> {
     raw.as_deref()
         .and_then(|value| serde_json::from_str(value).ok())
         .unwrap_or_default()

@@ -121,7 +121,7 @@ impl WorkflowService {
                 plan_json: plan_json.clone(),
                 status: WorkflowRunStatus::Running,
                 step_cursor: 0,
-                session_ids: Vec::new(),
+                session_ids: std::collections::BTreeMap::new(),
                 error_code: None,
                 error_message: None,
                 created_at: now.clone(),
@@ -159,16 +159,23 @@ impl WorkflowService {
         Ok(created)
     }
 
-    /// Record a session the run has opened (append-once, ordered).
-    pub fn append_session_id(&self, run_id: &str, session_id: &str) -> anyhow::Result<()> {
+    /// Record the session a slot is bound to for this run (B7 slot-keyed session
+    /// map). Idempotent on the (slot, session) pair; a slot only ever maps to one
+    /// live session for the run's lifetime.
+    pub fn set_session_for_slot(
+        &self,
+        run_id: &str,
+        slot: &str,
+        session_id: &str,
+    ) -> anyhow::Result<()> {
         self.store.with_tx_anyhow(|tx| {
             let Some(mut run) = WorkflowStore::find_run_tx(tx, run_id)? else {
                 return Ok(());
             };
-            if run.session_ids.iter().any(|id| id == session_id) {
+            if run.session_ids.get(slot).map(String::as_str) == Some(session_id) {
                 return Ok(());
             }
-            run.session_ids.push(session_id.to_string());
+            run.session_ids.insert(slot.to_string(), session_id.to_string());
             run.updated_at = now();
             WorkflowStore::update_run(tx, &run)?;
             Ok(())
@@ -343,6 +350,7 @@ impl WorkflowService {
             let mut run = WorkflowStore::find_run_tx(tx, run_id)?
                 .ok_or_else(|| anyhow::anyhow!("run vanished mid-decision"))?;
 
+            let mut end_run = false;
             let progress = match decision {
                 StepDecision::Complete { output } => {
                     finish_step(&mut step, WorkflowStepStatus::Completed, Some(output), None, None, &now);
@@ -401,10 +409,26 @@ impl WorkflowService {
                     run.updated_at = now.clone();
                     EngineProgress::SuspendedForApproval
                 }
+                // Branch `end` (C11/E5): the branch step completes with its
+                // taken-case output; the cursor jumps to the end; the run goes
+                // terminal `completed`; every later step is marked `skipped`.
+                StepDecision::EndRun { output } => {
+                    finish_step(&mut step, WorkflowStepStatus::Completed, Some(output), None, None, &now);
+                    run.step_cursor = step_count as i64;
+                    run.status = WorkflowRunStatus::Completed;
+                    run.updated_at = now.clone();
+                    end_run = true;
+                    EngineProgress::Finished(WorkflowRunStatus::Completed)
+                }
             };
 
             WorkflowStore::update_step_run(tx, &step)?;
             WorkflowStore::update_run(tx, &run)?;
+            // Skip the tail on an early end: mark every still-pending later step
+            // `skipped` so the checklist reflects the branch short-circuit (E5).
+            if end_run {
+                skip_tail(tx, run_id, step_index, step_count, &now)?;
+            }
             Ok(progress)
         })
     }
@@ -451,6 +475,31 @@ fn finish_step(
     step.error_message = error_message;
     step.ended_at = Some(now.to_string());
     step.updated_at = now.to_string();
+}
+
+/// Mark every step after `after_index` (up to `step_count`) that has not yet
+/// reached a terminal state as `skipped` — the tail a branch `end` cut off.
+fn skip_tail(
+    tx: &rusqlite::Connection,
+    run_id: &str,
+    after_index: i64,
+    step_count: usize,
+    now: &str,
+) -> anyhow::Result<()> {
+    for index in (after_index + 1)..(step_count as i64) {
+        if let Some(mut step) = WorkflowStore::find_step_run_tx(tx, run_id, index)? {
+            if matches!(
+                step.status,
+                WorkflowStepStatus::Pending | WorkflowStepStatus::Running | WorkflowStepStatus::Waiting
+            ) {
+                step.status = WorkflowStepStatus::Skipped;
+                step.ended_at = Some(now.to_string());
+                step.updated_at = now.to_string();
+                WorkflowStore::update_step_run(tx, &step)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn advance_or_finish(
