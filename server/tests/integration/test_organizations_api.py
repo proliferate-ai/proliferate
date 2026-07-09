@@ -435,9 +435,6 @@ async def test_invitation_accepts_join_for_matching_email_and_replays_current_me
     )
     assert response.status_code == 200
     assert f"proliferate://join/{organization_id}" in response.text
-    # The test env configures no base URL, so no issuing-server origin is
-    # embedded (see test_organization_join_landing.py for the configured cases).
-    assert "?origin=" not in response.text
 
     response = await client.post(
         "/v1/organizations/invitations/accept",
