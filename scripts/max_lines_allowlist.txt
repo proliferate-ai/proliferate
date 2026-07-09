@@ -13,6 +13,7 @@ anyharness/crates/anyharness-lib/src/api/openapi.rs 875 existing AnyHarness over
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
+anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 630 classifier tests incl. gateway route activation + native/gateway union (decisions ledger 13)
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1895 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1520 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file

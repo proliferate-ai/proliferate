@@ -302,6 +302,21 @@ residual cases:         never-connected target → no menu needed (no sessions
                         self-heals on next heartbeat.
 ```
 
+Route facts (amendment, decisions 13-16). Classification consumes detection
+facts AND route facts. The gateway is not detected, it is *enrolled*:
+`agent-auth/state.json` records the route and `route_auth/render.rs` injects
+provider config + models at launch. A `Route { kind: "gateway" }` fact is
+emitted in layer 1 when the SAME resolution `route_auth` uses at launch
+(`resolve_profile`) yields an engaged gateway source for the harness — one
+reader, two consumers, workspace-scoped, never ambient. The catalog's
+`gateway` context carries the signal `{"route": "gateway"}`; the algebra grows
+one leaf operator (`route`), probe-testable like the rest. `classify()` stays
+pure — the route reader lives beside the env-fact collectors, not inside it.
+Signal-less contexts still never match; the gateway context is no longer
+signal-less. Gateway models are first-class `session.models` rows tagged
+`availability.anyOf: ["gateway"]` in the gateway id namespace (raw ids the
+injected provider accepts), resolved probe-else-seed the way the renderer does.
+
 ### 5.5 Optimistic UI + session actor
 
 ```text
@@ -357,6 +372,33 @@ LIVE SWITCHING (hard rule):
 12. **AWS chain: three passive sources only** (env pair, shared-credentials
     profile, SSO cache); the exotic tail (IMDS, process creds) is proven by
     launch/trial, not detection — "menus lie, inference proves."
+13. **Enrolled routes are classification inputs** (amendment, #1024).
+    Classification consumes detection facts AND route facts. A
+    `Route { kind: "gateway" }` fact is emitted when `agent-auth/state.json`
+    resolves to an engaged gateway profile for the harness (same
+    `resolve_profile` the renderer uses — one reader, two consumers). The
+    `gateway` context gains the signal `{"route": "gateway"}`; the algebra
+    grows one leaf operator (`route`). Purity holds: the route reader lives in
+    layer 1 beside the env collectors, never inside `classify()`. Signal-less
+    contexts still never match — the gateway context is no longer signal-less.
+14. **Gateway models are catalog rows, not launch-time side effects.** Each
+    harness's `gatewayPolicy.seedModels` is mirrored as first-class
+    `session.models` rows with `availability.anyOf: ["gateway"]` in the gateway
+    id namespace (raw ids the injected provider accepts). No aliasing between
+    native and gateway rows: a model reachable both ways is a row available
+    under both contexts. Build invariant: seedModels ⊆ gateway-tagged
+    `session.models` ids (JS validator + Rust test). `defaults["gateway"]` is
+    set per harness (cheapest good model).
+15. **Validation resolves gateway models the way the renderer does.** The
+    validated set for the `gateway` context is probe-else-seed (latest gateway
+    probe revision, else seedModels — `gateway_resolver`'s rule), so the menu
+    never advertises a model the injected config lacks. Probe-added models
+    beyond the seeded rows stay launchable-but-unadvertised (availability beats
+    visibility).
+16. **Distinct error for gated vs unknown.** `SelectionUnsupported::ModelGated`
+    maps to its own HTTP error (`SESSION_MODEL_GATED`) carrying
+    `required_contexts` (the model's `availability.anyOf`), no longer collapsed
+    into `SESSION_MODEL_UNSUPPORTED`.
 
 ## 7. The PR stack
 
