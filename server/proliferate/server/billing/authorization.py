@@ -205,9 +205,7 @@ async def assert_cloud_sandbox_resume_allowed(
     reads ``sandbox.owner_user_id``, so the owner-id variant can run at seams that
     do not yet have a sandbox row (see the wake/ensure service layer).
     """
-    await assert_cloud_sandbox_resume_allowed_for_owner(
-        db, owner_user_id=sandbox.owner_user_id
-    )
+    await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=sandbox.owner_user_id)
 
 
 async def assert_cloud_sandbox_resume_allowed_for_owner(
