@@ -300,10 +300,14 @@ class WorkflowTriggerCreateRequest(WorkflowBaseModel):
     enabled: bool = True
     concurrency_policy: WorkflowTriggerConcurrency = Field(alias="concurrencyPolicy")
     target_mode: WorkflowTriggerTargetMode = Field(alias="targetMode")
-    target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
+    # D16: the authored "where" is a repo pin ("org/repo"), not a workspace id.
+    # The server derives + owns the dedicated cloud workspace. Required for
+    # schedule/poll (validated in the service, enforced by DB CHECK).
+    repo_full_name: str | None = Field(default=None, alias="repoFullName")
     # Exactly one of schedule / poll is required, matching ``kind``.
     schedule: TriggerScheduleRequest | None = None
     poll: TriggerPollRequest | None = None
+    # Schedule preset input values / poll static input defaults.
     args: dict[str, object] = Field(default_factory=dict)
 
 
@@ -316,7 +320,8 @@ class WorkflowTriggerUpdateRequest(WorkflowBaseModel):
         default=None, alias="concurrencyPolicy"
     )
     target_mode: WorkflowTriggerTargetMode | None = Field(default=None, alias="targetMode")
-    target_workspace_id: UUID | None = Field(default=None, alias="targetWorkspaceId")
+    # D16: re-pinning the repo re-derives the workspace. None = no change.
+    repo_full_name: str | None = Field(default=None, alias="repoFullName")
     schedule: TriggerScheduleRequest | None = None
     poll: TriggerPollRequest | None = None
     args: dict[str, object] | None = None
@@ -350,7 +355,11 @@ class WorkflowTriggerResponse(WorkflowBaseModel):
     enabled: bool
     concurrency_policy: str = Field(alias="concurrencyPolicy")
     target_mode: str = Field(alias="targetMode")
+    # D16: the authored repo pin + the derived (server-owned) workspace it maps to.
+    repo_full_name: str | None = Field(alias="repoFullName")
     target_workspace_id: str | None = Field(alias="targetWorkspaceId")
+    # Schedule preset input values (the enable-gate record); null for poll.
+    input_presets: dict[str, object] | None = Field(default=None, alias="inputPresets")
     schedule: TriggerScheduleResponse | None
     poll: TriggerPollResponse | None = None
     next_run_at: str | None = Field(alias="nextRunAt")
@@ -410,9 +419,11 @@ def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
         enabled=record.enabled,
         concurrency_policy=record.concurrency_policy,
         target_mode=record.target_mode,
+        repo_full_name=record.repo_full_name,
         target_workspace_id=(
             str(record.target_workspace_id) if record.target_workspace_id else None
         ),
+        input_presets=record.input_presets_json,
         schedule=schedule,
         poll=poll,
         next_run_at=_iso(record.next_run_at),

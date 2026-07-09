@@ -134,6 +134,9 @@ async def _make_poll_trigger(
         # logic is target-agnostic (cloud-only is a service-layer create/update rule).
         concurrency_policy="queue",
         target_mode="local",
+        # D16: poll triggers pin a repo (ck_workflow_trigger_repo_full_name); the
+        # poller-lane logic under test is target-agnostic.
+        repo_full_name="acme/widgets",
         target_workspace_id=None,
         poll_url="http://127.0.0.1:9911/poll",
         poll_interval_secs=interval_secs,
@@ -519,7 +522,8 @@ def _poll_body(**overrides):  # type: ignore[no-untyped-def]
         "kind": "poll",
         "concurrencyPolicy": "queue",
         "targetMode": "personal_cloud",
-        "targetWorkspaceId": uuid.uuid4(),
+        # D16: repo pin is authored; the workspace is derived server-side.
+        "repoFullName": "acme/widgets",
         "poll": TriggerPollRequest.model_validate(poll_kwargs),
         "args": {},
     }
@@ -537,7 +541,7 @@ async def test_poll_trigger_rejects_local_target(test_engine) -> None:  # type: 
         await db.commit()
         actor = _Actor(user.id)
         with pytest.raises(CloudApiError) as exc:
-            await _service_create(db, actor, wf.id, _poll_body(targetMode="local", targetWorkspaceId=None))
+            await _service_create(db, actor, wf.id, _poll_body(targetMode="local"))
     assert exc.value.code == "poll_local_unsupported"
 
 
@@ -580,23 +584,20 @@ async def test_poll_trigger_signature_mismatch_rejected(test_engine) -> None:  #
     async with factory() as db:
         user = await _make_user(db)
         wf = await _make_workflow(db, user)
+        # D16: a cloud repo env for the pin so derivation reaches the probe.
+        await _make_ready_cloud_workspace(db, user)
         await db.commit()
         actor = _Actor(user.id)
-
-        from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 
         # item omits required "n" and gives "title" the wrong type -> mismatch.
         bad_page = _page([_item("probe_bad", title=42)])
         with (
             patch.object(
-                cloud_workspace_store,
-                "get_cloud_workspace_for_user",
-                new=AsyncMock(return_value=_WS()),
+                poller_module, "fetch_poll_page", new=AsyncMock(return_value=bad_page)
             ),
-            patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=bad_page)),
+            pytest.raises(CloudApiError) as exc,
         ):
-            with pytest.raises(CloudApiError) as exc:
-                await _service_create(db, actor, wf.id, _poll_body())
+            await _service_create(db, actor, wf.id, _poll_body())
     assert exc.value.code == "poll_signature_mismatch"
 
 
@@ -642,10 +643,10 @@ async def test_poll_trigger_created_when_signature_matches(test_engine) -> None:
         with patch.object(
             poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
         ):
-            record = await _service_create(
-                db, actor, wf.id, _poll_body(targetWorkspaceId=workspace.id)
-            )
+            record = await _service_create(db, actor, wf.id, _poll_body())
     assert record.kind == WORKFLOW_TRIGGER_KIND_POLL
+    # The workspace is derived from the repo pin (reuses the repo's warm workspace).
+    assert record.target_workspace_id == workspace.id
     assert record.poll_item_schema_json == _ITEM_SCHEMA
 
 

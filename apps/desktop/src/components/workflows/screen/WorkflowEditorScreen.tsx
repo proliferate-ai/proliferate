@@ -38,7 +38,10 @@ import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
 import { WorkflowScopeHeader } from "../editor/WorkflowScopeHeader";
-import { WorkflowTriggersCard } from "../editor/WorkflowTriggersCard";
+import {
+  WorkflowTriggersCard,
+  type WorkflowTriggerRepoOption,
+} from "../editor/WorkflowTriggersCard";
 import {
   WorkflowFunctionsCard,
   type WorkflowFunctionProviderOption,
@@ -159,6 +162,17 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
         })),
     [cloudTargetsQuery.data],
   );
+
+  // D16: triggers pin a repo (the server derives + owns the workspace). The repo
+  // options are the unique "owner/name" repos the owner's cloud workspaces cover.
+  const triggerRepoOptions = useMemo<WorkflowTriggerRepoOption[]>(() => {
+    const seen = new Map<string, WorkflowTriggerRepoOption>();
+    for (const workspace of cloudTargetsQuery.data ?? []) {
+      const fullName = `${workspace.repo.owner}/${workspace.repo.name}`;
+      if (!seen.has(fullName)) seen.set(fullName, { fullName, label: fullName });
+    }
+    return [...seen.values()];
+  }, [cloudTargetsQuery.data]);
 
   // Gateway function providers (spec 6.1/6.3, L21): the owner's visible
   // integrations, restricted client-side to the launch set (issues, slack) —
@@ -396,7 +410,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
               <WorkflowTriggersCard
                 workflowId={workflowId}
                 args={definition.args}
-                cloudWorkspaces={cloudWorkspaceOptions}
+                repoOptions={triggerRepoOptions}
                 onOpenRun={(runId) => navigate(`/workflows/${workflowId}/runs/${runId}`)}
               />
 

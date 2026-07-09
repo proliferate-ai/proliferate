@@ -19,7 +19,6 @@ import {
   type AutomationSchedulePresetOrCustom,
 } from "@/lib/domain/automations/schedule/schedule";
 import { AutomationSchedulePopover } from "@/components/automations/editor/AutomationEditorControls";
-import type { WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
@@ -36,12 +35,20 @@ type ArgValue = string | number | boolean;
 type Concurrency = "skip" | "queue";
 export type TriggerKind = "schedule" | "poll";
 
+/** D16: a repo the trigger can pin ("owner/name"). The server derives + owns the
+ * cloud workspace from it; the definition never names a workspace. */
+export interface WorkflowTriggerRepoOption {
+  fullName: string;
+  label: string;
+}
+
 export interface WorkflowTriggersCardProps {
   workflowId: string;
   /** The workflow's declared args — a scheduled/poll run fires with fixed/mapped values. */
   args: readonly WorkflowInputSpec[];
-  /** The owner's ready cloud workspaces (schedule + poll runs are cloud-only in v1). */
-  cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  /** D16: the repos the owner can pin (schedule + poll runs are cloud-only in v1;
+   * the server derives the warm workspace from the pin). */
+  repoOptions: readonly WorkflowTriggerRepoOption[];
   /** Deep-link a poll item's spawned run (spec 8.2 row B). Omit to hide the link. */
   onOpenRun?: (runId: string) => void;
 }
@@ -82,14 +89,14 @@ export interface TriggerDraft {
   // common
   concurrency: Concurrency;
   enabled: boolean;
-  workspaceId: string;
+  repoFullName: string;
   argValues: Record<string, ArgValue>;
 }
 
 function draftFromTrigger(
   trigger: WorkflowTriggerResponse | null,
   args: readonly WorkflowInputSpec[],
-  cloudWorkspaces: readonly WorkflowRunTargetOption[],
+  repoOptions: readonly WorkflowTriggerRepoOption[],
   fallbackKind: TriggerKind,
 ): TriggerDraft {
   const kind: TriggerKind = (trigger?.kind as TriggerKind | undefined) ?? fallbackKind;
@@ -112,7 +119,7 @@ function draftFromTrigger(
     pollIntervalSecs: trigger?.poll?.intervalSecs ?? POLL_MIN_INTERVAL_SECS,
     concurrency: (trigger?.concurrencyPolicy as Concurrency) ?? "skip",
     enabled: trigger?.enabled ?? true,
-    workspaceId: trigger?.targetWorkspaceId ?? cloudWorkspaces[0]?.id ?? "",
+    repoFullName: trigger?.repoFullName ?? repoOptions[0]?.fullName ?? "",
     argValues,
   };
 }
@@ -135,7 +142,7 @@ function coerceArg(arg: WorkflowInputSpec, value: ArgValue): ArgValue {
 export function WorkflowTriggersCard({
   workflowId,
   args,
-  cloudWorkspaces,
+  repoOptions,
   onOpenRun,
 }: WorkflowTriggersCardProps) {
   const triggersQuery = useWorkflowTriggers(workflowId);
@@ -144,7 +151,7 @@ export function WorkflowTriggersCard({
 
   const triggers = triggersQuery.data ?? [];
   const pollTriggers = triggers.filter((t) => t.kind === "poll");
-  const cloudAvailable = cloudWorkspaces.length > 0;
+  const cloudAvailable = repoOptions.length > 0;
 
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
   const [draft, setDraft] = useState<TriggerDraft | null>(null);
@@ -153,7 +160,7 @@ export function WorkflowTriggersCard({
   const openForm = (trigger: WorkflowTriggerResponse | null, kind: TriggerKind = "schedule") => {
     setError(null);
     setEditing({ id: trigger?.id ?? null });
-    setDraft(draftFromTrigger(trigger, args, cloudWorkspaces, kind));
+    setDraft(draftFromTrigger(trigger, args, repoOptions, kind));
   };
 
   const closeForm = () => {
@@ -169,8 +176,8 @@ export function WorkflowTriggersCard({
 
   const submit = () => {
     if (!draft) return;
-    if (!draft.workspaceId) {
-      setError(`Choose a cloud workspace for the ${draft.kind === "poll" ? "polled" : "scheduled"} run.`);
+    if (!draft.repoFullName) {
+      setError(`Pin a repository for the ${draft.kind === "poll" ? "polled" : "scheduled"} run.`);
       return;
     }
 
@@ -204,7 +211,7 @@ export function WorkflowTriggersCard({
         enabled: draft.enabled,
         concurrencyPolicy: draft.concurrency,
         targetMode: "personal_cloud",
-        targetWorkspaceId: draft.workspaceId,
+        repoFullName: draft.repoFullName,
         poll: {
           url,
           authHeader: authHeader || null,
@@ -225,11 +232,13 @@ export function WorkflowTriggersCard({
       return;
     }
 
+    // D16 enable-gate: an enabled schedule must preset every required input; a
+    // disabled draft may leave them blank (the server enforces the same gate).
     const missing = args.find(
       (arg) => arg.required && (draft.argValues[arg.name] === "" || draft.argValues[arg.name] === undefined),
     );
-    if (missing) {
-      setError(`Provide a value for the required argument "${missing.name}".`);
+    if (draft.enabled && missing) {
+      setError(`Preset the required input "${missing.name}" before enabling this schedule.`);
       return;
     }
     const argsBody: Record<string, ArgValue> = {};
@@ -242,7 +251,7 @@ export function WorkflowTriggersCard({
       enabled: draft.enabled,
       concurrencyPolicy: draft.concurrency,
       targetMode: "personal_cloud",
-      targetWorkspaceId: draft.workspaceId,
+      repoFullName: draft.repoFullName,
       schedule: { rrule: draft.rrule, timezone: draft.timezone },
       args: argsBody,
     };
@@ -265,7 +274,6 @@ export function WorkflowTriggersCard({
 
       <TriggerBadgeRow
         triggers={triggers}
-        cloudWorkspaces={cloudWorkspaces}
         activeId={editing?.id ?? undefined}
         addingKind={editing !== null && editing.id === null ? draft?.kind ?? null : null}
         addDisabled={!cloudAvailable}
@@ -275,8 +283,8 @@ export function WorkflowTriggersCard({
 
       {!cloudAvailable ? (
         <p className="text-xs text-faint">
-          Scheduled and poll runs execute in the cloud. Create a cloud workspace to trigger this
-          workflow that way; local triggers are coming — run it manually for now.
+          Scheduled and poll runs execute in the cloud. Configure a cloud repository to trigger
+          this workflow that way; local triggers are coming — run it manually for now.
         </p>
       ) : (
         <p className="text-xs text-faint">Runs manually from here or the runs list; schedules and polls fire in the cloud.</p>
@@ -294,7 +302,7 @@ export function WorkflowTriggersCard({
         <TriggerForm
           draft={draft}
           args={args}
-          cloudWorkspaces={cloudWorkspaces}
+          repoOptions={repoOptions}
           error={error}
           busy={busy}
           isEdit={editing.id !== null}
@@ -312,7 +320,6 @@ export function WorkflowTriggersCard({
 
 interface TriggerBadgeRowProps {
   triggers: readonly WorkflowTriggerResponse[];
-  cloudWorkspaces: readonly WorkflowRunTargetOption[];
   activeId?: string | null;
   /** The kind currently being added via the inline "+ Add" form, if any. */
   addingKind: TriggerKind | null;
@@ -324,7 +331,6 @@ interface TriggerBadgeRowProps {
 /** The Ona-style chip row: Manual + schedule/poll chips + disabled "soon" chips + add buttons. */
 export function TriggerBadgeRow({
   triggers,
-  cloudWorkspaces,
   activeId,
   addingKind,
   addDisabled,
@@ -342,9 +348,7 @@ export function TriggerBadgeRow({
         <TriggerChip
           key={trigger.id}
           trigger={trigger}
-          workspaceLabel={
-            cloudWorkspaces.find((w) => w.id === trigger.targetWorkspaceId)?.label ?? "cloud workspace"
-          }
+          repoLabel={trigger.repoFullName ?? "cloud repository"}
           active={trigger.id === activeId}
           onClick={() => onEditTrigger(trigger)}
         />
@@ -403,12 +407,12 @@ function AddTriggerButton({
 
 function TriggerChip({
   trigger,
-  workspaceLabel,
+  repoLabel,
   active,
   onClick,
 }: {
   trigger: WorkflowTriggerResponse;
-  workspaceLabel: string;
+  repoLabel: string;
   active: boolean;
   onClick: () => void;
 }) {
@@ -420,8 +424,8 @@ function TriggerChip({
     ? formatAutomationTimestamp(trigger.nextRunAt ?? null, trigger.schedule?.timezone)
     : null;
   const title = isPoll
-    ? `${workspaceLabel}${trigger.poll?.lastPollError ? ` · last error: ${trigger.poll.lastPollError}` : ""}`
-    : `${workspaceLabel}${trigger.lastSkipReason ? ` · last skipped: ${trigger.lastSkipReason}` : ""}`;
+    ? `${repoLabel}${trigger.poll?.lastPollError ? ` · last error: ${trigger.poll.lastPollError}` : ""}`
+    : `${repoLabel}${trigger.lastSkipReason ? ` · last skipped: ${trigger.lastSkipReason}` : ""}`;
   return (
     <button
       type="button"
@@ -557,7 +561,7 @@ function TriggerItemsList({
 interface TriggerFormProps {
   draft: TriggerDraft;
   args: readonly WorkflowInputSpec[];
-  cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  repoOptions: readonly WorkflowTriggerRepoOption[];
   error: string | null;
   busy: boolean;
   isEdit: boolean;
@@ -574,7 +578,7 @@ interface TriggerFormProps {
 export function TriggerForm({
   draft,
   args,
-  cloudWorkspaces,
+  repoOptions,
   error,
   busy,
   isEdit,
@@ -594,9 +598,9 @@ export function TriggerForm({
       ) : null}
 
       {draft.kind === "poll" ? (
-        <PollFields draft={draft} cloudWorkspaces={cloudWorkspaces} isEdit={isEdit} onPatch={onPatch} />
+        <PollFields draft={draft} repoOptions={repoOptions} isEdit={isEdit} onPatch={onPatch} />
       ) : (
-        <ScheduleFields draft={draft} cloudWorkspaces={cloudWorkspaces} onPatch={onPatch} />
+        <ScheduleFields draft={draft} repoOptions={repoOptions} onPatch={onPatch} />
       )}
 
       {args.length > 0 ? (
@@ -660,11 +664,11 @@ export function TriggerForm({
 
 function ScheduleFields({
   draft,
-  cloudWorkspaces,
+  repoOptions,
   onPatch,
 }: {
   draft: TriggerDraft;
-  cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  repoOptions: readonly WorkflowTriggerRepoOption[];
   onPatch: (patch: Partial<TriggerDraft>) => void;
 }) {
   return (
@@ -685,12 +689,12 @@ function ScheduleFields({
         </span>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <Label>Cloud workspace</Label>
+        <Label>Repository</Label>
         <WorkflowSelect
-          ariaLabel="Cloud workspace"
-          value={draft.workspaceId}
-          options={cloudWorkspaces.map((workspace) => ({ value: workspace.id, label: workspace.label }))}
-          onChange={(value) => onPatch({ workspaceId: value })}
+          ariaLabel="Repository"
+          value={draft.repoFullName}
+          options={repoOptions.map((repo) => ({ value: repo.fullName, label: repo.label }))}
+          onChange={(value) => onPatch({ repoFullName: value })}
         />
       </div>
     </div>
@@ -699,12 +703,12 @@ function ScheduleFields({
 
 function PollFields({
   draft,
-  cloudWorkspaces,
+  repoOptions,
   isEdit,
   onPatch,
 }: {
   draft: TriggerDraft;
-  cloudWorkspaces: readonly WorkflowRunTargetOption[];
+  repoOptions: readonly WorkflowTriggerRepoOption[];
   isEdit: boolean;
   onPatch: (patch: Partial<TriggerDraft>) => void;
 }) {
@@ -722,12 +726,12 @@ function PollFields({
           />
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Label>Cloud workspace</Label>
+          <Label>Repository</Label>
           <WorkflowSelect
-            ariaLabel="Cloud workspace"
-            value={draft.workspaceId}
-            options={cloudWorkspaces.map((workspace) => ({ value: workspace.id, label: workspace.label }))}
-            onChange={(value) => onPatch({ workspaceId: value })}
+            ariaLabel="Repository"
+            value={draft.repoFullName}
+            options={repoOptions.map((repo) => ({ value: repo.fullName, label: repo.label }))}
+            onChange={(value) => onPatch({ repoFullName: value })}
           />
         </div>
       </div>

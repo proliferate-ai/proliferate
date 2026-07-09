@@ -252,10 +252,24 @@ Index("uq_workflow_run_trigger_slot", "trigger_id", "scheduled_for", unique=True
   'poll')` (widened PR B), `concurrency_policy IN ('skip','queue')`,
   `target_mode IN ('local','personal_cloud')`, a cloud⇒workspace / local⇒null
   constraint (line 225), `ck_workflow_trigger_schedule_fields` (line 237 — a
-  `schedule` must carry rrule + timezone + next_run_at), and — PR B —
+  `schedule` must carry rrule + timezone + next_run_at), — PR B —
   `ck_workflow_trigger_poll_fields` (line 242 — a `poll` must carry `poll_url` +
-  `poll_interval_secs`). Scheduler due-scan index `ix_workflow_trigger_scheduler_due`
-  (line 248). Poll columns (line 305) — endpoint, auth header *name*,
+  `poll_interval_secs`), and — **PR G (D16)** — `ck_workflow_trigger_repo_full_name`
+  (a schedule/poll trigger must pin `repo_full_name`). Scheduler due-scan index
+  `ix_workflow_trigger_scheduler_due` (line 248).
+  **D16 repo pin (PR G):** `repo_full_name` ("org/repo") is the *authored* "where";
+  `target_workspace_id` becomes **derived** — on trigger create/update the service
+  resolves the caller's cloud repo environment for the pin and ensures a dedicated
+  server-owned cloud workspace (reuse the repo's warm workspace, else provision the
+  row via `cloud_workspaces.create_cloud_workspace`), stamping its id. Worktree
+  materialization is NOT forced at save — `start_run` still raises
+  `target_workspace_not_ready` until the runtime workspace is ready, so that 409 is
+  a retry-at-fire concern, not a save error. The trigger-fire path is unchanged (it
+  passes the pinned id into `start_run`). `input_presets_json` records the schedule
+  preset input values behind the **enable-gate**: a schedule trigger cannot be
+  `enabled` until every required workflow input has a preset (`schedule_presets_incomplete`
+  400); a disabled draft may leave them blank. For schedule triggers the presets
+  mirror `args_json` (the fire-time args). Poll columns (line 305) — endpoint, auth header *name*,
   Fernet-encrypted auth header *value* (`poll_auth_ciphertext`, house crypto
   helpers, never surfaced on reads), interval, item JSON Schema *derived from the
   workflow inputs* (D17 — no `poll_args_mapping_json`, dropped in-migration),
@@ -754,15 +768,15 @@ after 3 consecutive failures.
 | POST | `/workflows` | create (enforces free-plan cap) |
 | GET | `/workflows/runs?workflowId` | run list |
 | GET | `/workflows/runs/{run_id}` | run detail — `WorkflowRunDetailResponse{run, stepActions[]}` (PR A; `step_actions` from `store.list_actions_for_run`) |
-| POST | `/workflows/runs/{run_id}/delivered` | **local** lane marks its delivery done |
-| POST | `/workflows/runs/{run_id}/status` | **local relay** reports observed state; also triggers `apply_step_actions` |
+| POST | `/workflows/runs/{run_id}/delivered` | marks delivery done. **D18 (E7):** auth is EITHER the per-run gateway token (anyharness) OR a user session (desktop local-lane relay); a valid token for another run → 403, no credential → 401 |
+| POST | `/workflows/runs/{run_id}/status` | reports observed state; also triggers `apply_step_actions`. **D18 (E7):** same dual auth as `/delivered` — the run token proves the writer IS the runtime (closes the spoofing hole where any logged-in owner could move the run), user session stays for the local relay |
 | POST | `/workflows/runs/{run_id}/deliver` | **cloud** lane retry of stuck `pending_delivery` |
 | GET | `/workflows/runs/{run_id}/refresh` | **cloud** lane pull; syncs ledger; also triggers `apply_step_actions` |
 | POST | `/workflows/runs/{run_id}/ping` | PR E (§3.4a) — completion ping; **no user session**, auth is the per-run gateway token; token↔run_id must match (else 403); cloud lane triggers `refresh_cloud_run`, local lane 202-no-ops; always 202 on valid token |
 | GET | `/workflows/slack/channels` | PR A — `{channels:[{id,name}], connected}`; `connected:false` + empty list when the actor has no ready Slack account ([integrations accounts store](../server/proliferate/db/store/integrations/accounts.py)) |
 | GET/PATCH/DELETE | `/workflows/{workflow_id}` | detail / update (append version) / archive |
 | POST | `/workflows/{workflow_id}/runs` | **StartRun**; personal_cloud also calls `deliver_cloud_run` in-request |
-| GET/POST · GET/PATCH/DELETE | `/workflows/{workflow_id}/triggers[/{trigger_id}]` | trigger CRUD — `kind:"schedule"\|"poll"`; a `poll` body carries `poll:{url, authHeader?, authValue?(write-only), intervalSecs}` (no item-schema/args-mapping authoring — D17), reads return `poll:{..., hasAuth, itemSchema(derived, read-only), lastPollAt, lastPollError}` (never the secret) |
+| GET/POST · GET/PATCH/DELETE | `/workflows/{workflow_id}/triggers[/{trigger_id}]` | trigger CRUD — `kind:"schedule"\|"poll"`; **D16 (PR G):** the body pins `repoFullName` ("org/repo", authored; `targetWorkspaceId` is gone) and the server derives + returns `targetWorkspaceId`; `args` are the schedule presets and reads return `repoFullName`, `inputPresets`; a `poll` body carries `poll:{url, authHeader?, authValue?(write-only), intervalSecs}` (no item-schema/args-mapping authoring — D17), reads return `poll:{..., hasAuth, itemSchema(derived, read-only), lastPollAt, lastPollError}` (never the secret) |
 | GET | `/workflows/{workflow_id}/triggers/{trigger_id}/items` | PR B — a poll trigger's seen-set, paginated (`limit`/`offset`), newest first: `{items:[{itemId, runId, status, errorMessage, receivedAt}]}` |
 
 **No server-side cancel/pause endpoint** — cancel is a runtime concern

@@ -36,7 +36,9 @@ class WorkflowTriggerRecord:
     enabled: bool
     concurrency_policy: str
     target_mode: str
+    repo_full_name: str | None
     target_workspace_id: UUID | None
+    input_presets_json: dict[str, object] | None
     schedule_rrule: str | None
     schedule_timezone: str | None
     schedule_summary: str | None
@@ -116,7 +118,11 @@ def _record(row: WorkflowTrigger) -> WorkflowTriggerRecord:
         enabled=row.enabled,
         concurrency_policy=row.concurrency_policy,
         target_mode=row.target_mode,
+        repo_full_name=row.repo_full_name,
         target_workspace_id=row.target_workspace_id,
+        input_presets_json=(
+            dict(row.input_presets_json) if row.input_presets_json is not None else None
+        ),
         schedule_rrule=row.schedule_rrule,
         schedule_timezone=row.schedule_timezone,
         schedule_summary=row.schedule_summary,
@@ -162,7 +168,9 @@ async def create_trigger(
     kind: str,
     concurrency_policy: str,
     target_mode: str,
+    repo_full_name: str | None = None,
     target_workspace_id: UUID | None,
+    input_presets_json: dict[str, object] | None = None,
     schedule_rrule: str | None = None,
     schedule_timezone: str | None = None,
     schedule_summary: str | None = None,
@@ -183,7 +191,9 @@ async def create_trigger(
         enabled=enabled,
         concurrency_policy=concurrency_policy,
         target_mode=target_mode,
+        repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
+        input_presets_json=input_presets_json,
         schedule_rrule=schedule_rrule,
         schedule_timezone=schedule_timezone,
         schedule_summary=schedule_summary,
@@ -232,8 +242,11 @@ async def update_trigger(
     enabled: bool | None = None,
     concurrency_policy: str | None = None,
     target_mode: str | None = None,
+    repo_full_name: str | None = None,
     target_workspace_id: UUID | None = None,
     clear_target_workspace: bool = False,
+    input_presets_json: dict[str, object] | None = None,
+    write_input_presets: bool = False,
     schedule_rrule: str | None = None,
     schedule_timezone: str | None = None,
     schedule_summary: str | None = None,
@@ -269,10 +282,16 @@ async def update_trigger(
         row.concurrency_policy = concurrency_policy
     if target_mode is not None:
         row.target_mode = target_mode
+    if repo_full_name is not None:
+        row.repo_full_name = repo_full_name
     if clear_target_workspace:
         row.target_workspace_id = None
     elif target_workspace_id is not None:
         row.target_workspace_id = target_workspace_id
+    # write_input_presets lets the caller set presets to a fresh dict (incl. {})
+    # unambiguously; a bare None default means "no change".
+    if write_input_presets:
+        row.input_presets_json = input_presets_json
     if schedule_rrule is not None:
         row.schedule_rrule = schedule_rrule
     if schedule_timezone is not None:

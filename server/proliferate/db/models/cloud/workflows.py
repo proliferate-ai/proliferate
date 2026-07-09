@@ -247,6 +247,12 @@ class WorkflowTrigger(Base):
             "kind <> 'poll' OR (poll_url IS NOT NULL AND poll_interval_secs IS NOT NULL)",
             name="ck_workflow_trigger_poll_fields",
         ),
+        # D16: unattended triggers (schedule/poll) pin a repo — it is the authored
+        # source of the derived warm workspace (target_workspace_id).
+        CheckConstraint(
+            "kind NOT IN ('schedule', 'poll') OR repo_full_name IS NOT NULL",
+            name="ck_workflow_trigger_repo_full_name",
+        ),
         Index("ix_workflow_trigger_workflow_id", "workflow_id"),
         Index("ix_workflow_trigger_target_workspace_id", "target_workspace_id"),
         # The scheduler's due scan: enabled schedule triggers whose slot has passed.
@@ -276,13 +282,24 @@ class WorkflowTrigger(Base):
     # triggers on one workflow may target different workspaces and run in parallel.
     concurrency_policy: Mapped[str] = mapped_column(String(16))
     target_mode: Mapped[str] = mapped_column(String(32))
+    # D16: the authored "where" for an unattended run — a "org/repo" pin. Required
+    # for schedule/poll by ck_workflow_trigger_repo_full_name; target_workspace_id
+    # is derived from it (the server owns the warm workspace).
+    repo_full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Cloud workspace the scheduled run delivers into (required for personal_cloud).
-    # CASCADE keeps the target-workspace NOT-NULL invariant true if a workspace is
-    # ever hard-deleted (they are normally archived, not deleted).
+    # D16: now DERIVED from repo_full_name — the server ensures a dedicated cloud
+    # workspace for the pinned repo and stamps its id here; it is never authored
+    # directly. CASCADE keeps the target-workspace NOT-NULL invariant true if a
+    # workspace is ever hard-deleted (they are normally archived, not deleted).
     target_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cloud_workspace.id", ondelete="CASCADE"),
         nullable=True,
     )
+    # D16 schedule enable-gate: the preset input values (mock's ScheduleConfig
+    # presets). A schedule trigger cannot be enabled until every required workflow
+    # input has a preset here. For schedule triggers it mirrors args_json (the
+    # fire-time args); it is the queryable enable-gate record.
+    input_presets_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     # Schedule cursor (reuses the automations RRULE house rules). Nullable at the
     # column level so future non-schedule kinds fit; the CHECK ties them to kind.
     schedule_rrule: Mapped[str | None] = mapped_column(Text, nullable=True)

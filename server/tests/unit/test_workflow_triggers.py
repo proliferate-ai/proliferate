@@ -87,11 +87,21 @@ async def _make_workflow(db: AsyncSession, user: User, *, required_arg: bool = F
     return workflow
 
 
-async def _make_ready_cloud_workspace(
-    db: AsyncSession, user: User, *, anyharness_workspace_id: str | None = "sandbox-ws-1"
-) -> CloudWorkspace:
+_REPO = "acme/widgets"
+
+
+async def _make_cloud_repo_environment(
+    db: AsyncSession,
+    user: User,
+    *,
+    git_owner: str = "acme",
+    git_repo_name: str = "widgets",
+) -> RepoEnvironment:
+    """A cloud repo environment for the derivation path (D16): the trigger pins a
+    repo, the service resolves its cloud environment and provisions a workspace."""
+
     repo_config = RepoConfig(
-        user_id=user.id, git_provider="github", git_owner="acme", git_repo_name="widgets"
+        user_id=user.id, git_provider="github", git_owner=git_owner, git_repo_name=git_repo_name
     )
     db.add(repo_config)
     await db.flush()
@@ -100,6 +110,13 @@ async def _make_ready_cloud_workspace(
     )
     db.add(repo_environment)
     await db.flush()
+    return repo_environment
+
+
+async def _make_ready_cloud_workspace(
+    db: AsyncSession, user: User, *, anyharness_workspace_id: str | None = "sandbox-ws-1"
+) -> CloudWorkspace:
+    repo_environment = await _make_cloud_repo_environment(db, user)
     workspace = CloudWorkspace(
         owner_user_id=user.id,
         repo_environment_id=repo_environment.id,
@@ -113,18 +130,20 @@ async def _make_ready_cloud_workspace(
 
 
 def _create_body(
-    workspace_id: uuid.UUID | None,
+    repo_full_name: str | None = _REPO,
     *,
     target_mode: str = "personal_cloud",
     concurrency: str = "skip",
     rrule: str = _HOURLY,
     timezone: str = "UTC",
     args: dict | None = None,
+    enabled: bool = True,
 ) -> WorkflowTriggerCreateRequest:
     return WorkflowTriggerCreateRequest(
         concurrencyPolicy=concurrency,  # type: ignore[call-arg]
         targetMode=target_mode,  # type: ignore[call-arg]
-        targetWorkspaceId=workspace_id,  # type: ignore[call-arg]
+        repoFullName=repo_full_name,  # type: ignore[call-arg]
+        enabled=enabled,
         schedule=TriggerScheduleRequest(rrule=rrule, timezone=timezone),
         args=args or {},
     )
@@ -178,12 +197,14 @@ async def test_create_schedule_trigger_cloud(db_session: AsyncSession) -> None:
     workspace = await _make_ready_cloud_workspace(db_session, user)
 
     trigger = await service.create_trigger(
-        db_session, user, workflow.id, _create_body(workspace.id, concurrency="queue")
+        db_session, user, workflow.id, _create_body(concurrency="queue")
     )
 
     assert trigger.kind == WORKFLOW_TRIGGER_KIND_SCHEDULE
     assert trigger.concurrency_policy == "queue"
     assert trigger.target_mode == "personal_cloud"
+    # D16: repo is authored; the workspace is derived (reuses the repo's workspace).
+    assert trigger.repo_full_name == _REPO
     assert trigger.target_workspace_id == workspace.id
     assert trigger.schedule_rrule == _HOURLY
     assert trigger.schedule_summary  # a human summary was computed
@@ -206,62 +227,95 @@ async def test_create_rejects_local_schedule(db_session: AsyncSession) -> None:
 async def test_create_rejects_bad_rrule(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
-    workspace = await _make_ready_cloud_workspace(db_session, user)
+    await _make_ready_cloud_workspace(db_session, user)
     with pytest.raises(CloudApiError) as exc:
         await service.create_trigger(
             db_session,
             user,
             workflow.id,
-            _create_body(workspace.id, rrule="RRULE:FREQ=SECONDLY;INTERVAL=1"),
+            _create_body(rrule="RRULE:FREQ=SECONDLY;INTERVAL=1"),
         )
     assert exc.value.code == "invalid_schedule"
 
 
-async def test_create_rejects_missing_required_arg(db_session: AsyncSession) -> None:
+async def test_create_enabled_rejects_missing_required_preset(db_session: AsyncSession) -> None:
+    """D16 enable-gate: an enabled schedule can't ship a required input unpresetted."""
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user, required_arg=True)
-    workspace = await _make_ready_cloud_workspace(db_session, user)
+    await _make_ready_cloud_workspace(db_session, user)
     with pytest.raises(CloudApiError) as exc:
         await service.create_trigger(
-            db_session, user, workflow.id, _create_body(workspace.id, args={})
+            db_session, user, workflow.id, _create_body(args={}, enabled=True)
         )
-    assert exc.value.code == "missing_argument"
+    assert exc.value.code == "schedule_presets_incomplete"
+
+
+async def test_create_disabled_allows_missing_required_preset(db_session: AsyncSession) -> None:
+    """A disabled draft may leave required presets blank; only enabling is gated."""
+    user = await _make_user(db_session)
+    workflow = await _make_workflow(db_session, user, required_arg=True)
+    await _make_ready_cloud_workspace(db_session, user)
+    trigger = await service.create_trigger(
+        db_session, user, workflow.id, _create_body(args={}, enabled=False)
+    )
+    assert trigger.enabled is False
+    assert trigger.input_presets_json == {}
 
 
 async def test_create_covers_required_arg(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user, required_arg=True)
-    workspace = await _make_ready_cloud_workspace(db_session, user)
+    await _make_ready_cloud_workspace(db_session, user)
     trigger = await service.create_trigger(
-        db_session, user, workflow.id, _create_body(workspace.id, args={"issue": "PROJ-1"})
+        db_session, user, workflow.id, _create_body(args={"issue": "PROJ-1"})
     )
     assert trigger.args_json == {"issue": "PROJ-1"}
+    # The presets back the enable-gate and mirror the fire-time args for schedule.
+    assert trigger.input_presets_json == {"issue": "PROJ-1"}
 
 
-async def test_create_requires_cloud_workspace(db_session: AsyncSession) -> None:
+async def test_create_requires_repo(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
         await service.create_trigger(db_session, user, workflow.id, _create_body(None))
-    assert exc.value.code == "target_workspace_required"
+    assert exc.value.code == "invalid_repo"
 
 
-async def test_create_rejects_unowned_workspace(db_session: AsyncSession) -> None:
+async def test_create_rejects_unconfigured_repo(db_session: AsyncSession) -> None:
+    """A repo the user hasn't configured as a cloud environment can't be pinned."""
     user = await _make_user(db_session)
-    other = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
-    foreign_ws = await _make_ready_cloud_workspace(db_session, other)
     with pytest.raises(CloudApiError) as exc:
-        await service.create_trigger(db_session, user, workflow.id, _create_body(foreign_ws.id))
-    assert exc.value.code == "target_workspace_not_found"
+        await service.create_trigger(
+            db_session, user, workflow.id, _create_body("someone/unconfigured")
+        )
+    assert exc.value.code == "cloud_repo_environment_not_found"
+
+
+async def test_create_derives_workspace_from_repo(db_session: AsyncSession) -> None:
+    """D16: with a cloud repo env but no existing workspace, the server provisions a
+    dedicated workspace row and stamps it as the derived target."""
+    user = await _make_user(db_session)
+    workflow = await _make_workflow(db_session, user)
+    repo_env = await _make_cloud_repo_environment(db_session, user)
+    trigger = await service.create_trigger(db_session, user, workflow.id, _create_body())
+    assert trigger.target_workspace_id is not None
+    from proliferate.db.store import cloud_workspaces as ws_store
+
+    derived = await ws_store.get_cloud_workspace_for_user(
+        db_session, user.id, trigger.target_workspace_id
+    )
+    assert derived is not None
+    assert derived.repo_environment_id == repo_env.id
 
 
 async def test_update_args_only_keeps_cursor(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
-    workspace = await _make_ready_cloud_workspace(db_session, user)
+    await _make_ready_cloud_workspace(db_session, user)
     trigger = await service.create_trigger(
-        db_session, user, workflow.id, _create_body(workspace.id, concurrency="skip")
+        db_session, user, workflow.id, _create_body(concurrency="skip")
     )
     original_next = trigger.next_run_at
 
@@ -280,9 +334,9 @@ async def test_update_args_only_keeps_cursor(db_session: AsyncSession) -> None:
 async def test_update_schedule_recomputes_cursor(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
-    workspace = await _make_ready_cloud_workspace(db_session, user)
+    await _make_ready_cloud_workspace(db_session, user)
     trigger = await service.create_trigger(
-        db_session, user, workflow.id, _create_body(workspace.id, rrule=_HOURLY)
+        db_session, user, workflow.id, _create_body(rrule=_HOURLY)
     )
     updated = await service.update_trigger(
         db_session,
@@ -301,9 +355,9 @@ async def test_update_schedule_recomputes_cursor(db_session: AsyncSession) -> No
 async def test_delete_trigger(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
-    workspace = await _make_ready_cloud_workspace(db_session, user)
+    await _make_ready_cloud_workspace(db_session, user)
     trigger = await service.create_trigger(
-        db_session, user, workflow.id, _create_body(workspace.id)
+        db_session, user, workflow.id, _create_body()
     )
     await service.delete_trigger(db_session, user, workflow.id, trigger.id)
     assert await trigger_store.get_trigger(db_session, trigger.id) is None
@@ -313,9 +367,9 @@ async def test_trigger_visibility_isolation(db_session: AsyncSession) -> None:
     owner = await _make_user(db_session)
     other = await _make_user(db_session)
     workflow = await _make_workflow(db_session, owner)
-    workspace = await _make_ready_cloud_workspace(db_session, owner)
+    await _make_ready_cloud_workspace(db_session, owner)
     trigger = await service.create_trigger(
-        db_session, owner, workflow.id, _create_body(workspace.id)
+        db_session, owner, workflow.id, _create_body()
     )
     with pytest.raises(CloudApiError) as exc:
         await service.get_trigger(db_session, other, workflow.id, trigger.id)
@@ -330,12 +384,12 @@ async def _seed_trigger(session_factory, *, concurrency: str) -> tuple[uuid.UUID
     async with session_factory() as db, db.begin():
         user = await _make_user(db)
         workflow = await _make_workflow(db, user)
-        workspace = await _make_ready_cloud_workspace(db, user)
+        await _make_ready_cloud_workspace(db, user)
         trigger = await service.create_trigger(
             db,
             user,
             workflow.id,
-            _create_body(workspace.id, concurrency=concurrency, args={"issue": "seed"}),
+            _create_body(concurrency=concurrency, args={"issue": "seed"}),
         )
     return trigger.id, workflow.id
 

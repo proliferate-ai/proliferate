@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_product_user
+from proliferate.auth.dependencies import current_product_user, optional_current_active_user
 from proliferate.constants.workflows import WORKFLOW_TARGET_MODE_PERSONAL_CLOUD
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
@@ -77,6 +77,59 @@ from proliferate.utils.time import utcnow
 router = APIRouter(prefix="/workflows", tags=["cloud-workflows"])
 
 
+@dataclass(frozen=True)
+class _RunTokenActor:
+    """Minimal actor for a runtime-authenticated run report (D18 / L16). The per-run
+    gateway token proves the run, so the owner id is all downstream owner-scoped
+    checks need — the executor is always the workflow owner in v1."""
+
+    id: UUID
+
+
+def _bearer_token(request: Request) -> str:
+    header = request.headers.get("authorization", "")
+    scheme, _, raw = header.partition(" ")
+    if scheme.lower() != "bearer":
+        return ""
+    return raw.strip()
+
+
+async def _authorize_run_report(
+    db: AsyncSession, *, run_id: UUID, request: Request, user: User | None
+) -> _RunTokenActor | User:
+    """D18 (E7): accept EITHER the per-run gateway token (anyharness reporting on
+    its own behalf) OR a user session (the desktop local-lane relay) as the
+    credential for ``/status`` and ``/delivered``.
+
+    A valid run token that belongs to a *different* run is a spoofing attempt →
+    403 (mirrors ``/ping``). A bearer that is not a run token falls through to
+    user-session auth (e.g. a JWT-authed desktop). No credential at all → 401.
+    """
+
+    token = _bearer_token(request)
+    if token:
+        grant = await store.get_active_run_gateway_token_by_hash(
+            db,
+            token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
+            now=utcnow(),
+        )
+        if grant is not None:
+            if grant.workflow_run_id != run_id:
+                raise CloudApiError(
+                    "workflow_run_token_mismatch",
+                    "This run token does not belong to the reported run.",
+                    status_code=403,
+                )
+            return _RunTokenActor(id=grant.owner_user_id)
+    if user is not None:
+        return user
+    raise CloudApiError(
+        "workflow_run_report_unauthorized",
+        "A user session or the per-run gateway token is required.",
+        status_code=401,
+    )
+
+
 @router.get("", response_model=WorkflowListResponse)
 async def list_workflows_endpoint(
     include_archived: Annotated[bool, Query(alias="includeArchived")] = False,
@@ -134,20 +187,26 @@ async def get_run_endpoint(
 @router.post("/runs/{run_id}/delivered", response_model=WorkflowRunResponse)
 async def mark_run_delivered_endpoint(
     run_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
+    user: User | None = Depends(optional_current_active_user),
 ) -> WorkflowRunResponse:
-    return run_payload(await mark_run_delivered(db, user, run_id))
+    # D18: run token (anyharness) OR user session (desktop local-lane relay).
+    actor = await _authorize_run_report(db, run_id=run_id, request=request, user=user)
+    return run_payload(await mark_run_delivered(db, actor, run_id))
 
 
 @router.post("/runs/{run_id}/status", response_model=WorkflowRunResponse)
 async def report_run_status_endpoint(
     run_id: UUID,
     body: RunStatusRequest,
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
+    user: User | None = Depends(optional_current_active_user),
 ) -> WorkflowRunResponse:
-    return run_payload(await report_run_status(db, user, run_id, body))
+    # D18 (E7): run token (anyharness self-report) OR user session (local relay).
+    actor = await _authorize_run_report(db, run_id=run_id, request=request, user=user)
+    return run_payload(await report_run_status(db, actor, run_id, body))
 
 
 @router.post("/runs/{run_id}/cancel", response_model=WorkflowRunResponse)
@@ -190,14 +249,6 @@ async def refresh_run_endpoint(
 
     run = await get_run(db, user, run_id)
     return run_payload(await refresh_cloud_run(db, user, run))
-
-
-@dataclass(frozen=True)
-class _PingActor:
-    """Minimal actor for the ping-triggered refresh — the run-token proves the run,
-    so the owner id is all the cloud-sandbox gateway access needs."""
-
-    id: UUID
 
 
 @router.post("/runs/{run_id}/ping", status_code=202)
@@ -249,7 +300,7 @@ async def run_ping_endpoint(
     # observation; the ping is accepted (202) and no-ops the refresh here.
     if run is not None and run.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
         try:
-            await refresh_cloud_run(db, _PingActor(id=grant.owner_user_id), run)
+            await refresh_cloud_run(db, _RunTokenActor(id=grant.owner_user_id), run)
         except CloudApiError:
             # A failed refresh never changes engine state — the ping is a nudge,
             # not a transition; the scheduler phase-3 sweep remains the backstop.

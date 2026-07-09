@@ -1649,6 +1649,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workflows/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Run Endpoint
+         * @description Take over / cancel a run (D15). User auth, owner-scoped (a run the caller
+         *     can't see 404s). This is the single human override; the UI's take-over action
+         *     routes here, and a blocked mutating verb's 409 ``SESSION_WORKFLOW_HELD`` sends
+         *     the user to it.
+         */
+        post: operations["cancel_run_endpoint_v1_cloud_workflows_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workflows/runs/{run_id}/deliver": {
         parameters: {
             query?: never;
@@ -5546,6 +5569,8 @@ export interface components {
             startedAt: string | null;
             /** Finishedat */
             finishedAt: string | null;
+            /** Stoppedbyuserid */
+            stoppedByUserId?: string | null;
         };
         /**
          * WorkflowRunTarget
@@ -5582,8 +5607,8 @@ export interface components {
              * @enum {string}
              */
             targetMode: "local" | "personal_cloud";
-            /** Targetworkspaceid */
-            targetWorkspaceId?: string | null;
+            /** Repofullname */
+            repoFullName?: string | null;
             schedule?: components["schemas"]["TriggerScheduleRequest"] | null;
             poll?: components["schemas"]["TriggerPollRequest"] | null;
             /** Args */
@@ -5631,8 +5656,14 @@ export interface components {
             concurrencyPolicy: string;
             /** Targetmode */
             targetMode: string;
+            /** Repofullname */
+            repoFullName: string | null;
             /** Targetworkspaceid */
             targetWorkspaceId: string | null;
+            /** Inputpresets */
+            inputPresets?: {
+                [key: string]: unknown;
+            } | null;
             schedule: components["schemas"]["TriggerScheduleResponse"] | null;
             poll?: components["schemas"]["TriggerPollResponse"] | null;
             /** Nextrunat */
@@ -5664,8 +5695,8 @@ export interface components {
             concurrencyPolicy?: ("skip" | "queue") | null;
             /** Targetmode */
             targetMode?: ("local" | "personal_cloud") | null;
-            /** Targetworkspaceid */
-            targetWorkspaceId?: string | null;
+            /** Repofullname */
+            repoFullName?: string | null;
             schedule?: components["schemas"]["TriggerScheduleRequest"] | null;
             poll?: components["schemas"]["TriggerPollRequest"] | null;
             /** Args */
@@ -9399,6 +9430,37 @@ export interface operations {
                 "application/json": components["schemas"]["RunStatusRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_endpoint_v1_cloud_workflows_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

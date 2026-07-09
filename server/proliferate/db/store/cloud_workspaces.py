@@ -86,6 +86,30 @@ async def list_active_workspace_branches_for_repo_environment(
     return {value for value in rows.scalars().all() if value}
 
 
+async def get_active_cloud_workspace_for_repo_environment(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    repo_environment_id: UUID,
+) -> CloudWorkspaceValue | None:
+    """The most-recently-updated non-archived workspace the user owns for a repo
+    environment, or None. Backs D16 trigger derivation (reuse before create)."""
+
+    row = (
+        await db.execute(
+            select(CloudWorkspace)
+            .where(
+                CloudWorkspace.owner_user_id == user_id,
+                CloudWorkspace.repo_environment_id == repo_environment_id,
+                CloudWorkspace.archived_at.is_(None),
+            )
+            .order_by(CloudWorkspace.updated_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return cloud_workspace_value(row) if row is not None else None
+
+
 async def get_cloud_workspace_for_user(
     db: AsyncSession,
     user_id: UUID,

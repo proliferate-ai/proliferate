@@ -43,6 +43,7 @@ from proliferate.constants.workflows import (
 from proliferate.db.store import cloud_workflow_triggers as trigger_store
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
+from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
 from proliferate.db.store.cloud_workflows import (
     WorkflowRecord,
@@ -70,13 +71,13 @@ from proliferate.server.cloud.workflows.domain.interpolation import (
     coerce_arguments,
     resolve_value,
 )
-from proliferate.server.cloud.workflows.domain.poll_contract import (
-    derive_item_schema,
-    validate_item_data,
-)
 from proliferate.server.cloud.workflows.domain.policy import (
     free_plan_workflow_limit,
     workflow_create_allowed,
+)
+from proliferate.server.cloud.workflows.domain.poll_contract import (
+    derive_item_schema,
+    validate_item_data,
 )
 from proliferate.server.cloud.workflows.domain.run_status import (
     RunTransitionError,
@@ -209,29 +210,68 @@ def workflow_arg_specs(version: WorkflowVersionRecord) -> list[ArgSpec]:
     return arg_specs
 
 
-async def ensure_cloud_workspace_owned(
-    db: AsyncSession, *, user: ActorIdentity, target_workspace_id: UUID | None
-) -> None:
-    """Validate the actor owns a live cloud workspace (ownership only).
+def _split_repo_full_name(repo_full_name: str | None) -> tuple[str, str]:
+    """Parse an "owner/name" repo pin. Raises 400 on a malformed value."""
 
-    Used at trigger create/update: the workspace must exist and be un-archived,
-    but need not be materialized yet — materialization is re-checked at fire time
-    by ``start_run`` (a workspace can finish provisioning after the trigger is set).
-    """
-
-    if target_workspace_id is None:
+    cleaned = (repo_full_name or "").strip()
+    owner, _, name = cleaned.partition("/")
+    if not owner or not name or "/" in name:
         raise CloudApiError(
-            "target_workspace_required",
-            "A cloud workspace is required to run this workflow in the cloud.",
+            "invalid_repo",
+            "Pin a repository as 'owner/name'.",
             status_code=400,
         )
-    workspace = await cloud_workspace_store.get_cloud_workspace_for_user(
-        db, user.id, target_workspace_id
+    return owner, name
+
+
+async def _ensure_trigger_target_workspace(
+    db: AsyncSession, *, user: ActorIdentity, repo_full_name: str | None
+) -> UUID:
+    """D16: derive the trigger's target workspace from its repo pin.
+
+    The trigger authors a repo; the server owns the workspace. This resolves the
+    caller's cloud repo environment for the pin and provisions a dedicated,
+    server-owned cloud workspace row for it (one warm workspace per trigger). The
+    anyharness worktree is NOT materialized here — that stays a retry-at-fire
+    concern (``start_run`` raises ``target_workspace_not_ready`` until the runtime
+    workspace is ready), exactly as before the repo pin existed.
+    """
+
+    owner, name = _split_repo_full_name(repo_full_name)
+    repo_environment = await repositories_store.get_cloud_repo_environment(
+        db, user_id=user.id, git_owner=owner, git_repo_name=name
     )
-    if workspace is None or workspace.archived_at is not None:
+    if repo_environment is None:
         raise CloudApiError(
-            "target_workspace_not_found", "Cloud workspace not found.", status_code=404
+            "cloud_repo_environment_not_found",
+            "Configure this repository as a cloud environment before pinning it to a trigger.",
+            status_code=404,
         )
+    # Reuse the warm workspace this repo already has, if any; otherwise create the
+    # dedicated row. Either way the trigger-fire path is unchanged — it stamps this
+    # id into start_run, which re-checks materialization (target_workspace_not_ready
+    # stays a retry-at-fire concern for a row whose worktree isn't ready yet).
+    existing = await cloud_workspace_store.get_active_cloud_workspace_for_repo_environment(
+        db, user_id=user.id, repo_environment_id=repo_environment.id
+    )
+    if existing is not None:
+        return existing.id
+    branch = f"workflow-trigger/{uuid4().hex[:12]}"
+    workspace = await cloud_workspace_store.create_cloud_workspace(
+        db,
+        user_id=user.id,
+        repo_environment_id=repo_environment.id,
+        display_name=f"{owner}/{name}",
+        git_branch=branch,
+        git_base_branch=repo_environment.default_branch or "main",
+    )
+    if workspace is None:  # pragma: no cover - the generated branch is unique
+        raise CloudApiError(
+            "cloud_workspace_create_failed",
+            "Could not provision a workspace for the pinned repository.",
+            status_code=409,
+        )
+    return workspace.id
 
 
 async def _visible_run(
@@ -802,24 +842,37 @@ def _normalize_trigger_schedule(schedule: TriggerScheduleRequest) -> ParsedAutom
         raise CloudApiError("invalid_schedule", str(exc), status_code=400) from exc
 
 
-async def _coerce_trigger_args(
-    db: AsyncSession, *, workflow_current_version_id: UUID | None, args: dict[str, object]
+def _coerce_schedule_presets(
+    arg_specs: list[ArgSpec], *, presets: dict[str, object]
 ) -> dict[str, object]:
-    if workflow_current_version_id is None:
-        raise CloudApiError(
-            "workflow_no_version",
-            "Add at least one step before scheduling this workflow.",
-            status_code=409,
-        )
-    version = await store.get_version(db, workflow_current_version_id)
-    if version is None:
-        raise CloudApiError(
-            "workflow_version_not_found", "Workflow version not found.", status_code=404
-        )
+    """Coerce a schedule trigger's preset input values (D16).
+
+    Partial (only the presets provided are coerced; unknown keys and bad types
+    still fail): a schedule with incomplete presets can be SAVED as a draft; the
+    enable-gate — not coercion — is what blocks enabling it.
+    """
+
     try:
-        return coerce_arguments(workflow_arg_specs(version), args)
+        return coerce_arguments([spec for spec in arg_specs if spec.name in presets], presets)
     except ArgumentError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
+
+
+def _assert_schedule_enable_gate(
+    arg_specs: list[ArgSpec], *, presets: dict[str, object], enabled: bool
+) -> None:
+    """D16 enable-gate: an ENABLED schedule trigger must preset every required
+    input (a disabled draft may leave them blank)."""
+
+    if not enabled:
+        return
+    missing = sorted(spec.name for spec in arg_specs if spec.required and spec.name not in presets)
+    if missing:
+        raise CloudApiError(
+            "schedule_presets_incomplete",
+            f"Preset every required input before enabling this schedule: {missing}.",
+            status_code=400,
+        )
 
 
 async def _workflow_arg_specs_or_raise(
@@ -1004,15 +1057,23 @@ async def create_trigger(
     _validate_trigger_kind(body.kind)
     _validate_concurrency(body.concurrency_policy)
     _validate_trigger_target_mode(body.target_mode, kind=body.kind)
-    await ensure_cloud_workspace_owned(db, user=user, target_workspace_id=body.target_workspace_id)
+    # D16: the repo pin is the authored "where"; the server derives + owns the
+    # workspace it maps to.
+    target_workspace_id = await _ensure_trigger_target_workspace(
+        db, user=user, repo_full_name=body.repo_full_name
+    )
 
     if body.kind == WORKFLOW_TRIGGER_KIND_POLL:
-        return await _create_poll_trigger(db, user, workflow, body)
+        return await _create_poll_trigger(
+            db, user, workflow, body, target_workspace_id=target_workspace_id
+        )
 
     parsed = _normalize_trigger_schedule(_require_schedule(body.schedule))
-    coerced_args = await _coerce_trigger_args(
-        db, workflow_current_version_id=workflow.current_version_id, args=body.args
+    arg_specs = await _workflow_arg_specs_or_raise(
+        db, workflow_current_version_id=workflow.current_version_id
     )
+    presets = _coerce_schedule_presets(arg_specs, presets=body.args)
+    _assert_schedule_enable_gate(arg_specs, presets=presets, enabled=body.enabled)
     return await trigger_store.create_trigger(
         db,
         workflow_id=workflow_id,
@@ -1020,12 +1081,15 @@ async def create_trigger(
         kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
         concurrency_policy=body.concurrency_policy,
         target_mode=body.target_mode,
-        target_workspace_id=body.target_workspace_id,
+        repo_full_name=body.repo_full_name,
+        target_workspace_id=target_workspace_id,
+        input_presets_json=presets,
         schedule_rrule=parsed.rrule_text,
         schedule_timezone=parsed.timezone,
         schedule_summary=parsed.summary,
         next_run_at=parsed.next_run_at,
-        args_json=coerced_args,
+        # For schedule triggers the presets ARE the fire-time args.
+        args_json=presets,
         enabled=body.enabled,
     )
 
@@ -1043,6 +1107,8 @@ async def _create_poll_trigger(
     user: ActorIdentity,
     workflow: WorkflowRecord,
     body: WorkflowTriggerCreateRequest,
+    *,
+    target_workspace_id: UUID,
 ) -> WorkflowTriggerRecord:
     if body.poll is None:
         raise CloudApiError(
@@ -1064,7 +1130,8 @@ async def _create_poll_trigger(
         kind=WORKFLOW_TRIGGER_KIND_POLL,
         concurrency_policy=body.concurrency_policy,
         target_mode=body.target_mode,
-        target_workspace_id=body.target_workspace_id,
+        repo_full_name=body.repo_full_name,
+        target_workspace_id=target_workspace_id,
         poll_url=config.url,
         poll_auth_header=config.auth_header,
         poll_auth_ciphertext=config.auth_ciphertext,
@@ -1111,13 +1178,19 @@ async def update_trigger(
     _validate_concurrency(concurrency)
     _validate_trigger_target_mode(target_mode, kind=existing.kind)
 
-    # Cloud target needs an owned workspace (new one if supplied, else the pinned one).
-    target_workspace_id = (
-        body.target_workspace_id
-        if body.target_workspace_id is not None
-        else existing.target_workspace_id
+    # D16: re-pinning the repo re-derives a fresh server-owned workspace; leaving
+    # it alone keeps the existing derived workspace.
+    repo_changed = (
+        body.repo_full_name is not None
+        and body.repo_full_name.strip() != (existing.repo_full_name or "")
     )
-    await ensure_cloud_workspace_owned(db, user=user, target_workspace_id=target_workspace_id)
+    repo_full_name = body.repo_full_name if repo_changed else existing.repo_full_name
+    if repo_changed:
+        target_workspace_id: UUID | None = await _ensure_trigger_target_workspace(
+            db, user=user, repo_full_name=body.repo_full_name
+        )
+    else:
+        target_workspace_id = existing.target_workspace_id
 
     if existing.kind == WORKFLOW_TRIGGER_KIND_POLL:
         return await _update_poll_trigger(
@@ -1128,6 +1201,7 @@ async def update_trigger(
             enabled=enabled,
             concurrency=concurrency,
             target_mode=target_mode,
+            repo_full_name=repo_full_name,
             target_workspace_id=target_workspace_id,
         )
     if body.poll is not None:
@@ -1151,10 +1225,12 @@ async def update_trigger(
     recompute_cursor = schedule_changed or becoming_enabled or existing.next_run_at is None
     next_run_at = parsed.next_run_at if recompute_cursor else None
 
-    args = body.args if body.args is not None else existing.args_json
-    coerced_args = await _coerce_trigger_args(
-        db, workflow_current_version_id=workflow.current_version_id, args=args
+    presets_source = body.args if body.args is not None else existing.input_presets_json or {}
+    arg_specs = await _workflow_arg_specs_or_raise(
+        db, workflow_current_version_id=workflow.current_version_id
     )
+    presets = _coerce_schedule_presets(arg_specs, presets=presets_source)
+    _assert_schedule_enable_gate(arg_specs, presets=presets, enabled=enabled)
 
     updated = await trigger_store.update_trigger(
         db,
@@ -1162,12 +1238,15 @@ async def update_trigger(
         enabled=enabled,
         concurrency_policy=concurrency,
         target_mode=target_mode,
+        repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
+        input_presets_json=presets,
+        write_input_presets=True,
         schedule_rrule=parsed.rrule_text,
         schedule_timezone=parsed.timezone,
         schedule_summary=parsed.summary,
         next_run_at=next_run_at,
-        args_json=coerced_args,
+        args_json=presets,
     )
     assert updated is not None
     return updated
@@ -1182,6 +1261,7 @@ async def _update_poll_trigger(
     enabled: bool,
     concurrency: str,
     target_mode: str,
+    repo_full_name: str | None,
     target_workspace_id: UUID | None,
 ) -> WorkflowTriggerRecord:
     if body.schedule is not None:
@@ -1219,6 +1299,7 @@ async def _update_poll_trigger(
         enabled=enabled,
         concurrency_policy=concurrency,
         target_mode=target_mode,
+        repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
         args_json=coerced_static,
         write_poll_config=True,

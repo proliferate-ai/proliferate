@@ -805,3 +805,113 @@ async def test_ping_accepts_contract_request_shape(
         headers={"Authorization": f"Bearer {plaintext}"},
     )
     assert resp.status_code == 202
+
+
+# --- D18 (E7): /status + /delivered run-token OR user auth ---------------------
+
+
+class _StubRequest:
+    """Minimal stand-in for a Starlette Request — ``_bearer_token`` only reads
+    ``headers.get``."""
+
+    def __init__(self, authorization: str | None = None) -> None:
+        self.headers = {} if authorization is None else {"authorization": authorization}
+
+
+async def test_status_accepts_run_token(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The runtime self-reports /status with its per-run gateway token (no session)."""
+    user = await _make_user(db_session)
+    run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/v1/cloud/workflows/runs/{run_id}/status",
+        headers={"Authorization": f"Bearer {plaintext}"},
+        json={"status": "running"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "running"
+
+
+async def test_status_rejects_mismatched_run_token(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Run A's token cannot report on run B (spoofing → 403), mirroring /ping."""
+    user = await _make_user(db_session)
+    _run_a, token_a = await _seed_run_with_token(db_session, owner=user, integrations=[])
+    run_b, _ = await _seed_run_with_token(db_session, owner=user, integrations=[])
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/v1/cloud/workflows/runs/{run_b}/status",
+        headers={"Authorization": f"Bearer {token_a}"},
+        json={"status": "running"},
+    )
+    assert resp.status_code == 403
+    # Run B stayed put — a rejected report changes no state.
+    after = await store.get_run(db_session, run_b)
+    assert after.status == "delivered"
+
+
+async def test_status_no_credential_unauthorized(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    user = await _make_user(db_session)
+    run_id, _ = await _seed_run_with_token(db_session, owner=user, integrations=[])
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/v1/cloud/workflows/runs/{run_id}/status",
+        json={"status": "running"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_authorize_run_report_accepts_user_session(db_session: AsyncSession) -> None:
+    """The desktop local-lane relay reports on a user session (no bearer) — the
+    resolver returns the user unchanged."""
+    from proliferate.server.cloud.workflows.api import _authorize_run_report
+
+    user = await _make_user(db_session)
+    run_id, _ = await _seed_run_with_token(db_session, owner=user, integrations=[])
+
+    actor = await _authorize_run_report(
+        db_session, run_id=run_id, request=_StubRequest(), user=user
+    )
+    assert actor is user
+
+
+async def test_authorize_run_report_prefers_run_token(db_session: AsyncSession) -> None:
+    """A valid run token authenticates as the runtime even when no user is present."""
+    from proliferate.server.cloud.workflows.api import _RunTokenActor, _authorize_run_report
+
+    user = await _make_user(db_session)
+    run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
+
+    actor = await _authorize_run_report(
+        db_session,
+        run_id=run_id,
+        request=_StubRequest(f"Bearer {plaintext}"),
+        user=None,
+    )
+    assert isinstance(actor, _RunTokenActor)
+    assert actor.id == user.id
+
+
+async def test_delivered_accepts_run_token(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    user = await _make_user(db_session)
+    run_id, plaintext = await _seed_run_with_token(
+        db_session, owner=user, integrations=[], status="pending_delivery"
+    )
+    await db_session.commit()
+
+    resp = await client.post(
+        f"/v1/cloud/workflows/runs/{run_id}/delivered",
+        headers={"Authorization": f"Bearer {plaintext}"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "delivered"

@@ -15,6 +15,7 @@ import {
   TriggerBadgeRow,
   TriggerForm,
   type TriggerDraft,
+  type WorkflowTriggerRepoOption,
   type WorkflowTriggerResponse,
 } from "@/components/workflows/editor/WorkflowTriggersCard";
 import { presetForRrule } from "@/lib/domain/automations/schedule/schedule";
@@ -28,6 +29,12 @@ const AGENTS: EditorAgent[] = [
 const CLOUD_WORKSPACES: WorkflowRunTargetOption[] = [
   { id: "ws-1", label: "proliferate · cloud" },
   { id: "ws-2", label: "web · cloud" },
+];
+
+// D16: triggers pin a repo; the server derives + owns the workspace.
+const REPO_OPTIONS: WorkflowTriggerRepoOption[] = [
+  { fullName: "acme/proliferate", label: "acme/proliferate" },
+  { fullName: "acme/web", label: "acme/web" },
 ];
 
 const ARGS: WorkflowArgSpec[] = [
@@ -45,7 +52,9 @@ function makeTrigger(overrides: Partial<WorkflowTriggerResponse>): WorkflowTrigg
     enabled: true,
     concurrencyPolicy: "skip",
     targetMode: "personal_cloud",
+    repoFullName: "acme/proliferate",
     targetWorkspaceId: "ws-1",
+    inputPresets: {},
     schedule: { rrule: DAILY_RRULE, timezone: "America/Los_Angeles", summary: "Every day at 9:00 AM" },
     nextRunAt: "2026-07-04T16:00:00Z",
     lastScheduledAt: null,
@@ -118,7 +127,7 @@ export function WorkflowFormsFixtures() {
     pollIntervalSecs: 300,
     concurrency: "skip",
     enabled: true,
-    workspaceId: "ws-1",
+    repoFullName: "acme/proliferate",
     argValues: { pr_number: "912", env: "staging" },
   });
   const patchDraft = (patch: Partial<TriggerDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
@@ -136,7 +145,7 @@ export function WorkflowFormsFixtures() {
     pollIntervalSecs: 300,
     concurrency: "queue",
     enabled: true,
-    workspaceId: "ws-1",
+    repoFullName: "acme/proliferate",
     argValues: { pr_number: "", env: "staging" },
   });
   const patchPollDraft = (patch: Partial<TriggerDraft>) => setPollDraft((prev) => ({ ...prev, ...patch }));
@@ -167,7 +176,6 @@ export function WorkflowFormsFixtures() {
           <span className="text-sm font-medium text-foreground">Triggers — schedule + poll chips, poll error caption</span>
           <TriggerBadgeRow
             triggers={TRIGGERS}
-            cloudWorkspaces={CLOUD_WORKSPACES}
             activeId={undefined}
             addingKind={null}
             addDisabled={false}
@@ -178,7 +186,7 @@ export function WorkflowFormsFixtures() {
           <TriggerForm
             draft={draft}
             args={args}
-            cloudWorkspaces={CLOUD_WORKSPACES}
+            repoOptions={REPO_OPTIONS}
             error={null}
             busy={false}
             isEdit
@@ -196,7 +204,7 @@ export function WorkflowFormsFixtures() {
           <TriggerForm
             draft={pollDraft}
             args={args}
-            cloudWorkspaces={CLOUD_WORKSPACES}
+            repoOptions={REPO_OPTIONS}
             error={null}
             busy={false}
             isEdit
@@ -213,7 +221,6 @@ export function WorkflowFormsFixtures() {
           <span className="text-sm font-medium text-foreground">Triggers — no cloud workspace</span>
           <TriggerBadgeRow
             triggers={[]}
-            cloudWorkspaces={[]}
             activeId={undefined}
             addingKind={null}
             addDisabled
