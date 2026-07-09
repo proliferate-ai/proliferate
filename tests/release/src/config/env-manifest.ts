@@ -50,6 +50,22 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: true,
   },
   {
+    name: "RELEASE_E2E_GATEWAY_BASE_URL",
+    description:
+      "Public inference base URL of the LiteLLM gateway RELEASE_E2E_GATEWAY_TEST_KEY was issued " +
+      "against (the deployment's AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL). When both are set for a " +
+      "--lane local run, the runner pushes a gateway-keyed agent-auth state document to the local " +
+      "AnyHarness runtime (PUT /v1/agent-auth/state) so harnesses can chat with no native CLI " +
+      "login — the CI path. Without it, local chat scenarios rely on whatever credential the " +
+      "runtime already resolves (native CLI login on a laptop).",
+    whereItLives:
+      "The gateway deployment's public URL (same place the key was minted). " +
+      "Local dev: `~/.proliferate-local/dev/release-e2e.env`. CI: GitHub Actions secret " +
+      "alongside RELEASE_E2E_GATEWAY_TEST_KEY.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
     name: "RELEASE_E2E_E2B_API_KEY",
     description:
       "E2B API key used to provision sandbox-lane cloud workspaces and to build/upload " +

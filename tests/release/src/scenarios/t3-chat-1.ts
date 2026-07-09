@@ -136,7 +136,8 @@ async function runLocalLane(agentsSelector: readonly string[]): Promise<void> {
       }
       let lastError: unknown;
       let succeededModel: string | undefined;
-      for (const modelId of choice.modelCandidates) {
+      const candidates = await withGatewayProbedCandidates(client, harnessKind, choice.modelCandidates);
+      for (const modelId of candidates) {
         try {
           await runOneHarness(client, workspace.id, { ...choice, modelId });
           succeededModel = modelId;
@@ -212,6 +213,42 @@ async function runOneHarness(
   // Session persists and reopens: re-fetch by id, assert same session still resolves with its history.
   const reopened = await client.getSession(session.id);
   assert.equal(reopened.id, session.id, `[${choice.harnessKind}] session must reopen with the same id`);
+}
+
+/**
+ * Rank model candidates for a harness, preferring the runtime's own probed
+ * gateway list when one exists. When gateway auth was pushed for this run
+ * (the CI path), the pushed key is typically allowlisted to a cheap model set
+ * — catalog-derived ids the key cannot serve 403 at the provider, so the
+ * probed ids (what the key can actually reach, cheapest-first per the same
+ * tier preference) are tried first and the catalog candidates kept as a
+ * fallback. With no gateway configured (a native-login laptop) the probe list
+ * is empty or the endpoint errs, and the catalog candidates pass through
+ * unchanged.
+ */
+export async function withGatewayProbedCandidates(
+  client: LocalRuntimeClient,
+  harnessKind: string,
+  catalogCandidates: readonly string[],
+): Promise<string[]> {
+  let probed: Array<{ id: string }> = [];
+  try {
+    probed = await client.getGatewayModels(harnessKind);
+  } catch {
+    return [...catalogCandidates];
+  }
+  const byPreference = (id: string): number => {
+    if (/fable/i.test(id)) return 99;
+    if (/haiku|mini/i.test(id)) return 0;
+    if (/sonnet/i.test(id)) return 1;
+    return 2;
+  };
+  const probedIds = probed
+    .map((model) => model.id)
+    .filter((id) => !/fable/i.test(id))
+    .sort((a, b) => byPreference(a) - byPreference(b));
+  const merged = [...probedIds, ...catalogCandidates];
+  return [...new Set(merged)];
 }
 
 const ANTHROPIC_AVAILABILITY_SOURCES = new Set(["anthropic-api", "anthropic-oauth", "bedrock"]);

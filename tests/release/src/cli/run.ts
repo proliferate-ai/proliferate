@@ -1,6 +1,7 @@
 import { HELP_TEXT, parseArgs } from "./args.js";
 import { resolveEnv, missingRequiredForLane, blockedReasonForMissingEnv } from "../config/env-resolution.js";
-import { envVarNames } from "../config/env-manifest.js";
+import { envVarNames, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
+import { pushGatewayAuthState } from "../fixtures/agent-auth.js";
 import { selectScenarios, allScenarioIds } from "../scenarios/registry.js";
 import { ScenarioBlockedError, ScenarioExpectedFailError } from "../scenarios/types.js";
 import {
@@ -38,6 +39,7 @@ async function main(): Promise<void> {
   const locallySeeded = new Set<string>();
   if (args.lane === "local" && !args.dryRun) {
     await seedLocalDurableUser(locallySeeded);
+    await pushLocalGatewayAuth();
   }
 
   printEnvManifestReport();
@@ -194,6 +196,38 @@ async function seedLocalDurableUser(seeded: Set<string>): Promise<void> {
     console.warn(
       `[seed] could not seed the local durable user (${error instanceof Error ? error.message : String(error)}). ` +
         "Durable-user-dependent scenarios will report blocked.",
+    );
+  }
+}
+
+/**
+ * When both the gateway virtual key and its public base URL are set for a
+ * --lane local run, push a gateway-keyed agent-auth state document to the
+ * local AnyHarness runtime so harnesses can chat with no native CLI login
+ * (the CI path — the runner has no ~/.claude login). Best-effort like the
+ * durable-user seed: without it, chat scenarios keep whatever credential the
+ * runtime already resolves (a laptop's native login) or report their own
+ * per-harness failure.
+ */
+async function pushLocalGatewayAuth(): Promise<void> {
+  const gatewayKey = nonEmpty(process.env.RELEASE_E2E_GATEWAY_TEST_KEY);
+  const gatewayBaseUrl = nonEmpty(process.env.RELEASE_E2E_GATEWAY_BASE_URL);
+  if (!gatewayKey || !gatewayBaseUrl) {
+    console.log(
+      "[seed] RELEASE_E2E_GATEWAY_TEST_KEY / RELEASE_E2E_GATEWAY_BASE_URL not both set — " +
+        "not pushing gateway agent-auth to the local runtime (native CLI login, if any, applies).",
+    );
+    return;
+  }
+  const runtimeUrl = process.env.RELEASE_E2E_LOCAL_RUNTIME_URL ?? DEFAULT_LOCAL_RUNTIME_URL;
+  try {
+    await pushGatewayAuthState({ runtimeUrl, gatewayBaseUrl, gatewayKey });
+    console.log(`[seed] gateway agent-auth pushed to the local runtime (${gatewayBaseUrl}).`);
+  } catch (error) {
+    console.warn(
+      `[seed] could not push gateway agent-auth to the local runtime ` +
+        `(${error instanceof Error ? error.message : String(error)}). Chat scenarios fall back to ` +
+        "whatever credential the runtime already resolves.",
     );
   }
 }
