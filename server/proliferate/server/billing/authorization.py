@@ -42,7 +42,6 @@ from proliferate.server.billing.snapshots import (
 )
 from proliferate.utils.time import utcnow
 
-
 # Block reasons that mean "you are out of included/managed cloud hours" — the
 # client keys off these to show upgrade-your-plan copy. Everything else is a
 # generic start block (payment attention, admin/spend hold, compute cap).
