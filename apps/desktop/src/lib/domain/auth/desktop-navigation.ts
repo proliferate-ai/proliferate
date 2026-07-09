@@ -15,7 +15,10 @@ export function desktopNavigationTarget(url: string): string | null {
     const segments = parsed.pathname.split("/").filter(Boolean);
     if (segments.length === 1) {
       const organizationId = decodeRoutePart(segments[0]);
-      const params = new URLSearchParams({ section: "organization-members" });
+      // Lands on Account (every signed-in user can reach it), not the
+      // admin-gated Members pane — a non-admin invitee must be able to
+      // follow this link and see/accept their invitation.
+      const params = new URLSearchParams({ section: "account" });
       params.set("joinOrganizationId", organizationId);
       return `/settings?${params.toString()}`;
     }

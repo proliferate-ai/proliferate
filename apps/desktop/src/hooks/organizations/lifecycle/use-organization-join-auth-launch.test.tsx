@@ -27,7 +27,7 @@ function renderJoinAuthLaunch() {
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <MemoryRouter
-        initialEntries={["/settings?section=organization-members&joinOrganizationId=org-1"]}
+        initialEntries={["/settings?section=account&joinOrganizationId=org-1"]}
       >
         {children}
       </MemoryRouter>
