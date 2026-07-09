@@ -429,3 +429,56 @@ claude thin-fork — per ~/delete/acp-protocol-and-forks-handoff.md.
   validates the standard (per the adoption backlog).
 - Worked example spec: written from the merged PR-1 diff (agents as the
   canonical annotated domain).
+
+## 9. Amendment 2026-07-09: bare Claude ids never validate on Bedrock (#1037, #1038)
+
+Ruled by Pablo. A Bedrock-routed Claude account 400s on bare model ids
+(`default`/`haiku`/`opus`/`sonnet`/`claude-opus-4-8`) with the CLI's own
+"Try --model to switch to us.anthropic.claude-opus-4-7 ..." — Bedrock serves
+only region-prefixed inference-profile ids (`us.anthropic.*` /
+`global.anthropic.*`). Validation accepted the bare id, the session was created,
+then the first prompt errored (any conn_failed → `SessionExecutionPhase::Errored`).
+The rule: validation must never accept a model the account cannot serve.
+
+Two coordinated defects, one root cause (menu presence taken as serve-ability):
+
+1. Detection (the pre-flight signal). The `bedrock` auth context keyed on
+   `allOf[CLAUDE_CODE_USE_BEDROCK=1, aws-credential-chain]`. `aws-credential-chain`
+   covers only the passive sources (ledger 12) and deliberately misses the
+   exotic tail (IMDS / task-role / container creds). A production Bedrock
+   deployment on an ECS task role sets the flag but exposes no passively
+   detectable creds, so the `allOf` failed and the account classified as
+   `anthropic-oauth`, where bare ids validate. Fix: key `bedrock` on the flag
+   alone. The flag is the routing switch — when set, the CLI routes to Bedrock
+   and only serves `us.anthropic.*`, whichever credential source it uses — so
+   the flag is the honest, sufficient signal and is the detection contract.
+   Absent the flag, an OAuth login stays `anthropic-oauth` even with AWS creds
+   present for other tools.
+
+2. Availability (the menu-lie). The Claude CLI lists the bare current-gen ids
+   on its menu during a bedrock probe run, so the observed-set availability
+   tagged `default`/`haiku`/`opus` `bedrock`-available — but the CLI 400s them
+   on use. Menu presence is not serve-ability. `build-catalog.mjs` now strips
+   `bedrock` from any Claude id that is not a region-prefixed inference profile
+   (the one sanctioned correction to observed-set availability; provenance keeps
+   the raw observation). So under the `bedrock` context the bare ids are
+   `ModelGated` and `visible_models` is the `us.anthropic.*` rows only, with the
+   no-selection default resolving via `defaults["bedrock"]` =
+   `us.anthropic.claude-sonnet-4-6`.
+
+Shape chosen: menu-level flavor gating, not transparent resolution. Transparent
+`haiku` → `us.anthropic.*` resolution is infeasible and ambiguous — the catalog
+carries no `us.anthropic.*` haiku row at all, and multiple `us.anthropic.*` opus
+generations exist. Gating is honest and keeps the one-computation invariant
+(`models` = `visible_models` = `validate_launch` = live-switch authority all run
+through `model_is_available`).
+
+This does not regress #975: a normal `claude.ai` OAuth or API login (no flag,
+so no `bedrock` context) is untouched — it still sees and launches the bare ids,
+which remain the only form it can use.
+
+Residual gap: an account that presents pure OAuth AND does not set
+`CLAUDE_CODE_USE_BEDROCK=1` yet is Anthropic-side Bedrock-enrolled has no
+pre-flight signal. Without the flag the CLI does not route to Bedrock, so this
+case is theoretical today; if it appears, the only remedies are a runtime
+error-string downgrade or a per-account model-list probe (neither is built).
