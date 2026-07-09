@@ -263,7 +263,12 @@ function killTracked(child: ChildProcess): void {
 }
 
 export async function bootStack(options: BootOptions = {}): Promise<BootedStack> {
-  const profile = options.profile ?? PROFILE;
+  // TIER2_INTENT_PROFILE lets a local run boot the same harness on its own
+  // profile so parallel worktrees don't collide on ports/DB/run-lock (this
+  // branch was verified on `t2auth`). Callers that pass an explicit profile
+  // (the billing suite) still win; CI keeps the default, one profile per
+  // isolated container.
+  const profile = options.profile ?? process.env.TIER2_INTENT_PROFILE ?? PROFILE;
   log(`preparing profile "${profile}"...`);
   const instance = ensureProfilePorts(profile);
   ensureDatabase(instance.databaseName);

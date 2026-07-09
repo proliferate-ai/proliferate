@@ -17,7 +17,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Google OAuth sign-in (mocked provider per-merge) | 2 | — |
+| Google OAuth sign-in (mocked provider per-merge) | 2 | tests/intent/specs/login-methods.spec.ts (T2-AUTH-4; tier-2 owns the login-method availability seam — `/auth/desktop/methods` + `/auth/desktop/github/availability` report password on / GitHub off and the login screen renders the password form; the real Google/GitHub OAuth round-trip is the tier-3 "Real provider handshakes" row per scenarios.md ruling #4) |
 | `/setup` instance claim → password login → logout → re-login | 2 | — |
 | Session revocation ends access | 2 | — |
 | Invitation: invite → accept in fresh browser → membership + role | 2 | — |
@@ -33,7 +33,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Create organization | 2 | — |
 | Invite users; promote/demote roles | 2 | — |
 | Admin-only surfaces gated: member cannot see/do admin actions | 2 | — |
-| Member visibility boundaries (sees own work, not others' private state) | 2 | — |
+| Member visibility boundaries (sees own work, not others' private state) | 2 | tests/intent/specs/member-visibility.spec.ts (T2-ORG-2; member reads their org + the shared roster, but 403s on the invitations list (#1029), the join-link secret, and PATCHing another member — the read boundary being open does not open the write boundary) |
 | Remove user; access ends | 2 | — |
 
 ## Workspaces
