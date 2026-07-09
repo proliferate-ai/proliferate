@@ -6,6 +6,9 @@ import { defineConfig } from "@playwright/test";
 // Postgres DB, so parallel workers would race on org/invitation state.
 export default defineConfig({
   testDir: "./specs",
+  // The billing specs live under ./specs/billing but boot a different stack
+  // (Stripe + enforce mode) via their own config; keep them out of this suite.
+  testIgnore: "**/billing/**",
   globalSetup: "./stack/global-setup.ts",
   workers: 1,
   fullyParallel: false,

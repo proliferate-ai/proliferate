@@ -25,6 +25,26 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const PROFILE = "t2intent";
+export const BILLING_PROFILE = "t2billing";
+
+export interface StripeBillingEnv {
+  secretKey: string;
+  webhookSecret: string;
+  proMonthlyPriceId: string;
+  overagePriceId: string;
+  refillPriceId: string;
+  meterId: string;
+  billingMode: string;
+}
+
+export interface BootOptions {
+  /** Profile name to boot under (default: the auth/org `t2intent` profile). */
+  profile?: string;
+  /** When set, the server boots with Stripe test-mode billing wired: pro
+   * billing enabled, `CLOUD_BILLING_MODE` (default `enforce`), and the Stripe
+   * test keys/prices. Used only by the billing suite. */
+  stripe?: StripeBillingEnv;
+}
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(here, "..", "..", "..");
@@ -242,8 +262,8 @@ function killTracked(child: ChildProcess): void {
   }
 }
 
-export async function bootStack(): Promise<BootedStack> {
-  const profile = PROFILE;
+export async function bootStack(options: BootOptions = {}): Promise<BootedStack> {
+  const profile = options.profile ?? PROFILE;
   log(`preparing profile "${profile}"...`);
   const instance = ensureProfilePorts(profile);
   ensureDatabase(instance.databaseName);
@@ -286,6 +306,26 @@ export async function bootStack(): Promise<BootedStack> {
     GITHUB_OAUTH_CLIENT_ID: "",
     GITHUB_OAUTH_CLIENT_SECRET: "",
   };
+  if (options.stripe) {
+    // Billing suite: wire real Stripe test-mode + turn enforcement on. The
+    // webhook receiver verifies signatures against STRIPE_WEBHOOK_SECRET, so
+    // the harness signs deliveries with the same value (see stack/billing.ts).
+    const s = options.stripe;
+    serverEnv.PRO_BILLING_ENABLED = "true";
+    serverEnv.CLOUD_BILLING_MODE = s.billingMode;
+    serverEnv.STRIPE_SECRET_KEY = s.secretKey;
+    serverEnv.STRIPE_WEBHOOK_SECRET = s.webhookSecret;
+    serverEnv.STRIPE_PRO_MONTHLY_PRICE_ID = s.proMonthlyPriceId;
+    serverEnv.STRIPE_CLOUD_MONTHLY_PRICE_ID = s.proMonthlyPriceId;
+    serverEnv.STRIPE_MANAGED_CLOUD_OVERAGE_PRICE_ID = s.overagePriceId;
+    serverEnv.STRIPE_SANDBOX_OVERAGE_PRICE_ID = s.overagePriceId;
+    serverEnv.STRIPE_MANAGED_CLOUD_OVERAGE_METER_ID = s.meterId;
+    serverEnv.STRIPE_SANDBOX_METER_ID = s.meterId;
+    serverEnv.STRIPE_REFILL_10H_PRICE_ID = s.refillPriceId;
+    serverEnv.STRIPE_CHECKOUT_SUCCESS_URL = `${webBaseUrl}/settings?section=billing&checkout=success`;
+    serverEnv.STRIPE_CHECKOUT_CANCEL_URL = `${webBaseUrl}/settings?section=billing&checkout=cancel`;
+    serverEnv.STRIPE_CUSTOMER_PORTAL_RETURN_URL = `${webBaseUrl}/settings?section=billing`;
+  }
   spawnTracked(
     children,
     path.join(REPO_ROOT, "server", ".venv", "bin", "uvicorn"),
