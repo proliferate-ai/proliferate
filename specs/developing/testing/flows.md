@@ -43,6 +43,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Local workspace create | 3 | — |
 | Worktree workspace create — locally AND inside a cloud sandbox | 3 | — |
 | Cloud workspace create: request path + UI state up to the provisioning seam | 2 | — |
+| Add-Repo flow entry: local/cloud branches render + desktop-web fallback limits (no native picker outside Tauri) | 2 | tests/intent/specs/workspace-entry.spec.ts |
 | New user cold path: GitHub App authorization triggers first-ever sandbox provisioned from zero, within time budget | 3 | — |
 | Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | — |
 | Cloud workspace pause/resume/connect on real E2B | 3 | — |
@@ -74,7 +75,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | — |
+| Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | tests/intent/specs/integrations.spec.ts |
 | Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | — |
 
 ## Workflows — PARKED (surface being reworked; tests land with the rework PRs)

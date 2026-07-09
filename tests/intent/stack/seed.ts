@@ -33,7 +33,9 @@ export function webBaseUrl(): string {
   return value;
 }
 
-function databaseUrl(): string {
+// Exported so sibling seed-*.ts files (e.g. seed-integrations.ts) share one
+// source of truth for this instead of re-deriving it.
+export function databaseUrl(): string {
   const value = process.env.TIER2_INTENT_DATABASE_URL;
   if (!value) {
     throw new Error("TIER2_INTENT_DATABASE_URL is not set — did globalSetup run?");
@@ -586,8 +588,9 @@ export async function resetPasswordLoginRateLimits(): Promise<void> {
 /** The server uses asyncpg's SQLAlchemy URL scheme; node-postgres needs the
  * plain `postgresql://` scheme, and its resolver chokes on the bracketed
  * `[::1]` host the macOS profile default uses — Docker's Postgres publishes
- * on localhost for both stacks, so map it. */
-function toPostgresDriverUrl(url: string): string {
+ * on localhost for both stacks, so map it. Exported for the same reason as
+ * `databaseUrl` above. */
+export function toPostgresDriverUrl(url: string): string {
   return url
     .replace(/^postgresql\+asyncpg:\/\//, "postgresql://")
     .replace("@[::1]:", "@localhost:");
