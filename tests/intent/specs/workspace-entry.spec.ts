@@ -93,12 +93,14 @@ async function expectEntryStepVisible(page: Page): Promise<void> {
 test.beforeEach(async ({ page }) => {
   await ensureInstanceClaimed();
   await signInThroughUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
-  // "Show sidebar" (collapsed default) or the sidebar's own always-visible
-  // "Add repository" action (already expanded) — either is the render proof
-  // that the authenticated app shell, not the login form, owns the page.
-  await expect(
-    page.getByRole("button", { name: "Show sidebar" }).or(page.getByRole("button", { name: "Add repository" })),
-  ).toBeVisible({ timeout: 30_000 });
+  // Same app-shell render proof auth.spec.ts's expectSignedInAppShell uses:
+  // past the auth gate, the login form is gone. Deliberately NOT asserting
+  // on "Add repository" here — its containing sidebar panel collapses to
+  // zero width by default (see ensureSidebarOpen below) rather than
+  // unmounting, so the button stays `visible` by Playwright's CSS-only
+  // definition even while functionally unreachable; it is not a reliable
+  // "the shell is up" signal on its own.
+  await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
 });
 
 test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () => {
