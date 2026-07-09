@@ -2739,7 +2739,9 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["AgentAuthSourceInput"][];
             /** Settings */
-            settings?: Record<string, unknown> | null;
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthSourceInput
@@ -2770,7 +2772,9 @@ export interface components {
             /** Sources */
             sources: components["schemas"]["AgentAuthStateSource"][];
             /** Settings */
-            settings?: Record<string, unknown> | null;
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthStateResponse
@@ -6476,6 +6480,7 @@ export interface operations {
                 email?: string | null;
                 organizationId?: string | null;
                 connectionId?: string | null;
+                slug?: string | null;
             };
             header?: never;
             path?: never;
