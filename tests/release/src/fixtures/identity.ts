@@ -13,7 +13,12 @@
  *   org, then the fresh user redeems that invitation via
  *   `POST /auth/password/register`.
  * - durable user: one seeded `e2e-tests` account/org on the target server,
- *   logged in via `POST /auth/web/password/login`.
+ *   logged in via `POST /auth/web/password/login`. Exception: staging's
+ *   durable user (proliferate-e2e-bot, confirmed present 2026-07-09) was
+ *   created by a real GitHub OAuth sign-in and has no password, so
+ *   --lane staging existing-user scenarios authenticate via
+ *   `loginDurableUserOnStaging` in `./staging-session.ts` instead of
+ *   `loginDurableUser` below.
  *
  * Request/response shapes below mirror the real Pydantic models as of this
  * writing:
