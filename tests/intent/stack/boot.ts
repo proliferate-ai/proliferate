@@ -310,6 +310,12 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     // registered against a different port; see feature-worktree-auth.md).
     GITHUB_OAUTH_CLIENT_ID: "",
     GITHUB_OAUTH_CLIENT_SECRET: "",
+    // T2-AUTH-3's mock IdP is a plain-HTTP loopback server (fakes/mock-idp) —
+    // the server's OIDC client rejects private/HTTP provider URLs by default
+    // (server/proliferate/integrations/sso/oidc.py's `_validate_oidc_url`);
+    // this settings seam exists for exactly this local/test case (see
+    // server/tests/unit/auth/test_sso.py's own http://127.0.0.1 coverage).
+    PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS: "true",
   };
   if (options.stripe) {
     // Billing suite: wire real Stripe test-mode + turn enforcement on. The
