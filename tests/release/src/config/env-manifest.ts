@@ -100,9 +100,44 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_SLACK_WEBHOOK_URL",
     description:
-      "Test Slack workspace incoming webhook, used by the real-integration-through-the-gateway " +
-      "flow (T3-INT-1) and by workflow Slack-delivery scenarios.",
+      "Test Slack workspace incoming webhook, used by workflow Slack-delivery scenarios. " +
+      "NOT used by T3-INT-1: see RELEASE_E2E_INTEGRATION_API_KEY (the cataloged Slack integration " +
+      "is oauth2/hosted-MCP, not api_key — src/fixtures/integrations.ts).",
     whereItLives: "A disposable Slack workspace reserved for release-e2e; incoming webhook app config.",
+    secret: true,
+  },
+  {
+    name: "RELEASE_E2E_SLACK_BOT_TOKEN",
+    description:
+      "Slack bot token for the proliferate-e2e workspace (#e2e-deliveries). Declared per the " +
+      "T3-INT-1 build task, but NOT usable against the shipped catalog: the cataloged Slack " +
+      "integration is auth_kind=oauth2 (hosted MCP at mcp.slack.com), so a bot token cannot be " +
+      "stored as an api_key credential. Use RELEASE_E2E_INTEGRATION_API_KEY against an api_key-kind " +
+      "seed integration instead. Kept as a placeholder pending a Slack-as-api_key definition or a " +
+      "ruling to drop it.",
+    whereItLives:
+      "Would be minted as a Slack app in the proliferate-e2e workspace (scopes chat:write + " +
+      "channels:read) — but see the description: the cataloged Slack definition does not accept it.",
+    secret: true,
+  },
+  {
+    name: "RELEASE_E2E_INTEGRATION_NAMESPACE",
+    description:
+      "Which cataloged api_key-kind seed integration T3-INT-1 authenticates and calls through the " +
+      "gateway. Must be one of context7|exa|tavily|render|neon (validated in " +
+      "src/fixtures/integrations.ts). Defaults to `exa` (free key, side-effect-free search tool call).",
+    whereItLives: "Operator choice; the default `exa` needs only a free Exa API key.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_INTEGRATION_API_KEY",
+    description:
+      "The real api_key credential for RELEASE_E2E_INTEGRATION_NAMESPACE, stored as the integration's " +
+      "api_key secret field and used to make a real tool call through the integration gateway (the " +
+      "gateway itself is what T3-INT-1 tests). Authenticated for real — no placeholder.",
+    whereItLives:
+      "Minted in the chosen provider's dashboard (default: an Exa API key from https://exa.ai). " +
+      "Local: ~/.proliferate-local/dev/release-e2e.env. CI: GitHub Actions secret.",
     secret: true,
   },
   {

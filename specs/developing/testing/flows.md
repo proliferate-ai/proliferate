@@ -75,7 +75,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
 | Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | — |
-| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | — |
+| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | tests/release/src/scenarios/t3-int-1.ts (T3-INT-1; blocked on credential RELEASE_E2E_INTEGRATION_API_KEY + github_link_required on the gateway route. Finding: cataloged Slack is oauth2/hosted-MCP not api_key, so the contract's Slack-bot-token premise does not fit the catalog — filed; scenario uses an api_key-kind seed (exa)) |
 
 ## Workflows — PARKED (surface being reworked; tests land with the rework PRs)
 
@@ -98,9 +98,9 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Stripe webhook robustness: duplicate/replay idempotent, concurrent 409, failure retried once-only, out-of-order safe | 2 | — |
 | Subscription edges: payment-failed hold + clear, mid-period cancel + rollover grace, billing modes off/observe/enforce, one-trial-per-GitHub-identity | 2 | — |
 | Usage surfaces truthful: seeded usage matches summary/timeseries/by-user/llm-balance APIs + UI | 2 | — |
-| Credits consumed properly: real session → LLM **and compute** meter events + credit decrement match consumption; Stripe webhook delivery live on staging | 3 | — |
-| Out of credits: sandbox paused and not accessible — **including every bypass route** (direct API resume, stale session, webhook race, pre-exhaustion key, other org member, trigger-driven start) | 3 | — |
-| Out of credits: gateway LLM access gated; reactivates on refill | 3 | — |
+| Credits consumed properly: real session → LLM **and compute** meter events + credit decrement match consumption; Stripe webhook delivery live on staging | 3 | tests/release/src/scenarios/t3-bill-1.ts (T3-BILL-1; ledger reader + as-built compute-attribution assertion green via billing_probe.py; LLM half blocked on RELEASE_E2E_GATEWAY_TEST_KEY, compute half blocked on github_link_required + public webhook URL. Compute-attribution pinned personal-subject via ORG_COMPUTE_ATTRIBUTION_FIXED until #1028) |
+| Out of credits: sandbox paused and not accessible — **including every bypass route** (direct API resume, stale session, webhook race, pre-exhaustion key, other org member, trigger-driven start) | 3 | tests/release/src/scenarios/t3-bill-2.ts (T3-BILL-2; exhaustion setup via drain-grants green; enforcement + 6-route bypass sweep blocked on github_link_required — cloud routes need a real sandbox + gate lift PR #1023) |
+| Out of credits: gateway LLM access gated; reactivates on refill | 3 | tests/release/src/scenarios/t3-bill-2.ts (T3-BILL-2, LLM side; blocked on RELEASE_E2E_GATEWAY_TEST_KEY — no key to reject) |
 | Overage bills real money correctly: compute metered events + amounts match up to cap then hard-block; LLM auto top-up charges once then fail-closes on payment failure | 3 | — |
 | Plan gates the model list: user sees/uses exactly the models their plan allows | 3 | — |
 

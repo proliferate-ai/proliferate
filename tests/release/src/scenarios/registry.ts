@@ -7,13 +7,14 @@ import { t3Cfg1 } from "./t3-cfg-1.js";
 import { t3Update1 } from "./t3-update-1.js";
 import { t3SecMat1 } from "./t3-sec-mat-1.js";
 import { t3Repo1 } from "./t3-repo-1.js";
+import { t3Int1 } from "./t3-int-1.js";
+import { t3Bill1 } from "./t3-bill-1.js";
+import { t3Bill2 } from "./t3-bill-2.js";
 
 /**
- * The tier-3 first wave for the LOCAL lane
- * (specs/developing/testing/scenarios.md#tier-3--first-wave). T3-FIXTURE is
- * infrastructure (src/fixtures/identity.ts), not a registered scenario.
- * T3-INT-1 (Slack) and the T3-BILL-* rows are out of scope per the build
- * task that landed this wave — add them here when they graduate from draft.
+ * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave).
+ * T3-FIXTURE is infrastructure (src/fixtures/identity.ts), not a registered
+ * scenario.
  */
 export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Prov1,
@@ -24,6 +25,9 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Update1,
   t3SecMat1,
   t3Repo1,
+  t3Int1,
+  t3Bill1,
+  t3Bill2,
 ];
 
 export function allScenarioIds(): string[] {
