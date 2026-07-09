@@ -122,6 +122,27 @@ jobs:
           --version-bump "${{ github.event.inputs.version_bump || 'patch' }}"
           --dry-run "${{ steps.meta.outputs.dry_run }}"
 
+      - name: Verify version tags are free
+        # Runs before the version-bump commit is pushed. desktop-v*/server-v*/
+        # runtime-v*/proliferate-v* tags must be brand new — prepare-artifact-release
+        # already picks the next version past every existing tag, so any of these
+        # existing at all here means a real collision (e.g. a race with another
+        # train), and we want that to abort before main gets a throwaway commit.
+        if: steps.meta.outputs.dry_run != 'true' && steps.artifacts.outputs.product_tag != ''
+        env:
+          ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
+          PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
+        run: |
+          set -euo pipefail
+          tags="$PRODUCT_TAG"
+          if [[ -n "$ARTIFACT_TAGS" ]]; then
+            tags="$tags,$ARTIFACT_TAGS"
+          fi
+          node scripts/ci-cd/create-release-tags.mjs \
+            --target pending \
+            --tags "$tags" \
+            --check-only true
+
       - name: Commit version bumps
         id: commit
         env:
@@ -156,9 +177,15 @@ jobs:
           if [[ -n "$ARTIFACT_TAGS" ]]; then
             tags="$tags,$ARTIFACT_TAGS"
           fi
+          # RELEASE_ID (release-YYYY-MM-DD) is a checkpoint marker, not a version
+          # pointer: nightly-release-train.yml's own "Resolve train metadata" step
+          # is its only reader, and it always excludes *today's* release_id when
+          # picking the previous train tag. A same-day rerun should move it
+          # forward to the new head, not fail the whole train.
           node scripts/ci-cd/create-release-tags.mjs \
             --target "${{ steps.commit.outputs.head_sha }}" \
             --tags "$tags" \
+            --movable-tags "$RELEASE_ID" \
             --dry-run false
 
       - name: Summarize train
