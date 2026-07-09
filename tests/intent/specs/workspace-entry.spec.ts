@@ -164,5 +164,13 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
 //   surface with the same "no web equivalent" property).
 // - The cloud branch's happy path past the GitHub App blocker (repo search,
 //   validate, save) — blocked by the same product-readiness gate
-//   T2-WS-1/T2-SEC-1 already pin; re-scope alongside those once Pablo rules
-//   on the GAP.
+//   T2-WS-1/T2-SEC-1 already pin; PR #1023 (merged to main 2026-07-09) fixes
+//   that gate at the source (current_product_user), so this should become
+//   testable once tests/intent-wave2 rebases past it.
+//
+// Product finding filed while building this: the local-option no-op above
+// has zero user feedback (no toast, no message) — a desktop-web user
+// clicking "Add a local repo" sees nothing happen and no explanation that
+// this needs the native app. Filed as
+// https://github.com/proliferate-ai/proliferate/issues/1035; not fixing
+// here, this PR is test-only.

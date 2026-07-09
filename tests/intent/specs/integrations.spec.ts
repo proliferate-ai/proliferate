@@ -43,6 +43,15 @@
 // policy management at least be exempted, the way `current_organization_actor`
 // already exempts single-org org/invitation endpoints?) or a real GitHub App
 // test fixture.
+//
+// UPDATE: PR #1023 ("extend single-org bypass to current_product_user"),
+// merged to main 2026-07-09, answers the question above directly — it adds
+// the exact same single-org bypass to `current_product_user` itself, which
+// this file's admin-router calls also depend on. Once this branch's stack
+// (tests/intent-wave2) rebases past it, every GAP test in this file should
+// flip to real connect/toggle assertions rather than 403s. Not rebasing this
+// PR onto that fix myself — that is the wave's merge-train's job, not a
+// single stacked PR's.
 
 import { expect, test } from "@playwright/test";
 import {
