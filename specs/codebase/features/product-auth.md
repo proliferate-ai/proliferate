@@ -27,12 +27,25 @@ GitHub remains the product-readiness provider. A password-only user is signed in
 but limited until the existing GitHub readiness check succeeds. Do not add a
 hidden bypass for normal (hosted, multi-tenant) users.
 
-Single-org (self-hosted) instances are the one carve-out: there is no GitHub
-OAuth app configured, so `current_product_user` admits password-only accounts
-when `settings.single_org_mode` is true, same as its sibling
-`current_organization_actor`. Hosted keeps the GitHub readiness gate
-unconditionally. Endpoints that genuinely need a GitHub token (repo import,
-etc.) still enforce that at their own point of use, not through this gate.
+There are two carve-outs to the GitHub readiness gate in `current_product_user`:
+
+- Single-org (self-hosted) instances have no GitHub OAuth app configured, so the
+  gate admits password-only accounts when `settings.single_org_mode` is true,
+  same as its sibling `current_organization_actor`.
+- A user who arrived through an organization's SSO connection passes without a
+  linked GitHub identity. The org relationship is the vetting: the connection is
+  admin-configured and membership is enforced on every SSO login, so an
+  org-scoped SSO identity backed by an active membership stands in for the
+  GitHub link. The exact check is
+  `user_has_active_organization_sso_membership`: an `sso_identity` row with a
+  non-null `organization_id` joined to an active `organization_membership` in
+  that org. A deployment-scoped SSO identity (org id null) does not qualify.
+
+Hosted keeps the GitHub readiness gate for everyone else, unconditionally.
+Endpoints that genuinely need a GitHub token (repo import, App install, etc.)
+still enforce that at their own point of use, not through this gate, and
+free-trial credit grants stay GitHub-gated (GitHub identity is the anti-abuse
+signal for free credits). SSO passing the readiness gate does not change either.
 
 The cloud sandbox gateway WebSocket authenticates its own product user rather
 than going through `current_product_user` (it reads the bearer token off the
@@ -115,6 +128,54 @@ because login still only works for accounts with an explicit password marker.
 `x-forwarded-for` is trusted only for loopback/local calls or proxy IPs and
 CIDRs listed in `PASSWORD_AUTH_TRUSTED_PROXY_HOSTS`.
 
+## Organization SSO Sign-In
+
+The org-SSO backend (connection model, discovery/start endpoints, OIDC callback,
+JIT membership) was fully built before this slice. What was missing was a way for
+a user to reach it: web and desktop cold login only ever probed deployment-scope
+SSO, and org SSO was reachable only through the desktop invite deep link. This
+slice adds the user-facing entry points. It does not change the OIDC flow itself.
+
+Entry points, one shape across surfaces:
+
+- Web auth screen shows a quiet `Sign in with SSO` link (shown when the
+  deployment is not itself SSO-gated). It opens `/login`, a page with a single
+  field for the organization's workspace slug.
+- `/login/<slug>` prefills that field. This is the URL an admin pastes into their
+  onboarding docs (for example `app.proliferate.ai/login/acme`).
+- The slug resolves to an `organizationId`, then the page calls the existing
+  `startSsoAuth` start flow with that org (and connection) id. No new SSO
+  machinery.
+- Desktop mirrors this: a `Sign in with SSO` affordance on cold login reveals a
+  slug field and drives the existing native SSO machinery (system browser +
+  `proliferate://auth/callback` deep link).
+- Web `/join/:orgId` signs the user in on the web when the org has SSO enabled
+  (it discovers by org id and starts the SSO flow; JIT membership and invite
+  acceptance happen in the SSO callback). It only falls back to the Desktop
+  handoff when the org has no usable SSO.
+
+Slug resolution:
+
+- Organizations carry a `slug`: a lowercase, URL-safe, unique handle generated
+  from the org name at creation (partial unique index on `organization.slug`;
+  existing rows backfilled). It is derived, not user-editable in this slice.
+- `GET /auth/sso/discover?slug=<slug>` resolves the slug to its org's enabled
+  SSO connection and returns only what the start flow needs (`organizationId`,
+  `connectionId`, `protocol`, connection `displayName`). It never returns the
+  org name or other org metadata.
+- Slug lookup is explicit user input, so it does not reopen the deliberate
+  email -> org-connection enumeration protection
+  (`test_discover_sso_ignores_org_connections_without_explicit_org_context`
+  stays green; there is still no email-domain discovery of org connections).
+
+Enumeration protection on the slug channel: a nonexistent slug, an org with no
+SSO, and an org whose SSO is disabled all return the identical generic response
+(`enabled: false`, `reason: "not_available"`, no ids), so a caller cannot cycle
+slugs to learn which organizations exist or which have SSO configured. Only a
+slug that resolves to an actually-enabled connection returns the ids needed to
+start. The client surfaces one generic message ("check the sign-in link your
+admin shared") for every non-enabled outcome.
+
 ## Surface UX
 
 Web signed out:
@@ -122,6 +183,8 @@ Web signed out:
 - Shows `Continue with GitHub` as the primary provider action.
 - Shows `Continue with Google` as the secondary visible provider action.
 - Shows web beta copy before sign-in.
+- Shows a `Sign in with SSO` link to the org-slug login page (see Organization
+  SSO Sign-In), except when the deployment is itself SSO-gated.
 - Does not currently show Apple or email/password sign-in on the web auth page.
 - If readiness is missing, the existing Connect GitHub gate is shown.
 - If web beta access is denied, shows a beta-only rejection state with Desktop
@@ -137,6 +200,9 @@ Mobile signed out:
 Desktop:
 
 - Keeps GitHub as the primary sign-in path.
+- Cold login also offers a `Sign in with SSO` affordance that asks for the org
+  workspace slug and drives the existing native SSO flow (see Organization SSO
+  Sign-In).
 - Account settings expose `Set password` / `Change password` for authenticated
   users.
 - Organization join deep links may arrive before Desktop is authenticated.

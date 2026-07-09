@@ -1,5 +1,6 @@
 import { KeyRound } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import { type AuthProviderName } from "@proliferate/cloud-sdk";
 import {
@@ -14,6 +15,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 
 import { webEnv } from "../../../config/env";
+import { routes } from "../../../config/routes";
 import { WEB_AUTH_COPY } from "../../../copy/auth/web-auth-copy";
 import { useWebDeploymentSsoDiscovery } from "../../../hooks/auth/derived/use-web-deployment-sso-discovery";
 import {
@@ -162,6 +164,14 @@ export function AuthScreen() {
       footer={<span className="block text-faint">{AUTH_SIGN_IN_COPY.footer}</span>}
       credentialForm={credentialForm}
       providers={providerActions}
+      note={deploymentSso || deploymentSsoDiscovery.isLoading ? null : (
+        <Link
+          to={routes.ssoLogin}
+          className="underline underline-offset-4 hover:text-foreground"
+        >
+          Sign in with SSO
+        </Link>
+      )}
       error={providerError ?? (bootstrapUnreachable ? localApiUnreachableNotice() : null)}
       devAccess={webEnv.devAccessTokenLogin ? (
         <div className="mt-2 border-t border-border pt-4">

@@ -28,7 +28,10 @@ from proliferate.db.store.organization_records import (
     membership_record,
     organization_record,
 )
-from proliferate.db.store.organizations import acquire_organization_membership_lock
+from proliferate.db.store.organizations import (
+    acquire_organization_membership_lock,
+    allocate_organization_slug,
+)
 from proliferate.utils.time import utcnow
 
 
@@ -66,6 +69,7 @@ async def create_instance_organization(
     now = utcnow()
     organization = Organization(
         name=name,
+        slug=await allocate_organization_slug(db, name),
         logo_domain=logo_domain,
         logo_image=None,
         is_instance=True,

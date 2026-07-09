@@ -35,6 +35,7 @@ async def discover_sso_endpoint(
     email: str | None = None,
     organization_id: str | None = Query(default=None, alias="organizationId"),
     connection_id: str | None = Query(default=None, alias="connectionId"),
+    slug: str | None = Query(default=None),
     db: AsyncSession = Depends(get_async_session),
 ) -> SsoDiscoveryResponse:
     discovery = await discover_sso(
@@ -42,6 +43,7 @@ async def discover_sso_endpoint(
         email=email,
         organization_id=_optional_uuid(organization_id, field="organizationId"),
         connection_id=_optional_uuid(connection_id, field="connectionId"),
+        slug=slug,
     )
     return SsoDiscoveryResponse(
         enabled=discovery.enabled,
