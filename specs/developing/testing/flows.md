@@ -42,7 +42,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | --- | --- | --- |
 | Local workspace create | 3 | — |
 | Worktree workspace create — locally AND inside a cloud sandbox | 3 | tests/release/src/scenarios/t3-wt-1.ts (T3-WT-1; local lane green, sandbox lane blocked on current_product_user) |
-| Cloud workspace create: request path + UI state up to the provisioning seam | 2 | — |
+| Cloud workspace create: request path + UI state up to the provisioning seam | 2 | tests/intent/specs/cloud-workspace.spec.ts (T2-WS-1; request-path seam — happy path past the repo-environment lookup needs a GitHub App fixture, named in the spec header) |
 | Add-Repo flow entry: local/cloud branches render + desktop-web fallback limits (no native picker outside Tauri) | 2 | tests/intent/specs/workspace-entry.spec.ts |
 | New user cold path: GitHub App authorization triggers first-ever sandbox provisioned from zero, within time budget | 3 | tests/release/src/scenarios/t3-prov-1.ts (T3-PROV-1; REAL trigger — seeds the App-auth callback's outcome via github_app_seed.py, real user token + real installation token, then runs the real post-callback body → real E2B sandbox; asserts positive AND negative trigger contract; fallback seam when seed creds absent) |
 | Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; blocked on current_product_user — no fallback seam for this one, it's specifically the front-door path) |
@@ -66,7 +66,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Secrets CRUD in UI: org, personal, file secrets | 2 | — |
+| Secrets CRUD in UI: org, personal, file secrets | 2 | tests/intent/specs/secrets.spec.ts (T2-SEC-1) |
 | Org secret set → materializes in a new cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (T3-SEC-MAT-1; blocked on current_product_user — no local-lane variant exists in the contract) |
 | Personal secret set → materializes in a new cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario, blocked) |
 | File secret set → lands at the right path in the sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario, blocked) |
