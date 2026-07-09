@@ -335,6 +335,12 @@ class UsageSegment(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(index=True)
     billing_subject_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    # Organization context for enforcement/attribution. ``billing_subject_id``
+    # stays the personal subject that pays (invoicing unchanged); this column
+    # records which org the segment belongs to (owner's current membership, or
+    # None for a user with no org) so org-scoped compute budget limits can be
+    # evaluated against org-wide and per-user window usage.
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     runtime_environment_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
     sandbox_id: Mapped[uuid.UUID] = mapped_column(index=True)

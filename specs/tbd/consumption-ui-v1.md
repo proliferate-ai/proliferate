@@ -13,8 +13,10 @@ over time, per user, or set caps. This spec adds that without touching the engin
 Two fully distinct meters. Keep them distinct.
 
 **Compute (seconds).** E2B webhooks open/close `usage_segment` rows
-(`server/proliferate/db/models/billing.py:329-351`: `user_id`, `billing_subject_id`,
-`sandbox_id`, `started_at`, `ended_at`, `is_billable`). A 15-min accounting pass drains
+(`server/proliferate/db/models/billing.py`: `user_id`, `billing_subject_id`, `organization_id`,
+`sandbox_id`, `started_at`, `ended_at`, `is_billable`). `billing_subject_id` is who pays (the
+owner's personal subject); `organization_id` is the enforcement/attribution scope (§4.2). A
+15-min accounting pass drains
 `billing_grant.remaining_seconds`; overage exports to a Stripe meter. Enforcement that is LIVE:
 the reconciler (`server/proliferate/server/billing/reconciler.py:271-365`) pauses open segments
 when `active_spend_hold`. **`authorize_sandbox_start` in
@@ -167,21 +169,33 @@ one import interval; that matches compute's 15-min reconciler lag and is accepta
 
 ### 4.2 Compute — via the live reconciler
 
-In `_enforce_or_reconcile_segment` (`reconciler.py:271-365`), alongside the existing
+In `_enforce_or_reconcile_segment` (`reconciler.py`), alongside the existing
 `active_spend_hold` check: load the org's enabled compute limits once per pass, compute window
 usage for the segment's `user_id` (and org-wide), and pause when over cap, closing the segment
 with the existing `USAGE_SEGMENT_CLOSED_BY_QUOTA_ENFORCEMENT` and recording a
 `BillingDecisionEvent` with a new decision type `user_limit_pause` (or `org_limit_pause`).
 Only when `CLOUD_BILLING_MODE=enforce`, same as today's behavior.
 
-### 4.3 Compute start-side (best effort)
+**Attribution (fixed — the org-subject segment attribution gap).** `usage_segment` carries an
+`organization_id` column (owner's current membership, or `None` for an org-less owner), stamped
+at segment-open time (`billing_runtime_usage.resolve_organization_id_for_user`). Enforcement
+resolves the org directly from `segment.organization_id` and sums window usage by
+`organization_id` (`billing.compute_usage_seconds_in_window_for_org`) — so org usage aggregates
+across every member regardless of who each segment is invoiced to. This is deliberately separate
+from `billing_subject_id`, which stays the workspace owner's **personal** subject: who pays is
+unchanged (org-owned workspaces are NOT invoiced to the org). Before this fix, segments were
+attributed only to the personal subject and the enforcement path resolved `organization_id=None`,
+so admin-configured compute caps saved in the UI and silently never fired.
 
-`authorize_sandbox_start` is orphaned. During implementation, grep for the real cloud-sandbox
-start/resume chokepoint (start from `server/proliferate/server/cloud/cloud_sandboxes/service.py`
-and whatever the managed-sandbox stack calls before provisioning/resume). If there is a natural
-seam, add the limit check there (blocked → the same structured error the UI can surface). If no
-clean seam exists, ship reconciler-only enforcement and record the gap at the top of
-`budget_limits.py` as a TODO comment — do NOT invent a new call chain for this.
+### 4.3 Compute start-side (live)
+
+`authorize_sandbox_start` stays orphaned (dead since #823 — do not wire it up). The live
+start/resume gate is `authorization.assert_cloud_sandbox_resume_allowed`, called first in
+`connect_ready_sandbox`. It blocks a wake on an active spend hold or an over-cap compute budget,
+raising a structured 402 (`CloudSandboxResumeBlockedError`) the UI can surface. It resolves the
+owner's org via membership and sums usage by `organization_id`
+(`compute_usage_seconds_in_window_for_org`), mirroring the reconciler's
+`_resolve_compute_limit_pause`.
 
 ## 5. SDK
 
