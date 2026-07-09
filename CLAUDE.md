@@ -32,6 +32,9 @@ there and apply to you.
   (Rust tests hardcode catalog values); `catalog.json` is `include_str!`'d so
   the runtime needs a rebuild.
 - Prefer exercising the change in the running app over tests alone.
+- Adding a test? `specs/developing/testing/README.md` is the standard — which
+  tier owns what, and "Writing a new test" for the mechanics of a tier-2 intent
+  spec (`tests/intent/`) or tier-3 live scenario (`tests/release/`).
 
 ## Logging & errors
 

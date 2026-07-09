@@ -200,11 +200,88 @@ tier 3 stays O(1) per lane, not O(features).
 
 ---
 
+## Writing a new test (practical guide)
+
+The tiers above say *what* a test is. This says *how* to add one so it matches
+the harness that already exists and lands in the right gate.
+
+### Tier 2 — a new mocked-intent spec
+
+Tier 2 lives entirely in `tests/intent/`. It boots the **real server + real
+desktop web build** (`apps/desktop` in web-port mode) against a seeded
+Postgres and drives a browser with Playwright. Everything across a network —
+sandbox provider, LLM, IdP, email, Slack — is faked or absent; a flow that
+genuinely needs a real agent or sandbox is tier 3, not tier 2.
+
+- **One spec per flow.** Add `tests/intent/specs/<flow>.spec.ts` (billing specs
+  nest under `specs/billing/`). Copy the shape of an existing sibling —
+  `auth.spec.ts` and `login-methods.spec.ts` are the smallest, cleanest
+  models. Open the file with a comment naming its scenario id and what it owns.
+- **Boot is automatic.** `stack/boot.ts` (via `stack/global-setup.ts`) boots
+  the stack once per run and publishes `TIER2_INTENT_*` env vars to every
+  worker; you never boot it yourself. The stack runs `SINGLE_ORG_MODE=true`
+  with GitHub OAuth env unset (password + first-run claim only).
+- **Seed through the product's own API, not the DB.** Reuse the helpers in
+  `stack/seed.ts` (`ensureInstanceClaimed`, `passwordLogin`, `inviteMember`,
+  `registerFreshMember`, `getOwnOrganization`, …). Add new helpers there rather
+  than inlining `fetch` in specs. **Raw SQL is the exception, not the pattern:**
+  only for state the product exposes no API for (fast-forwarding an
+  invitation's `expires_at`, seeding a connection row discover reads but never
+  round-trips) — always via `pg` against `databaseUrl()`, and clean it up so it
+  can't leak into sibling specs sharing the profile DB.
+- **Assert to the seam, not past it.** For sandbox/agent-adjacent flows, assert
+  "request accepted, row created, delivery attempted, UI entered pending" —
+  never sandbox readiness or run completion. Real-provider round-trips
+  (Google/GitHub OAuth, live IdP) are tier 3; tier 2 asserts the *seam that
+  decides* which flow fires (discovery answer, availability probe, redirect
+  kicked off).
+- **Naming:** scenario ids are `T2-<AREA>-<n>` (e.g. `T2-AUTH-5`). Define the
+  scenario in `scenarios.md`, then register the flow's row in `flows.md`
+  pointing at the spec file — **in the same PR** (the PR obligation and the
+  `flows.md` completeness audit both enforce this).
+- **Run it locally:** `pnpm -C tests/intent test` (or a single file, e.g.
+  `pnpm -C tests/intent exec playwright test specs/<flow>.spec.ts`).
+  `TIER2_INTENT_SKIP_RUNTIME=1` skips building the Rust runtime (nothing in
+  scope reads through it); `TIER2_INTENT_PROFILE=<name>` boots on an isolated
+  profile so parallel worktrees don't collide; `TIER2_INTENT_VERBOSE=1` streams
+  the server/vite logs.
+
+### Tier 3 — a new live scenario
+
+Tier 3 lives in `tests/release/` as **one runner CLI with lane flags**, not a
+pile of independent test files. It builds/cache-resolves the real E2B template,
+runs the real AnyHarness binary, and drives real agents on cheap models.
+
+- **Extend the existing smoke; do not add a new boot-the-world test.** Tier 3
+  stays O(1) per lane, not O(features) — a per-feature tier-3 test is the smell
+  that a tier-1/2 seam test is missing. Add scenarios under
+  `tests/release/src/scenarios/` reusing the shared fixtures
+  (`src/fixtures/`, the T3-FIXTURE identities/lanes) rather than reimplementing
+  auth or provisioning.
+- **Assert outcomes, never transcripts.** "Run reached `completed`, file
+  exists, emit validated against schema" — never "the agent said X".
+- **No credential ever lives in a scenario.** Every key the runner needs is
+  inventoried in `specs/developing/reference/env-vars.yaml`; the runner
+  fails fast with a named-variable error when one is missing.
+- **Run it locally** — this is a first-class path, not a CI afterthought:
+  `make release-e2e LANE=... DESKTOP=web AGENTS=...`, pointed at staging (the
+  default, same publicly reachable API the sandboxes call back into) or a local
+  stack plus tunnel. A red CI run must reproduce by copying its lane flags into
+  the local command.
+- **Naming/registration:** scenario ids are `T3-<AREA>-<n>`; define in
+  `scenarios.md` and register the `flows.md` row (tier 3) in the same PR.
+
+Deciding *which* tier a change belongs in is the "Deciding where a change's
+tests go" checklist above; this section is only about mechanics once you know
+the tier.
+
+---
+
 ## What gates what (current CI mapping)
 
 | Gate | Jobs |
 | --- | --- |
-| Merge (every PR) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-frontend-package vitest, desktop vitest, tier-2 intent suite |
+| Merge (every PR) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-frontend-package vitest, desktop vitest, tier-2 intent suite (`intent-tests` + `intent-billing` in `.github/workflows/intent-tests.yml`) |
 | Staging → production promotion | Tier 3 runner per lane + tier 4 upgrade scenario, against staging. Red blocks promotion and files an issue. **Flake-tolerant:** a green re-run unblocks; repeated red on the same scenario is a real failure, not a flake |
 | Nightly | Tier 3 lanes (incl. native-shell smoke) against whatever is on staging; failures file issues, never block merges |
 
@@ -226,7 +303,9 @@ developed and debugged locally against staging:
   local command against the same staging deploy.
 
 Migration exceptions, named per house rule: desktop vitest (443 files) is not
-yet wired into the merge gate; the tier-2 intent suite and the tier-3/4 runner
-do not exist yet. `scripts/validate-agent-catalog.mjs` remains a hand-kept
+yet wired into the merge gate. (The tier-2 intent suite and the tier-3/4 runner
+now exist — `tests/intent/` and `tests/release/` respectively — and the "how to
+add one" mechanics are in "Writing a new test" above.)
+`scripts/validate-agent-catalog.mjs` remains a hand-kept
 mirror of the Rust catalog validator until the contract-fixture pattern
 absorbs it.
