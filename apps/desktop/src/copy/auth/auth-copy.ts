@@ -52,6 +52,9 @@ export const CONNECT_SERVER_LABELS = {
   connect: "Connect",
   connecting: "Connecting…",
   useDifferentAddress: "Use a different address",
+  // Shown when the connect flow is opened from an invite link issued by a
+  // different server than the one this desktop is pointed at.
+  inviteContext: "This invitation is hosted on a different Proliferate server.",
 } as const;
 
 export const AUTH_ACCOUNT_LABELS = {

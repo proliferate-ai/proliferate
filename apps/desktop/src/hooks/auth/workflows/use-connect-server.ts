@@ -33,6 +33,13 @@ export interface UseConnectServerResult {
   pendingMeta: ServerMeta | null;
   pendingHost: string | null;
   open: () => void;
+  /**
+   * Open the flow already pointed at a supplied server URL — runs the same
+   * `/meta` validation as manual entry, but starting from a caller-provided
+   * address (e.g. an invite link's embedded origin) instead of typed input.
+   * The trust-confirm step is still mandatory; nothing switches silently.
+   */
+  openForUrl: (serverUrl: string) => Promise<void>;
   close: () => void;
   submitUrl: () => Promise<void>;
   confirmConnect: () => Promise<void>;
@@ -82,11 +89,12 @@ export function useConnectServer(): UseConnectServerResult {
     setError(null);
   }, []);
 
-  const submitUrl = useCallback(async () => {
+  const runCheck = useCallback(async (rawUrl: string) => {
     if (!available) return;
-    const normalized = normalizeServerUrl(url);
+    const normalized = normalizeServerUrl(rawUrl);
     if (!normalized.ok) {
       setError(normalized.error);
+      setStep("entry");
       return;
     }
 
@@ -103,7 +111,23 @@ export function useConnectServer(): UseConnectServerResult {
     setPendingHost(normalized.host);
     setPendingMeta(result.meta);
     setStep("trust-confirm");
-  }, [available, url]);
+  }, [available]);
+
+  const submitUrl = useCallback(async () => {
+    await runCheck(url);
+  }, [runCheck, url]);
+
+  const openForUrl = useCallback(async (serverUrl: string) => {
+    if (!available) return;
+    setUrl(serverUrl);
+    setError(null);
+    setPendingMeta(null);
+    setPendingHost(null);
+    setPendingUrl(null);
+    // Falls into "entry" on any validation/reachability failure, so the user
+    // can retype the address rather than being stranded on a blank dialog.
+    await runCheck(serverUrl);
+  }, [available, runCheck]);
 
   const confirmConnect = useCallback(async () => {
     if (!available || !pendingUrl) return;
@@ -141,6 +165,7 @@ export function useConnectServer(): UseConnectServerResult {
     pendingMeta,
     pendingHost,
     open,
+    openForUrl,
     close,
     submitUrl,
     confirmConnect,

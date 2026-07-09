@@ -6,6 +6,12 @@ import type { UseConnectServerResult } from "@/hooks/auth/workflows/use-connect-
 
 interface ConnectServerDialogProps {
   controller: UseConnectServerResult;
+  /**
+   * Optional context line rendered above the flow body — used when the dialog
+   * is opened from an invite link so the user understands why they're being
+   * asked to connect to a server (see the join-invitation flow).
+   */
+  context?: string;
 }
 
 /**
@@ -14,7 +20,7 @@ interface ConnectServerDialogProps {
  * (`set_app_config` + relaunch). Presentational only — all flow logic lives
  * in `useConnectServer`.
  */
-export function ConnectServerDialog({ controller }: ConnectServerDialogProps) {
+export function ConnectServerDialog({ controller, context }: ConnectServerDialogProps) {
   const {
     step,
     url,
@@ -81,6 +87,9 @@ export function ConnectServerDialog({ controller }: ConnectServerDialogProps) {
             void submitUrl();
           }}
         >
+          {context ? (
+            <p className="text-sm text-foreground">{context}</p>
+          ) : null}
           <p className="text-sm text-muted-foreground">
             {CONNECT_SERVER_LABELS.entryDescription}
           </p>
@@ -98,6 +107,9 @@ export function ConnectServerDialog({ controller }: ConnectServerDialogProps) {
         </form>
       ) : (
         <div className="grid gap-2">
+          {context ? (
+            <p className="text-sm text-muted-foreground">{context}</p>
+          ) : null}
           <p className="text-sm text-foreground">
             {pendingHost ? CONNECT_SERVER_LABELS.trustDescription(pendingHost) : null}
           </p>
