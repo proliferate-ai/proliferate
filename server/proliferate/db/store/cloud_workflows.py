@@ -77,6 +77,7 @@ class WorkflowRunRecord:
     delivered_at: datetime | None
     started_at: datetime | None
     finished_at: datetime | None
+    stopped_by_user_id: UUID | None = None
 
 
 def _workflow_record(row: Workflow) -> WorkflowRecord:
@@ -134,6 +135,7 @@ def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
         delivered_at=row.delivered_at,
         started_at=row.started_at,
         finished_at=row.finished_at,
+        stopped_by_user_id=row.stopped_by_user_id,
     )
 
 
@@ -372,6 +374,7 @@ async def update_run(
     delivered_at: datetime | None = None,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
+    stopped_by_user_id: UUID | None = None,
     clear_error: bool = False,
 ) -> WorkflowRunRecord | None:
     """Apply a run update. Only non-None arguments are written.
@@ -412,6 +415,8 @@ async def update_run(
         row.started_at = started_at
     if finished_at is not None:
         row.finished_at = finished_at
+    if stopped_by_user_id is not None:
+        row.stopped_by_user_id = stopped_by_user_id
     row.updated_at = utcnow()
     await db.flush()
     return _run_record(row)
@@ -441,6 +446,75 @@ async def has_non_terminal_run_for_trigger(db: AsyncSession, *, trigger_id: UUID
         )
     ).scalar_one_or_none()
     return found is not None
+
+
+def _plan_bound_session_ids(resolved_plan_json: dict[str, object] | None) -> set[str]:
+    """The session ids a resolved plan binds (B8: `sessions[slot].bind_session_id`)."""
+
+    sessions = (resolved_plan_json or {}).get("sessions")
+    if not isinstance(sessions, dict):
+        return set()
+    bound: set[str] = set()
+    for slot in sessions.values():
+        if isinstance(slot, dict):
+            bind_id = slot.get("bind_session_id")
+            if isinstance(bind_id, str) and bind_id:
+                bound.add(bind_id)
+    return bound
+
+
+async def live_run_holding_session(db: AsyncSession, *, session_id: str) -> UUID | None:
+    """The non-terminal ("live") run holding `session_id`, if any (B8 / E8).
+
+    A run holds a session when its resolved plan binds it (`bind_session_id`) or
+    it created/owns it (`anyharness_session_ids`, reported by the runtime). The
+    run row is the durable lock (the runtime's owned-session registry is only its
+    cache), so this is the authoritative server-side held check. The non-terminal
+    run set is small, so an in-Python scan of nested plan slots is fine.
+    """
+
+    rows = (
+        await db.execute(
+            select(
+                WorkflowRun.id,
+                WorkflowRun.resolved_plan_json,
+                WorkflowRun.anyharness_session_ids,
+            ).where(WorkflowRun.status.notin_(tuple(WORKFLOW_RUN_TERMINAL_STATUSES)))
+        )
+    ).all()
+    for run_id, resolved_plan_json, anyharness_session_ids in rows:
+        if session_id in (anyharness_session_ids or []):
+            return run_id
+        if session_id in _plan_bound_session_ids(resolved_plan_json):
+            return run_id
+    return None
+
+
+async def session_foreign_workspace(
+    db: AsyncSession, *, session_id: str, target_workspace_id: str
+) -> str | None:
+    """A workspace `session_id` is known to belong to that is NOT `target_workspace_id`.
+
+    The control plane has no session mirror; its only record of a session's home
+    workspace is the run rows that referenced it (`anyharness_session_ids`, which
+    the runtime reports per run). B8 requires a bound session to belong to the
+    target workspace — so if history places it in a different workspace, reject.
+    A session with no run history returns `None`; the runtime bind boundary
+    (session must exist in the target sandbox) is the authoritative backstop.
+    """
+
+    rows = (
+        await db.execute(
+            select(WorkflowRun.anyharness_workspace_id).where(
+                WorkflowRun.anyharness_session_ids.contains([session_id]),
+                WorkflowRun.anyharness_workspace_id.isnot(None),
+            )
+        )
+    ).all()
+    for (workspace_id,) in rows:
+        if workspace_id and workspace_id != target_workspace_id:
+            return workspace_id
+    return None
 
 
 async def earliest_non_terminal_run_id_for_trigger(

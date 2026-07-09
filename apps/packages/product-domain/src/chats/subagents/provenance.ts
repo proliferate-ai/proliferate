@@ -122,6 +122,38 @@ export function formatReviewFeedbackQueueText(args: {
   return "Review feedback ready";
 }
 
+/**
+ * Workflow-injected prompt provenance (C10 / E9). Stamped by the workflow
+ * executor when it injects a step's prompt into a session; the transcript renders
+ * the machine-driven bubble ("Workflow · <label>") from this, exactly as
+ * subagent-wake provenance drives its bubble. The shape mirrors the runtime
+ * `PromptProvenance::Workflow` contract variant (`type: "workflow"`).
+ *
+ * Typed locally rather than via `Extract<PromptProvenance, …>` so it compiles
+ * ahead of the `@anyharness/sdk` regeneration that adds the `workflow` variant;
+ * once regenerated the two shapes coincide.
+ */
+export interface WorkflowPromptProvenance {
+  type: "workflow";
+  runId: string;
+  stepKey: string;
+  kind: string;
+  label?: string | null;
+}
+
+export function isWorkflowProvenance(
+  provenance: PromptProvenance | null | undefined,
+): provenance is PromptProvenance & WorkflowPromptProvenance {
+  return (provenance as { type?: string } | null | undefined)?.type === "workflow";
+}
+
+export function formatWorkflowPromptTranscriptText(
+  provenance: WorkflowPromptProvenance,
+): string {
+  const label = provenance.label?.trim();
+  return label && label.length > 0 ? `Workflow · ${label}` : "Workflow step";
+}
+
 export function isAgentSessionProvenance(
   provenance: PromptProvenance | null | undefined,
 ): provenance is Extract<PromptProvenance, { type: "agentSession" }> {

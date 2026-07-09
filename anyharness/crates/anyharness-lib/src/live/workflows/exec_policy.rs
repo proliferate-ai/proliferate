@@ -30,7 +30,7 @@
 //! re-park on a historical auto-approval and wait for a resolution that never
 //! comes, so the audit trail is the structured log line, not a ledger event.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 
 use agent_client_protocol as acp;
@@ -67,17 +67,32 @@ pub fn bypass_mode_for_kind(agent_kind: &str) -> Option<&'static str> {
     }
 }
 
-/// The set of session ids the workflow executor opened. Shared behind `Arc`
-/// between the executor (which marks ids as it opens/rehydrates sessions) and
-/// the inbound permission advisor (which auto-approves for them).
+/// The registry of sessions a workflow run currently owns, keyed by session id
+/// to the owning run id. Shared behind `Arc` between the executor (which marks
+/// ids as it opens/rehydrates/binds sessions), the inbound permission advisor
+/// (which auto-approves for owned sessions — the always-bypass net), and the
+/// session runtime (which rejects mutating verbs on a held session — C13 L17
+/// lockout). The run row is the durable lock (contract §2.3); this registry is
+/// an in-memory cache of it, hydrated on boot from non-terminal runs' session
+/// maps and re-armed on crash-resume (`hydrate_from_run`).
 ///
-/// In-memory and grow-only for the runtime's lifetime. Entries are workflow
-/// session UUIDs (never reused), so a stale entry can never mis-classify a
-/// later session; the executor re-marks its sessions on crash-resume
-/// (`hydrate_from_run`), so the net survives a restart.
+/// Ownership + hold are the SAME condition (E8 "block everything"): a session
+/// appears here iff a non-terminal run owns it. **Release** is derived from the
+/// run going terminal (C13 / D15 / addendum item 3–4): [`release_run`] drops
+/// every entry for the run — which simultaneously (a) unmarks the always-bypass
+/// net (item 3: a demoted interactive session must stop being auto-approved) and
+/// (b) unlocks the session (C13: held-ness is derived, no per-session write).
+/// No session is ever closed at release (item 4: keep alive, demote).
+///
+/// A `released` set records run ids that have gone terminal so a late
+/// `hydrate_from_run` (crash-resume racing a terminal write) can never resurrect
+/// a released id (addendum item 3).
 #[derive(Default)]
 pub struct WorkflowOwnedSessions {
-    ids: RwLock<HashSet<String>>,
+    /// session_id -> owning run_id.
+    ids: RwLock<HashMap<String, String>>,
+    /// run ids that reached terminal; [`mark`] refuses to (re-)arm these.
+    released: RwLock<HashSet<String>>,
 }
 
 impl WorkflowOwnedSessions {
@@ -85,14 +100,49 @@ impl WorkflowOwnedSessions {
         Self::default()
     }
 
-    /// Mark a session as workflow-owned (idempotent).
-    pub fn mark(&self, session_id: &str) {
-        self.ids.write().unwrap().insert(session_id.to_string());
+    /// Mark a session as owned by `run_id` (idempotent). A no-op once the run has
+    /// been released (terminal) so re-hydration can never resurrect a demoted
+    /// session (addendum item 3).
+    pub fn mark(&self, session_id: &str, run_id: &str) {
+        if self.released.read().unwrap().contains(run_id) {
+            return;
+        }
+        self.ids
+            .write()
+            .unwrap()
+            .insert(session_id.to_string(), run_id.to_string());
     }
 
-    /// Is this session workflow-owned?
+    /// Is this session workflow-owned? (The always-bypass advisor's question.)
     pub fn is_owned(&self, session_id: &str) -> bool {
-        self.ids.read().unwrap().contains(session_id)
+        self.ids.read().unwrap().contains_key(session_id)
+    }
+
+    /// The run holding this session, if any — the lockout guard's question
+    /// (C13). `Some(run_id)` means every mutating verb is blocked and routes to
+    /// the take-over modal (E8).
+    pub fn held_run(&self, session_id: &str) -> Option<String> {
+        self.ids.read().unwrap().get(session_id).cloned()
+    }
+
+    /// Release every session the run owned (terminal / take-over). Derived
+    /// unlock (C13) + bypass unmark (item 3): drops the entries and records the
+    /// run as released so a racing re-hydration can't re-arm them. Returns the
+    /// released session ids so the caller can restore their worker gateway
+    /// binding (addendum item 2) and demote them (item 4). Never closes a
+    /// session.
+    pub fn release_run(&self, run_id: &str) -> Vec<String> {
+        self.released.write().unwrap().insert(run_id.to_string());
+        let mut ids = self.ids.write().unwrap();
+        let released: Vec<String> = ids
+            .iter()
+            .filter(|(_, owner)| owner.as_str() == run_id)
+            .map(|(session_id, _)| session_id.clone())
+            .collect();
+        for session_id in &released {
+            ids.remove(session_id);
+        }
+        released
     }
 }
 
@@ -177,10 +227,41 @@ mod tests {
     fn owned_registry_marks_and_reports_membership() {
         let owned = WorkflowOwnedSessions::new();
         assert!(!owned.is_owned("s1"));
-        owned.mark("s1");
-        owned.mark("s1"); // idempotent
+        owned.mark("s1", "run-1");
+        owned.mark("s1", "run-1"); // idempotent
         assert!(owned.is_owned("s1"));
+        assert_eq!(owned.held_run("s1").as_deref(), Some("run-1"));
         assert!(!owned.is_owned("s2"));
+        assert!(owned.held_run("s2").is_none());
+    }
+
+    #[test]
+    fn release_run_unmarks_every_session_and_returns_them() {
+        let owned = WorkflowOwnedSessions::new();
+        owned.mark("s1", "run-1");
+        owned.mark("s2", "run-1");
+        owned.mark("s3", "run-2");
+        let mut released = owned.release_run("run-1");
+        released.sort();
+        assert_eq!(released, vec!["s1".to_string(), "s2".to_string()]);
+        // run-1's sessions are unmarked (bypass off + unlocked); run-2 untouched.
+        assert!(!owned.is_owned("s1"));
+        assert!(owned.held_run("s1").is_none());
+        assert!(!owned.is_owned("s2"));
+        assert!(owned.is_owned("s3"));
+        assert_eq!(owned.held_run("s3").as_deref(), Some("run-2"));
+    }
+
+    #[test]
+    fn mark_after_release_does_not_resurrect_a_demoted_session() {
+        // addendum item 3: a crash-resume re-hydration racing a terminal write
+        // must not re-arm a released run's sessions.
+        let owned = WorkflowOwnedSessions::new();
+        owned.mark("s1", "run-1");
+        owned.release_run("run-1");
+        owned.mark("s1", "run-1"); // late hydrate_from_run
+        assert!(!owned.is_owned("s1"));
+        assert!(owned.held_run("s1").is_none());
     }
 
     // --- auto_approve_option_id -----------------------------------------
@@ -237,7 +318,7 @@ mod tests {
     #[test]
     fn workflow_owned_session_is_auto_approved_without_consulting_inner() {
         let owned = Arc::new(WorkflowOwnedSessions::new());
-        owned.mark("wf-sess");
+        owned.mark("wf-sess", "run-1");
         let inner = Arc::new(SpyAdvisor {
             consulted: Mutex::new(false),
         });

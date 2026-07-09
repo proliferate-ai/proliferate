@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyharness_contract::v1::{
-    ContentPart, Goal, GoalArmState, GoalSourceKind, GoalStatus, PromptInputBlock, SessionEvent,
-    SessionEventEnvelope, SetSessionGoalRequest,
+    ContentPart, Goal, GoalArmState, GoalSourceKind, GoalStatus, SessionEvent, SessionEventEnvelope,
+    SetSessionGoalRequest,
 };
 use serde_json::{json, Value};
 use tokio::sync::broadcast;
@@ -22,6 +22,7 @@ use super::gateway::{fire_run_ping, workflow_gateway_server, RunPingSink, Workfl
 use crate::domains::goals::runtime::{GoalOpError, GoalRuntime};
 use crate::domains::sessions::live_config::ACP_MODEL_COMPAT_CONFIG_ID;
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
+use crate::domains::sessions::prompt::provenance::PromptProvenance;
 use crate::domains::sessions::runtime::{SendPromptOutcome, SessionRuntime};
 use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
@@ -78,6 +79,25 @@ struct CurrentSession {
     session_id: String,
     #[allow(dead_code)]
     harness: String,
+}
+
+/// The step identity carried into a prompt injection so it can be stamped with
+/// `PromptProvenance::Workflow` and recorded in `workflow_session_injections`
+/// (C10 / E9).
+struct InjectionMeta {
+    step_key: String,
+    kind: String,
+    label: String,
+}
+
+impl InjectionMeta {
+    fn from_step(step: &PlanStep) -> Self {
+        Self {
+            step_key: step.key.clone(),
+            kind: step.kind_slug().to_string(),
+            label: step.label.clone(),
+        }
+    }
 }
 
 /// One executor per run. Sessions are slot-keyed (B7): `current` maps each
@@ -139,7 +159,7 @@ impl WorkflowStepExecutorImpl {
                 // Re-arm the always-bypass safety net for the resumed session
                 // (the registry is in-memory, so a restart would otherwise drop
                 // it).
-                self.deps.workflow_owned_sessions.mark(session_id);
+                self.deps.workflow_owned_sessions.mark(session_id, &self.run_id);
                 // Re-register the per-run gateway server too, so a relaunch of
                 // the resumed session (crash-resume) re-injects it (same
                 // in-memory registry, dropped on restart).
@@ -223,19 +243,47 @@ impl WorkflowStepExecutorImpl {
             .and_then(|spec| spec.bind_session_id.clone());
 
         let (session_id, session_harness) = if let Some(bind_id) = bind_session_id {
-            // Session binding (L29): load the pre-existing session. Owned by PR
-            // F; today `bind_session_id` is always absent, so this branch is a
-            // compiling path, not a live one.
+            // Session binding (L29 / B8): load the pre-existing (taken-over)
+            // session instead of creating one. It must exist and its harness must
+            // match the slot — otherwise the plan is malformed (the server
+            // validates this at StartRun, but the runtime re-checks: a plan that
+            // reached here with a mismatch is a hard error, never a silent
+            // wrong-harness launch).
             let session = self
                 .deps
                 .session_service
                 .get_session(&bind_id)
                 .map_err(|error| failed_msg("session_bind_failed", error.to_string()))?
                 .ok_or_else(|| failed_msg("session_bind_missing", bind_id.clone()))?;
-            // Register the per-run gateway MCP server for the bound session too,
-            // so a relaunch injects it (same in-memory registry as fresh).
+            // B8: harness must match the slot (hard plan error) and the session
+            // must not already be held by a DIFFERENT live run (hard bind
+            // rejection). Both are pure decisions, extracted to
+            // [`validate_bind_target`] so they are unit-testable without a live
+            // runtime.
+            let held_run = self.deps.workflow_owned_sessions.held_run(&bind_id);
+            validate_bind_target(
+                &bind_id,
+                &self.run_id,
+                &session.agent_kind,
+                &harness,
+                held_run.as_deref(),
+            )?;
+            // Mark ownership BEFORE the rebind relaunch so the always-bypass net
+            // + lockout are armed for the taken-over session immediately (C13).
+            self.deps
+                .workflow_owned_sessions
+                .mark(&bind_id, &self.run_id);
+            // Addendum item 2: rebind the bound session's gateway MCP binding.
+            // The per-run credential is injected only at LAUNCH; this session was
+            // launched with only the worker-token binding, so register the per-run
+            // gateway server and relaunch it so its integration calls run under
+            // the run's opt-in scope, not the owner's broad personal grant.
             if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
                 self.deps.workflow_gateway_sessions.set(&bind_id, server);
+                self.deps
+                    .session_runtime
+                    .relaunch_session_for_mcp_rebind(&bind_id)
+                    .await;
             }
             (bind_id, session.agent_kind)
         } else {
@@ -268,7 +316,7 @@ impl WorkflowStepExecutorImpl {
                 .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?;
             // Register the session as workflow-owned so the inbound permission
             // advisor auto-approves for it. Done before launch/first turn.
-            self.deps.workflow_owned_sessions.mark(&record.id);
+            self.deps.workflow_owned_sessions.mark(&record.id, &self.run_id);
             // Register the per-run gateway MCP server for this session so the
             // launch extension injects it (plan block wins over the worker
             // dotfile via the extension ordering + dedupe on
@@ -286,7 +334,7 @@ impl WorkflowStepExecutorImpl {
         };
         // Register the session as workflow-owned so the inbound permission
         // advisor auto-approves for it. Done before the first prompt/turn.
-        self.deps.workflow_owned_sessions.mark(&session_id);
+        self.deps.workflow_owned_sessions.mark(&session_id, &self.run_id);
         let _ = self
             .deps
             .workflow_service
@@ -301,17 +349,50 @@ impl WorkflowStepExecutorImpl {
         Ok(session_id)
     }
 
-    async fn send_prompt(&self, session_id: &str, text: &str) -> Result<Option<String>, StepOutcome> {
-        let blocks = vec![PromptInputBlock::Text {
-            text: text.to_string(),
-        }];
+    /// Inject a prompt into a workflow-owned session via the internal
+    /// provenance-carrying path (C10 / E9) — NOT the public `send_prompt` the
+    /// lockout guards (C13). The prompt is stamped `PromptProvenance::Workflow`
+    /// so the transcript renders the machine bubble from stored truth, and a
+    /// normalized `workflow_session_injections` row is written alongside (the
+    /// executor owns both step identity and the send).
+    async fn send_prompt(
+        &self,
+        session_id: &str,
+        text: &str,
+        meta: &InjectionMeta,
+    ) -> Result<Option<String>, StepOutcome> {
+        let label = if meta.label.trim().is_empty() {
+            None
+        } else {
+            Some(meta.label.clone())
+        };
+        let provenance = PromptProvenance::Workflow {
+            run_id: self.run_id.clone(),
+            step_key: meta.step_key.clone(),
+            step_kind: meta.kind.clone(),
+            label,
+        };
         match self
             .deps
             .session_runtime
-            .send_prompt(session_id, blocks, None)
+            .send_text_prompt_with_provenance(session_id, text.to_string(), provenance)
             .await
         {
-            Ok(SendPromptOutcome::Running { turn_id, .. }) => Ok(Some(turn_id)),
+            Ok(SendPromptOutcome::Running { turn_id, .. }) => {
+                // Stamp the injection index (contract §5.2). Best-effort: a failed
+                // index write must never fail the step (the wire provenance on the
+                // event payload is the source of truth for rendering).
+                let _ = self.deps.workflow_service.record_injection(
+                    session_id,
+                    &turn_id,
+                    &self.run_id,
+                    &meta.step_key,
+                    &meta.kind,
+                    &meta.label,
+                    text,
+                );
+                Ok(Some(turn_id))
+            }
             Ok(SendPromptOutcome::Queued { .. }) => Ok(None),
             Err(error) => Err(failed_msg("prompt_failed", format!("{error:?}"))),
         }
@@ -330,7 +411,7 @@ impl WorkflowStepExecutorImpl {
         Ok(handle.subscribe())
     }
 
-    async fn run_prompt(&self, slot: &str, agent: &AgentPromptStep) -> StepOutcome {
+    async fn run_prompt(&self, slot: &str, agent: &AgentPromptStep, meta: &InjectionMeta) -> StepOutcome {
         let session_id = match self.ensure_session(slot).await {
             Ok(id) => id,
             Err(outcome) => return outcome,
@@ -341,7 +422,7 @@ impl WorkflowStepExecutorImpl {
                 Ok(events) => events,
                 Err(outcome) => return outcome,
             };
-            let turn_id = match self.send_prompt(&session_id, &agent.prompt).await {
+            let turn_id = match self.send_prompt(&session_id, &agent.prompt, meta).await {
                 Ok(turn_id) => turn_id,
                 Err(outcome) => return outcome,
             };
@@ -366,7 +447,7 @@ impl WorkflowStepExecutorImpl {
                 let session_id = session_id.clone();
                 async move {
                 let mut events = self.subscribe(&session_id).await?;
-                let turn_id = self.send_prompt(&session_id, &prompt).await?;
+                let turn_id = self.send_prompt(&session_id, &prompt, meta).await?;
                 match await_turn_ended_collecting(&mut events, turn_id.as_deref(), TURN_BACKSTOP)
                     .await
                 {
@@ -380,7 +461,7 @@ impl WorkflowStepExecutorImpl {
         .await
     }
 
-    async fn run_goal(&self, slot: &str, agent: &AgentPromptStep, goal: &GoalSpec, step_index: usize) -> StepOutcome {
+    async fn run_goal(&self, slot: &str, agent: &AgentPromptStep, goal: &GoalSpec, step_index: usize, meta: &InjectionMeta) -> StepOutcome {
         let session_id = match self.ensure_session(slot).await {
             Ok(id) => id,
             Err(outcome) => return outcome,
@@ -413,7 +494,7 @@ impl WorkflowStepExecutorImpl {
                 Ok(events) => events,
                 Err(outcome) => return outcome,
             };
-            if let Err(outcome) = self.send_prompt(&session_id, &prompt).await {
+            if let Err(outcome) = self.send_prompt(&session_id, &prompt, meta).await {
                 return outcome;
             }
             match await_goal_terminal(&mut events, deadline, goal.on_blocked, &mut on_progress).await {
@@ -573,7 +654,11 @@ impl WorkflowStepExecutorImpl {
                 let _ = self
                     .deps
                     .session_runtime
-                    .set_live_session_config_option(&session_id, ACP_MODEL_COMPAT_CONFIG_ID, model)
+                    .set_live_session_config_option_unlocked(
+                        &session_id,
+                        ACP_MODEL_COMPAT_CONFIG_ID,
+                        model,
+                    )
                     .await;
             }
         }
@@ -593,7 +678,7 @@ impl WorkflowStepExecutorImpl {
     /// concrete errors, up to the plan's `max_attempts` (C12: sourced from the
     /// plan, no longer a hardcoded constant); the validated object becomes the
     /// step's entire output. Exhaustion fails `emit_invalid`.
-    async fn run_emit(&self, slot: &str, step: &AgentEmitStep, step_index: usize) -> StepOutcome {
+    async fn run_emit(&self, slot: &str, step: &AgentEmitStep, step_index: usize, meta: &InjectionMeta) -> StepOutcome {
         let session_id = match self.ensure_session(slot).await {
             Ok(id) => id,
             Err(outcome) => return outcome,
@@ -622,7 +707,7 @@ impl WorkflowStepExecutorImpl {
             async move {
                 // Subscribe BEFORE prompting so a fast TurnEnded is never missed.
                 let mut events = self.subscribe(&session_id).await?;
-                let turn_id = self.send_prompt(&session_id, &prompt).await?;
+                let turn_id = self.send_prompt(&session_id, &prompt, meta).await?;
                 match await_turn_ended(&mut events, turn_id.as_deref(), TURN_BACKSTOP).await {
                     TurnWait::Ended => {}
                     TurnWait::SessionClosed => return Err(failed("session_closed")),
@@ -686,13 +771,14 @@ fn evaluate_branch(step: &BranchStep) -> StepOutcome {
 impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
     async fn execute_step(&self, step: &PlanStep, ctx: &StepExecContext) -> StepOutcome {
         let slot = step.slot.as_str();
+        let meta = InjectionMeta::from_step(step);
         match &step.kind {
             StepKind::AgentConfig(cfg) => self.run_agent_config(slot, cfg).await,
             StepKind::AgentPrompt(agent) => match &agent.goal {
-                None => self.run_prompt(slot, agent).await,
-                Some(goal) => self.run_goal(slot, agent, goal, ctx.step_index).await,
+                None => self.run_prompt(slot, agent, &meta).await,
+                Some(goal) => self.run_goal(slot, agent, goal, ctx.step_index, &meta).await,
             },
-            StepKind::AgentEmit(emit) => self.run_emit(slot, emit, ctx.step_index).await,
+            StepKind::AgentEmit(emit) => self.run_emit(slot, emit, ctx.step_index, &meta).await,
             StepKind::ShellRun(shell) => self.run_shell(shell).await,
             StepKind::ScmOpenPr(pr) => self.run_scm(pr).await,
             StepKind::Notify(notify) => {
@@ -1246,6 +1332,43 @@ fn failed_msg(code: &str, message: impl Into<String>) -> StepOutcome {
     }
 }
 
+/// B8 bind-target validation (pure decision, so it is unit-testable without a
+/// live runtime). A bound session must:
+/// 1. match the slot's harness — otherwise the plan is malformed (hard error);
+/// 2. not already be held by a *different* live run — otherwise binding would
+///    silently transfer ownership (`mark` overwrites the owner entry, and the
+///    previous owner's `release_run` would then no longer drop it), leaking the
+///    lockout. Re-binding a session THIS run already holds is idempotent and OK.
+fn validate_bind_target(
+    bind_id: &str,
+    run_id: &str,
+    session_harness: &str,
+    slot_harness: &str,
+    held_run: Option<&str>,
+) -> Result<(), StepOutcome> {
+    if session_harness != slot_harness {
+        return Err(failed_msg(
+            "plan_malformed",
+            format!(
+                "bound session {bind_id} harness {session_harness} does not match slot harness \
+                 {slot_harness}"
+            ),
+        ));
+    }
+    if let Some(existing_run) = held_run {
+        if existing_run != run_id {
+            return Err(failed_msg(
+                "session_bind_held",
+                format!(
+                    "bound session {bind_id} is already held by workflow run {existing_run}; it \
+                     cannot be bound to run {run_id}"
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1307,6 +1430,53 @@ mod tests {
         assert!(invocation_present(&tools, &required("linear", "update_status")));
         assert!(!invocation_present(&tools, &required("slack", "post_message")));
         assert!(!invocation_present(&[], &required("linear", "update_status")));
+    }
+
+    // --- B8 bind-target validation ---
+
+    fn outcome_code(outcome: &StepOutcome) -> &str {
+        match outcome {
+            StepOutcome::Failed { code, .. } => code,
+            _ => panic!("expected Failed outcome"),
+        }
+    }
+
+    #[test]
+    fn bind_target_ok_when_harness_matches_and_not_held() {
+        assert!(validate_bind_target("sess-1", "run-a", "claude", "claude", None).is_ok());
+    }
+
+    #[test]
+    fn bind_target_rebinding_own_run_is_idempotent() {
+        // A session already held by THIS run may be re-bound (idempotent).
+        assert!(
+            validate_bind_target("sess-1", "run-a", "claude", "claude", Some("run-a")).is_ok()
+        );
+    }
+
+    #[test]
+    fn bind_target_harness_mismatch_is_hard_plan_error() {
+        let err = validate_bind_target("sess-1", "run-a", "codex", "claude", None)
+            .expect_err("harness mismatch must be a hard error");
+        assert_eq!(outcome_code(&err), "plan_malformed");
+    }
+
+    #[test]
+    fn bind_target_rejects_session_held_by_a_different_run() {
+        // The double-owner hole: without this guard, run-b would silently re-own a
+        // session run-a holds, and run-a's release would no longer drop it.
+        let err = validate_bind_target("sess-1", "run-b", "claude", "claude", Some("run-a"))
+            .expect_err("a session held by another live run cannot be bound");
+        assert_eq!(outcome_code(&err), "session_bind_held");
+    }
+
+    #[test]
+    fn bind_target_harness_mismatch_takes_precedence_over_held() {
+        // Even when also held elsewhere, a harness mismatch is the malformed-plan
+        // error (checked first).
+        let err = validate_bind_target("sess-1", "run-b", "codex", "claude", Some("run-a"))
+            .expect_err("mismatch must error");
+        assert_eq!(outcome_code(&err), "plan_malformed");
     }
 
     // --- agent.emit schema validation ---

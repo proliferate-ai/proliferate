@@ -532,3 +532,35 @@ fn record_step_goal_progress_only_writes_while_running() {
     assert!(output.contains("iterations"));
     assert!(output.contains("tokens_used"));
 }
+
+// --------------------------------------------------------------------------
+// C10 injected-turn provenance index (workflow_session_injections). The
+// executor writes a row alongside begin_step; the steps checklist / audit read
+// it back. Shell steps write no row (PROPOSED option B).
+// --------------------------------------------------------------------------
+
+#[test]
+fn record_injection_round_trips_and_is_idempotent() {
+    let service = test_service();
+    service
+        .record_injection("sess-1", "turn-1", "run-1", "0.-.0", "agent.prompt", "Investigate", "do the thing")
+        .unwrap();
+    // Idempotent on (session_id, turn_id): a crash-resume re-send is a no-op.
+    service
+        .record_injection("sess-1", "turn-1", "run-1", "0.-.0", "agent.prompt", "Investigate", "changed")
+        .unwrap();
+    let row = service
+        .store()
+        .find_injection("sess-1", "turn-1")
+        .unwrap()
+        .expect("injection row present");
+    let (run_id, step_key, kind, label, text) = row;
+    assert_eq!(run_id, "run-1");
+    assert_eq!(step_key, "0.-.0");
+    assert_eq!(kind, "agent.prompt");
+    assert_eq!(label, "Investigate");
+    // INSERT OR IGNORE: the first write wins.
+    assert_eq!(text, "do the thing");
+    // An un-injected (human) turn has no row: absence = human, presence = machine.
+    assert!(service.store().find_injection("sess-1", "turn-2").unwrap().is_none());
+}

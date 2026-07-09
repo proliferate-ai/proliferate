@@ -195,6 +195,12 @@ class WorkflowRun(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # D15 take-over/cancel: the user who stopped the run (nullable — set only by an
+    # explicit take-over/cancel). The audit answer to "why is this cancelled".
+    stopped_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
 
 class WorkflowTrigger(Base):

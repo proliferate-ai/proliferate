@@ -7,7 +7,9 @@ import uuid
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.workflows import WORKFLOW_TRIGGER_MANUAL
 from proliferate.db.models.auth import User
+from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.errors import CloudApiError
@@ -246,6 +248,126 @@ async def test_cannot_run_archived_workflow(db_session: AsyncSession) -> None:
             db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
         )
     assert exc.value.code == "workflow_archived"
+
+
+async def _seed_run(
+    db: AsyncSession,
+    user: User,
+    workflow,
+    *,
+    resolved_plan_json: dict,
+    anyharness_workspace_id: str | None = None,
+    anyharness_session_ids: list[str] | None = None,
+    status: str | None = None,
+):
+    run = await store.create_run(
+        db,
+        workflow_id=workflow.id,
+        workflow_version_id=workflow.current_version_id,
+        trigger_kind=WORKFLOW_TRIGGER_MANUAL,
+        executor_user_id=user.id,
+        args_json={},
+        target_mode="local",
+        resolved_plan_json=resolved_plan_json,
+        anyharness_workspace_id=anyharness_workspace_id,
+    )
+    if anyharness_session_ids is not None or status is not None:
+        await store.update_run(
+            db,
+            run_id=run.id,
+            anyharness_session_ids=anyharness_session_ids,
+            status=status,
+        )
+    return run
+
+
+async def test_start_run_rejects_binding_held_by_live_run(db_session: AsyncSession) -> None:
+    # B8/E8: a session already held by a non-terminal ("live") run cannot be bound
+    # to a new run — silently re-owning it would transfer ownership and leak the
+    # lockout. The run row is the durable lock, so this is caught server-side.
+    user = await _make_user(db_session)
+    workflow, _ = await _create_workflow(db_session, user)
+    await _seed_run(
+        db_session,
+        user,
+        workflow,
+        resolved_plan_json={"sessions": {"main": {"bind_session_id": "sess-held"}}},
+    )
+    with pytest.raises(CloudApiError) as exc:
+        await service.start_run(
+            db_session,
+            user,
+            workflow.id,
+            inputs={"issue": "x"},
+            target_mode="local",
+            session_bindings={"main": "sess-held"},
+        )
+    assert exc.value.code == "session_binding_held"
+
+
+async def test_start_run_rejects_binding_slot_not_in_workflow(db_session: AsyncSession) -> None:
+    user = await _make_user(db_session)
+    workflow, _ = await _create_workflow(db_session, user)
+    with pytest.raises(CloudApiError) as exc:
+        await service.start_run(
+            db_session,
+            user,
+            workflow.id,
+            inputs={"issue": "x"},
+            target_mode="local",
+            session_bindings={"ghost": "sess-x"},
+        )
+    assert exc.value.code == "unknown_session_binding_slot"
+
+
+async def test_live_run_holding_session_detects_created_and_bound(
+    db_session: AsyncSession,
+) -> None:
+    user = await _make_user(db_session)
+    workflow, _ = await _create_workflow(db_session, user)
+    # A session a live run created (reported in anyharness_session_ids) is held.
+    await _seed_run(
+        db_session,
+        user,
+        workflow,
+        resolved_plan_json={"sessions": {"main": {}}},
+        anyharness_session_ids=["sess-created"],
+    )
+    assert await store.live_run_holding_session(db_session, session_id="sess-created") is not None
+    assert await store.live_run_holding_session(db_session, session_id="sess-none") is None
+
+
+async def test_session_foreign_workspace_flags_cross_workspace(db_session: AsyncSession) -> None:
+    user = await _make_user(db_session)
+    workflow, _ = await _create_workflow(db_session, user)
+    await _seed_run(
+        db_session,
+        user,
+        workflow,
+        resolved_plan_json={"sessions": {"main": {}}},
+        anyharness_workspace_id="ws-A",
+        anyharness_session_ids=["sess-1"],
+    )
+    # Belongs to ws-A: targeting ws-B is a conflict; targeting ws-A is fine.
+    assert (
+        await store.session_foreign_workspace(
+            db_session, session_id="sess-1", target_workspace_id="ws-B"
+        )
+        == "ws-A"
+    )
+    assert (
+        await store.session_foreign_workspace(
+            db_session, session_id="sess-1", target_workspace_id="ws-A"
+        )
+        is None
+    )
+    # A session with no run history is unknown server-side (runtime backstop).
+    assert (
+        await store.session_foreign_workspace(
+            db_session, session_id="sess-unknown", target_workspace_id="ws-B"
+        )
+        is None
+    )
 
 
 async def test_visibility_isolates_owners(db_session: AsyncSession) -> None:

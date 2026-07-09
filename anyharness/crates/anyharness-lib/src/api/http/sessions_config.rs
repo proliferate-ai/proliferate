@@ -7,7 +7,9 @@ use axum::{
     Extension, Json,
 };
 
-use super::access::{assert_session_auth_scope, assert_session_mutable};
+use super::access::{
+    assert_session_auth_scope, assert_session_mutable, assert_session_not_workflow_held,
+};
 use super::error::ApiError;
 use super::sessions_contract::session_to_contract;
 use super::sessions_errors::{
@@ -39,6 +41,7 @@ pub async fn update_session_title(
 ) -> Result<Json<Session>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
     assert_session_mutable(&state, &session_id)?;
+    assert_session_not_workflow_held(&state, &session_id)?;
     let record = state
         .session_service
         .update_session_title(&session_id, &req.title)

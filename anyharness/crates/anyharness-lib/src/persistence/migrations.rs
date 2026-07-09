@@ -198,6 +198,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0053_workflow_runs",
         include_str!("sql/0053_workflow_runs.sql"),
     ),
+    (
+        "0054_workflow_injections",
+        include_str!("sql/0054_workflow_injections.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

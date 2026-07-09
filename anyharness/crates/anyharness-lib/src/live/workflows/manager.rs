@@ -134,6 +134,10 @@ impl WorkflowRunManager {
                 None,
             )?;
         }
+        // Release ownership + gateway bindings now (idempotent with the actor's
+        // own terminal release when one is live) so take-over frees the sessions
+        // immediately — the run row is already terminal (C13 / items 2–4).
+        self.release_on_terminal(run_id);
         self.deps
             .workflow_service
             .get_run(run_id)?
@@ -246,14 +250,44 @@ impl WorkflowRunManager {
             let progress =
                 drive_run(&deps.workflow_service, &executor, &run_id, &cancel).await;
             manager.forget(&run_id);
-            if matches!(progress, EngineProgress::SuspendedForApproval) {
-                manager.schedule_approval_timeout(&run_id);
+            match progress {
+                EngineProgress::SuspendedForApproval => {
+                    manager.schedule_approval_timeout(&run_id)
+                }
+                // Terminal (completed/failed/cancelled): release ownership +
+                // gateway bindings, keep sessions alive/demoted (C13 / items 2–4).
+                EngineProgress::Finished(_) => manager.release_on_terminal(&run_id),
+                EngineProgress::Advanced => {}
             }
         });
     }
 
     fn forget(&self, run_id: &str) {
         self.live.lock().unwrap().remove(run_id);
+    }
+
+    /// Release everything a terminal run held (C13 derived unlock + addendum
+    /// items 2–4). The run row going terminal IS the unlock; this makes the
+    /// derivation concrete on the in-memory caches:
+    ///
+    /// - **Ownership + lockout** (item 3 / C13): drop the run's sessions from
+    ///   [`WorkflowOwnedSessions`], which simultaneously un-holds them (mutating
+    ///   verbs are allowed again) and stops the always-bypass auto-approve.
+    ///   `release_run` also records the run so a racing crash-resume can't re-arm.
+    /// - **Gateway binding** (item 2 restore): deregister each session's per-run
+    ///   gateway server, so a subsequent resume reassembles the worker dotfile
+    ///   binding instead of the (now-expired) run token.
+    /// - **Session fate** (item 4, RULED): sessions are NOT closed — they stay
+    ///   open as normal interactive sessions (transcript inspectable, work
+    ///   continuable in place). Normal idle cleanup applies thereafter.
+    ///
+    /// Idempotent: safe to call from both the actor's terminal path and the
+    /// server-relayed cancel.
+    fn release_on_terminal(&self, run_id: &str) {
+        let released = self.deps.workflow_owned_sessions.release_run(run_id);
+        for session_id in &released {
+            self.deps.workflow_gateway_sessions.remove(session_id);
+        }
     }
 
     /// Arm (or re-arm) the human.approval timeout timer for a parked run, if the

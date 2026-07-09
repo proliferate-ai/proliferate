@@ -188,6 +188,61 @@ impl WorkflowStore {
         Ok(())
     }
 
+    /// Record a workflow-injected turn (contract §5.2 / C10). Idempotent on the
+    /// (session_id, turn_id) PK — a crash-resume re-send under the same turn is a
+    /// no-op. Only prompt-bearing steps call this; shell steps write no row.
+    pub fn insert_injection(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        run_id: &str,
+        step_key: &str,
+        kind: &str,
+        label: &str,
+        injected_text: &str,
+        created_at: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_conn(|conn| {
+            conn.execute(
+                "INSERT OR IGNORE INTO workflow_session_injections (
+                    session_id, turn_id, run_id, step_key, kind, label, injected_text, created_at
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    session_id, turn_id, run_id, step_key, kind, label, injected_text, created_at
+                ],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// The injection row for a session turn, if the turn was workflow-injected.
+    /// Tier-1 tests + the steps checklist read through this.
+    #[allow(clippy::type_complexity)]
+    pub fn find_injection(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> anyhow::Result<Option<(String, String, String, String, String)>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT run_id, step_key, kind, label, injected_text
+                 FROM workflow_session_injections WHERE session_id = ?1 AND turn_id = ?2",
+                params![session_id, turn_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+        })
+    }
+
     pub fn update_step_run(
         tx: &Connection,
         step: &WorkflowStepRunRecord,

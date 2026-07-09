@@ -1236,6 +1236,80 @@ editor/run UI of its own (drift note #7).
 
 ---
 
+## 7.6 Session plane (PR F — binding · provenance · lockout · take-over)
+
+The session plane is the one coherent PR that makes a workflow's sessions
+first-class: how a run adopts an existing session, how machine-injected turns are
+distinguished from human ones, how a driven session is protected from stray user
+edits, and how a human takes it back. B8 + C10 + C13 + D15, plus the 2026-07-09
+addendum (gateway rebind, bypass-registry unmark, keep-alive-on-terminal).
+
+**B8 session binding (L29).** `StartRun` accepts
+`session_bindings: {<slot>: session_id}` (server `StartRunRequest.session_bindings`,
+`models.py`). The server validates each bound slot names a real agent slot
+(`service.start_run`); the resolver sets `sessions[slot].bind_session_id`
+(`_resolve_plan`). At runtime, `WorkflowStepExecutorImpl::ensure_session`'s bind
+branch (`executor.rs`) LOADS the existing session instead of
+`create_durable_session`, and **hard-errors `plan_malformed` if the session's
+harness doesn't match the slot** (never a silent wrong-harness launch). The bound
+session then appears in the run's slot→session map like any fresh session.
+
+**C10 provenance (E9 — stamp at write time).** The executor injects prompts through
+the internal provenance-carrying path
+(`SessionRuntime::send_text_prompt_with_provenance`, `prompt.rs`), NOT the public
+`send_prompt` (which the lockout guards). Each injection stamps
+`PromptProvenance::Workflow { run_id, step_key, step_kind, label }` — the internal
+enum's serde tag is `kind`, so the step-kind slug rides `step_kind` and surfaces as
+the public contract's `kind` field (`prompt/provenance.rs` → contract `events.rs`).
+The dead `Automation` variant (whose `to_public` lossily collapsed to `System`) is
+gone. Desktop reads `prompt_provenance` off the `UserMessage` exactly as it reads
+subagent-wake (`product-domain/.../subagents/provenance.ts`, `isWorkflowProvenance`).
+Alongside the send, the executor writes a normalized row to the new
+`workflow_session_injections` SQLite table (migration `0054`; `WorkflowStore::
+insert_injection`) — the queryable index for the per-session steps checklist. Only
+prompt-bearing steps write a row (shell steps write none — **PROPOSED option B,
+adopted**: `turn_id` is NOT NULL, no read-path join). Absence of a row = human turn,
+presence = machine.
+
+**C13 lockout (E8 — block everything).** A session is held iff it appears in a
+non-terminal run's session map — the run row IS the lock (no new column). The
+runtime caches this in the generalized `WorkflowOwnedSessions`
+(`HashMap<session_id, run_id>` + a `released` set, `exec_policy.rs`), which is ALSO
+the always-bypass auto-approve registry — ownership and hold are the same condition.
+`SessionRuntime` holds an `Arc<WorkflowOwnedSessions>` and guards every mutating verb
+(`send_prompt`, `set_live_session_config_option`, `fork_session`, cancel/close;
+title-update at the HTTP layer via `assert_session_not_workflow_held`) with a typed
+`WorkflowHeld { run_id }` → 409 `SESSION_WORKFLOW_HELD` that routes the UI to the
+take-over modal. **Included fix:** those verbs threaded access-gate errors as typed
+`Access(WorkspaceAccessError)` (was a 500 collapse) so `WORKSPACE_MUTATION_BLOCKED`
+and the new 409 both surface correctly. The executor is exempt by construction: it
+uses the internal prompt path + `set_live_session_config_option_unlocked`.
+
+**D15 take-over / cancel.** Server `POST /workflows/runs/{run_id}/cancel`
+(`api.py` → `delivery.cancel_run`, user auth, owner-scoped 404):
+`check_transition(→cancelled)` under `lock_run`, stamp `stopped_by_user_id`
+(migration `a7b9c1d3e5f7`) + `finished_at`, run the shared terminal side effects
+(expire the per-run gateway token, `apply_step_actions`), then best-effort runtime
+cancel via `integrations/anyharness/workflow_runs.cancel_workflow_run` (cloud lane
+through the sandbox gateway; local relayed by desktop). The runtime half already
+existed (`manager.cancel`).
+
+**Release = derived from terminal (C13 / addendum items 2–4).**
+`WorkflowRunManager::release_on_terminal` fires on any terminal outcome (actor's
+`drive_run` finishing, and the take-over `cancel`): it calls
+`WorkflowOwnedSessions::release_run` (drops the run's sessions → simultaneously
+un-holds them AND stops auto-approve — item 3; the `released` set stops a racing
+crash-resume from re-arming) and deregisters each session from
+`WorkflowGatewaySessions` so a later resume reassembles the worker dotfile binding
+instead of the expired run token (item 2 restore). Sessions are **never closed** at
+terminal (item 4, RULED): they stay open as normal interactive sessions. For a bound
+(taken-over) session, the executor rebinds mid-run at claim time —
+registers the per-run gateway server and relaunches the session
+(`relaunch_session_for_mcp_rebind`) so its integration calls run under the run's
+opt-in scope, not the owner's broad personal grant (item 2 claim).
+
+---
+
 ## 8. Known gaps / drift + PR map
 
 **Drift (design doc vs. shipped code — code wins):**

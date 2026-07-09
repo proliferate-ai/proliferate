@@ -52,6 +52,35 @@ async def deliver_workflow_run(
         )
 
 
+async def cancel_workflow_run(
+    runtime_url: str,
+    access_token: str,
+    *,
+    run_id: str,
+    timeout: float,
+) -> None:
+    """POST the runtime's take-over/cancel (D15 runtime half): stop the live actor
+    at the next step boundary and best-effort tear down the in-flight turn. The
+    server has already flipped the run terminal + released ownership, so this is a
+    best-effort nudge — a 404 (runtime never saw the run, or already forgot it) is
+    benign and swallowed by the caller."""
+
+    try:
+        async with _client(runtime_url, access_token, timeout) as client:
+            response = await client.post(f"{_WORKFLOW_RUNS_PATH}/{run_id}/cancel")
+    except httpx.HTTPError as exc:
+        raise CloudRuntimeReconnectError(str(exc) or exc.__class__.__name__) from exc
+    if response.status_code not in (
+        httpx.codes.OK,
+        httpx.codes.ACCEPTED,
+        httpx.codes.NO_CONTENT,
+        httpx.codes.NOT_FOUND,
+    ):
+        raise CloudRuntimeReconnectError(
+            f"Sandbox rejected workflow cancel (status {response.status_code})."
+        )
+
+
 async def read_workflow_run(
     runtime_url: str,
     access_token: str,

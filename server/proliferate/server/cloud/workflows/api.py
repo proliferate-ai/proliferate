@@ -23,7 +23,11 @@ from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.integrations.slack import client as slack_client
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
+from proliferate.server.cloud.workflows.delivery import (
+    cancel_run,
+    deliver_cloud_run,
+    refresh_cloud_run,
+)
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
     SlackChannelResponse,
@@ -144,6 +148,20 @@ async def report_run_status_endpoint(
     user: User = Depends(current_product_user),
 ) -> WorkflowRunResponse:
     return run_payload(await report_run_status(db, user, run_id, body))
+
+
+@router.post("/runs/{run_id}/cancel", response_model=WorkflowRunResponse)
+async def cancel_run_endpoint(
+    run_id: UUID,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> WorkflowRunResponse:
+    """Take over / cancel a run (D15). User auth, owner-scoped (a run the caller
+    can't see 404s). This is the single human override; the UI's take-over action
+    routes here, and a blocked mutating verb's 409 ``SESSION_WORKFLOW_HELD`` sends
+    the user to it."""
+
+    return run_payload(await cancel_run(db, user, run_id))
 
 
 @router.post("/runs/{run_id}/deliver", response_model=WorkflowRunResponse)

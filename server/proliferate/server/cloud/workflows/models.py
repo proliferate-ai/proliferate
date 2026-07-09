@@ -157,6 +157,8 @@ class WorkflowRunResponse(WorkflowBaseModel):
     delivered_at: str | None = Field(alias="deliveredAt")
     started_at: str | None = Field(alias="startedAt")
     finished_at: str | None = Field(alias="finishedAt")
+    # D15: the user who took over / cancelled the run (audit).
+    stopped_by_user_id: str | None = Field(default=None, alias="stoppedByUserId")
 
 
 class StepActionResponse(WorkflowBaseModel):
@@ -261,6 +263,9 @@ def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
         delivered_at=_iso(record.delivered_at),
         started_at=_iso(record.started_at),
         finished_at=_iso(record.finished_at),
+        stopped_by_user_id=(
+            str(record.stopped_by_user_id) if record.stopped_by_user_id else None
+        ),
     )
 
 

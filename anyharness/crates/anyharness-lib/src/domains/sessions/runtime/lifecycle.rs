@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::domains::sessions::extensions::SessionClosingContext;
 use crate::domains::sessions::links::model::SessionLinkRelation;
@@ -10,16 +10,56 @@ use crate::domains::sessions::runtime_event::{
     RuntimeEventInjectionResult, RuntimeInjectedSessionEvent,
 };
 
-use super::{SessionLifecycleError, SessionRuntime};
+use super::{SessionLifecycleError, SessionMcpRefresh, SessionRuntime};
 
 impl SessionRuntime {
+    /// Rebind a workflow-bound session's live MCP servers (addendum item 2): the
+    /// per-run gateway credential is injected only at session LAUNCH (via the
+    /// launch extension reading `WorkflowGatewaySessions`). A taken-over EXISTING
+    /// session was launched with only the worker-token binding, so we retire its
+    /// live actor and relaunch it — the relaunch reassembles MCP servers from the
+    /// extension seam, which now includes the per-run gateway (registered at
+    /// claim). Best-effort: a rebind failure is logged; the run still proceeds.
+    pub(crate) async fn relaunch_session_for_mcp_rebind(&self, session_id: &str) {
+        if let Some(handle) = self.acp_manager.get_handle(session_id).await {
+            let _ = handle.close().await;
+        }
+        for _ in 0..40 {
+            if !self.has_live_session(session_id).await {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        if let Err(error) = self
+            .ensure_live_session(
+                session_id,
+                Some(SessionMcpRefresh {
+                    mcp_servers: Vec::new(),
+                    mcp_binding_summaries: None,
+                }),
+            )
+            .await
+        {
+            tracing::warn!(
+                session_id = %session_id,
+                error = ?error,
+                "workflow gateway rebind relaunch failed (ignored)"
+            );
+        }
+    }
+
     pub async fn cancel_live_session(
         &self,
         session_id: &str,
     ) -> Result<SessionRecord, SessionLifecycleError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(SessionLifecycleError::Access)?;
+        // L17 lockout (C13 / E8): session-level cancel is a mutating verb;
+        // blocked on a held session (take-over cancels the whole run instead).
+        if let Some(run_id) = self.workflow_held_run(session_id) {
+            return Err(SessionLifecycleError::WorkflowHeld { run_id });
+        }
         let record = self.get_session_or_not_found(session_id)?;
 
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
@@ -39,7 +79,12 @@ impl SessionRuntime {
     ) -> Result<SessionRecord, SessionLifecycleError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| SessionLifecycleError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(SessionLifecycleError::Access)?;
+        // L17 lockout (C13 / E8): close is a mutating verb; blocked on a held
+        // session (take-over is the only door; terminal keeps sessions alive).
+        if let Some(run_id) = self.workflow_held_run(session_id) {
+            return Err(SessionLifecycleError::WorkflowHeld { run_id });
+        }
         let _record = self.get_session_or_not_found(session_id)?;
         let mut visited = HashSet::new();
         self.close_session_tree(session_id, &mut visited).await?;

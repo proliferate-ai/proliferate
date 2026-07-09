@@ -166,6 +166,14 @@ impl WorkflowGatewaySessions {
     pub fn get(&self, session_id: &str) -> Option<SessionMcpServer> {
         self.servers.read().unwrap().get(session_id).cloned()
     }
+
+    /// Deregister the per-run gateway server (addendum item 2 release / item 4
+    /// demotion): a subsequent relaunch of the (now interactive) session stops
+    /// injecting the run token and falls back to the worker dotfile binding.
+    /// Returns whether an entry was removed.
+    pub fn remove(&self, session_id: &str) -> bool {
+        self.servers.write().unwrap().remove(session_id).is_some()
+    }
 }
 
 /// Session-launch extension that injects the per-run gateway MCP server for a

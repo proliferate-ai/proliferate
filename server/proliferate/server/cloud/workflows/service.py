@@ -546,6 +546,49 @@ async def start_run(
         namespaces=granted_namespaces(run_scope),
     )
 
+    # B8 session binding validation. (Harness-match stays at the runtime bind
+    # boundary — a hard Malformed-plan error — since the slot->harness fact and the
+    # session's harness both live in the runtime.)
+    if session_bindings:
+        known_slots = {node["slot"] for node in resolved_agents}
+        unknown = sorted(set(session_bindings) - known_slots)
+        if unknown:
+            raise CloudApiError(
+                "unknown_session_binding_slot",
+                f"session_bindings names slots not in this workflow: {unknown}.",
+                status_code=400,
+            )
+        for slot, bound_session_id in session_bindings.items():
+            # (ii) Not already held by a live run: the run row is the durable lock
+            # (C13/E8). Silently re-owning a session another live run holds would
+            # transfer ownership and leak the lockout — reject up front.
+            holding_run_id = await store.live_run_holding_session(
+                db, session_id=bound_session_id
+            )
+            if holding_run_id is not None:
+                raise CloudApiError(
+                    "session_binding_held",
+                    f"session bound to slot '{slot}' is already held by live "
+                    f"workflow run {holding_run_id}.",
+                    status_code=409,
+                )
+            # (i) Belongs to the target workspace: if run history places the
+            # session in a different workspace, reject (the runtime bind boundary
+            # is the authoritative backstop for sessions with no history).
+            if cloud_anyharness_workspace_id is not None:
+                foreign_workspace = await store.session_foreign_workspace(
+                    db,
+                    session_id=bound_session_id,
+                    target_workspace_id=cloud_anyharness_workspace_id,
+                )
+                if foreign_workspace is not None:
+                    raise CloudApiError(
+                        "session_binding_wrong_workspace",
+                        f"session bound to slot '{slot}' belongs to a different "
+                        "workspace than this run's target.",
+                        status_code=409,
+                    )
+
     run_id = uuid4()
     resolved_plan = _resolve_plan(
         run_id=run_id,

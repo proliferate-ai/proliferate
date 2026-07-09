@@ -182,6 +182,32 @@ impl WorkflowService {
         })
     }
 
+    /// Stamp a workflow-injected turn into the injections index (contract §5.2 /
+    /// C10). Written by the executor at send time, in the same family as
+    /// `begin_step` (the executor owns both the step identity and the send).
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_injection(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        run_id: &str,
+        step_key: &str,
+        kind: &str,
+        label: &str,
+        injected_text: &str,
+    ) -> anyhow::Result<()> {
+        self.store.insert_injection(
+            session_id,
+            turn_id,
+            run_id,
+            step_key,
+            kind,
+            label,
+            injected_text,
+            &now(),
+        )
+    }
+
     /// Upsert a live progress snapshot onto a RUNNING step's `output_json`
     /// (spec 3.6 live goal progress). No-op unless the step is still `running`,
     /// so a terminal write from the step driver is never clobbered by a late

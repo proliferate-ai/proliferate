@@ -34,8 +34,10 @@ from proliferate.constants.workflows import (
     WORKFLOW_CLOUD_REFRESH_TIMEOUT_SECONDS,
     WORKFLOW_DELIVERY_ERROR_CODE,
     WORKFLOW_RUN_OBSERVABLE_STATUSES,
+    WORKFLOW_RUN_STATUS_CANCELLED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_STATUS_RUNNING,
+    WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db.store import cloud_workflows as store
@@ -51,8 +53,13 @@ from proliferate.server.cloud.gateway.service import ensure_cloud_sandbox_gatewa
 from proliferate.server.cloud.integration_gateway.domain.scope import (
     intersect_namespaces_with_worker,
 )
-from proliferate.server.cloud.workflows.domain.run_status import is_terminal
-from proliferate.server.cloud.workflows.service import mark_run_delivered
+from proliferate.integrations.anyharness.workflow_runs import cancel_workflow_run
+from proliferate.server.cloud.workflows.domain.run_status import (
+    RunTransitionError,
+    check_transition,
+    is_terminal,
+)
+from proliferate.server.cloud.workflows.service import _visible_run, mark_run_delivered
 from proliferate.utils.time import utcnow
 
 _ERROR_MESSAGE_MAX_CHARS = 480
@@ -318,3 +325,75 @@ async def refresh_cloud_run(
         # leave the ledger untouched.
         return run
     return await _sync_run_from_view(db, run.id, _parse_sandbox_run_view(payload))
+
+
+# --- take-over / cancel (D15) --------------------------------------------------
+
+
+async def cancel_run(
+    db: AsyncSession, user: ActorIdentity, run_id: UUID
+) -> WorkflowRunRecord:
+    """Take over / cancel a run (D15). The single human override: flip the desired
+    status to ``cancelled``, stamp ``stopped_by_user_id`` + ``finished_at``, run
+    the shared terminal side effects (expire the per-run gateway token, apply step
+    actions), then best-effort nudge the runtime to stop the live actor.
+
+    The server write going terminal IS the release (C13 / L17): the runtime derives
+    session held-ness from the run row, so every session the run held is freed to
+    normal interactive ownership even if the runtime is momentarily unreachable
+    (a later refresh reconciles). The runtime nudge is therefore best-effort — a
+    404/transport failure never fails take-over. Local runs are relayed by the
+    desktop, so the server only performs the terminal write for them.
+    """
+
+    # Owner-scoped 404 (visible_run raises not-found for a run the user can't see).
+    run = await _visible_run(db, user=user, run_id=run_id)
+    if is_terminal(run.status):
+        return run
+
+    locked = await store.lock_run(db, run_id)
+    if locked is None:
+        raise CloudApiError("workflow_run_not_found", "Workflow run not found.", status_code=404)
+    try:
+        check_transition(locked.status, WORKFLOW_RUN_STATUS_CANCELLED)
+    except RunTransitionError as exc:
+        raise CloudApiError(exc.code, exc.message, status_code=409) from exc
+
+    now = utcnow()
+    updated = await store.update_run(
+        db,
+        run_id=run_id,
+        status=WORKFLOW_RUN_STATUS_CANCELLED,
+        finished_at=now if locked.finished_at is None else None,
+        stopped_by_user_id=user.id,
+    )
+    assert updated is not None
+
+    # Shared terminal side effects (reused from report_run_status): expire the
+    # per-run token before applying step actions so a crash mid-actions still
+    # leaves the token dead.
+    await store.expire_run_gateway_tokens_for_run(db, workflow_run_id=run_id)
+    try:
+        from proliferate.server.cloud.workflows.actions import apply_step_actions
+
+        await apply_step_actions(db, run=updated)
+    except Exception:
+        logger.exception("apply_step_actions failed on cancel run_id=%s", run_id)
+
+    # Best-effort runtime nudge. Cloud lane: POST the runtime cancel through the
+    # sandbox gateway. Local lane: the desktop relays cancel to its own runtime, so
+    # the server does not reach out.
+    if updated.target_mode != WORKFLOW_TARGET_MODE_LOCAL:
+        try:
+            access = await ensure_cloud_sandbox_gateway_access(db, user)
+            await cancel_workflow_run(
+                access.upstream_base_url,
+                access.upstream_token,
+                run_id=str(run_id),
+                timeout=WORKFLOW_CLOUD_REFRESH_TIMEOUT_SECONDS,
+            )
+        except (CloudApiError, CloudRuntimeReconnectError) as exc:
+            # The run is already terminal + released; a failed nudge is benign.
+            logger.warning("runtime cancel nudge failed run_id=%s: %s", run_id, exc)
+
+    return updated

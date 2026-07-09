@@ -141,6 +141,11 @@ pub struct AppState {
     pub goal_runtime: Arc<GoalRuntime>,
     pub workflow_service: Arc<WorkflowService>,
     pub workflow_manager: WorkflowRunManager,
+    /// L17 lockout registry (C13 / E8): shared with the session runtime + the
+    /// permission advisor. Exposed on state so the title-update HTTP handler
+    /// (whose mutation lives in `SessionService`, not the runtime) can apply the
+    /// same held guard as the runtime verbs.
+    pub workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
     pub acp_manager: LiveSessionManager,
     pub terminal_service: Arc<TerminalService>,
     pub agent_login_terminal_service: Arc<AgentLoginTerminalService>,
@@ -351,6 +356,7 @@ impl AppState {
             plan_service.clone(),
             plan_service.clone(),
             goal_service.clone(),
+            workflow_owned_sessions.clone(),
         ));
         // Workflow run engine (W3): the durable service + the live run manager
         // (its own actors, spawned on delivery and on startup-resume).
@@ -508,6 +514,7 @@ impl AppState {
             goal_runtime,
             workflow_service,
             workflow_manager,
+            workflow_owned_sessions,
             acp_manager,
             terminal_service,
             agent_login_terminal_service,

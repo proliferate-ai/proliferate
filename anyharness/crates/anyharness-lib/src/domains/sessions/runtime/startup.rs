@@ -140,6 +140,14 @@ impl SessionRuntime {
                     EnsureLiveSessionError::SessionNotFound(session_id)
                 }
                 SessionLifecycleError::Internal(error) => EnsureLiveSessionError::Internal(error),
+                SessionLifecycleError::Access(error) => {
+                    EnsureLiveSessionError::Internal(anyhow::anyhow!(error.to_string()))
+                }
+                SessionLifecycleError::WorkflowHeld { run_id } => {
+                    EnsureLiveSessionError::Internal(anyhow::anyhow!(
+                        "session held by workflow run {run_id}"
+                    ))
+                }
             })?;
 
         self.ensure_live_session_handle(&record, mcp_refresh)

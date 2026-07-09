@@ -506,6 +506,19 @@ CREATE TABLE workflow_runs (
     updated_at TEXT NOT NULL
 );
 
+-- table: workflow_session_injections
+CREATE TABLE workflow_session_injections (
+    session_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    step_key TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    label TEXT NOT NULL,
+    injected_text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, turn_id)
+);
+
 -- table: workflow_step_runs
 CREATE TABLE workflow_step_runs (
     run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
@@ -755,6 +768,10 @@ CREATE INDEX idx_terminal_command_runs_workspace_activity
 -- index: idx_terminal_command_runs_workspace_created
 CREATE INDEX idx_terminal_command_runs_workspace_created
     ON terminal_command_runs(workspace_id, created_at DESC);
+
+-- index: idx_workflow_injections_run
+CREATE INDEX idx_workflow_injections_run
+    ON workflow_session_injections(run_id, step_key);
 
 -- index: idx_workflow_runs_status
 CREATE INDEX idx_workflow_runs_status
