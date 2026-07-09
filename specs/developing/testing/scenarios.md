@@ -356,6 +356,57 @@ stays enabled.
 
 ---
 
+## Self-hosting
+
+Full narrative + tier-3/4 definitions live in
+`specs/developing/testing/self-hosting.md` (the self-hosting spec of record);
+the tier-1/2 scenarios that the test suite implements are indexed here.
+
+### T1-SH-1: single-org derivation (unit)
+`telemetry_mode == "self_managed"` OR `"local_dev"` ⇒ `single_org_mode` true;
+`"hosted_product"` ⇒ false. `single_org_mode_override`
+(`SINGLE_ORG_MODE`/`PROLIFERATE_SINGLE_ORG_MODE`) wins in both directions.
+(config.py:376-379.)
+
+### T1-SH-2: SSO env alias equivalence (unit)
+Every SSO setting carries exactly the two-form alias pair, and the bare
+`SSO_*` form populates the field identically to `PROLIFERATE_SSO_*`. Guards the
+docs' canonical bare-form promise; a new SSO var can't ship with only one alias.
+
+### T1-SH-3: `/meta` wire contract (unit)
+Golden field names AND order on `MetaResponse` and the live JSON. `/meta` is
+what the connect dialog's trust screen renders; a rename/reorder breaks every
+desktop silently.
+
+### T2-SH-1: connect + switch (NOT tier 2)
+The connect affordance is Tauri-gated (`LoginScreen.tsx:117`) and never renders
+in the desktop-web build; the `set_app_config` write + relaunch + credential
+store throw outside Tauri. Tier-3 by ruling (self-hosting.md §4) — registered
+in `flows.md` as not-yet-implemented, not faked here.
+
+### T2-SH-2: `/setup` claim UI (extends T2-AUTH-1)
+Assert the self-hosted specifics on top of the claim/login lifecycle: the
+claimed user is **owner** of the one `is_instance` organization (single-org: the
+org list has exactly one), and a second context hitting `/setup` after the claim
+gets the permanently-closed 404 (API status AND the rendered "Not found — there
+is nothing to set up here" page).
+
+### T2-SH-3: invite → register-with-token → invitee sign-in
+Admin invites (delivery `skipped` locally, no email) → invitee opens
+`/register?token={invitation_id}&email=...` → sets a password → signs into the
+desktop-web app. Assert: active membership with the invited role in the instance
+org. Negative: a real token presented with a **mismatched email** is rejected by
+the uniform 403 (`_not_invited`) and mints no account.
+
+### T2-SH-4: adaptive sign-in
+Driven purely by `GET /auth/desktop/methods` + `/auth/desktop/github/availability`.
+No GitHub OAuth env (this stack) ⇒ real password-only surface, no GitHub button.
+GitHub availability advertised ⇒ the "Continue with GitHub" button replaces the
+password form (asserted at the availability boundary — a real GitHub-configured
+server driving the browser UI is tier-3, self-hosting.md §4, matching T2-AUTH-4).
+
+---
+
 ## Tier 3 — first wave (release-critical)
 
 Conventions: the runner points a desktop at the target server by writing

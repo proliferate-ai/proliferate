@@ -72,6 +72,35 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
         assert isinstance(value, str) and value
 
 
+# T1-SH-3 (specs/developing/testing/self-hosting.md): the /meta wire contract.
+#
+# `/meta` is the shape the desktop's connect-to-a-server dialog reads to render
+# its trust-confirmation screen ("Server version X"). A silent field rename or
+# reorder breaks every desktop that talks to a self-hosted server, and no other
+# test would notice. This golden test pins the exact field names AND their
+# order, both on the response model and on the live JSON, so a rename mechanically
+# fails here. Field-set membership is covered above; this is the rename guard.
+_META_GOLDEN_FIELDS = [
+    "serverVersion",
+    "desktopVersion",
+    "runtimeVersion",
+    "workerVersion",
+    "minDesktopVersion",
+]
+
+
+def test_meta_response_golden_contract(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # The declared response model is the contract of record.
+    assert list(meta_module.MetaResponse.model_fields.keys()) == _META_GOLDEN_FIELDS
+
+    _clear_pin_env(monkeypatch)
+    body = _client().get("/meta").json()
+
+    # The serialized wire order matches the model exactly (dict preserves
+    # insertion order, so this catches a reorder as well as a rename).
+    assert list(body.keys()) == _META_GOLDEN_FIELDS
+
+
 def test_meta_pins_fall_back_to_server_version(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _clear_pin_env(monkeypatch)
     monkeypatch.setenv("SERVER_VERSION", "1.2.3")
