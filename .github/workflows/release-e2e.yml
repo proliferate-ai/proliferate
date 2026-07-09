@@ -173,6 +173,10 @@ jobs:
         env:
           # Local stack wiring — the runner points at these (env-manifest.ts).
           SINGLE_ORG_MODE: "true"
+          # CI-only server secrets (same throwaway values server-ci.yml uses;
+          # settings validation requires them when debug=False).
+          JWT_SECRET: release-e2e-ci-jwt-secret
+          CLOUD_SECRET_KEY: release-e2e-ci-cloud-secret
           SETUP_TOKEN_FILE: /tmp/proliferate-ci-setup-token
           DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
           REDIS_URL: redis://127.0.0.1:6379/0
