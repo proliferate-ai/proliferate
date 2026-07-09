@@ -43,16 +43,10 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Local workspace create | 3 | — |
 | Worktree workspace create — locally AND inside a cloud sandbox | 3 | tests/release/src/scenarios/t3-wt-1.ts (T3-WT-1; local lane green, sandbox lane blocked on current_product_user) |
 | Cloud workspace create: request path + UI state up to the provisioning seam | 2 | — |
-<<<<<<< HEAD
+| Add-Repo flow entry: local/cloud branches render + desktop-web fallback limits (no native picker outside Tauri) | 2 | tests/intent/specs/workspace-entry.spec.ts |
 | New user cold path: GitHub App authorization triggers first-ever sandbox provisioned from zero, within time budget | 3 | tests/release/src/scenarios/t3-prov-1.ts (T3-PROV-1; REAL trigger — seeds the App-auth callback's outcome via github_app_seed.py, real user token + real installation token, then runs the real post-callback body → real E2B sandbox; asserts positive AND negative trigger contract; fallback seam when seed creds absent) |
 | Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; blocked on current_product_user — no fallback seam for this one, it's specifically the front-door path) |
 | Cloud workspace pause/resume/connect on real E2B | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; blocked, see above) |
-=======
-| Add-Repo flow entry: local/cloud branches render + desktop-web fallback limits (no native picker outside Tauri) | 2 | tests/intent/specs/workspace-entry.spec.ts |
-| New user cold path: GitHub App authorization triggers first-ever sandbox provisioned from zero, within time budget | 3 | — |
-| Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | — |
-| Cloud workspace pause/resume/connect on real E2B | 3 | — |
->>>>>>> origin/main
 | Local ↔ cloud workspace migration | 3 | — |
 | Add repo from cloud | 2 | — |
 | Repo settings applied: default branch, action scripts, environment scripts/env vars take effect — locally AND in sandbox | 3 | tests/release/src/scenarios/t3-repo-1.ts (T3-REPO-1; #1043 authorization blocker resolved — seeds the durable user's real App auth; remaining expected-fail is environmental: t3local's App (proliferate-dev/pablonyx) isn't installed on the fixture org proliferate-e2e → github_app_installation_required) |
@@ -81,13 +75,8 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-<<<<<<< HEAD
-| Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | — |
-| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | tests/release/src/scenarios/t3-int-1.ts (T3-INT-1; blocked on credential RELEASE_E2E_INTEGRATION_API_KEY + github_link_required on the gateway route. Finding: cataloged Slack is oauth2/hosted-MCP not api_key, so the contract's Slack-bot-token premise does not fit the catalog — filed; scenario uses an api_key-kind seed (exa)) |
-=======
 | Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | tests/intent/specs/integrations.spec.ts |
-| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | — |
->>>>>>> origin/main
+| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | tests/release/src/scenarios/t3-int-1.ts (T3-INT-1; blocked on credential RELEASE_E2E_INTEGRATION_API_KEY + github_link_required on the gateway route. Finding: cataloged Slack is oauth2/hosted-MCP not api_key, so the contract's Slack-bot-token premise does not fit the catalog — filed; scenario uses an api_key-kind seed (exa)) |
 
 ## Workflows — PARKED (surface being reworked; tests land with the rework PRs)
 
