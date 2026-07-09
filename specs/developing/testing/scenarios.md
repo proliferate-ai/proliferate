@@ -285,10 +285,9 @@ Against the Stripe webhook receiver (`claim_webhook_event` semantics):
   continues through period end; 24h rollover grace honored after
   `current_period_end`; then hard cutoff.
 - `customer.subscription.deleted` after a **clean voluntary cancellation**:
-  pin the CURRENT behavior (unconditional `payment_failed` hold — survey
-  2026-07-08 confirmed the reason-sensitive refinement was never shipped) as
-  an expected-fail/known-bug test until the product fix lands. [FILED AS
-  FINDING — Pablo to rule fix-now vs post-release.]
+  no `payment_failed` hold (reason-sensitive since the #1032 fix: explicit
+  payment-driven `cancellation_details.reason` or prior `past_due`/`unpaid`
+  status holds; a voluntary cancel does not).
 - billing modes: `CLOUD_BILLING_MODE=off` → all enforcement inert, product
   fully usable; `observe` → accounting/exports happen, nothing ever blocked;
   `enforce` → gates live. One smoke per mode.
@@ -556,11 +555,9 @@ current behavior as known-bug expected-fail):
    sites resolve `organization_id=None` and bail — an admin-configured
    compute cap saves in the UI and silently does nothing. (LLM caps are
    unaffected — correctly org-attributed.)
-2. **Clean voluntary cancellation gets a `payment_failed` hold.**
-   `customer.subscription.deleted` applies the hold unconditionally
-   (`stripe_webhooks.py:193-199`) — no reason sensitivity, so a customer who
-   cancels cleanly can be spuriously blocked when Stripe deletes the record
-   at period end.
+2. **Clean voluntary cancellation gets a `payment_failed` hold.** FIXED by
+   the #1032 fix: `customer.subscription.deleted` is now reason-sensitive
+   (`_subscription_deletion_is_payment_driven` in `stripe_webhooks.py`).
 3. **No-GitHub account gets no free trial and no explanation.**
    `ensure_free_trial_v2_grant` silently returns when the account has no
    linked GitHub identity — looks broken to the user. (UX severity, not

@@ -15,7 +15,6 @@ import { expect } from "@playwright/test";
 import { test, adminContext, skipIfNoStripe } from "./_fixtures.ts";
 import * as b from "../../stack/billing.ts";
 
-const FINDING_7_ISSUE = "https://github.com/proliferate-ai/proliferate/issues/1032";
 
 async function subscribedPersonalSubject() {
   const { token } = await adminContext();
@@ -148,12 +147,12 @@ test.describe("T2-BILL-8: subscription edge states", () => {
   });
 
   test(
-    "FINDING 7 (pinned known-bug): subscription.deleted applies a payment_failed hold even after clean cancellation",
+    "subscription.deleted after a clean voluntary cancellation applies no payment_failed hold",
     async () => {
-      test.info().annotations.push({
-        type: "known-bug",
-        description: `customer.subscription.deleted unconditionally applies payment_failed hold — UNRULED. ${FINDING_7_ISSUE}. When the reason-sensitive fix lands, invert this assertion.`,
-      });
+      // Formerly the FINDING 7 known-bug pin (issue #1032): the hold is
+      // now reason-sensitive, so a clean cancellation must not be labeled
+      // payment_failed. Dunning-driven deletions keep the hold (covered by the
+      // server suite: test_stripe_subscription_deleted_hold.py).
       const { subject, sub, fullSub } = await subscribedPersonalSubject();
       await b.deliverEvent({ type: "customer.subscription.created", object: fullSub });
 
@@ -162,11 +161,10 @@ test.describe("T2-BILL-8: subscription edge states", () => {
       const deleted = b.deleteSubscription(sub.id);
       await b.deliverEvent({ type: "customer.subscription.deleted", object: deleted });
 
-      // CURRENT (buggy) behavior: a payment_failed hold is applied regardless.
       expect(
         (await b.listActiveHolds(subject.id)).some((h) => h.kind === "payment_failed"),
-        "pins current unconditional payment_failed hold (finding 7)",
-      ).toBe(true);
+        "no payment_failed hold after a clean voluntary cancellation (finding 7 fixed)",
+      ).toBe(false);
     },
   );
 
