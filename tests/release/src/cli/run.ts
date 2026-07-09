@@ -116,8 +116,17 @@ async function main(): Promise<void> {
 
   if (failures.length > 0) {
     const reports = failures.map(toFailureReport);
+    console.error(`\n${failures.length} scenario run(s) failed:`);
+    for (const report of reports) {
+      // First line of the observed error, inline in the log — the JSON reports
+      // are the full record, but the runner is often read straight from the CI
+      // log (where the report artifact may not be fetched), so surface the
+      // reason there too.
+      const firstLine = report.observed.split("\n")[0];
+      console.error(`  - [${report.scenario_id}/${report.lane}] ${firstLine}`);
+    }
     const written = await writeFailureReports(failures, args.outputDir);
-    console.error(`\n${failures.length} scenario run(s) failed. Reports written:`);
+    console.error("Reports written:");
     for (const filePath of written) {
       console.error(`  - ${filePath}`);
     }

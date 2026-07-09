@@ -225,12 +225,17 @@ jobs:
           make release-e2e LANE="$LANE" DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
 
       - name: Upload failure reports
-        if: steps.preflight.outputs.enabled == 'true' && failure()
+        # always() (not failure()): the runner step is continue-on-error, so a
+        # red runner never flips the job to "failed" and failure() would skip
+        # this. Upload whenever the job ran the runner; the step no-ops when
+        # there are no reports.
+        if: always() && steps.preflight.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-e2e-reports
           path: tests/release/.output/
           retention-days: 7
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   # Staging lane — the README's documented tier-3 CI target (real deployment,
