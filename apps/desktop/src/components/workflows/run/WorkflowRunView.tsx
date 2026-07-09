@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
+import { flattenWorkflowSteps, type WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
 import {
   coerceRunStatus,
   deriveStepRunViews,
@@ -10,6 +10,7 @@ import {
   workflowArgChips,
   workflowRunStatusLabel,
   workflowRunStatusTone,
+  type WorkflowStepActionSummary,
   type WorkflowStepSessionLink,
 } from "@proliferate/product-domain/workflows/run-status";
 import { workflowTriggerLabel } from "@proliferate/product-domain/workflows/model";
@@ -56,6 +57,17 @@ export function WorkflowRunView({
     () => workflowArgChips(run.args as Record<string, unknown> | null),
     [run.args],
   );
+  const actionSummaries = useMemo<WorkflowStepActionSummary[]>(
+    () =>
+      stepActions.map((action) => ({
+        stepKey: action.stepKey,
+        actionKind: action.actionKind,
+        status: action.status,
+        errorMessage: action.errorMessage,
+      })),
+    [stepActions],
+  );
+  const flatSteps = useMemo(() => flattenWorkflowSteps(definition), [definition]);
   const views = useMemo(
     () =>
       deriveStepRunViews({
@@ -64,9 +76,9 @@ export function WorkflowRunView({
         stepCursor: run.stepCursor,
         stepOutputs: run.stepOutputs as Record<string, unknown> | null,
         anyharnessWorkspaceId: run.anyharnessWorkspaceId,
-        stepActions,
+        stepActions: actionSummaries,
       }),
-    [definition, status, run.stepCursor, run.stepOutputs, run.anyharnessWorkspaceId, stepActions],
+    [definition, status, run.stepCursor, run.stepOutputs, run.anyharnessWorkspaceId, actionSummaries],
   );
 
   return (
@@ -123,7 +135,7 @@ export function WorkflowRunView({
           <WorkflowRunTimelineRow
             key={view.index}
             view={view}
-            preview={definition.steps[index] ? workflowStepPreview(definition.steps[index]!) : null}
+            preview={flatSteps[index] ? workflowStepPreview(flatSteps[index]!.step) : null}
             connector={index < views.length - 1}
             onOpenSession={onOpenSession}
             approvalControls={

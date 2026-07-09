@@ -7,11 +7,12 @@
  */
 
 import { truncateGoalObjective } from "../activity/goal";
-import type {
-  WorkflowDefinition,
-  WorkflowGoal,
-  WorkflowStep,
-  WorkflowStepKind,
+import {
+  flattenWorkflowSteps,
+  type WorkflowDefinition,
+  type WorkflowGoal,
+  type WorkflowStep,
+  type WorkflowStepKind,
 } from "./definition";
 
 export interface WorkflowStepKindMeta {
@@ -25,11 +26,12 @@ export interface WorkflowStepKindMeta {
 /** Spec 3.6 step-glyph vocabulary. */
 export const WORKFLOW_STEP_META: Record<WorkflowStepKind, WorkflowStepKindMeta> = {
   "agent.prompt": { glyph: "◇", label: "Prompt", hint: "Send a prompt" },
-  "agent.config": { glyph: "⚙", label: "Agent", hint: "Set the agent" },
+  "agent.emit": { glyph: "▤", label: "Write output", hint: "Capture a typed output" },
+  "agent.config": { glyph: "⚙", label: "Switch model", hint: "Switch model" },
   "shell.run": { glyph: "$", label: "Script", hint: "Run a command" },
   "scm.open_pr": { glyph: "⇈", label: "Open PR", hint: "Open a pull request" },
   notify: { glyph: "🔔", label: "Notify", hint: "Send a notification" },
-  "human.approval": { glyph: "⏸", label: "Approval", hint: "Wait for a human" },
+  branch: { glyph: "⑂", label: "Branch", hint: "Branch on a prior output" },
   "workflow.include": { glyph: "⧉", label: "Include", hint: "Inline a workflow" },
 };
 
@@ -43,9 +45,9 @@ export function stepStripGlyph(step: WorkflowStep): string {
   return WORKFLOW_STEP_META[step.kind].glyph;
 }
 
-/** The glyph strip for a workflow card, in step order. */
+/** The glyph strip for a workflow card, in run order across every agent node. */
 export function workflowStepStrip(definition: WorkflowDefinition): string[] {
-  return definition.steps.map(stepStripGlyph);
+  return flattenWorkflowSteps(definition).map(({ step }) => stepStripGlyph(step));
 }
 
 export function workflowStepKindLabel(kind: WorkflowStepKind): string {
@@ -62,18 +64,17 @@ function collapse(value: string, maxChars = PREVIEW_MAX_CHARS): string {
   return `${collapsed.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
-/** The `harness · model` summary line for an agent-config step (empty when unset). */
-export function agentConfigSummary(step: {
-  harness?: string;
-  model?: string;
-}): string {
-  return [step.harness, step.model].filter((part) => part && part.trim()).join(" · ");
+/** The `model` summary line for a switch-model step (empty when unset). */
+export function agentConfigSummary(step: { model?: string }): string {
+  return (step.model ?? "").trim();
 }
 
 /** One-line content preview shown on a step card. */
 export function workflowStepPreview(step: WorkflowStep): string {
   switch (step.kind) {
     case "agent.prompt":
+      return collapse(step.prompt) || WORKFLOW_STEP_META[step.kind].hint;
+    case "agent.emit":
       return collapse(step.prompt) || WORKFLOW_STEP_META[step.kind].hint;
     case "agent.config":
       return agentConfigSummary(step) || WORKFLOW_STEP_META[step.kind].hint;
@@ -83,8 +84,8 @@ export function workflowStepPreview(step: WorkflowStep): string {
       return collapse(step.title) || WORKFLOW_STEP_META[step.kind].hint;
     case "notify":
       return collapse(step.message) || WORKFLOW_STEP_META[step.kind].hint;
-    case "human.approval":
-      return collapse(step.message) || WORKFLOW_STEP_META[step.kind].hint;
+    case "branch":
+      return collapse(step.on) || WORKFLOW_STEP_META[step.kind].hint;
     case "workflow.include":
       return WORKFLOW_STEP_META[step.kind].hint;
   }
@@ -100,6 +101,8 @@ export function workflowStepExcerpt(step: WorkflowStep): string {
   switch (step.kind) {
     case "agent.prompt":
       return normalize(step.prompt);
+    case "agent.emit":
+      return normalize(step.prompt);
     case "agent.config":
       return agentConfigSummary(step);
     case "shell.run":
@@ -107,8 +110,9 @@ export function workflowStepExcerpt(step: WorkflowStep): string {
     case "scm.open_pr":
       return normalize(step.title);
     case "notify":
-    case "human.approval":
       return normalize(step.message);
+    case "branch":
+      return normalize(step.on);
     case "workflow.include":
       return "";
   }
@@ -216,14 +220,14 @@ export function buildWorkflowCardView(input: BuildWorkflowCardInput): WorkflowCa
     name: input.name,
     description: input.description ?? null,
     glyphs: workflowStepStrip(input.definition),
-    stepCount: input.definition.steps.length,
-    argCount: input.definition.args.length,
+    stepCount: flattenWorkflowSteps(input.definition).length,
+    argCount: input.definition.inputs.length,
     triggers: [manual, ...(input.triggers ?? [])],
     lastRun: input.lastRun ?? null,
   };
 }
 
-/** Whether a Run should open the args form modal first (has declared args). */
+/** Whether a Run should open the args form modal first (has declared inputs). */
 export function workflowNeedsArgsForm(definition: WorkflowDefinition): boolean {
-  return definition.args.length > 0;
+  return definition.inputs.length > 0;
 }

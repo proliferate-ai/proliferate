@@ -42,11 +42,13 @@ export function useLaunchWorkflowRun() {
   return useMutation<WorkflowRunResponse, Error, LaunchWorkflowRunInput>({
     mutationFn: async (input) => {
       const body: StartRunRequest = {
-        args: input.args,
+        inputs: input.args,
         targetMode: input.targetMode,
-        ...(input.targetMode === "personal_cloud" && input.cloudWorkspaceId
-          ? { targetWorkspaceId: input.cloudWorkspaceId }
-          : {}),
+        target: {
+          ...(input.targetMode === "personal_cloud" && input.cloudWorkspaceId
+            ? { workspaceId: input.cloudWorkspaceId }
+            : {}),
+        },
       };
       const run = await startWorkflowRun(input.workflowId, body);
 

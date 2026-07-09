@@ -1,9 +1,7 @@
 import { useState } from "react";
 import {
-  type WorkflowArgSpec,
-  type WorkflowArgType,
-  type WorkflowSessionBinding,
-  type WorkflowSetup,
+  type WorkflowInputSpec,
+  type WorkflowInputType,
 } from "@proliferate/product-domain/workflows/definition";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
@@ -14,71 +12,69 @@ import type { EditorAgent } from "./WorkflowStepPanel";
 import { WorkflowSelect } from "./WorkflowSelect";
 
 export interface WorkflowSetupCardProps {
-  setup: WorkflowSetup;
-  args: WorkflowArgSpec[];
+  inputs: WorkflowInputSpec[];
   agents: readonly EditorAgent[];
-  onSetupChange: (setup: WorkflowSetup) => void;
-  onArgsChange: (args: WorkflowArgSpec[]) => void;
+  onInputsChange: (inputs: WorkflowInputSpec[]) => void;
 }
 
-const ARG_TYPES: WorkflowArgType[] = ["string", "number", "boolean", "enum"];
+const INPUT_TYPES: WorkflowInputType[] = ["text", "number", "choice", "boolean"];
 
-/** Aligned columns shared by the arg table header and every arg row. */
-function ArgRow({
-  arg,
+/** Aligned columns shared by the input table header and every input row. */
+function InputRow({
+  input,
   onChange,
   onRemove,
 }: {
-  arg: WorkflowArgSpec;
-  onChange: (arg: WorkflowArgSpec) => void;
+  input: WorkflowInputSpec;
+  onChange: (input: WorkflowInputSpec) => void;
   onRemove: () => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
         <Input
-          value={arg.name}
+          value={input.name}
           placeholder="name"
-          aria-label="Argument name"
+          aria-label="Input name"
           className="min-w-0 flex-1 font-mono"
-          onChange={(event) => onChange({ ...arg, name: event.target.value })}
+          onChange={(event) => onChange({ ...input, name: event.target.value })}
         />
         <WorkflowSelect
-          ariaLabel="Argument type"
-          value={arg.type}
+          ariaLabel="Input type"
+          value={input.type}
           className="w-24"
           menuWidthClassName="w-32"
           align="start"
-          options={ARG_TYPES.map((type) => ({ value: type, label: type }))}
+          options={INPUT_TYPES.map((type) => ({ value: type, label: type }))}
           onChange={(value) => {
-            const type = value as WorkflowArgType;
-            const next: WorkflowArgSpec = { ...arg, type };
-            if (type === "enum" && !next.enum) {
-              next.enum = [];
+            const type = value as WorkflowInputType;
+            const next: WorkflowInputSpec = { ...input, type };
+            if (type === "choice" && !next.choices) {
+              next.choices = [];
             }
-            if (type !== "enum") {
-              delete next.enum;
+            if (type !== "choice") {
+              delete next.choices;
             }
             onChange(next);
           }}
         />
-        {arg.type === "boolean" ? (
+        {input.type === "boolean" ? (
           <div className="flex w-28 shrink-0 items-center">
-            <Switch checked={arg.default === true} onChange={(checked) => onChange({ ...arg, default: checked })} />
+            <Switch checked={input.default === true} onChange={(checked) => onChange({ ...input, default: checked })} />
           </div>
         ) : (
           <Input
-            value={arg.default === undefined ? "" : String(arg.default)}
+            value={input.default === undefined ? "" : String(input.default)}
             placeholder="default"
             aria-label="Default value"
             className="w-28 shrink-0"
             onChange={(event) => {
               const raw = event.target.value;
-              const value: WorkflowArgSpec = { ...arg };
+              const value: WorkflowInputSpec = { ...input };
               if (raw === "") {
                 delete value.default;
               } else {
-                value.default = arg.type === "number" && !Number.isNaN(Number(raw)) ? Number(raw) : raw;
+                value.default = input.type === "number" && !Number.isNaN(Number(raw)) ? Number(raw) : raw;
               }
               onChange(value);
             }}
@@ -87,24 +83,24 @@ function ArgRow({
         <div className="flex w-14 shrink-0 justify-center">
           <Switch
             aria-label="Required"
-            checked={arg.required}
-            onChange={(checked) => onChange({ ...arg, required: checked })}
+            checked={input.required}
+            onChange={(checked) => onChange({ ...input, required: checked })}
           />
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Remove argument" className="shrink-0" onClick={onRemove}>
+        <Button variant="ghost" size="icon-sm" aria-label="Remove input" className="shrink-0" onClick={onRemove}>
           <X className="size-4" />
         </Button>
       </div>
-      {arg.type === "enum" ? (
+      {input.type === "choice" ? (
         <Input
-          value={(arg.enum ?? []).join(", ")}
+          value={(input.choices ?? []).join(", ")}
           placeholder="value1, value2"
-          aria-label="Enum values"
+          aria-label="Choice values"
           className="font-mono"
           onChange={(event) =>
             onChange({
-              ...arg,
-              enum: event.target.value
+              ...input,
+              choices: event.target.value
                 .split(",")
                 .map((value) => value.trim())
                 .filter((value) => value.length > 0),
@@ -117,17 +113,17 @@ function ArgRow({
 }
 
 /**
- * The Setup configuration card: session mode, arguments, bypass hint.
+ * The Configuration card: the workflow's declared inputs (data-contract §1).
  * Visually consistent with the rail card language (rounded-xl, border, shadow-sm).
  */
-export function WorkflowSetupCard({ setup, args, agents: _agents, onSetupChange, onArgsChange }: WorkflowSetupCardProps) {
+export function WorkflowSetupCard({ inputs, agents: _agents, onInputsChange }: WorkflowSetupCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const updateArg = (index: number, next: WorkflowArgSpec) => {
-    onArgsChange(args.map((arg, i) => (i === index ? next : arg)));
+  const updateInput = (index: number, next: WorkflowInputSpec) => {
+    onInputsChange(inputs.map((input, i) => (i === index ? next : input)));
   };
 
-  const summary = args.length > 0 ? `${args.length} ${args.length === 1 ? "arg" : "args"}` : null;
+  const summary = inputs.length > 0 ? `${inputs.length} ${inputs.length === 1 ? "input" : "inputs"}` : null;
 
   return (
     <div className="rounded-xl border border-border bg-background shadow-sm">
@@ -145,31 +141,13 @@ export function WorkflowSetupCard({ setup, args, agents: _agents, onSetupChange,
 
       {expanded ? (
         <div className="flex flex-col gap-4 border-t border-border/60 px-4 py-4">
-          <div className="flex flex-col gap-1.5">
-            <Label>Session</Label>
-            <WorkflowSelect
-              ariaLabel="Session"
-              value={setup.sessionBinding}
-              options={[
-                { value: "fresh", label: "Fresh (visible)" },
-                { value: "headless", label: "Headless" },
-              ]}
-              onChange={(value) =>
-                onSetupChange({ ...setup, sessionBinding: value as WorkflowSessionBinding })
-              }
-            />
-            <p className="text-xs text-faint">
-              Workflow runs use the agent&apos;s bypass mode. Run location (this Mac or cloud) is chosen at run time.
-            </p>
-          </div>
-
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <Label className="mb-0">Arguments</Label>
-              <span className="text-xs text-faint">Prompted on each run · use {"{{args.name}}"} in steps</span>
+              <Label className="mb-0">Inputs</Label>
+              <span className="text-xs text-faint">Prompted on each run · use {"{{inputs.name}}"} in steps</span>
             </div>
 
-            {args.length > 0 ? (
+            {inputs.length > 0 ? (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 px-0.5 text-xs text-faint">
                   <span className="min-w-0 flex-1">Name</span>
@@ -178,12 +156,12 @@ export function WorkflowSetupCard({ setup, args, agents: _agents, onSetupChange,
                   <span className="w-14 text-center">Req</span>
                   <span className="w-7 shrink-0" />
                 </div>
-                {args.map((arg, index) => (
-                  <ArgRow
+                {inputs.map((input, index) => (
+                  <InputRow
                     key={index}
-                    arg={arg}
-                    onChange={(next) => updateArg(index, next)}
-                    onRemove={() => onArgsChange(args.filter((_, i) => i !== index))}
+                    input={input}
+                    onChange={(next) => updateInput(index, next)}
+                    onRemove={() => onInputsChange(inputs.filter((_, i) => i !== index))}
                   />
                 ))}
               </div>
@@ -191,11 +169,11 @@ export function WorkflowSetupCard({ setup, args, agents: _agents, onSetupChange,
 
             <button
               type="button"
-              onClick={() => onArgsChange([...args, { name: "", type: "string", required: false }])}
+              onClick={() => onInputsChange([...inputs, { name: "", type: "text", required: false }])}
               className="flex items-center gap-1.5 self-start rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               <Plus className="size-3.5" />
-              Add argument
+              Add input
             </button>
           </div>
         </div>

@@ -4,8 +4,9 @@ import { WORKFLOW_STEP_META } from "@proliferate/product-domain/workflows/presen
 import type { IconProps } from "@proliferate/ui/icons";
 import {
   Blocks,
+  ClipboardList,
+  GitBranch,
   GitPullRequest,
-  Pause,
   Robot,
   SendIcon,
   Sparkles,
@@ -20,11 +21,12 @@ import { twMerge } from "@proliferate/ui/utils/tw-merge";
  */
 const KIND_ICON: Record<WorkflowStepKind, ComponentType<IconProps>> = {
   "agent.prompt": Sparkles,
+  "agent.emit": ClipboardList,
   "agent.config": Robot,
   "shell.run": SquareTerminal,
   "scm.open_pr": GitPullRequest,
   notify: SendIcon,
-  "human.approval": Pause,
+  branch: GitBranch,
   "workflow.include": Blocks,
 };
 

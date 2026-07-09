@@ -17,49 +17,53 @@ import { goalRailLine, workflowStepStrip } from "./presentation";
 import { deriveEffectiveConfigs, deriveScopeGroups } from "./effective-config";
 
 describe("interpolation", () => {
-  it("parses arg and step-output references", () => {
-    const refs = iterReferences("fix {{args.repo}} using {{steps[0].output.diff}}");
+  it("parses input and emit references", () => {
+    const refs = iterReferences("fix {{inputs.repo}} using {{diff.summary}}");
     expect(refs).toEqual([
-      { kind: "arg", name: "repo" },
-      { kind: "stepOutput", index: 0, name: "diff" },
+      { kind: "input", name: "repo" },
+      { kind: "emit", emit: "diff", field: "summary" },
     ]);
   });
 
-  it("flags unknown args and forward step references", () => {
-    const argNames = new Set(["repo"]);
+  it("flags unknown inputs and forward emit references", () => {
+    const inputNames = new Set(["repo"]);
     expect(
-      validateStringReferences("{{args.missing}}", { argNames, stepIndex: 1 }).map((i) => i.code),
-    ).toEqual(["unknown_arg_reference"]);
-    expect(
-      validateStringReferences("{{steps[2].output.x}}", { argNames, stepIndex: 1 }).map(
+      validateStringReferences("{{inputs.missing}}", { inputNames, priorEmitNames: new Set() }).map(
         (i) => i.code,
       ),
-    ).toEqual(["forward_step_reference"]);
+    ).toEqual(["unknown_input_reference"]);
     expect(
-      validateStringReferences("{{steps[0].output.x}}", { argNames, stepIndex: 1 }),
+      validateStringReferences("{{verdict.field}}", {
+        inputNames,
+        priorEmitNames: new Set(),
+      }).map((i) => i.code),
+    ).toEqual(["forward_emit_reference"]);
+    expect(
+      validateStringReferences("{{verdict.field}}", {
+        inputNames,
+        priorEmitNames: new Set(["verdict"]),
+      }),
     ).toEqual([]);
   });
 
   it("rejects malformed placeholders and ignores escaped braces", () => {
-    const argNames = new Set<string>();
     expect(
-      validateStringReferences("{{ not a ref }}", { argNames, stepIndex: 0 }).map((i) => i.code),
+      validateStringReferences("{{ not a ref }}", {
+        inputNames: new Set(),
+        priorEmitNames: new Set(),
+      }).map((i) => i.code),
     ).toEqual(["invalid_template_reference"]);
-    expect(iterReferences("\\{{args.repo}}")).toEqual([]);
+    expect(iterReferences("\\{{inputs.repo}}")).toEqual([]);
   });
 
-  it("suggests only args and strictly-earlier step outputs", () => {
+  it("suggests only inputs and strictly-earlier emit fields", () => {
     const suggestions = templateSuggestions({
-      args: [{ name: "repo", type: "string" }],
-      stepIndex: 2,
-      priorStepOutputs: [
-        { index: 0, stepLabel: "Script", outputNames: ["diff"] },
-        { index: 3, stepLabel: "Script", outputNames: ["late"] },
-      ],
+      inputs: [{ name: "repo", type: "text" }],
+      priorEmits: [{ emit: "diff", stepLabel: "Write output", fieldNames: ["summary"] }],
     });
     expect(suggestions.map((s) => s.token)).toEqual([
-      "{{args.repo}}",
-      "{{steps[0].output.diff}}",
+      "{{inputs.repo}}",
+      "{{diff.summary}}",
     ]);
   });
 });
@@ -67,45 +71,61 @@ describe("interpolation", () => {
 describe("definition parse/serialize", () => {
   it("round-trips a canonical wire dict", () => {
     const wire = {
-      args: [{ name: "repo", type: "string", required: true }],
-      setup: { harness: "claude-code", model: "sonnet", session_binding: "headless" },
-      steps: [
+      version: 1,
+      inputs: [{ name: "repo", type: "text", required: true }],
+      integrations: ["slack"],
+      agents: [
         {
-          kind: "agent.prompt",
-          on_fail: { kind: "retry", n: 2 },
-          prompt: "fix {{args.repo}}",
-          goal: {
-            objective: "green",
-            max_turns: 25,
-            max_wall_secs: 5400,
-            token_budget: 400000,
-            on_blocked: "notify",
-            verify: { shell: "make test", expect_exit: 0 },
-          },
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            {
+              kind: "agent.prompt",
+              on_fail: { kind: "retry", n: 2 },
+              prompt: "fix {{inputs.repo}}",
+              goal: {
+                objective: "green",
+                max_turns: 25,
+                max_wall_secs: 5400,
+                token_budget: 400000,
+                on_blocked: "notify",
+                verify: { shell: "make test", expect_exit: 0 },
+              },
+            },
+            { kind: "shell.run", on_fail: { kind: "stop" }, command: "make test", output_name: "t" },
+          ],
         },
-        { kind: "shell.run", on_fail: { kind: "stop" }, command: "make test", output_name: "t" },
       ],
     };
     const parsed = parseWorkflowDefinition(wire);
-    expect(parsed.setup.sessionBinding).toBe("headless");
-    expect(parsed.steps[0]).toMatchObject({ kind: "agent.prompt", onFail: { kind: "retry", n: 2 } });
+    expect(parsed.agents[0]!.harness).toBe("claude");
+    expect(parsed.agents[0]!.steps[0]).toMatchObject({
+      kind: "agent.prompt",
+      onFail: { kind: "retry", n: 2 },
+    });
     expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
   });
 
-  it("round-trips an agent.config step", () => {
+  it("round-trips an agent.config (switch-model) step", () => {
     const wire = {
-      args: [],
-      setup: { harness: "claude", model: "sonnet", session_binding: "fresh" },
-      steps: [
-        { kind: "agent.config", on_fail: { kind: "stop" }, harness: "codex", model: "opus" },
-        { kind: "agent.config", on_fail: { kind: "stop" }, harness: "claude" },
-        { kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" },
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            { kind: "agent.config", on_fail: { kind: "stop" }, model: "opus" },
+            { kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" },
+          ],
+        },
       ],
     };
     const parsed = parseWorkflowDefinition(wire);
-    expect(parsed.steps[0]).toMatchObject({ kind: "agent.config", harness: "codex", model: "opus" });
-    expect(parsed.steps[1]).toMatchObject({ kind: "agent.config", harness: "claude" });
-    expect((parsed.steps[1] as { model?: string }).model).toBeUndefined();
+    expect(parsed.agents[0]!.steps[0]).toMatchObject({ kind: "agent.config", model: "opus" });
     expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
   });
 
@@ -134,55 +154,139 @@ describe("definition parse/serialize", () => {
   });
 });
 
+describe("editor multi-agent round-trip (track 1a′ battery line 1)", () => {
+  it("builds a valid v2 definition from multi-agent editor state and round-trips it", () => {
+    // Shape an editor would author: agents as top-level rail items, each with
+    // its own harness/model and nested steps.
+    const definition: WorkflowDefinition = {
+      version: 1,
+      name: "Triage and fix",
+      description: "Files a triage note then attempts a fix on a second agent.",
+      inputs: [{ name: "repo", type: "text", required: true }],
+      integrations: ["issues"],
+      agents: [
+        {
+          slot: "triage",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            { kind: "agent.emit", onFail: { kind: "stop" }, prompt: "summarize {{inputs.repo}}", name: "summary" },
+          ],
+        },
+        {
+          slot: "fixer",
+          harness: "codex",
+          model: "gpt-5",
+          steps: [
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "fix based on {{summary.text}}" },
+            { kind: "shell.run", onFail: { kind: "retry", n: 1 }, command: "make test" },
+          ],
+        },
+      ],
+    };
+
+    expect(validateWorkflowDefinition(definition)).toEqual([]);
+
+    const wire = serializeWorkflowDefinition(definition);
+    expect(wire.agents).toHaveLength(2);
+    expect((wire.agents as { slot: string }[]).map((a) => a.slot)).toEqual(["triage", "fixer"]);
+
+    const reparsed = parseWorkflowDefinition(wire);
+    expect(reparsed).toEqual(definition);
+    expect(validateWorkflowDefinition(reparsed)).toEqual([]);
+  });
+
+  it("flags a duplicate agent slot across top-level rail items", () => {
+    const definition: WorkflowDefinition = {
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        { slot: "main", harness: "claude", model: "sonnet", steps: [] },
+        { slot: "main", harness: "codex", model: "gpt-5", steps: [] },
+      ],
+    };
+    const issues = validateWorkflowDefinition(definition);
+    expect(issues.some((issue) => issue.code === "duplicate_slot")).toBe(true);
+  });
+});
+
 describe("validation", () => {
   const base: WorkflowDefinition = {
-    args: [],
-    setup: { harness: "claude-code", model: "sonnet", sessionBinding: "fresh" },
-    steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "do it" }],
+    version: 1,
+    inputs: [],
+    integrations: [],
+    agents: [
+      {
+        slot: "main",
+        harness: "claude",
+        model: "sonnet",
+        steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "do it" }],
+      },
+    ],
   };
 
   it("accepts a valid definition", () => {
     expect(validateWorkflowDefinition(base)).toEqual([]);
   });
 
-  it("flags empty prompt, missing setup, and bad refs", () => {
+  it("flags empty prompt, missing agent config, and bad refs", () => {
     const bad: WorkflowDefinition = {
-      args: [],
-      setup: { harness: "", model: "", sessionBinding: "fresh" },
-      steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "{{args.nope}}" }],
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "",
+          model: "",
+          steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "{{inputs.nope}}" }],
+        },
+      ],
     };
     const codes = validateWorkflowDefinition(bad).map((i) => i.code);
     expect(codes).toContain("invalid_definition");
-    expect(codes).toContain("unknown_arg_reference");
+    expect(codes).toContain("unknown_input_reference");
   });
 
-  it("requires at least one of harness/model on an agent.config step", () => {
+  it("requires a model on an agent.config step", () => {
     const empty: WorkflowDefinition = {
       ...base,
-      steps: [{ kind: "agent.config", onFail: { kind: "stop" } }],
+      agents: [{ ...base.agents[0]!, steps: [{ kind: "agent.config", onFail: { kind: "stop" }, model: "" }] }],
     };
     expect(validateWorkflowDefinition(empty).map((i) => i.code)).toContain("invalid_definition");
     const ok: WorkflowDefinition = {
       ...base,
-      steps: [
-        { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "go" },
+      agents: [
+        {
+          ...base.agents[0]!,
+          steps: [
+            { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "go" },
+          ],
+        },
       ],
     };
     expect(validateWorkflowDefinition(ok)).toEqual([]);
   });
 
-  it("folds agent.config harness for goal-capability checks", () => {
+  it("flags a goal on a harness that doesn't support goals", () => {
     const codes = validateWorkflowDefinition(
       {
         ...base,
-        steps: [
-          { kind: "agent.config", onFail: { kind: "stop" }, harness: "no-goals" },
+        agents: [
           {
-            kind: "agent.prompt",
-            onFail: { kind: "stop" },
-            prompt: "go",
-            goal: { objective: "x", maxTurns: 5, maxWallSecs: 60, onBlocked: "notify" },
+            slot: "main",
+            harness: "no-goals",
+            model: "sonnet",
+            steps: [
+              {
+                kind: "agent.prompt",
+                onFail: { kind: "stop" },
+                prompt: "go",
+                goal: { objective: "x", maxTurns: 5, maxWallSecs: 60, onBlocked: "notify" },
+              },
+            ],
           },
         ],
       },
@@ -194,12 +298,17 @@ describe("validation", () => {
   it("requires goal caps and objective when a goal is attached", () => {
     const withGoal: WorkflowDefinition = {
       ...base,
-      steps: [
+      agents: [
         {
-          kind: "agent.prompt",
-          onFail: { kind: "stop" },
-          prompt: "go",
-          goal: { objective: "", maxTurns: 0, maxWallSecs: 0, onBlocked: "notify" },
+          ...base.agents[0]!,
+          steps: [
+            {
+              kind: "agent.prompt",
+              onFail: { kind: "stop" },
+              prompt: "go",
+              goal: { objective: "", maxTurns: 0, maxWallSecs: 0, onBlocked: "notify" },
+            },
+          ],
         },
       ],
     };
@@ -207,24 +316,25 @@ describe("validation", () => {
     expect(codes.filter((c) => c === "invalid_definition").length).toBeGreaterThanOrEqual(3);
   });
 
-  it("accepts a valid functions grant and flags empty/duplicate providers and tools (spec 1.5 / L22)", () => {
-    const ok: WorkflowDefinition = {
-      ...base,
-      functions: [{ provider: "issues", tools: ["claim", "search_issues"] }],
-    };
-    expect(validateWorkflowDefinition(ok)).toEqual([]);
-
+  it("flags a branch that switches on a forward emit reference", () => {
     const bad: WorkflowDefinition = {
       ...base,
-      functions: [
-        { provider: "issues", tools: [] },
-        { provider: "issues", tools: ["claim", "claim"] },
+      agents: [
+        {
+          ...base.agents[0]!,
+          steps: [
+            {
+              kind: "branch",
+              onFail: { kind: "stop" },
+              on: "{{verdict.field}}",
+              cases: { yes: { to: "continue" } },
+            },
+          ],
+        },
       ],
     };
     const codes = validateWorkflowDefinition(bad).map((i) => i.code);
-    expect(codes).toContain("duplicate_function_provider");
-    // Empty tools on the first grant, duplicate tool name on the second.
-    expect(codes.filter((c) => c === "invalid_definition").length).toBeGreaterThanOrEqual(2);
+    expect(codes).toContain("forward_emit_reference");
   });
 });
 
@@ -244,20 +354,15 @@ describe("templates", () => {
 });
 
 describe("run-status derivation", () => {
-  const definition = WORKFLOW_TEMPLATES[0]!.definition; // agent config -> shell -> goal prompt -> pr
+  const definition = WORKFLOW_TEMPLATES[0]!.definition; // shell -> goal prompt -> pr
 
   it("marks earlier steps complete, the cursor goal-iterating, later pending", () => {
     const views = deriveStepRunViews({
       definition,
       runStatus: "running",
-      stepCursor: 2,
+      stepCursor: 1,
     });
-    expect(views.map((v) => v.status)).toEqual([
-      "completed",
-      "completed",
-      "goal_iterating",
-      "pending",
-    ]);
+    expect(views.map((v) => v.status)).toEqual(["completed", "goal_iterating", "pending"]);
   });
 
   it("resolves every step on completion", () => {
@@ -269,116 +374,139 @@ describe("run-status derivation", () => {
     const views = deriveStepRunViews({
       definition,
       runStatus: "failed",
-      stepCursor: 1,
-      stepOutputs: { "1": { exit_code: 1 } },
+      stepCursor: 0,
+      stepOutputs: { "0.-.0": { exit_code: 1 } },
     });
-    expect(views.map((v) => v.status)).toEqual(["completed", "failed", "skipped", "skipped"]);
-    expect(views[1]!.chips).toEqual([{ kind: "exit", label: "exit 1", ok: false }]);
+    expect(views.map((v) => v.status)).toEqual(["failed", "skipped", "skipped"]);
+    expect(views[0]!.chips).toEqual([{ kind: "exit", label: "exit 1", ok: false }]);
   });
 });
 
 describe("presentation", () => {
   it("uses the goal glyph for goal-armed prompts", () => {
     const strip = workflowStepStrip(WORKFLOW_TEMPLATES[0]!.definition);
-    expect(strip).toEqual(["⚙", "$", "◎", "⇈"]);
+    expect(strip).toEqual(["$", "◎", "⇈"]);
   });
 
   it("renders the two-line goal rail treatment", () => {
-    const line = goalRailLine(WORKFLOW_TEMPLATES[0]!.definition.steps[2]!);
+    const line = goalRailLine(WORKFLOW_TEMPLATES[0]!.definition.agents[0]!.steps[1]!);
     expect(line?.glyph).toBe("◎");
     expect(line?.text).toContain("25t · 90m · 400k");
   });
 });
 
 describe("effective-config derivation", () => {
-  it("setup-only: all steps share scope 0, first agent.prompt opens session", () => {
+  it("single agent, no config steps: all steps share scope 0, first step opens the session", () => {
     const def: WorkflowDefinition = {
-      args: [],
-      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
-      steps: [
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "hello" },
-        { kind: "shell.run", onFail: { kind: "stop" }, command: "make test" },
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "done" },
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "hello" },
+            { kind: "shell.run", onFail: { kind: "stop" }, command: "make test" },
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "done" },
+          ],
+        },
       ],
     };
     const configs = deriveEffectiveConfigs(def);
     expect(configs).toHaveLength(3);
-    // First prompt opens the session
-    expect(configs[0]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "sonnet", isNewSession: true, scopeIndex: 0 });
-    // Shell step: same scope, no new session
-    expect(configs[1]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "sonnet", isNewSession: false, scopeIndex: 0 });
-    // Second prompt: same scope, no new session
-    expect(configs[2]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "sonnet", isNewSession: false, scopeIndex: 0 });
+    expect(configs[0]).toMatchObject({
+      effectiveHarness: "claude",
+      effectiveModel: "sonnet",
+      isNewSession: true,
+      scopeIndex: 0,
+    });
+    expect(configs[1]).toMatchObject({ isNewSession: false, scopeIndex: 0 });
+    expect(configs[2]).toMatchObject({ isNewSession: false, scopeIndex: 0 });
   });
 
-  it("model-only change: same session (scope unchanged)", () => {
+  it("agent.config model switch: same session (harness never changes mid-slot)", () => {
     const def: WorkflowDefinition = {
-      args: [],
-      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
-      steps: [
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "start" },
-        { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "continue" },
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "start" },
+            { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "continue" },
+          ],
+        },
       ],
     };
     const configs = deriveEffectiveConfigs(def);
     expect(configs[0]).toMatchObject({ isNewSession: true, scopeIndex: 0 });
-    // Model-only config: NOT a new session (harness unchanged)
-    expect(configs[1]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "opus", isNewSession: false, scopeIndex: 0 });
-    expect(configs[2]).toMatchObject({ effectiveHarness: "claude", effectiveModel: "opus", isNewSession: false, scopeIndex: 0 });
+    expect(configs[1]).toMatchObject({
+      effectiveHarness: "claude",
+      effectiveModel: "opus",
+      isNewSession: false,
+      scopeIndex: 0,
+    });
+    expect(configs[2]).toMatchObject({ effectiveModel: "opus", isNewSession: false, scopeIndex: 0 });
   });
 
-  it("harness change: opens new session (new scope)", () => {
+  it("a second agent node (different slot) opens a new session/scope", () => {
     const def: WorkflowDefinition = {
-      args: [],
-      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
-      steps: [
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "start" },
-        { kind: "agent.config", onFail: { kind: "stop" }, harness: "codex", model: "gpt" },
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "in codex" },
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "triage",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "start" }],
+        },
+        {
+          slot: "fix",
+          harness: "codex",
+          model: "gpt",
+          steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "in codex" }],
+        },
       ],
     };
     const configs = deriveEffectiveConfigs(def);
     expect(configs[0]).toMatchObject({ effectiveHarness: "claude", isNewSession: true, scopeIndex: 0 });
-    // Harness change IS a new session
     expect(configs[1]).toMatchObject({ effectiveHarness: "codex", effectiveModel: "gpt", isNewSession: true, scopeIndex: 1 });
-    expect(configs[2]).toMatchObject({ effectiveHarness: "codex", isNewSession: false, scopeIndex: 1 });
   });
 
-  it("consecutive configs: each harness change increments scope", () => {
+  it("scope groups derive correctly across two agent nodes", () => {
     const def: WorkflowDefinition = {
-      args: [],
-      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
-      steps: [
-        { kind: "agent.config", onFail: { kind: "stop" }, harness: "codex" },
-        { kind: "agent.config", onFail: { kind: "stop" }, harness: "opencode" },
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "go" },
-      ],
-    };
-    const configs = deriveEffectiveConfigs(def);
-    // First config: opens first scope (no prior agent-touching step)
-    expect(configs[0]).toMatchObject({ effectiveHarness: "codex", isNewSession: true, scopeIndex: 0 });
-    // Second config: harness changed from codex -> opencode
-    expect(configs[1]).toMatchObject({ effectiveHarness: "opencode", isNewSession: true, scopeIndex: 1 });
-    // Prompt inherits
-    expect(configs[2]).toMatchObject({ effectiveHarness: "opencode", isNewSession: false, scopeIndex: 1 });
-  });
-
-  it("scope groups derive correctly", () => {
-    const def: WorkflowDefinition = {
-      args: [],
-      setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
-      steps: [
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "a" },
-        { kind: "shell.run", onFail: { kind: "stop" }, command: "test" },
-        { kind: "agent.config", onFail: { kind: "stop" }, harness: "codex" },
-        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "b" },
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "a" },
+            { kind: "shell.run", onFail: { kind: "stop" }, command: "test" },
+          ],
+        },
+        {
+          slot: "fix",
+          harness: "codex",
+          model: "gpt",
+          steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "b" }],
+        },
       ],
     };
     const configs = deriveEffectiveConfigs(def);
     const groups = deriveScopeGroups(configs);
     expect(groups).toHaveLength(2);
     expect(groups[0]).toMatchObject({ startIndex: 0, endIndex: 1, scopeIndex: 0, harness: "claude" });
-    expect(groups[1]).toMatchObject({ startIndex: 2, endIndex: 3, scopeIndex: 1, harness: "codex" });
+    expect(groups[1]).toMatchObject({ startIndex: 2, endIndex: 2, scopeIndex: 1, harness: "codex" });
   });
 });

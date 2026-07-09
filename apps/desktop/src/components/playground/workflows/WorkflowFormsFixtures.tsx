@@ -1,8 +1,5 @@
 import { useState } from "react";
-import type {
-  WorkflowArgSpec,
-  WorkflowSetup,
-} from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { WorkflowRunArgsModal, type WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
 import { WorkflowMetaCard } from "@/components/workflows/editor/WorkflowMetaCard";
@@ -37,9 +34,9 @@ const REPO_OPTIONS: WorkflowTriggerRepoOption[] = [
   { fullName: "acme/web", label: "acme/web" },
 ];
 
-const ARGS: WorkflowArgSpec[] = [
+const ARGS: WorkflowInputSpec[] = [
   { name: "pr_number", type: "number", required: true },
-  { name: "env", type: "enum", enum: ["staging", "prod"], required: false, default: "staging" },
+  { name: "env", type: "choice", choices: ["staging", "prod"], required: false, default: "staging" },
 ];
 
 const DAILY_RRULE = "RRULE:FREQ=DAILY;INTERVAL=1;BYHOUR=9;BYMINUTE=0";
@@ -108,8 +105,7 @@ const TRIGGERS: WorkflowTriggerResponse[] = [
 export function WorkflowFormsFixtures() {
   const [name, setName] = useState("Fix until green");
   const [description, setDescription] = useState("Investigate and fix failing tests until the suite passes.");
-  const [setup, setSetup] = useState<WorkflowSetup>({ harness: "claude", model: "opus", sessionBinding: "fresh" });
-  const [args, setArgs] = useState<WorkflowArgSpec[]>(ARGS);
+  const [args, setArgs] = useState<WorkflowInputSpec[]>(ARGS);
   const [integrations, setIntegrations] = useState<string[]>(INTEGRATION_GRANTS);
   const [emptyIntegrations, setEmptyIntegrations] = useState<string[]>([]);
   const [runModalOpen, setRunModalOpen] = useState(false);
@@ -160,7 +156,7 @@ export function WorkflowFormsFixtures() {
           onNameChange={setName}
           onDescriptionChange={setDescription}
         />
-        <WorkflowSetupCard setup={setup} args={args} agents={AGENTS} onSetupChange={setSetup} onArgsChange={setArgs} />
+        <WorkflowSetupCard inputs={args} agents={AGENTS} onInputsChange={setArgs} />
 
         <div className="flex flex-col gap-2">
           <span className="text-xs text-faint">Integrations — namespace toggles (E3), loud cloud-only caption</span>

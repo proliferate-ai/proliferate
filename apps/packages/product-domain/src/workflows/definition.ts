@@ -644,6 +644,44 @@ export function serializeWorkflowDefinition(
   return out;
 }
 
+// --- Flattening ------------------------------------------------------------------
+
+/** A step plus the agent-node context it runs in, at its flattened run-order index. */
+export interface FlatWorkflowStep {
+  step: WorkflowStep;
+  nodeIndex: number;
+  slot: string;
+  harness: string;
+  /**
+   * The resolved plan's structured step key (service.py `_resolve_definition`):
+   * `${nodeIndex}.-.${stepIndexInNode}` — the "-" lane placeholder is reserved
+   * for the future parallel-lane shape (§4) and never re-keys the contract.
+   * This is how the server addresses step outputs / actions on the wire.
+   */
+  stepKey: string;
+}
+
+/**
+ * Flatten every agent node's steps into one run-ordered list (spine order).
+ * Consumers that need a single "step index" across the whole definition
+ * (presentation, run-status, effective-config) build on this.
+ */
+export function flattenWorkflowSteps(definition: WorkflowDefinition): FlatWorkflowStep[] {
+  const out: FlatWorkflowStep[] = [];
+  definition.agents.forEach((node, nodeIndex) => {
+    node.steps.forEach((step, stepIndex) => {
+      out.push({
+        step,
+        nodeIndex,
+        slot: node.slot,
+        harness: node.harness,
+        stepKey: `${nodeIndex}.-.${stepIndex}`,
+      });
+    });
+  });
+  return out;
+}
+
 // --- Type guards ---------------------------------------------------------------
 
 export function isWorkflowStepKind(value: unknown): value is WorkflowStepKind {

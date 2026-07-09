@@ -1,4 +1,4 @@
-import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
+import { flattenWorkflowSteps, type WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
 import {
   deriveStepRunViews,
   workflowRunStatusLabel,
@@ -12,15 +12,8 @@ import { WORKFLOW_TEMPLATES } from "@proliferate/product-domain/workflows/templa
 
 const FIX_UNTIL_GREEN = WORKFLOW_TEMPLATES[0]!.definition; // shell -> goal prompt -> pr
 
-const APPROVAL_DEFINITION: WorkflowDefinition = {
-  args: [],
-  setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
-  steps: [
-    { kind: "shell.run", onFail: { kind: "stop" }, command: "make build", outputName: "build" },
-    { kind: "human.approval", onFail: { kind: "stop" }, message: "Approve deploy?", onTimeout: "fail" },
-    { kind: "notify", onFail: { kind: "continue" }, channel: "slack", message: "Deployed." },
-  ],
-};
+// Sentry triage's goal is `onBlocked: "pause_for_approval"` — the waiting-approval scenario.
+const APPROVAL_DEFINITION = WORKFLOW_TEMPLATES[1]!.definition;
 
 const GOAL_OUTPUT = {
   goal: { objective: "the full test suite passes", status: "active", iterations: 3, tokens_used: 64_000 },
@@ -39,30 +32,29 @@ interface RunScenario {
 
 const SCENARIOS: RunScenario[] = [
   {
-    // FIX_UNTIL_GREEN now leads with an agent.config step (index 0).
+    // FIX_UNTIL_GREEN: shell (0.-.0) -> goal prompt (0.-.1) -> pr (0.-.2).
     label: "Running · goal-iterating",
     definition: FIX_UNTIL_GREEN,
     status: "running",
-    stepCursor: 2,
+    stepCursor: 1,
     stepOutputs: {
-      "0": { harness: "claude-code", model: "sonnet", session_switched: true },
-      "1": { exit_code: 1 },
-      "2": GOAL_OUTPUT,
+      "0.-.0": { exit_code: 1 },
+      "0.-.1": GOAL_OUTPUT,
     },
   },
   {
     label: "Failed",
     definition: FIX_UNTIL_GREEN,
     status: "failed",
-    stepCursor: 1,
-    stepOutputs: { "0": { harness: "claude-code", model: "sonnet" }, "1": { exit_code: 1 } },
+    stepCursor: 0,
+    stepOutputs: { "0.-.0": { exit_code: 1 } },
   },
   {
     label: "Waiting for approval",
     definition: APPROVAL_DEFINITION,
     status: "waiting_approval",
-    stepCursor: 1,
-    stepOutputs: { "0": { exit_code: 0 } },
+    stepCursor: 0,
+    stepOutputs: { "0.-.0": GOAL_OUTPUT },
     approval: true,
   },
   {
@@ -71,10 +63,9 @@ const SCENARIOS: RunScenario[] = [
     status: "completed",
     stepCursor: null,
     stepOutputs: {
-      "0": { harness: "claude-code", model: "sonnet" },
-      "1": { exit_code: 0 },
-      "2": { ...GOAL_OUTPUT, goal: { ...GOAL_OUTPUT.goal, status: "met", iterations: 6, tokens_used: 128_000 } },
-      "3": { pr_number: 912, pr_url: "https://github.com/proliferate-ai/proliferate/pull/912" },
+      "0.-.0": { exit_code: 0 },
+      "0.-.1": { ...GOAL_OUTPUT, goal: { ...GOAL_OUTPUT.goal, status: "met", iterations: 6, tokens_used: 128_000 } },
+      "0.-.2": { pr_number: 912, pr_url: "https://github.com/proliferate-ai/proliferate/pull/912" },
     },
   },
 ];
@@ -93,6 +84,7 @@ function ApprovalControls() {
 }
 
 function RunTimeline({ scenario }: { scenario: RunScenario }) {
+  const flatSteps = flattenWorkflowSteps(scenario.definition);
   const views = deriveStepRunViews({
     definition: scenario.definition,
     runStatus: scenario.status,
@@ -115,8 +107,8 @@ function RunTimeline({ scenario }: { scenario: RunScenario }) {
           key={view.index}
           view={view}
           preview={
-            scenario.definition.steps[index]
-              ? workflowStepPreview(scenario.definition.steps[index]!)
+            flatSteps[index]
+              ? workflowStepPreview(flatSteps[index]!.step)
               : null
           }
           durationLabel={view.status === "completed" ? "18s" : undefined}

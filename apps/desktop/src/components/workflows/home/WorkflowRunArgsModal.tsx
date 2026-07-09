@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { WorkflowArgSpec } from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
 import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
@@ -28,7 +28,7 @@ export interface WorkflowRunSubmit {
 export interface WorkflowRunArgsModalProps {
   open: boolean;
   workflowName: string;
-  args: readonly WorkflowArgSpec[];
+  args: readonly WorkflowInputSpec[];
   localWorkspaces: readonly WorkflowRunTargetOption[];
   cloudWorkspaces: readonly WorkflowRunTargetOption[];
   /** Default local workspace (e.g. the currently-open one), if any. */
@@ -47,7 +47,7 @@ export interface WorkflowRunArgsModalProps {
   onSubmit: (input: WorkflowRunSubmit) => void;
 }
 
-function initialValue(arg: WorkflowArgSpec): ArgValue {
+function initialValue(arg: WorkflowInputSpec): ArgValue {
   if (arg.default !== undefined) {
     return arg.default;
   }
@@ -56,9 +56,9 @@ function initialValue(arg: WorkflowArgSpec): ArgValue {
       return false;
     case "number":
       return "" as unknown as number;
-    case "enum":
-      return arg.enum?.[0] ?? "";
-    case "string":
+    case "choice":
+      return arg.choices?.[0] ?? "";
+    case "text":
       return "";
   }
 }
@@ -176,11 +176,11 @@ export function WorkflowRunArgsModal({
                 checked={Boolean(values[arg.name])}
                 onChange={(checked) => setValue(arg.name, checked)}
               />
-            ) : arg.type === "enum" ? (
+            ) : arg.type === "choice" ? (
               <WorkflowSelect
                 ariaLabel={`${arg.name} value`}
                 value={String(values[arg.name] ?? "")}
-                options={(arg.enum ?? []).map((option) => ({ value: option, label: option }))}
+                options={(arg.choices ?? []).map((option) => ({ value: option, label: option }))}
                 onChange={(value) => setValue(arg.name, value)}
               />
             ) : (

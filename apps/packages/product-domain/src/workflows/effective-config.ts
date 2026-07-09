@@ -1,11 +1,14 @@
 /**
- * Effective-config derivation — mirrors the runtime executor's fold
- * (`recompute_active_config` + `ensure_session` in executor.rs).
+ * Effective-config derivation — format v2 (data-contract §1.1).
  *
- * Given a workflow definition, computes for each step:
- * - The effective harness and model in scope
- * - Whether this step opens a new session (harness differs from previous)
- * - The scope index (increments on each new session)
+ * In v2 a session IS a slot: every agent node opens exactly one session, fixed
+ * to that node's `harness` for its whole life (harness never changes mid-slot —
+ * a different harness is a different node/slot). Only `model` can change
+ * mid-slot, via an `agent.config` step. So for each flattened step:
+ * - The effective harness is always the owning node's harness.
+ * - The effective model starts at the node's `model` and folds forward through
+ *   any `agent.config` steps within that node.
+ * - A new session opens exactly at the first step of each agent node.
  *
  * Pure function, no side effects.
  */
@@ -13,83 +16,36 @@
 import type { WorkflowDefinition } from "./definition";
 
 export interface StepEffectiveConfig {
-  /** The harness in effect for this step. */
+  /** The harness in effect for this step (fixed per agent node). */
   effectiveHarness: string;
-  /** The model in effect for this step (from setup or last agent.config that set one). */
+  /** The model in effect for this step (node's model, folded through agent.config). */
   effectiveModel: string;
-  /**
-   * True when this step opens a new session:
-   * - The first agent-touching step (index 0 of the first scope)
-   * - Any agent.config whose harness differs from the previous effective harness
-   */
+  /** True for the first step of each agent node — a new session opens there. */
   isNewSession: boolean;
-  /** Scope index — increments each time a new session opens. */
+  /** Scope index — one per agent node, in spine order. */
   scopeIndex: number;
 }
 
 /**
- * Derive the per-step effective config for every step in a workflow definition.
- * Mirrors the executor's fold: setup seeds {harness, model}; each agent.config
- * step folds into the active config for all subsequent steps; an agent step
- * reuses the session when harness matches, opens a new session when it differs.
+ * Derive the per-step effective config for every step across the whole spine.
  */
 export function deriveEffectiveConfigs(definition: WorkflowDefinition): StepEffectiveConfig[] {
-  const { setup } = definition;
-  let effectiveHarness = setup.harness;
-  let effectiveModel = setup.model;
-  let scopeIndex = 0;
-  // Track the "previous" harness before the fold for detecting changes.
-  // The first scope (from setup) counts as scope 0 — it opens on the first
-  // agent-touching step. We track whether we've seen any agent-touching step yet.
-  let firstAgentScopeOpened = false;
-
   const results: StepEffectiveConfig[] = [];
 
-  for (const step of definition.steps) {
-    if (step.kind === "agent.config") {
-      const prevHarness = effectiveHarness;
-      // Fold: only override fields that are present (mirrors apply_config in executor.rs)
-      if (step.harness !== undefined) {
-        effectiveHarness = step.harness;
-      }
-      if (step.model !== undefined) {
+  definition.agents.forEach((node, nodeIndex) => {
+    let effectiveModel = node.model;
+    node.steps.forEach((step, stepInNode) => {
+      if (step.kind === "agent.config") {
         effectiveModel = step.model;
       }
-
-      const harnessChanged = effectiveHarness !== prevHarness;
-      const isNew = harnessChanged || !firstAgentScopeOpened;
-
-      if (isNew && firstAgentScopeOpened) {
-        scopeIndex++;
-      }
-      if (!firstAgentScopeOpened) {
-        firstAgentScopeOpened = true;
-      }
-
       results.push({
-        effectiveHarness,
+        effectiveHarness: node.harness,
         effectiveModel,
-        isNewSession: isNew,
-        scopeIndex,
+        isNewSession: stepInNode === 0,
+        scopeIndex: nodeIndex,
       });
-    } else {
-      // Non-config steps: they inherit the current effective config.
-      // The first agent-touching step (agent.prompt) in the initial scope
-      // implicitly opens the first session.
-      let isNew = false;
-      if (step.kind === "agent.prompt" && !firstAgentScopeOpened) {
-        firstAgentScopeOpened = true;
-        isNew = true;
-      }
-
-      results.push({
-        effectiveHarness,
-        effectiveModel,
-        isNewSession: isNew,
-        scopeIndex,
-      });
-    }
-  }
+    });
+  });
 
   return results;
 }
@@ -99,9 +55,9 @@ export function deriveEffectiveConfigs(definition: WorkflowDefinition): StepEffe
  * same scopeIndex form a group. Returns the start index and label for each.
  */
 export interface ScopeGroup {
-  /** Index of the first step in this scope group. */
+  /** Index of the first step in this scope group (flattened index). */
   startIndex: number;
-  /** Index of the last step in this scope group (inclusive). */
+  /** Index of the last step in this scope group (inclusive, flattened index). */
   endIndex: number;
   scopeIndex: number;
   harness: string;

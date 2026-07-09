@@ -1,5 +1,9 @@
 import { useState, useMemo } from "react";
-import type { WorkflowDefinition, WorkflowStep } from "@proliferate/product-domain/workflows/definition";
+import {
+  flattenWorkflowSteps,
+  type WorkflowDefinition,
+  type WorkflowStep,
+} from "@proliferate/product-domain/workflows/definition";
 import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/interpolation";
 import { deriveEffectiveConfigs } from "@proliferate/product-domain/workflows/effective-config";
 import { WorkflowStepPanel, type EditorAgent } from "@/components/workflows/editor/WorkflowStepPanel";
@@ -20,44 +24,56 @@ const AGENTS: EditorAgent[] = [
 ];
 
 const SUGGESTIONS: TemplateSuggestion[] = [
-  { token: "{{args.pr_number}}", label: "args.pr_number", detail: "argument · number", kind: "arg" },
-  { token: "{{steps.1.output}}", label: "steps.1.output", detail: "step 1 · Prompt output", kind: "stepOutput" },
+  { token: "{{inputs.pr_number}}", label: "inputs.pr_number", detail: "input · number", kind: "input" },
+  { token: "{{verdict.field}}", label: "verdict.field", detail: "emit · Prompt output", kind: "emit" },
 ];
 
 // --- Scope-demo rail: exercises all scope-boundary cases ---
-// Setup: claude · sonnet → INITIAL scope header (unnumbered)
-// Step 0: agent.prompt   → action 1
-// Step 1: shell.run      → action 2
-// Step 2: agent.config model-only → opus → MODEL-ONLY scope header (quiet, unnumbered)
-// Step 3: agent.prompt   → action 3
-// Step 4: agent.config harness → opencode → NEW-SESSION scope header (emphasis, unnumbered)
-// Step 5: agent.prompt   → action 4
-
-const SCOPE_DEMO_STEPS: WorkflowStep[] = [
-  { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "Analyze the codebase and identify all API endpoints that lack input validation." },
-  { kind: "shell.run", onFail: { kind: "continue" }, command: "pnpm build && pnpm test" },
-  { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
-  {
-    kind: "agent.prompt",
-    onFail: { kind: "stop" },
-    prompt: "Based on the analysis, fix all validation gaps and add comprehensive test coverage.",
-    goal: {
-      objective: "all tests pass with full validation coverage",
-      maxTurns: 25,
-      maxWallSecs: 5400,
-      tokenBudget: 400_000,
-      onBlocked: "notify",
-      verify: { shell: "pnpm test", expectExit: 0 },
-    },
-  },
-  { kind: "agent.config", onFail: { kind: "stop" }, harness: "opencode", model: "gpt-4o" },
-  { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "Review the changes from a second perspective and suggest any improvements." },
-];
+// Node "main" (claude · sonnet) → INITIAL scope header (unnumbered)
+//   Step 0: agent.prompt   → action 1
+//   Step 1: shell.run      → action 2
+//   Step 2: agent.config model-only → opus → MODEL-ONLY scope header (quiet, unnumbered)
+//   Step 3: agent.prompt   → action 3
+// Node "review" (opencode · gpt-4o) → NEW-SESSION scope header (emphasis, unnumbered)
+//   Step 4: agent.prompt   → action 4
 
 const SCOPE_DEMO_DEFINITION: WorkflowDefinition = {
-  args: [],
-  setup: { harness: "claude", model: "sonnet", sessionBinding: "fresh" },
-  steps: SCOPE_DEMO_STEPS,
+  version: 1,
+  inputs: [],
+  integrations: [],
+  agents: [
+    {
+      slot: "main",
+      harness: "claude",
+      model: "sonnet",
+      steps: [
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "Analyze the codebase and identify all API endpoints that lack input validation." },
+        { kind: "shell.run", onFail: { kind: "continue" }, command: "pnpm build && pnpm test" },
+        { kind: "agent.config", onFail: { kind: "stop" }, model: "opus" },
+        {
+          kind: "agent.prompt",
+          onFail: { kind: "stop" },
+          prompt: "Based on the analysis, fix all validation gaps and add comprehensive test coverage.",
+          goal: {
+            objective: "all tests pass with full validation coverage",
+            maxTurns: 25,
+            maxWallSecs: 5400,
+            tokenBudget: 400_000,
+            onBlocked: "notify",
+            verify: { shell: "pnpm test", expectExit: 0 },
+          },
+        },
+      ],
+    },
+    {
+      slot: "review",
+      harness: "opencode",
+      model: "gpt-4o",
+      steps: [
+        { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "Review the changes from a second perspective and suggest any improvements." },
+      ],
+    },
+  ],
 };
 
 function resolveLabels(harnessKind: string, modelId: string) {
@@ -69,8 +85,8 @@ function resolveLabels(harnessKind: string, modelId: string) {
 }
 
 function ScopeDemoRail() {
-  // -1 selects the initial (setup) scope header.
   const [selected, setSelected] = useState<number>(0);
+  const flatSteps = useMemo(() => flattenWorkflowSteps(SCOPE_DEMO_DEFINITION), []);
   const effectiveConfigs = useMemo(
     () => deriveEffectiveConfigs(SCOPE_DEMO_DEFINITION),
     [],
@@ -80,29 +96,36 @@ function ScopeDemoRail() {
 
   return (
     <div className="w-[480px] rounded-xl bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] p-5 [background-size:16px_16px]">
-      <WorkflowScopeHeader
-        variant="initial"
-        {...resolveLabels(SCOPE_DEMO_DEFINITION.setup.harness, SCOPE_DEMO_DEFINITION.setup.model)}
-        selected={selected === -1}
-        onSelect={() => setSelected(-1)}
-      />
-      {SCOPE_DEMO_STEPS.map((step, index) => {
+      {flatSteps.map(({ step }, index) => {
         const thisConfig = effectiveConfigs[index];
+        const labels = resolveLabels(
+          thisConfig?.effectiveHarness ?? "",
+          thisConfig?.effectiveModel ?? "",
+        );
 
-        if (step.kind === "agent.config") {
-          const labels = resolveLabels(
-            thisConfig?.effectiveHarness ?? step.harness ?? "",
-            thisConfig?.effectiveModel ?? step.model ?? "",
-          );
+        if (thisConfig?.isNewSession) {
           return (
             <WorkflowScopeHeader
-              key={index}
-              variant={thisConfig?.isNewSession ? "new-session" : "model-only"}
+              key={`scope-${index}`}
+              variant={index === 0 ? "initial" : "new-session"}
+              harness={labels.harness}
+              model={labels.model}
+              selected={selected === index}
+              onSelect={() => setSelected(index)}
+            />
+          );
+        }
+
+        if (step.kind === "agent.config") {
+          return (
+            <WorkflowScopeHeader
+              key={`scope-${index}`}
+              variant="model-only"
               harness={labels.harness}
               model={labels.model}
               selected={selected === index}
               canMoveUp={index > 0}
-              canMoveDown={index < SCOPE_DEMO_STEPS.length - 1}
+              canMoveDown={index < flatSteps.length - 1}
               onSelect={() => setSelected(index)}
               onDuplicate={() => undefined}
               onDelete={() => undefined}
@@ -114,8 +137,7 @@ function ScopeDemoRail() {
 
         actionNumber += 1;
         const nextIsAction =
-          SCOPE_DEMO_STEPS[index + 1] !== undefined &&
-          SCOPE_DEMO_STEPS[index + 1]!.kind !== "agent.config";
+          flatSteps[index + 1] !== undefined && flatSteps[index + 1]!.step.kind !== "agent.config";
         return (
           <WorkflowStepRailCard
             key={index}
@@ -126,7 +148,7 @@ function ScopeDemoRail() {
             invalid={false}
             connector={nextIsAction}
             canMoveUp={index > 0}
-            canMoveDown={index < SCOPE_DEMO_STEPS.length - 1}
+            canMoveDown={index < flatSteps.length - 1}
             onSelect={() => setSelected(index)}
             onChange={() => undefined}
             onDuplicate={() => undefined}
@@ -151,7 +173,7 @@ function ScopeDemoRail() {
 
 // --- Original panel host for the editor panels ---
 
-const CONFIG_STEP: WorkflowStep = { kind: "agent.config", onFail: { kind: "stop" }, harness: "claude", model: "sonnet" };
+const CONFIG_STEP: WorkflowStep = { kind: "agent.config", onFail: { kind: "stop" }, model: "sonnet" };
 const SHELL_STEP: WorkflowStep = {
   kind: "shell.run",
   onFail: { kind: "continue" },
@@ -162,7 +184,7 @@ const PROMPT_STEP: WorkflowStep = {
   kind: "agent.prompt",
   onFail: { kind: "stop" },
   prompt:
-    "Triage the failing CI run for PR {{args.pr_number}}: read the logs, reproduce the failure locally, "
+    "Triage the failing CI run for PR {{inputs.pr_number}}: read the logs, reproduce the failure locally, "
     + "fix the root cause rather than the symptom, and add a regression test so it cannot come back.",
   goal: {
     objective: "the full test suite passes",

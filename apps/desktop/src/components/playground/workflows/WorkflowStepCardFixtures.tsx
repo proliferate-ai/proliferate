@@ -28,7 +28,6 @@ const GOAL_STEP: WorkflowStep = {
 const CONFIG_STEP: WorkflowStep = {
   kind: "agent.config",
   onFail: { kind: "stop" },
-  harness: "claude",
   model: "sonnet",
 };
 
@@ -50,16 +49,15 @@ const PR_STEP: WorkflowStep = {
 const NOTIFY_STEP: WorkflowStep = {
   kind: "notify",
   onFail: { kind: "continue" },
-  channel: "slack",
+  slackChannelId: "general",
   message: "QA finished for PR #912.",
 };
 
-const APPROVAL_STEP: WorkflowStep = {
-  kind: "human.approval",
+const BRANCH_STEP: WorkflowStep = {
+  kind: "branch",
   onFail: { kind: "stop" },
-  message: "Approve deploying this change to production?",
-  onTimeout: "fail",
-  timeoutSecs: 3600,
+  on: "{{verdict.verdict}}",
+  cases: { pass: { to: "continue" }, fail: { to: "end" } },
 };
 
 interface Labeled {
@@ -76,7 +74,7 @@ const STEP_CARDS: Labeled[] = [
   { label: "Script (shell.run)", step: SHELL_STEP },
   { label: "Open PR", step: PR_STEP },
   { label: "Notify (Slack)", step: NOTIFY_STEP },
-  { label: "Approval", step: APPROVAL_STEP },
+  { label: "Branch", step: BRANCH_STEP },
   { label: "Selected", step: GOAL_STEP, selected: true },
   { label: "Empty content (preview box collapses)", step: { ...PROMPT_STEP, prompt: "" } },
   { label: "Invalid (needs attention)", step: { ...PROMPT_STEP, prompt: "" }, invalid: true },
@@ -129,7 +127,7 @@ export function WorkflowStepCardFixtures() {
       <Section title="Kind badges & glyph strips">
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-3">
-            {(["agent.prompt", "agent.config", "shell.run", "scm.open_pr", "notify", "human.approval"] as const).map(
+            {(["agent.prompt", "agent.config", "shell.run", "scm.open_pr", "notify", "branch"] as const).map(
               (kind) => (
                 <WorkflowStepKindBadge key={kind} kind={kind} />
               ),

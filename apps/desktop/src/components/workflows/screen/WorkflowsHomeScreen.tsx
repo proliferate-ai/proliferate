@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   createEmptyDefinition,
   serializeWorkflowDefinition,
+  type WorkflowAgentNode,
   type WorkflowDefinition,
-  type WorkflowSetup,
 } from "@proliferate/product-domain/workflows/definition";
 import {
   buildWorkflowRunRow,
@@ -52,30 +52,32 @@ interface DesktopCatalogAgent {
   models: { id: string }[];
 }
 
-function defaultSetupFromCatalog(agents: readonly DesktopCatalogAgent[] | undefined): WorkflowSetup {
+function defaultNodeFromCatalog(agents: readonly DesktopCatalogAgent[] | undefined): WorkflowAgentNode {
   const agent = agents?.[0];
   return {
+    slot: "main",
     harness: agent?.kind ?? "claude",
     model: agent?.defaultModelId ?? agent?.models[0]?.id ?? "sonnet",
-    sessionBinding: "fresh",
+    steps: [],
   };
 }
 
-function withDefaultSetup(
+/** Re-default the template's first agent node to the owner's first catalog agent. */
+function withDefaultAgent(
   definition: WorkflowDefinition,
   agents: readonly DesktopCatalogAgent[] | undefined,
 ): WorkflowDefinition {
   const agent = agents?.[0];
-  if (!agent) {
+  const [first, ...rest] = definition.agents;
+  if (!agent || !first) {
     return definition;
   }
   return {
     ...definition,
-    setup: {
-      ...definition.setup,
-      harness: agent.kind,
-      model: agent.defaultModelId ?? agent.models[0]?.id ?? definition.setup.model,
-    },
+    agents: [
+      { ...first, harness: agent.kind, model: agent.defaultModelId ?? agent.models[0]?.id ?? first.model },
+      ...rest,
+    ],
   };
 }
 
@@ -253,10 +255,10 @@ export function WorkflowsHomeScreen() {
   };
 
   const startFromScratch = () =>
-    createAndEdit("Untitled workflow", null, createEmptyDefinition(defaultSetupFromCatalog(agents)));
+    createAndEdit("Untitled workflow", null, createEmptyDefinition(defaultNodeFromCatalog(agents)));
 
   const useTemplate = (template: WorkflowTemplate) =>
-    createAndEdit(template.name, template.description, withDefaultSetup(template.definition, agents));
+    createAndEdit(template.name, template.description, withDefaultAgent(template.definition, agents));
 
   const showEmptyGallery = tab === "workflows" && !workflowsQuery.isLoading && workflows.length === 0;
 
@@ -343,7 +345,7 @@ export function WorkflowsHomeScreen() {
         <WorkflowRunArgsModal
           open
           workflowName={argsModal.workflow.name}
-          args={argsModal.definition.args}
+          args={argsModal.definition.inputs}
           localWorkspaces={localWorkspaceOptions}
           cloudWorkspaces={cloudWorkspaceOptions}
           hasIntegrations={argsModal.definition.integrations.length > 0}

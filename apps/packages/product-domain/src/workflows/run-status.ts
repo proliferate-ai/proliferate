@@ -8,7 +8,7 @@
  * (W3/W4) owns the exact output shapes.
  */
 
-import type { WorkflowDefinition, WorkflowStep, WorkflowStepKind } from "./definition";
+import { flattenWorkflowSteps, type WorkflowDefinition, type WorkflowStep, type WorkflowStepKind } from "./definition";
 import { workflowStepKindLabel, WORKFLOW_STEP_META } from "./presentation";
 
 // --- Run status ----------------------------------------------------------------
@@ -161,9 +161,13 @@ export type WorkflowStepOutputChip =
   | { kind: "approval"; label: string; approved: boolean }
   | { kind: "text"; label: string };
 
-/** A step-action ledger row (spec 1.2), as returned by the run-detail endpoint. */
+/**
+ * A step-action ledger row (spec 1.2), as returned by the run-detail endpoint.
+ * Keyed by the resolved plan's structured `stepKey` (§4), not a flat index —
+ * mirrors the server's `StepActionResponse.stepKey`.
+ */
 export interface WorkflowStepActionSummary {
-  stepIndex: number;
+  stepKey: string;
   actionKind: string;
   status: string;
   errorMessage: string | null;
@@ -192,10 +196,9 @@ function outputChipsFor(
   output: Record<string, unknown> | null,
   action: WorkflowStepActionSummary | null,
 ): WorkflowStepOutputChip[] {
-  const kind = step.kind;
-  if (kind === "notify" && step.channel === "slack") {
-    // The runtime's own output never claims delivery for Slack — only the
-    // server-observed action row (spec 8.4) does. No row yet ⇒ no chip.
+  if (step.kind === "notify") {
+    // Slack-only (E1b): the runtime's own output never claims delivery — only
+    // the server-observed action row (spec 8.4) does. No row yet ⇒ no chip.
     if (!action) {
       return [];
     }
@@ -217,7 +220,7 @@ function outputChipsFor(
   if (!output) {
     return [];
   }
-  switch (kind) {
+  switch (step.kind) {
     case "shell.run": {
       if (typeof output.exit_code === "number") {
         return [{ kind: "exit", label: `exit ${output.exit_code}`, ok: output.exit_code === 0 }];
@@ -232,35 +235,15 @@ function outputChipsFor(
       }
       return [];
     }
-    case "notify": {
-      // In-app has no delivery ledger — recording the step output IS the
-      // delivery (spec: "always recorded in-app and in run history").
-      const channel = typeof output.channel === "string" ? output.channel : "notification";
-      return [{ kind: "notify", label: `Sent · ${channel}`, status: "sent" }];
-    }
-    case "human.approval": {
-      if (output.decision === "approved" || output.decision === "denied") {
-        return [
-          {
-            kind: "approval",
-            label: output.decision === "approved" ? "Approved" : "Denied",
-            approved: output.decision === "approved",
-          },
-        ];
-      }
-      return [];
-    }
     case "agent.prompt":
       return [];
-    case "agent.config": {
-      const parts: string[] = [];
-      if (typeof output.harness === "string") {
-        parts.push(output.harness);
-      }
-      if (typeof output.model === "string") {
-        parts.push(output.model);
-      }
-      return parts.length > 0 ? [{ kind: "text", label: parts.join(" · ") }] : [];
+    case "agent.emit":
+      return [{ kind: "text", label: `Captured ${step.name}` }];
+    case "agent.config":
+      return typeof output.model === "string" ? [{ kind: "text", label: output.model }] : [];
+    case "branch": {
+      const reason = typeof output.reason === "string" ? output.reason : null;
+      return reason ? [{ kind: "text", label: reason }] : [];
     }
     case "workflow.include":
       // Never present in a resolved plan: the server inlines it away at StartRun
@@ -315,7 +298,7 @@ export interface DeriveStepRunViewsInput {
   runStatus: WorkflowRunStatus;
   /** 0-based index of the currently-executing step; null before delivery. */
   stepCursor: number | null;
-  /** Opaque per-step outputs keyed by step index (string or number keys). */
+  /** Opaque per-step outputs keyed by the resolved plan's structured stepKey. */
   stepOutputs?: Record<string, unknown> | null;
   anyharnessWorkspaceId?: string | null;
   /** The run's step-action ledger rows (spec 1.2), for delivery-status chips. */
@@ -354,12 +337,12 @@ function baseStepStatus(
 
 function stepOutputRecord(
   stepOutputs: Record<string, unknown> | null | undefined,
-  index: number,
+  stepKey: string,
 ): Record<string, unknown> | null {
   if (!stepOutputs) {
     return null;
   }
-  return asRecord(stepOutputs[String(index)]) ?? asRecord(stepOutputs[index as unknown as string]);
+  return asRecord(stepOutputs[stepKey]);
 }
 
 /**
@@ -370,15 +353,16 @@ function stepOutputRecord(
 export function deriveStepRunViews(input: DeriveStepRunViewsInput): WorkflowStepRunView[] {
   const { definition, runStatus, stepOutputs, stepActions } = input;
   const terminalCompleted = runStatus === "completed";
-  const cursor = input.stepCursor ?? (terminalCompleted ? definition.steps.length : 0);
+  const flatSteps = flattenWorkflowSteps(definition);
+  const cursor = input.stepCursor ?? (terminalCompleted ? flatSteps.length : 0);
 
-  return definition.steps.map((step, index) => {
+  return flatSteps.map(({ step, stepKey }, index) => {
     const isGoalStep = step.kind === "agent.prompt" && step.goal !== undefined;
     const status = terminalCompleted
       ? "completed"
       : baseStepStatus(index, cursor, runStatus, isGoalStep);
-    const output = stepOutputRecord(stepOutputs, index);
-    const action = stepActions?.find((a) => a.stepIndex === index) ?? null;
+    const output = stepOutputRecord(stepOutputs, stepKey);
+    const action = stepActions?.find((a) => a.stepKey === stepKey) ?? null;
     return {
       index,
       kind: step.kind,
