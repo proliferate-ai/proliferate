@@ -14,6 +14,9 @@ from proliferate.constants.billing import (
     BILLING_DECISION_ORG_LIMIT_PAUSE,
     BILLING_DECISION_USER_LIMIT_PAUSE,
     BILLING_MODE_ENFORCE,
+    WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
+    WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
+    WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
 )
 from proliferate.db import session_ops as db_session
 from proliferate.db.store import billing as billing_store
@@ -40,6 +43,31 @@ from proliferate.server.billing.snapshots import (
 from proliferate.utils.time import utcnow
 
 
+# Block reasons that mean "you are out of included/managed cloud hours" — the
+# client keys off these to show upgrade-your-plan copy. Everything else is a
+# generic start block (payment attention, admin/spend hold, compute cap).
+_CREDITS_EXHAUSTED_REASONS = frozenset(
+    {
+        WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED,
+        WORKSPACE_ACTION_BLOCK_KIND_OVERAGE_DISABLED,
+        WORKSPACE_ACTION_BLOCK_KIND_CAP_EXHAUSTED,
+    }
+)
+
+# Stable machine codes on the 402 detail body. These are part of the client
+# contract — the desktop maps them to actionable toast copy, so do not rename
+# without updating consumers.
+BILLING_BLOCK_CODE_CREDITS_EXHAUSTED = "billing_credits_exhausted"
+BILLING_BLOCK_CODE_START_BLOCKED = "billing_start_blocked"
+
+
+def billing_block_error_code(reason: str | None) -> str:
+    """Map a block reason to the stable 402 ``detail.code`` the client keys off."""
+    if reason in _CREDITS_EXHAUSTED_REASONS:
+        return BILLING_BLOCK_CODE_CREDITS_EXHAUSTED
+    return BILLING_BLOCK_CODE_START_BLOCKED
+
+
 class CloudSandboxResumeBlockedError(ProliferateError):
     """Raised when a cloud sandbox must not be started/resumed for billing.
 
@@ -48,9 +76,14 @@ class CloudSandboxResumeBlockedError(ProliferateError):
     start/resume gate that the orphaned ``authorize_sandbox_start`` never wired
     up (spec §4.3): a sandbox the reconciler paused for an active spend hold or
     an over-cap compute budget must not be woken by an incoming request.
+
+    This is EXPECTED business logic (a quota denial), not a page-worthy failure:
+    the ``code``/``reason``/``remaining_seconds`` on the 402 let the client show
+    an actionable message, and the ``billing_subject_id``/``owner_user_id`` let
+    the background materialization path log the denial with correlation context
+    instead of firing ``report_critical`` (see materialization/runner.py).
     """
 
-    code = "billing_resume_blocked"
     status_code = 402
 
     def __init__(
@@ -59,10 +92,28 @@ class CloudSandboxResumeBlockedError(ProliferateError):
         *,
         decision_type: str,
         reason: str | None = None,
+        billing_subject_id: UUID | None = None,
+        owner_user_id: UUID | None = None,
+        remaining_seconds: int | None = None,
     ) -> None:
-        super().__init__(message, code=self.code, status_code=self.status_code)
+        super().__init__(
+            message,
+            code=billing_block_error_code(reason),
+            status_code=self.status_code,
+        )
         self.decision_type = decision_type
         self.reason = reason
+        self.billing_subject_id = billing_subject_id
+        self.owner_user_id = owner_user_id
+        self.remaining_seconds = remaining_seconds
+        # Machine-readable fields on the 402 body (main.py copies extra_detail
+        # into detail): a stable reason code plus remaining seconds when known.
+        extra_detail: dict[str, object] = {"decision_type": decision_type}
+        if reason is not None:
+            extra_detail["reason"] = reason
+        if remaining_seconds is not None:
+            extra_detail["remaining_seconds"] = remaining_seconds
+        self.extra_detail = extra_detail
 
 
 async def authorize_sandbox_start_for_billing_subject(
@@ -290,4 +341,7 @@ async def assert_cloud_sandbox_resume_allowed_for_owner(
         or "This sandbox is paused because your billing limit was reached.",
         decision_type=decision_type,
         reason=reason,
+        billing_subject_id=decision_subject_id,
+        owner_user_id=owner_user_id,
+        remaining_seconds=snapshot.remaining_seconds,
     )
