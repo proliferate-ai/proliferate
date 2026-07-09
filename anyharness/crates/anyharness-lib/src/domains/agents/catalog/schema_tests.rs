@@ -39,15 +39,19 @@ fn draft_catalog_parses_with_expected_shape() {
             .collect::<Vec<_>>(),
         vec!["bedrock", "anthropic-api", "anthropic-oauth", "gateway"]
     );
-    // The gateway context is route-engaged: it references the registry
-    // gateway slot but carries no detection signals (never classifier-active).
+    // The gateway context is route-engaged: it references the registry gateway
+    // slot and carries a `route` signal (decisions ledger 13) so the classifier
+    // activates it on a `Route` fact.
     let gateway_context = claude
         .auth_contexts
         .iter()
         .find(|context| context.id == "gateway")
         .expect("claude gateway auth context");
     assert_eq!(gateway_context.auth_slot_id.as_deref(), Some("gateway"));
-    assert!(gateway_context.signals.is_none());
+    assert_eq!(
+        gateway_context.signals,
+        Some(AgentCatalogAuthSignal::Route("gateway".to_string()))
+    );
     // gatewayPolicy carries the small-fast role pin that used to be a Rust const.
     let policy = claude
         .session
@@ -188,6 +192,16 @@ fn auth_signals_round_trip_any_of_and_leaves() {
         AgentCatalogAuthSignal::Env("ANTHROPIC_API_KEY".to_string())
     );
     assert_eq!(leaf.depth(), 1);
+}
+
+#[test]
+fn auth_signal_route_operator_round_trips() {
+    let json = serde_json::json!({ "route": "gateway" });
+    let signal: AgentCatalogAuthSignal =
+        serde_json::from_value(json.clone()).expect("route signal must parse");
+    assert_eq!(signal, AgentCatalogAuthSignal::Route("gateway".to_string()));
+    assert_eq!(signal.depth(), 1);
+    assert_eq!(serde_json::to_value(&signal).expect("serialize"), json);
 }
 
 fn bundled_registry_version() -> String {

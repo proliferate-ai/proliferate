@@ -100,6 +100,12 @@ fn validate_signal_vocabulary(
                 );
             }
         }
+        AgentCatalogAuthSignal::Route(_kind) => {
+            // Route signals carry no registry env/discovery vocabulary: the
+            // route is paired by the context's auth slot (resolved above) and
+            // the `Route` fact is fed from workspace-scoped state, never from
+            // slot-declared credential detection (decisions ledger 13).
+        }
         AgentCatalogAuthSignal::AnyOf(children) | AgentCatalogAuthSignal::AllOf(children) => {
             for child in children {
                 validate_signal_vocabulary(agent_kind, context_id, child, slot)?;
@@ -156,6 +162,11 @@ mod tests {
         for model in &mut claude.session.models {
             model.availability.any_of.retain(|id| id == "anthropic-api");
         }
+        // Trimming to anthropic-api drops the gateway-tagged rows; drop the
+        // gateway curation too so the seedModels invariant (decision 14) does
+        // not trip on this signal-vocabulary fixture.
+        claude.session.gateway_policy = None;
+        claude.session.defaults.remove("gateway");
         validate_agent_catalog_document(&catalog).expect("pairing fixture must validate");
         catalog
     }

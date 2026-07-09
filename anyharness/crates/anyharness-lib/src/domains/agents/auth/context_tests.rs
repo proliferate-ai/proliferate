@@ -90,6 +90,26 @@ fn discovery_fact(kind: &str) -> CredentialFact {
     }
 }
 
+fn route(kind: &str) -> AgentCatalogAuthSignal {
+    AgentCatalogAuthSignal::Route(kind.to_string())
+}
+
+fn route_fact(kind: &str) -> CredentialFact {
+    CredentialFact::Route {
+        kind: kind.to_string(),
+    }
+}
+
+/// The real claude descriptor, unmodified — carries both the `anthropic` and
+/// the route-engaged `gateway` auth slots (so the classifier does not skip a
+/// gateway context for an undeclared slot).
+fn claude_gateway_descriptor() -> AgentDescriptor {
+    built_in_registry()
+        .into_iter()
+        .find(|descriptor| descriptor.kind == AgentKind::Claude)
+        .expect("claude descriptor")
+}
+
 fn claude_style_contexts() -> Vec<AgentCatalogAuthContext> {
     vec![
         context("anthropic-api", "default", Some(env(TEST_API_KEY_VAR))),
@@ -143,6 +163,61 @@ fn oauth_wins_when_api_key_absent() {
     let active = classify(&descriptor, &claude_style_contexts(), &facts);
 
     assert_eq!(active.ids(), ["anthropic-oauth"]);
+}
+
+#[test]
+fn gateway_context_activates_iff_route_fact_present() {
+    // The gateway context is route-engaged (decisions ledger 13): its `route`
+    // signal matches a `Route` fact collected from workspace-scoped state.
+    let descriptor = claude_gateway_descriptor();
+    let contexts = vec![context("gateway", "gateway", Some(route("gateway")))];
+
+    // With the route fact: active.
+    let active = classify(&descriptor, &contexts, &[route_fact("gateway")]);
+    assert_eq!(active.ids(), ["gateway"]);
+    assert!(active.is_active("gateway"));
+    assert!(!active.is_baseline());
+
+    // Without it (only credential facts): the route signal never matches, so
+    // classification falls through to baseline.
+    let active = classify(&descriptor, &contexts, &[env_fact(TEST_API_KEY_VAR)]);
+    assert!(active.is_baseline());
+    assert!(!active.is_active("gateway"));
+
+    // No facts at all: still baseline.
+    let active = classify(&descriptor, &contexts, &[]);
+    assert!(active.is_baseline());
+}
+
+#[test]
+fn native_key_and_gateway_route_coexist_as_union() {
+    // Decision (amendment): gateway is a distinct auth slot; UNION across slots
+    // means a workspace with a native key AND gateway enrollment sees both.
+    let descriptor = claude_gateway_descriptor();
+    let contexts = vec![
+        context("anthropic-api", "anthropic", Some(env(TEST_API_KEY_VAR))),
+        context("gateway", "gateway", Some(route("gateway"))),
+    ];
+
+    let active = classify(
+        &descriptor,
+        &contexts,
+        &[env_fact(TEST_API_KEY_VAR), route_fact("gateway")],
+    );
+    assert!(active.is_active("anthropic-api"));
+    assert!(active.is_active("gateway"));
+    assert!(!active.is_baseline());
+}
+
+#[test]
+fn signal_less_context_still_never_matches() {
+    // Regression guard: a context with NO signals stays inert (probe-only
+    // knowledge) — only route-SIGNALED contexts gained activation.
+    let descriptor = claude_gateway_descriptor();
+    let contexts = vec![context("gateway", "gateway", None)];
+    let active = classify(&descriptor, &contexts, &[route_fact("gateway")]);
+    assert!(active.is_baseline());
+    assert!(!active.is_active("gateway"));
 }
 
 #[test]
