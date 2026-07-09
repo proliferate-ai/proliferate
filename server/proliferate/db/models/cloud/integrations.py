@@ -290,3 +290,48 @@ class CloudIntegrationToolSchemaCache(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class CloudIntegrationToolCallEvent(Base):
+    """Per-tool-call audit row for the integration gateway proxy.
+
+    Every ``integrations.call_tool`` proxied to an upstream provider writes one
+    row here — success or failure — so there is queryable evidence a tool call
+    happened and how it went. The gateway grant supplies the acting user/org and
+    the originating runtime worker; namespace + tool name identify the call.
+    User/org use SET NULL so the audit trail outlives a deleted user or org.
+    """
+
+    __tablename__ = "cloud_integration_tool_call_event"
+    __table_args__ = (
+        Index(
+            "ix_cloud_integration_tool_call_event_org_created",
+            "organization_id",
+            "created_at",
+        ),
+        Index(
+            "ix_cloud_integration_tool_call_event_user_created",
+            "user_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    runtime_worker_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_runtime_worker.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    integration_namespace: Mapped[str] = mapped_column(String(64))
+    tool_name: Mapped[str] = mapped_column(String(255))
+    ok: Mapped[bool] = mapped_column(Boolean)
+    error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer)
