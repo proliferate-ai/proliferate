@@ -53,7 +53,11 @@ class WorkerDesiredVersions(_CamelModel):
     # self-updating workers into perpetual swap attempts, so an unstamped
     # server pins nothing.
     worker: str | None = None
-    anyharness: str
+    # None when the server image was not stamped with RUNTIME_VERSION: like the
+    # worker pin, an unstamped fallback could never match a published runtime
+    # artifact and would drive an anyharness-updating sandbox worker into
+    # perpetual swap attempts, so an unstamped server pins nothing.
+    anyharness: str | None = None
     catalog_version: str | None = None
 
 

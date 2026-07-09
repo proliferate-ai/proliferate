@@ -85,6 +85,59 @@ class TestRuntimeWorkerVersionConvergence:
         assert "catalogVersion" in desired
 
     @pytest.mark.asyncio
+    async def test_heartbeat_omits_anyharness_pin_when_unstamped(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # No RUNTIME_VERSION stamp (local dev / plain docker build): pinning the
+        # server-version fallback would drive an anyharness-updating sandbox
+        # worker into perpetual swap attempts against an unpublished artifact,
+        # so the pin must be absent instead. A new worker seeing an absent pin
+        # treats the runtime update as a no-op — the compat contract against an
+        # unstamped/old server.
+        monkeypatch.delenv("RUNTIME_VERSION", raising=False)
+        auth = await _authed_user(client, db_session, prefix="worker-nortpin")
+        token = await _desktop_enrollment_token(client, auth, install_id="install-nortpin")
+        enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+        worker_token = enroll.json()["workerToken"]
+
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={},
+        )
+        assert heartbeat.status_code == 200, heartbeat.text
+        # Absent (or explicit null): the model serializes anyharness=None.
+        assert heartbeat.json()["desiredVersions"].get("anyharness") is None
+
+    @pytest.mark.asyncio
+    async def test_old_worker_minimal_heartbeat_still_acked(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # An old worker (predating anyharness convergence) posts a bare
+        # heartbeat and ignores desiredVersions.anyharness entirely. The new
+        # server must still ack it normally — the compat contract in the other
+        # direction (old worker vs new server).
+        monkeypatch.setenv("RUNTIME_VERSION", "8.8.8")
+        auth = await _authed_user(client, db_session, prefix="worker-oldhb")
+        token = await _desktop_enrollment_token(client, auth, install_id="install-oldhb")
+        enroll = await client.post("/v1/cloud/worker/enroll", json={"enrollmentToken": token})
+        worker_token = enroll.json()["workerToken"]
+
+        heartbeat = await client.post(
+            "/v1/cloud/worker/heartbeat",
+            headers={"Authorization": f"Bearer {worker_token}"},
+            json={},
+        )
+        assert heartbeat.status_code == 200, heartbeat.text
+        assert heartbeat.json()["desiredVersions"]["anyharness"] == "8.8.8"
+
+    @pytest.mark.asyncio
     async def test_heartbeat_includes_catalog_version(
         self,
         client: AsyncClient,
@@ -276,3 +329,83 @@ class TestWorkerArtifactDownload:
             response = await client.get(path)
             assert response.status_code == 404
             assert response.json()["detail"]["code"] == "cloud_worker_artifact_unknown"
+
+
+class TestRuntimeArtifactDownload:
+    @pytest.fixture(autouse=True)
+    def _pinned_cdn(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("DESKTOP_DOWNLOADS_BASE_URL", raising=False)
+        monkeypatch.setenv("RUNTIME_VERSION", "3.4.5")
+
+    def _stub_probe(self, monkeypatch: pytest.MonkeyPatch, *, exists: bool) -> list[str]:
+        from proliferate.server.cloud.runtime_workers import service as service_module
+
+        probed: list[str] = []
+
+        async def probe(url: str) -> bool:
+            probed.append(url)
+            return exists
+
+        monkeypatch.setattr(service_module, "versioned_manifest_exists", probe)
+        return probed
+
+    @pytest.mark.asyncio
+    async def test_download_redirects_to_pinned_runtime_artifact(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._stub_probe(monkeypatch, exists=True)
+        for asset in ("anyharness", "anyharness.sha256"):
+            response = await client.get(f"/v1/cloud/runtime/download/linux-x86_64/{asset}")
+            assert response.status_code == 302, response.text
+            assert response.headers["location"] == (
+                f"https://downloads.proliferate.com/runtime/stable/3.4.5/linux-x86_64/{asset}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_download_falls_back_when_pin_unpublished(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        probed = self._stub_probe(monkeypatch, exists=False)
+        response = await client.get("/v1/cloud/runtime/download/macos-aarch64/anyharness")
+        assert response.status_code == 302
+        assert response.headers["location"] == (
+            "https://downloads.proliferate.com/runtime/stable/macos-aarch64/anyharness"
+        )
+        assert probed == [
+            "https://downloads.proliferate.com/runtime/stable/3.4.5/macos-aarch64/anyharness"
+        ]
+
+    @pytest.mark.asyncio
+    async def test_download_skips_probe_when_pin_unstamped(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delenv("RUNTIME_VERSION", raising=False)
+        probed = self._stub_probe(monkeypatch, exists=True)
+        response = await client.get("/v1/cloud/runtime/download/linux-aarch64/anyharness")
+        assert response.status_code == 302
+        assert response.headers["location"] == (
+            "https://downloads.proliferate.com/runtime/stable/linux-aarch64/anyharness"
+        )
+        # No pin, nothing to probe: never build a ".../None/..." URL.
+        assert probed == []
+
+    @pytest.mark.asyncio
+    async def test_download_rejects_unknown_target_or_asset(
+        self,
+        client: AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        self._stub_probe(monkeypatch, exists=True)
+        for path in (
+            "/v1/cloud/runtime/download/windows-x86_64/anyharness",
+            "/v1/cloud/runtime/download/linux-x86_64/proliferate-worker",
+        ):
+            response = await client.get(path)
+            assert response.status_code == 404
+            assert response.json()["detail"]["code"] == "cloud_runtime_artifact_unknown"
