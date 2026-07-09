@@ -154,6 +154,7 @@ artifacts it serves are real), trigger the mechanism, assert convergence.
 | --- | --- | --- | --- |
 | Worker self-update (sandbox only) | Heartbeat `desiredVersions.worker` | Server pins (`WORKER_VERSION`) + CDN base `DESKTOP_DOWNLOADS_BASE_URL` — both **server-side** env vars (the worker asks the API server, which 302-redirects to the CDN base; stub by pointing the base at a file server the sandbox can reach, e.g. via ngrok) | **Yes** — the priority scenario |
 | Agent catalog convergence (existing sandboxes + local runtimes) | Heartbeat `desiredVersions.catalogVersion` → worker pushes catalog → runtime reconcile reinstalls drifted CLIs | Server catalog version | **Yes** — full-chain test; today only per-hop units exist |
+| AnyHarness binary self-update (sandbox only) | Heartbeat `desiredVersions.anyharness` → worker downloads pinned runtime, stops/swaps/relaunches it in place | Server pin (`RUNTIME_VERSION`) + the download base the redirect resolves to — both **server-side** (same stub shape as the worker row) | Specced, not yet built — `specs/tbd/anyharness-self-update-v1.md`; enters this table with its scenario when it lands |
 | Desktop app (Tauri updater; bundles anyharness/worker sidecars) | 30-min poll of `latest.json` | Hardcoded in `tauri.conf.json`, **not env-overridable** | Feed-artifact validation yes; real update needs a test build with an overridable endpoint |
 | E2B template | Build-time only; rolling `:staging`/`:production` tags affect **new** sandboxes only | `E2B_TEMPLATE_NAME` / `E2B_TEMPLATE_REF` | Yes — new-sandbox-gets-new-template + old-workspace-still-wakes |
 | SQLite/Alembic migrations | Ships inside the new binary/server | — | Yes — forward-apply on kept N−1 data |
@@ -164,12 +165,14 @@ neither has an end-to-end test today (coverage is per-hop unit tests). The
 worker scenario must include a live session on the box surviving the
 swap-and-exec.
 
-Known non-mechanism, stated so nobody tests a ghost: the anyharness binary has
-**no in-place update path** — sandboxes only get a new anyharness via a new
-template (the worker ignores `desiredVersions.anyharness`; the supervisor
-`update/` module validates and stages artifacts handed to it but fetches and
-swaps nothing), and desktop only via the app bundle. If in-place anyharness
-update is built later, it enters this table with its own scenario.
+Sandbox AnyHarness in-place update is **specced but not yet built**
+(`specs/tbd/anyharness-self-update-v1.md`): the worker will watch
+`desiredVersions.anyharness` and swap the runtime binary in place. Until it
+lands the worker still ignores that field and sandboxes get a new anyharness
+only via a new template. Desktop gets a new anyharness only via the app bundle,
+and that remains bundle-only by design. The supervisor `update/` module
+validates and stages artifacts handed to it but fetches and swaps nothing, and
+is deliberately not the update owner in v1.
 
 Lives in `tests/release/upgrade/`, runs under the same runner CLI.
 
