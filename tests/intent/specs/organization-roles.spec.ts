@@ -27,17 +27,13 @@
 //   removed member is never silently reactivated by a later list/login call
 //   (place_new_identity raises instance_access_removed, 403, instead).
 //
-// SPEC DIVERGENCE (flagged for the record, see PR body): scenarios.md names
-// "list invitations" as an example of an admin-gated endpoint a member gets
-// 403 from. As built, GET /organizations/{id}/invitations depends on
-// current_path_org_member (not current_path_org_admin) — see
-// organizations/api.py list_organization_invitations_endpoint — so a plain
-// member CAN call it successfully today, even though the settings UI that
-// surfaces the same data (OrganizationMembersSection) is adminOnly
-// navigation. This test pins the AS-BUILT behavior (member 200s on that
-// specific endpoint) as a documented product gap, and uses a genuinely
-// admin-gated endpoint (create-invitation) for the 403 assertion the
-// scenario actually needs.
+// Formerly-documented GAP, now fixed: GET /organizations/{id}/invitations
+// used to depend on current_path_org_member, so a plain member could read
+// every invitation (emails included) even though the settings UI that
+// surfaces this data is adminOnly. PR #1029 switched the route to
+// current_path_org_admin plus the service-layer _require_current_org_role
+// defense-in-depth check. The test below now asserts the fixed behavior
+// (member 403s), matching scenarios.md's original expectation.
 
 import { expect, test } from "@playwright/test";
 import {
@@ -121,16 +117,21 @@ test.describe("T2-ORG-1: roles and gating", () => {
     expect(detail?.code).toBe("organization_permission_denied");
   });
 
-  test("documents GAP: list-invitations is member-readable, not admin-gated, despite adminOnly settings UI", async () => {
-    // The UI section that surfaces this data (OrganizationMembersSection,
-    // settings navigation id "organization-members") is adminOnly — but the
-    // API it calls underneath has no such gate. A plain member can read
-    // every pending/accepted/revoked invitation for the org, including
-    // invitee email addresses, via a direct call. Pinned here so a future
-    // tightening (or a ruling that this is intentional) shows up as a loud
-    // diff instead of silent drift.
-    const asMember = await listOrganizationInvitations(memberRoleToken, organizationId);
-    expect(Array.isArray(asMember)).toBe(true); // 200, not 403.
+  test("member gets 403 on list-invitations (admin-gated since #1029)", async () => {
+    // Was a documented GAP: this endpoint used current_path_org_member, so
+    // a plain member could read every invitation (invitee emails included)
+    // even though the settings section surfacing this data is adminOnly.
+    // PR #1029 gated it to admins; this pins the fixed behavior.
+    const attempt = await apiRequest<{ detail?: { code?: string } }>(
+      `/v1/organizations/${organizationId}/invitations`,
+      { token: memberRoleToken },
+    );
+    expect(attempt.status).toBe(403);
+    expect(attempt.body?.detail?.code).toBe("organization_permission_denied");
+
+    // An admin still reads the list fine.
+    const asAdmin = await listOrganizationInvitations(adminRoleToken, organizationId);
+    expect(Array.isArray(asAdmin)).toBe(true);
   });
 
   test("admin can invite member and admin, but not owner", async () => {
