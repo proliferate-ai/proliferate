@@ -15,7 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.billing import BILLING_RECONCILER_LOCK_KEY
 from proliferate.db.models.billing import BillingDecisionEvent, UsageSegment, WebhookEventReceipt
 from proliferate.db.models.cloud.workspaces import CloudWorkspace
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
+from proliferate.db.store.billing_subjects import (
+    ensure_organization_billing_subject,
+    ensure_personal_billing_subject,
+)
 from proliferate.db.store.organizations import get_current_membership_for_user
 from proliferate.utils.time import utcnow
 
@@ -62,10 +65,35 @@ async def resolve_organization_id_for_user(
     Resolves the user's current (first active) membership — the same resolution
     the resume gate uses (``get_current_membership_for_user``). This is the org
     context stamped onto a usage segment so org-scoped compute budget limits can
-    be evaluated; it does not change ``billing_subject_id`` (who pays).
+    be evaluated, and it also decides who pays: a user with a current membership
+    bills the org subject (see ``resolve_billing_subject_id_for_user``).
     """
     membership = await get_current_membership_for_user(db, user_id)
     return membership.organization.id if membership is not None else None
+
+
+async def resolve_billing_subject_id_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+) -> UUID:
+    """The subject that pays for a user's compute.
+
+    A user acting under a current org membership bills the org's billing subject
+    (org Stripe customer + org grant pool); an org-less user bills their personal
+    subject. This mirrors the LLM track exactly: an org member's gateway
+    enrollment is minted against the org billing subject
+    (``ensure_org_enrollment``), an org-less user's against their personal one
+    (``ensure_user_enrollment``), and both keyed off the same current-membership
+    test. Deriving both the paying subject and ``organization_id`` from the one
+    membership lookup keeps compute attribution and enforcement scope from ever
+    disagreeing.
+    """
+    organization_id = await resolve_organization_id_for_user(db, user_id)
+    if organization_id is not None:
+        subject = await ensure_organization_billing_subject(db, organization_id)
+        return subject.id
+    subject = await ensure_personal_billing_subject(db, user_id)
+    return subject.id
 
 
 async def _get_workspace_billing_subject(
@@ -410,11 +438,16 @@ async def ensure_sandbox_usage_started(
         owner_user_id = actor_user_id
     else:
         raise RuntimeError("Usage segment requires a runtime environment, workspace, or user.")
-    # Stamp the org the segment belongs to (owner's current membership) so
-    # org-scoped compute budget limits can be enforced. The paying subject
-    # (``billing_subject_id``) is unchanged — invoicing stays on the personal
-    # subject.
+    # Resolve the org the segment belongs to from the owner's current
+    # membership. This is both the enforcement/attribution scope and, when set,
+    # who pays: an owner acting under an org bills the org billing subject (org
+    # Stripe customer + org grants), matching the LLM track; an org-less owner
+    # keeps the personal subject resolved above. Both derive from one membership
+    # lookup so ``organization_id`` and ``billing_subject_id`` can never disagree.
     organization_id = await resolve_organization_id_for_user(db, owner_user_id)
+    if organization_id is not None:
+        org_subject = await ensure_organization_billing_subject(db, organization_id)
+        billing_subject_id = org_subject.id
     return await create_usage_segment(
         db,
         user_id=actor_user_id or owner_user_id,

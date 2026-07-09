@@ -143,6 +143,7 @@ async def test_usage_by_user_admin_includes_zero_usage_members_and_limit_caps(
             UsageSegment(
                 user_id=member_id,
                 billing_subject_id=subject.id,
+                organization_id=organization.id,
                 workspace_id=uuid.uuid4(),
                 sandbox_id=uuid.uuid4(),
                 external_sandbox_id=f"sandbox-{uuid.uuid4().hex[:8]}",

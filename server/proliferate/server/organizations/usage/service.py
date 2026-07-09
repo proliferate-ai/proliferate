@@ -48,9 +48,14 @@ async def get_usage_by_user(
     start = now - timedelta(days=days)
     billing_subject_id = await _org_billing_subject_id(db, organization_id)
     members = await organization_store.list_organization_members(db, organization_id)
-    compute_by_user = await billing_store.compute_usage_seconds_by_user(
+    # Compute is scoped by ``organization_id``, not the org billing subject:
+    # segments carry the org they belong to (stamped at open time) regardless of
+    # which subject each is invoiced to, so this aggregates every member's
+    # compute and matches the enforcement path's org-wide sum. LLM stays on the
+    # org billing subject because org gateway enrollments are minted against it.
+    compute_by_user = await billing_store.compute_usage_seconds_by_user_for_org(
         db,
-        billing_subject_id=billing_subject_id,
+        organization_id=organization_id,
         start=start,
         end=now,
         now=now,

@@ -20,9 +20,9 @@ from proliferate.db.store import billing as billing_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.billing_runtime_usage import (
     record_billing_decision_event,
+    resolve_billing_subject_id_for_user,
     resolve_billing_subject_id_for_workspace,
 )
-from proliferate.db.store.billing_subjects import ensure_personal_billing_subject
 from proliferate.db.store.cloud_sandboxes import CloudSandboxValue
 from proliferate.errors import ProliferateError
 from proliferate.server.billing import snapshot_state
@@ -221,17 +221,21 @@ async def assert_cloud_sandbox_resume_allowed_for_owner(
         return
     if owner_user_id is None:
         return
-    subject = await ensure_personal_billing_subject(db, owner_user_id)
-    snapshot = await get_billing_snapshot_for_subject_in_session(db, subject.id)
+    # Resolve the subject that pays the same way segment-open does: an org member
+    # bills the org subject, an org-less owner bills personal. This must match
+    # segment attribution — org compute now drains the org grant pool, so the
+    # active-spend-hold snapshot has to read the org subject or a hold on the org
+    # pool would never block an org member's resume.
+    billing_subject_id = await resolve_billing_subject_id_for_user(db, owner_user_id)
+    snapshot = await get_billing_snapshot_for_subject_in_session(db, billing_subject_id)
     now = utcnow()
 
     decision_type: str | None = None
     reason: str | None = None
-    # The recorded decision event stays on the owner's personal subject — the
-    # subject that pays (invoicing unchanged). Compute limits are org-scoped, so
-    # the compute-cap check resolves the owner's org and sums usage by
-    # ``organization_id`` (matching the reconciler's ``_resolve_compute_limit_pause``).
-    decision_subject_id = subject.id
+    # The recorded decision event stays on the paying subject. Compute limits are
+    # org-scoped, so the compute-cap check resolves the owner's org and sums usage
+    # by ``organization_id`` (matching the reconciler's ``_resolve_compute_limit_pause``).
+    decision_subject_id = billing_subject_id
     if snapshot.active_spend_hold:
         decision_type = BILLING_DECISION_ENFORCE_ACTIVE_SPEND
         reason = snapshot.hold_reason or "active_spend_hold"

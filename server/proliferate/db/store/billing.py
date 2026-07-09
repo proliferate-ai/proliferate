@@ -377,6 +377,44 @@ async def compute_usage_seconds_by_user(
     return {user_id: float(seconds or 0.0) for user_id, seconds in rows}
 
 
+async def compute_usage_seconds_by_user_for_org(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    start: datetime,
+    end: datetime,
+    now: datetime,
+) -> dict[UUID, float]:
+    """Billable compute seconds per user over ``[start, end)`` scoped to an org.
+
+    Groups by ``UsageSegment.organization_id`` (not billing subject) so the
+    org-admin usage-by-user view aggregates every member's compute regardless of
+    which subject each segment is invoiced to — the same scope the enforcement
+    path sums (``compute_usage_seconds_in_window_for_org``). Segments opened
+    before org compute billed the org still carry ``organization_id`` (stamped at
+    open time since #1028), so they are included even where their paying subject
+    is still a personal one.
+    """
+    window_start = coerce_utc(start) or start
+    window_end = coerce_utc(end) or end
+    rows = (
+        await db.execute(
+            select(
+                UsageSegment.user_id,
+                func.coalesce(func.sum(_clipped_segment_seconds(now)), 0.0),
+            )
+            .where(
+                UsageSegment.organization_id == organization_id,
+                UsageSegment.is_billable.is_(True),
+                UsageSegment.started_at >= window_start,
+                UsageSegment.started_at < window_end,
+            )
+            .group_by(UsageSegment.user_id)
+        )
+    ).all()
+    return {user_id: float(seconds or 0.0) for user_id, seconds in rows}
+
+
 async def compute_usage_seconds_in_window(
     db: AsyncSession,
     *,
