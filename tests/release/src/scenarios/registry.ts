@@ -10,11 +10,12 @@ import { t3Repo1 } from "./t3-repo-1.js";
 import { t3Int1 } from "./t3-int-1.js";
 import { t3Bill1 } from "./t3-bill-1.js";
 import { t3Bill2 } from "./t3-bill-2.js";
+import { t4Cloud1 } from "./upgrade/t4-cloud-1.js";
 
 /**
- * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave).
- * T3-FIXTURE is infrastructure (src/fixtures/identity.ts), not a registered
- * scenario.
+ * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave)
+ * plus the tier-4 upgrade-path scenarios under `upgrade/`. T3-FIXTURE is
+ * infrastructure (src/fixtures/identity.ts), not a registered scenario.
  */
 export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Prov1,
@@ -28,6 +29,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Int1,
   t3Bill1,
   t3Bill2,
+  t4Cloud1,
 ];
 
 export function allScenarioIds(): string[] {

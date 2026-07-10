@@ -247,6 +247,23 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["local"],
   },
   {
+    name: "RELEASE_E2E_STAGING_ECS_PIN_BUMP",
+    description:
+      "Opt-in switch (set to `1`) authorizing T4-CLOUD-1 to bump the advertised AnyHarness runtime " +
+      "pin on the STAGING server by overriding RUNTIME_VERSION in the proliferate-staging-server ECS " +
+      "task definition and rolling the service — the only knob that moves desiredVersions.anyharness " +
+      "without cutting a release (RUNTIME_VERSION is a baked-in image ENV; ECS task env overrides it). " +
+      "The scenario restores the original task definition in a finally. Absent -> the scenario reports " +
+      "blocked rather than mutating ECS. Staging-only and guarded (assertNotProduction); never touches " +
+      "proliferate-prod*. AWS credentials come from the ambient environment (aws CLI), not a repo var.",
+    whereItLives:
+      "Operator sets it explicitly for a nightly/on-demand staging run once AWS creds able to " +
+      "register-task-definition + update-service on proliferate-staging are present. Never set in CI " +
+      "without a dedicated staging-scoped role.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
     name: "RELEASE_E2E_LOCAL_DATABASE_URL",
     description:
       "Postgres URL for the LOCAL lane's profile DB. Only needed by T3-PROV-1's fallback seam " +
