@@ -612,6 +612,43 @@ totals match (the fractional-cent remainder logic is under test here too).
 
 ---
 
+## Tier 4 — upgrade path
+
+### T4-CLOUD-1: AnyHarness runtime binary self-update in a cloud sandbox
+Spec of record: `specs/tbd/anyharness-self-update-v1.md` §7. Sandbox lane,
+`--lane staging`. The one place the AnyHarness binary itself converges in a
+running sandbox (not via a new E2B template).
+
+Shape: with a sandbox already running version N, record the advertised
+`desiredVersions.anyharness` pin (`/meta` `runtimeVersion`) and the running
+version (proxied runtime `/health` via `GET /v1/cloud/cloud-sandbox/anyharness/
+health`); bump the advertised pin to a different published version; let the
+sandbox worker converge the binary in place (no test-side artifact push — the
+feed is the only thing moved); assert the runtime reports the new version (spec
+§5 "converged" for the binary track) and, secondarily, that the catalog/agent
+pins reconcile.
+
+Feed knob: the server advertises the pin from `RUNTIME_VERSION`, a baked-in
+image ENV with no runtime override, so the test-scoped bump overrides
+`RUNTIME_VERSION` in the `proliferate-staging-server` ECS task definition and
+rolls the service (ECS task env wins), restoring the original task definition in
+a `finally`. Gated behind the explicit `RELEASE_E2E_STAGING_ECS_PIN_BUMP` opt-in
+and `assertNotProduction`; never touches `proliferate-prod*`. Test:
+`tests/release/src/scenarios/upgrade/t4-cloud-1.ts`.
+
+Standing state (2026-07-09): reports blocked without a live E2B-backed sandbox
+plus the ECS opt-in. When it reaches the mechanism it is expected-fail on a
+diagnosed product blocker (issue #1089): the released binary reports
+`CARGO_PKG_VERSION` (hardcoded 0.1.0) from both `anyharness --version` and
+`/health` `version`, and the worker's convergence preflight + health-gate both
+require an exact match to the pinned semver, so no real pin converges. Building
+this test also surfaced that nothing published the `runtime/`/`worker/` CDN
+trees the redirects resolve to — now closed by
+`scripts/ci-cd/publish-runtime-cdn.sh` + the `release-runtime.yml` `publish-cdn`
+job.
+
+---
+
 ## Open rulings collected
 
 1. "Plan gates the model list" — not in code; keep as planned work or delete

@@ -138,7 +138,7 @@ its own seam. Mechanism map and current-coverage audit: the tier-4 section of
 | Worker self-update: sandbox worker N−1 heartbeats, downloads N from stubbed CDN base (`DESKTOP_DOWNLOADS_BASE_URL`), verifies, swaps, execs — with a live session on the box that survives | 4 | — |
 | Catalog convergence full chain (sandbox): server catalog version bump → heartbeat → worker push → runtime reconcile → agent CLI in an **existing** sandbox reinstalled at the new pin — independent of any worker binary update | 4 | tests/release/src/scenarios/t3-update-1.ts (T3-UPDATE-1; blocked on current_product_user) |
 | Catalog convergence on desktop local: same chain through the bundled desktop worker → local runtime → agent CLI reinstalled at the new pin | 4 | tests/release/src/scenarios/t3-update-1.ts (T3-UPDATE-1; expected-fail — no such mechanism exists for the local runtime today, filed as issue #1025) |
-| AnyHarness binary self-update (sandbox): worker sees `desiredVersions.anyharness` bump → downloads pinned runtime → stops/swaps/relaunches it in place → a live session on the box restarts and completes → heartbeat reports the new version and agent CLIs reconcile to the new registry's pins | 4 | — (mechanism built per `specs/tbd/anyharness-self-update-v1.md`; scenario in `tests/release/upgrade/` is the follow-up) |
+| AnyHarness binary self-update (sandbox): worker sees `desiredVersions.anyharness` bump → downloads pinned runtime → stops/swaps/relaunches it in place → a live session on the box restarts and completes → heartbeat reports the new version and agent CLIs reconcile to the new registry's pins | 4 | tests/release/src/scenarios/upgrade/t4-cloud-1.ts (T4-CLOUD-1; feed knob = staging server RUNTIME_VERSION via an ECS task-def override, gated behind `RELEASE_E2E_STAGING_ECS_PIN_BUMP` and `assertNotProduction`, restored in a finally. Blocked without a live E2B-backed sandbox + the ECS opt-in. **Product blocker found building this test:** the released anyharness binary reports `CARGO_PKG_VERSION` (hardcoded 0.1.0, never stamped) from both `anyharness --version` and `/health` `version`, but the worker's convergence preflight + health-gate require an exact match to the pinned semver — so no real pin can converge. Marked expected-fail with that diagnosis when it reaches the mechanism. Also: nothing published the `runtime/`|`worker/` CDN trees the redirects resolve to until scripts/ci-cd/publish-runtime-cdn.sh + the release-runtime.yml publish-cdn job) |
 | Desktop app update replaces bundled anyharness + worker sidecars; post-update catalog reconcile installs the right agent CLIs | 4 | — |
 | Desktop feed artifact valid per release: `latest.json` shape, signature verifies against bundled pubkey, bundle sidecars report correct versions | 4 | — |
 | Desktop real N−1 → N auto-update (nightly native lane; needs a test build with overridable feed endpoint) | 4 | — |
@@ -154,7 +154,14 @@ this registry when the mechanism is built.
 (`specs/tbd/anyharness-self-update-v1.md`): the sandbox worker acts on
 `desiredVersions.anyharness` and swaps the runtime binary in place (download →
 stop → swap → relaunch → health-gate → roll back on failure) — the row above
-tracks it, and the end-to-end scenario is the remaining follow-up. A new
+tracks it, and the end-to-end scenario is now written
+(tests/release/src/scenarios/upgrade/t4-cloud-1.ts). Building it surfaced two
+gaps: (1) nothing in-repo published the `runtime/`/`worker/` bare-binary CDN
+trees the server redirects resolve to — now published by
+scripts/ci-cd/publish-runtime-cdn.sh and the release-runtime.yml publish-cdn
+job; (2) the released binary's `--version` and `/health` version are hardcoded
+`CARGO_PKG_VERSION` (0.1.0), which the worker's exact-match preflight/health-gate
+reject, so no real pin converges (issue #1089). A new
 anyharness now reaches a running sandbox without a new template. Desktop gets
 it only inside the app bundle, and that stays bundle-only by design (the worker
 leaves the gate off). The supervisor `update/` module stages but never fetches
