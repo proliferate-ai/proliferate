@@ -22,6 +22,7 @@ import {
   formatAutomationTimestamp,
   presetForRrule,
   timeForRrule,
+  validateAutomationRrule,
   type AutomationSchedulePresetOrCustom,
 } from "@/lib/domain/automations/schedule/schedule";
 import { AutomationSchedulePopover } from "@/components/automations/editor/AutomationEditorControls";
@@ -298,6 +299,12 @@ export function WorkflowTriggersCard({
       } else {
         createMutation.mutate(body, onDone);
       }
+      return;
+    }
+
+    const rruleError = validateAutomationRrule(draft.rrule);
+    if (rruleError) {
+      setFormError(rruleError);
       return;
     }
 

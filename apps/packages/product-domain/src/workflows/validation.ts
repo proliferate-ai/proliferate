@@ -105,6 +105,44 @@ function templatedFields(step: WorkflowStep): TemplatedField[] {
   }
 }
 
+/** Mirrors the server's `_positive_int` (definition.py): a value is a valid
+ * "positive integer" field only when present, not a boolean, an actual
+ * integer, and > 0. */
+function isPositiveInteger(value: unknown): boolean {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/** Mirrors the server's `_int_field`: required, and must be an integer (any
+ * sign) — used for `goal.verify.expectExit`, which has no positivity bound. */
+function isIntegerValue(value: unknown): boolean {
+  return typeof value === "number" && Number.isInteger(value);
+}
+
+/** Mirrors the server's number-input coercion (`_coerce_number`,
+ * interpolation.py): a real number, or a string that parses as one. */
+function isNumberLikeDefault(value: unknown): boolean {
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed !== "" && Number.isFinite(Number(trimmed));
+  }
+  return false;
+}
+
+/** Mirrors the server's boolean-input coercion (`_coerce_boolean`): a real
+ * boolean, or the literal string "true"/"false" (case-insensitive). */
+function isBooleanLikeDefault(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return true;
+  }
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "true" || value.trim().toLowerCase() === "false";
+  }
+  return false;
+}
+
 function validateInputs(inputs: WorkflowInputSpec[]): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
   if (inputs.length > WORKFLOW_MAX_ARGS) {
@@ -143,6 +181,21 @@ function validateInputs(inputs: WorkflowInputSpec[]): WorkflowIssue[] {
         issues.push({
           code: "invalid_definition",
           message: `Default for choice input '${input.name}' is not an allowed value.`,
+          location: { scope: "input", inputIndex, field: "default" },
+        });
+      }
+    }
+    if (input.default !== undefined) {
+      if (input.type === "number" && !isNumberLikeDefault(input.default)) {
+        issues.push({
+          code: "invalid_definition",
+          message: `Default for input '${input.name}' must be a number.`,
+          location: { scope: "input", inputIndex, field: "default" },
+        });
+      } else if (input.type === "boolean" && !isBooleanLikeDefault(input.default)) {
+        issues.push({
+          code: "invalid_definition",
+          message: `Default for input '${input.name}' must be a boolean.`,
           location: { scope: "input", inputIndex, field: "default" },
         });
       }
@@ -197,8 +250,22 @@ function validateStep(
             location: { scope: "step", stepIndex, field: "goal.maxWallSecs" },
           });
         }
+        if (step.goal.tokenBudget !== undefined && !isPositiveInteger(step.goal.tokenBudget)) {
+          push({
+            code: "invalid_definition",
+            message: "Goal token budget must be a positive integer.",
+            location: { scope: "step", stepIndex, field: "goal.tokenBudget" },
+          });
+        }
         if (step.goal.verify) {
           push(requireText(step.goal.verify.shell, "Verify command is required.", stepIndex, "goal.verify.shell"));
+          if (!isIntegerValue(step.goal.verify.expectExit)) {
+            push({
+              code: "invalid_definition",
+              message: "Verify expected exit code must be an integer.",
+              location: { scope: "step", stepIndex, field: "goal.verify.expectExit" },
+            });
+          }
         }
         if (
           options.harnessSupportsGoals
@@ -232,6 +299,13 @@ function validateStep(
           location: { scope: "step", stepIndex, field: "name" },
         });
       }
+      if (step.maxAttempts !== undefined && !isPositiveInteger(step.maxAttempts)) {
+        push({
+          code: "invalid_definition",
+          message: "Max attempts must be a positive integer.",
+          location: { scope: "step", stepIndex, field: "maxAttempts" },
+        });
+      }
       break;
     }
     case "agent.config":
@@ -239,6 +313,13 @@ function validateStep(
       break;
     case "shell.run": {
       push(requireText(step.command, "A command is required.", stepIndex, "command"));
+      if (step.timeoutSecs !== undefined && !isPositiveInteger(step.timeoutSecs)) {
+        push({
+          code: "invalid_definition",
+          message: "Timeout must be a positive integer.",
+          location: { scope: "step", stepIndex, field: "timeoutSecs" },
+        });
+      }
       if (step.outputName !== undefined && !isWorkflowIdentifier(step.outputName)) {
         push({
           code: "invalid_definition",

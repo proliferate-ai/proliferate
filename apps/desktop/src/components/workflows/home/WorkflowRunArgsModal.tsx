@@ -191,9 +191,17 @@ export function WorkflowRunArgsModal({
 
   const [values, setValues] = useState<Record<string, ArgValue>>(initial);
   const [bindings, setBindings] = useState<Record<string, string>>({});
-  const [targetMode, setTargetMode] = useState<TargetMode>(
-    () => (defaultTargetMode === "personal_cloud" && cloudAvailable ? "personal_cloud" : "local"),
-  );
+  const [targetMode, setTargetMode] = useState<TargetMode>(() => {
+    if (defaultTargetMode === "personal_cloud" && cloudAvailable) {
+      return "personal_cloud";
+    }
+    // No last-used default and nothing local to run against — default to
+    // cloud rather than a "local" mode with an empty workspace picker.
+    if (!defaultTargetMode && localWorkspaces.length === 0 && cloudAvailable) {
+      return "personal_cloud";
+    }
+    return "local";
+  });
   const [localWorkspaceId, setLocalWorkspaceId] = useState<string>(
     () =>
       (defaultLocalWorkspaceId

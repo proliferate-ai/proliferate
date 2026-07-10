@@ -1093,7 +1093,11 @@ async def list_slack_channels(db: AsyncSession, user: ActorIdentity) -> SlackCha
         bundle = decrypt_json(account.credential_ciphertext)
     except Exception:
         return SlackChannelsResult(channels=[], connected=False)
-    bot_token = bundle.get("bot_token") or bundle.get("access_token")
+    # oauth-bundle-v1 stores the token under camelCase "accessToken"; keep the
+    # snake_case keys as fallbacks (see actions.py _perform_slack_notify).
+    bot_token = (
+        bundle.get("bot_token") or bundle.get("accessToken") or bundle.get("access_token")
+    )
     if not bot_token:
         return SlackChannelsResult(channels=[], connected=False)
     try:
@@ -1698,12 +1702,16 @@ async def update_trigger(
     )
     repo_full_name = body.repo_full_name if repo_changed else existing.repo_full_name
     # Local targets never carry a cloud workspace (2a): re-pinning the repo only
-    # changes which local worktree the desktop uses. Cloud targets re-derive.
-    if target_mode == WORKFLOW_TARGET_MODE_LOCAL:
+    # changes which local worktree the desktop uses. Cloud targets re-derive —
+    # also when the target_mode itself is switching TO personal_cloud, since a
+    # trigger that was local has no workspace yet (target_workspace_id is None)
+    # and the CHECK constraint requires one for personal_cloud.
+    clear_target_workspace = target_mode == WORKFLOW_TARGET_MODE_LOCAL
+    if clear_target_workspace:
         target_workspace_id: UUID | None = None
-    elif repo_changed:
+    elif repo_changed or existing.target_workspace_id is None:
         target_workspace_id = await _ensure_trigger_target_workspace(
-            db, user=user, repo_full_name=body.repo_full_name
+            db, user=user, repo_full_name=repo_full_name
         )
     else:
         target_workspace_id = existing.target_workspace_id
@@ -1719,6 +1727,7 @@ async def update_trigger(
             target_mode=target_mode,
             repo_full_name=repo_full_name,
             target_workspace_id=target_workspace_id,
+            clear_target_workspace=clear_target_workspace,
         )
     if body.poll is not None:
         raise CloudApiError(
@@ -1757,6 +1766,7 @@ async def update_trigger(
         target_mode=target_mode,
         repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
+        clear_target_workspace=clear_target_workspace,
         input_presets_json=presets,
         write_input_presets=True,
         schedule_rrule=parsed.rrule_text,
@@ -1780,6 +1790,7 @@ async def _update_poll_trigger(
     target_mode: str,
     repo_full_name: str | None,
     target_workspace_id: UUID | None,
+    clear_target_workspace: bool,
 ) -> WorkflowTriggerRecord:
     if body.schedule is not None:
         raise CloudApiError("invalid_schedule", "A poll trigger has no schedule.", status_code=400)
@@ -1843,6 +1854,7 @@ async def _update_poll_trigger(
         target_mode=target_mode,
         repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
+        clear_target_workspace=clear_target_workspace,
         args_json=coerced_static,
         write_poll_config=True,
         poll_url=config.url if config is not None else existing.poll_url,

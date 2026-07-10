@@ -13,6 +13,7 @@ import {
   type WorkflowSessionCandidateInput,
 } from "@proliferate/product-domain/workflows/run-launch";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useWorkflowRuns } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useLaunchWorkflowRun } from "@/hooks/access/cloud/workflows/use-launch-workflow-run";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
@@ -31,8 +32,11 @@ const FUNCTION_PROVIDER_NOT_READY_CODE = "workflow_function_provider_not_ready";
 
 /** The composer door's context (spec run-from-chat R1 door 1, gaps ①/②):
  * the chat the "run a workflow" affordance was opened from. `workspaceId` is
- * in the same id space as `localWorkspaceOptions`/`cloudWorkspaceOptions`
- * (raw local id, or raw cloud id for `personal_cloud`). */
+ * in bind-candidate id space (raw local id, or the cloud SYNTHETIC id
+ * `cloud:<id>` — same space as `sessionCandidates`/session-directory
+ * entries), NOT the raw-id space `localWorkspaceOptions`/`cloudWorkspaceOptions`
+ * use — call sites below convert with `parseCloudWorkspaceSyntheticId` where
+ * they need the raw form (target-resolution / label lookups). */
 export interface WorkflowChatOrigin {
   sessionId: string;
   title: string | null;
@@ -170,16 +174,26 @@ export function useWorkflowRunLauncher(): WorkflowRunLauncher {
     ? (() => {
         const lastUsed = deriveLastUsedTarget(runTargetRecords, state.workflow.id);
         const chatOrigin = state.chatOrigin;
+        // `chatOrigin.workspaceId` is bind-candidate id space (synthetic for
+        // cloud) — resolvedTarget/chatOriginLabel need the raw id space
+        // `localWorkspaceOptions`/`cloudWorkspaceOptions` use, so unwrap for
+        // `personal_cloud` before comparing (the candidate injection below
+        // keeps the synthetic form, unconverted, on purpose).
+        const chatOriginRawWorkspaceId = chatOrigin
+          ? chatOrigin.targetMode === "personal_cloud"
+            ? parseCloudWorkspaceSyntheticId(chatOrigin.workspaceId) ?? chatOrigin.workspaceId
+            : chatOrigin.workspaceId
+          : null;
         // Gap① — chat-origin target always wins over R6 last-used (spec:
         // "chat origin: implicit ... no picker row rendered").
         const resolvedTarget = resolveChatOriginTarget(
-          chatOrigin ? { targetMode: chatOrigin.targetMode, workspaceId: chatOrigin.workspaceId } : null,
+          chatOrigin ? { targetMode: chatOrigin.targetMode, workspaceId: chatOriginRawWorkspaceId } : null,
           lastUsed,
         );
         const chatOriginLabel = chatOrigin
           ? (chatOrigin.targetMode === "local"
-              ? localWorkspaceOptions.find((option) => option.id === chatOrigin.workspaceId)?.label
-              : cloudWorkspaceOptions.find((option) => option.id === chatOrigin.workspaceId)?.label)
+              ? localWorkspaceOptions.find((option) => option.id === chatOriginRawWorkspaceId)?.label
+              : cloudWorkspaceOptions.find((option) => option.id === chatOriginRawWorkspaceId)?.label)
             ?? "this workspace"
           : null;
         // Gap② — the current session goes first among same-harness bind

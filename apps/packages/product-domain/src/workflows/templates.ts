@@ -9,9 +9,9 @@
  * catalog. Every templated field uses only declared inputs and earlier
  * emits, so each definition passes validation as-is.
  *
- * The Slack `notify` steps carry a placeholder `slackChannelId` ("general")
- * since v2 notify requires a channel to validate; the create flow re-prompts
- * for a real channel post-connect.
+ * The Slack `notify` steps ship with an empty `slackChannelId` — v2 notify
+ * requires a real channel, so validation flags it as an issue until the user
+ * picks one in the editor.
  */
 
 import {
@@ -122,8 +122,8 @@ const SENTRY_TRIAGE: WorkflowTemplate = {
           {
             kind: "notify",
             onFail: { kind: "continue" },
-            // Placeholder channel — the create flow re-prompts post-connect.
-            slackChannelId: "general",
+            // No real channel is known yet — validation flags this until picked.
+            slackChannelId: "",
             message: "Sentry triage finished for {{inputs.issue_url}}.",
           },
         ],
@@ -172,7 +172,8 @@ const PR_QA: WorkflowTemplate = {
           {
             kind: "notify",
             onFail: { kind: "continue" },
-            slackChannelId: "general",
+            // No real channel is known yet — validation flags this until picked.
+            slackChannelId: "",
             message: "QA finished for PR #{{inputs.pr_number}}.",
           },
         ],
@@ -264,7 +265,8 @@ const WEEKLY_DIGEST: WorkflowTemplate = {
           {
             kind: "notify",
             onFail: { kind: "continue" },
-            slackChannelId: "general",
+            // No real channel is known yet — validation flags this until picked.
+            slackChannelId: "",
             message: "Weekly digest:\n{{digest.summary}}",
           },
         ],

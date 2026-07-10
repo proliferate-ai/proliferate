@@ -817,3 +817,50 @@ async def test_slack_channels_endpoint_connected(client) -> None:  # type: ignor
     assert result.connected is True
     assert len(result.channels) == 2
     assert result.channels[0].id == "C1"
+
+
+async def test_slack_channels_endpoint_reads_oauth_bundle_access_token(client) -> None:  # type: ignore[no-untyped-def]
+    """The oauth-bundle-v1 credential stores the token under camelCase
+    ``accessToken`` (not ``bot_token``/``access_token``). The picker must read it,
+    otherwise it wrongly reports connected=false with no channels."""
+    from proliferate.db import engine as engine_module
+    from proliferate.integrations.slack.client import SlackChannelSummary
+
+    session_factory = engine_module.async_session_factory
+    async with session_factory() as db:
+        user = await _make_user(db)
+        await db.commit()
+
+    fake_account = type("FakeAccount", (), {"credential_ciphertext": "enc"})()
+    fake_def = type("FakeDef", (), {})()
+    fake_channels = [
+        SlackChannelSummary(
+            id="C9", name="general", is_channel=True, is_private=False, is_archived=False
+        ),
+    ]
+
+    from proliferate.server.cloud.workflows.api import list_slack_channels_endpoint
+
+    async with session_factory() as db:
+        with (
+            patch(
+                "proliferate.server.cloud.workflows.service.accounts_store.get_ready_account_for_provider",
+                new_callable=AsyncMock,
+                return_value=ReadyAccountRow(
+                    account=fake_account, definition=fake_def, org_policy_enabled=None
+                ),
+            ),
+            patch(
+                "proliferate.server.cloud.workflows.service.decrypt_json",
+                return_value={"accessToken": "xoxp-oauth-bundle-token"},
+            ),
+            patch(
+                "proliferate.server.cloud.workflows.service.slack_client.list_channels",
+                new_callable=AsyncMock,
+                return_value=fake_channels,
+            ) as list_channels_mock,
+        ):
+            result = await list_slack_channels_endpoint(db=db, user=user)
+    assert result.connected is True
+    assert len(result.channels) == 1
+    list_channels_mock.assert_awaited_once_with(bot_token="xoxp-oauth-bundle-token")

@@ -37,6 +37,16 @@ def _cloud_worker_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _billing_mode_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin billing to off so a developer's .env.local (e.g. CLOUD_BILLING_MODE=
+    enforce from the billing stack) can't flip enforcement gates mid-suite —
+    the workflow delivery budget gate blocks every test user in enforce mode.
+    Tests that exercise enforcement monkeypatch it themselves (_force_budget).
+    """
+    monkeypatch.setattr(settings, "cloud_billing_mode", "off")
+
+
+@pytest.fixture(autouse=True)
 def _hosted_membership_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin the membership policy to hosted (personal org per user) by default.
 

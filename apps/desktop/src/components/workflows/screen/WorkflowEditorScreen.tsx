@@ -49,6 +49,7 @@ import { useWorkflowDetail, useWorkflows } from "@/hooks/access/cloud/workflows/
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
 import { useWorkflowSlackChannels } from "@/hooks/access/cloud/workflows/use-workflow-slack-channels";
 import { useCloudIntegrations } from "@/hooks/cloud/facade/use-cloud-integrations";
+import { useFunctionInvocations } from "@/hooks/access/cloud/integrations/use-function-invocations";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { buildLocalAutomationRepoCandidates } from "@/lib/domain/automations/local-executor/plan";
@@ -151,6 +152,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const workflowsQuery = useWorkflows();
   const { activeOrganizationId } = useActiveOrganization();
   const { integrations: cloudIntegrations } = useCloudIntegrations(activeOrganizationId);
+  const functionInvocationsQuery = useFunctionInvocations();
   const { updateMutation, createMutation } = useWorkflowMutations();
 
   // Seeds (track 1f starter templates) are shared, org-agnostic rows: viewable
@@ -174,6 +176,10 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   // only flips true right after a successful save) — drives the header's
   // "Unsaved changes" vs "Saved" status line.
   const [dirty, setDirty] = useState(false);
+  // Surfaces a save/create mutation's rejection (e.g. a server-side name-length
+  // 400) right next to the Save button — previously a failed mutation just
+  // stopped the spinner with no feedback. Cleared on the next edit or success.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Seed the draft once the detail loads. A brand-new / empty definition has
   // no agent node yet — seed one so the editor always has a slot to edit.
@@ -230,20 +236,27 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
   // Gateway integration namespaces (spec 6.1/6.3, L21): the owner's visible
   // integrations, restricted client-side to the launch set (issues, slack) —
-  // everything else is "more arrive later" per the card's caption.
-  const functionProviders = useMemo<WorkflowFunctionProviderOption[]>(
-    () =>
-      cloudIntegrations
-        .filter((integration) =>
-          (WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES as readonly string[]).includes(integration.namespace),
-        )
-        .map((integration) => ({
-          namespace: integration.namespace,
-          displayName: integration.displayName,
-          connected: integration.accountId !== null && integration.health === "ready",
-        })),
-    [cloudIntegrations],
-  );
+  // everything else is "more arrive later" per the card's caption. `functions`
+  // (track 1b) has no integration-definition row — the server never returns it
+  // from the catalog — so its picker entry is synthesized here, gated on the
+  // owner having ≥1 function invocation (mirrors the server's
+  // `visible_provider_namespaces` readiness check, gateway_grants.py).
+  const hasFunctionInvocations = (functionInvocationsQuery.data?.items.length ?? 0) > 0;
+  const functionProviders = useMemo<WorkflowFunctionProviderOption[]>(() => {
+    const providers = cloudIntegrations
+      .filter((integration) =>
+        (WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES as readonly string[]).includes(integration.namespace),
+      )
+      .map((integration) => ({
+        namespace: integration.namespace,
+        displayName: integration.displayName,
+        connected: integration.accountId !== null && integration.health === "ready",
+      }));
+    if (hasFunctionInvocations) {
+      providers.push({ namespace: "functions", displayName: "Functions", connected: true });
+    }
+    return providers;
+  }, [cloudIntegrations, hasFunctionInvocations]);
   const functionProviderDisplayNames = useMemo(
     () => new Map(functionProviders.map((provider) => [provider.namespace, provider.displayName])),
     [functionProviders],
@@ -344,6 +357,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const markDirty = () => {
     setSaved(false);
     setDirty(true);
+    setSaveError(null);
   };
 
   const patchDefinition = (next: Partial<WorkflowDefinition>) => {
@@ -518,6 +532,10 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
         onSuccess: () => {
           setSaved(true);
           setDirty(false);
+          setSaveError(null);
+        },
+        onError: (error) => {
+          setSaveError(error.message);
         },
       },
     );
@@ -532,7 +550,11 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
       },
       {
         onSuccess: (detail) => {
+          setSaveError(null);
           navigate(`/workflows/${detail.workflow.id}/edit`);
+        },
+        onError: (error) => {
+          setSaveError(error.message);
         },
       },
     );
@@ -771,6 +793,11 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
               <span className="text-xs text-muted-foreground">Unsaved changes</span>
             ) : saved ? (
               <span className="text-xs font-medium text-success">Saved</span>
+            ) : null}
+            {saveError ? (
+              <span className="max-w-[220px] truncate text-xs text-destructive" title={saveError}>
+                {saveError}
+              </span>
             ) : null}
             {isSeed ? null : (
               <Button size="sm" onClick={handleSave} loading={updateMutation.isPending} disabled={!canSave}>

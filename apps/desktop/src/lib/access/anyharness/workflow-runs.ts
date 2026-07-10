@@ -156,6 +156,27 @@ export async function resolveLocalWorkflowApproval(
 }
 
 /**
+ * Cancel a run on the local runtime. Terminal + idempotent: cancelling an
+ * already-terminal run echoes its current view. The desktop cancel flow calls
+ * this best-effort BEFORE the server terminal write, so the local agent is
+ * actually stopped rather than orphaned behind a cancelled row.
+ */
+export async function cancelLocalWorkflowRun(
+  connection: LocalRuntimeConnection,
+  runId: string,
+  options?: { signal?: AbortSignal },
+): Promise<LocalWorkflowRunView> {
+  const response = await fetch(
+    `${runtimeBase(connection)}${WORKFLOW_RUNS_PATH}/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST", headers: headers(connection), signal: options?.signal },
+  );
+  if (!response.ok) {
+    throw await parseError(response, "cancel the workflow run");
+  }
+  return normalizeRunView(await response.json());
+}
+
+/**
  * The local workflow executor's runtime deps (`WorkflowExecutorDeps` in
  * `lib/workflows/local-workflow-executor.ts`), wired to the local runtime's
  * AnyHarness client. Kept behind the AnyHarness access boundary — the claim

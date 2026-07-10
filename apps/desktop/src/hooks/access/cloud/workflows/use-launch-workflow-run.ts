@@ -61,14 +61,31 @@ export function useLaunchWorkflowRun() {
         if (!input.localWorkspaceId) {
           throw new Error("Choose a workspace to run this workflow in.");
         }
-        // Hand the resolved plan to the local runtime, then flip the server ledger
-        // to delivered and start relaying observed state.
+        // Hand the resolved plan to the local runtime, then start relaying
+        // observed state and flip the server ledger to delivered.
         await createLocalWorkflowRun(
           { runtimeUrl },
           { plan: run.resolvedPlan, workspaceId: input.localWorkspaceId },
         );
-        await markWorkflowRunDelivered(run.id);
+        // Invariant: once the runtime accepted the plan the run is executing
+        // locally, so it MUST be registered with the relay before anything that
+        // can fail — otherwise a thrown delivered-mark leaves an orphaned run
+        // that executes but is never relayed, stranding the server row in
+        // pending_delivery forever (an unstoppable duplicate on retry). The relay
+        // polls + reports observed status independent of the server's delivered
+        // flag, so registration alone is enough to reconcile the row.
         register(run.id, { workspaceId: input.localWorkspaceId, runtimeUrl });
+        try {
+          await markWorkflowRunDelivered(run.id);
+        } catch (error) {
+          // Best-effort: the relay's next status report reconciles the row past
+          // delivery even if this explicit mark fails.
+          const errorName = error instanceof Error ? error.name : "unknown";
+          console.warn("Marking local workflow run delivered failed", {
+            runId: run.id,
+            errorName,
+          });
+        }
       }
 
       return run;

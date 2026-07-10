@@ -49,6 +49,10 @@ function InputRow({
           onChange={(value) => {
             const type = value as WorkflowInputType;
             const next: WorkflowInputSpec = { ...input, type };
+            // A default typed for the old type (e.g. a choice value, or a
+            // number string) is almost never valid for the new one — clear it
+            // rather than carry a stale mismatched value forward.
+            delete next.default;
             if (type === "choice" && !next.choices) {
               next.choices = [];
             }

@@ -562,6 +562,136 @@ describe("validation", () => {
     expect(codes).toContain("forward_emit_reference");
   });
 
+  describe("numeric fields mirror the server's _int_field / _positive_int (D-cleanup)", () => {
+    it("requires goal.verify.expectExit to be an integer, but allows any sign", () => {
+      const withVerify = (expectExit: number): WorkflowDefinition => ({
+        ...base,
+        agents: [
+          {
+            ...base.agents[0]!,
+            steps: [
+              {
+                kind: "agent.prompt",
+                onFail: { kind: "stop" },
+                prompt: "go",
+                goal: {
+                  objective: "x",
+                  maxTurns: 5,
+                  maxWallSecs: 60,
+                  onBlocked: "notify",
+                  verify: { shell: "make test", expectExit },
+                },
+              },
+            ],
+          },
+        ],
+      });
+      expect(validateWorkflowDefinition(withVerify(1.5)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withVerify(0))).toEqual([]);
+      // A non-zero, negative exit code is still an integer — no positivity bound.
+      expect(validateWorkflowDefinition(withVerify(-1))).toEqual([]);
+    });
+
+    it("requires goal.tokenBudget to be a positive integer when present", () => {
+      const withTokenBudget = (tokenBudget: number): WorkflowDefinition => ({
+        ...base,
+        agents: [
+          {
+            ...base.agents[0]!,
+            steps: [
+              {
+                kind: "agent.prompt",
+                onFail: { kind: "stop" },
+                prompt: "go",
+                goal: { objective: "x", maxTurns: 5, maxWallSecs: 60, onBlocked: "notify", tokenBudget },
+              },
+            ],
+          },
+        ],
+      });
+      expect(validateWorkflowDefinition(withTokenBudget(0)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withTokenBudget(-5)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withTokenBudget(2.5)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withTokenBudget(1000))).toEqual([]);
+    });
+
+    it("requires agent.emit maxAttempts to be a positive integer when present", () => {
+      const withMaxAttempts = (maxAttempts: number): WorkflowDefinition => ({
+        ...base,
+        agents: [
+          {
+            ...base.agents[0]!,
+            steps: [
+              { kind: "agent.emit", onFail: { kind: "stop" }, prompt: "go", name: "out", maxAttempts },
+            ],
+          },
+        ],
+      });
+      expect(validateWorkflowDefinition(withMaxAttempts(0)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withMaxAttempts(-1)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withMaxAttempts(3))).toEqual([]);
+    });
+
+    it("requires shell.run timeoutSecs to be a positive integer when present", () => {
+      const withTimeout = (timeoutSecs: number): WorkflowDefinition => ({
+        ...base,
+        agents: [
+          {
+            ...base.agents[0]!,
+            steps: [{ kind: "shell.run", onFail: { kind: "stop" }, command: "make test", timeoutSecs }],
+          },
+        ],
+      });
+      expect(validateWorkflowDefinition(withTimeout(0)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withTimeout(1.5)).map((i) => i.code)).toContain(
+        "invalid_definition",
+      );
+      expect(validateWorkflowDefinition(withTimeout(30))).toEqual([]);
+    });
+  });
+
+  describe("input default type mismatch mirrors the server's coerce semantics", () => {
+    it("flags a number input whose default doesn't parse as a number", () => {
+      const bad: WorkflowDefinition = {
+        ...base,
+        inputs: [{ name: "count", type: "number", required: false, default: "not-a-number" }],
+      };
+      expect(validateWorkflowDefinition(bad).map((i) => i.code)).toContain("invalid_definition");
+      const ok: WorkflowDefinition = {
+        ...base,
+        inputs: [{ name: "count", type: "number", required: false, default: "42" }],
+      };
+      expect(validateWorkflowDefinition(ok)).toEqual([]);
+    });
+
+    it("flags a boolean input whose default isn't a real boolean", () => {
+      const bad: WorkflowDefinition = {
+        ...base,
+        inputs: [{ name: "flag", type: "boolean", required: false, default: "yes" }],
+      };
+      expect(validateWorkflowDefinition(bad).map((i) => i.code)).toContain("invalid_definition");
+      const ok: WorkflowDefinition = {
+        ...base,
+        inputs: [{ name: "flag", type: "boolean", required: false, default: true }],
+      };
+      expect(validateWorkflowDefinition(ok)).toEqual([]);
+    });
+  });
+
   describe("per-slot integration narrowing (track 3c phase 2)", () => {
     const withIntegrations: WorkflowDefinition = {
       ...base,
@@ -771,9 +901,19 @@ describe("notify agent-filled fields (track 3c)", () => {
 });
 
 describe("templates", () => {
-  it("are all valid definitions", () => {
-    for (const template of WORKFLOW_TEMPLATES) {
+  it("templates with no Slack step are fully valid definitions", () => {
+    const noSlackIds = new Set(["fix-until-green", "changelog"]);
+    for (const template of WORKFLOW_TEMPLATES.filter((t) => noSlackIds.has(t.id))) {
       expect(validateWorkflowDefinition(template.definition)).toEqual([]);
+    }
+  });
+
+  it("Slack-notify templates ship with an empty channel, flagged until a real one is picked", () => {
+    const slackIds = new Set(["sentry-triage", "pr-qa", "weekly-digest"]);
+    for (const template of WORKFLOW_TEMPLATES.filter((t) => slackIds.has(t.id))) {
+      const issues = validateWorkflowDefinition(template.definition);
+      expect(issues.map((i) => i.code)).toEqual(["invalid_definition"]);
+      expect(issues[0]!.location.field).toBe("slackChannelId");
     }
   });
 

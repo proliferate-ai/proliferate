@@ -286,13 +286,19 @@ export function WorkflowsHomeScreen() {
   };
 
   const createAndEdit = (name: string, description: string | null, definition: WorkflowDefinition) => {
+    setRunError(null);
     createMutation.mutate(
       {
         name,
         description: description ?? undefined,
         definition: serializeWorkflowDefinition(definition),
       },
-      { onSuccess: (detail) => navigate(`/workflows/${detail.workflow.id}/edit`) },
+      {
+        onSuccess: (detail) => navigate(`/workflows/${detail.workflow.id}/edit`),
+        // Surfaced through the same banner as run errors — a silent create
+        // failure otherwise just stops the spinner with no explanation.
+        onError: (error) => setRunError(error.message),
+      },
     );
   };
 

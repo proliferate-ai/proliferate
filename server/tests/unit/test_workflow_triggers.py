@@ -377,6 +377,64 @@ async def test_update_schedule_recomputes_cursor(db_session: AsyncSession) -> No
     assert updated.next_run_at > utcnow()
 
 
+async def test_update_switches_cloud_target_to_local_nulls_workspace(
+    db_session: AsyncSession,
+) -> None:
+    """Regression: PATCHing an existing cloud trigger to a local target must clear
+    target_workspace_id, or the store's write violates
+    ck_workflow_trigger_target_workspace (local requires a NULL workspace)."""
+    user = await _make_user(db_session)
+    workflow = await _make_workflow(db_session, user)
+    await _make_ready_cloud_workspace(db_session, user)
+    trigger = await service.create_trigger(db_session, user, workflow.id, _create_body())
+    assert trigger.target_workspace_id is not None
+
+    updated = await service.update_trigger(
+        db_session,
+        user,
+        workflow.id,
+        trigger.id,
+        WorkflowTriggerUpdateRequest(targetMode="local"),  # type: ignore[call-arg]
+    )
+    assert updated.target_mode == "local"
+    assert updated.target_workspace_id is None
+
+
+async def test_update_switches_local_target_to_cloud_derives_workspace(
+    db_session: AsyncSession,
+) -> None:
+    """Regression: PATCHing an existing local trigger to a personal_cloud target
+    must derive a workspace, or the store's write violates
+    ck_workflow_trigger_target_workspace (personal_cloud requires a non-NULL
+    workspace) — the existing row still carries target_workspace_id=None from
+    its local days."""
+    user = await _make_user(db_session)
+    workflow = await _make_workflow(db_session, user)
+    repo_env = await _make_cloud_repo_environment(db_session, user)
+    trigger = await service.create_trigger(
+        db_session, user, workflow.id, _create_body(target_mode="local")
+    )
+    assert trigger.target_workspace_id is None
+
+    updated = await service.update_trigger(
+        db_session,
+        user,
+        workflow.id,
+        trigger.id,
+        WorkflowTriggerUpdateRequest(targetMode="personal_cloud"),  # type: ignore[call-arg]
+    )
+    assert updated.target_mode == "personal_cloud"
+    assert updated.target_workspace_id is not None
+
+    from proliferate.db.store import cloud_workspaces as ws_store
+
+    derived = await ws_store.get_cloud_workspace_for_user(
+        db_session, user.id, updated.target_workspace_id
+    )
+    assert derived is not None
+    assert derived.repo_environment_id == repo_env.id
+
+
 async def test_delete_trigger(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)

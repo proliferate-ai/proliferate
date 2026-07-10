@@ -16,10 +16,7 @@ import {
   type WorkflowChatOrigin,
 } from "@/hooks/access/cloud/workflows/use-workflow-run-launcher";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
-import {
-  isCloudWorkspaceId,
-  parseCloudWorkspaceSyntheticId,
-} from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { isCloudWorkspaceId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import type { WorkflowResponse } from "@/hooks/access/cloud/workflows/types";
 
 const COMPOSER_WORKFLOW_LIST_LIMIT = 8;
@@ -62,11 +59,17 @@ export function ComposerWorkflowRunButton({
     return null;
   }
 
+  // `workspaceUiKey` is already in bind-candidate id space (the raw local id,
+  // or the cloud SYNTHETIC id `cloud:<id>` — same as session-directory entries,
+  // use-workspace-entry-flow.ts:106) — pass it through as-is rather than
+  // unwrapping to the raw cloud id, or the launch modal's candidate matching
+  // (isBindableSessionCandidate against its synthetic `activeWorkspaceKey`,
+  // WorkflowRunArgsModal.tsx) never offers the current session for binding.
   const chatOriginBase: Omit<WorkflowChatOrigin, "sessionId" | "harness"> = isCloudWorkspaceId(workspaceUiKey)
     ? {
         title: sessionTitle,
         targetMode: "personal_cloud" as WorkflowTargetMode,
-        workspaceId: parseCloudWorkspaceSyntheticId(workspaceUiKey) ?? workspaceUiKey,
+        workspaceId: workspaceUiKey,
       }
     : {
         title: sessionTitle,

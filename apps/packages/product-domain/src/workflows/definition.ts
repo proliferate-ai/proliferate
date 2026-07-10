@@ -80,8 +80,14 @@ export const WORKFLOW_MAX_INTEGRATIONS = 25;
  * mid-run OAuth-refresh failure mode. OAuth-DCR providers (Linear, Notion,
  * Supabase) are deferred — see architecture doc §6.1/§6.6. E3: namespace-only —
  * no per-tool selection.
+ *
+ * `functions` (track 1b) is the reserved virtual provider for the owner's HTTP
+ * function invocations — it has no integration-definition row (server never
+ * returns it from the catalog), so the editor must synthesize its picker entry
+ * itself, gated on the owner having ≥1 function invocation (mirrors the
+ * server's `visible_provider_namespaces`, gateway_grants.py).
  */
-export const WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES = ["issues", "slack"] as const;
+export const WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES = ["issues", "slack", "functions"] as const;
 
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SLOT_RE = /^[a-z][a-z0-9_]*$/;

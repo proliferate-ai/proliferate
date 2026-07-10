@@ -140,7 +140,7 @@ pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
             draft: pr.draft,
         }),
         StepKind::Notify(notify) => StepKind::Notify(NotifyStep {
-            slack_channel_id: notify.slack_channel_id.clone(),
+            slack_channel_id: resolve_string(&notify.slack_channel_id, outputs),
             message: resolve_string(&notify.message, outputs),
         }),
         StepKind::Branch(branch) => StepKind::Branch(BranchStep {
@@ -233,12 +233,20 @@ mod tests {
         // Track 3c: a notify's {{fields.*}} were rewritten server-side to indexed
         // refs against the injected notify-fields emit. At runtime they late-bind
         // exactly like any other step-output ref — the machinery is unchanged.
+        //
+        // slack_channel_id can itself be a templated indexed ref (the server's
+        // interpolation.py allows emit-output refs there, e.g. a routing emit
+        // step choosing the destination channel), so it must resolve exactly
+        // like message rather than being cloned verbatim.
         let mut outputs = StepOutputs::new();
         outputs.insert(0, serde_json::json!({ "result": "green" }));
-        outputs.insert(1, serde_json::json!({ "summary": "all good", "risk": 2 }));
+        outputs.insert(
+            1,
+            serde_json::json!({ "summary": "all good", "risk": 2, "channel": "C-ROUTED" }),
+        );
         let step: PlanStep = serde_json::from_value(serde_json::json!({
             "kind": "notify",
-            "slack_channel_id": "C1",
+            "slack_channel_id": "{{steps[1].output.channel}}",
             "message": "done {{steps[0].output.result}} — {{steps[1].output.summary}} (risk {{steps[1].output.risk}})"
         }))
         .expect("parse notify");
@@ -246,6 +254,7 @@ mod tests {
         let StepKind::Notify(notify) = &resolved.kind else {
             panic!("expected notify");
         };
+        assert_eq!(notify.slack_channel_id, "C-ROUTED");
         assert_eq!(notify.message, "done green — all good (risk 2)");
     }
 
