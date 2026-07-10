@@ -29,11 +29,15 @@ vi.mock("@/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
   }),
 }));
 
+const webAppMocks = vi.hoisted(() => ({
+  webApp: { available: true, baseUrl: "https://web.proliferate.com" } as {
+    available: boolean;
+    baseUrl: string | null;
+  },
+}));
+
 vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
-  useWebAppTarget: () => ({
-    available: true,
-    baseUrl: "https://web.proliferate.com",
-  }),
+  useWebAppTarget: () => webAppMocks.webApp,
 }));
 
 vi.mock("@/stores/toast/toast-store", () => ({
@@ -50,6 +54,7 @@ describe("useWorkspaceOpenInWebActions", () => {
       cloudWorkspace: { id: "cloud-workspace-1" },
       mobilityWorkspace: null,
     };
+    webAppMocks.webApp = { available: true, baseUrl: "https://web.proliferate.com" };
   });
 
   afterEach(() => {
@@ -72,5 +77,22 @@ describe("useWorkspaceOpenInWebActions", () => {
         "info",
       );
     });
+  });
+
+  it("disables the action and never opens anything when this deployment has no web app", () => {
+    webAppMocks.webApp = { available: false, baseUrl: null };
+    const { result } = renderHook(() => useWorkspaceOpenInWebActions());
+
+    expect(result.current.disabled).toBe(true);
+    expect(result.current.disabledReason).toBe("The web app is not available for this server.");
+    expect(result.current.url).toBeNull();
+
+    act(() => {
+      result.current.openCurrentWorkspaceInWeb();
+    });
+
+    expect(hookMocks.copyText).not.toHaveBeenCalled();
+    expect(hookMocks.openExternal).not.toHaveBeenCalled();
+    expect(hookMocks.showToast).toHaveBeenCalledWith("The web app is not available for this server.");
   });
 });

@@ -137,7 +137,10 @@ def build_server_capabilities(config: Settings) -> ServerCapabilities:
         BILLING_MODE_OBSERVE,
         BILLING_MODE_ENFORCE,
     }
-    cloud_workspaces = bool(config.e2b_api_key.strip() and config.e2b_template_name.strip())
+    # Shared with the actual provisioning gate (Settings.cloud_provisioning_configured)
+    # so the advertised capability never diverges from what the server will actually
+    # provision (e.g. a debug box with only E2B_API_KEY set).
+    cloud_workspaces = config.cloud_provisioning_configured
     agent_gateway = config.agent_gateway_enabled
 
     web_base = config.frontend_base_url.strip()

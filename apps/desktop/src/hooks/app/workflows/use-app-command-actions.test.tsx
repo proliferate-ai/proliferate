@@ -162,11 +162,15 @@ vi.mock("@/lib/infra/measurement/latency-flow", () => ({
   startLatencyFlow: vi.fn(() => "latency-flow-1"),
 }));
 
+const webAppMocks = vi.hoisted(() => ({
+  webApp: { available: true, baseUrl: "https://web.proliferate.com" } as {
+    available: boolean;
+    baseUrl: string | null;
+  },
+}));
+
 vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
-  useWebAppTarget: () => ({
-    available: true,
-    baseUrl: "https://web.proliferate.com",
-  }),
+  useWebAppTarget: () => webAppMocks.webApp,
 }));
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -188,6 +192,7 @@ describe("useAppCommandActions", () => {
     hookMocks.activeNewWorkspaceScope = null;
     hookMocks.homeTargetSelection.baseBranchOverride = "stale/from-other-repo";
     hookMocks.homeRepositorySelection.selectedBranchName = "main";
+    webAppMocks.webApp = { available: true, baseUrl: "https://web.proliferate.com" };
   });
 
   afterEach(() => {
@@ -222,5 +227,21 @@ describe("useAppCommandActions", () => {
 
     expect(hookMocks.openExternal).toHaveBeenCalledWith("https://web.proliferate.com");
     expect(hookMocks.showToast).toHaveBeenCalledWith("Opening web app...", "info");
+  });
+
+  it("disables the web-app action and never opens anything when this deployment has no web app", () => {
+    webAppMocks.webApp = { available: false, baseUrl: null };
+    const { result } = renderHook(() => useAppCommandActions(), { wrapper });
+
+    expect(result.current.openWebApp.disabledReason).toBe(
+      "The web app is not available for this server.",
+    );
+
+    act(() => {
+      result.current.openWebApp.execute("shortcut");
+    });
+
+    expect(hookMocks.openExternal).not.toHaveBeenCalled();
+    expect(hookMocks.showToast).toHaveBeenCalledWith("The web app is not available for this server.");
   });
 });

@@ -145,11 +145,13 @@ _CAPABILITY_FIELDS = {
 def _cfg(**overrides):  # type: ignore[no-untyped-def]
     cfg = Settings()
     # Reset every capability-relevant field to a known base, then apply
-    # overrides, so ambient env cannot leak into the assertion.
+    # overrides, so ambient env (including ambient DEBUG=true, which the test
+    # suite runs under) cannot leak into the assertion.
     base = {
         "telemetry_mode": "self_managed",
         "cloud_billing_mode": "off",
         "agent_gateway_enabled": False,
+        "debug": False,
         "e2b_api_key": "",
         "e2b_template_name": "",
         "frontend_base_url": "",
@@ -262,11 +264,26 @@ def test_capabilities_self_managed_with_addons() -> None:
 
 
 def test_capabilities_cloud_workspaces_requires_both_e2b_fields() -> None:
+    # Outside debug mode, cloudWorkspaces shares Settings.cloud_provisioning_configured,
+    # which requires both an API key and a template name.
     only_key = build_server_capabilities(_cfg(e2b_api_key="e2b-key"))
     only_template = build_server_capabilities(_cfg(e2b_template_name="company-runtime"))
 
     assert only_key.cloudWorkspaces is False
     assert only_template.cloudWorkspaces is False
+
+
+def test_capabilities_cloud_workspaces_matches_provisioning_predicate_in_debug() -> None:
+    # Same predicate as actual provisioning (Settings.cloud_provisioning_configured):
+    # in debug mode a blank template name is fine as long as an API key is set, so
+    # the advertised capability never diverges from what the server will provision.
+    key_only_debug = _cfg(debug=True, e2b_api_key="e2b-key")
+    no_key_debug = _cfg(debug=True, e2b_template_name="company-runtime")
+
+    assert build_server_capabilities(key_only_debug).cloudWorkspaces is True
+    assert key_only_debug.cloud_provisioning_configured is True
+    assert build_server_capabilities(no_key_debug).cloudWorkspaces is False
+    assert no_key_debug.cloud_provisioning_configured is False
 
 
 def test_capabilities_local_dev_is_self_managed_posture() -> None:

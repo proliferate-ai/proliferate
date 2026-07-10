@@ -1,23 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  BookMarked,
-  BookOpen,
-  CreditCard,
-  Globe,
-  Keyboard,
-  Lightbulb,
-  LogOut,
-  MessageSquare,
-  Settings,
-} from "lucide-react";
-import {
-  ArrowUpRight,
-  Check,
-  ChevronUpDown,
-  Discord,
-  Mail,
-} from "@proliferate/ui/icons";
+import { CreditCard, LogOut, Settings } from "lucide-react";
+import { Check, ChevronUpDown, Mail } from "@proliferate/ui/icons";
 import { useUsageSummary } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
@@ -27,7 +11,6 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { OrganizationAvatar } from "@/components/organizations/OrganizationAvatar";
-import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
@@ -38,6 +21,7 @@ import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-o
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-action";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {
@@ -49,10 +33,8 @@ import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-sho
 import { useToastStore } from "@/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
 import { SidebarAppVersionRow } from "./SidebarAppVersionRow";
+import { SidebarHelpSection } from "./SidebarHelpSection";
 import { ConsumptionCard } from "./SidebarConsumptionCard";
-
-const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
-const PROLIFERATE_DISCORD_URL = "https://discord.gg/7b5afMTqW";
 
 /**
  * The single sidebar bottom-left account block, shared verbatim by the main
@@ -72,6 +54,7 @@ export function SidebarAccountFooter() {
     openFeature: openPrompt,
     disabledReason: supportDisabledReason,
   } = useOpenSupportReportWindow({ source: "sidebar" });
+  const supportAction = useSupportMenuAction();
   const showToast = useToastStore((state) => state.show);
   const capabilities = useAppCapabilities();
   const webApp = useWebAppTarget();
@@ -259,83 +242,16 @@ export function SidebarAccountFooter() {
                 </div>
               ) : null}
 
-              <div className="border-t border-border-light py-1">
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Keyboard shortcuts"
-                  icon={<Keyboard className="size-4" />}
-                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
-                  onClick={() => {
-                    close();
-                    openShortcutsDialog(true);
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Docs"
-                  icon={<BookOpen className="size-4" />}
-                  trailing={<ArrowUpRight className="size-3" />}
-                  onClick={() => {
-                    openExternalUrl(PROLIFERATE_DOCS_URL);
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Changelog"
-                  icon={<BookMarked className="size-4" />}
-                  trailing={<ArrowUpRight className="size-3" />}
-                  onClick={() => {
-                    openExternalUrl(PROLIFERATE_CHANGELOG_URL);
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Discord"
-                  icon={<Discord className="size-4" />}
-                  trailing={<ArrowUpRight className="size-3" />}
-                  onClick={() => {
-                    openExternalUrl(PROLIFERATE_DISCORD_URL);
-                    close();
-                  }}
-                />
-                {webApp.available && webApp.baseUrl ? (
-                  <PopoverMenuItem
-                    variant="sidebar"
-                    label="Go to web"
-                    icon={<Globe className="size-4" />}
-                    trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
-                    onClick={() => {
-                      openExternalUrl(webApp.baseUrl!);
-                      close();
-                    }}
-                  />
-                ) : null}
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Send feedback"
-                  icon={<MessageSquare className="size-4" />}
-                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSupport)}</span>}
-                  disabled={Boolean(supportDisabledReason)}
-                  title={supportDisabledReason ?? undefined}
-                  onClick={() => {
-                    openSupport();
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Submit a prompt"
-                  icon={<Lightbulb className="size-4" />}
-                  disabled={Boolean(supportDisabledReason)}
-                  title={supportDisabledReason ?? undefined}
-                  onClick={() => {
-                    openPrompt();
-                    close();
-                  }}
-                />
-              </div>
+              <SidebarHelpSection
+                webApp={webApp}
+                supportAction={supportAction}
+                supportDisabledReason={supportDisabledReason}
+                openSupport={openSupport}
+                openPrompt={openPrompt}
+                openExternalUrl={openExternalUrl}
+                onShowKeyboardShortcuts={() => openShortcutsDialog(true)}
+                onClose={close}
+              />
 
               <div className="border-t border-border-light py-1">
                 <PopoverMenuItem
