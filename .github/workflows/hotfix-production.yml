@@ -71,7 +71,7 @@ jobs:
       server_tag: ${{ steps.artifacts.outputs.server_tag }}
       artifact_tags: ${{ steps.artifacts.outputs.artifact_tags }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref }}
@@ -336,7 +336,7 @@ jobs:
       contents: write
       pull-requests: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

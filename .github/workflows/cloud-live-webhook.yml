@@ -61,7 +61,7 @@ jobs:
 
           echo "ready=$ready" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.prerequisites.outputs.ready == 'true'
 
       - uses: astral-sh/setup-uv@v7

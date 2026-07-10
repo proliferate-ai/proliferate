@@ -121,7 +121,7 @@ jobs:
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.preflight.outputs.enabled == 'true'
 
       - uses: actions/setup-node@v6
@@ -247,7 +247,7 @@ jobs:
         # this. Upload whenever the job ran the runner; the step no-ops when
         # there are no reports.
         if: always() && steps.preflight.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-e2e-reports
           path: tests/release/.output/
@@ -294,7 +294,7 @@ jobs:
           fi
           echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: steps.preflight.outputs.enabled == 'true'
       - uses: actions/setup-node@v6
         if: steps.preflight.outputs.enabled == 'true'
@@ -333,7 +333,7 @@ jobs:
 
       - name: Upload failure reports
         if: always() && steps.preflight.outputs.enabled == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-e2e-reports-staging
           path: tests/release/.output/
