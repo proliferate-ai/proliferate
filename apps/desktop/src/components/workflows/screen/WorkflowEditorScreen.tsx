@@ -20,7 +20,6 @@ import {
 import { templateSuggestions } from "@proliferate/product-domain/workflows/interpolation";
 import { WORKFLOW_STEP_META } from "@proliferate/product-domain/workflows/presentation";
 import { stepIssues, validateWorkflowDefinition } from "@proliferate/product-domain/workflows/validation";
-import { deriveEffectiveConfigs } from "@proliferate/product-domain/workflows/effective-config";
 import {
   addLaneToGroup,
   getSpineNode,
@@ -35,13 +34,12 @@ import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSi
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Spinner } from "@proliferate/ui/primitives/Spinner";
-import { ArrowLeft, CircleAlert, MoreHorizontal, Plus, Robot, X } from "@proliferate/ui/icons";
+import { ArrowLeft, CircleAlert, MoreHorizontal, Play, Plus, Robot, X } from "@proliferate/ui/icons";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
-import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
@@ -56,7 +54,6 @@ import { buildLocalAutomationRepoCandidates } from "@/lib/domain/automations/loc
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
-import { WorkflowScopeHeader } from "../editor/WorkflowScopeHeader";
 import {
   WorkflowTriggersCard,
   type WorkflowTriggerRepoOption,
@@ -66,9 +63,17 @@ import {
   WorkflowFunctionsCard,
   type WorkflowFunctionProviderOption,
 } from "../editor/WorkflowFunctionsCard";
-import { WorkflowStepRailCard } from "../editor/WorkflowStepRailCard";
+import {
+  WorkflowAddStepButton,
+  WorkflowAgentBlockCard,
+  WorkflowSpineConnector,
+  WorkflowStepRow,
+} from "../editor/WorkflowAgentBlockCard";
 import { WorkflowStepPanel, type EditorAgent } from "../editor/WorkflowStepPanel";
 import { WorkflowSelect } from "../editor/WorkflowSelect";
+import { IntegrationIcon } from "@/components/settings/panes/integrations/IntegrationIcon";
+import { useWorkflowTriggers } from "@/hooks/access/cloud/workflows/use-workflow-triggers";
+import { useWorkflowRunLauncher } from "@/hooks/access/cloud/workflows/use-workflow-run-launcher";
 
 interface CatalogModel {
   id: string;
@@ -154,6 +159,22 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const { integrations: cloudIntegrations } = useCloudIntegrations(activeOrganizationId);
   const functionInvocationsQuery = useFunctionInvocations();
   const { updateMutation, createMutation } = useWorkflowMutations();
+  const launcher = useWorkflowRunLauncher();
+  // Trigger facts for the setup summary card (chips only; editing lives in the
+  // setup inspector's Triggers section).
+  const triggersQuery = useWorkflowTriggers(workflowId);
+  const triggerChips = useMemo(() => {
+    const chips = ["manual"];
+    for (const trigger of triggersQuery.data ?? []) {
+      if (!trigger.enabled) continue;
+      if (trigger.kind === "schedule") {
+        chips.push(trigger.repoFullName ? `scheduled · ${trigger.repoFullName.split("/")[1]}` : "scheduled");
+      } else if (trigger.kind === "poll") {
+        chips.push(trigger.repoFullName ? `polls a feed · ${trigger.repoFullName.split("/")[1]}` : "polls a feed");
+      }
+    }
+    return chips;
+  }, [triggersQuery.data]);
 
   // Seeds (track 1f starter templates) are shared, org-agnostic rows: viewable
   // and runnable, but never editable in place. The editor opens read-only and
@@ -167,10 +188,14 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   // (lane "-" for a standalone node).
   const [selectedStep, setSelectedStep] = useState<(SpineAddress & { stepIndex: number }) | null>(null);
   const [setupTarget, setSetupTarget] = useState<SpineAddress | null>(null);
+  // The setup inspector (name/description/inputs/integrations/triggers) —
+  // opened by clicking the canvas summary card, mutually exclusive with the
+  // step and agent inspectors. Open on load: naming the workflow is the first
+  // edit, and the T2-WF editor spec expects the name field visible on entry.
+  const [setupOpen, setSetupOpen] = useState(true);
   const [dragKey, setDragKey] = useState<(SpineAddress & { stepIndex: number }) | null>(null);
   const [dragSpineIndex, setDragSpineIndex] = useState<number | null>(null);
   const [dragLane, setDragLane] = useState<{ spineIndex: number; laneIndex: number } | null>(null);
-  const [addOpenAddress, setAddOpenAddress] = useState<SpineAddress | null>(null);
   const [saved, setSaved] = useState(false);
   // Tracks edits made since the last load/save, independent of `saved` (which
   // only flips true right after a successful save) — drives the header's
@@ -282,11 +307,6 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
     [workflowsQuery.data, workflowId],
   );
 
-  const effectiveConfigs = useMemo(
-    () => (draft ? deriveEffectiveConfigs(draft.definition) : []),
-    [draft],
-  );
-
   const suggestions = useMemo(() => {
     if (draft === null || selectedStep === null) {
       return [];
@@ -390,7 +410,6 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
     const steps = [...node.steps, createWorkflowStep(kind)];
     patchNode(address, { steps });
     setSelectedStep({ ...address, stepIndex: steps.length - 1 });
-    setAddOpenAddress(null);
   };
 
   const duplicateStep = (address: SpineAddress, stepIndex: number) => {
@@ -563,20 +582,34 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const nameInvalid = draft.name.trim() === "";
   const canSave = !isSeed && !nameInvalid && issues.length === 0 && !updateMutation.isPending;
 
-  // Resolve raw harness/model ids to their catalog display labels for the
-  // scope-boundary headers. Falls back to the raw id when not in the catalog.
-  const resolveAgentLabels = (harnessKind: string, modelId: string) => {
+  // Resolve a node's model id to its catalog display label. Falls back to the
+  // raw id when not in the catalog (e.g. a probe-only variant).
+  const resolveModelLabel = (harnessKind: string, modelId: string) => {
     const agent = agents.find((a) => a.kind === harnessKind);
+    return agent?.models.find((m) => m.id === modelId)?.label ?? modelId ?? "";
+  };
+
+  // The routed-connector summary after a standalone agent: its branch step's
+  // taken (continue) case + the values that end the run, in plain English.
+  const routeAfter = (node: WorkflowAgentNode): { taken: string; others?: string } | null => {
+    const branch = node.steps.find((step) => step.kind === "branch");
+    if (!branch || branch.kind !== "branch" || !branch.on) {
+      return null;
+    }
+    const taken = Object.entries(branch.cases).find(([, c]) => c.to === "continue");
+    if (!taken) {
+      return null;
+    }
+    const ends = Object.entries(branch.cases)
+      .filter(([, c]) => c.to === "end")
+      .map(([value]) => `"${value}"`);
     return {
-      harness: agent?.displayName ?? (harnessKind || "No agent"),
-      model: agent?.models.find((m) => m.id === modelId)?.label ?? modelId ?? "",
+      taken: `${branch.on} is "${taken[0]}"`,
+      others: ends.length > 0 ? `${ends.join(", ")} ends the run` : undefined,
     };
   };
 
-  /** The agent-node scope header, shared by a standalone node and a lane inside
-   * a parallel group — only the reorder/delete wiring passed in differs. */
-  const renderAgentHeader = (
-    node: WorkflowAgentNode,
+  const agentMenu = (
     address: SpineAddress,
     opts: {
       canMoveUp: boolean;
@@ -584,143 +617,104 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
       onMoveUp: () => void;
       onMoveDown: () => void;
       onDelete?: () => void;
-      extraMenuItems?: (close: () => void) => React.ReactNode;
+      onAddParallel: () => void;
     },
   ) => (
-    <WorkflowScopeHeader
-      variant="initial"
-      {...resolveAgentLabels(node.harness, node.model)}
-      selected={setupTarget?.spineIndex === address.spineIndex && setupTarget.lane === address.lane}
-      invalid={issues.some(
-        (issue) => issue.location.scope === "agent" && issue.location.nodeIndex === nodeOrdinalFor(definition, address),
+    <PopoverButton
+      stopPropagation
+      align="end"
+      side="bottom"
+      className={`w-52 ${POPOVER_SURFACE_CLASS}`}
+      trigger={(
+        <Button
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          aria-label="Agent actions"
+          className="shrink-0 rounded p-0.5 text-faint transition-colors hover:bg-surface-elevated-secondary hover:text-muted-foreground"
+        >
+          <MoreHorizontal className="size-3.5" />
+        </Button>
       )}
-      canMoveUp={opts.canMoveUp}
-      canMoveDown={opts.canMoveDown}
-      onSelect={() => { setSetupTarget(address); setSelectedStep(null); }}
-      onMoveUp={opts.onMoveUp}
-      onMoveDown={opts.onMoveDown}
-      onDelete={opts.onDelete}
-      extraMenuItems={opts.extraMenuItems}
-    />
+    >
+      {(close) => (
+        <div className="p-1">
+          <PopoverMenuItem
+            density="compact"
+            label="Edit"
+            onClick={() => { close(); setSetupTarget(address); setSelectedStep(null); setSetupOpen(false); }}
+          />
+          <PopoverMenuItem density="compact" label="Add agent in parallel" onClick={() => { close(); opts.onAddParallel(); }} />
+          <PopoverMenuItem density="compact" label="Move up" disabled={!opts.canMoveUp} onClick={() => { close(); opts.onMoveUp(); }} />
+          <PopoverMenuItem density="compact" label="Move down" disabled={!opts.canMoveDown} onClick={() => { close(); opts.onMoveDown(); }} />
+          {opts.onDelete ? (
+            <PopoverMenuItem
+              density="compact"
+              label="Delete agent"
+              labelClassName="text-destructive"
+              onClick={() => { close(); opts.onDelete!(); }}
+            />
+          ) : null}
+        </div>
+      )}
+    </PopoverButton>
   );
 
-  /** The step list + add-step affordance for one agent node, addressed by
-   * `address` — identical whether the node is standalone or a lane. */
-  const renderAgentSteps = (node: WorkflowAgentNode, address: SpineAddress) => {
-    let actionNumber = 0;
+  /** One agent node as a block card: header (slot/model → agent inspector) +
+   * single-line step rows + the add-step affordance. Identical for a
+   * standalone node and a lane; only the menu wiring differs. */
+  const renderAgentBlock = (
+    node: WorkflowAgentNode,
+    address: SpineAddress,
+    menu: React.ReactNode,
+  ) => {
+    const agentInvalid = issues.some(
+      (issue) => issue.location.scope === "agent" && issue.location.nodeIndex === nodeOrdinalFor(definition, address),
+    );
     return (
-      <>
+      <WorkflowAgentBlockCard
+        node={node}
+        modelLabel={resolveModelLabel(node.harness, node.model)}
+        selected={setupTarget?.spineIndex === address.spineIndex && setupTarget.lane === address.lane}
+        invalid={agentInvalid}
+        onSelect={() => { setSetupTarget(address); setSelectedStep(null); setSetupOpen(false); }}
+        menu={menu}
+      >
         {node.steps.map((step, stepIndex) => {
           const flatIndex = flatStepIndex(definition, address, stepIndex);
-          const thisConfig = effectiveConfigs[flatIndex];
-          const dragProps = {
-            draggable: true,
-            onDragStart: () => setDragKey({ ...address, stepIndex }),
-            onDragOver: (event: DragEvent) => event.preventDefault(),
-            onDrop: () => {
-              if (dragKey !== null && dragKey.spineIndex === address.spineIndex && dragKey.lane === address.lane) {
-                reorderStep(address, dragKey.stepIndex, stepIndex);
-              }
-              setDragKey(null);
-            },
-          } as const;
           const isSelected =
             selectedStep?.spineIndex === address.spineIndex
             && selectedStep.lane === address.lane
             && selectedStep.stepIndex === stepIndex;
-
-          // Agent config is a SCOPE BOUNDARY, not a numbered action — render it
-          // as a header/divider with no spine number. In v2 it only ever
-          // switches the model (harness is fixed per node).
-          if (step.kind === "agent.config") {
-            const labels = resolveAgentLabels(
-              thisConfig?.effectiveHarness ?? node.harness,
-              thisConfig?.effectiveModel ?? step.model,
-            );
-            return (
-              <div key={stepIndex} {...dragProps}>
-                <WorkflowScopeHeader
-                  variant={thisConfig?.isNewSession ? "new-session" : "model-only"}
-                  harness={labels.harness}
-                  model={labels.model}
-                  selected={isSelected}
-                  invalid={stepIssues(issues, flatIndex).length > 0}
-                  canMoveUp={stepIndex > 0}
-                  canMoveDown={stepIndex < node.steps.length - 1}
-                  onSelect={() => { setSelectedStep({ ...address, stepIndex }); setSetupTarget(null); }}
-                  onDuplicate={() => duplicateStep(address, stepIndex)}
-                  onDelete={() => deleteStep(address, stepIndex)}
-                  onMoveUp={() => reorderStep(address, stepIndex, stepIndex - 1)}
-                  onMoveDown={() => reorderStep(address, stepIndex, stepIndex + 1)}
-                />
-              </div>
-            );
-          }
-
-          // Real action — number it 1..N ignoring scope boundaries.
-          actionNumber += 1;
-          // Draw the spine only to the next contiguous action. When the next
-          // step is a scope boundary (agent.config), the header is the clean
-          // break, so the spine stops here.
-          const nextIsAction =
-            node.steps[stepIndex + 1] !== undefined && node.steps[stepIndex + 1]!.kind !== "agent.config";
           return (
-            <div key={stepIndex} {...dragProps}>
-              <WorkflowStepRailCard
+            <div
+              key={stepIndex}
+              draggable
+              onDragStart={() => setDragKey({ ...address, stepIndex })}
+              onDragOver={(event: DragEvent) => event.preventDefault()}
+              onDrop={() => {
+                if (dragKey !== null && dragKey.spineIndex === address.spineIndex && dragKey.lane === address.lane) {
+                  reorderStep(address, dragKey.stepIndex, stepIndex);
+                }
+                setDragKey(null);
+              }}
+            >
+              <WorkflowStepRow
                 step={step}
-                index={stepIndex}
-                stepNumber={actionNumber}
                 selected={isSelected}
                 invalid={stepIssues(issues, flatIndex).length > 0}
-                connector={nextIsAction}
                 canMoveUp={stepIndex > 0}
                 canMoveDown={stepIndex < node.steps.length - 1}
-                onSelect={() => { setSelectedStep({ ...address, stepIndex }); setSetupTarget(null); }}
-                onChange={(next) => updateStep(address, stepIndex, next)}
+                onSelect={() => { setSelectedStep({ ...address, stepIndex }); setSetupTarget(null); setSetupOpen(false); }}
+                onMove={(dir) => reorderStep(address, stepIndex, stepIndex + dir)}
                 onDuplicate={() => duplicateStep(address, stepIndex)}
                 onDelete={() => deleteStep(address, stepIndex)}
-                onMoveUp={() => reorderStep(address, stepIndex, stepIndex - 1)}
-                onMoveDown={() => reorderStep(address, stepIndex, stepIndex + 1)}
               />
             </div>
           );
         })}
-
-        <div className="flex justify-start pl-[6px]">
-          <PopoverButton
-            align="start"
-            side="bottom"
-            externalOpen={addOpenAddress?.spineIndex === address.spineIndex && addOpenAddress.lane === address.lane}
-            onOpenChange={(open) => setAddOpenAddress(open ? address : null)}
-            className={`w-48 ${POPOVER_SURFACE_CLASS}`}
-            trigger={(
-              <Button
-                type="button"
-                variant="unstyled"
-                size="unstyled"
-                aria-label="Add step"
-                className="flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm outline-none transition-colors hover:border-border-heavy hover:text-foreground data-[state=open]:border-border-heavy data-[state=open]:text-foreground"
-              >
-                <Plus className="size-4" />
-              </Button>
-            )}
-          >
-            {(close) => (
-              <div className="p-1">
-                {STEP_KINDS.map((kind) => (
-                  <PopoverMenuItem
-                    key={kind}
-                    density="compact"
-                    icon={<WorkflowStepKindBadge kind={kind} iconOnly className="bg-transparent p-0" />}
-                    label={WORKFLOW_STEP_META[kind].label}
-                    onClick={() => { close(); addStep(address, kind); }}
-                  />
-                ))}
-              </div>
-            )}
-          </PopoverButton>
-        </div>
-      </>
+        <WorkflowAddStepButton kinds={STEP_KINDS} onAdd={(kind) => addStep(address, kind)} />
+      </WorkflowAgentBlockCard>
     );
   };
 
@@ -800,55 +794,110 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
               </span>
             ) : null}
             {isSeed ? null : (
-              <Button size="sm" onClick={handleSave} loading={updateMutation.isPending} disabled={!canSave}>
+              <Button size="sm" variant="secondary" onClick={handleSave} loading={updateMutation.isPending} disabled={!canSave}>
                 Save
               </Button>
             )}
+            <Button
+              size="sm"
+              disabled={issues.length > 0 || dirty}
+              title={dirty ? "Save your changes first" : issues.length > 0 ? "Fix the issues first" : undefined}
+              onClick={() => {
+                if (detailQuery.data) {
+                  launcher.open(detailQuery.data.workflow, definition);
+                }
+              }}
+            >
+              <Play className="size-3.5" />
+              Run
+            </Button>
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] grid-cols-[1fr]" style={selectedStep !== null || setupTarget !== null ? { gridTemplateColumns: "1fr minmax(0, min(50%, 420px))" } : undefined}>
+        <div className="grid min-h-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] grid-cols-[1fr]" style={selectedStep !== null || setupTarget !== null || setupOpen ? { gridTemplateColumns: "1fr minmax(0, min(50%, 420px))" } : undefined}>
           <div
             className="min-w-0 overflow-y-auto bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] [background-size:16px_16px]"
           >
-            <div className="mx-auto flex max-w-[720px] flex-col gap-3 px-6 py-6">
-              <WorkflowMetaCard
-                name={draft.name}
-                description={draft.description}
-                onNameChange={(name) => {
-                  markDirty();
-                  setDraft((prev) => (prev ? { ...prev, name } : prev));
-                }}
-                onDescriptionChange={(description) => {
-                  markDirty();
-                  setDraft((prev) => (prev ? { ...prev, description } : prev));
-                }}
-              />
-              <WorkflowSetupCard inputs={definition.inputs} agents={agents} onInputsChange={setInputs} />
-              <WorkflowFunctionsCard
-                integrations={definition.integrations}
-                providers={functionProviders}
-                onChange={setIntegrations}
-              />
-              <WorkflowTriggersCard
-                workflowId={workflowId}
-                args={definition.inputs}
-                repoOptions={triggerRepoOptions}
-                localRepoOptions={localTriggerRepoOptions}
-                onOpenRun={(runId) => navigate(`/workflows/${workflowId}/runs/${runId}`)}
-              />
+            <div className="mx-auto flex max-w-2xl flex-col px-6 py-6">
+              {/* Setup summary card (editor page of record): title, description,
+                  input + integration facts at a glance; clicking opens the setup
+                  inspector where the actual editing lives. */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => { setSetupOpen(true); setSetupTarget(null); setSelectedStep(null); }}
+                className={`mb-4 flex cursor-pointer flex-col gap-2 rounded-xl border bg-background p-3 shadow-sm transition-colors ${
+                  setupOpen ? "border-border-heavy" : "border-border hover:border-border-heavy"
+                }`}
+              >
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium text-foreground">{draft.name || "Untitled workflow"}</span>
+                  {draft.description ? (
+                    <span className="text-xs text-muted-foreground" data-telemetry-mask>{draft.description}</span>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">Inputs</span>
+                  {definition.inputs.length > 0 ? (
+                    definition.inputs.map((input) => (
+                      <span
+                        key={input.name}
+                        className="inline-flex shrink-0 select-none items-center gap-1 rounded-full bg-surface-elevated-secondary px-2 py-0.5 font-mono text-xs leading-4 text-muted-foreground"
+                      >
+                        {input.name || "…"}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-faint">none</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">Integrations</span>
+                  {definition.integrations.length > 0 ? (
+                    definition.integrations.map((namespace) => (
+                      <span key={namespace} className="inline-flex items-center gap-1.5">
+                        <IntegrationIcon namespace={namespace} className="size-4 rounded" />
+                        <span className="text-xs text-muted-foreground">
+                          {functionProviderDisplayNames.get(namespace) ?? namespace}
+                        </span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-faint">none</span>
+                  )}
+                </div>
+                {triggerChips.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="w-20 shrink-0 text-xs font-medium text-muted-foreground">Triggers</span>
+                    {triggerChips.map((chip) => (
+                      <span
+                        key={chip}
+                        className="inline-flex shrink-0 select-none items-center gap-1 rounded-full bg-surface-elevated-secondary px-2 py-0.5 text-xs leading-4 text-muted-foreground"
+                      >
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
 
-              {/* Agents as top-level rail items: a standalone node is its own
-                  scope boundary (a harness/model header) with its steps nested
-                  underneath; a parallel group (L30 / D-031a) is one spine
-                  entry whose lanes render side-by-side, each with the same
-                  per-agent header + nested steps. Switching agents = a new
-                  node; switching model within a node = an inline agent.config
-                  step. */}
+              {/* Spine: agent block cards joined by connectors; a routed branch
+                  in the entry above summarizes its taken case on the connector.
+                  A parallel group is one framed entry whose lanes render
+                  side-by-side inside it. */}
               {definition.agents.map((entry, spineIndex) => {
+                const previous = spineIndex > 0 ? definition.agents[spineIndex - 1] : null;
+                const connector =
+                  spineIndex > 0 ? (
+                    <WorkflowSpineConnector
+                      route={previous && !isParallelGroup(previous) ? routeAfter(previous) : null}
+                    />
+                  ) : null;
+
                 if (isParallelGroup(entry)) {
                   return (
-                    <div key={spineIndex} className="flex flex-col">
+                    <div key={spineIndex} className="contents">
+                      {connector}
                       <div
                         draggable
                         onDragStart={() => setDragSpineIndex(spineIndex)}
@@ -859,64 +908,83 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                           }
                           setDragSpineIndex(null);
                         }}
-                        className="flex items-center gap-2 py-1.5"
+                        className="flex flex-col rounded-xl border border-border bg-surface-elevated-secondary/20 transition-colors hover:border-border-heavy"
                       >
-                        <span className="text-xs font-medium text-foreground">Run together</span>
-                        <span className="text-xs text-muted-foreground">
-                          — every agent runs at once; a sibling always finishes before the run fails
-                        </span>
-                        <span aria-hidden className="h-px flex-1 bg-border" />
-                        <PopoverButton
-                          stopPropagation
-                          align="end"
-                          side="bottom"
-                          className={`w-48 ${POPOVER_SURFACE_CLASS}`}
-                          trigger={(
-                            <Button variant="ghost" size="icon-sm" aria-label="Group options">
-                              <MoreHorizontal className="size-4" />
-                            </Button>
-                          )}
-                        >
-                          {(close) => (
-                            <div className="p-1">
-                              <PopoverMenuItem
-                                density="compact"
-                                label="Add agent in parallel"
-                                onClick={() => { close(); addLane(spineIndex); }}
-                              />
-                            </div>
-                          )}
-                        </PopoverButton>
-                      </div>
-
-                      <div className="flex flex-wrap items-start gap-3">
-                        {entry.parallel.map((laneNode, laneIndex) => {
-                          const address: SpineAddress = { spineIndex, lane: laneNode.slot };
-                          return (
-                            <div
-                              key={laneNode.slot}
-                              className="flex min-w-[260px] flex-1 flex-col"
-                              draggable
-                              onDragStart={() => setDragLane({ spineIndex, laneIndex })}
-                              onDragOver={(event) => event.preventDefault()}
-                              onDrop={() => {
-                                if (dragLane !== null && dragLane.spineIndex === spineIndex) {
-                                  reorderLane(spineIndex, dragLane.laneIndex, laneIndex);
-                                }
-                                setDragLane(null);
-                              }}
-                            >
-                              {renderAgentHeader(laneNode, address, {
-                                canMoveUp: laneIndex > 0,
-                                canMoveDown: laneIndex < entry.parallel.length - 1,
-                                onMoveUp: () => reorderLane(spineIndex, laneIndex, laneIndex - 1),
-                                onMoveDown: () => reorderLane(spineIndex, laneIndex, laneIndex + 1),
-                                onDelete: () => removeLane(spineIndex, laneNode.slot),
-                              })}
-                              <div className="flex flex-col pl-4">{renderAgentSteps(laneNode, address)}</div>
-                            </div>
-                          );
-                        })}
+                        <div className="flex min-w-0 items-center gap-2 px-3.5 py-2">
+                          <span className="text-sm font-medium text-foreground">Run together</span>
+                          <span className="min-w-0 truncate text-xs text-muted-foreground">
+                            continue once all finish, even if one fails
+                          </span>
+                          <span className="min-w-0 flex-1" />
+                          <PopoverButton
+                            stopPropagation
+                            align="end"
+                            side="bottom"
+                            className={`w-48 ${POPOVER_SURFACE_CLASS}`}
+                            trigger={(
+                              <Button
+                                type="button"
+                                variant="unstyled"
+                                size="unstyled"
+                                aria-label="Group actions"
+                                className="shrink-0 rounded p-0.5 text-faint transition-colors hover:bg-surface-elevated-secondary hover:text-muted-foreground"
+                              >
+                                <MoreHorizontal className="size-3.5" />
+                              </Button>
+                            )}
+                          >
+                            {(close) => (
+                              <div className="p-1">
+                                <PopoverMenuItem
+                                  density="compact"
+                                  label="Add parallel agent"
+                                  onClick={() => { close(); addLane(spineIndex); }}
+                                />
+                                <PopoverMenuItem
+                                  density="compact"
+                                  label="Move up"
+                                  disabled={spineIndex <= 0}
+                                  onClick={() => { close(); reorderSpineEntry(spineIndex, spineIndex - 1); }}
+                                />
+                                <PopoverMenuItem
+                                  density="compact"
+                                  label="Move down"
+                                  disabled={spineIndex >= definition.agents.length - 1}
+                                  onClick={() => { close(); reorderSpineEntry(spineIndex, spineIndex + 1); }}
+                                />
+                              </div>
+                            )}
+                          </PopoverButton>
+                        </div>
+                        <div className="flex gap-2 px-2 pb-2">
+                          {entry.parallel.map((laneNode, laneIndex) => {
+                            const address: SpineAddress = { spineIndex, lane: laneNode.slot };
+                            return (
+                              <div
+                                key={laneNode.slot}
+                                className="flex min-w-[240px] flex-1 flex-col"
+                                draggable
+                                onDragStart={() => setDragLane({ spineIndex, laneIndex })}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={() => {
+                                  if (dragLane !== null && dragLane.spineIndex === spineIndex) {
+                                    reorderLane(spineIndex, dragLane.laneIndex, laneIndex);
+                                  }
+                                  setDragLane(null);
+                                }}
+                              >
+                                {renderAgentBlock(laneNode, address, agentMenu(address, {
+                                  canMoveUp: laneIndex > 0,
+                                  canMoveDown: laneIndex < entry.parallel.length - 1,
+                                  onMoveUp: () => reorderLane(spineIndex, laneIndex, laneIndex - 1),
+                                  onMoveDown: () => reorderLane(spineIndex, laneIndex, laneIndex + 1),
+                                  onDelete: () => removeLane(spineIndex, laneNode.slot),
+                                  onAddParallel: () => addLane(spineIndex),
+                                }))}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );
@@ -924,7 +992,8 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
 
                 const address: SpineAddress = { spineIndex, lane: "-" };
                 return (
-                  <div key={spineIndex} className="flex flex-col">
+                  <div key={spineIndex} className="contents">
+                    {connector}
                     <div
                       draggable
                       onDragStart={() => setDragSpineIndex(spineIndex)}
@@ -936,46 +1005,88 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                         setDragSpineIndex(null);
                       }}
                     >
-                      {renderAgentHeader(entry, address, {
+                      {renderAgentBlock(entry, address, agentMenu(address, {
                         canMoveUp: spineIndex > 0,
                         canMoveDown: spineIndex < definition.agents.length - 1,
                         onMoveUp: () => reorderSpineEntry(spineIndex, spineIndex - 1),
                         onMoveDown: () => reorderSpineEntry(spineIndex, spineIndex + 1),
                         onDelete: totalAgentCount > 1 ? () => deleteSpineEntry(spineIndex) : undefined,
-                        extraMenuItems: (close) => (
-                          <PopoverMenuItem
-                            density="compact"
-                            label="Add agent in parallel"
-                            onClick={() => { close(); parallelizeEntry(spineIndex); }}
-                          />
-                        ),
-                      })}
+                        onAddParallel: () => parallelizeEntry(spineIndex),
+                      }))}
                     </div>
-
-                    <div className="flex flex-col pl-4">{renderAgentSteps(entry, address)}</div>
                   </div>
                 );
               })}
 
-              <div className="flex items-center justify-start gap-2">
-                <Button variant="secondary" size="sm" onClick={addAgentNode} disabled={totalAgentCount >= WORKFLOW_MAX_AGENTS}>
-                  <Plus className="size-3.5" />
-                  Add agent
+              {/* Add-agent verbs (mock: quiet pill buttons under the spine). */}
+              <div className="flex items-center justify-center gap-2 py-3">
+                <Button
+                  type="button"
+                  variant="unstyled"
+                  size="unstyled"
+                  onClick={addAgentNode}
+                  disabled={totalAgentCount >= WORKFLOW_MAX_AGENTS}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:border-border-heavy hover:text-foreground disabled:opacity-50"
+                >
+                  <Plus className="size-3" />
+                  Agent below
                 </Button>
                 <Button
-                  variant="secondary"
-                  size="sm"
+                  type="button"
+                  variant="unstyled"
+                  size="unstyled"
                   onClick={addAgentInParallel}
                   disabled={totalAgentCount >= WORKFLOW_MAX_AGENTS || definition.agents.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:border-border-heavy hover:text-foreground disabled:opacity-50"
                 >
-                  <Plus className="size-3.5" />
+                  <Plus className="size-3" />
                   In parallel with the last
                 </Button>
               </div>
             </div>
           </div>
 
-          {selectedStep !== null && nodeAt(selectedStep)?.steps[selectedStep.stepIndex] ? (
+          {setupOpen ? (
+            <div className="flex h-full flex-col overflow-hidden border-l border-border bg-background">
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <span className="inline-flex select-none items-center gap-1.5 rounded-full border border-border bg-transparent px-3 py-0.5 text-xs font-medium leading-none text-foreground">
+                  Setup
+                </span>
+                <Button variant="ghost" size="icon-sm" onClick={() => setSetupOpen(false)} aria-label="Close panel">
+                  <X className="size-4" />
+                </Button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="flex flex-col gap-3">
+                  <WorkflowMetaCard
+                    name={draft.name}
+                    description={draft.description}
+                    onNameChange={(name) => {
+                      markDirty();
+                      setDraft((prev) => (prev ? { ...prev, name } : prev));
+                    }}
+                    onDescriptionChange={(description) => {
+                      markDirty();
+                      setDraft((prev) => (prev ? { ...prev, description } : prev));
+                    }}
+                  />
+                  <WorkflowSetupCard inputs={definition.inputs} agents={agents} onInputsChange={setInputs} />
+                  <WorkflowFunctionsCard
+                    integrations={definition.integrations}
+                    providers={functionProviders}
+                    onChange={setIntegrations}
+                  />
+                  <WorkflowTriggersCard
+                    workflowId={workflowId}
+                    args={definition.inputs}
+                    repoOptions={triggerRepoOptions}
+                    localRepoOptions={localTriggerRepoOptions}
+                    onOpenRun={(runId) => navigate(`/workflows/${workflowId}/runs/${runId}`)}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : selectedStep !== null && nodeAt(selectedStep)?.steps[selectedStep.stepIndex] ? (
             <div className="overflow-hidden border-l border-border bg-background">
               <WorkflowStepPanel
                 step={nodeAt(selectedStep)!.steps[selectedStep.stepIndex]!}
@@ -1095,6 +1206,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
           ) : null}
         </div>
       </div>
+      {launcher.modal}
     </MainSidebarPageShell>
   );
 }
