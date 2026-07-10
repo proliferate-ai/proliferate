@@ -2,11 +2,13 @@ import { twMerge } from "@proliferate/ui/utils/tw-merge";
 import { ProliferateLivingMark } from "@proliferate/product-ui/brand/ProliferateLivingMark";
 import { ProviderBrandIcon } from "@proliferate/product-ui/auth/ProviderBrandIcon";
 import { AuthAppearanceBoundary } from "@/components/auth/AuthAppearanceBoundary";
+import { ConnectServerDialog } from "@/components/auth/ConnectServerDialog";
 import { PasswordSignInForm } from "@/components/auth/PasswordSignInForm";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
+import { useConnectServer } from "@/hooks/auth/workflows/use-connect-server";
 import { ArrowRight, GitHub } from "@proliferate/ui/icons";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS } from "@/copy/auth/auth-copy";
+import { AUTH_LOGIN_LABELS, AUTH_SCREEN_LABELS, CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
 
 // Shared shell for the initial page (loading -> auth). The SAME element tree is
 // rendered in both modes so React never re-mounts the living mark — its
@@ -87,6 +89,12 @@ export function AuthScreenLayout({
     && !ssoSignInAvailable
     && !githubSignInChecking
     && !githubSignInAvailable;
+
+  // Connect-to-a-self-hosted-server (self-hosting-v1 §3.5): a quiet secondary
+  // affordance, never rendered in the web build (no Tauri, no
+  // `set_app_config` command — `available` is false there).
+  const connectServer = useConnectServer();
+  const showConnectServer = showAuth && connectServer.available;
 
   return (
     <AuthAppearanceBoundary
@@ -243,6 +251,39 @@ export function AuthScreenLayout({
           </div>
         </div>
       </div>
+
+      {showConnectServer && (
+        <div className="fixed inset-x-0 bottom-6 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          {connectServer.connectedServerHost ? (
+            <>
+              <span>
+                {CONNECT_SERVER_LABELS.connectedPrefix} {connectServer.connectedServerHost}
+              </span>
+              <span aria-hidden>·</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void connectServer.resetToDefaultServer()}
+                className="inline h-auto px-0 py-0 text-muted-foreground underline underline-offset-4 hover:text-foreground"
+              >
+                {CONNECT_SERVER_LABELS.reset}
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={connectServer.open}
+              className="inline h-auto px-0 py-0 text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            >
+              {CONNECT_SERVER_LABELS.connectAffordance}
+            </Button>
+          )}
+        </div>
+      )}
+      <ConnectServerDialog controller={connectServer} />
     </AuthAppearanceBoundary>
   );
 }

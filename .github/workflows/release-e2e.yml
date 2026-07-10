@@ -1,0 +1,293 @@
+name: Release E2E (tier 3)
+
+# Tier-3 live end-to-end runner (specs/developing/testing/README.md "Tier 3 —
+# live end-to-end"). Drives real agents on cheap models through real flows:
+# provision/pause/resume/connect, chat per cataloged agent, config apply,
+# secrets materialization, billing metering, repo settings.
+#
+# Cadence: release-train, NOT per-PR. It burns real money/time (E2B sandboxes,
+# gateway LLM calls) so it runs on a schedule and on demand, never on
+# `pull_request`. Per the README CI mapping it is non-blocking: failures file
+# issues and block the staging->production promotion, they never gate merges.
+# Every job is `continue-on-error` while the runner earns a flake-free record.
+#
+# Honest scoping (the runner self-reports blocked/expected-fail per scenario
+# for anything it lacks credentials for; the gates below just avoid booting a
+# stack that could not produce signal):
+#   - The local lane needs a way to drive real agents. In CI there is no native
+#     agent CLI login, so it routes through the LLM gateway with
+#     RELEASE_E2E_GATEWAY_TEST_KEY. With no key the job skips itself cleanly
+#     (::notice::), the same pattern the tier-2 billing suite uses for
+#     STRIPE_TEST_SECRET_KEY.
+#   - The sandbox lane additionally needs an E2B team (E2B_API_KEY repo secret,
+#     mapped to RELEASE_E2E_E2B_API_KEY) AND a publicly reachable server URL for
+#     E2B to deliver webhooks to — a locally booted server on 127.0.0.1 needs a
+#     tunnel, so sandbox scenarios self-report blocked without one.
+#   - The staging lane (against the real staging deployment + its gateway) is
+#     the README's documented CI target, but the staging gateway test key is not
+#     provisioned yet (RELEASE_E2E_GATEWAY_TEST_KEY on staging). Its job is left
+#     commented at the bottom until that key exists.
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: Runtime target lane the runner points at.
+        default: local
+        required: false
+        type: choice
+        options:
+          - local
+          - staging
+      scenarios:
+        description: Comma-separated scenario ids, or "all".
+        default: all
+        required: false
+        type: string
+      agents:
+        description: Comma-separated harness kinds, or "all".
+        default: all
+        required: false
+        type: string
+  schedule:
+    # Nightly, offset after the release train (which runs at 09:00 UTC) so it
+    # exercises the freshly cut artifacts. README: "Nightly — Tier 3 lanes
+    # against whatever is on staging; failures file issues, never block merges."
+    - cron: "0 11 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-e2e-tier3
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release-e2e-local:
+    name: tier-3 local lane (provisional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Provisional posture, enforced twice: the job name says so, and the job
+    # never fails the workflow while it is provisional (README CI mapping —
+    # tier 3 is not yet a merge gate).
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      # Preflight gate (billing-suite pattern): a tier-3 local run needs the
+      # gateway test key to drive real agents in CI. Absent -> skip cleanly.
+      - name: Preflight — required credentials
+        id: preflight
+        env:
+          GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+          DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
+          DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+        run: |
+          enabled=true
+          if [ -z "$GATEWAY_TEST_KEY" ]; then
+            echo "::notice title=Tier-3 skipped::RELEASE_E2E_GATEWAY_TEST_KEY is not set. The local lane cannot drive real agents in CI without it (there is no native agent CLI login on the runner). Provision a LiteLLM virtual key for an e2e-tests team (cheap-model allowlist, see T3-CHAT-1) and add it as the RELEASE_E2E_GATEWAY_TEST_KEY secret. Skipping cleanly."
+            enabled=false
+          fi
+          if [ -z "$DURABLE_USER_EMAIL" ] || [ -z "$DURABLE_USER_PASSWORD" ]; then
+            echo "::notice title=Tier-3 durable identity self-seeded::RELEASE_E2E_DURABLE_USER_EMAIL / _PASSWORD not set — the runner seeds a per-run durable user through the real /setup claim (the stack is ephemeral), so local-lane server-mediated scenarios still run. Sandbox-lane scenarios that need the real persistent identity report blocked."
+          fi
+          if [ -z "$E2B_API_KEY" ]; then
+            echo "::notice title=Tier-3 sandbox lane absent::E2B_API_KEY not set — sandbox-lane scenarios will report blocked. (Note: even with the key, the sandbox lane needs a publicly reachable server URL / tunnel for E2B webhooks.)"
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        if: steps.preflight.outputs.enabled == 'true'
+
+      - uses: actions/setup-node@v6
+        if: steps.preflight.outputs.enabled == 'true'
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        if: steps.preflight.outputs.enabled == 'true'
+        with:
+          version: 10
+      - uses: astral-sh/setup-uv@v7
+        if: steps.preflight.outputs.enabled == 'true'
+      - uses: actions/setup-python@v6
+        if: steps.preflight.outputs.enabled == 'true'
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.preflight.outputs.enabled == 'true'
+      - uses: Swatinem/rust-cache@v2
+        if: steps.preflight.outputs.enabled == 'true'
+        with:
+          workspaces: ". -> target/runtime-local"
+
+      - name: Install workspace dependencies
+        if: steps.preflight.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install server (venv, matches local layout)
+        if: steps.preflight.outputs.enabled == 'true'
+        run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
+
+      - name: Install system deps (Tauri crates in the workspace build)
+        if: steps.preflight.outputs.enabled == 'true'
+        # `make build-rust` compiles the whole workspace, including the Tauri
+        # desktop crate — same package set ci.yml installs for it.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Build the AnyHarness runtime binary
+        if: steps.preflight.outputs.enabled == 'true'
+        # Same target dir the Makefile's dev-artifacts check reads
+        # (DEV_ANYHARNESS_TARGET_DIR), so `make release-e2e`'s downstream tooling
+        # and a laptop run resolve the same binary.
+        run: make build-rust
+
+      - name: Boot the server + AnyHarness runtime, then run the tier-3 runner
+        if: steps.preflight.outputs.enabled == 'true'
+        env:
+          # Local stack wiring — the runner points at these (env-manifest.ts).
+          SINGLE_ORG_MODE: "true"
+          # CI-only server secrets (same throwaway values server-ci.yml uses;
+          # settings validation requires them when debug=False).
+          JWT_SECRET: release-e2e-ci-jwt-secret
+          CLOUD_SECRET_KEY: release-e2e-ci-cloud-secret
+          SETUP_TOKEN_FILE: /tmp/proliferate-ci-setup-token
+          DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
+          REDIS_URL: redis://127.0.0.1:6379/0
+          PROLIFERATE_API_PORT: "8086"
+          ANYHARNESS_PORT: "8542"
+          ANYHARNESS_RUNTIME_HOME: ${{ github.workspace }}/.ci-runtime-home
+          RELEASE_E2E_SERVER_URL: http://127.0.0.1:8086
+          RELEASE_E2E_LOCAL_RUNTIME_URL: http://127.0.0.1:8542
+          # Credentials — mapped from repo secrets to the manifest's env names.
+          # Absent secrets expand to empty; the runner reports those scenarios
+          # blocked rather than failing (env-resolution.ts).
+          RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+          # Public base URL of the gateway the test key was issued against
+          # (staging's AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL). With both set the
+          # runner pushes gateway agent-auth to the local runtime so harnesses
+          # chat with no native CLI login (env-manifest.ts).
+          RELEASE_E2E_GATEWAY_BASE_URL: ${{ secrets.RELEASE_E2E_GATEWAY_BASE_URL || 'https://staging-gateway.proliferate.com' }}
+          # Durable-user secrets are OPTIONAL for this lane: when absent the
+          # runner self-seeds a per-run durable user through the real /setup
+          # claim (the stack is ephemeral), and sandbox-lane scenarios that
+          # need the real persistent identity report blocked (#1069).
+          RELEASE_E2E_DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
+          RELEASE_E2E_DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
+          RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID }}
+          RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
+          # E2B repo secrets carry the runner's manifest names.
+          RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID }}
+          # Stripe test mode for the billing scenarios' setup seam.
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          LANE: ${{ github.event.inputs.lane || 'local' }}
+          SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
+          AGENTS: ${{ github.event.inputs.agents || 'all' }}
+        run: |
+          set -euo pipefail
+          # Apply migrations then boot the API server (headless — not `make run`,
+          # which also launches the Tauri desktop app).
+          ( cd server && .venv/bin/alembic upgrade head )
+          ( cd server && .venv/bin/uvicorn proliferate.main:app --host 127.0.0.1 --port 8086 ) &
+          SERVER_PID=$!
+          # Boot the AnyHarness runtime built above. ANTHROPIC_AUTH_TOKEN is
+          # exported to the runtime process because its session-create
+          # readiness gate reads only process env / native login files — it
+          # does not consult the gateway agent-auth state the runner pushes
+          # (PUT /v1/agent-auth/state), so a gateway-only environment would
+          # report claude LoginRequired. At launch the gateway render overrides
+          # ANTHROPIC_AUTH_TOKEN/_BASE_URL with the same key anyway, so this
+          # only satisfies the readiness check, never routes traffic.
+          ANTHROPIC_AUTH_TOKEN="$RELEASE_E2E_GATEWAY_TEST_KEY" \
+            ./target/runtime-local/debug/anyharness serve --host 127.0.0.1 --port 8542 &
+          RUNTIME_PID=$!
+          trap 'kill $SERVER_PID $RUNTIME_PID 2>/dev/null || true' EXIT
+
+          # Wait for both to report healthy.
+          for url in http://127.0.0.1:8086/health http://127.0.0.1:8542/health; do
+            for i in $(seq 1 60); do
+              if curl -fsS "$url" >/dev/null 2>&1; then break; fi
+              if [ "$i" = "60" ]; then echo "timed out waiting for $url"; exit 1; fi
+              sleep 2
+            done
+          done
+
+          make release-e2e LANE="$LANE" DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
+
+      - name: Upload failure reports
+        # always() (not failure()): the runner step is continue-on-error, so a
+        # red runner never flips the job to "failed" and failure() would skip
+        # this. Upload whenever the job ran the runner; the step no-ops when
+        # there are no reports.
+        if: always() && steps.preflight.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-reports
+          path: tests/release/.output/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Staging lane — the README's documented tier-3 CI target (real deployment,
+  # publicly reachable, real gateway with cheap models). Commented out until the
+  # staging gateway test key is provisioned: the runner needs
+  # RELEASE_E2E_GATEWAY_TEST_KEY issued for an e2e-tests LiteLLM team on staging,
+  # plus RELEASE_E2E_SERVER_URL pointing at the staging API. Uncomment and add
+  # the secrets once that infrastructure exists.
+  #
+  # release-e2e-staging:
+  #   name: tier-3 staging lane (provisional)
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 60
+  #   continue-on-error: true
+  #   steps:
+  #     - name: Preflight — staging gateway key
+  #       id: preflight
+  #       env:
+  #         GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+  #         STAGING_SERVER_URL: ${{ secrets.RELEASE_E2E_SERVER_URL }}
+  #       run: |
+  #         if [ -z "$GATEWAY_TEST_KEY" ] || [ -z "$STAGING_SERVER_URL" ]; then
+  #           echo "::notice title=Staging tier-3 skipped::RELEASE_E2E_GATEWAY_TEST_KEY / RELEASE_E2E_SERVER_URL not set."
+  #           echo "enabled=false" >> "$GITHUB_OUTPUT"; exit 0
+  #         fi
+  #         echo "enabled=true" >> "$GITHUB_OUTPUT"
+  #     - uses: actions/checkout@v6
+  #       if: steps.preflight.outputs.enabled == 'true'
+  #     # ... node/pnpm setup ...
+  #     - name: Run tier-3 against staging
+  #       if: steps.preflight.outputs.enabled == 'true'
+  #       env:
+  #         RELEASE_E2E_SERVER_URL: ${{ secrets.RELEASE_E2E_SERVER_URL }}
+  #         RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+  #         RELEASE_E2E_DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
+  #         RELEASE_E2E_DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
+  #         RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+  #       run: make release-e2e LANE=staging DESKTOP=web AGENTS=all SCENARIOS=all

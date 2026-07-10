@@ -15,6 +15,7 @@ import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/c
 
 export function VirtualTranscriptViewport({
   bottomSpacerHeight,
+  contentRef,
   measureElement,
   onViewportScroll,
   renderableRows,
@@ -29,6 +30,7 @@ export function VirtualTranscriptViewport({
 }: {
   bottomSpacerHeight: number;
   columnClassName?: string;
+  contentRef?: RefObject<HTMLDivElement | null>;
   gutterClassName?: string;
   measureElement: (element: Element | null) => void;
   onViewportScroll: (viewport: HTMLDivElement) => void;
@@ -47,6 +49,7 @@ export function VirtualTranscriptViewport({
       onViewportScroll={onViewportScroll}
     >
       <div
+        ref={contentRef}
         className={`${gutterClassName} min-h-full`}
         data-transcript-virtualization-mode="virtual"
         data-transcript-virtualization-setting={virtualizationMode}
@@ -55,7 +58,7 @@ export function VirtualTranscriptViewport({
           ref={selectionRootRef}
           data-chat-transcript-root="true"
           tabIndex={-1}
-          className={`${columnClassName} select-none outline-none`}
+          className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
         >
           {topSpacerHeight > 0 && (
             <div aria-hidden="true" style={{ height: topSpacerHeight }} />

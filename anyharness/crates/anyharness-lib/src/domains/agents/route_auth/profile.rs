@@ -148,6 +148,7 @@ mod tests {
             version: STATE_VERSION,
             revision,
             user_id: None,
+            issuing_server_origin: None,
             harnesses,
         }
     }
@@ -176,6 +177,7 @@ mod tests {
         HarnessAuth {
             harness_kind: kind.into(),
             sources,
+            settings: None,
         }
     }
 

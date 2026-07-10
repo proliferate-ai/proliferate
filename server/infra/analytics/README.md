@@ -57,9 +57,14 @@ e.g. local dev).
   read (`ce:GetCostAndUsage`, `ce:GetCostForecast`) + Secrets Manager read
   scoped to the three secret prefixes below (see
   `iam-task-role-policy.json`).
-- **Command**: `python /app/scripts/analytics_ingest.py` (the image pins
-  `proliferate-server:latest`; re-provisioning always picks up the current
-  image with the script present).
+- **Command**: `python /app/scripts/analytics_ingest.py`. The task def pins
+  `proliferate-server:Production-latest` — the stable tag the server deploy
+  moves to the current prod image (there is no `:latest` tag in this repo's
+  ECR; images are tagged by commit short-SHA + the `Production-latest` /
+  `staging-latest` moving tags). The live schedule instead pins the exact
+  deployed SHA (re-registered on each deploy) so a mid-deploy tag move can't
+  swap the image out from under a scheduled run; this file uses the moving
+  tag so re-provisioning from scratch always lands on current prod.
 
 ### Secrets (AWS Secrets Manager)
 
@@ -67,7 +72,7 @@ e.g. local dev).
 | --- | --- | --- |
 | `proliferate/prod/analytics-ingest` | `E2B_SESSION_COOKIE`, `E2B_TEAM_SLUG` | analytics-specific; `E2B_TEAM_SLUG` is required (the job skips E2B if unset — no hardcoded default); cookie needs periodic manual refresh, see below. |
 | `proliferate/prod/database` | `DATABASE_URL` | shared with the app. |
-| `proliferate/prod/server-app` | `JWT_SECRET`, `STRIPE_SECRET_KEY` | shared with the app; `JWT_SECRET` is pulled in only because `proliferate.config.Settings` requires it to construct, not because the job uses it. |
+| `proliferate/prod/server-app` | `JWT_SECRET`, `CLOUD_SECRET_KEY`, `STRIPE_SECRET_KEY` | shared with the app; `JWT_SECRET` and `CLOUD_SECRET_KEY` are pulled in only because `proliferate.config.Settings` requires them to construct in production mode (`debug=False`), not because the job uses them. `STRIPE_SECRET_KEY` is used by the Stripe provider. |
 
 ## Schedule
 

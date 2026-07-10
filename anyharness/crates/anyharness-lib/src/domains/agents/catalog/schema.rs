@@ -51,6 +51,10 @@ pub struct AgentCatalogAgent {
     #[serde(default)]
     pub auth_contexts: Vec<AgentCatalogAuthContext>,
     pub session: AgentCatalogSession,
+    /// Per-harness advanced settings (v1: boolean toggles mapped to CLI flags or
+    /// env vars). Absent when a harness declares no settings.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub settings: Vec<AgentCatalogSetting>,
     pub provenance: AgentCatalogAgentProvenance,
 }
 
@@ -166,7 +170,7 @@ pub struct AgentCatalogAuthContext {
 }
 
 /// The minimal probe-testable signal algebra: `env | envFlag | discovery |
-/// anyOf | allOf` — no NOT operator, nesting depth <= 2 (enforced in
+/// route | anyOf | allOf` — no NOT operator, nesting depth <= 2 (enforced in
 /// `validation.rs`). Externally tagged so JSON reads as
 /// `{"env": "ANTHROPIC_API_KEY"}` / `{"allOf": [ ... ]}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,6 +184,11 @@ pub enum AgentCatalogAuthSignal {
     EnvFlag(String),
     /// A named discovery fact kind, e.g. `"claude-oauth-creds"`.
     Discovery(String),
+    /// An enrolled runtime route kind (e.g. `"gateway"`): matches a
+    /// `Route` fact resolved from workspace-scoped `agent-auth/state.json`
+    /// (decisions ledger 13). Route facts are collected in layer 1 beside the
+    /// env facts, never inside `classify()`, so purity holds.
+    Route(String),
     AnyOf(Vec<AgentCatalogAuthSignal>),
     AllOf(Vec<AgentCatalogAuthSignal>),
 }
@@ -188,7 +197,7 @@ impl AgentCatalogAuthSignal {
     /// Nesting depth: leaves are 1, combinators are 1 + deepest child.
     pub fn depth(&self) -> usize {
         match self {
-            Self::Env(_) | Self::EnvFlag(_) | Self::Discovery(_) => 1,
+            Self::Env(_) | Self::EnvFlag(_) | Self::Discovery(_) | Self::Route(_) => 1,
             Self::AnyOf(children) | Self::AllOf(children) => {
                 1 + children.iter().map(Self::depth).max().unwrap_or(0)
             }
@@ -364,6 +373,41 @@ pub struct AgentCatalogProbeRun {
     pub snapshot_path: Option<String>,
 }
 
+/// A declared per-harness setting (v1: boolean toggles). Applied at spawn
+/// according to the mapping kind: `cli_flag` appends the flag to argv when
+/// the value is `true`; `env` sets an env var to the string form of the value.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogSetting {
+    pub key: String,
+    /// v1: only `"boolean"` is supported.
+    #[serde(rename = "type")]
+    pub setting_type: String,
+    pub label: String,
+    #[serde(default)]
+    pub description: Option<String>,
+    /// The default value for this setting (JSON-typed: bool for boolean settings).
+    #[serde(default)]
+    pub default: serde_json::Value,
+    /// Which delivery surfaces this setting is relevant to (subset of `{local, cloud}`).
+    #[serde(default)]
+    pub surfaces: Vec<String>,
+    pub mapping: AgentCatalogSettingMapping,
+}
+
+/// How a setting value maps to the harness spawn. Externally tagged by `kind`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogSettingMapping {
+    pub kind: String,
+    /// For `cli_flag`: the flag to append (e.g. `"--chrome"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flag: Option<String>,
+    /// For `env`: the env var name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<String>,
+}
+
 #[cfg(test)]
 pub(crate) fn draft_catalog_json() -> &'static str {
     include_str!(concat!(
@@ -373,214 +417,5 @@ pub(crate) fn draft_catalog_json() -> &'static str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parse_draft() -> AgentCatalogDocument {
-        serde_json::from_str(draft_catalog_json()).expect("draft catalog must parse")
-    }
-
-    #[test]
-    fn draft_catalog_parses_with_expected_shape() {
-        let catalog = parse_draft();
-
-        assert_eq!(catalog.schema_version, 2);
-        assert_eq!(catalog.catalog_version, draft_catalog_version().as_str());
-        let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
-        assert_eq!(
-            probed_against.registry_version.as_deref(),
-            Some(bundled_registry_version().as_str())
-        );
-        assert_eq!(catalog.agents.len(), 5);
-
-        let claude = &catalog.agents[0];
-        assert_eq!(claude.kind, "claude");
-        assert_eq!(claude.harness.agent_process.version, "0.44.0");
-        assert_eq!(
-            claude
-                .harness
-                .native
-                .as_ref()
-                .map(|pin| pin.version.as_str()),
-            Some("2.1.181")
-        );
-        assert_eq!(
-            claude
-                .auth_contexts
-                .iter()
-                .map(|context| context.id.as_str())
-                .collect::<Vec<_>>(),
-            vec!["bedrock", "anthropic-api", "anthropic-oauth", "gateway"]
-        );
-        // The gateway context is route-engaged: it references the registry
-        // gateway slot but carries no detection signals (never classifier-active).
-        let gateway_context = claude
-            .auth_contexts
-            .iter()
-            .find(|context| context.id == "gateway")
-            .expect("claude gateway auth context");
-        assert_eq!(gateway_context.auth_slot_id.as_deref(), Some("gateway"));
-        assert!(gateway_context.signals.is_none());
-        // gatewayPolicy carries the small-fast role pin that used to be a Rust const.
-        let policy = claude
-            .session
-            .gateway_policy
-            .as_ref()
-            .expect("claude gatewayPolicy");
-        assert_eq!(policy.providers, vec!["anthropic"]);
-        assert_eq!(
-            policy.roles.get("small_fast").map(String::as_str),
-            Some("claude-haiku-4-5-20251001")
-        );
-        let first = &claude.session.models[0];
-        assert_eq!(first.id, "default");
-        assert_eq!(
-            first.availability.any_of,
-            vec!["anthropic-api", "anthropic-oauth", "bedrock"]
-        );
-        assert!(first.default_visible);
-        let effort = first.controls.get("effort").expect("effort control");
-        assert_eq!(
-            effort.values,
-            vec!["default", "low", "medium", "high", "xhigh", "max"]
-        );
-        assert_eq!(effort.observed_value.as_deref(), Some("default"));
-        assert_eq!(effort.default, None);
-
-        let codex = &catalog.agents[1];
-        let model_control = codex
-            .session
-            .controls
-            .iter()
-            .find(|control| control.key == "model")
-            .expect("model control");
-        let mapping = model_control.mapping.as_ref().expect("model mapping");
-        assert_eq!(mapping.switch_via.as_deref(), Some("configOption"));
-        assert_eq!(mapping.variant_syntax.as_deref(), None);
-
-        let cursor = &catalog.agents[2];
-        assert!(cursor.provenance.attestation.is_none());
-        assert!(cursor.harness.native.is_none());
-        // Cursor is the variant-carrying agent: its model control declares the
-        // bracket-params syntax and its models carry probe-observed variant ids.
-        let cursor_model_control = cursor
-            .session
-            .controls
-            .iter()
-            .find(|control| control.key == "model")
-            .expect("cursor model control");
-        let cursor_mapping = cursor_model_control
-            .mapping
-            .as_ref()
-            .expect("cursor model mapping");
-        assert_eq!(
-            cursor_mapping.variant_syntax.as_deref(),
-            Some("bracket-params")
-        );
-        // Variant families are draft data — anchor on the stable shape, not a
-        // fixed model id (the probed model list moves between catalog runs).
-        let with_variants = cursor
-            .session
-            .models
-            .iter()
-            .find(|model| {
-                model
-                    .provenance
-                    .as_ref()
-                    .is_some_and(|provenance| !provenance.variant_ids.is_empty())
-            })
-            .expect("some cursor model carries variant ids");
-        let provenance = with_variants.provenance.as_ref().expect("provenance");
-        assert!(provenance
-            .variant_ids
-            .iter()
-            .any(|variant| variant.starts_with(&format!("{}[", with_variants.id))));
-
-        let opencode = &catalog.agents[4];
-        assert!(opencode
-            .auth_contexts
-            .iter()
-            .any(|context| context.id == "baseline" && context.auth_slot_id.is_none()));
-        assert_eq!(
-            opencode
-                .session
-                .observed_defaults
-                .get("baseline")
-                .map(String::as_str),
-            Some("opencode/big-pickle")
-        );
-    }
-
-    #[test]
-    fn auth_signals_round_trip_bedrock_all_of_example() {
-        // The bedrock-style signature from the migration doc (§5.4).
-        let json = serde_json::json!({
-            "allOf": [
-                { "envFlag": "CLAUDE_CODE_USE_BEDROCK=1" },
-                { "discovery": "aws-credential-chain" }
-            ]
-        });
-
-        let signal: AgentCatalogAuthSignal =
-            serde_json::from_value(json.clone()).expect("bedrock signal must parse");
-
-        assert_eq!(
-            signal,
-            AgentCatalogAuthSignal::AllOf(vec![
-                AgentCatalogAuthSignal::EnvFlag("CLAUDE_CODE_USE_BEDROCK=1".to_string()),
-                AgentCatalogAuthSignal::Discovery("aws-credential-chain".to_string()),
-            ])
-        );
-        assert_eq!(signal.depth(), 2);
-        assert_eq!(serde_json::to_value(&signal).expect("serialize"), json);
-    }
-
-    #[test]
-    fn auth_signals_round_trip_any_of_and_leaves() {
-        let json = serde_json::json!({
-            "anyOf": [
-                { "env": "CLAUDE_CODE_OAUTH_TOKEN" },
-                { "discovery": "claude-oauth-creds" }
-            ]
-        });
-
-        let signal: AgentCatalogAuthSignal =
-            serde_json::from_value(json.clone()).expect("oauth signal must parse");
-
-        assert_eq!(signal.depth(), 2);
-        assert_eq!(serde_json::to_value(&signal).expect("serialize"), json);
-
-        let leaf: AgentCatalogAuthSignal =
-            serde_json::from_value(serde_json::json!({ "env": "ANTHROPIC_API_KEY" }))
-                .expect("leaf signal must parse");
-        assert_eq!(
-            leaf,
-            AgentCatalogAuthSignal::Env("ANTHROPIC_API_KEY".to_string())
-        );
-        assert_eq!(leaf.depth(), 1);
-    }
-
-    fn bundled_registry_version() -> String {
-        let text = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../../catalogs/agents/registry.json"
-        ))
-        .expect("read bundled registry");
-        serde_json::from_str::<serde_json::Value>(&text).expect("parse registry")["registryVersion"]
-            .as_str()
-            .expect("registryVersion")
-            .to_string()
-    }
-
-    fn draft_catalog_version() -> String {
-        let text = std::fs::read_to_string(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../../scripts/agent-catalog/catalog.draft.json"
-        ))
-        .expect("read draft catalog");
-        serde_json::from_str::<serde_json::Value>(&text).expect("parse draft")["catalogVersion"]
-            .as_str()
-            .expect("catalogVersion")
-            .to_string()
-    }
-}
+#[path = "schema_tests.rs"]
+mod tests;

@@ -2,6 +2,7 @@ import type { components } from "../generated/openapi.js";
 
 export type AgentInstallState = components["schemas"]["AgentInstallState"];
 export type AgentCredentialState = components["schemas"]["AgentCredentialState"];
+export type AgentCliAuthState = components["schemas"]["AgentCliAuthState"];
 export type AgentReadinessState = components["schemas"]["AgentReadinessState"];
 export type ArtifactStatus = components["schemas"]["ArtifactStatus"];
 export type AgentSummary = components["schemas"]["AgentSummary"];

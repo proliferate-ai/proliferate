@@ -219,6 +219,7 @@ pub fn run() {
             anonymous_telemetry::load_anonymous_telemetry_bootstrap,
             anonymous_telemetry::save_anonymous_telemetry_state,
             config::get_app_config,
+            config::set_app_config,
             diagnostics_commands::export_debug_bundle,
             diagnostics_commands::collect_support_diagnostics,
             diagnostics_commands::log_renderer_diagnostic,

@@ -18,6 +18,7 @@ import {
   Discord,
   Mail,
 } from "@proliferate/ui/icons";
+import { useUsageSummary } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import {
@@ -47,6 +48,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
+import { ConsumptionCard } from "./SidebarConsumptionCard";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
 const PROLIFERATE_DISCORD_URL = "https://discord.gg/7b5afMTqW";
@@ -71,6 +73,7 @@ export function SidebarAccountFooter() {
   } = useOpenSupportReportWindow({ source: "sidebar" });
   const showToast = useToastStore((state) => state.show);
   const { data: billingPlan } = useCloudBilling();
+  const { data: usageSummary } = useUsageSummary(undefined, authStatus === "authenticated");
   const {
     activeOrganization,
     activeOrganizationId,
@@ -117,6 +120,14 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
+      {usageSummary ? (
+        <ConsumptionCard
+          usageSummary={usageSummary}
+          onTopUp={() => {
+            navigate("/settings?section=billing");
+          }}
+        />
+      ) : null}
       <div aria-hidden className="h-[0.5px] bg-sidebar-border" />
       <div className="flex items-center px-2 py-2">
         <PopoverButton

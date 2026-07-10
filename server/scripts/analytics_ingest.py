@@ -434,8 +434,21 @@ async def ingest_e2b(conn: AsyncConnection) -> int:
 # ---------------------------------------------------------------------------
 
 
+SENTRY_LOOKBACK_DAYS = 30
+
+
 async def ingest_sentry(conn: AsyncConnection) -> int:
-    """Ingest daily error counts per project from Sentry's stats API."""
+    """Ingest daily error counts per project from Sentry's stats API.
+
+    Sentry's org ``stats_v2`` endpoint only returns a per-day time series
+    (``intervals`` + per-group ``series``) when the request uses an explicit
+    ``start``/``end`` range AND does *not* pass ``groupBy`` — with
+    ``statsPeriod`` or ``groupBy=project`` it collapses to totals-only (empty
+    ``intervals``). So we fetch the project list first, then query each project
+    individually with an explicit range and no groupBy, pairing ``intervals[i]``
+    with ``series[i]``. Window is kept modest (30d) because the endpoint caps
+    the number of daily data points it will return.
+    """
     token = os.environ.get("SENTRY_ANALYTICS_TOKEN")
     if not token:
         logger.warning("Sentry token not configured, skipping")
@@ -445,80 +458,92 @@ async def ingest_sentry(conn: AsyncConnection) -> int:
         logger.warning("SENTRY_ORG not configured, skipping Sentry ingestion")
         return 0
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{SENTRY_API_BASE}/organizations/{org}/stats_v2/",
-                headers={"Authorization": f"Bearer {token}"},
-                params={
-                    "category": "error",
-                    "interval": "1d",
-                    "field": "sum(quantity)",
-                    "groupBy": ["project", "outcome"],
-                    "statsPeriod": "90d",
-                },
-                timeout=30.0,
-            )
-        response.raise_for_status()
-        payload = response.json()
-    except httpx.HTTPError:
-        logger.exception("Sentry stats request failed, skipping Sentry ingestion")
-        return 0
-    except ValueError:
-        logger.warning("Sentry stats response was not JSON, skipping Sentry ingestion")
-        return 0
-
-    intervals = payload.get("intervals") or []
-    groups = payload.get("groups") or []
-    if not intervals or not groups:
-        logger.warning("Sentry stats response had no groups/intervals, skipping upsert")
-        return 0
-
-    project_names = {
-        str(project.get("id")): project.get("slug") or str(project.get("id"))
-        for project in payload.get("projects", [])
-    } or {}
+    headers = {"Authorization": f"Bearer {token}"}
+    end = datetime.now(UTC)
+    start = end - timedelta(days=SENTRY_LOOKBACK_DAYS)
+    start_iso = start.strftime("%Y-%m-%dT00:00:00")
+    end_iso = end.strftime("%Y-%m-%dT00:00:00")
 
     now = datetime.now(UTC)
     rows = 0
-    for group in groups:
-        by = group.get("by") or {}
-        if by.get("outcome") not in (None, "accepted"):
-            continue
-        project_key = str(by.get("project", "unknown"))
-        project_name = project_names.get(project_key, project_key)
-        totals = ((group.get("totals") or {}).get("sum(quantity)")) or []
-        series = ((group.get("series") or {}).get("sum(quantity)")) or totals
-        for idx, interval_start in enumerate(intervals):
-            try:
-                activity_date = datetime.fromisoformat(
-                    interval_start.replace("Z", "+00:00")
-                ).date()
-            except ValueError:
-                continue
-            error_count = series[idx] if idx < len(series) else 0
-            if not error_count:
-                continue
-            await conn.execute(
-                text(
-                    """
-                    INSERT INTO analytics.sentry_errors_daily
-                        (activity_date, project, surface, release, error_count, updated_at)
-                    VALUES
-                        (:activity_date, :project, NULL, '', :error_count, :updated_at)
-                    ON CONFLICT (activity_date, project, release) DO UPDATE SET
-                        error_count = EXCLUDED.error_count,
-                        updated_at = EXCLUDED.updated_at
-                    """
-                ),
-                {
-                    "activity_date": activity_date,
-                    "project": project_name[:128],
-                    "error_count": int(error_count),
-                    "updated_at": now,
-                },
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            projects_resp = await client.get(
+                f"{SENTRY_API_BASE}/organizations/{org}/projects/",
+                headers=headers,
             )
-            rows += 1
+            projects_resp.raise_for_status()
+            projects = projects_resp.json()
+
+            for project in projects:
+                project_id = project.get("id")
+                project_slug = project.get("slug") or str(project_id)
+                surface = project.get("platform")
+                if project_id is None:
+                    continue
+
+                stats_resp = await client.get(
+                    f"{SENTRY_API_BASE}/organizations/{org}/stats_v2/",
+                    headers=headers,
+                    params={
+                        "category": "error",
+                        "interval": "1d",
+                        "field": "sum(quantity)",
+                        "project": project_id,
+                        "start": start_iso,
+                        "end": end_iso,
+                    },
+                )
+                stats_resp.raise_for_status()
+                payload = stats_resp.json()
+
+                intervals = payload.get("intervals") or []
+                groups = payload.get("groups") or []
+                if not intervals or not groups:
+                    continue
+                series = (groups[0].get("series") or {}).get("sum(quantity)") or []
+
+                for idx, interval_start in enumerate(intervals):
+                    try:
+                        activity_date = datetime.fromisoformat(
+                            interval_start.replace("Z", "+00:00")
+                        ).date()
+                    except ValueError:
+                        continue
+                    error_count = series[idx] if idx < len(series) else 0
+                    if not error_count:
+                        continue
+                    await conn.execute(
+                        text(
+                            """
+                            INSERT INTO analytics.sentry_errors_daily
+                                (activity_date, project, surface, release,
+                                 error_count, updated_at)
+                            VALUES
+                                (:activity_date, :project, :surface, '',
+                                 :error_count, :updated_at)
+                            ON CONFLICT (activity_date, project, release) DO UPDATE SET
+                                surface = EXCLUDED.surface,
+                                error_count = EXCLUDED.error_count,
+                                updated_at = EXCLUDED.updated_at
+                            """
+                        ),
+                        {
+                            "activity_date": activity_date,
+                            "project": project_slug[:128],
+                            "surface": (surface or None),
+                            "error_count": int(error_count),
+                            "updated_at": now,
+                        },
+                    )
+                    rows += 1
+    except httpx.HTTPError:
+        logger.exception("Sentry stats request failed, skipping Sentry ingestion")
+        return rows
+    except ValueError:
+        logger.warning("Sentry stats response was not JSON, skipping Sentry ingestion")
+        return rows
+
     return rows
 
 

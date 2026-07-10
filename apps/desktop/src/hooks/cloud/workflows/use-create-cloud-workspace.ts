@@ -13,6 +13,7 @@ import {
   buildCloudWorkspaceAttemptFromRequest,
   type CloudWorkspaceRepoTarget,
   isCloudWorkspaceBranchConflictError,
+  resolveCloudWorkspaceCreateFailureMessage,
 } from "@/lib/domain/workspaces/cloud/cloud-workspace-creation";
 import {
   buildSubmittingPendingWorkspaceEntry,
@@ -64,11 +65,13 @@ export type CloudWorkspaceEntryResult =
     attemptId: string;
     projectedSessionId: string | null;
   }
-  | { status: "interrupted" };
-
-function resolveErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
+  | {
+    status: "interrupted";
+    // Set only when the attempt failed with a server error (vs. being
+    // superseded by a newer attempt); carries the resolved server message so
+    // callers can surface it in a toast instead of a generic string.
+    failureMessage?: string;
+  };
 
 function isAttemptCurrent(attemptId: string): boolean {
   return useSessionSelectionStore.getState().pendingWorkspaceEntry?.attemptId === attemptId;
@@ -280,14 +283,18 @@ export function useCreateCloudWorkspace() {
             retryCount,
           },
         });
+        const failureMessage = resolveCloudWorkspaceCreateFailureMessage(
+          error,
+          "Failed to create cloud workspace.",
+        );
         const currentPending = useSessionSelectionStore.getState().pendingWorkspaceEntry;
         failPendingEntry(
           currentPending?.attemptId === attemptId
             ? currentPending
             : currentEntry ?? nextEntry,
-          resolveErrorMessage(error, "Failed to create cloud workspace."),
+          failureMessage,
         );
-        return { status: "interrupted" };
+        return { status: "interrupted", failureMessage };
       }
     }
     return { status: "interrupted" };

@@ -20,7 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
-    AGENT_AUTH_SOURCE_KINDS,
+    AGENT_AUTH_POLICY_ROUTES,
+    AGENT_AUTH_ROUTE_NATIVE,
     AGENT_AUTH_SURFACE_CLOUD,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
@@ -33,6 +34,7 @@ from proliferate.db.store.agent_gateway import (
 )
 from proliferate.db.store.billing import list_entitlements
 from proliferate.db.store.billing_subscriptions import list_subscriptions
+from proliferate.db.store.organizations import list_organizations_for_user
 from proliferate.server.billing.domain.plans import (
     active_unlimited_cloud_entitlement,
     latest_healthy_cloud_subscription,
@@ -203,6 +205,17 @@ async def put_auth_selections(
             status_code=400,
         ) from error
 
+    # Org policy is a HARD gate at select-time: a member may not persist a
+    # selection set that violates any org they belong to (personal/non-org
+    # users have no memberships, so this is a no-op for them). Existing rows at
+    # rest are never touched — the violations report keeps covering stale ones.
+    await _enforce_org_selection_policy(
+        db,
+        user_id=user_id,
+        harness_kind=harness_kind,
+        sources=sources,
+    )
+
     try:
         rows = await agent_gateway_store.put_auth_selections(
             db,
@@ -236,6 +249,32 @@ async def put_auth_selections(
     if surface == AGENT_AUTH_SURFACE_CLOUD:
         await materialization_service.schedule_materialize_agent_auth(db, user_id=user_id)
     return rows
+
+
+async def put_harness_settings(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    harness_kind: str,
+    surface: str,
+    settings_dict: dict[str, object],
+) -> dict[str, object]:
+    """Validate shape (all values must be bool) and upsert harness settings."""
+    for key, value in settings_dict.items():
+        if not isinstance(key, str) or not isinstance(value, bool):
+            raise CloudApiError(
+                "invalid_harness_settings",
+                "Settings must be a dict[str, bool]. "
+                f"Key {key!r} has value of type {type(value).__name__}.",
+                status_code=400,
+            )
+    return await agent_gateway_store.put_harness_settings(
+        db,
+        user_id=user_id,
+        harness_kind=harness_kind,
+        surface=surface,
+        settings=settings_dict,
+    )
 
 
 async def get_auth_state(
@@ -395,11 +434,13 @@ async def update_org_policy(
     allowed_routes: list[str] | None,
     allowed_harnesses: list[str] | None,
 ) -> OrgAgentPolicySnapshot:
-    # "routes" are the selection source kinds (gateway/api_key); native is the
-    # empty state and carries no row, so it is never an allow-list value.
+    # "routes" are the selection source kinds (gateway/api_key) PLUS "native",
+    # the empty-selection state. Native carries no selection row, but it is a
+    # valid policy allow-list value: listing it permits native CLI login,
+    # omitting it (when the list is otherwise set) disallows it.
     routes = _validate_policy_values(
         allowed_routes,
-        allowed=AGENT_AUTH_SOURCE_KINDS,
+        allowed=AGENT_AUTH_POLICY_ROUTES,
         field="routes",
     )
     harnesses = _validate_policy_harnesses(allowed_harnesses)
@@ -439,10 +480,85 @@ def selection_violates_policy(
     allowed_routes: tuple[str, ...] | None,
     allowed_harnesses: tuple[str, ...] | None,
 ) -> bool:
-    """Flag-only conflict check; nothing is ever blocked."""
+    """Flag-only conflict check for selections AT REST; nothing here is blocked.
+
+    This powers the violations report (existing enabled rows). Select-time
+    blocking of NEW writes lives in :func:`_enforce_org_selection_policy`.
+    """
     if allowed_routes is not None and selection.source_kind not in allowed_routes:
         return True
     return allowed_harnesses is not None and selection.harness_kind not in allowed_harnesses
+
+
+def _selection_set_policy_violation(
+    *,
+    harness_kind: str,
+    sources: Sequence[DesiredAuthSource],
+    allowed_routes: tuple[str, ...] | None,
+    allowed_harnesses: tuple[str, ...] | None,
+) -> str | None:
+    """Return a member-facing message if this desired set violates the policy.
+
+    Mirrors the at-rest report semantics: only ENABLED sources count (disabled
+    rows never launch), and an empty enabled set == native CLI login. The
+    harness check only applies when the desired set has an enabled source —
+    an empty/all-disabled set must always be allowed so a member can clear a
+    pre-existing selection on a harness the org has since disallowed (there is
+    no other way to comply, since there is no DELETE endpoint).
+    """
+    enabled = [source for source in sources if source.enabled]
+    if allowed_harnesses is not None and harness_kind not in allowed_harnesses and enabled:
+        return f"Harness '{harness_kind}' is not allowed by your organization's policy."
+    if allowed_routes is None:
+        return None
+    if not enabled:
+        # Zero enabled sources == the harness's own (native) CLI login.
+        if AGENT_AUTH_ROUTE_NATIVE not in allowed_routes:
+            return "Native CLI login is not allowed by your organization's policy."
+        return None
+    for source in enabled:
+        if source.source_kind not in allowed_routes:
+            return (
+                f"Auth route '{source.source_kind}' is not allowed by your organization's policy."
+            )
+    return None
+
+
+async def _enforce_org_selection_policy(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    harness_kind: str,
+    sources: Sequence[DesiredAuthSource],
+) -> None:
+    """Reject a desired selection set that violates any of the user's orgs.
+
+    A member may belong to several orgs; a route/harness disallowed by ANY of
+    them is disallowed for the member (the strictest wins). Personal users have
+    no memberships, so this returns immediately. The stored policy row is read
+    directly (raw allow-lists), independent of the plan-based edit gate: a
+    policy that exists is enforced even if the org's edit entitlement lapsed.
+    """
+    memberships = await list_organizations_for_user(db, user_id)
+    for record in memberships:
+        policy_row = await agent_gateway_store.get_org_agent_policy(
+            db,
+            organization_id=record.organization.id,
+        )
+        if policy_row is None:
+            continue
+        message = _selection_set_policy_violation(
+            harness_kind=harness_kind,
+            sources=sources,
+            allowed_routes=_decode_policy_list(policy_row.allowed_routes_json),
+            allowed_harnesses=_decode_policy_list(policy_row.allowed_harnesses_json),
+        )
+        if message is not None:
+            raise CloudApiError(
+                "policy_violation",
+                message,
+                status_code=403,
+            )
 
 
 async def list_org_policy_violations(

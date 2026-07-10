@@ -90,6 +90,26 @@ fn discovery_fact(kind: &str) -> CredentialFact {
     }
 }
 
+fn route(kind: &str) -> AgentCatalogAuthSignal {
+    AgentCatalogAuthSignal::Route(kind.to_string())
+}
+
+fn route_fact(kind: &str) -> CredentialFact {
+    CredentialFact::Route {
+        kind: kind.to_string(),
+    }
+}
+
+/// The real claude descriptor, unmodified — carries both the `anthropic` and
+/// the route-engaged `gateway` auth slots (so the classifier does not skip a
+/// gateway context for an undeclared slot).
+fn claude_gateway_descriptor() -> AgentDescriptor {
+    built_in_registry()
+        .into_iter()
+        .find(|descriptor| descriptor.kind == AgentKind::Claude)
+        .expect("claude descriptor")
+}
+
 fn claude_style_contexts() -> Vec<AgentCatalogAuthContext> {
     vec![
         context("anthropic-api", "default", Some(env(TEST_API_KEY_VAR))),
@@ -143,6 +163,61 @@ fn oauth_wins_when_api_key_absent() {
     let active = classify(&descriptor, &claude_style_contexts(), &facts);
 
     assert_eq!(active.ids(), ["anthropic-oauth"]);
+}
+
+#[test]
+fn gateway_context_activates_iff_route_fact_present() {
+    // The gateway context is route-engaged (decisions ledger 13): its `route`
+    // signal matches a `Route` fact collected from workspace-scoped state.
+    let descriptor = claude_gateway_descriptor();
+    let contexts = vec![context("gateway", "gateway", Some(route("gateway")))];
+
+    // With the route fact: active.
+    let active = classify(&descriptor, &contexts, &[route_fact("gateway")]);
+    assert_eq!(active.ids(), ["gateway"]);
+    assert!(active.is_active("gateway"));
+    assert!(!active.is_baseline());
+
+    // Without it (only credential facts): the route signal never matches, so
+    // classification falls through to baseline.
+    let active = classify(&descriptor, &contexts, &[env_fact(TEST_API_KEY_VAR)]);
+    assert!(active.is_baseline());
+    assert!(!active.is_active("gateway"));
+
+    // No facts at all: still baseline.
+    let active = classify(&descriptor, &contexts, &[]);
+    assert!(active.is_baseline());
+}
+
+#[test]
+fn native_key_and_gateway_route_coexist_as_union() {
+    // Decision (amendment): gateway is a distinct auth slot; UNION across slots
+    // means a workspace with a native key AND gateway enrollment sees both.
+    let descriptor = claude_gateway_descriptor();
+    let contexts = vec![
+        context("anthropic-api", "anthropic", Some(env(TEST_API_KEY_VAR))),
+        context("gateway", "gateway", Some(route("gateway"))),
+    ];
+
+    let active = classify(
+        &descriptor,
+        &contexts,
+        &[env_fact(TEST_API_KEY_VAR), route_fact("gateway")],
+    );
+    assert!(active.is_active("anthropic-api"));
+    assert!(active.is_active("gateway"));
+    assert!(!active.is_baseline());
+}
+
+#[test]
+fn signal_less_context_still_never_matches() {
+    // Regression guard: a context with NO signals stays inert (probe-only
+    // knowledge) — only route-SIGNALED contexts gained activation.
+    let descriptor = claude_gateway_descriptor();
+    let contexts = vec![context("gateway", "gateway", None)];
+    let active = classify(&descriptor, &contexts, &[route_fact("gateway")]);
+    assert!(active.is_baseline());
+    assert!(!active.is_active("gateway"));
 }
 
 #[test]
@@ -508,9 +583,9 @@ fn bundled_docs_classify_oauth_discovery_contexts() {
 
 #[test]
 fn bundled_docs_bedrock_flag_beats_api_key_for_claude() {
-    // The flag deliberately forces the bedrock route in the harness, so when
-    // set (with aws creds present) it must win the slot even if an API key
-    // is also in the composed env.
+    // The flag is the bedrock routing switch: when set, the CLI routes to
+    // Bedrock and only serves us.anthropic.* ids, so it must win the slot even
+    // if an API key (or OAuth creds) is also in the composed env.
     let facts = [
         flag_fact("CLAUDE_CODE_USE_BEDROCK", "1"),
         discovery_fact("aws-credential-chain"),
@@ -518,9 +593,24 @@ fn bundled_docs_bedrock_flag_beats_api_key_for_claude() {
     ];
     assert_eq!(classify_bundled("claude", &facts), vec!["bedrock"]);
 
-    // Flag without aws credentials is not a bedrock context.
+    // The flag alone classifies as bedrock — a production Bedrock deployment
+    // on an ECS task role sets the flag but has no passively detectable creds
+    // (IMDS / task-role are the exotic tail we deliberately don't detect,
+    // decisions ledger 12). Keying bedrock on the flag is the honest signal:
+    // the CLI still routes to Bedrock, so bare ids must be gated.
     let flag_only = [flag_fact("CLAUDE_CODE_USE_BEDROCK", "1")];
-    assert_eq!(classify_bundled("claude", &flag_only), vec!["baseline"]);
+    assert_eq!(classify_bundled("claude", &flag_only), vec!["bedrock"]);
+
+    // No flag: an OAuth login is a plain anthropic-oauth account (bare ids
+    // stay usable) even when AWS creds happen to be present for other tools.
+    let oauth_with_aws = [
+        discovery_fact("claude-oauth-creds"),
+        discovery_fact("aws-credential-chain"),
+    ];
+    assert_eq!(
+        classify_bundled("claude", &oauth_with_aws),
+        vec!["anthropic-oauth"]
+    );
 }
 
 #[test]

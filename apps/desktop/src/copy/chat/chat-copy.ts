@@ -5,12 +5,12 @@ export const CHAT_COMPOSER_LABELS = {
   stop: "Stop run",
 } as const;
 
-// Context-appropriate labels for the animated streaming/status indicator. The
-// same shimmer used to say "Thinking" everywhere; callers now thread the label
-// that matches their context ("Thinking" is agent work only).
+// Labels for the animated streaming/status indicator. Dispatch and agent work
+// both read as "Thinking" — the send/queue distinction is plumbing the user
+// shouldn't have to care about, and one voice keeps the status line calm.
 export const CHAT_STREAMING_STATUS_LABELS = {
   thinking: "Thinking",
-  sending: "Sending…",
+  sending: "Thinking",
   restoringSession: "Restoring session…",
 } as const;
 

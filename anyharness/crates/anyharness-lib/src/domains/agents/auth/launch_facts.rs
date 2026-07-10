@@ -20,22 +20,71 @@
 //! (`context::classify`).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use anyharness_credential_discovery::CredentialFact;
+use anyharness_credential_discovery::{route_kinds, CredentialFact};
 
 use crate::domains::agents::registry::bundled::bundled_agent_registry_document;
 use crate::domains::agents::registry::schema::{AgentRegistryAuthSlotEnvVar, AgentRegistryEnvVarKind};
+use crate::domains::agents::route_auth::profile::{
+    resolve_profile, AgentRuntimeAuthProfile, ResolvedSource,
+};
+use crate::domains::agents::route_auth::state::load_state_file;
 
 /// Collect credential facts for classification, merging composed workspace env
-/// with registry-bounded ambient process env. Both call sites
+/// with registry-bounded ambient process env, AND the enrolled-route facts
+/// resolved from workspace-scoped `agent-auth/state.json`. Both call sites
 /// (launch_options and create_session) go through this single entry point.
+///
+/// `runtime_home` is the AnyHarness home whose `agent-auth/state.json` the
+/// route reader consults — the SAME resolution `route_auth` uses at launch
+/// (decisions ledger 13). A missing/native/non-gateway state yields no route
+/// fact; classification then falls through exactly as before.
 pub fn collect_launch_env_facts(
     agent_kind: &str,
     readiness_env: &BTreeMap<String, String>,
+    runtime_home: &Path,
 ) -> Vec<CredentialFact> {
     let ambient: BTreeMap<String, String> = std::env::vars().collect();
-    collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient)
+    let mut facts = collect_launch_env_facts_with_ambient(agent_kind, readiness_env, &ambient);
+    facts.extend(collect_route_facts(agent_kind, runtime_home));
+    facts
+}
+
+/// Route facts from workspace-scoped `agent-auth/state.json`. Reuses
+/// `route_auth::resolve_profile` — one reader, two consumers (this collector
+/// and the launch-time renderer) — so a classification-visible gateway context
+/// exactly tracks a gateway source the launcher would inject. A malformed
+/// state file is tolerated as "no route" (stale in the SAFE direction: the
+/// gateway context stays gated until the file heals), never an error here.
+fn collect_route_facts(agent_kind: &str, runtime_home: &Path) -> Vec<CredentialFact> {
+    let state = match load_state_file(runtime_home) {
+        Ok(state) => state,
+        Err(error) => {
+            tracing::debug!(agent_kind, %error, "route state unreadable; no route facts");
+            return Vec::new();
+        }
+    };
+    match resolve_profile(state.as_ref(), agent_kind) {
+        Ok(AgentRuntimeAuthProfile::Sources(sources)) => {
+            let has_gateway = sources
+                .sources
+                .iter()
+                .any(|source| matches!(source, ResolvedSource::Gateway(_)));
+            if has_gateway {
+                vec![CredentialFact::Route {
+                    kind: route_kinds::GATEWAY.to_string(),
+                }]
+            } else {
+                Vec::new()
+            }
+        }
+        Ok(AgentRuntimeAuthProfile::Native) => Vec::new(),
+        Err(error) => {
+            tracing::debug!(agent_kind, %error, "route profile unresolved; no route facts");
+            Vec::new()
+        }
+    }
 }
 
 /// Pure-logic core: testable without mutating the process environment.
@@ -227,5 +276,85 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    fn temp_home() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "anyharness-route-facts-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(path.join("agent-auth")).expect("create agent-auth dir");
+        path
+    }
+
+    fn write_state(home: &std::path::Path, json: &str) {
+        std::fs::write(home.join("agent-auth").join("state.json"), json).expect("write state");
+    }
+
+    /// A gateway source in `agent-auth/state.json` emits a `Route` fact for
+    /// that harness (decisions ledger 13), collected beside the env facts.
+    #[test]
+    fn gateway_source_in_state_emits_route_fact() {
+        let home = temp_home();
+        write_state(
+            &home,
+            r#"{"version":2,"revision":1,"harnesses":[
+                {"harness_kind":"claude","sources":[
+                    {"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        );
+
+        let facts = collect_launch_env_facts("claude", &BTreeMap::new(), &home);
+        assert!(
+            facts
+                .iter()
+                .any(|fact| matches!(fact, CredentialFact::Route { kind } if kind == "gateway")),
+            "gateway source should emit a Route fact; got: {facts:?}"
+        );
+
+        // A harness the state file does not configure resolves Native → no
+        // route fact.
+        let facts = collect_launch_env_facts("codex", &BTreeMap::new(), &home);
+        assert!(
+            !facts
+                .iter()
+                .any(|fact| matches!(fact, CredentialFact::Route { .. })),
+            "unconfigured harness must not get a route fact; got: {facts:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// An api_key-only source (no gateway) resolves to Sources without a
+    /// gateway → no route fact.
+    #[test]
+    fn api_key_only_source_emits_no_route_fact() {
+        let home = temp_home();
+        write_state(
+            &home,
+            r#"{"version":2,"revision":1,"harnesses":[
+                {"harness_kind":"claude","sources":[
+                    {"kind":"api_key","env_var_name":"ANTHROPIC_API_KEY","value":"sk"}]}]}"#,
+        );
+
+        let facts = collect_launch_env_facts("claude", &BTreeMap::new(), &home);
+        assert!(
+            !facts
+                .iter()
+                .any(|fact| matches!(fact, CredentialFact::Route { .. })),
+            "api_key-only source must not emit a route fact; got: {facts:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// No state file at all: no route fact, no error (native behavior).
+    #[test]
+    fn missing_state_file_emits_no_route_fact() {
+        let home = temp_home();
+        let facts = collect_launch_env_facts("claude", &BTreeMap::new(), &home);
+        assert!(!facts
+            .iter()
+            .any(|fact| matches!(fact, CredentialFact::Route { .. })));
+        let _ = std::fs::remove_dir_all(&home);
     }
 }

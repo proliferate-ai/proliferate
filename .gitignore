@@ -46,6 +46,8 @@ server/openapi.json
 # Tauri build outputs and sidecar binaries
 apps/desktop/src-tauri/binaries/
 apps/desktop/src-tauri/gen/
+# Materialized TEST-ONLY updater overlay (never committed; the .template is)
+apps/desktop/src-tauri/updater-test.conf.json
 
 # CI / release artifacts
 anyharness-sdk.tgz

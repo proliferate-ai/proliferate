@@ -37,7 +37,7 @@ from proliferate.server.cloud.runtime_workers.models import (
     WorkerEnrollResponse,
     WorkerHeartbeatResponse,
 )
-from proliferate.server.version import runtime_version as pinned_runtime_version
+from proliferate.server.version import runtime_version_pin as pinned_runtime_version
 from proliferate.server.version import worker_version_pin as pinned_worker_version
 from proliferate.utils.time import utcnow
 
@@ -54,6 +54,12 @@ _WORKER_ARTIFACT_TARGETS = frozenset(
 )
 # The binary plus its checksum, published alongside on the downloads CDN.
 _WORKER_ARTIFACT_ASSETS = frozenset({"proliferate-worker", "proliferate-worker.sha256"})
+
+# The AnyHarness runtime binary a sandbox worker converges onto, plus its
+# checksum, published alongside on the downloads CDN. Same platform targets as
+# the worker binary.
+_RUNTIME_ARTIFACT_TARGETS = _WORKER_ARTIFACT_TARGETS
+_RUNTIME_ARTIFACT_ASSETS = frozenset({"anyharness", "anyharness.sha256"})
 
 
 def worker_cloud_base_url() -> str:
@@ -285,3 +291,30 @@ async def worker_artifact_redirect_url(*, target: str, asset: str) -> str:
         if await versioned_manifest_exists(pinned):
             return pinned
     return f"{base}/worker/stable/{target}/{asset}"
+
+
+async def runtime_artifact_redirect_url(*, target: str, asset: str) -> str:
+    """Resolve the downloads-CDN URL for the pinned AnyHarness binary (or checksum).
+
+    Parallel to :func:`worker_artifact_redirect_url`: the server carries only
+    the ``RUNTIME_VERSION`` pin, never the artifact, and falls back to the
+    unpinned ``stable`` path when the pinned artifact has not been published
+    yet. A sandbox worker converging its runtime resolves the version path once
+    (fetching the binary here) and derives the ``.sha256`` URL from that
+    redirect's resolved location, so binary and checksum always share a
+    directory — and thus a version. Keeps the sandbox free of any GitHub egress
+    or credentials, exactly like the worker path.
+    """
+    if target not in _RUNTIME_ARTIFACT_TARGETS or asset not in _RUNTIME_ARTIFACT_ASSETS:
+        raise CloudApiError(
+            "cloud_runtime_artifact_unknown",
+            "Unknown runtime artifact target or asset.",
+            status_code=404,
+        )
+    base = downloads_base_url()
+    pin = pinned_runtime_version()
+    if pin is not None:
+        pinned = f"{base}/runtime/stable/{pin}/{target}/{asset}"
+        if await versioned_manifest_exists(pinned):
+            return pinned
+    return f"{base}/runtime/stable/{target}/{asset}"

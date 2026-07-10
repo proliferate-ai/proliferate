@@ -38,6 +38,12 @@ CLOUD_SSH_WORKER_API_PORT ?= 8044
 CLOUD_SSH_WORKER_DB ?= proliferate_dev_ssh_worker_smoke
 DESKTOP_RELEASE_WORKFLOW ?= Release Desktop
 DESKTOP_RELEASE_REF ?= $(shell git branch --show-current 2>/dev/null)
+LANE ?= local
+DESKTOP ?= web
+AGENTS ?= all
+SCENARIOS ?= all
+DRY_RUN ?=
+FILE_ISSUES ?=
 DESKTOP_RELEASE_TARGET_OS ?= macos
 DESKTOP_RELEASE_TAG ?= desktop-v$(shell node -p "require('./apps/desktop/package.json').version" 2>/dev/null)
 SERVER_ENV_SOURCE = set -a; \
@@ -104,7 +110,7 @@ endif
         check check-max-lines check-server-boundaries test test-server fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
-        release-desktop-dry-run release-desktop-draft \
+        desktop-test-build release-desktop-dry-run release-desktop-draft \
         test-agent-spec test-agent-runtime-local test-agent-local-fast test-agent-local \
         test-agent-runtime-cloud-e2b \
         cloud-runtime-build publish-cloud-template-env-local \
@@ -116,6 +122,7 @@ endif
         prod-service prod-taskdef prod-tasks prod-task prod-logs prod-secret-keys \
         prod-db-url prod-sql prod-psql prod-rds \
         db-migrate-up db-migrate-down \
+        release-e2e \
         all clean
 
 # --- Profile dev (setup, build, and run are separate) ---
@@ -518,6 +525,16 @@ db-ah:
 
 # --- Release helpers ---
 
+# Build a TEST-FLAVOR desktop app whose auto-updater points at a local manifest
+# server (UPDATER_URL) and trusts a throwaway key. For the tier-4 upgrade test.
+# The shipped tauri.conf.json is untouched -- a gitignored overlay is merged via
+# `tauri build --config`. See specs/developing/testing/desktop-update-testing.md.
+#   make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json
+desktop-test-build:
+	@test -n "$(UPDATER_URL)" || { echo "UPDATER_URL is required. Example: make desktop-test-build UPDATER_URL=http://127.0.0.1:8787/latest.json"; exit 1; }
+	UPDATER_URL="$(UPDATER_URL)" UPDATER_PUBKEY="$(UPDATER_PUBKEY)" TARGET="$(TARGET)" BUNDLES="$(BUNDLES)" \
+		bash apps/desktop/scripts/build-updater-test.sh
+
 release-desktop-dry-run:
 	@set -e; \
 	command -v gh >/dev/null 2>&1 || { echo "GitHub CLI is required: brew install gh"; exit 1; }; \
@@ -762,6 +779,21 @@ test-cloud-webhooks: server-db-ready
 
 test-cloud-all: cloud-runtime-build server-db-ready
 	cd server && RUN_CLOUD_E2E=1 RUN_LIVE_E2B_WEBHOOK=1 uv run python -m pytest tests/e2e/cloud -xvs
+
+# Tier-3 live end-to-end / tier-4 upgrade-path runner
+# (specs/developing/testing/README.md "Running tier 3/4 locally"). One runner
+# CLI with lane flags; this target is a thin wrapper so CI and laptops call it
+# identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
+# SCENARIOS=<list|all> DRY_RUN=1 FILE_ISSUES=1.
+release-e2e:
+	pnpm install --silent
+	cd tests/release && pnpm exec tsx src/cli/run.ts \
+		--lane $(LANE) \
+		--desktop $(DESKTOP) \
+		--agents $(AGENTS) \
+		--scenarios $(SCENARIOS) \
+		$(if $(DRY_RUN),--dry-run,) \
+		$(if $(FILE_ISSUES),--file-issues,)
 
 test-cloud-ssh-worker:
 	@test -n "$(SSH_TARGET)" || { \

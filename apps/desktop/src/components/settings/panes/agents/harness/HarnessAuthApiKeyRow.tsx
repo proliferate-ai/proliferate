@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import type { AgentApiKey } from "@proliferate/cloud-sdk";
-import { Trash } from "@proliferate/ui/icons";
+import { Pencil, Trash } from "@proliferate/ui/icons";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Switch } from "@proliferate/ui/primitives/Switch";
@@ -34,27 +35,75 @@ export function HarnessAuthApiKeyRow({
   onRemove,
 }: HarnessAuthApiKeyRowProps) {
   const invalidName = row.envVarName.length > 0 && !isValidEnvVarName(row.envVarName);
+  // New rows (no env var yet) start in edit mode; existing rows start read-only.
+  const isNewRow = row.uid.startsWith("draft-") && row.envVarName.length === 0;
+  const [editing, setEditing] = useState(isNewRow);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [editing]);
+
+  function handleEditBlur() {
+    onEnvVarBlur();
+    // Only exit edit mode if the name is valid (or empty for a new row that just lost focus).
+    if (!invalidName) {
+      setEditing(false);
+    }
+  }
+
+  function handleEditKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleEditBlur();
+    }
+  }
 
   return (
     <div className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 sm:flex-row sm:items-start">
       <div className="sm:w-56">
-        <Input
-          aria-label="Environment variable name"
-          placeholder={HARNESS_PANE_COPY.envVarPlaceholder}
-          value={row.envVarName}
-          spellCheck={false}
-          autoCapitalize="off"
-          autoCorrect="off"
-          aria-invalid={invalidName || undefined}
-          onChange={(event) => onEnvVarChange(row.uid, event.target.value)}
-          onBlur={onEnvVarBlur}
-          className="font-mono"
-        />
-        {invalidName ? (
-          <p className="mt-1 text-xs text-destructive">
-            Use SCREAMING_SNAKE_CASE (A–Z, 0–9, _).
-          </p>
-        ) : null}
+        {editing ? (
+          <>
+            <Input
+              ref={inputRef}
+              aria-label="Environment variable name"
+              placeholder={HARNESS_PANE_COPY.envVarPlaceholder}
+              value={row.envVarName}
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
+              aria-invalid={invalidName || undefined}
+              onChange={(event) => onEnvVarChange(row.uid, event.target.value)}
+              onBlur={handleEditBlur}
+              onKeyDown={handleEditKeyDown}
+              className="font-mono"
+            />
+            {invalidName ? (
+              <p className="mt-1 text-xs text-destructive">
+                Use SCREAMING_SNAKE_CASE (A-Z, 0-9, _).
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span
+              className="truncate rounded bg-accent px-2 py-1.5 font-mono text-xs text-muted-foreground"
+              title={row.envVarName}
+            >
+              {row.envVarName || HARNESS_PANE_COPY.envVarPlaceholder}
+            </span>
+            <IconButton
+              aria-label="Edit variable name"
+              title="Edit variable name"
+              disabled={busy}
+              onClick={() => setEditing(true)}
+            >
+              <Pencil className="size-3" />
+            </IconButton>
+          </div>
+        )}
       </div>
       <div className="sm:w-56">
         <KeyPicker

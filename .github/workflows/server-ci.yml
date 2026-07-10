@@ -141,7 +141,11 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     needs: [lint, test]
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/server-v')) || (github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run)
+    # Reusable-workflow calls inherit the caller's event name (never
+    # "workflow_call"), so this leg is driven by inputs.publish/dry_run instead.
+    # inputs.* are empty on plain push/PR events, so the comparisons stay false
+    # there and true only on a server-v tag push or an explicit publish call.
+    if: (startsWith(github.ref, 'refs/tags/server-v')) || (inputs.publish == true && inputs.dry_run != true)
     permissions:
       contents: read
       packages: write
@@ -164,18 +168,26 @@ jobs:
         run: |
           set -euo pipefail
           GHCR_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/proliferate-server"
+          LITELLM_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/proliferate-litellm"
           TAGS=()
+          LITELLM_TAGS=()
 
           if [[ "${GITHUB_REF:-}" == refs/tags/server-v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/server-v}"
           else
             VERSION="${INPUT_VERSION:?A server version input is required for reusable releases.}"
           fi
-          TAGS+=("${GHCR_IMAGE}:${VERSION}")
+          # Push both the immutable version tag and the rolling :stable tag that the
+          # self-host compose bundle (server/deploy/) defaults to.
+          TAGS+=("${GHCR_IMAGE}:${VERSION}" "${GHCR_IMAGE}:stable")
+          LITELLM_TAGS+=("${LITELLM_IMAGE}:${VERSION}" "${LITELLM_IMAGE}:stable")
 
           {
             echo "tags<<EOF"
             printf '%s\n' "${TAGS[@]}"
+            echo "EOF"
+            echo "litellm_tags<<EOF"
+            printf '%s\n' "${LITELLM_TAGS[@]}"
             echo "EOF"
             echo "version=${VERSION}"
           } >> "$GITHUB_OUTPUT"
@@ -214,10 +226,24 @@ jobs:
             WORKER_VERSION=${{ steps.pins.outputs.worker_version }}
             MIN_DESKTOP_VERSION=${{ steps.pins.outputs.min_desktop_version }}
 
+      # The self-host compose bundle also defaults the LiteLLM gateway to
+      # ghcr.io/OWNER/proliferate-litellm:stable, which no workflow built before.
+      # Build it here symmetrically with the server image (same GHCR login, same
+      # version/:stable tags) so self-host operators can pull it.
+      - name: Build and push LiteLLM gateway
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: server/litellm/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.litellm_tags }}
+
   self-hosted-release-assets:
     runs-on: ubuntu-latest
     needs: [lint, test, docker]
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/server-v')) || (github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run)
+    # Same input-driven gate as the docker job (see note above): a server-v tag
+    # push, or an explicit publish call from a release train / hotfix workflow.
+    if: (startsWith(github.ref, 'refs/tags/server-v')) || (inputs.publish == true && inputs.dry_run != true)
     permissions:
       contents: write
     steps:
@@ -296,7 +322,9 @@ jobs:
         working-directory: .
 
       - name: Ensure server release tag exists
-        if: github.event_name == 'workflow_call' && inputs.publish && !inputs.dry_run
+        # Only publish calls need to create the tag; on a real server-v tag push
+        # the tag already exists. Input-driven, not event-name-driven.
+        if: inputs.publish == true && inputs.dry_run != true
         env:
           RELEASE_TAG: ${{ format('server-v{0}', inputs.version) }}
           RELEASE_TARGET: ${{ inputs.git_sha }}

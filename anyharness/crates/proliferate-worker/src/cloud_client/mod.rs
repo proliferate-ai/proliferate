@@ -71,9 +71,10 @@ pub struct HeartbeatRequest {
 pub struct DesiredVersions {
     #[serde(default)]
     pub worker: Option<String>,
-    // Parsed for completeness; the worker only swaps its own binary today.
-    // AnyHarness convergence is owned by whoever launches the runtime.
-    #[allow(dead_code)]
+    /// The AnyHarness runtime version the server pins. A sandbox worker with
+    /// `anyharness_update_enabled` converges the runtime binary onto it
+    /// (download / swap-in-place / relaunch); other workers ignore it. `None`
+    /// on an unstamped/old server, which the worker treats as a no-op.
     #[serde(default)]
     pub anyharness: Option<String>,
     /// The `catalogVersion` string the server currently serves. When this
@@ -183,7 +184,43 @@ impl CloudClient {
         // Capture the post-redirect URL before the body consumes the response.
         let resolved_url = response.url().to_string();
         let bytes = response.bytes().await?.to_vec();
-        Ok(DownloadedArtifact { bytes, resolved_url })
+        Ok(DownloadedArtifact {
+            bytes,
+            resolved_url,
+        })
+    }
+
+    /// Fetch a pinned AnyHarness runtime artifact via the server's runtime
+    /// redirect endpoint, capturing the CDN URL the 302 resolved to. Parallel
+    /// to `download_worker_artifact`: unauthenticated (public CDN), follows the
+    /// redirect, and returns the resolved URL so the sibling `.sha256` can be
+    /// fetched from the same published directory (hence the same version)
+    /// without re-resolving the pinned-vs-fallback path a second time.
+    pub async fn download_runtime_artifact(
+        &self,
+        target: &str,
+        asset: &str,
+    ) -> Result<DownloadedArtifact, WorkerError> {
+        let response = self
+            .http_download
+            .get(format!(
+                "{}/v1/cloud/runtime/download/{target}/{asset}",
+                self.base_url
+            ))
+            .timeout(ARTIFACT_DOWNLOAD_TIMEOUT)
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(WorkerError::Cloud { status, body });
+        }
+        let resolved_url = response.url().to_string();
+        let bytes = response.bytes().await?.to_vec();
+        Ok(DownloadedArtifact {
+            bytes,
+            resolved_url,
+        })
     }
 
     /// Fetch an artifact directly from an already-resolved CDN URL (used for
@@ -360,10 +397,7 @@ mod tests {
         let response = serde_json::from_slice::<HeartbeatResponse>(payload)
             .expect("heartbeat ack with catalogVersion");
         let desired = response.desired_versions.expect("desiredVersions present");
-        assert_eq!(
-            desired.catalog_version.as_deref(),
-            Some("2026-07-06.1")
-        );
+        assert_eq!(desired.catalog_version.as_deref(), Some("2026-07-06.1"));
     }
 
     #[test]

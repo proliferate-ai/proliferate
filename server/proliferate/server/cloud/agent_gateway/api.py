@@ -146,6 +146,18 @@ async def put_agent_auth_selections_endpoint(
         )
     except CloudApiError as error:
         raise_cloud_error(error)
+    # Persist settings alongside sources when provided.
+    if body.settings is not None:
+        try:
+            await service.put_harness_settings(
+                db,
+                user_id=user.id,
+                harness_kind=harness_kind,
+                surface=surface,
+                settings_dict=body.settings,
+            )
+        except CloudApiError as error:
+            raise_cloud_error(error)
     titles = await service.key_titles(db, user_id=user.id)
     return [
         auth_selection_payload(record, key_title=titles.get(record.api_key_id))

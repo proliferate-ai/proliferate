@@ -1,7 +1,7 @@
 {
   "name": "proliferate",
   "private": true,
-  "version": "0.3.9",
+  "version": "0.3.17",
   "type": "module",
   "scripts": {
     "dev": "vite",

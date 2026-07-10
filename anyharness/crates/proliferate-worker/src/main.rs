@@ -1,3 +1,4 @@
+mod anyharness_update;
 mod catalog_sync;
 mod cloud_client;
 mod config;

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -122,3 +122,95 @@ async def advance_usage_import_cursor(
         row.updated_at = now
     await db.flush()
     return usage_import_cursor_record(row)
+
+
+def _coerce_utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+async def llm_cost_usd_timeseries(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    granularity: str,
+    start: datetime,
+    end: datetime,
+    user_id: UUID | None = None,
+) -> list[tuple[datetime, float]]:
+    """Imported LLM cost bucketed by ``date_trunc(granularity, occurred_at)``.
+
+    Scoped to a billing subject (org or personal); optionally filtered to one
+    user. Missing buckets are not zero-filled here — the caller fills gaps.
+    """
+    bucket = func.date_trunc(granularity, AgentLlmUsageEvent.occurred_at)
+    conditions = [
+        AgentLlmUsageEvent.billing_subject_id == billing_subject_id,
+        AgentLlmUsageEvent.occurred_at >= _coerce_utc(start),
+        AgentLlmUsageEvent.occurred_at < _coerce_utc(end),
+    ]
+    if user_id is not None:
+        conditions.append(AgentLlmUsageEvent.user_id == user_id)
+    rows = (
+        await db.execute(
+            select(
+                bucket.label("bucket"),
+                func.coalesce(func.sum(AgentLlmUsageEvent.cost_usd), 0.0),
+            )
+            .where(*conditions)
+            .group_by(bucket)
+            .order_by(bucket)
+        )
+    ).all()
+    return [(_coerce_utc(bucket_start), float(cost or 0.0)) for bucket_start, cost in rows]
+
+
+async def llm_cost_usd_by_user(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    start: datetime,
+    end: datetime,
+) -> dict[UUID, float]:
+    """Imported LLM cost per user over ``[start, end)`` for a subject."""
+    rows = (
+        await db.execute(
+            select(
+                AgentLlmUsageEvent.user_id,
+                func.coalesce(func.sum(AgentLlmUsageEvent.cost_usd), 0.0),
+            )
+            .where(
+                AgentLlmUsageEvent.billing_subject_id == billing_subject_id,
+                AgentLlmUsageEvent.occurred_at >= _coerce_utc(start),
+                AgentLlmUsageEvent.occurred_at < _coerce_utc(end),
+                AgentLlmUsageEvent.user_id.is_not(None),
+            )
+            .group_by(AgentLlmUsageEvent.user_id)
+        )
+    ).all()
+    return {user_id: float(cost or 0.0) for user_id, cost in rows}
+
+
+async def llm_cost_usd_in_window(
+    db: AsyncSession,
+    *,
+    billing_subject_id: UUID,
+    start: datetime,
+    end: datetime,
+    user_id: UUID | None = None,
+) -> float:
+    """Total imported LLM cost over ``[start, end)`` for enforcement.
+
+    ``user_id=None`` sums the whole subject (org-wide); otherwise it filters to
+    that user.
+    """
+    conditions = [
+        AgentLlmUsageEvent.billing_subject_id == billing_subject_id,
+        AgentLlmUsageEvent.occurred_at >= _coerce_utc(start),
+        AgentLlmUsageEvent.occurred_at < _coerce_utc(end),
+    ]
+    if user_id is not None:
+        conditions.append(AgentLlmUsageEvent.user_id == user_id)
+    result = await db.scalar(
+        select(func.coalesce(func.sum(AgentLlmUsageEvent.cost_usd), 0.0)).where(*conditions)
+    )
+    return float(result or 0.0)

@@ -321,7 +321,7 @@ export function ChatInput({
   return (
     <DebugProfiler id="chat-composer">
       <div className="relative">
-        <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col px-5" />
+        <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col" />
         <ChatComposerSurface
           overflowMode="clip"
           onClick={handleComposerSurfaceClick}
