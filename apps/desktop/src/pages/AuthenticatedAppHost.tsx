@@ -33,20 +33,22 @@ export function AuthenticatedAppHost({
   }, [isSettingsRoute, location.hash, location.pathname, location.search]);
 
   const isHomeRoute = location.pathname === APP_ROUTES.home;
-  const shouldRenderWorkspace = isHomeRoute || isSettingsRoute;
+  // The workspace shell stays mounted (hidden) across every authenticated
+  // route: cold-mounting it on return from /workflows or /workspaces is
+  // seconds of synchronous hydration work.
   const workspaceHostClassName = isSettingsRoute
     ? "pointer-events-none"
-    : shouldRenderWorkspace
+    : isHomeRoute
       ? undefined
       : "hidden";
 
   return (
     <>
       <div
-        aria-hidden={isSettingsRoute ? "true" : undefined}
+        aria-hidden={isHomeRoute ? undefined : "true"}
         className={workspaceHostClassName}
       >
-        {shouldRenderWorkspace && <MainComponent workspaceVisible={!isSettingsRoute} />}
+        <MainComponent workspaceVisible={isHomeRoute} />
       </div>
 
       {isSettingsRoute ? (
