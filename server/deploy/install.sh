@@ -335,7 +335,7 @@ download_and_verify_bundle() {
 install_bundle_files() {
   # Refresh scripts/compose/example/VERSION without ever clobbering operator
   # config or data (.env.static, .env.local, .env.generated, .env.runtime).
-  mkdir -p "$DEPLOY_DIR" "$INSTALL_ROOT/bin"
+  mkdir -p "$DEPLOY_DIR" "$INSTALL_ROOT/bin" "$INSTALL_ROOT/secrets/github-app"
   local src="$FETCH_TMP/proliferate-deploy"
   local rel
   while IFS= read -r -d '' rel; do

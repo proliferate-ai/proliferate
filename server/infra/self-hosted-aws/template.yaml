@@ -369,7 +369,7 @@ Resources:
             03-enable-docker:
               command: systemctl enable --now docker
             04-create-directories:
-              command: mkdir -p /opt/proliferate/server/deploy /opt/proliferate/bin /etc/cfn/hooks.d
+              command: mkdir -p /opt/proliferate/server/deploy /opt/proliferate/bin /opt/proliferate/secrets/github-app /etc/cfn/hooks.d
 
         fetch_bundle:
           commands:

@@ -30,11 +30,30 @@ services:
       timeout: 3s
       retries: 10
 
+  # redis is `profiles: [cloud-workspaces]`: only needed when E2B_API_KEY and
+  # E2B_TEMPLATE_NAME are both set (the same complete-pair gate preflight.sh
+  # already enforces for the whole capability). Cloud materialization takes a
+  # per-sandbox lock here (REDBEAT_REDIS_URL); without it, private-repo
+  # workspace creation fails at the lock-acquire step. bootstrap.sh/update.sh
+  # compute this profile automatically from common.sh's
+  # proliferate_enabled_profiles, so a base install with no E2B config never
+  # pulls or starts this container.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    profiles: ["cloud-workspaces"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # litellm-db and litellm are both `profiles: [agent-gateway]`: only needed
   # when AGENT_GATEWAY_ENABLED=true. Bare `up -d`/`pull` (what bootstrap.sh
   # and update.sh run) skip profiled services entirely, so self-hosters who
-  # leave the gateway disabled never pull or start these. Bring the gateway
-  # up explicitly with:
+  # leave the gateway disabled never pull or start these. Bootstrap/update
+  # compute this profile automatically too; a manual bring-up (e.g. after
+  # hand-editing .env.static without rerunning bootstrap) looks like:
   #   docker compose --profile agent-gateway -f docker-compose.production.yml up -d
   litellm-db:
     image: postgres:16-alpine
@@ -99,6 +118,13 @@ services:
       # First-run setup token plaintext lives here until the instance is
       # claimed. A named volume so restarts and image updates do not rotate it.
       - setup_state:/var/lib/proliferate/setup
+      # Optional GitHub App private key, mounted read-only. Empty/absent by
+      # default (Docker creates an empty host directory here on first boot
+      # when the operator has not set GITHUB_APP_PRIVATE_KEY_HOST_PATH); set
+      # GITHUB_APP_PRIVATE_KEY_PATH=/run/secrets/github-app/<filename> to use
+      # a file placed in this directory instead of the inline
+      # GITHUB_APP_PRIVATE_KEY form.
+      - ${GITHUB_APP_PRIVATE_KEY_HOST_PATH:-/opt/proliferate/secrets/github-app}:/run/secrets/github-app:ro
     depends_on:
       db:
         condition: service_healthy

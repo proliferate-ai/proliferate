@@ -253,14 +253,20 @@ fi
 # --- Redis (only when a capability requires it) ------------------------------
 
 section "Redis"
-# Cloud materialization uses a Redis lock; the base bundle does not ship a
-# redis service, so only check when the cloud capability is configured.
+# Cloud materialization uses a Redis lock. The bundled `redis` service comes
+# up automatically under the cloud-workspaces profile whenever the E2B pair
+# is complete (see common.sh), so only check when that capability is on.
 if [[ -n "$(get E2B_API_KEY)" && -n "$(get E2B_TEMPLATE_NAME)" ]]; then
   redis_url="$(get REDBEAT_REDIS_URL)"
-  if docker info >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -qi 'redis'; then
-    pass "a redis container is running (cloud materialization lock)."
+  if [[ -f "$RUNTIME_ENV_FILE" ]] && docker info >/dev/null 2>&1; then
+    redis_state="$(compose --profile cloud-workspaces ps --format '{{.State}}' redis 2>/dev/null | head -n1)"
+    if [[ "$redis_state" == "running" ]]; then
+      pass "service redis: running (${redis_url:-redis://redis:6379/0})"
+    else
+      fail "service redis: ${redis_state:-not created}. Cloud materialization cannot acquire its lock without it. Check: $DEPLOY_DIR/update.sh and docker compose logs redis"
+    fi
   else
-    warn "cloud workspaces are configured but no redis container is running. Cloud materialization needs Redis (${redis_url:-redis://redis:6379/0}); the base bundle does not yet ship one — see the deployment requirements in the self-hosting docs."
+    warn "Stack not started; cannot check the redis service state."
   fi
 else
   info "cloud workspaces not configured; Redis not required."
@@ -272,26 +278,46 @@ section "Agent gateway"
 if proliferate_is_truthy "$(get AGENT_GATEWAY_ENABLED)"; then
   info "AGENT_GATEWAY_ENABLED=true (profile: agent-gateway)"
   info "LITELLM_MASTER_KEY: $(shape LITELLM_MASTER_KEY); AGENT_GATEWAY_LITELLM_MASTER_KEY: $(shape AGENT_GATEWAY_LITELLM_MASTER_KEY)"
-  if docker info >/dev/null 2>&1; then
-    if docker ps --format '{{.Names}}' 2>/dev/null | grep -qi 'litellm'; then
-      pass "litellm container running"
+  if [[ -f "$RUNTIME_ENV_FILE" ]] && docker info >/dev/null 2>&1; then
+    litellm_state="$(compose --profile agent-gateway ps --format '{{.State}}' litellm 2>/dev/null | head -n1)"
+    litellm_health="$(compose --profile agent-gateway ps --format '{{.Health}}' litellm 2>/dev/null | head -n1)"
+    if [[ "$litellm_state" == "running" && ( "$litellm_health" == "healthy" || -z "$litellm_health" ) ]]; then
+      pass "service litellm: running (:4000 ${litellm_health:-no healthcheck reported}))"
     else
-      fail "AGENT_GATEWAY_ENABLED=true but no litellm container is running. Start it: docker compose --env-file $RUNTIME_ENV_FILE -f $COMPOSE_FILE --profile agent-gateway up -d (bootstrap.sh/update.sh do this automatically)."
+      fail "service litellm: ${litellm_state:-not created} (health: ${litellm_health:-unknown}). Start it: docker compose --env-file $RUNTIME_ENV_FILE -f $COMPOSE_FILE --profile agent-gateway up -d (bootstrap.sh/update.sh do this automatically). Check: docker compose logs litellm"
     fi
   fi
   pub_gw="$(get AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL)"
   if [[ -n "$pub_gw" ]]; then
     if curl -fsS --max-time 8 "${pub_gw%/}/health/liveliness" >/dev/null 2>&1 \
       || curl -fsS --max-time 8 "${pub_gw%/}/health" >/dev/null 2>&1; then
-      pass "public gateway endpoint reachable ($pub_gw)"
+      pass "public gateway endpoint reachable via Caddy /llm ($pub_gw)"
     else
-      warn "public gateway endpoint did not respond ($pub_gw). Confirm the Caddy route to litellm:4000 is configured (see the model-gateway add-on docs)."
+      warn "public gateway endpoint did not respond ($pub_gw). Confirm AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL points at .../llm and DNS/TLS for it are ready."
     fi
   else
     warn "AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is not set; sandboxes cannot reach the gateway."
   fi
+  if [[ -z "$(get ANTHROPIC_API_KEY)" && -z "$(get OPENAI_API_KEY)" && -z "$(get XAI_API_KEY)" ]]; then
+    warn "No provider key (ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY) is set for litellm; it has no model to serve."
+  fi
 else
   info "agent gateway disabled."
+fi
+
+# --- Deployment SSO (only when enabled) ---------------------------------------
+
+section "Deployment SSO"
+if proliferate_is_truthy "$(get SSO_ENABLED)"; then
+  info "SSO_ENABLED=true; client id: $(shape SSO_OIDC_CLIENT_ID); client secret: $(shape SSO_OIDC_CLIENT_SECRET)"
+  sso_jit="$(get SSO_JIT_POLICY)"
+  if [[ "${sso_jit:-disabled}" == "disabled" && -z "$(get ADMIN_EMAILS)" ]]; then
+    warn "SSO_JIT_POLICY=disabled (or unset) and ADMIN_EMAILS is empty: no SSO sign-in can create the first user. Set ADMIN_EMAILS (password sign-in) or SSO_JIT_POLICY=create_member."
+  else
+    pass "SSO first-user path is reachable (ADMIN_EMAILS set or SSO_JIT_POLICY auto-provisions)."
+  fi
+else
+  info "SSO disabled."
 fi
 
 # --- Optional add-on config shape (redacted) ---------------------------------
@@ -299,13 +325,18 @@ fi
 section "Add-on configuration (redacted)"
 info "GitHub OAuth client id: $(shape GITHUB_OAUTH_CLIENT_ID); secret: $(shape GITHUB_OAUTH_CLIENT_SECRET)"
 if [[ -n "$(get GITHUB_APP_ID)" ]]; then
-  info "GitHub App: id set; private key: $(shape GITHUB_APP_PRIVATE_KEY); webhook secret: $(shape GITHUB_APP_WEBHOOK_SECRET)"
+  info "GitHub App: id set; private key: $(shape GITHUB_APP_PRIVATE_KEY); private key path: $(get GITHUB_APP_PRIVATE_KEY_PATH); webhook secret: $(shape GITHUB_APP_WEBHOOK_SECRET)"
 fi
 e2b_key="$(get E2B_API_KEY)"
 e2b_tmpl="$(get E2B_TEMPLATE_NAME)"
 if [[ -n "$e2b_key" || -n "$e2b_tmpl" ]]; then
   # Template name is not a secret; showing it aids debugging.
   info "E2B: api key $(shape E2B_API_KEY); template ${e2b_tmpl:-<empty>}"
+fi
+if [[ -n "$(get RESEND_API_KEY)" ]]; then
+  info "Resend: api key $(shape RESEND_API_KEY); from address $(get RESEND_FROM_EMAIL)"
+else
+  info "RESEND_API_KEY not set; invitation email delivery is 'skipped' (admins use the copy-link)."
 fi
 
 # --- Summary -----------------------------------------------------------------
