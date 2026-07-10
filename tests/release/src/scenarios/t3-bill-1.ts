@@ -14,19 +14,24 @@ import { ORG_COMPUTE_ATTRIBUTION_FIXED, runBillingProbe, type MeterRecords } fro
  * with the credit balance decremented, and (b) a closed `usage_segment`
  * (opened/closed by the E2B webhooks, not a timer) with the accounting pass
  * draining the corresponding grant seconds. Attribution must be asserted
- * as-built: compute → the workspace owner's PERSONAL subject (unchanged by
- * #1028 — invoicing org compute to the org subject is an explicitly deferred
- * open question there); LLM → the ORG subject where enrolled.
- * ORG_COMPUTE_ATTRIBUTION_FIXED tracks the org-attribution *column/enforcement*
- * capability (#1028, merged) — true on this branch.
+ * as-built. As of #1047 (merged) BOTH tracks attribute the same way: a user
+ * with a current org membership bills the ORG subject (org Stripe customer,
+ * org grant pool) for compute AND LLM; an org-less user bills personal. #1047
+ * resolves the paying subject at segment-open from the same membership lookup
+ * #1028 uses to stamp `usage_segment.organization_id`, so `billing_subject_id`
+ * and `organization_id` can never disagree — the earlier "compute always bills
+ * the workspace owner's personal subject" behavior is gone.
+ * ORG_COMPUTE_ATTRIBUTION_FIXED tracks that org compute now bills the org
+ * subject (#1028 column + #1047 who-pays) — true on this branch.
  *
  * Reachable now (real, cheap): the ledger reader
  * (`tests/release/scripts/billing_probe.py`) reads the durable user's meter
  * records and grants directly from the profile DB, and this scenario asserts
  * the branch's compute-attribution *capability* (`usage_segment` has an
  * `organization_id` column, per merged #1028) against
- * ORG_COMPUTE_ATTRIBUTION_FIXED — the "assert current behavior as-built" the
- * contract requires.
+ * ORG_COMPUTE_ATTRIBUTION_FIXED, plus that any compute segment carrying an
+ * `organization_id` invoices the org subject (not personal) per #1047 — the
+ * "assert current behavior as-built" the contract requires.
  *
  * Blocked (per lane, reported not skipped) for PRODUCING new consumption:
  * - local lane / LLM half: no `RELEASE_E2E_GATEWAY_TEST_KEY` exists, so a local
@@ -55,7 +60,7 @@ export const t3Bill1: ScenarioDefinition = {
     runtimeLane === "local"
       ? { description: "produce real LLM usage via a gateway-keyed session → assert agent_llm_usage_event rows + credit decrement (LLM half)" }
       : { description: "keep a real cloud sandbox running an interval → assert a closed usage_segment + grant drain (compute half)" },
-    { description: "assert attribution: compute → personal subject; LLM → org subject where enrolled" },
+    { description: "assert attribution (#1047): org-member compute + LLM → org subject; org-less user → personal" },
   ],
   run: async (ctx) => {
     if (ctx.dryRun) {
@@ -74,13 +79,38 @@ export const t3Bill1: ScenarioDefinition = {
       `T3-BILL-1: usage_segment.organization_id presence (${meter.usageSegmentHasOrgColumn}) must match ` +
         `ORG_COMPUTE_ATTRIBUTION_FIXED (${ORG_COMPUTE_ATTRIBUTION_FIXED}) — #1028 is merged so this must be true`,
     );
+    // #1047: org compute bills the ORG subject (org Stripe customer + org grant
+    // pool), matching LLM. Assert it as-built rather than pinning the old
+    // personal-subject behavior: any compute segment stamped with an
+    // organization_id must be invoiced to the org's billing subject, never the
+    // owner's personal subject.
+    const orgSubjectId = meter.subjects.organization;
+    const personalSubjectId = meter.subjects.personal;
+    for (const segment of meter.usageSegments) {
+      const org = segment.organizationId;
+      if (!org) {
+        continue; // org-less user's segment — stays personal, nothing to check
+      }
+      assert.notEqual(
+        segment.billingSubjectId,
+        personalSubjectId,
+        `T3-BILL-1: #1047 — compute segment ${segment.id} carries organization_id ${org} but is invoiced ` +
+          `to the owner's personal subject (${personalSubjectId}); it must bill the org subject`,
+      );
+      if (orgSubjectId) {
+        assert.equal(
+          segment.billingSubjectId,
+          orgSubjectId,
+          `T3-BILL-1: #1047 — org compute segment ${segment.id} must bill the org subject ${orgSubjectId}`,
+        );
+      }
+    }
     console.log(
       `[T3-BILL-1/${ctx.runtimeLane}] baseline: ${meter.usageSegments.length} segment(s), ` +
         `${meter.llmUsageEvents.length} llm event(s), ${meter.grants.length} grant(s); ` +
-        // #1028 added org attribution/enforcement scope only — compute still
-        // bills the personal subject (invoicing org compute to the org
-        // subject is an explicitly deferred open question in #1028).
-        `compute bills the personal subject`,
+        // #1047: org compute now bills the org subject (org grant pool),
+        // matching LLM; org-less users still bill personal.
+        `org-member compute + LLM bill the org subject`,
     );
 
     if (ctx.runtimeLane === "local") {

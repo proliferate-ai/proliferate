@@ -30,12 +30,14 @@ import { runBillingProbe, type DrainGrantsResult, type MeterRecords } from "../f
  *   6. trigger-driven work (workflow/automation) that would start a sandbox.
  * Then refill → sandbox resumable, gateway serves again, new workspaces allowed.
  *
- * The live start gate is `assert_cloud_sandbox_resume_allowed` on the
- * resume/connect path (`authorize_sandbox_start` is dead code) — assert against
- * that, never the dead function. NOTE: that enforcement call site is on `main`,
- * not on this runner branch (6 commits behind); it is reached through the same
- * `current_product_user`-gated resume route, so it is not independently
- * assertable here yet.
+ * The live start gate is `assert_cloud_sandbox_resume_allowed_for_owner`, now
+ * (post-#1036, merged) wired into the service layer so BOTH `/cloud-sandbox/wake`
+ * and `/cloud-sandbox/ensure` inherit it before staging a row (`authorize_sandbox_start`
+ * remains dead code — assert against the wired gate, never the dead function).
+ * Its owner-subject resolution is #1047's (org member → org subject), so a hold
+ * on the org grant pool blocks the member's resume. T3-BILL-3 asserts this gate
+ * live against staging (`--lane staging`); this local-lane scenario still needs
+ * a funded-then-drained org to exercise it end to end.
  *
  * Reachable now (real): the exhaustion SETUP — `billing_probe.py drain-grants`
  * zeroes the durable user's grant seconds directly, and this scenario asserts

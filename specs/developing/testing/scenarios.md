@@ -610,6 +610,44 @@ and a small per-seat cap:
 Assert amounts end-to-end: seconds consumed → cents exported → Stripe event
 totals match (the fractional-cent remainder logic is under test here too).
 
+**Blocked on staging (2026-07-10):** cannot run against the current staging
+deployment. Staging's Stripe is in **LIVE mode** (a `cloud-checkout` returns a
+`cs_live_` session — verified), so a test-mode top-up with card 4242 is
+impossible and a real charge is out of scope; org `cloud-checkout` is
+additionally gated (`org_pro_billing_disabled` — pro billing is off on staging)
+and personal `refill-checkout` is unconfigured (`stripe_refill_price_unconfigured`).
+Compute-segment metering is independently broken: E2B delivers webhooks to
+`POST /api/v1/cloud/webhooks/e2b` but every one returns **401
+`invalid_webhook_signature`** (239 in 5 days, zero 2xx — the configured
+`E2B_WEBHOOK_SIGNATURE_SECRET` does not match what E2B signs with; E2B's
+dashboard never surfaced a signing secret), so `usage_segment` rows never open
+or close. Needs a test-mode Stripe deployment (or the durable org funded then
+drained on a test clock) and a working E2B webhook secret before it can run.
+
+### T3-BILL-4: org billing lifecycle — out-of-credits enforcement, live
+Added 2026-07-10. The reachable half of the durable-org lifecycle ruling
+(Pablo 2026-07-10), asserted against the real staging deployment through the
+billing HTTP surface a client uses — the T3-BILL-1/2 ledger DB seam is
+local-only (staging DB is VPC-only; the durable staging user is a real
+GitHub-OAuth account that passes `current_product_user`). Staging lane
+(`--lane staging`); the local lane reports blocked (its ledger is T3-BILL-1/2's).
+Against the durable org's exhausted subject, assert:
+- the **enumerated out-of-credits state** on `cloud-plan`/`overview`
+  (`startBlocked`, `holdReason=credits_exhausted`, 0 remaining hours) and
+  `llm-balance` (`remainingUsd=0`);
+- the **live compute start gate** (#1036, wired into the service layer):
+  `POST /cloud-sandbox/ensure` is refused with a 402 `billing_credits_exhausted`
+  and **no sandbox is created** (the gate fires before the row insert);
+- the **#1047 attribution split** as a positive contrast: the org member's
+  compute + LLM bill the ORG subject (exhausted) while the same user's PERSONAL
+  subject keeps its free grant — org work does not silently drain personal
+  credits;
+- **overage can be turned on** for the org via `overage-settings` and the policy
+  round-trips (restored afterward).
+The funded half (fund → consume → refill/reactivate → meter overage) is
+deferred to T3-BILL-3 above, blocked by the same staging Stripe live-mode /
+E2B-webhook findings. Test: `tests/release/src/scenarios/t3-bill-4.ts`.
+
 ---
 
 ## Tier 4 — upgrade path
@@ -713,3 +751,28 @@ current behavior as known-bug expected-fail):
    `ensure_free_trial_v2_grant` silently returns when the account has no
    linked GitHub identity — looks broken to the user. (UX severity, not
    correctness.)
+
+## Staging infra findings (2026-07-10) — block the tier-3 billing funded lane
+
+Surfaced building T3-BILL-4 / trying to enroll the durable staging org.
+
+4. **Staging Stripe is in LIVE mode.** `proliferate-staging-server`'s
+   `STRIPE_SECRET_KEY` is a `sk_live_` key and a `cloud-checkout` returns a
+   `cs_live_` session (verified). The tier-3 billing ruling assumes a test-mode
+   deployment (card 4242, drain/top-up teardown), so the durable org cannot be
+   enrolled or funded on staging without a real charge — NOT done, per the
+   test-mode-only rule. Ruling needed: point staging at a Stripe **test-mode**
+   key (+ test price ids for cloud-monthly / pro / refill), or fund-then-drain
+   the durable org on a live test clock. Until then T3-BILL-3 and the funded
+   half of the lifecycle stay blocked; T3-BILL-4 asserts only the reachable
+   exhaustion-enforcement contract.
+5. **Staging E2B webhooks all fail signature validation.** E2B delivers to
+   `POST /api/v1/cloud/webhooks/e2b` (source 34.177.112.204) but every request
+   returns **401 `invalid_webhook_signature`** — 239 in 5 days, zero 2xx. The
+   server computes `base64(sha256(secret + body))` (`e2b_webhooks.py`) against
+   `E2B_WEBHOOK_SIGNATURE_SECRET`; the configured secret does not match what E2B
+   signs with (E2B's dashboard never surfaced a signing secret). Consequence:
+   `usage_segment` rows are never opened/closed on staging, so compute metering
+   is dead there regardless of billing state. Fix: obtain/rotate the real E2B
+   signing secret (or confirm E2B's actual signing scheme) and reconcile with
+   `verify_e2b_webhook_signature`.

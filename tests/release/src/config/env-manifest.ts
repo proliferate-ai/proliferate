@@ -28,12 +28,16 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_SERVER_URL",
     description:
-      "Publicly reachable API base URL for the target lane. Staging satisfies this " +
-      "directly; a local --lane=local run needs a tunnel (e.g. ngrok) fronting " +
-      "the local profile's API port, since sandboxes must call back into it.",
+      "API base URL for the target lane, INCLUDING the deployment's api path prefix but not the " +
+      "route's own /auth or /v1 segment — scenarios write prefix-relative paths (/auth/…, /v1/…). " +
+      "Local has an empty api prefix, so this is the origin (http://127.0.0.1:8086). Staging's api " +
+      "prefix is /api, so this is https://staging-app.proliferate.com/api (the identity router mounts " +
+      "at {prefix}/auth and the v1 routers at {prefix}/v1, so /api is required for both to resolve). " +
+      "A local --lane=local run additionally needs a tunnel fronting the API port so sandboxes can " +
+      "call back into it.",
     whereItLives:
-      "Staging: the known staging API URL (see specs/developing/deploying/ci-cd.md). " +
-      "Local: printed by the tunnel tool when `make run PROFILE=<name>` is fronted by one.",
+      "Staging: https://staging-app.proliferate.com/api (origin + /api prefix). " +
+      "Local: the profile's API origin, printed by the tunnel tool when `make run PROFILE=<name>` is fronted by one.",
     secret: false,
   },
   {
@@ -137,10 +141,15 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_DURABLE_ORG_ID",
     description:
-      "Organization id owning the durable user's account. Used as the inviting org when " +
-      "the fresh-user fixture mints a new account (invitation-gated registration is the " +
-      "only self-serve password-registration path in code today).",
-    whereItLives: "Read from the durable user's `GET /v1/organizations` response once, then pinned here.",
+      "Organization id owning the durable user's account. Used (a) as the inviting org when the " +
+      "fresh-user fixture mints a new account (invitation-gated registration), and (b) by T3-BILL-3 " +
+      "as the org whose billing lifecycle is asserted (it also falls back to the durable user's single " +
+      "owned org when unset). Local and staging have DIFFERENT durable orgs, so this is set per lane " +
+      "(a `staging` GitHub Actions variable, not a repo-wide one).",
+    whereItLives:
+      "Read from the durable user's `GET /v1/organizations` response once, then pinned. Staging value " +
+      "(the durable `proliferate-e2e-bot` user's owned org): recorded as the `RELEASE_E2E_DURABLE_ORG_ID` " +
+      "variable in the GitHub `staging` environment. Local: seeded per run by the CLI (cli/run.ts).",
     secret: false,
   },
   {

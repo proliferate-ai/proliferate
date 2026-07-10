@@ -256,38 +256,86 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Staging lane — the README's documented tier-3 CI target (real deployment,
-  # publicly reachable, real gateway with cheap models). Commented out until the
-  # staging gateway test key is provisioned: the runner needs
-  # RELEASE_E2E_GATEWAY_TEST_KEY issued for an e2e-tests LiteLLM team on staging,
-  # plus RELEASE_E2E_SERVER_URL pointing at the staging API. Uncomment and add
-  # the secrets once that infrastructure exists.
-  #
-  # release-e2e-staging:
-  #   name: tier-3 staging lane (provisional)
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 60
-  #   continue-on-error: true
-  #   steps:
-  #     - name: Preflight — staging gateway key
-  #       id: preflight
-  #       env:
-  #         GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
-  #         STAGING_SERVER_URL: ${{ secrets.RELEASE_E2E_SERVER_URL }}
-  #       run: |
-  #         if [ -z "$GATEWAY_TEST_KEY" ] || [ -z "$STAGING_SERVER_URL" ]; then
-  #           echo "::notice title=Staging tier-3 skipped::RELEASE_E2E_GATEWAY_TEST_KEY / RELEASE_E2E_SERVER_URL not set."
-  #           echo "enabled=false" >> "$GITHUB_OUTPUT"; exit 0
-  #         fi
-  #         echo "enabled=true" >> "$GITHUB_OUTPUT"
-  #     - uses: actions/checkout@v6
-  #       if: steps.preflight.outputs.enabled == 'true'
-  #     # ... node/pnpm setup ...
-  #     - name: Run tier-3 against staging
-  #       if: steps.preflight.outputs.enabled == 'true'
-  #       env:
-  #         RELEASE_E2E_SERVER_URL: ${{ secrets.RELEASE_E2E_SERVER_URL }}
-  #         RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
-  #         RELEASE_E2E_DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
-  #         RELEASE_E2E_DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
-  #         RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-  #       run: make release-e2e LANE=staging DESKTOP=web AGENTS=all SCENARIOS=all
+  # publicly reachable, real gateway with cheap models). Runs against the
+  # `staging` GitHub environment (its vars/secrets: API_BASE_URL,
+  # RELEASE_E2E_GATEWAY_TEST_KEY, RELEASE_E2E_DURABLE_ORG_ID, …). The staging
+  # gateway + durable org id + gateway test key are now provisioned; the one
+  # remaining gate is the browser-free durable-user session:
+  # RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (a `staging` environment secret).
+  # Refresh tokens rotate on every use, so a durable-in-CI mechanism (a
+  # non-rotating bootstrap, or persisting the rotated state between runs) is
+  # still needed before this authenticates for real — until then the preflight
+  # skips cleanly (::notice::), the same pattern the local lane uses.
+  release-e2e-staging:
+    name: tier-3 staging lane (provisional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+    environment: staging
+    steps:
+      - name: Preflight — staging credentials
+        id: preflight
+        env:
+          GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+          STAGING_SERVER_URL: ${{ vars.API_BASE_URL }}
+          STAGING_SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
+        run: |
+          enabled=true
+          if [ -z "$STAGING_SERVER_URL" ]; then
+            echo "::notice title=Staging tier-3 skipped::staging API_BASE_URL variable is not set."
+            enabled=false
+          fi
+          if [ -z "$STAGING_SESSION_REFRESH_TOKEN" ]; then
+            echo "::notice title=Staging tier-3 skipped::RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (staging env secret) is not set — the durable staging user (proliferate-e2e-bot, GitHub-OAuth-only, no password) authenticates via a rotating session refresh token. Bootstrap one per tests/release/src/fixtures/staging-session.ts and add it (plus a rotation-durable mechanism) before this lane runs. Skipping cleanly."
+            enabled=false
+          fi
+          if [ -z "$GATEWAY_TEST_KEY" ]; then
+            echo "::notice title=Staging gateway key absent::RELEASE_E2E_GATEWAY_TEST_KEY not set — gateway-dependent scenarios report blocked. Billing-surface scenarios (T3-BILL-4) still run."
+          fi
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        if: steps.preflight.outputs.enabled == 'true'
+      - uses: actions/setup-node@v6
+        if: steps.preflight.outputs.enabled == 'true'
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        if: steps.preflight.outputs.enabled == 'true'
+        with:
+          version: 10
+      - uses: astral-sh/setup-uv@v7
+        if: steps.preflight.outputs.enabled == 'true'
+      - uses: actions/setup-python@v6
+        if: steps.preflight.outputs.enabled == 'true'
+        with:
+          python-version: "3.12"
+      - name: Install workspace dependencies
+        if: steps.preflight.outputs.enabled == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tier-3 against staging
+        if: steps.preflight.outputs.enabled == 'true'
+        env:
+          # API_BASE_URL already includes the deployment's /api prefix, which is
+          # exactly what RELEASE_E2E_SERVER_URL wants (env-manifest.ts).
+          RELEASE_E2E_SERVER_URL: ${{ vars.API_BASE_URL }}
+          RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+          RELEASE_E2E_GATEWAY_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL || 'https://staging-gateway.proliferate.com' }}
+          RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
+          RELEASE_E2E_DURABLE_ORG_ID: ${{ vars.RELEASE_E2E_DURABLE_ORG_ID }}
+          RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          RELEASE_E2E_E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
+          LANE: staging
+          SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
+          AGENTS: ${{ github.event.inputs.agents || 'all' }}
+        run: make release-e2e LANE="$LANE" DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
+
+      - name: Upload failure reports
+        if: always() && steps.preflight.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-reports-staging
+          path: tests/release/.output/
+          retention-days: 7
+          if-no-files-found: ignore

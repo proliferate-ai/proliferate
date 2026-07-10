@@ -51,10 +51,12 @@ from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent  # noqa
 async def _subjects_for_user(db, user_id) -> dict[str, str]:
     """Resolve the user's personal + (best-effort) org billing subjects.
 
-    Compute segments bill the *personal* subject and LLM events bill the *org*
-    subject where enrolled — the known attribution split
-    (scenarios.md#T3-BILL-1, findings 6/10). Returning both lets the scenario
-    assert each side against the subject the product actually used.
+    Since #1047, compute AND LLM both bill the *org* subject where the user has
+    a current membership (org Stripe customer + org grant pool), and personal
+    only for an org-less user — the paying subject is resolved from the same
+    membership lookup that stamps ``usage_segment.organization_id`` (#1028), so
+    the two never disagree. Returning both subjects lets the scenario assert an
+    org-member segment invoices the org subject, not personal.
     """
     rows = (
         await db.execute(select(BillingSubject).where(BillingSubject.user_id == user_id))
@@ -113,15 +115,17 @@ async def meter_records(email: str, since_seconds: int) -> dict:
         return {
             "userId": str(user.id),
             "subjects": subjects,
-            # usage_segment carries organization_id since #1028 (merged) —
-            # attribution/enforcement scope only, billing_subject_id on the
-            # segment stays the owner's personal subject. Surfaced so the
-            # scenario asserts the as-built personal-subject attribution.
+            # usage_segment carries organization_id since #1028; since #1047 the
+            # segment's billing_subject_id is the ORG subject for an org member
+            # (personal only when org-less). Surfaced so the scenario asserts an
+            # org segment invoices the org subject (per-segment organizationId
+            # below).
             "usageSegmentHasOrgColumn": hasattr(UsageSegment, "organization_id"),
             "usageSegments": [
                 {
                     "id": str(s.id),
                     "billingSubjectId": str(s.billing_subject_id),
+                    "organizationId": str(s.organization_id) if s.organization_id else None,
                     "sandboxId": str(s.sandbox_id),
                     "startedAt": s.started_at.isoformat() if s.started_at else None,
                     "endedAt": s.ended_at.isoformat() if s.ended_at else None,
