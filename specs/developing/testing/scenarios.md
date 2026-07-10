@@ -610,19 +610,30 @@ and a small per-seat cap:
 Assert amounts end-to-end: seconds consumed → cents exported → Stripe event
 totals match (the fractional-cent remainder logic is under test here too).
 
-**Blocked on staging (2026-07-10):** cannot run against the current staging
-deployment. Staging's Stripe is in **LIVE mode** (a `cloud-checkout` returns a
-`cs_live_` session — verified), so a test-mode top-up with card 4242 is
-impossible and a real charge is out of scope; org `cloud-checkout` is
-additionally gated (`org_pro_billing_disabled` — pro billing is off on staging)
-and personal `refill-checkout` is unconfigured (`stripe_refill_price_unconfigured`).
-Compute-segment metering is independently broken: E2B delivers webhooks to
-`POST /api/v1/cloud/webhooks/e2b` but every one returns **401
-`invalid_webhook_signature`** (239 in 5 days, zero 2xx — the configured
-`E2B_WEBHOOK_SIGNATURE_SECRET` does not match what E2B signs with; E2B's
-dashboard never surfaced a signing secret), so `usage_segment` rows never open
-or close. Needs a test-mode Stripe deployment (or the durable org funded then
-drained on a test clock) and a working E2B webhook secret before it can run.
+**Status (2026-07-09): partially unblocked — the funded posture is now live,
+the metered AMOUNTS are still deferred.** Staging was swapped from `sk_live_` to
+the account's **test mode** (test price/meter ids, `PRO_BILLING_ENABLED=true`, a
+test-mode webhook endpoint at the billing webhook URL), which retires finding #4:
+`cloud-checkout` now returns test-mode Stripe URLs, the `org_pro_billing_disabled`
+gate is cleared, and the durable org was **funded through a Stripe test
+subscription** (card 4242 → the same `customer.subscription.created` /
+`invoice.paid` webhooks a real checkout fires → credits granted, verified via
+`/billing/overview`). The scenario (`tests/release/src/scenarios/t3-bill-3.ts`,
+`--lane staging`) asserts that reachable half: test-mode deployment posture +
+funded org + overage on/off round-trip. The **metered-overage AMOUNTS** stay
+deferred because finding #5 is still open — E2B webhooks to
+`POST /api/v1/cloud/webhooks/e2b` still all return **401
+`invalid_webhook_signature`** (zero 2xx), so `usage_segment` rows never open and
+no `proliferate_managed_cloud_overage_cents` meter event is emitted; and the LLM
+auto-top-up charge needs the org's own gateway key consumed (the standalone
+gateway test key has its own budget, per T3-BILL-4). Tier-2 T2-BILL-* proves the
+metered arithmetic against Stripe test clocks per-PR. Note also: with
+`PRO_BILLING_ENABLED=true`, personal `refill-checkout` returns
+`refill_checkout_disabled` (refills are a non-Pro-billing feature) — the Pro
+model uses subscription + overage + LLM auto-top-up instead. Durable-org tension:
+this scenario needs the org FUNDED while T3-BILL-4 needs it EXHAUSTED; the ruling
+gives the funded half here, so while funded T3-BILL-4 reports blocked (its own
+"funded out of band" guard), not red.
 
 ### T3-BILL-4: org billing lifecycle — out-of-credits enforcement, live
 Added 2026-07-10. The reachable half of the durable-org lifecycle ruling
@@ -756,19 +767,26 @@ current behavior as known-bug expected-fail):
 
 Surfaced building T3-BILL-4 / trying to enroll the durable staging org.
 
-4. **Staging Stripe is in LIVE mode.** `proliferate-staging-server`'s
-   `STRIPE_SECRET_KEY` is a `sk_live_` key and a `cloud-checkout` returns a
-   `cs_live_` session (verified). The tier-3 billing ruling assumes a test-mode
-   deployment (card 4242, drain/top-up teardown), so the durable org cannot be
-   enrolled or funded on staging without a real charge — NOT done, per the
-   test-mode-only rule. Ruling needed: point staging at a Stripe **test-mode**
-   key (+ test price ids for cloud-monthly / pro / refill), or fund-then-drain
-   the durable org on a live test clock. Until then T3-BILL-3 and the funded
-   half of the lifecycle stay blocked; T3-BILL-4 asserts only the reachable
-   exhaustion-enforcement contract.
-5. **Staging E2B webhooks all fail signature validation.** E2B delivers to
+4. **Staging Stripe was in LIVE mode — RESOLVED 2026-07-09 (swapped to test
+   mode).** `proliferate-staging-server` used to carry a `sk_live_`
+   `STRIPE_SECRET_KEY` and a `cloud-checkout` returned a `cs_live_` session, so
+   the durable org could not be funded without a real charge. Staging is now
+   pointed at the account's **test mode**: `STRIPE_SECRET_KEY` +
+   `STRIPE_WEBHOOK_SECRET` (Secrets Manager `proliferate/staging/server-app`)
+   are test-mode values, the `STRIPE_*_PRICE_ID` / meter-id / meter-event-name
+   task-def env vars point at the "Proliferate Cloud (Local Test)" test objects
+   (`scripts/stripe-setup-test-mode.mjs`'s catalog + a `proliferate_llm_topup_10usd_test`
+   price), `PRO_BILLING_ENABLED=true`, and a test-mode webhook endpoint is
+   registered at `…/api/v1/billing/webhooks/stripe`. Verified: `cloud-checkout`
+   returns test-mode URLs, `proBillingEnabled=true`, and the durable org was
+   funded through a Stripe test subscription (card 4242 → webhook grant → 20h /
+   pro plan). T3-BILL-3 now asserts this funded posture; T3-BILL-4's exhausted
+   contract now reports blocked while the org is funded.
+5. **Staging E2B webhooks all fail signature validation — STILL OPEN
+   (re-confirmed 2026-07-09).** E2B delivers to
    `POST /api/v1/cloud/webhooks/e2b` (source 34.177.112.204) but every request
-   returns **401 `invalid_webhook_signature`** — 239 in 5 days, zero 2xx. The
+   still returns **401 `invalid_webhook_signature`** (steady 401s in the last
+   few hours, zero 2xx). The
    server computes `base64(sha256(secret + body))` (`e2b_webhooks.py`) against
    `E2B_WEBHOOK_SIGNATURE_SECRET`; the configured secret does not match what E2B
    signs with (E2B's dashboard never surfaced a signing secret). Consequence:
