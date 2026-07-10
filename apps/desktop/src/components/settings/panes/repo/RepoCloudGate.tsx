@@ -6,6 +6,9 @@ import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmp
 import { SettingsRow } from "@proliferate/product-ui/settings/SettingsRow";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { Button } from "@proliferate/ui/primitives/Button";
+import type { GitHubRepoAuthorityAction } from "@proliferate/cloud-sdk";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useGitHubAppInstallation } from "@/hooks/settings/workflows/use-github-app-installation";
 import { useGitHubAppUserAuthorization } from "@/hooks/settings/workflows/use-github-app-user-authorization";
 import { type CloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-cloud-repo-environment-editor";
 
@@ -13,6 +16,8 @@ import { type CloudRepoEnvironmentEditor } from "@/hooks/settings/workflows/use-
 // surface (the same return target the add-repo flow uses).
 const USER_AUTHORIZATION_RETURN_TO =
   "proliferate://settings/environments?source=github_app_callback";
+const INSTALLATION_RETURN_TO =
+  "proliferate://settings/environments?source=github_app_installation_callback";
 
 interface RepoCloudGateProps {
   editor: CloudRepoEnvironmentEditor;
@@ -107,6 +112,7 @@ export function RepoCloudGate({
     return (
       <RepoCloudAuthorizationRequired
         status={editor.authority.data.status}
+        action={editor.authority.data.action ?? null}
         message={editor.authority.data.message ?? null}
         onAuthorizationReturn={() => {
           void editor.authority.refetch();
@@ -147,36 +153,43 @@ export function RepoCloudGate({
 }
 
 /**
- * The not-authorized branch of the gate. User-authorization gaps get an inline
- * "Connect GitHub App" action (the shared authorize flow); installation and
- * repo-access gaps a non-admin can't self-serve stay explanatory messages.
+ * The not-authorized branch of the gate. Each authority action gets the same
+ * inline CTA the Add Cloud repo picker offers: connect/reconnect the GitHub
+ * App, install it for the org, or open the installation settings to grant this
+ * repository access. Gaps a user can't self-serve (no active org for install)
+ * stay explanatory messages.
  */
 function RepoCloudAuthorizationRequired({
   status,
+  action,
   message,
   onAuthorizationReturn,
 }: {
   status: string;
+  action: GitHubRepoAuthorityAction | null;
   message: string | null;
   onAuthorizationReturn: () => void;
 }) {
-  const needsUserAuthorization =
-    status === "missing_user_authorization" || status === "expired_user_authorization";
-  const { authorize, authorizing, error } = useGitHubAppUserAuthorization({
+  const { activeOrganizationId } = useActiveOrganization();
+  const userAuthorization = useGitHubAppUserAuthorization({
     returnTo: USER_AUTHORIZATION_RETURN_TO,
     onAuthorizationReturn,
   });
+  const installation = useGitHubAppInstallation({
+    organizationId: activeOrganizationId,
+    returnTo: INSTALLATION_RETURN_TO,
+    onInstallationReturn: onAuthorizationReturn,
+  });
 
-  if (needsUserAuthorization) {
-    const reconnect = status === "expired_user_authorization";
-    const actionLabel = authorizing
+  if (action === "authorize_user" || action === "reauthorize_user") {
+    const reconnect = action === "reauthorize_user";
+    const actionLabel = userAuthorization.authorizing
       ? "Opening GitHub…"
       : reconnect
         ? "Reconnect GitHub App"
         : "Connect GitHub App";
     return (
-      <SettingsEmptyState
-        icon={<GitHub aria-hidden="true" />}
+      <RepoAuthorityActionState
         title={reconnect ? "Reconnect GitHub App" : "Connect GitHub App"}
         description={
           message
@@ -184,23 +197,42 @@ function RepoCloudAuthorizationRequired({
             ? "Your GitHub App authorization expired. Reconnect it to configure cloud environments for this repository."
             : "Authorize the Proliferate GitHub App to configure cloud environments for this repository.")
         }
-        action={
-          <div className="flex flex-col items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              loading={authorizing}
-              disabled={authorizing}
-              onClick={authorize}
-            >
-              {!authorizing ? (
-                <ProviderBrandIcon provider="github" className="size-[13px]" />
-              ) : null}
-              {actionLabel}
-            </Button>
-            {error ? <p className="text-ui-sm text-destructive">{error}</p> : null}
-          </div>
+        actionLabel={actionLabel}
+        withGitHubIcon={!userAuthorization.authorizing}
+        loading={userAuthorization.authorizing}
+        error={userAuthorization.error}
+        onAction={userAuthorization.authorize}
+      />
+    );
+  }
+
+  if (action === "install_app" && activeOrganizationId) {
+    return (
+      <RepoAuthorityActionState
+        title="Install Proliferate GitHub App"
+        description={
+          message
+          ?? "Install the Proliferate GitHub App for your organization to configure cloud environments for this repository."
         }
+        actionLabel={installation.installing ? "Opening GitHub…" : "Install Proliferate GitHub App"}
+        loading={installation.installing}
+        error={installation.error}
+        onAction={installation.install}
+      />
+    );
+  }
+
+  if (action === "grant_repo_access") {
+    return (
+      <RepoAuthorityActionState
+        title="Grant repository access"
+        description={
+          message
+          ?? "Update the Proliferate GitHub App installation so it has access to this repository."
+        }
+        actionLabel="Grant repository access"
+        error={installation.error}
+        onAction={installation.openInstallationSettings}
       />
     );
   }
@@ -210,6 +242,49 @@ function RepoCloudAuthorizationRequired({
       icon={<GitHub aria-hidden="true" />}
       title={authorizationRequiredTitle(status)}
       description={message ?? repoAuthorityNotice(status)}
+    />
+  );
+}
+
+function RepoAuthorityActionState({
+  title,
+  description,
+  actionLabel,
+  withGitHubIcon = false,
+  loading = false,
+  error,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  actionLabel: string;
+  withGitHubIcon?: boolean;
+  loading?: boolean;
+  error: string | null;
+  onAction: () => void;
+}) {
+  return (
+    <SettingsEmptyState
+      icon={<GitHub aria-hidden="true" />}
+      title={title}
+      description={description}
+      action={
+        <div className="flex flex-col items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            loading={loading}
+            disabled={loading}
+            onClick={onAction}
+          >
+            {withGitHubIcon ? (
+              <ProviderBrandIcon provider="github" className="size-[13px]" />
+            ) : null}
+            {actionLabel}
+          </Button>
+          {error ? <p className="text-ui-sm text-destructive">{error}</p> : null}
+        </div>
+      }
     />
   );
 }
