@@ -113,6 +113,87 @@ pub fn resolve_agent_with_env(
     }
 }
 
+/// Launch-time readiness: [`resolve_agent_with_env`] PLUS the enrolled
+/// agent-auth route state, so an enrolled gateway/api_key route makes the agent
+/// credential-ready EXACTLY as the launcher will inject it at spawn.
+///
+/// This is the fix for issue #1106: the native readiness path only sees the
+/// materialized workspace env, never `agent-auth/state.json`, so a gateway-route
+/// session (whose credentials live in state.json and are injected only at
+/// launch by `route_auth::resolve_launch_route_auth`) was reported
+/// `LoginRequired`/`CredentialsRequired` and the session-create gate rejected
+/// it — even though the launch path had valid credentials. Operators worked
+/// around it by copying gateway credentials into a workspace env file, which in
+/// turn corrupted auth-context classification (the raw `ANTHROPIC_AUTH_TOKEN`
+/// activated the native `anthropic-api` context alongside `gateway`), unlocking
+/// native-only models like `default` on what was really a gateway launch and
+/// 400ing at LiteLLM.
+///
+/// Readiness and launch now consult ONE credential state. A route never masks a
+/// missing agent process or a runtime incompatibility — the launcher still
+/// needs the ACP binary and a compatible runtime — so only credential/login
+/// gaps and the "native CLI missing" install gap are cleared (see
+/// [`route_credentials_upgrade_status`]).
+///
+/// The launch paths (`create_session`, `ensure_live_session`/`start_live_session`,
+/// and `resolved_workspace_launch_options`) use this. Native-readiness surfaces
+/// (`GET /v1/agents`, login, reconcile, probe) keep using
+/// [`resolve_agent`]/[`resolve_agent_with_env`]: they answer "is the vendor CLI
+/// installed and logged in", which is a different question from "can the runtime
+/// launch this agent through the enrolled route".
+pub fn resolve_launch_agent(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    workspace_env: &BTreeMap<String, String>,
+) -> ResolvedAgent {
+    let mut resolved = resolve_agent_with_env(descriptor, runtime_home, workspace_env);
+    let already_ready = matches!(
+        resolved.credential_state,
+        CredentialState::Ready | CredentialState::ReadyViaLocalAuth
+    );
+    if !already_ready
+        && crate::domains::agents::route_auth::launch_route_provides_credentials(
+            runtime_home,
+            descriptor.kind.as_str(),
+        )
+    {
+        let upgraded =
+            route_credentials_upgrade_status(resolved.status, resolved.agent_process.installed);
+        if upgraded == ResolvedAgentStatus::Ready {
+            // The route supplies credentials the launcher injects at spawn.
+            // `ReadyViaLocalAuth` is the closest existing state: ready via a
+            // non-env, runtime-materialized credential rather than a workspace
+            // env var.
+            resolved.credential_state = CredentialState::ReadyViaLocalAuth;
+        }
+        resolved.status = upgraded;
+    }
+    resolved
+}
+
+/// Given a native-readiness verdict for an agent whose enrolled route supplies
+/// launch credentials, decide the launch-time status. A route clears the
+/// credential/login gaps (`CredentialsRequired`, `LoginRequired`) and the
+/// "native CLI missing" install gap (`InstallRequired` while the ACP agent
+/// process IS installed — a gateway launch does not need the vendor CLI login).
+/// It NEVER clears a missing agent process (`InstallRequired` with the process
+/// absent) or a runtime incompatibility (`Unsupported`): the launcher still
+/// needs the ACP binary and a compatible runtime. `Ready`/`Error` pass through.
+fn route_credentials_upgrade_status(
+    status: ResolvedAgentStatus,
+    agent_process_installed: bool,
+) -> ResolvedAgentStatus {
+    match status {
+        ResolvedAgentStatus::CredentialsRequired | ResolvedAgentStatus::LoginRequired => {
+            ResolvedAgentStatus::Ready
+        }
+        ResolvedAgentStatus::InstallRequired if agent_process_installed => {
+            ResolvedAgentStatus::Ready
+        }
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,5 +634,97 @@ mod tests {
         );
 
         assert_eq!(status, ResolvedAgentStatus::InstallRequired);
+    }
+
+    #[test]
+    fn route_upgrade_clears_credential_and_native_install_gaps_only() {
+        use ResolvedAgentStatus::*;
+        // Credential/login gaps clear — the route injects the credential.
+        assert_eq!(route_credentials_upgrade_status(CredentialsRequired, true), Ready);
+        assert_eq!(route_credentials_upgrade_status(LoginRequired, true), Ready);
+        // Native CLI missing but the ACP agent process IS installed → Ready: a
+        // gateway launch needs no vendor CLI login.
+        assert_eq!(route_credentials_upgrade_status(InstallRequired, true), Ready);
+        // Agent process itself missing → still InstallRequired: a route cannot
+        // supply the ACP binary the launcher must exec.
+        assert_eq!(
+            route_credentials_upgrade_status(InstallRequired, false),
+            InstallRequired
+        );
+        // Runtime incompatibility and already-terminal states pass through.
+        assert_eq!(route_credentials_upgrade_status(Unsupported, true), Unsupported);
+        assert_eq!(route_credentials_upgrade_status(Ready, true), Ready);
+        assert_eq!(route_credentials_upgrade_status(Error, false), Error);
+    }
+
+    #[test]
+    fn resolve_launch_agent_matches_native_readiness_when_no_route_enrolled() {
+        // With no agent-auth state file, launch readiness must be byte-for-byte
+        // native readiness — the route path never changes a routeless agent.
+        let registry = built_in_registry();
+        let claude = registry
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Claude)
+            .expect("missing Claude descriptor");
+        let runtime_home = make_temp_dir("anyharness-launch-agent-no-route");
+
+        let native = resolve_agent_with_env(&claude, &runtime_home, &BTreeMap::new());
+        let launch = resolve_launch_agent(&claude, &runtime_home, &BTreeMap::new());
+        assert_eq!(
+            launch.status, native.status,
+            "an absent route must not change readiness"
+        );
+        assert_eq!(launch.credential_state, native.credential_state);
+
+        let _ = std::fs::remove_dir_all(runtime_home);
+    }
+
+    #[test]
+    fn resolve_launch_agent_readies_a_gateway_routed_agent() {
+        // Issue #1106: a gateway route makes the agent launch-ready without any
+        // credential in the workspace env (the launcher injects it at spawn).
+        // The codex agent-process override gives an installed ACP process so the
+        // test isolates the credential dimension from install/compat.
+        let registry = built_in_registry();
+        let codex = registry
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Codex)
+            .expect("missing Codex descriptor");
+        let runtime_home = make_temp_dir("anyharness-launch-agent-gateway-route");
+        let bin = runtime_home.join("codex-acp");
+        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").expect("write override binary");
+        make_executable(&bin).expect("make override binary executable");
+        let _program_guard = EnvVarGuard::set("ANYHARNESS_CODEX_AGENT_PROGRAM", &bin);
+
+        // Enroll a gateway route for codex only.
+        let state_dir = runtime_home.join("agent-auth");
+        std::fs::create_dir_all(&state_dir).expect("create agent-auth dir");
+        std::fs::write(
+            state_dir.join("state.json"),
+            r#"{"version":2,"revision":1,"harnesses":[{"harness_kind":"codex","sources":[{"kind":"gateway","base_url":"https://gw","key":"sk-vk"}]}]}"#,
+        )
+        .expect("write state");
+
+        let launch = resolve_launch_agent(&codex, &runtime_home, &BTreeMap::new());
+        assert_eq!(
+            launch.status,
+            ResolvedAgentStatus::Ready,
+            "an enrolled gateway route must make the agent launch-ready (issue #1106)"
+        );
+
+        // The route is scoped to codex: claude (no route, agent process not
+        // installed on this clean home) is not made ready by codex's route.
+        let claude = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Claude)
+            .expect("missing Claude descriptor");
+        let claude_launch = resolve_launch_agent(&claude, &runtime_home, &BTreeMap::new());
+        assert_ne!(
+            claude_launch.status,
+            ResolvedAgentStatus::Ready,
+            "a codex-only route must not make claude launch-ready"
+        );
+
+        let _ = std::fs::remove_dir_all(runtime_home);
     }
 }

@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
 use crate::domains::agents::catalog::settings::resolve_settings_deltas;
-use crate::domains::agents::readiness::service::resolve_agent_with_env;
+use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::agents::route_auth::resolve_launch_route_auth;
 use crate::domains::agents::route_auth::state::load_state_file;
@@ -314,8 +314,10 @@ impl SessionRuntime {
             .map_err(StartSessionError::Internal)?;
         let readiness_env = workspace_env.clone();
         let agent_resolution_started = Instant::now();
-        let resolved_agent =
-            resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
+        // Route-aware launch readiness keeps the resolved agent's credential
+        // state consistent with create/launch-options for gateway routes
+        // (issue #1106); the live launch injects the route env below regardless.
+        let resolved_agent = resolve_launch_agent(&descriptor, &self.runtime_home, &readiness_env);
         tracing::info!(
             session_id = %record.id,
             agent_kind = %record.agent_kind,

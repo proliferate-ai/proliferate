@@ -136,3 +136,102 @@ fn absent_current_origin_signal_still_injects_no_regression() {
 
     assert_eq!(rendered.set.get("ANTHROPIC_AUTH_TOKEN").unwrap(), VK);
 }
+
+// --- launch_route_provides_credentials: the readiness predicate must judge the
+// EXACT credential state resolve_launch_route_auth_for_server would inject
+// (issue #1106). These mirror the render tests above one-for-one so the two can
+// never drift. ---
+
+fn api_key_state(kind: &str, env_var_name: &str) -> serde_json::Value {
+    json!({
+        "version": 2,
+        "revision": 7,
+        "harnesses": [
+            {
+                "harness_kind": kind,
+                "sources": [
+                    { "kind": "api_key", "env_var_name": env_var_name, "value": "sk-raw" },
+                ],
+            },
+        ],
+    })
+}
+
+#[test]
+fn readiness_sees_a_matching_gateway_route_as_credential_providing() {
+    let home = TempHome::new("readiness-gateway-match");
+    home.write_state_json(&stamped_gateway_state(
+        "claude",
+        Some("https://proliferate.corp.example"),
+    ));
+    assert!(super::launch_route_provides_credentials_for_server(
+        home.path(),
+        "claude",
+        Some("https://proliferate.corp.example"),
+    ));
+    // A harness the state file never configured resolves Native → not route-provided.
+    assert!(!super::launch_route_provides_credentials_for_server(
+        home.path(),
+        "codex",
+        Some("https://proliferate.corp.example"),
+    ));
+}
+
+#[test]
+fn readiness_ignores_a_mismatched_origin_route_exactly_like_launch() {
+    // The launcher treats an origin-mismatched state as native/no-injection, so
+    // readiness must too — otherwise readiness would pass while launch would not
+    // actually inject the abandoned server's gateway token.
+    let home = TempHome::new("readiness-gateway-mismatch");
+    home.write_state_json(&stamped_gateway_state(
+        "claude",
+        Some("https://old-server.example"),
+    ));
+    assert!(!super::launch_route_provides_credentials_for_server(
+        home.path(),
+        "claude",
+        Some("https://new-server.example"),
+    ));
+}
+
+#[test]
+fn readiness_sees_an_api_key_route_as_credential_providing() {
+    let home = TempHome::new("readiness-api-key");
+    home.write_state_json(&api_key_state("codex", "OPENAI_API_KEY"));
+    assert!(super::launch_route_provides_credentials_for_server(
+        home.path(),
+        "codex",
+        None,
+    ));
+}
+
+#[test]
+fn readiness_treats_absent_and_malformed_state_as_no_route() {
+    // Absent file: no route → native readiness governs.
+    let absent = TempHome::new("readiness-absent");
+    assert!(!super::launch_route_provides_credentials_for_server(
+        absent.path(),
+        "claude",
+        None,
+    ));
+    // Malformed file: tolerated as "no route" (never fail readiness closed on a
+    // state file the launcher itself tolerates until it heals).
+    let malformed = TempHome::new("readiness-malformed");
+    malformed.write_state_raw(b"{ not json");
+    assert!(!super::launch_route_provides_credentials_for_server(
+        malformed.path(),
+        "claude",
+        None,
+    ));
+}
+
+#[test]
+fn readiness_honors_legacy_unstamped_route_no_regression() {
+    let home = TempHome::new("readiness-legacy");
+    home.write_state_json(&stamped_gateway_state("claude", None));
+    assert!(super::launch_route_provides_credentials_for_server(
+        home.path(),
+        "claude",
+        Some("https://proliferate.corp.example"),
+    ));
+}

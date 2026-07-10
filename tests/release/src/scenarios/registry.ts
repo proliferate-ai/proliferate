@@ -3,6 +3,7 @@ import { t3Prov1 } from "./t3-prov-1.js";
 import { t3Prov2 } from "./t3-prov-2.js";
 import { t3Wt1 } from "./t3-wt-1.js";
 import { t3Chat1 } from "./t3-chat-1.js";
+import { t3Gw1 } from "./t3-gw-1.js";
 import { t3Cfg1 } from "./t3-cfg-1.js";
 import { t3Update1 } from "./t3-update-1.js";
 import { t3SecMat1 } from "./t3-sec-mat-1.js";
@@ -31,6 +32,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Prov2,
   t3Wt1,
   t3Chat1,
+  t3Gw1,
   t3Cfg1,
   t3Update1,
   t3SecMat1,
