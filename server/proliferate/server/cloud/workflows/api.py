@@ -31,7 +31,15 @@ from proliferate.server.cloud.workflows.delivery import (
     deliver_cloud_run,
     refresh_cloud_run,
 )
+from proliferate.server.cloud.workflows.local_executor import (
+    claim_local_workflow_runs,
+    heartbeat_local_workflow_run,
+)
 from proliferate.server.cloud.workflows.models import (
+    LocalWorkflowClaimActionRequest,
+    LocalWorkflowClaimListResponse,
+    LocalWorkflowClaimMutationResponse,
+    LocalWorkflowClaimRequest,
     PollInputSpecResponse,
     PollInspectRequest,
     PollInspectResponse,
@@ -215,7 +223,17 @@ async def report_run_status_endpoint(
 ) -> WorkflowRunResponse:
     # D18 (E7): run token (anyharness self-report) OR user session (local relay).
     actor = await _authorize_run_report(db, run_id=run_id, request=request, user=user)
-    return run_payload(await report_run_status(db, actor, run_id, body))
+    # The claim-ownership guard (2a) applies only to the owner-authed relay path; the
+    # runtime's token-authed self-report is guarded by claim-time token rotation.
+    return run_payload(
+        await report_run_status(
+            db,
+            actor,
+            run_id,
+            body,
+            authed_via_run_token=isinstance(actor, _RunTokenActor),
+        )
+    )
 
 
 @router.post("/runs/{run_id}/cancel", response_model=WorkflowRunResponse)
@@ -315,6 +333,40 @@ async def run_ping_endpoint(
             # not a transition; the scheduler phase-3 sweep remains the backstop.
             pass
     return Response(status_code=202)
+
+
+# --- desktop executor claim plane (track 2a) -----------------------------------
+# Literal paths declared BEFORE the "/{workflow_id}" param routes (same reason the
+# "/runs" routes lead). Auth = the desktop's user session; every claim is
+# owner-scoped in the service, so a session can only claim its own local runs.
+
+
+@router.post("/executor/local/claims", response_model=LocalWorkflowClaimListResponse)
+async def claim_local_workflow_runs_endpoint(
+    body: LocalWorkflowClaimRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> LocalWorkflowClaimListResponse:
+    """Claim a batch of this owner's ``claimable`` (or stale-reclaimable) local
+    scheduled runs for a desktop executor (the 10s claim poll)."""
+
+    return await claim_local_workflow_runs(db, user.id, body)
+
+
+@router.post(
+    "/executor/local/runs/{run_id}/heartbeat",
+    response_model=LocalWorkflowClaimMutationResponse,
+)
+async def heartbeat_local_workflow_run_endpoint(
+    run_id: UUID,
+    body: LocalWorkflowClaimActionRequest,
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(current_product_user),
+) -> LocalWorkflowClaimMutationResponse:
+    """Renew a live claim's TTL (the 30s heartbeat). ``accepted=false`` means the
+    claim was lost (reclaimed / terminal / expired) and the executor must stop."""
+
+    return await heartbeat_local_workflow_run(db, user.id, run_id, body)
 
 
 @router.get("/slack/channels", response_model=SlackChannelsResponse)

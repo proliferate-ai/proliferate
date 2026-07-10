@@ -3,21 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
+    WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES,
+    WORKFLOW_LOCAL_RECLAIMABLE_STATUSES,
     WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
     WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED,
+    WORKFLOW_RUN_STATUS_CLAIMABLE,
+    WORKFLOW_RUN_STATUS_CLAIMED,
     WORKFLOW_RUN_STATUS_MISSED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_TERMINAL_STATUSES,
     WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
+    WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db.models.cloud.workflows import (
@@ -82,6 +87,12 @@ class WorkflowRunRecord:
     started_at: datetime | None
     finished_at: datetime | None
     stopped_by_user_id: UUID | None = None
+    # Desktop-executor claim plane (2a); set only on local scheduled runs.
+    executor_id: str | None = None
+    claim_id: UUID | None = None
+    claimed_at: datetime | None = None
+    claim_expires_at: datetime | None = None
+    last_heartbeat_at: datetime | None = None
 
 
 def _workflow_record(row: Workflow) -> WorkflowRecord:
@@ -142,6 +153,11 @@ def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
         started_at=row.started_at,
         finished_at=row.finished_at,
         stopped_by_user_id=row.stopped_by_user_id,
+        executor_id=row.executor_id,
+        claim_id=row.claim_id,
+        claimed_at=row.claimed_at,
+        claim_expires_at=row.claim_expires_at,
+        last_heartbeat_at=row.last_heartbeat_at,
     )
 
 
@@ -423,6 +439,7 @@ async def create_run(
     anyharness_workspace_id: str | None = None,
     trigger_id: UUID | None = None,
     scheduled_for: datetime | None = None,
+    status: str = WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
 ) -> WorkflowRunRecord:
     now = utcnow()
     row = WorkflowRun(
@@ -436,7 +453,7 @@ async def create_run(
         args_json=args_json,
         target_mode=target_mode,
         resolved_plan_json=resolved_plan_json,
-        status=WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
+        status=status,
         step_cursor=None,
         # For cloud runs the delivery target workspace is known up front and
         # never changes; recording it lets delivery + refresh resolve the sandbox
@@ -736,6 +753,115 @@ async def list_pending_scheduled_cloud_runs(
         .all()
     )
     return tuple(_run_record(row) for row in rows)
+
+
+# --- desktop executor claim plane (track 2a; local scheduled runs) ---------------
+#
+# Ports the automations claim machinery (automation_run_claims.py) to workflow
+# runs. These are direct, row-locked mutations — NOT runtime self-reports — so they
+# do not funnel through the run_status transition guard; the claim/heartbeat rules
+# live here. A cloud run never matches (every predicate pins target_mode=local).
+
+
+async def claim_local_workflow_runs(
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    executor_id: str,
+    claim_ttl: timedelta,
+    limit: int,
+    now: datetime,
+) -> tuple[WorkflowRunRecord, ...]:
+    """Atomically claim a batch of this owner's local runs for a desktop executor.
+
+    Selects two kinds of run (``FOR UPDATE SKIP LOCKED``, FIFO by slot): a fresh
+    ``claimable`` run, or a ``claimed`` run whose heartbeat lapsed past its TTL
+    (the laptop closed pre-run — reclaimable). Each claimed row gets a *new*
+    ``claim_id`` so a stale executor's later heartbeat/report is rejected, which is
+    what makes the reclaim happen exactly once: two racing claimers contend on the
+    row lock, the loser's ``SKIP LOCKED`` (or the now-fresh claim on re-read) drops
+    it. A ``running`` run is deliberately NOT reclaimable — silently re-running it
+    would double-execute; it waits for take-over (D15), like a stuck cloud run.
+    """
+
+    predicates = [
+        WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_LOCAL,
+        WorkflowRun.executor_user_id == user_id,
+        or_(
+            WorkflowRun.status == WORKFLOW_RUN_STATUS_CLAIMABLE,
+            and_(
+                WorkflowRun.status.in_(tuple(WORKFLOW_LOCAL_RECLAIMABLE_STATUSES)),
+                WorkflowRun.claim_expires_at.is_not(None),
+                WorkflowRun.claim_expires_at <= now,
+            ),
+        ),
+    ]
+    rows = list(
+        (
+            await db.execute(
+                select(WorkflowRun)
+                .where(*predicates)
+                .order_by(*_RUN_ORDER)
+                .limit(max(1, limit))
+                .with_for_update(skip_locked=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    expires_at = now + claim_ttl
+    claimed: list[WorkflowRunRecord] = []
+    for row in rows:
+        row.status = WORKFLOW_RUN_STATUS_CLAIMED
+        row.executor_id = executor_id
+        row.claim_id = uuid4()
+        row.claimed_at = now
+        row.claim_expires_at = expires_at
+        row.last_heartbeat_at = now
+        row.updated_at = now
+        claimed.append(_run_record(row))
+    await db.flush()
+    return tuple(claimed)
+
+
+async def heartbeat_local_workflow_run(
+    db: AsyncSession,
+    *,
+    run_id: UUID,
+    claim_id: UUID,
+    user_id: UUID,
+    claim_ttl: timedelta,
+    now: datetime,
+) -> WorkflowRunRecord | None:
+    """Extend a live claim's TTL. Returns the run when the heartbeat is accepted,
+    ``None`` when the (run_id, claim_id) pair no longer owns an active local claim
+    (reclaimed by another executor, terminal, or expired) — the executor must then
+    stop, its claim is gone.
+    """
+
+    row = (
+        await db.execute(
+            select(WorkflowRun)
+            .where(
+                WorkflowRun.id == run_id,
+                WorkflowRun.claim_id == claim_id,
+                WorkflowRun.executor_user_id == user_id,
+                WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_LOCAL,
+                WorkflowRun.status.in_(tuple(WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES)),
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    if row is None or row.claim_expires_at is None or row.claim_expires_at <= now:
+        # An expired claim is NOT silently revived: the run is already reclaimable
+        # by another executor, so the stale holder must lose. (Matches the
+        # automations ``claim_is_active`` guard.)
+        return None
+    row.claim_expires_at = now + claim_ttl
+    row.last_heartbeat_at = now
+    row.updated_at = now
+    await db.flush()
+    return _run_record(row)
 
 
 # --- step actions (PR A) ---------------------------------------------------------

@@ -15,6 +15,7 @@ import {
   coerceRunStatus,
   deriveStepRunViews,
   isTerminalRunStatus,
+  shouldPollRun,
   workflowRunStatusDetail,
   workflowRunStatusLabel,
   workflowRunStatusTone,
@@ -488,6 +489,33 @@ describe("run-status: unrecognized wire status (future-status readiness)", () =>
   it("falls back to a generic label when there is no usable raw value", () => {
     expect(workflowRunStatusLabel("unknown")).toBe("Unknown");
     expect(workflowRunStatusLabel("unknown", 42)).toBe("Unknown");
+  });
+});
+
+// 2a: the desktop-executor lane adds two waiting statuses a local scheduled run
+// occupies before its relay reports `running`. They must be first-class client
+// statuses — non-terminal (keep polling), quietly labelled, never coerced to the
+// terminal `unknown` sentinel (which would stop polling + render attention).
+describe("run status presentation — desktop claim lane (2a: claimable + claimed)", () => {
+  it("round-trips both statuses over the wire instead of coercing to unknown", () => {
+    expect(coerceRunStatus("claimable")).toBe("claimable");
+    expect(coerceRunStatus("claimed")).toBe("claimed");
+  });
+
+  it("treats both as NON-terminal so the run view keeps polling a waiting run", () => {
+    expect(isTerminalRunStatus("claimable")).toBe(false);
+    expect(isTerminalRunStatus("claimed")).toBe(false);
+    expect(shouldPollRun("claimable")).toBe(true);
+    expect(shouldPollRun("claimed")).toBe(true);
+  });
+
+  it("labels them quietly with running-adjacent (not attention/danger) tones", () => {
+    expect(workflowRunStatusLabel("claimable")).toBe("Waiting for device");
+    expect(workflowRunStatusLabel("claimed")).toBe("Starting on device");
+    expect(workflowRunStatusTone("claimable")).toBe("muted");
+    expect(workflowRunStatusTone("claimed")).toBe("running");
+    expect(workflowRunStatusDetail("claimable")).toMatch(/waiting for a signed-in device/i);
+    expect(workflowRunStatusDetail("claimed")).toMatch(/claimed this run/i);
   });
 });
 

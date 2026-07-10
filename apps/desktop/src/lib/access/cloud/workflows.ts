@@ -35,6 +35,10 @@ export type SlackChannelResponse = Schemas["SlackChannelResponse"];
 export type SlackChannelsResponse = Schemas["SlackChannelsResponse"];
 export type PollInspectRequest = Schemas["PollInspectRequest"];
 export type PollInspectResponse = Schemas["PollInspectResponse"];
+export type LocalWorkflowClaimRequest = Schemas["LocalWorkflowClaimRequest"];
+export type LocalWorkflowClaimActionRequest = Schemas["LocalWorkflowClaimActionRequest"];
+export type LocalWorkflowClaimListResponse = Schemas["LocalWorkflowClaimListResponse"];
+export type LocalWorkflowClaimMutationResponse = Schemas["LocalWorkflowClaimMutationResponse"];
 
 export async function listWorkflows(includeArchived = false): Promise<WorkflowListResponse> {
   return getProliferateClient().requestJson<WorkflowListResponse>({
@@ -164,6 +168,39 @@ export async function refreshWorkflowRun(runId: string): Promise<WorkflowRunResp
     method: "GET",
     path: "/v1/cloud/workflows/runs/{run_id}/refresh",
     pathParams: { run_id: runId },
+  });
+}
+
+// --- desktop executor claim plane (track 2a; lifts L15) ------------------------
+
+/**
+ * Claim a batch of this owner's `claimable` (or stale-reclaimable) local
+ * scheduled runs for the desktop executor (the 10s claim poll). Owner-scoped by
+ * the caller's session on the server — a claim only ever touches your own runs.
+ */
+export async function claimLocalWorkflowRuns(
+  body: LocalWorkflowClaimRequest,
+): Promise<LocalWorkflowClaimListResponse> {
+  return getProliferateClient().requestJson<LocalWorkflowClaimListResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/executor/local/claims",
+    body,
+  });
+}
+
+/**
+ * Renew a live claim's TTL (the 30s heartbeat). `accepted=false` means the claim
+ * is gone (reclaimed / terminal / expired) and the executor must stop.
+ */
+export async function heartbeatLocalWorkflowRun(
+  runId: string,
+  body: LocalWorkflowClaimActionRequest,
+): Promise<LocalWorkflowClaimMutationResponse> {
+  return getProliferateClient().requestJson<LocalWorkflowClaimMutationResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/executor/local/runs/{run_id}/heartbeat",
+    pathParams: { run_id: runId },
+    body,
   });
 }
 

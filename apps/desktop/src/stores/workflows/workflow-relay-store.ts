@@ -13,6 +13,14 @@ import { create } from "zustand";
 export interface RelayRunRegistration {
   workspaceId: string;
   runtimeUrl: string;
+  /**
+   * The claim this device holds on a LOCAL scheduled run (2a). The relay stamps it
+   * onto every `/status` report so the server can reject a stale laptop whose run
+   * was reclaimed by another device (the same user owns both, so the server can't
+   * tell them apart from owner auth alone). Null for a manual/chat local run, which
+   * has no claim.
+   */
+  claimId?: string | null;
 }
 
 interface WorkflowRelayStoreState {
@@ -27,6 +35,7 @@ export const useWorkflowRelayStore = create<WorkflowRelayStoreState>((set) => ({
     set((state) =>
       state.runs[runId]?.workspaceId === registration.workspaceId
         && state.runs[runId]?.runtimeUrl === registration.runtimeUrl
+        && (state.runs[runId]?.claimId ?? null) === (registration.claimId ?? null)
         ? state
         : { runs: { ...state.runs, [runId]: registration } },
     ),

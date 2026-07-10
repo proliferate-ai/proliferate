@@ -114,4 +114,27 @@ describe("planRelayReports", () => {
     expect(terminal?.anyharnessSessionIds).toEqual(["sess-1"]);
     expect(terminal?.stepOutputs).toEqual({ "0": { session_id: "sess-1" } });
   });
+
+  // 2a: a claimed local scheduled run's relay must stamp the held claim onto every
+  // report so the server can reject a reclaimed laptop's stale relay (owner auth
+  // can't tell two of the same user's devices apart).
+  it("stamps the held claim id onto every report when one is supplied", () => {
+    const { reports } = planRelayReports(
+      initialRelayState(),
+      view({ status: "completed", stepCursor: 2 }),
+      { claimId: "claim-xyz" },
+    );
+    expect(reports.map((r) => r.status)).toEqual(["running", "completed"]);
+    expect(reports.every((r) => r.claimId === "claim-xyz")).toBe(true);
+  });
+
+  it("omits claimId for a manual/chat local run that carries no claim", () => {
+    const { reports } = planRelayReports(initialRelayState(), view({ status: "running" }));
+    expect(reports[0].claimId).toBeUndefined();
+    // A null claim (an unclaimed run) is also treated as absent.
+    const withNull = planRelayReports(initialRelayState(), view({ status: "running" }), {
+      claimId: null,
+    });
+    expect(withNull.reports[0].claimId).toBeUndefined();
+  });
 });

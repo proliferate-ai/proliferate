@@ -131,6 +131,8 @@ class WorkflowRun(Base):
         CheckConstraint(
             "status IN ("
             "'pending_delivery', "
+            "'claimable', "
+            "'claimed', "
             "'delivered', "
             "'running', "
             "'waiting_approval', "
@@ -166,6 +168,23 @@ class WorkflowRun(Base):
             "scheduled_for",
             unique=True,
             postgresql_where=text("trigger_id IS NOT NULL AND scheduled_for IS NOT NULL"),
+        ),
+        # Desktop-executor claim plane (2a). The claim poll scans an owner's
+        # claimable + reclaimable-stale local runs; keep it partial so cloud runs
+        # (and terminal history) never touch these indexes.
+        Index(
+            "ix_workflow_run_local_claimable",
+            "executor_user_id",
+            "created_at",
+            postgresql_where=text("target_mode = 'local' AND status = 'claimable'"),
+        ),
+        Index(
+            "ix_workflow_run_local_claim_expiry",
+            "claim_expires_at",
+            postgresql_where=text(
+                "target_mode = 'local' AND status = 'claimed' "
+                "AND claim_expires_at IS NOT NULL"
+            ),
         ),
     )
 
@@ -222,6 +241,20 @@ class WorkflowRun(Base):
     stopped_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("user.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    # --- desktop-executor claim plane (track 2a; local scheduled runs only). ----
+    # A local scheduled run is created ``claimable`` with these NULL; a desktop
+    # executor's claim stamps them (mirrors the automations run claim row). Cloud
+    # runs never set them. ``claim_id`` rotates on every (re)claim so a stale
+    # executor's heartbeat/report against an old claim is rejected.
+    executor_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    claim_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 

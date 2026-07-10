@@ -15,6 +15,13 @@ import { workflowStepKindLabel, WORKFLOW_STEP_META } from "./presentation";
 
 export const WORKFLOW_RUN_STATUSES = [
   "pending_delivery",
+  // Desktop-executor lane (2a): a local scheduled run is born `claimable` (waiting
+  // for a signed-in device's poller) and becomes `claimed` once a device picks it
+  // up, before its relay reports `running`. Both are NON-terminal waiting states —
+  // the run view must keep polling and render them quietly, never coerce them to
+  // the terminal `unknown` sentinel.
+  "claimable",
+  "claimed",
   "delivered",
   "running",
   "waiting_approval",
@@ -77,6 +84,10 @@ export function workflowRunStatusLabel(status: WorkflowRunStatus, detail?: unkno
   switch (status) {
     case "pending_delivery":
       return "Queued";
+    case "claimable":
+      return "Waiting for device";
+    case "claimed":
+      return "Starting on device";
     case "delivered":
       return "Starting";
     case "running":
@@ -100,7 +111,12 @@ export function workflowRunStatusTone(status: WorkflowRunStatus): WorkflowStatus
   switch (status) {
     case "pending_delivery":
     case "delivered":
+    case "claimable":
+      // Quiet waiting states, like queued/starting — not attention.
       return "muted";
+    case "claimed":
+      // A device picked it up and is starting — running-adjacent, still quiet.
+      return "running";
     case "running":
       return "running";
     case "waiting_approval":
@@ -146,6 +162,12 @@ export function workflowRunStatusDetail(
   }
   if (status === "missed") {
     return "This scheduled occurrence wasn't run — kept for history only, no sandbox launched.";
+  }
+  if (status === "claimable") {
+    return "Waiting for a signed-in device to pick up this run.";
+  }
+  if (status === "claimed") {
+    return "A device claimed this run and is starting it.";
   }
   return null;
 }
@@ -409,6 +431,9 @@ function baseStepStatus(
       return isGoalStep ? "goal_iterating" : "running";
     case "delivered":
     case "pending_delivery":
+    case "claimable":
+    case "claimed":
+      // Pre-execution waiting states — the timeline shows every step pending.
       return "pending";
     case "missed":
       // Never actually reached — a missed run has no resolved plan/timeline to

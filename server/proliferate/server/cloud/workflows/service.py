@@ -29,11 +29,14 @@ from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_TRIGGER_TYPES,
     WORKFLOW_ISOLATION_DEFAULT,
     WORKFLOW_ISOLATION_WORKTREE,
+    WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES,
     WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
     WORKFLOW_RUN_OBSERVABLE_STATUSES,
+    WORKFLOW_RUN_STATUS_CLAIMABLE,
     WORKFLOW_RUN_STATUS_DELIVERED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_STATUS_RUNNING,
+    WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
     WORKFLOW_SESSION_BINDING_FRESH,
     WORKFLOW_SESSION_BINDING_HEADLESS,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
@@ -686,6 +689,17 @@ async def start_run(
         agents=resolved_agents,
         isolation=isolation,
     )
+    # Desktop-executor lane (2a, lifts L15): a server-created LOCAL run (a schedule
+    # trigger firing on a local target) is born ``claimable`` — nothing on the
+    # server delivers it; it waits for a desktop executor to claim it. A local
+    # manual/chat run stays ``pending_delivery``: the desktop that called StartRun
+    # already holds the plan and delivers it to its own runtime + calls /delivered.
+    is_server_delivered = trigger_kind in WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS
+    initial_status = (
+        WORKFLOW_RUN_STATUS_CLAIMABLE
+        if target_mode == WORKFLOW_TARGET_MODE_LOCAL and is_server_delivered
+        else WORKFLOW_RUN_STATUS_PENDING_DELIVERY
+    )
     run = await store.create_run(
         db,
         run_id=run_id,
@@ -699,6 +713,7 @@ async def start_run(
         anyharness_workspace_id=cloud_anyharness_workspace_id,
         trigger_id=trigger_id,
         scheduled_for=scheduled_for,
+        status=initial_status,
     )
 
     # Mint the per-run gateway token for EVERY run (L16), both lanes, empty scope
@@ -752,7 +767,12 @@ def _parse_cost(value: float | None) -> Decimal | None:
 
 
 async def report_run_status(
-    db: AsyncSession, user: ActorIdentity, run_id: UUID, body: RunStatusRequest
+    db: AsyncSession,
+    user: ActorIdentity,
+    run_id: UUID,
+    body: RunStatusRequest,
+    *,
+    authed_via_run_token: bool = False,
 ) -> WorkflowRunRecord:
     await _visible_run(db, user=user, run_id=run_id)
     if body.status not in WORKFLOW_RUN_OBSERVABLE_STATUSES:
@@ -764,6 +784,36 @@ async def report_run_status(
     locked = await store.lock_run(db, run_id)
     if locked is None:
         raise CloudApiError("workflow_run_not_found", "Workflow run not found.", status_code=404)
+
+    # Desktop-executor lane (2a) claim ownership. Token rotation at claim time
+    # (local_executor.claim_local_workflow_runs) already 401s a reclaimed laptop's
+    # runtime on the token-authed path. This closes the OTHER path: the desktop relay
+    # reports observed state via OWNER auth, and the same user owns both laptops, so
+    # the token check can't tell them apart. For a LOCAL run a desktop still holds a
+    # live claim on (claimed/running/waiting_approval), an owner-authed report must
+    # carry the CURRENT claim_id; a stale or missing one is rejected so laptop A's
+    # relay can't clobber the run laptop B reclaimed. The runtime's own token-authed
+    # self-report (authed_via_run_token) and every cloud run skip this — a cloud run
+    # has no claim_id and its behavior is unchanged.
+    if (
+        not authed_via_run_token
+        and locked.target_mode == WORKFLOW_TARGET_MODE_LOCAL
+        and locked.claim_id is not None
+        and locked.status in WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES
+    ):
+        if body.claim_id is None:
+            raise CloudApiError(
+                "workflow_run_claim_required",
+                "A claim id is required to report status on a claimed local run.",
+                status_code=409,
+            )
+        if body.claim_id != locked.claim_id:
+            raise CloudApiError(
+                "workflow_run_stale_claim",
+                "This claim no longer owns the run; it was reclaimed by another device.",
+                status_code=409,
+            )
+
     try:
         check_transition(locked.status, body.status)
     except RunTransitionError as exc:
@@ -831,12 +881,16 @@ async def get_run(db: AsyncSession, user: ActorIdentity, run_id: UUID) -> Workfl
 # (identical hourly/daily cursor rules), arg coverage via ``coerce_arguments``
 # (so required args must be covered), workspace ownership via the helper above.
 #
-# Local schedule decision (v1): **rejected at create**. The workflow local lane is
-# entirely client-initiated (the desktop calls StartRun, hands the plan to its own
-# runtime, and relays state); there is no server→desktop claim protocol for
-# workflow runs and no repo/workspace binding to tell an executor *where* to run.
-# Building that is the automations claim machinery again — out of scope — so
-# scheduled runs are cloud-only until it lands.
+# Local SCHEDULE triggers (track 2a): supported. This lifts the v1 L15 reject by
+# building the server→desktop claim protocol — a due local schedule trigger fires a
+# ``claimable`` run a desktop executor claims (see the claim plane in the store +
+# local_executor). A local schedule trigger keeps its repo pin (D16 CHECK; it tells
+# the desktop which local worktree) but does NOT derive a cloud workspace
+# (target_workspace_id stays NULL — the local CHECK invariant).
+#
+# Local POLL triggers stay rejected: poll runs are created per-item by the poller,
+# not by the missed-run-aware scheduler, so the claim/missed-run machinery this
+# track adds does not cover them yet (follow-up).
 
 
 def _validate_trigger_kind(kind: str) -> None:
@@ -869,20 +923,22 @@ def _validate_missed_run_policy(policy: str) -> None:
 def _validate_trigger_target_mode(
     mode: str, *, kind: str = WORKFLOW_TRIGGER_KIND_SCHEDULE
 ) -> None:
-    # Locked v1 decision (spec 5.1/5.3): schedule AND poll triggers are cloud-only
-    # (no server→desktop claim protocol exists). Reject local cleanly rather than
-    # record a run nobody delivers.
     is_poll = kind == WORKFLOW_TRIGGER_KIND_POLL
     if mode == WORKFLOW_TARGET_MODE_LOCAL:
-        raise CloudApiError(
-            "poll_local_unsupported" if is_poll else "schedule_local_unsupported",
-            _POLL_LOCAL_UNSUPPORTED_MESSAGE if is_poll else _TRIGGER_LOCAL_UNSUPPORTED_MESSAGE,
-            status_code=400,
-        )
+        # 2a: local SCHEDULE triggers are now a real path (desktop claim plane).
+        # Local POLL triggers remain cloud-only until the poller lane learns the
+        # claim/missed-run protocol.
+        if is_poll:
+            raise CloudApiError(
+                "poll_local_unsupported",
+                _POLL_LOCAL_UNSUPPORTED_MESSAGE,
+                status_code=400,
+            )
+        return
     if mode != WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
         raise CloudApiError(
             "invalid_target_mode",
-            "target_mode must be 'personal_cloud' for "
+            "target_mode must be 'personal_cloud' or 'local' for "
             + ("poll" if is_poll else "scheduled")
             + " triggers.",
             status_code=400,
@@ -1237,11 +1293,20 @@ async def create_trigger(
     _validate_concurrency(body.concurrency_policy)
     _validate_missed_run_policy(body.missed_run_policy)
     _validate_trigger_target_mode(body.target_mode, kind=body.kind)
-    # D16: the repo pin is the authored "where"; the server derives + owns the
-    # workspace it maps to.
-    target_workspace_id = await _ensure_trigger_target_workspace(
-        db, user=user, repo_full_name=body.repo_full_name
-    )
+    # D16: the repo pin is the authored "where". For a CLOUD target the server
+    # derives + owns the cloud workspace it maps to. For a LOCAL target (2a) the
+    # repo pin names the desktop's local worktree instead — no cloud workspace is
+    # provisioned and target_workspace_id stays NULL (the local CHECK invariant).
+    target_workspace_id: UUID | None = None
+    if body.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        target_workspace_id = await _ensure_trigger_target_workspace(
+            db, user=user, repo_full_name=body.repo_full_name
+        )
+    else:
+        # Local target: the repo pin names the desktop's local worktree — validate
+        # its "owner/name" shape (raises invalid_repo on missing/malformed) but do
+        # NOT provision a cloud workspace.
+        _split_repo_full_name(body.repo_full_name)
 
     if body.kind == WORKFLOW_TRIGGER_KIND_POLL:
         return await _create_poll_trigger(
@@ -1372,8 +1437,12 @@ async def update_trigger(
         and body.repo_full_name.strip() != (existing.repo_full_name or "")
     )
     repo_full_name = body.repo_full_name if repo_changed else existing.repo_full_name
-    if repo_changed:
-        target_workspace_id: UUID | None = await _ensure_trigger_target_workspace(
+    # Local targets never carry a cloud workspace (2a): re-pinning the repo only
+    # changes which local worktree the desktop uses. Cloud targets re-derive.
+    if target_mode == WORKFLOW_TARGET_MODE_LOCAL:
+        target_workspace_id: UUID | None = None
+    elif repo_changed:
+        target_workspace_id = await _ensure_trigger_target_workspace(
             db, user=user, repo_full_name=body.repo_full_name
         )
     else:

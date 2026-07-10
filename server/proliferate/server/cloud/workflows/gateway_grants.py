@@ -164,6 +164,31 @@ async def mint_run_gateway_token(
     return token, build_gateway_plan_block(token=token, run_id=run_id, scope=scope)
 
 
+async def rotate_run_gateway_token(
+    db: AsyncSession,
+    *,
+    run_id: UUID,
+    owner_user_id: UUID,
+    scope: dict[str, dict[str, object]],
+) -> tuple[str, dict[str, object]]:
+    """Rotate a run's per-run gateway token (track 2a claim/reclaim).
+
+    Expires the run's existing active token(s) and mints a fresh one bound to the
+    same run + scope. Used on every local claim/reclaim so a laptop that lost the
+    run (reclaimed by another device) is left holding an EXPIRED token: the gateway
+    refuses its calls and the token-authed ``/status`` path 401s it
+    (``get_active_run_gateway_token_by_hash`` already filters on status=active AND
+    unexpired). Returns the same ``(plaintext_token, gateway_block)`` pair as
+    :func:`mint_run_gateway_token` so the caller can fold it into the resolved plan
+    it hands the new claimant, exactly mirroring StartRun's mint+embed.
+    """
+
+    await store.expire_run_gateway_tokens_for_run(db, workflow_run_id=run_id)
+    return await mint_run_gateway_token(
+        db, run_id=run_id, owner_user_id=owner_user_id, scope=scope
+    )
+
+
 def _ping_url(run_id: UUID) -> str:
     base = worker_cloud_base_url()
     if not base:

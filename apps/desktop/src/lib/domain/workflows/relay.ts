@@ -42,6 +42,13 @@ export interface RelayStatusReport {
   anyharnessSessionIds: string[] | null;
   errorCode: string | null;
   errorMessage: string | null;
+  /**
+   * The claim this device holds on the run (2a). Stamped onto every report for a
+   * claimed LOCAL scheduled run so the server can reject a reclaimed laptop's stale
+   * relay (owner auth alone can't tell two of the same user's devices apart).
+   * Omitted for a manual/chat local run, which carries no claim.
+   */
+  claimId?: string;
 }
 
 export interface RelayRunState {
@@ -82,6 +89,7 @@ function signatureFor(
 export function planRelayReports(
   prev: RelayRunState,
   view: RelayObservedRun,
+  options?: { claimId?: string | null },
 ): { reports: RelayStatusReport[]; state: RelayRunState } {
   const outputs = stepOutputsFrom(view);
   const base = {
@@ -91,6 +99,9 @@ export function planRelayReports(
     anyharnessSessionIds: view.sessionIds ?? null,
     errorCode: view.errorCode ?? null,
     errorMessage: view.errorMessage ?? null,
+    // Thread the held claim (2a) onto every report so a reclaimed laptop's stale
+    // relay is rejected. Absent for a manual/chat local run (no claim).
+    ...(options?.claimId ? { claimId: options.claimId } : {}),
   };
   const reports: RelayStatusReport[] = [];
   const state: RelayRunState = { ...prev };

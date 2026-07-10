@@ -12,6 +12,7 @@ import {
   planRelayReports,
   type RelayRunState,
 } from "@/lib/domain/workflows/relay";
+import { shouldReattachLocalRun } from "@/lib/domain/workflows/local-executor";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import {
   useWorkflowRelayStore,
@@ -20,8 +21,6 @@ import {
 import { workflowRunDetailKey, workflowRunsKey } from "./query-keys";
 
 const RELAY_POLL_INTERVAL_MS = 2000;
-const LOCAL_TARGET_MODE = "local";
-const NON_TERMINAL_DELIVERED = new Set(["delivered", "running", "waiting_approval"]);
 
 /**
  * Top-level relay for the desktop lane (spec 3.2). While the app is open it polls
@@ -57,11 +56,11 @@ export function useLocalWorkflowRelay(): void {
           return;
         }
         for (const run of serverRuns) {
-          if (
-            run.targetMode === LOCAL_TARGET_MODE
-            && NON_TERMINAL_DELIVERED.has(run.status)
-            && run.anyharnessWorkspaceId
-          ) {
+          // Re-attach any local run the server advanced past delivery + recorded a
+          // workspace for (a manual local run, or a claimed scheduled run whose
+          // relay already reported `running`). A still-`claimed` run with no
+          // workspace is left to the claim poller to re-claim + re-deliver.
+          if (shouldReattachLocalRun(run) && run.anyharnessWorkspaceId) {
             relayState.current.set(run.id, {
               ...initialRelayState(),
               // The server already advanced past delivery, so `running` is reported.
@@ -70,6 +69,10 @@ export function useLocalWorkflowRelay(): void {
             register(run.id, {
               workspaceId: run.anyharnessWorkspaceId,
               runtimeUrl,
+              // Thread the claim this run carries (2a) so relayed reports remain
+              // authorized at claim granularity after a restart; null for a
+              // manual/chat local run, which has no claim.
+              claimId: run.claimId ?? null,
             });
           }
         }
@@ -96,7 +99,11 @@ export function useLocalWorkflowRelay(): void {
           runId,
         );
         const prev = relayState.current.get(runId) ?? initialRelayState();
-        const { reports, state } = planRelayReports(prev, view);
+        // Thread the held claim (2a) so each relayed report stays authorized at
+        // claim granularity — the server rejects a reclaimed laptop's stale relay.
+        const { reports, state } = planRelayReports(prev, view, {
+          claimId: registration.claimId,
+        });
         relayState.current.set(runId, state);
         for (const report of reports) {
           await reportWorkflowRunStatus(runId, report);

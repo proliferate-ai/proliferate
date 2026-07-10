@@ -96,6 +96,15 @@ class RunStatusRequest(WorkflowBaseModel):
     anyharness_session_ids: list[str] | None = Field(default=None, alias="anyharnessSessionIds")
     cost_usd: float | None = Field(default=None, alias="costUsd")
     cost_tokens: int | None = Field(default=None, alias="costTokens")
+    # Desktop-executor lane (2a) claim ownership. The desktop relay stamps the claim
+    # it holds onto every report for a LOCAL run. For a local run a desktop still
+    # holds a live claim on (claimed/running/waiting_approval), an owner-authed
+    # report whose claim_id != the run's CURRENT claim is rejected (409 stale_claim)
+    # and one that omits it is rejected too — so a laptop whose run was reclaimed by
+    # another device can't drive the run via owner-authed /status. Absent on cloud
+    # runs (the runtime self-reports via its per-run gateway token); behavior there
+    # is unchanged.
+    claim_id: UUID | None = Field(default=None, alias="claimId")
 
 
 # --- responses -----------------------------------------------------------------
@@ -165,6 +174,12 @@ class WorkflowRunResponse(WorkflowBaseModel):
     finished_at: str | None = Field(alias="finishedAt")
     # D15: the user who took over / cancelled the run (audit).
     stopped_by_user_id: str | None = Field(default=None, alias="stoppedByUserId")
+    # Desktop-executor claim plane (2a); populated only on claimed local runs.
+    executor_id: str | None = Field(default=None, alias="executorId")
+    claim_id: str | None = Field(default=None, alias="claimId")
+    claimed_at: str | None = Field(default=None, alias="claimedAt")
+    claim_expires_at: str | None = Field(default=None, alias="claimExpiresAt")
+    last_heartbeat_at: str | None = Field(default=None, alias="lastHeartbeatAt")
 
 
 class StepActionResponse(WorkflowBaseModel):
@@ -278,7 +293,43 @@ def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
         stopped_by_user_id=(
             str(record.stopped_by_user_id) if record.stopped_by_user_id else None
         ),
+        executor_id=record.executor_id,
+        claim_id=str(record.claim_id) if record.claim_id else None,
+        claimed_at=_iso(record.claimed_at),
+        claim_expires_at=_iso(record.claim_expires_at),
+        last_heartbeat_at=_iso(record.last_heartbeat_at),
     )
+
+
+# --- desktop executor claim plane (track 2a) -----------------------------------
+
+
+class LocalWorkflowClaimRequest(WorkflowBaseModel):
+    """A desktop executor's claim poll: identify the executor + cap the batch."""
+
+    executor_id: str = Field(alias="executorId")
+    limit: int = 5
+
+
+class LocalWorkflowClaimActionRequest(WorkflowBaseModel):
+    """A per-run action (heartbeat) proving which claim the executor holds."""
+
+    executor_id: str = Field(alias="executorId")
+    claim_id: UUID = Field(alias="claimId")
+
+
+class LocalWorkflowClaimListResponse(WorkflowBaseModel):
+    """Runs the poll claimed this cycle — each carries its resolved plan + claim."""
+
+    runs: list[WorkflowRunResponse]
+
+
+class LocalWorkflowClaimMutationResponse(WorkflowBaseModel):
+    """A heartbeat outcome: the refreshed run, or ``accepted=false`` when the claim
+    is no longer live (reclaimed / terminal / expired) and the executor must stop."""
+
+    run: WorkflowRunResponse | None = None
+    accepted: bool
 
 
 # --- triggers (spec 3.5) -------------------------------------------------------

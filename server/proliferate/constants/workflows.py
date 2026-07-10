@@ -42,6 +42,14 @@ SUPPORTED_WORKFLOW_TARGET_MODES: Final = frozenset(
 # the client marks it delivered once it has handed the resolved plan to a local/
 # cloud anyharness, and the runtime then reports observed transitions.
 WORKFLOW_RUN_STATUS_PENDING_DELIVERY: Final = "pending_delivery"
+# Desktop-executor lane (track 2a; lifts L15). A server-created *local* scheduled
+# run is born ``claimable`` (NOT ``pending_delivery`` — nothing on the server ever
+# delivers it): it waits for a desktop executor to claim it. The claim/heartbeat
+# lifecycle mirrors the automations claim row (``claimable`` -> ``claimed`` with a
+# heartbeat -> ``running`` -> terminal; a stale heartbeat makes a ``claimed`` run
+# reclaimable). Cloud runs never enter these two statuses.
+WORKFLOW_RUN_STATUS_CLAIMABLE: Final = "claimable"
+WORKFLOW_RUN_STATUS_CLAIMED: Final = "claimed"
 WORKFLOW_RUN_STATUS_DELIVERED: Final = "delivered"
 WORKFLOW_RUN_STATUS_RUNNING: Final = "running"
 WORKFLOW_RUN_STATUS_WAITING_APPROVAL: Final = "waiting_approval"
@@ -58,6 +66,8 @@ WORKFLOW_RUN_STATUS_MISSED: Final = "missed"
 SUPPORTED_WORKFLOW_RUN_STATUSES: Final = frozenset(
     {
         WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
+        WORKFLOW_RUN_STATUS_CLAIMABLE,
+        WORKFLOW_RUN_STATUS_CLAIMED,
         WORKFLOW_RUN_STATUS_DELIVERED,
         WORKFLOW_RUN_STATUS_RUNNING,
         WORKFLOW_RUN_STATUS_WAITING_APPROVAL,
@@ -93,6 +103,25 @@ WORKFLOW_RUN_STATUS_TRANSITIONS: Final[dict[str, frozenset[str]]] = {
             # onward (WORKFLOW_RUN_OBSERVABLE_STATUSES) and never sees a
             # pending_delivery run.
             WORKFLOW_RUN_STATUS_FAILED,
+        }
+    ),
+    # Desktop-executor lane (2a). A claimable run is claimed by a desktop executor
+    # (a direct, row-locked store mutation, not a runtime self-report) or cancelled
+    # by a pre-claim take-over. A claimed run's desktop relay then reports
+    # ``running`` via the same /status path the cloud lane uses (claim IS the local
+    # "delivery"; there is no separate /delivered step for the claimed lane), or the
+    # user takes it over (cancelled), or the executor reports an early failure.
+    WORKFLOW_RUN_STATUS_CLAIMABLE: frozenset(
+        {
+            WORKFLOW_RUN_STATUS_CLAIMED,
+            WORKFLOW_RUN_STATUS_CANCELLED,
+        }
+    ),
+    WORKFLOW_RUN_STATUS_CLAIMED: frozenset(
+        {
+            WORKFLOW_RUN_STATUS_RUNNING,
+            WORKFLOW_RUN_STATUS_FAILED,
+            WORKFLOW_RUN_STATUS_CANCELLED,
         }
     ),
     WORKFLOW_RUN_STATUS_DELIVERED: frozenset(
@@ -344,6 +373,32 @@ WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE: Final = 100
 # Each cloud delivery wakes a sandbox, so cap wakes per beat to keep it bounded
 # (the house automation loop bounds its per-tick work the same way).
 WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK: Final = 25
+
+# --- Desktop local executor claim plane (track 2a; lifts L15). -----------------
+# Ports the automations claim machinery to workflow runs. A server-created local
+# scheduled run is born ``claimable``; a desktop executor claims a batch (10s claim
+# poll), stamps a claim + heartbeat, and keeps it alive (30s heartbeat). If the
+# laptop closes and the heartbeat lapses past this TTL, a ``claimed`` (pre-run) row
+# is reclaimable by the next claim — exactly once, guarded by the row lock +
+# claim_id rotation (SKIP LOCKED). A run that already reached ``running`` is NEVER
+# silently reclaimed (that would double-execute); it waits for take-over (D15),
+# same as a stuck cloud run. TTL mirrors the automations claim TTL so the desktop's
+# existing 30s heartbeat cadence carries over unchanged.
+WORKFLOW_LOCAL_CLAIM_TTL_SECONDS: Final = 90
+WORKFLOW_LOCAL_CLAIM_MAX_LIMIT: Final = 25
+WORKFLOW_LOCAL_EXTERNAL_ID_MAX_LENGTH: Final = 255
+# Statuses a stale (heartbeat-lapsed) claim may be reclaimed FROM — the pre-run
+# state only. Mirrors the automations RECLAIMABLE set excluding dispatched states.
+WORKFLOW_LOCAL_RECLAIMABLE_STATUSES: Final = frozenset({WORKFLOW_RUN_STATUS_CLAIMED})
+# Statuses where a heartbeat is accepted (the claim is still meaningful): the
+# claimed pre-run state plus the live in-run states the desktop relay drives.
+WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES: Final = frozenset(
+    {
+        WORKFLOW_RUN_STATUS_CLAIMED,
+        WORKFLOW_RUN_STATUS_RUNNING,
+        WORKFLOW_RUN_STATUS_WAITING_APPROVAL,
+    }
+)
 
 # --- Sizing / abuse limits. ----------------------------------------------------
 WORKFLOW_SHORT_TEXT_MAX_LENGTH: Final = 255

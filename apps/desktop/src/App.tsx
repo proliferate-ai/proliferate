@@ -23,6 +23,7 @@ import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-r
 import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-auth-adoption"
 import { useLocalAuthStateSync } from "@/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
+import { useLocalWorkflowExecutor } from "@/hooks/workflows/lifecycle/use-local-workflow-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
 import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
@@ -223,6 +224,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_local_workflow_executor")
+  useLocalWorkflowExecutor()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_local_workflow_executor")
   recordBootDiagnosticOnce("app_runtime.render.before.use_home_deferred_launch_runner")
   useHomeDeferredLaunchRunner()
   recordBootDiagnosticOnce("app_runtime.render.after.use_home_deferred_launch_runner")

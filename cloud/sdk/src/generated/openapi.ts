@@ -1742,6 +1742,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workflows/executor/local/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Local Workflow Runs Endpoint
+         * @description Claim a batch of this owner's ``claimable`` (or stale-reclaimable) local
+         *     scheduled runs for a desktop executor (the 10s claim poll).
+         */
+        post: operations["claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/executor/local/runs/{run_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Heartbeat Local Workflow Run Endpoint
+         * @description Renew a live claim's TTL (the 30s heartbeat). ``accepted=false`` means the
+         *     claim was lost (reclaimed / terminal / expired) and the executor must stop.
+         */
+        post: operations["heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workflows/slack/channels": {
         parameters: {
             query?: never;
@@ -4488,6 +4530,50 @@ export interface components {
             /** Finalsurface */
             finalSurface: string;
         };
+        /**
+         * LocalWorkflowClaimActionRequest
+         * @description A per-run action (heartbeat) proving which claim the executor holds.
+         */
+        LocalWorkflowClaimActionRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Claimid
+             * Format: uuid
+             */
+            claimId: string;
+        };
+        /**
+         * LocalWorkflowClaimListResponse
+         * @description Runs the poll claimed this cycle — each carries its resolved plan + claim.
+         */
+        LocalWorkflowClaimListResponse: {
+            /** Runs */
+            runs: components["schemas"]["WorkflowRunResponse"][];
+        };
+        /**
+         * LocalWorkflowClaimMutationResponse
+         * @description A heartbeat outcome: the refreshed run, or ``accepted=false`` when the claim
+         *     is no longer live (reclaimed / terminal / expired) and the executor must stop.
+         */
+        LocalWorkflowClaimMutationResponse: {
+            run?: components["schemas"]["WorkflowRunResponse"] | null;
+            /** Accepted */
+            accepted: boolean;
+        };
+        /**
+         * LocalWorkflowClaimRequest
+         * @description A desktop executor's claim poll: identify the executor + cap the batch.
+         */
+        LocalWorkflowClaimRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Limit
+             * @default 5
+             */
+            limit: number;
+        };
         /** MetaResponse */
         MetaResponse: {
             /** Serverversion */
@@ -5082,9 +5168,9 @@ export interface components {
         };
         /**
          * PollInspectResponse
-         * @description Flow 1 result: the /init sample item (if any) plus the derived inputs
-         *     skeleton. A bad /init response never reaches here — it raises a structured
-         *     ``poll_probe_failed`` error instead.
+         * @description Flow 1 result: the /init sample item (if any), the derived inputs skeleton,
+         *     and the sample fields that couldn't become inputs. A bad /init response never
+         *     reaches here — it raises a structured ``poll_probe_failed`` error instead.
          */
         PollInspectResponse: {
             /** Sampleitemid */
@@ -5255,6 +5341,8 @@ export interface components {
             costUsd?: number | null;
             /** Costtokens */
             costTokens?: number | null;
+            /** Claimid */
+            claimId?: string | null;
         };
         /** SaveRepoEnvironmentRequest */
         SaveRepoEnvironmentRequest: {
@@ -5853,6 +5941,16 @@ export interface components {
             finishedAt: string | null;
             /** Stoppedbyuserid */
             stoppedByUserId?: string | null;
+            /** Executorid */
+            executorId?: string | null;
+            /** Claimid */
+            claimId?: string | null;
+            /** Claimedat */
+            claimedAt?: string | null;
+            /** Claimexpiresat */
+            claimExpiresAt?: string | null;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: string | null;
         };
         /**
          * WorkflowRunTarget
@@ -9854,6 +9952,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalWorkflowClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalWorkflowClaimListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalWorkflowClaimActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalWorkflowClaimMutationResponse"];
                 };
             };
             /** @description Validation Error */
