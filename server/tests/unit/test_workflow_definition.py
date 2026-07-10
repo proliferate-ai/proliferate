@@ -101,6 +101,50 @@ def test_parse_valid_definition_returns_canonical_and_specs() -> None:
     assert canonical["agents"][1]["steps"][2]["on_fail"] == {"kind": "continue"}
 
 
+# --- per-slot integration narrowing (track 3c phase 2) -------------------------
+
+
+def test_agent_integrations_narrows_and_survives_canonicalization() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = ["linear"]
+    canonical, _ = parse_definition(definition)
+    assert canonical["agents"][0]["integrations"] == ["linear"]
+    # The other node never declared the field — it keeps the workflow-level
+    # default implicitly (no "integrations" key stored, deny-path (c)).
+    assert "integrations" not in canonical["agents"][1]
+
+
+def test_agent_integrations_empty_list_narrows_to_nothing() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = []
+    canonical, _ = parse_definition(definition)
+    assert canonical["agents"][0]["integrations"] == []
+
+
+def test_agent_integrations_not_subset_rejected() -> None:
+    definition = _valid_definition()
+    # "context7" is not in the workflow-level integrations list.
+    definition["agents"][0]["integrations"] = ["context7"]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "agent_integrations_not_subset"
+
+
+def test_agent_integrations_duplicate_rejected() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = ["linear", "linear"]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_integration"
+
+
+def test_agent_integrations_must_be_a_list() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = "linear"
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
 def test_version_must_be_one() -> None:
     definition = _valid_definition()
     definition["version"] = 2
@@ -190,6 +234,113 @@ def test_notify_requires_slack_channel_id() -> None:
     del definition["agents"][1]["steps"][2]["slack_channel_id"]
     with pytest.raises(WorkflowDefinitionError):
         parse_definition(definition)
+
+
+# --- notify agent-filled fields (track 3c) -------------------------------------
+
+
+def _with_agent_fields_notify(*, message: str, slot: str = "triage") -> dict:
+    """A definition whose notify references agent-filled fields."""
+    definition = _valid_definition()
+    notify = definition["agents"][1]["steps"][2]
+    notify["message"] = message
+    notify["agent_fields"] = {
+        "slot": slot,
+        "schema": {
+            "summary": {"type": "string", "description": "one-line summary"},
+            "risk": {"type": "number"},
+        },
+    }
+    return definition
+
+
+def test_notify_agent_fields_valid_parses() -> None:
+    definition = _with_agent_fields_notify(
+        message="Done. {{fields.summary}} (risk {{fields.risk}}) for {{inputs.issue}}"
+    )
+    canonical, _ = parse_definition(definition)
+    notify = canonical["agents"][1]["steps"][2]
+    assert notify["agent_fields"]["slot"] == "triage"
+    assert set(notify["agent_fields"]["schema"]) == {"summary", "risk"}
+    assert notify["agent_fields"]["schema"]["risk"] == {"type": "number"}
+
+
+def test_fields_ref_without_agent_fields_rejected() -> None:
+    # DENY-PATH (a): {{fields.x}} with no agent_fields on the notify.
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][2]["message"] = "value: {{fields.summary}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "fields_reference_not_allowed"
+
+
+def test_fields_ref_not_in_schema_rejected() -> None:
+    # DENY-PATH (b): the referenced field is not declared in the schema.
+    definition = _with_agent_fields_notify(message="value: {{fields.unknown}}")
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field_reference"
+
+
+def test_fields_ref_outside_notify_message_rejected() -> None:
+    # DENY-PATH (a): {{fields.*}} is illegal outside a notify's message, even when
+    # agent_fields is declared on the same step (e.g. in slack_channel_id).
+    definition = _with_agent_fields_notify(message="{{fields.summary}}")
+    definition["agents"][1]["steps"][2]["slack_channel_id"] = "{{fields.summary}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "fields_reference_not_allowed"
+
+
+def test_fields_ref_in_prompt_step_rejected() -> None:
+    # DENY-PATH (a): {{fields.*}} in a non-notify step.
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][0]["prompt"] = "use {{fields.summary}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "fields_reference_not_allowed"
+
+
+def test_agent_fields_slot_must_exist() -> None:
+    definition = _with_agent_fields_notify(message="{{fields.summary}}", slot="ghost")
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_slot"
+
+
+def test_agent_fields_schema_rejects_nonscalar_type() -> None:
+    definition = _with_agent_fields_notify(message="{{fields.summary}}")
+    definition["agents"][1]["steps"][2]["agent_fields"]["schema"]["summary"] = {"type": "object"}
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "invalid_definition"
+
+
+def test_agent_fields_schema_rejects_nested_keys() -> None:
+    definition = _with_agent_fields_notify(message="{{fields.summary}}")
+    definition["agents"][1]["steps"][2]["agent_fields"]["schema"]["summary"] = {
+        "type": "string",
+        "properties": {"nope": {"type": "string"}},
+    }
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+def test_agent_fields_schema_must_be_non_empty() -> None:
+    definition = _with_agent_fields_notify(message="hi")
+    definition["agents"][1]["steps"][2]["agent_fields"]["schema"] = {}
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_emit_name_cannot_use_reserved_notify_fields_prefix() -> None:
+    # DENY-PATH (c): a user-authored emit named with the resolver-reserved prefix.
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][1]["name"] = "__notify_fields_0"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "invalid_definition"
 
 
 def test_agent_config_narrows_to_model_only() -> None:

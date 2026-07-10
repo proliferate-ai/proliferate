@@ -46,6 +46,10 @@ export type WorkflowGoalOnBlocked = (typeof WORKFLOW_GOAL_ON_BLOCKED)[number];
 export const WORKFLOW_BRANCH_TARGETS = ["continue", "end"] as const;
 export type WorkflowBranchTarget = (typeof WORKFLOW_BRANCH_TARGETS)[number];
 
+// Track 3c: scalar field types an agent-filled notify field may declare.
+export const WORKFLOW_NOTIFY_FIELD_TYPES = ["string", "number", "boolean"] as const;
+export type WorkflowNotifyFieldType = (typeof WORKFLOW_NOTIFY_FIELD_TYPES)[number];
+
 // --- Sizing / caps (mirror constants/workflows.py) -----------------------------
 
 export const WORKFLOW_SHORT_TEXT_MAX_LENGTH = 255;
@@ -56,6 +60,9 @@ export const WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS = 3;
 
 /** Reserved reference first-segments (never legal emit names). */
 export const WORKFLOW_RESERVED_REF_SEGMENTS = ["inputs", "steps", "fields"] as const;
+
+/** Reserved emit-name prefix owned by the resolver's injected notify-fields emit. */
+export const WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX = "__notify_fields";
 
 export const WORKFLOW_GOAL_DEFAULT_MAX_TURNS = 25;
 export const WORKFLOW_GOAL_DEFAULT_MAX_WALL_SECS = 90 * 60;
@@ -173,11 +180,31 @@ export interface ScmOpenPrStep extends StepBase {
   draft?: boolean;
 }
 
+/** One agent-filled notify field: a scalar type + optional description. */
+export interface WorkflowNotifyFieldSpec {
+  type: WorkflowNotifyFieldType;
+  description?: string;
+}
+
+/**
+ * Agent-filled notify fields (track 3c). The agent fills `schema`'s named scalar
+ * fields (via the emit machinery) in `slot`, right before the notification sends;
+ * the `message` references them as `{{fields.<name>}}`. Resolver-expanded into an
+ * injected `agent.emit` + the notify with indexed refs — the runtime never sees
+ * this block.
+ */
+export interface WorkflowNotifyAgentFields {
+  slot: string;
+  schema: Record<string, WorkflowNotifyFieldSpec>;
+}
+
 /** Slack-only notify (E1b): no channel discriminator. */
 export interface NotifyStep extends StepBase {
   kind: "notify";
   slackChannelId: string;
   message: string;
+  /** Optional agent-filled fields ({{fields.*}} in `message`); undefined = template-only. */
+  agentFields?: WorkflowNotifyAgentFields;
 }
 
 /** Branch (C11/D3): switch on a prior emit's field; each case is continue|end. */
@@ -221,6 +248,15 @@ export interface WorkflowAgentNode {
   harness: string;
   model: string;
   steps: WorkflowStep[];
+  /**
+   * Per-slot integration narrowing (track 3c phase 2, data-contract §3
+   * "resolver-only change"). A subset of the workflow-level `integrations`
+   * list — validated by the server + this file's `validation.ts` mirror.
+   * Undefined (the default) = this slot keeps the full workflow-level list;
+   * an explicit (possibly empty) array narrows just this slot's runtime
+   * grant. Absence vs. an empty array are NOT the same thing.
+   */
+  integrations?: string[];
 }
 
 export interface WorkflowDefinition {
@@ -350,6 +386,32 @@ function parseGoal(raw: unknown): WorkflowGoal | undefined {
   return goal;
 }
 
+function parseNotifyAgentFields(raw: unknown): WorkflowNotifyAgentFields | undefined {
+  const record = asRecord(raw);
+  if (!record) {
+    return undefined;
+  }
+  const rawSchema = asRecord(record.schema);
+  const schema: Record<string, WorkflowNotifyFieldSpec> = {};
+  if (rawSchema) {
+    for (const [name, spec] of Object.entries(rawSchema)) {
+      const specRecord = asRecord(spec);
+      // Preserve the raw type (even an unrecognized one) so `validation.ts` can
+      // surface an `invalid_definition` error, matching the server's parse — a bad
+      // type must not be silently dropped before the validator sees it.
+      const fieldSpec: WorkflowNotifyFieldSpec = {
+        type: specRecord?.type as WorkflowNotifyFieldType,
+      };
+      const description = asString(specRecord?.description);
+      if (description !== undefined) {
+        fieldSpec.description = description;
+      }
+      schema[name] = fieldSpec;
+    }
+  }
+  return { slot: asString(record.slot) ?? "", schema };
+}
+
 function parseStep(raw: unknown): WorkflowStep | null {
   const record = asRecord(raw);
   const kind = record?.kind;
@@ -421,13 +483,19 @@ function parseStep(raw: unknown): WorkflowStep | null {
       }
       return step;
     }
-    case "notify":
-      return {
+    case "notify": {
+      const step: NotifyStep = {
         kind,
         ...base,
         slackChannelId: asString(record.slack_channel_id) ?? "",
         message: asString(record.message) ?? "",
       };
+      const agentFields = parseNotifyAgentFields(record.agent_fields);
+      if (agentFields) {
+        step.agentFields = agentFields;
+      }
+      return step;
+    }
     case "branch": {
       const rawCases = asRecord(record.cases) ?? {};
       const cases: Record<string, { to: WorkflowBranchTarget }> = {};
@@ -467,12 +535,23 @@ function parseAgentNode(raw: unknown): WorkflowAgentNode | null {
   const steps = Array.isArray(record.steps)
     ? record.steps.map(parseStep).filter((s): s is WorkflowStep => s !== null)
     : [];
-  return {
+  const node: WorkflowAgentNode = {
     slot: asString(record.slot) ?? "",
     harness: asString(record.harness) ?? "",
     model: asString(record.model) ?? "",
     steps,
   };
+  // Presence, not just truthiness — an explicit [] narrows to nothing, which
+  // is different from the field being absent (keep workflow-level default). A
+  // present-but-non-array value is preserved verbatim (not dropped) so
+  // `validation.ts` can flag its shape as `invalid_definition`, matching the
+  // server's parse rather than silently treating it as absent.
+  if (record.integrations !== undefined) {
+    node.integrations = Array.isArray(record.integrations)
+      ? record.integrations.filter((v): v is string => typeof v === "string")
+      : (record.integrations as unknown as string[]);
+  }
+  return node;
 }
 
 /**
@@ -597,6 +676,19 @@ function serializeStep(step: WorkflowStep): Record<string, unknown> {
     case "notify":
       base.slack_channel_id = step.slackChannelId;
       base.message = step.message;
+      if (step.agentFields) {
+        base.agent_fields = {
+          slot: step.agentFields.slot,
+          schema: Object.fromEntries(
+            Object.entries(step.agentFields.schema).map(([name, spec]) => [
+              name,
+              spec.description !== undefined
+                ? { type: spec.type, description: spec.description }
+                : { type: spec.type },
+            ]),
+          ),
+        };
+      }
       return base;
     case "branch": {
       base.on = step.on;
@@ -617,12 +709,18 @@ function serializeStep(step: WorkflowStep): Record<string, unknown> {
 }
 
 function serializeAgentNode(node: WorkflowAgentNode): Record<string, unknown> {
-  return {
+  const out: Record<string, unknown> = {
     slot: node.slot,
     harness: node.harness,
     model: node.model,
     steps: node.steps.map(serializeStep),
   };
+  if (node.integrations !== undefined) {
+    // Guard the spread: parse may have preserved a present-but-non-array value
+    // (an invalid definition the validator flags); pass it through verbatim.
+    out.integrations = Array.isArray(node.integrations) ? [...node.integrations] : node.integrations;
+  }
+  return out;
 }
 
 /** The snake_case definition dict to POST/PATCH. Inverse of parse. */
@@ -698,4 +796,10 @@ function isGoalOnBlocked(value: unknown): value is WorkflowGoalOnBlocked {
 
 function isBranchTarget(value: unknown): value is WorkflowBranchTarget {
   return typeof value === "string" && (WORKFLOW_BRANCH_TARGETS as readonly string[]).includes(value);
+}
+
+export function isWorkflowNotifyFieldType(value: unknown): value is WorkflowNotifyFieldType {
+  return (
+    typeof value === "string" && (WORKFLOW_NOTIFY_FIELD_TYPES as readonly string[]).includes(value)
+  );
 }

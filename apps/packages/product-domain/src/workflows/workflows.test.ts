@@ -161,6 +161,77 @@ describe("definition parse/serialize", () => {
     const noIntegrations = parseWorkflowDefinition({ ...wire, integrations: undefined });
     expect(noIntegrations.integrations).toEqual([]);
   });
+
+  it("round-trips per-slot integration narrowing (track 3c phase 2)", () => {
+    const wire = {
+      version: 1,
+      inputs: [],
+      integrations: ["issues", "slack"],
+      agents: [
+        {
+          slot: "triage",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" }],
+          integrations: ["issues"],
+        },
+        {
+          slot: "fix",
+          harness: "claude",
+          model: "opus",
+          steps: [{ kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" }],
+        },
+      ],
+    };
+    const parsed = parseWorkflowDefinition(wire);
+    expect(parsed.agents[0]!.integrations).toEqual(["issues"]);
+    // Absence, not just falsy-ness — the unnarrowed slot never gets the key.
+    expect(parsed.agents[1]!.integrations).toBeUndefined();
+    expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
+  });
+
+  it("distinguishes an explicit empty narrowing from an absent field", () => {
+    const wire = {
+      version: 1,
+      inputs: [],
+      integrations: ["issues"],
+      agents: [
+        {
+          slot: "quiet",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" }],
+          integrations: [],
+        },
+      ],
+    };
+    const parsed = parseWorkflowDefinition(wire);
+    expect(parsed.agents[0]!.integrations).toEqual([]);
+    expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
+  });
+
+  it("flags a present-but-non-array agent integrations as invalid (not silently absent)", () => {
+    // Parse preserves the bad shape verbatim (not treated as absent) so the
+    // validator surfaces `invalid_definition`, matching the server's parse.
+    const wire = {
+      version: 1,
+      inputs: [],
+      integrations: ["issues"],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.prompt", on_fail: { kind: "stop" }, prompt: "go" }],
+          integrations: "issues",
+        },
+      ],
+    };
+    const parsed = parseWorkflowDefinition(wire);
+    expect(Array.isArray(parsed.agents[0]!.integrations)).toBe(false);
+    const codes = validateWorkflowDefinition(parsed).map((i) => i.code);
+    expect(codes).toContain("invalid_definition");
+  });
 });
 
 describe("editor multi-agent round-trip (track 1a′ battery line 1)", () => {
@@ -344,6 +415,213 @@ describe("validation", () => {
     };
     const codes = validateWorkflowDefinition(bad).map((i) => i.code);
     expect(codes).toContain("forward_emit_reference");
+  });
+
+  describe("per-slot integration narrowing (track 3c phase 2)", () => {
+    const withIntegrations: WorkflowDefinition = {
+      ...base,
+      integrations: ["issues", "slack"],
+    };
+
+    it("accepts a subset narrowing", () => {
+      const ok: WorkflowDefinition = {
+        ...withIntegrations,
+        agents: [{ ...withIntegrations.agents[0]!, integrations: ["issues"] }],
+      };
+      expect(validateWorkflowDefinition(ok)).toEqual([]);
+    });
+
+    it("accepts an explicit empty narrowing (deny-path b: excludes everything)", () => {
+      const ok: WorkflowDefinition = {
+        ...withIntegrations,
+        agents: [{ ...withIntegrations.agents[0]!, integrations: [] }],
+      };
+      expect(validateWorkflowDefinition(ok)).toEqual([]);
+    });
+
+    it("leaves an unnarrowed slot unchanged (deny-path c: no issue, no field)", () => {
+      const ok: WorkflowDefinition = withIntegrations;
+      expect(validateWorkflowDefinition(ok)).toEqual([]);
+      expect(ok.agents[0]!.integrations).toBeUndefined();
+    });
+
+    it("flags a namespace not in the workflow-level list (deny-path a)", () => {
+      const bad: WorkflowDefinition = {
+        ...withIntegrations,
+        agents: [{ ...withIntegrations.agents[0]!, integrations: ["issues", "context7"] }],
+      };
+      const codes = validateWorkflowDefinition(bad).map((i) => i.code);
+      expect(codes).toContain("agent_integrations_not_subset");
+    });
+
+    it("flags a duplicate namespace on the same agent", () => {
+      const bad: WorkflowDefinition = {
+        ...withIntegrations,
+        agents: [{ ...withIntegrations.agents[0]!, integrations: ["issues", "issues"] }],
+      };
+      const codes = validateWorkflowDefinition(bad).map((i) => i.code);
+      expect(codes).toContain("duplicate_integration");
+    });
+  });
+});
+
+describe("notify agent-filled fields (track 3c)", () => {
+  const withNotifyFields = (
+    overrides: Partial<{ message: string; slot: string }> = {},
+  ): WorkflowDefinition => ({
+    version: 1,
+    inputs: [],
+    integrations: [],
+    agents: [
+      {
+        slot: "main",
+        harness: "claude",
+        model: "sonnet",
+        steps: [
+          {
+            kind: "notify",
+            onFail: { kind: "stop" },
+            slackChannelId: "C1",
+            message: overrides.message ?? "done: {{fields.summary}}",
+            agentFields: {
+              slot: overrides.slot ?? "main",
+              schema: {
+                summary: { type: "string", description: "one-liner" },
+                risk: { type: "number" },
+              },
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  it("accepts a notify whose message references declared agent fields", () => {
+    expect(validateWorkflowDefinition(withNotifyFields())).toEqual([]);
+  });
+
+  it("flags {{fields.*}} in a notify with no agent_fields (deny-path a)", () => {
+    const def: WorkflowDefinition = {
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            {
+              kind: "notify",
+              onFail: { kind: "stop" },
+              slackChannelId: "C1",
+              message: "value: {{fields.summary}}",
+            },
+          ],
+        },
+      ],
+    };
+    expect(validateWorkflowDefinition(def).map((i) => i.code)).toContain(
+      "fields_reference_not_allowed",
+    );
+  });
+
+  it("flags a fields ref not present in the schema (deny-path b)", () => {
+    const codes = validateWorkflowDefinition(
+      withNotifyFields({ message: "value: {{fields.ghost}}" }),
+    ).map((i) => i.code);
+    expect(codes).toContain("unknown_field_reference");
+  });
+
+  it("flags {{fields.*}} outside a notify message", () => {
+    const codes = validateWorkflowDefinition({
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "use {{fields.x}}" }],
+        },
+      ],
+    }).map((i) => i.code);
+    expect(codes).toContain("fields_reference_not_allowed");
+  });
+
+  it("flags an agent-fields slot that is not an agent", () => {
+    const codes = validateWorkflowDefinition(withNotifyFields({ slot: "ghost" })).map((i) => i.code);
+    expect(codes).toContain("unknown_slot");
+  });
+
+  it("flags a schema field with an unrecognized type (not silently dropped)", () => {
+    // Parse preserves the bad type so the validator can flag it, rather than
+    // dropping the field before the type check runs (matches the server's parse).
+    const wire = {
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            {
+              kind: "notify",
+              on_fail: { kind: "stop" },
+              slack_channel_id: "C1",
+              message: "done: {{fields.summary}}",
+              agent_fields: {
+                slot: "main",
+                schema: { summary: { type: "date" } },
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const parsed = parseWorkflowDefinition(wire);
+    // The field survives parse (with its raw, invalid type) so validation sees it.
+    const notify = parsed.agents[0]!.steps[0]!;
+    expect(notify.kind === "notify" && notify.agentFields?.schema.summary).toBeTruthy();
+    const codes = validateWorkflowDefinition(parsed).map((i) => i.code);
+    expect(codes).toContain("invalid_definition");
+  });
+
+  it("rejects an emit named with the reserved notify-fields prefix (deny-path c)", () => {
+    const codes = validateWorkflowDefinition({
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            { kind: "agent.emit", onFail: { kind: "stop" }, prompt: "go", name: "__notify_fields_0" },
+          ],
+        },
+      ],
+    }).map((i) => i.code);
+    expect(codes).toContain("invalid_definition");
+  });
+
+  it("round-trips agent_fields through parse/serialize", () => {
+    const def = withNotifyFields();
+    const wire = serializeWorkflowDefinition(def);
+    const notifyWire = (wire.agents as { steps: Record<string, unknown>[] }[])[0]!.steps[0]!;
+    expect(notifyWire.agent_fields).toEqual({
+      slot: "main",
+      schema: {
+        summary: { type: "string", description: "one-liner" },
+        risk: { type: "number" },
+      },
+    });
+    const reparsed = parseWorkflowDefinition(wire);
+    expect(serializeWorkflowDefinition(reparsed)).toEqual(wire);
   });
 });
 

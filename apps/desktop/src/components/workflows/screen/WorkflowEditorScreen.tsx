@@ -36,6 +36,8 @@ import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflo
 import { useWorkflowSlackChannels } from "@/hooks/access/cloud/workflows/use-workflow-slack-channels";
 import { useCloudIntegrations } from "@/hooks/cloud/facade/use-cloud-integrations";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
+import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { buildLocalAutomationRepoCandidates } from "@/lib/domain/automations/local-executor/plan";
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { WorkflowMetaCard } from "../editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "../editor/WorkflowSetupCard";
@@ -45,6 +47,7 @@ import {
   type WorkflowTriggerRepoOption,
 } from "../editor/WorkflowTriggersCard";
 import {
+  WorkflowAgentIntegrationsRow,
   WorkflowFunctionsCard,
   type WorkflowFunctionProviderOption,
 } from "../editor/WorkflowFunctionsCard";
@@ -175,6 +178,22 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
     return [...seen.values()];
   }, [cloudTargetsQuery.data]);
 
+  // D-028①/D16 local lane: the desktop's local clones a LOCAL schedule trigger
+  // can pin — the exact same candidate source the local claim executor
+  // (`useLocalWorkflowClaimPoller`) matches a fired run's repo pin against, so a
+  // repo offered here is guaranteed claimable on this device.
+  const workspacesQuery = useWorkspaces();
+  const localTriggerRepoOptions = useMemo<WorkflowTriggerRepoOption[]>(() => {
+    const candidates = buildLocalAutomationRepoCandidates({
+      repoRoots: workspacesQuery.data?.repoRoots ?? [],
+      workspaces: workspacesQuery.data?.localWorkspaces ?? [],
+    });
+    return candidates.map((candidate) => {
+      const fullName = `${candidate.repoRoot.remoteOwner}/${candidate.repoRoot.remoteRepoName}`;
+      return { fullName, label: candidate.repoRoot.displayName?.trim() || fullName };
+    });
+  }, [workspacesQuery.data]);
+
   // Gateway integration namespaces (spec 6.1/6.3, L21): the owner's visible
   // integrations, restricted client-side to the launch set (issues, slack) —
   // everything else is "more arrive later" per the card's caption.
@@ -190,6 +209,10 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
           connected: integration.accountId !== null && integration.health === "ready",
         })),
     [cloudIntegrations],
+  );
+  const functionProviderDisplayNames = useMemo(
+    () => new Map(functionProviders.map((provider) => [provider.namespace, provider.displayName])),
+    [functionProviders],
   );
 
   const issues = useMemo(
@@ -475,6 +498,7 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 workflowId={workflowId}
                 args={definition.inputs}
                 repoOptions={triggerRepoOptions}
+                localRepoOptions={localTriggerRepoOptions}
                 onOpenRun={(runId) => navigate(`/workflows/${workflowId}/runs/${runId}`)}
               />
 
@@ -719,6 +743,19 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                       />
                     </div>
                   </div>
+                  {definition.integrations.length > 0 ? (
+                    <div className="border-t border-border/60 pt-3">
+                      <WorkflowAgentIntegrationsRow
+                        workflowIntegrations={definition.integrations}
+                        displayNames={functionProviderDisplayNames}
+                        value={nodes[setupNodeIndex]!.integrations}
+                        onChange={(next) => {
+                          markDirty();
+                          patchNode(setupNodeIndex, { integrations: next });
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

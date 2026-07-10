@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
+import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
 import {
   parsePollSignatureMismatches,
   type PollFieldMismatch,
@@ -56,9 +57,13 @@ export interface WorkflowTriggersCardProps {
   workflowId: string;
   /** The workflow's declared args — a scheduled/poll run fires with fixed/mapped values. */
   args: readonly WorkflowInputSpec[];
-  /** D16: the repos the owner can pin (schedule + poll runs are cloud-only in v1;
-   * the server derives the warm workspace from the pin). */
+  /** D16: the cloud repos the owner can pin (the server derives the warm
+   * workspace from the pin). Poll runs are cloud-only in v1. */
   repoOptions: readonly WorkflowTriggerRepoOption[];
+  /** D-028①: the desktop's local clones a SCHEDULE trigger may pin instead
+   * (`targetMode: "local"`, 2a). Poll triggers never offer this list — the
+   * poller lane has no claim/missed-run protocol for local yet. */
+  localRepoOptions: readonly WorkflowTriggerRepoOption[];
   /** Deep-link a poll item's spawned run (spec 8.2 row B). Omit to hide the link. */
   onOpenRun?: (runId: string) => void;
 }
@@ -85,6 +90,9 @@ export interface TriggerDraft {
   rrule: string;
   timezone: string;
   preset: AutomationSchedulePresetOrCustom;
+  /** D-028①: SCHEDULE-only location (cloud workspace vs. "On this Mac", 2a).
+   * Poll stays cloud-only — always "personal_cloud" (never surfaced in its form). */
+  targetMode: WorkflowTargetMode;
   // poll fields
   pollUrl: string;
   pollAuthHeader: string;
@@ -108,6 +116,7 @@ function draftFromTrigger(
   trigger: WorkflowTriggerResponse | null,
   args: readonly WorkflowInputSpec[],
   repoOptions: readonly WorkflowTriggerRepoOption[],
+  localRepoOptions: readonly WorkflowTriggerRepoOption[],
   fallbackKind: TriggerKind,
 ): TriggerDraft {
   const kind: TriggerKind = (trigger?.kind as TriggerKind | undefined) ?? fallbackKind;
@@ -117,11 +126,20 @@ function draftFromTrigger(
     const stored = trigger?.args?.[arg.name] as ArgValue | undefined;
     argValues[arg.name] = stored ?? initialArgValue(arg);
   }
+  // Poll is always cloud (never surfaced a location picker); a fresh schedule
+  // draft defaults to cloud when a cloud repo exists, else local (2a).
+  const targetMode: WorkflowTargetMode =
+    kind === "poll"
+      ? "personal_cloud"
+      : (trigger?.targetMode as WorkflowTargetMode | undefined)
+        ?? (repoOptions.length > 0 ? "personal_cloud" : "local");
+  const activeRepoOptions = targetMode === "local" ? localRepoOptions : repoOptions;
   return {
     kind,
     rrule,
     timezone: trigger?.schedule?.timezone ?? defaultAutomationTimezone(),
     preset: presetForRrule(rrule),
+    targetMode,
     pollUrl: trigger?.poll?.url ?? "",
     pollAuthHeader: trigger?.poll?.authHeader ?? "",
     pollHasAuth: trigger?.poll?.hasAuth ?? false,
@@ -131,7 +149,7 @@ function draftFromTrigger(
     concurrency: (trigger?.concurrencyPolicy as Concurrency) ?? "skip",
     missedRunPolicy: (trigger?.missedRunPolicy as MissedRunPolicy) ?? DEFAULT_MISSED_RUN_POLICY,
     enabled: trigger?.enabled ?? true,
-    repoFullName: trigger?.repoFullName ?? repoOptions[0]?.fullName ?? "",
+    repoFullName: trigger?.repoFullName ?? activeRepoOptions[0]?.fullName ?? "",
     argValues,
   };
 }
@@ -146,15 +164,17 @@ function coerceArg(arg: WorkflowInputSpec, value: ArgValue): ArgValue {
  * Manual is an always-on chip; schedule + poll triggers render as quiet chips
  * (summary + status) in the same badge row, with `Webhook`/`API` shown as
  * disabled "soon" chips. Clicking a trigger chip (or an `+ Add` button) opens
- * the inline editor for that kind. Both trigger kinds are cloud-only in v1 —
- * the picker offers cloud workspaces and the card explains when none exist.
- * Poll triggers additionally surface `last_poll_at`/`last_poll_error` and an
+ * the inline editor for that kind. Poll runs are cloud-only in v1 (the picker
+ * offers cloud workspaces); schedule runs may additionally target "On this
+ * Mac" (D-028①, 2a) when the desktop has a local clone of a repo. Poll
+ * triggers additionally surface `last_poll_at`/`last_poll_error` and an
  * expandable per-item seen-set (spawned/invalid/error).
  */
 export function WorkflowTriggersCard({
   workflowId,
   args,
   repoOptions,
+  localRepoOptions,
   onOpenRun,
 }: WorkflowTriggersCardProps) {
   const triggersQuery = useWorkflowTriggers(workflowId);
@@ -164,6 +184,11 @@ export function WorkflowTriggersCard({
   const triggers = triggersQuery.data ?? [];
   const pollTriggers = triggers.filter((t) => t.kind === "poll");
   const cloudAvailable = repoOptions.length > 0;
+  const localAvailable = localRepoOptions.length > 0;
+  // Poll never offers local (the poller lane has no claim/missed-run protocol
+  // for it yet); schedule can use either lane.
+  const scheduleAddDisabled = !cloudAvailable && !localAvailable;
+  const pollAddDisabled = !cloudAvailable;
 
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
   const [draft, setDraft] = useState<TriggerDraft | null>(null);
@@ -185,7 +210,7 @@ export function WorkflowTriggersCard({
     setError(null);
     setErrorMismatches(null);
     setEditing({ id: trigger?.id ?? null });
-    setDraft(draftFromTrigger(trigger, args, repoOptions, kind));
+    setDraft(draftFromTrigger(trigger, args, repoOptions, localRepoOptions, kind));
   };
 
   const closeForm = () => {
@@ -295,7 +320,10 @@ export function WorkflowTriggersCard({
       enabled: draft.enabled,
       concurrencyPolicy: draft.concurrency,
       missedRunPolicy: draft.missedRunPolicy,
-      targetMode: "personal_cloud",
+      // D-028①/2a: a local target never carries a cloud workspace — the
+      // server's CHECK invariant leaves target_workspace_id null and matches
+      // the repo pin against the desktop's local clones at claim time.
+      targetMode: draft.targetMode,
       repoFullName: draft.repoFullName,
       schedule: { rrule: draft.rrule, timezone: draft.timezone },
       args: argsBody,
@@ -322,18 +350,27 @@ export function WorkflowTriggersCard({
         triggers={triggers}
         activeId={editing?.id ?? undefined}
         addingKind={editing !== null && editing.id === null ? draft?.kind ?? null : null}
-        addDisabled={!cloudAvailable}
+        scheduleAddDisabled={scheduleAddDisabled}
+        pollAddDisabled={pollAddDisabled}
         onAdd={(kind) => openForm(null, kind)}
         onEditTrigger={(trigger) => openForm(trigger)}
       />
 
-      {!cloudAvailable ? (
+      {!cloudAvailable && !localAvailable ? (
         <p className="text-xs text-faint">
-          Scheduled and poll runs execute in the cloud. Configure a cloud repository to trigger
-          this workflow that way; local triggers are coming — run it manually for now.
+          Configure a cloud repository or open a local repo to trigger this workflow that way; run
+          it manually for now.
+        </p>
+      ) : !cloudAvailable ? (
+        <p className="text-xs text-faint">
+          Runs manually from here or the runs list; schedules can run on this Mac — polls need a
+          cloud repository.
         </p>
       ) : (
-        <p className="text-xs text-faint">Runs manually from here or the runs list; schedules and polls fire in the cloud.</p>
+        <p className="text-xs text-faint">
+          Runs manually from here or the runs list; schedules can run on this Mac or in the cloud —
+          polls fire in the cloud.
+        </p>
       )}
 
       {pollTriggers.length > 0 ? (
@@ -349,6 +386,7 @@ export function WorkflowTriggersCard({
           draft={draft}
           args={args}
           repoOptions={repoOptions}
+          localRepoOptions={localRepoOptions}
           error={error}
           errorMismatches={errorMismatches}
           busy={busy}
@@ -370,7 +408,10 @@ interface TriggerBadgeRowProps {
   activeId?: string | null;
   /** The kind currently being added via the inline "+ Add" form, if any. */
   addingKind: TriggerKind | null;
-  addDisabled: boolean;
+  /** Schedule may target cloud OR local (D-028①) — disabled only when neither exists. */
+  scheduleAddDisabled: boolean;
+  /** Poll stays cloud-only — disabled when no cloud repo exists. */
+  pollAddDisabled: boolean;
   onAdd: (kind: TriggerKind) => void;
   onEditTrigger: (trigger: WorkflowTriggerResponse) => void;
 }
@@ -380,7 +421,8 @@ export function TriggerBadgeRow({
   triggers,
   activeId,
   addingKind,
-  addDisabled,
+  scheduleAddDisabled,
+  pollAddDisabled,
   onAdd,
   onEditTrigger,
 }: TriggerBadgeRowProps) {
@@ -395,7 +437,7 @@ export function TriggerBadgeRow({
         <TriggerChip
           key={trigger.id}
           trigger={trigger}
-          repoLabel={trigger.repoFullName ?? "cloud repository"}
+          repoLabel={trigger.repoFullName ?? (trigger.targetMode === "local" ? "this Mac" : "cloud repository")}
           active={trigger.id === activeId}
           onClick={() => onEditTrigger(trigger)}
         />
@@ -404,13 +446,15 @@ export function TriggerBadgeRow({
       <AddTriggerButton
         label="Add schedule"
         active={addingKind === "schedule"}
-        disabled={addDisabled}
+        disabled={scheduleAddDisabled}
+        disabledTitle="Scheduled runs need a cloud repository or a local clone"
         onClick={() => onAdd("schedule")}
       />
       <AddTriggerButton
         label="Add poll"
         active={addingKind === "poll"}
-        disabled={addDisabled}
+        disabled={pollAddDisabled}
+        disabledTitle="Poll runs need a cloud workspace"
         onClick={() => onAdd("poll")}
       />
 
@@ -428,18 +472,20 @@ function AddTriggerButton({
   label,
   active,
   disabled,
+  disabledTitle,
   onClick,
 }: {
   label: string;
   active: boolean;
   disabled: boolean;
+  disabledTitle: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       disabled={disabled}
-      title={disabled ? "Scheduled and poll runs need a cloud workspace" : undefined}
+      title={disabled ? disabledTitle : undefined}
       onClick={onClick}
       className={twMerge(
         "inline-flex items-center gap-1.5 rounded-full border border-dashed border-border px-2.5 py-1 text-sm text-muted-foreground transition-colors hover:border-border-heavy hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground",
@@ -609,6 +655,7 @@ interface TriggerFormProps {
   draft: TriggerDraft;
   args: readonly WorkflowInputSpec[];
   repoOptions: readonly WorkflowTriggerRepoOption[];
+  localRepoOptions: readonly WorkflowTriggerRepoOption[];
   error: string | null;
   /** Flow 2's structured field-by-field diff (poll_signature_mismatch's
    * `extra_detail.mismatches`), if `error` is that kind of failure. */
@@ -670,6 +717,7 @@ export function TriggerForm({
   draft,
   args,
   repoOptions,
+  localRepoOptions,
   error,
   errorMismatches,
   busy,
@@ -688,7 +736,12 @@ export function TriggerForm({
       {draft.kind === "poll" ? (
         <PollFields draft={draft} repoOptions={repoOptions} isEdit={isEdit} onPatch={onPatch} />
       ) : (
-        <ScheduleFields draft={draft} repoOptions={repoOptions} onPatch={onPatch} />
+        <ScheduleFields
+          draft={draft}
+          repoOptions={repoOptions}
+          localRepoOptions={localRepoOptions}
+          onPatch={onPatch}
+        />
       )}
 
       {args.length > 0 ? (
@@ -773,12 +826,26 @@ export function TriggerForm({
 function ScheduleFields({
   draft,
   repoOptions,
+  localRepoOptions,
   onPatch,
 }: {
   draft: TriggerDraft;
   repoOptions: readonly WorkflowTriggerRepoOption[];
+  localRepoOptions: readonly WorkflowTriggerRepoOption[];
   onPatch: (patch: Partial<TriggerDraft>) => void;
 }) {
+  const cloudAvailable = repoOptions.length > 0;
+  const localAvailable = localRepoOptions.length > 0;
+  const activeRepoOptions = draft.targetMode === "local" ? localRepoOptions : repoOptions;
+
+  // D-028①: only offer a location that actually has a repo to pin. Switching
+  // location re-seeds the repo pin from the newly active list (never carries
+  // a stale cross-lane value).
+  const setTargetMode = (targetMode: WorkflowTargetMode) => {
+    const nextOptions = targetMode === "local" ? localRepoOptions : repoOptions;
+    onPatch({ targetMode, repoFullName: nextOptions[0]?.fullName ?? "" });
+  };
+
   return (
     <div className="grid grid-cols-2 gap-3">
       <div className="flex min-w-0 flex-col gap-1.5">
@@ -797,13 +864,33 @@ function ScheduleFields({
         </span>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <Label>Repository</Label>
+        <Label>Location</Label>
         <WorkflowSelect
-          ariaLabel="Repository"
-          value={draft.repoFullName}
-          options={repoOptions.map((repo) => ({ value: repo.fullName, label: repo.label }))}
-          onChange={(value) => onPatch({ repoFullName: value })}
+          ariaLabel="Run location"
+          value={draft.targetMode}
+          options={[
+            ...(localAvailable ? [{ value: "local", label: "On this Mac" }] : []),
+            ...(cloudAvailable ? [{ value: "personal_cloud", label: "Cloud" }] : []),
+          ]}
+          onChange={(value) => setTargetMode(value as WorkflowTargetMode)}
         />
+      </div>
+      <div className="col-span-2 flex min-w-0 flex-col gap-1.5">
+        <Label>Repository</Label>
+        {activeRepoOptions.length > 0 ? (
+          <WorkflowSelect
+            ariaLabel="Repository"
+            value={draft.repoFullName}
+            options={activeRepoOptions.map((repo) => ({ value: repo.fullName, label: repo.label }))}
+            onChange={(value) => onPatch({ repoFullName: value })}
+          />
+        ) : (
+          <p className="text-xs text-faint">
+            {draft.targetMode === "local"
+              ? "No local repository clones found on this device."
+              : "No cloud repositories yet."}
+          </p>
+        )}
       </div>
     </div>
   );

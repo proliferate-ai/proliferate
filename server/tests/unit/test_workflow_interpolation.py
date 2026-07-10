@@ -97,5 +97,31 @@ def test_resolve_is_recursive_over_json() -> None:
 def test_reserved_first_segment_is_rejected() -> None:
     from proliferate.server.cloud.workflows.domain.interpolation import TemplateReferenceError
 
+    # `steps` is reserved as the resolver's rewrite target: it can never be an
+    # emit name, so a two-segment `{{steps.foo}}` ref is a parse error.
     with pytest.raises(TemplateReferenceError):
-        _resolve("{{fields.x}}", {}, {"x": 0})
+        _resolve("{{steps.foo}}", {}, {"foo": 0})
+
+
+def test_fields_ref_parses_and_rewrites_to_injected_emit_index() -> None:
+    from proliferate.server.cloud.workflows.domain.interpolation import (
+        FieldsReference,
+        parse_reference,
+    )
+
+    # `{{fields.<name>}}` is a recognized reference type (the notify agent-filled
+    # follow-up). Its legality is enforced by the definition validator (only in a
+    # notify message with agent_fields); the resolver rewrites it to an indexed ref
+    # against the injected notify-fields emit's flat position.
+    assert parse_reference("fields.summary") == FieldsReference(name="summary")
+    resolved = resolve_string(
+        "note: {{fields.summary}}", inputs={}, emit_index={}, fields_index=4
+    )
+    assert resolved == "note: {{steps[4].output.summary}}"
+
+
+def test_fields_ref_left_verbatim_without_fields_index() -> None:
+    # Defensive: post-validation this never happens, but a fields ref with no
+    # injected-emit index must be left verbatim (never mis-resolved to a live
+    # token) rather than resolved against the wrong step.
+    assert _resolve("{{fields.summary}}", {}, {}) == "{{fields.summary}}"

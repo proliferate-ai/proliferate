@@ -39,6 +39,11 @@ from proliferate.constants.workflows import (
 # ``}}``. References never contain braces, so ``[^{}]`` keeps matching greedy-safe.
 _PLACEHOLDER_RE = re.compile(r"(?<!\\)\{\{\s*(?P<ref>[^{}]*?)\s*\}\}")
 _INPUT_REF_RE = re.compile(r"^inputs\.(?P<name>[A-Za-z_][A-Za-z0-9_]*)$")
+# {{fields.<name>}} — an agent-filled notify field (data-contract Part II
+# follow-up). Legal ONLY in a notify step's `message` that declares `agent_fields`
+# (enforced by the definition validator); resolved to an indexed ref against the
+# injected notify-fields emit at flatten time.
+_FIELDS_REF_RE = re.compile(r"^fields\.(?P<name>[A-Za-z_][A-Za-z0-9_]*)$")
 # {{<emit_name>.<field>}} — a two-segment ref whose first segment is not reserved.
 _EMIT_REF_RE = re.compile(
     r"^(?P<emit>[A-Za-z_][A-Za-z0-9_]*)\.(?P<field>[A-Za-z_][A-Za-z0-9_]*)$"
@@ -74,7 +79,12 @@ class StepOutputReference:
     name: str
 
 
-Reference = InputReference | EmitReference | StepOutputReference
+@dataclass(frozen=True)
+class FieldsReference:
+    name: str
+
+
+Reference = InputReference | EmitReference | StepOutputReference | FieldsReference
 
 
 def parse_reference(ref: str) -> Reference:
@@ -89,6 +99,13 @@ def parse_reference(ref: str) -> Reference:
             index=int(step_match.group("index")),
             name=step_match.group("name"),
         )
+    # `fields.` must be recognized BEFORE the generic emit rule (which would match
+    # `fields.name` and then reject it as a reserved first segment). Recognizing it
+    # here lets the definition validator apply the notify-specific rule (allowed
+    # only in a notify message with agent_fields, name must be in the schema).
+    fields_match = _FIELDS_REF_RE.match(ref)
+    if fields_match is not None:
+        return FieldsReference(name=fields_match.group("name"))
     emit_match = _EMIT_REF_RE.match(ref)
     if emit_match is not None:
         emit = emit_match.group("emit")
@@ -116,6 +133,7 @@ def validate_string_references(
     *,
     input_names: frozenset[str],
     prior_emit_names: frozenset[str],
+    allowed_fields: frozenset[str] | None = None,
 ) -> None:
     """Validate every placeholder in one stored (pre-resolution) step string field.
 
@@ -125,6 +143,13 @@ def validate_string_references(
     ref must name one of them; an input ref must name a declared input. Indexed
     step-output refs are illegal in stored definitions (they are the resolver's
     output, not an authored form).
+
+    ``allowed_fields`` scopes ``{{fields.<name>}}`` (agent-filled notify fields).
+    It is the set of field names declared by the notify step's ``agent_fields``
+    schema, and is supplied ONLY for a notify ``message`` that declares one. A
+    ``{{fields.*}}`` placeholder in any other context (``allowed_fields is None``)
+    is a validation error; a ``{{fields.X}}`` whose ``X`` is not in the schema is
+    an ``unknown_field_reference``.
     """
 
     for reference in iter_references(value):
@@ -142,6 +167,19 @@ def validate_string_references(
                         f"Template references emit '{reference.emit}', which is not "
                         "produced by an earlier step in run order."
                     ),
+                )
+        elif isinstance(reference, FieldsReference):
+            if allowed_fields is None:
+                raise TemplateReferenceError(
+                    "fields_reference_not_allowed",
+                    f"'{{{{fields.{reference.name}}}}}' is only allowed in a notify step's "
+                    "message that declares 'agent_fields'.",
+                )
+            if reference.name not in allowed_fields:
+                raise TemplateReferenceError(
+                    "unknown_field_reference",
+                    f"Template references agent field '{reference.name}', which is not "
+                    "declared in the notify step's agent_fields schema.",
                 )
         else:  # StepOutputReference
             raise TemplateReferenceError(
@@ -264,6 +302,7 @@ def resolve_string(
     *,
     inputs: dict[str, object],
     emit_index: dict[str, int],
+    fields_index: int | None = None,
 ) -> str:
     """Resolve one templated string at flatten time (the resolver's single pass).
 
@@ -272,6 +311,12 @@ def resolve_string(
     - ``{{<emit>.<field>}}`` is rewritten to ``{{steps[<n>].output.<field>}}``
       using ``emit_index`` (emit name -> flattened step index). The runtime
       late-binds the indexed form.
+    - ``{{fields.<name>}}`` is rewritten to ``{{steps[<fields_index>].output.<name>}}``
+      where ``fields_index`` is the flat index of the notify step's injected
+      notify-fields emit. The validator guarantees a ``{{fields.*}}`` placeholder
+      only ever reaches here with a non-None ``fields_index`` (a notify message
+      that declared ``agent_fields``); anywhere else it is left verbatim rather
+      than mis-resolved.
 
     Segment-based (no re-scanning): replacements are concatenated as literal text.
     """
@@ -286,6 +331,12 @@ def resolve_string(
         elif isinstance(reference, EmitReference):
             index = emit_index[reference.emit]
             out.append(f"{{{{steps[{index}].output.{reference.field}}}}}")
+        elif isinstance(reference, FieldsReference):
+            if fields_index is None:
+                # Can't happen post-validation; leave verbatim rather than guess.
+                out.append(match.group(0))
+            else:
+                out.append(f"{{{{steps[{fields_index}].output.{reference.name}}}}}")
         else:  # already-indexed StepOutputReference — re-emit canonical
             out.append(f"{{{{steps[{reference.index}].output.{reference.name}}}}}")
         last = match.end()
@@ -298,16 +349,24 @@ def resolve_value(
     *,
     inputs: dict[str, object],
     emit_index: dict[str, int],
+    fields_index: int | None = None,
 ) -> object:
     """Recursively resolve every string within a JSON value (see ``resolve_string``)."""
 
     if isinstance(value, str):
-        return resolve_string(value, inputs=inputs, emit_index=emit_index)
+        return resolve_string(
+            value, inputs=inputs, emit_index=emit_index, fields_index=fields_index
+        )
     if isinstance(value, list):
-        return [resolve_value(item, inputs=inputs, emit_index=emit_index) for item in value]
+        return [
+            resolve_value(item, inputs=inputs, emit_index=emit_index, fields_index=fields_index)
+            for item in value
+        ]
     if isinstance(value, dict):
         return {
-            key: resolve_value(item, inputs=inputs, emit_index=emit_index)
+            key: resolve_value(
+                item, inputs=inputs, emit_index=emit_index, fields_index=fields_index
+            )
             for key, item in value.items()
         }
     return value

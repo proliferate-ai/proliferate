@@ -12,11 +12,13 @@
 
 import {
   isWorkflowIdentifier,
+  isWorkflowNotifyFieldType,
   isWorkflowSlot,
   WORKFLOW_BRANCH_TARGETS,
   WORKFLOW_MAX_AGENTS,
   WORKFLOW_MAX_ARGS,
   WORKFLOW_MAX_STEPS,
+  WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX,
   WORKFLOW_RESERVED_REF_SEGMENTS,
   type WorkflowAgentNode,
   type WorkflowDefinition,
@@ -163,6 +165,7 @@ function validateStep(
   options: ValidateWorkflowOptions,
   harness: string,
   priorEmitNames: ReadonlySet<string>,
+  allSlots: ReadonlySet<string>,
 ): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
   const push = (issue: WorkflowIssue | null) => {
@@ -215,7 +218,10 @@ function validateStep(
           message: "Emit name must be an identifier.",
           location: { scope: "step", stepIndex, field: "name" },
         });
-      } else if ((WORKFLOW_RESERVED_REF_SEGMENTS as readonly string[]).includes(step.name)) {
+      } else if (
+        (WORKFLOW_RESERVED_REF_SEGMENTS as readonly string[]).includes(step.name)
+        || step.name.startsWith(WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX)
+      ) {
         push({
           code: "invalid_definition",
           message: `Emit name '${step.name}' is reserved.`,
@@ -241,7 +247,7 @@ function validateStep(
     case "scm.open_pr":
       push(requireText(step.title, "A PR title is required.", stepIndex, "title"));
       break;
-    case "notify":
+    case "notify": {
       push(requireText(step.message, "A message is required.", stepIndex, "message"));
       if (!step.slackChannelId.trim()) {
         push({
@@ -250,7 +256,41 @@ function validateStep(
           location: { scope: "step", stepIndex, field: "slackChannelId" },
         });
       }
+      if (step.agentFields) {
+        if (!allSlots.has(step.agentFields.slot)) {
+          push({
+            code: "unknown_slot",
+            message: `Agent-fields slot '${step.agentFields.slot}' is not an agent in this workflow.`,
+            location: { scope: "step", stepIndex, field: "agentFields.slot" },
+          });
+        }
+        const fieldNames = Object.keys(step.agentFields.schema);
+        if (fieldNames.length === 0) {
+          push({
+            code: "invalid_definition",
+            message: "Agent-fields needs at least one field.",
+            location: { scope: "step", stepIndex, field: "agentFields.schema" },
+          });
+        }
+        for (const [name, spec] of Object.entries(step.agentFields.schema)) {
+          if (!isWorkflowIdentifier(name)) {
+            push({
+              code: "invalid_definition",
+              message: `Agent-field name '${name}' must be an identifier.`,
+              location: { scope: "step", stepIndex, field: "agentFields.schema" },
+            });
+          }
+          if (!isWorkflowNotifyFieldType(spec.type)) {
+            push({
+              code: "invalid_definition",
+              message: `Agent-field '${name}' must be a string, number, or boolean.`,
+              location: { scope: "step", stepIndex, field: "agentFields.schema" },
+            });
+          }
+        }
+      }
       break;
+    }
     case "branch": {
       // `on` must be exactly one emit ref, visible strictly earlier.
       const refs = iterReferences(step.on);
@@ -307,7 +347,12 @@ function validateStep(
   return issues;
 }
 
-function validateNode(node: WorkflowAgentNode, nodeIndex: number, seenSlots: Set<string>): WorkflowIssue[] {
+function validateNode(
+  node: WorkflowAgentNode,
+  nodeIndex: number,
+  seenSlots: Set<string>,
+  workflowIntegrations: readonly string[],
+): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
   if (node.slot.trim() === "" || !isWorkflowSlot(node.slot)) {
     issues.push({
@@ -338,6 +383,36 @@ function validateNode(node: WorkflowAgentNode, nodeIndex: number, seenSlots: Set
       location: { scope: "agent", nodeIndex, field: "model" },
     });
   }
+  // Per-slot integration narrowing (track 3c phase 2, deny-path a): every
+  // entry must be a member of the workflow-level `integrations` list.
+  if (node.integrations !== undefined && !Array.isArray(node.integrations)) {
+    // Present-but-non-array (parse preserved it verbatim): a shape error, matching
+    // the server's "must be a list of namespace strings".
+    issues.push({
+      code: "invalid_definition",
+      message: "Agent integrations must be a list of namespace strings.",
+      location: { scope: "agent", nodeIndex, field: "integrations" },
+    });
+  } else if (node.integrations !== undefined) {
+    const allowed = new Set(workflowIntegrations);
+    const seenNarrowed = new Set<string>();
+    for (const namespace of node.integrations) {
+      if (!allowed.has(namespace)) {
+        issues.push({
+          code: "agent_integrations_not_subset",
+          message: `Integration '${namespace}' is not in this workflow's integrations list.`,
+          location: { scope: "agent", nodeIndex, field: "integrations" },
+        });
+      } else if (seenNarrowed.has(namespace)) {
+        issues.push({
+          code: "duplicate_integration",
+          message: `Duplicate integration '${namespace}' on this agent.`,
+          location: { scope: "agent", nodeIndex, field: "integrations" },
+        });
+      }
+      seenNarrowed.add(namespace);
+    }
+  }
   return issues;
 }
 
@@ -366,6 +441,7 @@ export function validateWorkflowDefinition(
   }
 
   const inputNames = new Set(definition.inputs.map((input) => input.name));
+  const allSlots = new Set(definition.agents.map((node) => node.slot));
   const seenSlots = new Set<string>();
   const seenEmits = new Set<string>();
   const priorEmits = new Set<string>();
@@ -373,13 +449,23 @@ export function validateWorkflowDefinition(
   let flatIndex = 0;
 
   definition.agents.forEach((node, nodeIndex) => {
-    issues.push(...validateNode(node, nodeIndex, seenSlots));
+    issues.push(...validateNode(node, nodeIndex, seenSlots, definition.integrations));
     totalSteps += node.steps.length;
     node.steps.forEach((step) => {
       const stepIndex = flatIndex;
-      issues.push(...validateStep(step, stepIndex, options, node.harness, priorEmits));
+      issues.push(...validateStep(step, stepIndex, options, node.harness, priorEmits, allSlots));
+      // {{fields.*}} is scoped to a notify message that declared agent_fields.
+      const allowedFields =
+        step.kind === "notify" && step.agentFields
+          ? new Set(Object.keys(step.agentFields.schema))
+          : null;
       for (const { field, value } of templatedFields(step)) {
-        for (const refIssue of validateStringReferences(value, { inputNames, priorEmitNames: priorEmits })) {
+        const fieldsScope = field === "message" ? allowedFields : null;
+        for (const refIssue of validateStringReferences(value, {
+          inputNames,
+          priorEmitNames: priorEmits,
+          allowedFields: fieldsScope,
+        })) {
           issues.push({
             code: refIssue.code,
             message: refIssue.message,

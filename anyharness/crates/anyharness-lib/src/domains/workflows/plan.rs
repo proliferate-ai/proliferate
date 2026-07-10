@@ -663,6 +663,56 @@ mod tests {
         assert!(gateway.integrations.is_empty());
     }
 
+    // --- notify agent-filled fields (track 3c) ---
+
+    #[test]
+    fn parses_expanded_notify_fields_plan() {
+        // DENY-PATH (d): the server expands a notify-with-agent_fields into an
+        // injected `agent.emit` (in the named slot) followed by the notify whose
+        // {{fields.*}} were rewritten to indexed refs against that emit. The
+        // runtime never learns the word "fields" — it sees a plain emit + a plain
+        // notify with an indexed placeholder, both of which must parse.
+        let plan = parse(
+            r#"{
+                "run_id": "run-nf",
+                "plan_version": 1,
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [
+                    { "key": "0.-.0", "slot": "main", "kind": "agent.emit",
+                      "prompt": "classify", "max_attempts": 3,
+                      "output_schema": { "type": "object" } },
+                    { "key": "0.-.1.notify_fields", "slot": "main", "kind": "agent.emit",
+                      "label": "Prepare notification fields",
+                      "prompt": "Respond with a JSON object containing: summary, risk",
+                      "max_attempts": 3,
+                      "output_schema": {
+                          "type": "object",
+                          "properties": { "summary": { "type": "string" },
+                                          "risk": { "type": "number" } },
+                          "required": ["summary", "risk"],
+                          "additionalProperties": false
+                      } },
+                    { "key": "0.-.1", "slot": "main", "kind": "notify",
+                      "slack_channel_id": "C1",
+                      "message": "done {{steps[0].output.result}} — {{steps[1].output.summary}}" }
+                ]
+            }"#,
+        )
+        .expect("expanded notify-fields plan must parse");
+        assert_eq!(plan.step_count(), 3);
+        // The injected step is an ordinary agent.emit; its 4-segment key is opaque
+        // to the runtime.
+        assert_eq!(plan.steps[1].key, "0.-.1.notify_fields");
+        let StepKind::AgentEmit(_) = &plan.steps[1].kind else {
+            panic!("expected injected agent.emit");
+        };
+        let StepKind::Notify(notify) = &plan.steps[2].kind else {
+            panic!("expected notify");
+        };
+        // The message carries indexed refs pointing at the injected emit (index 1).
+        assert!(notify.message.contains("{{steps[1].output.summary}}"));
+    }
+
     #[test]
     fn plans_without_gateway_still_parse() {
         // A token is minted for every run under L16, but a gateway-less plan

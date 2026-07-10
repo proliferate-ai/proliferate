@@ -45,9 +45,18 @@ def resolve_run_scope(definition: dict[str, object]) -> dict[str, dict[str, obje
     """The run's frozen namespace grant, stamped per slot (E3, §2.6).
 
     Shape: ``{"<slot>": {"integrations": ["linear", "slack"]}}``. The definition's
-    workflow-level ``integrations`` list applies to every slot in v1 (per-slot
-    narrowing is a later editor+resolver feature that changes NO schema — the plan
-    is already per-slot). No ``tools/list`` fetch, no per-provider tool arrays.
+    workflow-level ``integrations`` list applies to every slot by default; a node
+    that declares its own ``integrations`` list (already validated as a subset at
+    save time, ``definition.py``) narrows just that slot's grant (track 3c phase
+    2 — resolver-only change, per the data contract's "the resolved plan is
+    already per-slot" note; no schema change to the frozen token). No
+    ``tools/list`` fetch, no per-provider tool arrays.
+
+    Enforcement caveat: the per-run gateway token is per-run, not per-slot, and a
+    caller does not identify its slot, so the gateway enforces the UNION of every
+    slot's grant (``_flatten_run_scope`` in integration_gateway/dependencies.py).
+    The per-slot grant here narrows what each slot is GIVEN in the frozen token; true
+    per-slot enforcement (callers identifying their slot) is Part II future work.
 
     Composition (L20) inlines a child's *steps*, not its grant: the run's scope is
     the top-level definition's own ``integrations[]`` (L24 — each definition sizes
@@ -61,12 +70,21 @@ def resolve_run_scope(definition: dict[str, object]) -> dict[str, dict[str, obje
             seen.add(item)
             namespaces.append(item)
 
-    slots: list[str] = []
+    scope: dict[str, dict[str, object]] = {}
     for node in definition.get("agents") or []:
-        if isinstance(node, dict) and isinstance(node.get("slot"), str):
-            slots.append(str(node["slot"]))
+        if not isinstance(node, dict):
+            continue
+        slot = node.get("slot")
+        if not isinstance(slot, str):
+            continue
+        node_integrations = node.get("integrations")
+        if isinstance(node_integrations, list):
+            slot_namespaces = [ns for ns in node_integrations if isinstance(ns, str)]
+        else:
+            slot_namespaces = list(namespaces)
+        scope[slot] = {"integrations": slot_namespaces}
     # A grant with no slots (e.g. a zero-agent draft) is a no-op scope.
-    return {slot: {"integrations": list(namespaces)} for slot in slots}
+    return scope
 
 
 def granted_namespaces(scope: dict[str, dict[str, object]]) -> list[str]:

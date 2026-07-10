@@ -1,4 +1,5 @@
 import { Badge } from "@proliferate/ui/primitives/Badge";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { CircleAlert, Check } from "@proliferate/ui/icons";
 
 /** One selectable gateway provider (spec 6.1 / L21): a namespace visible to the
@@ -97,6 +98,84 @@ export function WorkflowFunctionsCard({ integrations, providers, onChange }: Wor
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+export interface WorkflowAgentIntegrationsRowProps {
+  /** The workflow-level granted namespaces (this row's option universe). */
+  workflowIntegrations: readonly string[];
+  /** Display names for the workflow's namespaces, keyed by namespace. */
+  displayNames: ReadonlyMap<string, string>;
+  /** `undefined` = this slot keeps the full workflow-level list (default). */
+  value: readonly string[] | undefined;
+  onChange: (next: string[] | undefined) => void;
+}
+
+/**
+ * Per-agent integration narrowing (track 3c phase 2, data-contract §3: the
+ * resolved plan is already per-slot, so this is a resolver-only change with
+ * a quiet editor surface). Same toggle-chip atom as the workflow-level card
+ * above, scoped to the workflow's own granted namespaces — narrowing can only
+ * ever be a subset. Rendered in the agent panel, only when the workflow
+ * declares at least one integration.
+ */
+export function WorkflowAgentIntegrationsRow({
+  workflowIntegrations,
+  displayNames,
+  value,
+  onChange,
+}: WorkflowAgentIntegrationsRowProps) {
+  const narrowed = value !== undefined;
+  const selected = new Set(value ?? workflowIntegrations);
+
+  const toggle = (namespace: string) => {
+    const base = value ?? workflowIntegrations;
+    const next = base.includes(namespace)
+      ? base.filter((ns) => ns !== namespace)
+      : [...base, namespace];
+    onChange(next);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm text-muted-foreground">Integrations</span>
+        {narrowed ? (
+          <Button variant="ghost" size="sm" onClick={() => onChange(undefined)}>
+            All workflow integrations
+          </Button>
+        ) : (
+          <span className="text-xs text-faint">All workflow integrations</span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {workflowIntegrations.map((namespace) => {
+          const on = selected.has(namespace);
+          return (
+            <button
+              key={namespace}
+              type="button"
+              onClick={() => toggle(namespace)}
+              aria-pressed={on}
+              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                on
+                  ? "border-accent bg-accent/10 text-foreground"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {on ? <Check className="size-3.5" aria-hidden /> : null}
+              <span>{displayNames.get(namespace) ?? namespace}</span>
+            </button>
+          );
+        })}
+      </div>
+      {narrowed ? (
+        <p className="text-xs text-faint">
+          Selects which of the workflow&apos;s integrations this agent is granted. All agents in a
+          run share the run&apos;s gateway grant today.
+        </p>
+      ) : null}
     </div>
   );
 }

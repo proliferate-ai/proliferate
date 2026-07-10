@@ -34,6 +34,11 @@ const REPO_OPTIONS: WorkflowTriggerRepoOption[] = [
   { fullName: "acme/web", label: "acme/web" },
 ];
 
+// D-028①: the desktop's local clones a SCHEDULE trigger may pin instead (2a).
+const LOCAL_REPO_OPTIONS: WorkflowTriggerRepoOption[] = [
+  { fullName: "acme/proliferate", label: "acme/proliferate" },
+];
+
 const ARGS: WorkflowInputSpec[] = [
   { name: "pr_number", type: "number", required: true },
   { name: "env", type: "choice", choices: ["staging", "prod"], required: false, default: "staging" },
@@ -116,6 +121,7 @@ export function WorkflowFormsFixtures() {
     rrule: DAILY_RRULE,
     timezone: "America/Los_Angeles",
     preset: presetForRrule(DAILY_RRULE),
+    targetMode: "personal_cloud",
     pollUrl: "",
     pollAuthHeader: "",
     pollHasAuth: false,
@@ -135,6 +141,7 @@ export function WorkflowFormsFixtures() {
     rrule: DAILY_RRULE,
     timezone: "America/Los_Angeles",
     preset: presetForRrule(DAILY_RRULE),
+    targetMode: "personal_cloud",
     pollUrl: "https://issues.example.com/poll/new-issues",
     pollAuthHeader: "Authorization",
     pollHasAuth: true,
@@ -177,15 +184,17 @@ export function WorkflowFormsFixtures() {
             triggers={TRIGGERS}
             activeId={undefined}
             addingKind={null}
-            addDisabled={false}
+            scheduleAddDisabled={false}
+            pollAddDisabled={false}
             onAdd={() => {}}
             onEditTrigger={() => {}}
           />
-          <p className="text-xs text-faint">Runs manually from here or the runs list; schedules and polls fire in the cloud.</p>
+          <p className="text-xs text-faint">Runs manually from here or the runs list; schedules can run on this Mac or in the cloud — polls fire in the cloud.</p>
           <TriggerForm
             draft={draft}
             args={args}
             repoOptions={REPO_OPTIONS}
+            localRepoOptions={LOCAL_REPO_OPTIONS}
             error={null}
             errorMismatches={null}
             busy={false}
@@ -205,6 +214,7 @@ export function WorkflowFormsFixtures() {
             draft={pollDraft}
             args={args}
             repoOptions={REPO_OPTIONS}
+            localRepoOptions={LOCAL_REPO_OPTIONS}
             error={null}
             errorMismatches={null}
             busy={false}
@@ -224,13 +234,14 @@ export function WorkflowFormsFixtures() {
             triggers={[]}
             activeId={undefined}
             addingKind={null}
-            addDisabled
+            scheduleAddDisabled
+            pollAddDisabled
             onAdd={() => {}}
             onEditTrigger={() => {}}
           />
           <p className="text-xs text-faint">
-            Scheduled and poll runs execute in the cloud. Create a cloud workspace to trigger this workflow that way;
-            local triggers are coming — run it manually for now.
+            Configure a cloud repository or open a local repo to trigger this workflow that way; run
+            it manually for now.
           </p>
         </div>
 

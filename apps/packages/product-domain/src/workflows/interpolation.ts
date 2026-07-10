@@ -21,13 +21,17 @@ import { WORKFLOW_RESERVED_REF_SEGMENTS } from "./definition";
 /** A placeholder that is `{{` (not backslash-escaped), a body, then `}}`. */
 const PLACEHOLDER_RE = /(?<!\\)\{\{\s*([^{}]*?)\s*\}\}/g;
 const INPUT_REF_RE = /^inputs\.([A-Za-z_][A-Za-z0-9_]*)$/;
+const FIELDS_REF_RE = /^fields\.([A-Za-z_][A-Za-z0-9_]*)$/;
 const EMIT_REF_RE = /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$/;
 
 const RESERVED = new Set<string>(WORKFLOW_RESERVED_REF_SEGMENTS);
 
 export type WorkflowReference =
   | { kind: "input"; name: string }
-  | { kind: "emit"; emit: string; field: string };
+  | { kind: "emit"; emit: string; field: string }
+  // Agent-filled notify field (track 3c). Legal only in a notify message that
+  // declares agent_fields; the resolver rewrites it to an indexed ref.
+  | { kind: "fields"; name: string };
 
 export interface PlaceholderMatch {
   raw: string;
@@ -40,7 +44,9 @@ export interface PlaceholderMatch {
 export type TemplateReferenceCode =
   | "invalid_template_reference"
   | "unknown_input_reference"
-  | "forward_emit_reference";
+  | "forward_emit_reference"
+  | "fields_reference_not_allowed"
+  | "unknown_field_reference";
 
 export interface TemplateReferenceIssue {
   code: TemplateReferenceCode;
@@ -53,6 +59,12 @@ export function parseReference(body: string): WorkflowReference | null {
   const inputMatch = INPUT_REF_RE.exec(body);
   if (inputMatch) {
     return { kind: "input", name: inputMatch[1]! };
+  }
+  // `fields.` before the generic emit rule (which would match `fields.name` then
+  // fail the reserved-segment guard). Legality is enforced in validation.
+  const fieldsMatch = FIELDS_REF_RE.exec(body);
+  if (fieldsMatch) {
+    return { kind: "fields", name: fieldsMatch[1]! };
   }
   const emitMatch = EMIT_REF_RE.exec(body);
   if (emitMatch && !RESERVED.has(emitMatch[1]!)) {
@@ -98,9 +110,19 @@ export function iterReferences(value: string): WorkflowReference[] {
  */
 export function validateStringReferences(
   value: string,
-  options: { inputNames: ReadonlySet<string>; priorEmitNames: ReadonlySet<string> },
+  options: {
+    inputNames: ReadonlySet<string>;
+    priorEmitNames: ReadonlySet<string>;
+    /**
+     * The agent_fields schema field names, supplied ONLY for a notify `message`
+     * that declares agent_fields (track 3c). `null`/undefined = `{{fields.*}}` is
+     * illegal in this context.
+     */
+    allowedFields?: ReadonlySet<string> | null;
+  },
 ): TemplateReferenceIssue[] {
   const issues: TemplateReferenceIssue[] = [];
+  const allowedFields = options.allowedFields ?? null;
   for (const placeholder of iterPlaceholders(value)) {
     const { reference } = placeholder;
     if (reference === null) {
@@ -118,6 +140,24 @@ export function validateStringReferences(
         issues.push({
           code: "unknown_input_reference",
           message: `Template references unknown input '${reference.name}'.`,
+          match: placeholder,
+        });
+      }
+    } else if (reference.kind === "fields") {
+      if (allowedFields === null) {
+        issues.push({
+          code: "fields_reference_not_allowed",
+          message:
+            `'${placeholder.raw}' is only allowed in a notify step's message `
+            + "that declares agent_fields.",
+          match: placeholder,
+        });
+      } else if (!allowedFields.has(reference.name)) {
+        issues.push({
+          code: "unknown_field_reference",
+          message:
+            `Template references agent field '${reference.name}', which is not `
+            + "declared in the notify step's agent_fields schema.",
           match: placeholder,
         });
       }

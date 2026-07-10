@@ -57,6 +57,10 @@ from proliferate.server.cloud.gateway.service import ensure_cloud_sandbox_gatewa
 from proliferate.server.cloud.integration_gateway.domain.scope import (
     intersect_namespaces_with_worker,
 )
+from proliferate.server.cloud.workflows.gateway_grants import (
+    granted_namespaces,
+    resolve_run_scope,
+)
 from proliferate.integrations.anyharness.workflow_runs import cancel_workflow_run
 from proliferate.server.cloud.workflows.domain.run_status import (
     RunTransitionError,
@@ -226,6 +230,15 @@ async def _apply_delivery_scope_intersection(
     now. NULL worker scope = unscoped passthrough (run scope unchanged, distinct
     from an empty allowlist). Re-freezes both the token row and the plan's gateway
     block so the shipped plan and the enforced token agree.
+
+    Per-slot narrowing (track 3c phase 2) is preserved: each slot's OWN namespace
+    list is intersected with the worker allowlist independently — recomputed from the
+    pinned version's definition, exactly as StartRun/rotate resolve it. Stamping
+    every slot with the flat union (the earlier bug) silently widened a narrowed
+    slot's stored grant. The plan's flat ``gateway.integrations`` stays the union of
+    the per-slot intersections; the runtime only reads its emptiness for the L22
+    local-lane fail-fast, and enforcement is union-at-gateway until Part II slot
+    identity (``_flatten_run_scope`` in integration_gateway/dependencies.py).
     """
 
     plan = dict(run.resolved_plan_json or {})
@@ -240,19 +253,34 @@ async def _apply_delivery_scope_intersection(
     worker_scope = await runtime_workers_store.get_active_worker_gateway_scope_for_owner(
         db, owner_user_id=run.executor_user_id
     )
-    intersected = intersect_namespaces_with_worker(run_namespaces, worker_scope)
-    if intersected == run_namespaces:
+    # NULL worker scope = unscoped passthrough: the frozen (already per-slot) scope
+    # is enforced as-is; nothing to narrow.
+    if worker_scope is None:
         return plan
-    # Re-freeze the per-slot token scope to the intersected namespace set (v1
-    # stamps every slot with the same list; rebuild from the plan's session slots).
-    sessions = plan.get("sessions")
-    slots = list(sessions) if isinstance(sessions, dict) else []
-    new_scope_json = {slot: {"integrations": list(intersected)} for slot in slots}
+    version = await store.get_version(db, run.workflow_version_id)
+    if version is None:  # pragma: no cover - pinned versions are immutable
+        return plan
+    # Intersect EACH slot's own grant with the worker allowlist so a slot narrowed at
+    # StartRun keeps its narrowing and never gains a worker-allowed namespace it was
+    # not granted.
+    run_scope = resolve_run_scope(version.definition_json)
+    new_scope_json: dict[str, dict[str, object]] = {}
+    for slot, slot_scope in run_scope.items():
+        slot_namespaces = [
+            ns for ns in (slot_scope.get("integrations") or []) if isinstance(ns, str)
+        ]
+        new_scope_json[slot] = {
+            "integrations": intersect_namespaces_with_worker(slot_namespaces, worker_scope)
+        }
+    intersected_union = granted_namespaces(new_scope_json)
+    # Worker allowlist ⊇ the run's union: no namespace dropped from any slot.
+    if intersected_union == sorted(run_namespaces):
+        return plan
     await store.refreeze_run_gateway_token_scope(
         db, workflow_run_id=run.id, scope_json=new_scope_json
     )
     gateway = dict(gateway)
-    gateway["integrations"] = intersected
+    gateway["integrations"] = intersected_union
     plan["gateway"] = gateway
     updated = await store.update_run(db, run_id=run.id, resolved_plan_json=plan)
     return updated.resolved_plan_json if updated is not None else plan

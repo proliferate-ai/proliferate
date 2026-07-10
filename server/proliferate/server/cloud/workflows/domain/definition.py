@@ -23,6 +23,7 @@ from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_BRANCH_TARGETS,
     SUPPORTED_WORKFLOW_GOAL_ON_BLOCKED,
     SUPPORTED_WORKFLOW_INPUT_TYPES,
+    SUPPORTED_WORKFLOW_NOTIFY_FIELD_TYPES,
     SUPPORTED_WORKFLOW_ON_FAIL_KINDS,
     SUPPORTED_WORKFLOW_STEP_KINDS,
     WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS,
@@ -30,6 +31,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_MAX_AGENTS,
     WORKFLOW_MAX_ARGS,
     WORKFLOW_MAX_STEPS,
+    WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX,
     WORKFLOW_ON_FAIL_RETRY,
     WORKFLOW_ON_FAIL_STOP,
     WORKFLOW_RESERVED_REF_SEGMENTS,
@@ -66,6 +68,22 @@ class WorkflowDefinitionError(Exception):
 
 def _err(code: str, message: str) -> WorkflowDefinitionError:
     return WorkflowDefinitionError(code, message)
+
+
+def _reject_reserved_ref_name(name: str, *, field: str) -> None:
+    """A ref-namespace name (emit / include handle) must avoid reserved segments
+    and the resolver-owned notify-fields emit prefix."""
+
+    if name in WORKFLOW_RESERVED_REF_SEGMENTS:
+        raise _err(
+            "invalid_definition",
+            f"'{field}' '{name}' is a reserved reference segment.",
+        )
+    if name.startswith(WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX):
+        raise _err(
+            "invalid_definition",
+            f"'{field}' '{name}' uses the reserved '{WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX}' prefix.",
+        )
 
 
 # An input-mapping key on a ``workflow.include`` step: an identifier that must
@@ -365,11 +383,7 @@ def _parse_agent_emit(step: dict[str, object], *, field: str) -> dict[str, objec
     name = _require_str(step, "name", field=field)
     if not _IDENTIFIER_RE.match(name):
         raise _err("invalid_definition", f"'{field}.name' must be an identifier.")
-    if name in WORKFLOW_RESERVED_REF_SEGMENTS:
-        raise _err(
-            "invalid_definition",
-            f"'{field}.name' '{name}' is a reserved reference segment.",
-        )
+    _reject_reserved_ref_name(name, field=f"{field}.name")
     canonical: dict[str, object] = {
         "prompt": _require_str(step, "prompt", field=field),
         "name": name,
@@ -428,15 +442,76 @@ def _parse_scm_open_pr(step: dict[str, object], *, field: str) -> dict[str, obje
 
 
 def _parse_notify(step: dict[str, object], *, field: str) -> dict[str, object]:
-    """Slack-only notify (E1b): ``{slack_channel_id, message}``, template-only v1."""
+    """Slack-only notify (E1b): ``{slack_channel_id, message}``.
+
+    v1 is template-only. The optional ``agent_fields`` block (track 3c) lets an
+    agent fill named fields the ``message`` references as ``{{fields.<name>}}``:
+    a slot + a flat scalar schema. The resolver expands a notify-with-agent_fields
+    into an injected ``agent.emit`` (in that slot) followed by the notify, whose
+    ``{{fields.*}}`` late-bind to the injected emit's output.
+    """
 
     _reject_unknown_keys(
-        step, {"kind", "on_fail", "label", "message", "slack_channel_id"}, field=field
+        step,
+        {"kind", "on_fail", "label", "message", "slack_channel_id", "agent_fields"},
+        field=field,
     )
-    return {
+    canonical: dict[str, object] = {
         "slack_channel_id": _require_str(step, "slack_channel_id", field=field),
         "message": _require_str(step, "message", field=field),
     }
+    if "agent_fields" in step and step["agent_fields"] is not None:
+        canonical["agent_fields"] = _parse_notify_agent_fields(step["agent_fields"], field=field)
+    return canonical
+
+
+def _parse_notify_agent_fields(raw: object, *, field: str) -> dict[str, object]:
+    """Parse a notify ``agent_fields`` block: ``{slot, schema}``.
+
+    ``slot`` names the agent that fills the fields (existence is checked in the
+    spine walk, which knows every slot). ``schema`` is a **flat** object mapping an
+    identifier field name to ``{type, description?}`` where ``type`` is one of the
+    scalar notify-field types (string/number/boolean) — nested objects/arrays are
+    rejected so the injected emit's ``output_schema`` stays a flat contract.
+    """
+
+    agent_fields = _require_dict(raw, field=f"{field}.agent_fields")
+    _reject_unknown_keys(agent_fields, {"slot", "schema"}, field=f"{field}.agent_fields")
+    slot = _require_str(agent_fields, "slot", field=f"{field}.agent_fields")
+    if not _SLOT_RE.match(slot):
+        raise _err(
+            "invalid_definition",
+            f"'{field}.agent_fields.slot' '{slot}' must match ^[a-z][a-z0-9_]*$.",
+        )
+    raw_schema = agent_fields.get("schema")
+    if not isinstance(raw_schema, dict) or not raw_schema:
+        raise _err(
+            "invalid_definition",
+            f"'{field}.agent_fields.schema' must be a non-empty object of named fields.",
+        )
+    schema: dict[str, object] = {}
+    for name, spec in raw_schema.items():
+        if not isinstance(name, str) or not _IDENTIFIER_RE.match(name):
+            raise _err(
+                "invalid_definition",
+                f"'{field}.agent_fields.schema' field name '{name}' must be an identifier.",
+            )
+        spec_field = f"{field}.agent_fields.schema['{name}']"
+        spec_dict = _require_dict(spec, field=spec_field)
+        _reject_unknown_keys(spec_dict, {"type", "description"}, field=spec_field)
+        field_type = spec_dict.get("type")
+        if field_type not in SUPPORTED_WORKFLOW_NOTIFY_FIELD_TYPES:
+            raise _err(
+                "invalid_definition",
+                f"'{spec_field}.type' must be one of "
+                f"{sorted(SUPPORTED_WORKFLOW_NOTIFY_FIELD_TYPES)}.",
+            )
+        canonical_spec: dict[str, object] = {"type": field_type}
+        description = _optional_str(spec_dict, "description", field=spec_field)
+        if description is not None:
+            canonical_spec["description"] = description
+        schema[name] = canonical_spec
+    return {"slot": slot, "schema": schema}
 
 
 def _parse_branch(step: dict[str, object], *, field: str) -> dict[str, object]:
@@ -512,10 +587,7 @@ def _parse_workflow_include(step: dict[str, object], *, field: str) -> dict[str,
     if name is not None:
         if not _IDENTIFIER_RE.match(name):
             raise _err("invalid_definition", f"'{field}.name' must be an identifier.")
-        if name in WORKFLOW_RESERVED_REF_SEGMENTS:
-            raise _err(
-                "invalid_definition", f"'{field}.name' '{name}' is a reserved reference segment."
-            )
+        _reject_reserved_ref_name(name, field=f"{field}.name")
         canonical["name"] = name
     return canonical
 
@@ -552,7 +624,47 @@ def _parse_step(item: object, *, field: str) -> dict[str, object]:
 # --- agents spine (A4) ---------------------------------------------------------
 
 
-def _parse_agents(raw: object, *, require_steps: bool) -> list[dict[str, object]]:
+def _parse_agent_integrations(
+    raw: object, *, workflow_integrations: list[str], field: str
+) -> list[str]:
+    """Per-slot integration narrowing (track 3c phase 2).
+
+    Optional on an agent node: a subset of the workflow-level ``integrations``
+    list. Absent = the slot keeps the workflow-level list (default, unchanged
+    behavior); an explicit (possibly empty) list narrows the slot's runtime
+    grant to exactly those namespaces — the resolver-only change described in
+    the data contract §3/§2.6.
+    """
+
+    if not isinstance(raw, list):
+        raise _err(
+            "invalid_definition", f"'{field}.integrations' must be a list of namespace strings."
+        )
+    allowed = set(workflow_integrations)
+    seen: set[str] = set()
+    canonical: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or not item.strip():
+            raise _err(
+                "invalid_definition",
+                f"Each '{field}.integrations' entry must be a non-empty namespace string.",
+            )
+        if item not in allowed:
+            raise _err(
+                "agent_integrations_not_subset",
+                f"'{field}.integrations' entry '{item}' is not one of the workflow's "
+                "declared integrations.",
+            )
+        if item in seen:
+            raise _err("duplicate_integration", f"Duplicate integration '{item}' in '{field}'.")
+        seen.add(item)
+        canonical.append(item)
+    return canonical
+
+
+def _parse_agents(
+    raw: object, *, require_steps: bool, workflow_integrations: list[str]
+) -> list[dict[str, object]]:
     if raw is None and not require_steps:
         return []
     if not isinstance(raw, list):
@@ -569,7 +681,9 @@ def _parse_agents(raw: object, *, require_steps: bool) -> list[dict[str, object]
     for node_index, item in enumerate(raw):
         node = _require_dict(item, field=f"agents[{node_index}]")
         _reject_unknown_keys(
-            node, {"slot", "harness", "model", "steps"}, field=f"agents[{node_index}]"
+            node,
+            {"slot", "harness", "model", "steps", "integrations"},
+            field=f"agents[{node_index}]",
         )
         slot = _require_str(node, "slot", field=f"agents[{node_index}]")
         if not _SLOT_RE.match(slot):
@@ -603,27 +717,50 @@ def _parse_agents(raw: object, *, require_steps: bool) -> list[dict[str, object]
                 "too_many_steps",
                 f"A workflow may declare at most {WORKFLOW_MAX_STEPS} steps.",
             )
-        canonical_agents.append(
-            {"slot": slot, "harness": harness, "model": model, "steps": steps}
-        )
+        canonical_node: dict[str, object] = {
+            "slot": slot,
+            "harness": harness,
+            "model": model,
+            "steps": steps,
+        }
+        if "integrations" in node:
+            canonical_node["integrations"] = _parse_agent_integrations(
+                node.get("integrations"),
+                workflow_integrations=workflow_integrations,
+                field=f"agents[{node_index}]",
+            )
+        canonical_agents.append(canonical_node)
     return canonical_agents
 
 
 # --- template reference + emit validation --------------------------------------
 
 
-def _iter_step_strings(step: dict[str, object]) -> Iterator[str]:
-    """Yield every templated string field within a canonical step."""
+def _iter_step_strings(step: dict[str, object]) -> Iterator[tuple[str, str]]:
+    """Yield ``(field_name, value)`` for every templated string within a canonical
+    step. ``field_name`` is the step's top-level key (nested dict strings inherit
+    their parent key) — enough to scope the notify ``message`` for ``{{fields.*}}``.
+
+    ``agent_fields`` is skipped: it is configuration (slot + schema), not a
+    template holder, and is validated structurally in ``_parse_notify``."""
 
     for key, value in step.items():
-        if key in {"kind", "on_fail", "label", "name", "output_schema", "required_invocation"}:
+        if key in {
+            "kind",
+            "on_fail",
+            "label",
+            "name",
+            "output_schema",
+            "required_invocation",
+            "agent_fields",
+        }:
             continue
         if isinstance(value, str):
-            yield value
+            yield key, value
         elif isinstance(value, dict):
             for sub in value.values():
                 if isinstance(sub, str):
-                    yield sub
+                    yield key, sub
 
 
 def _validate_spine_references(
@@ -638,11 +775,29 @@ def _validate_spine_references(
     child's emits are namespaced away at resolution and are never visible here
     (cross-spine refs are a Part II concern)."""
 
+    all_slots = frozenset(str(node["slot"]) for node in agents)
     prior_emits: set[str] = set()
     include_names: set[str] = set()
     for node in agents:
         for step in node["steps"]:  # type: ignore[index]
-            for value in _iter_step_strings(step):
+            agent_fields = (
+                step.get("agent_fields") if step["kind"] == WORKFLOW_STEP_NOTIFY else None
+            )
+            allowed_fields: frozenset[str] | None = None
+            if isinstance(agent_fields, dict):
+                schema = agent_fields.get("schema", {})
+                allowed_fields = frozenset(schema.keys() if isinstance(schema, dict) else ())
+                slot = agent_fields.get("slot")
+                if slot not in all_slots:
+                    raise _err(
+                        "unknown_slot",
+                        f"notify agent_fields.slot '{slot}' is not an agent slot in this "
+                        "workflow.",
+                    )
+            for field_name, value in _iter_step_strings(step):
+                # {{fields.*}} is scoped to the notify `message` that declared
+                # agent_fields; anywhere else it is a validation error (None scope).
+                fields_scope = allowed_fields if field_name == "message" else None
                 for reference in iter_references(value):
                     if (
                         isinstance(reference, EmitReference)
@@ -658,6 +813,7 @@ def _validate_spine_references(
                         value,
                         input_names=input_names,
                         prior_emit_names=frozenset(prior_emits),
+                        allowed_fields=fields_scope,
                     )
                 except TemplateReferenceError as exc:
                     raise _err(exc.code, exc.message) from exc
@@ -719,7 +875,9 @@ def parse_definition(
 
     canonical_inputs, arg_specs = _parse_inputs(definition.get("inputs"))
     integrations = _parse_integrations(definition.get("integrations"))
-    agents = _parse_agents(definition.get("agents"), require_steps=require_steps)
+    agents = _parse_agents(
+        definition.get("agents"), require_steps=require_steps, workflow_integrations=integrations
+    )
     _validate_spine_references(agents, frozenset(spec.name for spec in arg_specs))
 
     canonical: dict[str, object] = {

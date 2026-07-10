@@ -229,6 +229,27 @@ mod tests {
     }
 
     #[test]
+    fn notify_fields_late_bind_to_injected_emit_output() {
+        // Track 3c: a notify's {{fields.*}} were rewritten server-side to indexed
+        // refs against the injected notify-fields emit. At runtime they late-bind
+        // exactly like any other step-output ref — the machinery is unchanged.
+        let mut outputs = StepOutputs::new();
+        outputs.insert(0, serde_json::json!({ "result": "green" }));
+        outputs.insert(1, serde_json::json!({ "summary": "all good", "risk": 2 }));
+        let step: PlanStep = serde_json::from_value(serde_json::json!({
+            "kind": "notify",
+            "slack_channel_id": "C1",
+            "message": "done {{steps[0].output.result}} — {{steps[1].output.summary}} (risk {{steps[1].output.risk}})"
+        }))
+        .expect("parse notify");
+        let resolved = resolve_step(&step, &outputs);
+        let StepKind::Notify(notify) = &resolved.kind else {
+            panic!("expected notify");
+        };
+        assert_eq!(notify.message, "done green — all good (risk 2)");
+    }
+
+    #[test]
     fn resolve_step_rewrites_prompt_and_goal() {
         let step: PlanStep = serde_json::from_value(serde_json::json!({
             "kind": "agent.prompt",

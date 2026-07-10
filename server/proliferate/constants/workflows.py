@@ -260,6 +260,32 @@ WORKFLOW_MAX_AGENTS: Final = 20
 # name (emit names share the ref namespace).
 WORKFLOW_RESERVED_REF_SEGMENTS: Final = frozenset({"inputs", "steps", "fields"})
 
+# --- notify agent-filled fields (data-contract Part II follow-up; track 3c). ---
+# A `notify` step may declare an `agent_fields` block: a slot + a flat schema of
+# named scalar fields the AGENT fills (via the emit machinery) right before the
+# notification is sent. The template references those values as `{{fields.<name>}}`
+# in the notify `message` (`fields` is a reserved ref segment above). The resolver
+# expands one notify-with-agent_fields into TWO plan steps — an injected
+# `agent.emit` in the named slot, then the notify whose `{{fields.*}}` late-bind to
+# that emit's output (indexed refs, exactly like `{{<emit>.<field>}}`). The runtime
+# never learns the word `fields`; plan.rs is untouched. Schema field types are the
+# scalar subset (the runtime's emit output_schema validates the emitted object).
+WORKFLOW_NOTIFY_FIELD_TYPE_STRING: Final = "string"
+WORKFLOW_NOTIFY_FIELD_TYPE_NUMBER: Final = "number"
+WORKFLOW_NOTIFY_FIELD_TYPE_BOOLEAN: Final = "boolean"
+SUPPORTED_WORKFLOW_NOTIFY_FIELD_TYPES: Final = frozenset(
+    {
+        WORKFLOW_NOTIFY_FIELD_TYPE_STRING,
+        WORKFLOW_NOTIFY_FIELD_TYPE_NUMBER,
+        WORKFLOW_NOTIFY_FIELD_TYPE_BOOLEAN,
+    }
+)
+# Reserved emit-name prefix for the resolver's injected notify-fields emit. Users
+# may not author an emit (or include handle) whose name starts with this — the
+# resolver owns the namespace so an injected step can never collide with a
+# user-authored one.
+WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX: Final = "__notify_fields"
+
 # --- run isolation (wave 2b; data-contract §4 plan-level, mental-model §9/§11).
 # Whether the run's sessions execute directly in the pinned workspace's checkout
 # (``workspace``, the legacy behavior — also what an ABSENT field means, so old

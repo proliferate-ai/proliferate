@@ -177,6 +177,90 @@ async def test_mint_resolves_declared_scope(db_session: AsyncSession) -> None:
     assert token.scope_json == _scope_json(["context7"])
 
 
+# --- per-slot integration narrowing (track 3c phase 2) -------------------------
+
+
+async def test_resolve_run_scope_narrows_one_slot_leaves_others_default() -> None:
+    from proliferate.server.cloud.workflows.gateway_grants import resolve_run_scope
+
+    definition = {
+        "version": 1,
+        "inputs": [],
+        "integrations": ["linear", "slack"],
+        "agents": [
+            {
+                "slot": "triage",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
+                "integrations": ["linear"],
+            },
+            {
+                "slot": "fix",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
+            },
+        ],
+    }
+    scope = resolve_run_scope(definition)
+    # Narrowed slot excludes the non-listed namespace (deny-path b).
+    assert scope["triage"] == {"integrations": ["linear"]}
+    # Unnarrowed slot keeps the full workflow-level list (deny-path c).
+    assert scope["fix"] == {"integrations": ["linear", "slack"]}
+
+
+async def test_resolve_run_scope_empty_narrowing_grants_nothing_to_that_slot() -> None:
+    from proliferate.server.cloud.workflows.gateway_grants import resolve_run_scope
+
+    definition = {
+        "version": 1,
+        "inputs": [],
+        "integrations": ["linear"],
+        "agents": [
+            {
+                "slot": "quiet",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
+                "integrations": [],
+            },
+        ],
+    }
+    assert resolve_run_scope(definition) == {"quiet": {"integrations": []}}
+
+
+async def test_mint_stamps_narrowed_scope_per_slot(db_session: AsyncSession) -> None:
+    user = await _make_user(db_session)
+    await _seed_ready_account(db_session, user_id=user.id, namespace="context7")
+    definition = {
+        "version": 1,
+        "inputs": [],
+        "integrations": ["context7"],
+        "agents": [
+            {
+                "slot": "quiet",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
+                "integrations": [],
+            },
+        ],
+    }
+    wf = await _store_workflow(db_session, user, definition, name="narrowed")
+    run = await service.start_run(
+        db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
+    )
+    token = (
+        await db_session.execute(
+            store.select(WorkflowRunGatewayToken).where(
+                WorkflowRunGatewayToken.workflow_run_id == run.id
+            )
+        )
+    ).scalar_one()
+    assert token.scope_json == {"quiet": {"integrations": []}}
+
+
 async def test_l22_fail_fast_provider_without_ready_account(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     await sync_seed_definitions(db_session)
@@ -318,6 +402,94 @@ async def test_delivery_empty_worker_scope_grants_nothing(db_session: AsyncSessi
 
     plan = await delivery._apply_delivery_scope_intersection(db_session, run)
     assert plan["gateway"]["integrations"] == []
+
+
+async def test_delivery_preserves_per_slot_narrowing_under_worker_intersection(
+    db_session: AsyncSession,
+) -> None:
+    """MAJOR-B regression: a worker allowlist that narrows the run must intersect
+    EACH slot's OWN grant, not stamp every slot with the flat union. A slot narrowed
+    at StartRun keeps its narrowing and never silently gains a namespace it was not
+    granted (which the old union-per-slot rebuild did)."""
+    user = await _make_user(db_session)
+    # Worker drops 'github' but keeps linear+slack, so the run's union is narrowed
+    # (forces the re-freeze path) while both remaining namespaces survive.
+    await _seed_worker_with_scope(
+        db_session, owner_user_id=user.id, scope_json=["linear", "slack"]
+    )
+    definition = {
+        "version": 1,
+        "inputs": [],
+        "integrations": ["github", "linear", "slack"],
+        "agents": [
+            {
+                "slot": "triage",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
+                "integrations": ["linear"],  # narrowed to a single namespace
+            },
+            {
+                "slot": "fix",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
+                # no integrations key -> default = full workflow-level list
+            },
+        ],
+    }
+    wf = await _store_workflow(db_session, user, definition, name="multi-slot")
+    version = await store.get_version(db_session, wf.current_version_id)
+    plan = {
+        "steps": [],
+        "sessions": {
+            "triage": {"harness": "claude", "model": "sonnet"},
+            "fix": {"harness": "claude", "model": "sonnet"},
+        },
+        "gateway": {"integrations": ["github", "linear", "slack"]},
+    }
+    run = await store.create_run(
+        db_session,
+        workflow_id=wf.id,
+        workflow_version_id=version.id,
+        trigger_kind="manual",
+        executor_user_id=user.id,
+        args_json={},
+        target_mode=WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+        resolved_plan_json=plan,
+    )
+    await store.create_run_gateway_token(
+        db_session,
+        workflow_run_id=run.id,
+        owner_user_id=user.id,
+        organization_id=None,
+        token_hash=runtime_workers_store.hash_workflow_run_gateway_token(
+            f"tok-{uuid.uuid4().hex}"
+        ),
+        scope_json={
+            "triage": {"integrations": ["linear"]},
+            "fix": {"integrations": ["github", "linear", "slack"]},
+        },
+        expires_at=utcnow() + timedelta(hours=24),
+    )
+
+    result = await delivery._apply_delivery_scope_intersection(db_session, run)
+
+    # Flat plan gateway list = union of the per-slot intersections (sorted).
+    assert result["gateway"]["integrations"] == ["linear", "slack"]
+    token = (
+        await db_session.execute(
+            store.select(WorkflowRunGatewayToken).where(
+                WorkflowRunGatewayToken.workflow_run_id == run.id
+            )
+        )
+    ).scalar_one()
+    # The narrowed slot KEEPS ["linear"] (never gains slack); the default slot loses
+    # only the worker-dropped 'github'.
+    assert token.scope_json == {
+        "triage": {"integrations": ["linear"]},
+        "fix": {"integrations": ["linear", "slack"]},
+    }
 
 
 # --- terminal token expiry -----------------------------------------------------

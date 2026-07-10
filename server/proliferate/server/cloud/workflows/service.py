@@ -27,6 +27,7 @@ from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_TARGET_MODES,
     SUPPORTED_WORKFLOW_TRIGGER_KINDS,
     SUPPORTED_WORKFLOW_TRIGGER_TYPES,
+    WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS,
     WORKFLOW_ISOLATION_DEFAULT,
     WORKFLOW_ISOLATION_WORKTREE,
     WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES,
@@ -41,6 +42,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_SESSION_BINDING_HEADLESS,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
     WORKFLOW_STEP_AGENT_EMIT,
+    WORKFLOW_STEP_NOTIFY,
     WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
     WORKFLOW_TRIGGER_CHAT,
@@ -426,6 +428,76 @@ def _resolve_run_isolation(
     return WORKFLOW_ISOLATION_DEFAULT
 
 
+def _escape_braces(rendered: str) -> str:
+    """Brace-escape server-composed text so it can never form a live runtime
+    ``{{steps[n].output.*}}`` token (mirrors interpolation's input-value guard)."""
+
+    return rendered.replace("{", "\\{").replace("}", "\\}")
+
+
+def _notify_agent_fields(step: dict[str, object]) -> dict[str, object] | None:
+    """Return a notify step's ``agent_fields`` block, or ``None`` if it is not a
+    notify step or is template-only."""
+
+    if step.get("kind") != WORKFLOW_STEP_NOTIFY:
+        return None
+    agent_fields = step.get("agent_fields")
+    return agent_fields if isinstance(agent_fields, dict) else None
+
+
+def _build_notify_fields_emit(
+    step: dict[str, object], agent_fields: dict[str, object]
+) -> dict[str, object]:
+    """Build the injected ``agent.emit`` that fills a notify's ``{{fields.*}}``.
+
+    Reuses the emit machinery (schema-validated output + max_attempts re-ask) — no
+    new step kind, no new runtime verb ("gate-shaped"). The derived prompt is
+    generated from the flat ``agent_fields.schema``; the emit's ``output_schema``
+    wraps that schema into a strict object contract the runtime validates. The
+    emit carries no ``name`` (names are resolved away in the plan); its output is
+    addressed purely by flat index. Its ``on_fail`` inherits the notify's, so a
+    field the agent cannot produce stops the run rather than sending a blank
+    notification.
+
+    The emit is fully server-generated (no ``{{inputs.*}}`` / ``{{<emit>.*}}``
+    refs), so it is delivered WITHOUT going through the ref resolver. Any
+    author-supplied ``description`` text is brace-escaped so it can never form a
+    live ``{{steps[n].output.*}}`` token in the runtime — the same injection guard
+    the resolver applies to interpolated input values.
+    """
+
+    schema = agent_fields["schema"]
+    assert isinstance(schema, dict)
+    lines: list[str] = []
+    properties: dict[str, object] = {}
+    for name, spec in schema.items():
+        assert isinstance(spec, dict)
+        field_type = spec["type"]
+        description = spec.get("description")
+        line = f"- {name} ({field_type})"
+        if description:
+            line += f": {_escape_braces(str(description))}"
+        lines.append(line)
+        properties[name] = {"type": field_type}
+    prompt = (
+        "A notification will be sent using values you provide here. Respond with a "
+        "JSON object containing exactly these fields:\n" + "\n".join(lines)
+    )
+    return {
+        "kind": WORKFLOW_STEP_AGENT_EMIT,
+        "on_fail": step["on_fail"],
+        "label": "Prepare notification fields",
+        "prompt": prompt,
+        "max_attempts": WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS,
+        "output_schema": {
+            "type": "object",
+            "properties": properties,
+            "required": list(schema.keys()),
+            "additionalProperties": False,
+        },
+    }
+
+
 def _resolve_plan(
     *,
     run_id: UUID,
@@ -455,11 +527,20 @@ def _resolve_plan(
     integrations = list(canonical.get("integrations", []))
 
     # First pass: assign each step its flattened index and build the
-    # emit-name -> flat-index map the ref rewrite needs.
+    # emit-name -> flat-index map the ref rewrite needs. A notify step that
+    # declares `agent_fields` (track 3c) expands into TWO plan steps — an injected
+    # `agent.emit` in the named slot, then the notify itself — so the injected emit
+    # occupies its own flat position AHEAD of the notify. `notify_fields_index`
+    # records that position so the notify's `{{fields.*}}` refs rewrite to indexed
+    # refs against it (exactly like a named `{{<emit>.<field>}}` ref).
     emit_index: dict[str, int] = {}
+    notify_fields_index: dict[tuple[int, int], int] = {}
     flat_position = 0
-    for node in agents:
-        for step in node["steps"]:
+    for node_index, node in enumerate(agents):
+        for step_index, step in enumerate(node["steps"]):
+            if _notify_agent_fields(step) is not None:
+                notify_fields_index[(node_index, step_index)] = flat_position
+                flat_position += 1  # the injected notify-fields emit
             if step.get("kind") == WORKFLOW_STEP_AGENT_EMIT:
                 emit_index[step["name"]] = flat_position
             flat_position += 1
@@ -481,10 +562,34 @@ def _resolve_plan(
         sessions[slot] = session_entry
 
         for step_index, step in enumerate(node["steps"]):
+            agent_fields = _notify_agent_fields(step)
+            fields_index: int | None = None
+            if agent_fields is not None:
+                # Emit the injected notify-fields agent.emit (runs in agent_fields.slot)
+                # ahead of the notify; its output backs the notify's {{fields.*}}.
+                fields_index = notify_fields_index[(node_index, step_index)]
+                # Server-generated (no template refs to resolve); delivered as-is.
+                injected = _build_notify_fields_emit(step, agent_fields)
+                injected["key"] = f"{node_index}.-.{step_index}.notify_fields"
+                injected["slot"] = agent_fields["slot"]
+                steps.append(injected)
+
             # Lane "-" for the flat (non-parallel) case; the "<node>.<lane>.<step>"
             # shape (§4) is adopted now so lanes never re-key the contract.
             key = f"{node_index}.-.{step_index}"
-            resolved = resolve_value(step, inputs=coerced_inputs, emit_index=emit_index)
+            # Strip agent_fields from the notify before delivery — the runtime never
+            # sees it (the injected emit + indexed {{fields.*}} refs carry it all).
+            source = (
+                step
+                if agent_fields is None
+                else {k: v for k, v in step.items() if k != "agent_fields"}
+            )
+            resolved = resolve_value(
+                source,
+                inputs=coerced_inputs,
+                emit_index=emit_index,
+                fields_index=fields_index,
+            )
             assert isinstance(resolved, dict)
             resolved["key"] = key
             resolved["slot"] = slot

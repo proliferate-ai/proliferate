@@ -165,6 +165,84 @@ async def test_start_run_resolves_plan_and_records_pending_delivery(
     assert plan["isolation"] == "workspace"
 
 
+def _definition_with_notify_fields() -> dict:
+    """A single-slot workflow whose notify uses agent-filled {{fields.*}}."""
+    definition = _definition()
+    notify = definition["agents"][0]["steps"][2]
+    notify["message"] = "done {{check.result}} — {{fields.summary}} (risk {{fields.risk}})"
+    notify["agent_fields"] = {
+        "slot": "main",
+        "schema": {
+            "summary": {"type": "string", "description": "one-liner"},
+            "risk": {"type": "number"},
+        },
+    }
+    return definition
+
+
+async def test_notify_agent_fields_expands_to_injected_emit(
+    db_session: AsyncSession,
+) -> None:
+    user = await _make_user(db_session)
+    await _seed_ready_account(db_session, user_id=user.id, namespace="slack")
+    workflow, _ = await service.create_workflow(
+        db_session,
+        user,
+        WorkflowCreateRequest(name="notify-fields", definition=_definition_with_notify_fields()),
+    )
+
+    run = await service.start_run(
+        db_session,
+        user,
+        workflow.id,
+        inputs={"issue": "PROJ-1", "env": "prod"},
+        target_mode="local",
+    )
+    steps = run.resolved_plan_json["steps"]
+    # 3 authored steps → 4 resolved (an injected agent.emit precedes the notify).
+    assert [s["kind"] for s in steps] == [
+        "agent.prompt",
+        "agent.emit",
+        "agent.emit",  # injected notify-fields emit
+        "notify",
+    ]
+    injected = steps[2]
+    assert injected["slot"] == "main"
+    assert injected["key"] == "0.-.2.notify_fields"
+    # It reuses the emit machinery: schema + re-ask budget, no `name` on the wire.
+    # (JSONB does not preserve object key order, so compare as sets.)
+    assert set(injected["output_schema"]["required"]) == {"summary", "risk"}
+    assert injected["output_schema"]["additionalProperties"] is False
+    assert injected["output_schema"]["properties"]["risk"] == {"type": "number"}
+    assert injected["max_attempts"] == 3
+    assert "name" not in injected
+    assert "agent_fields" not in injected
+    # The notify keeps its structured key and its agent_fields is stripped.
+    notify = steps[3]
+    assert notify["key"] == "0.-.2"
+    assert "agent_fields" not in notify
+    # {{fields.*}} late-bind to the injected emit (index 2); the prior named emit
+    # ref ({{check.result}}) still points at its own index (1).
+    assert notify["message"] == (
+        "done {{steps[1].output.result}} — "
+        "{{steps[2].output.summary}} (risk {{steps[2].output.risk}})"
+    )
+
+
+async def test_template_only_notify_resolves_unchanged(db_session: AsyncSession) -> None:
+    # DENY-PATH (e) regression: a notify with no agent_fields resolves exactly as
+    # before — no injected step, byte-identical late-bound message.
+    user = await _make_user(db_session)
+    workflow, _ = await _create_workflow(db_session, user)
+    run = await service.start_run(
+        db_session, user, workflow.id, inputs={"issue": "X", "env": "prod"}, target_mode="local"
+    )
+    steps = run.resolved_plan_json["steps"]
+    assert [s["kind"] for s in steps] == ["agent.prompt", "agent.emit", "notify"]
+    assert steps[2]["message"] == "done {{steps[1].output.result}}"
+    assert "agent_fields" not in steps[2]
+
+
 async def test_start_run_rejects_missing_required_arg(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
