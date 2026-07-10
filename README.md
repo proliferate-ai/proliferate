@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-<h3>Build and own workflows for any coding agent</h3>
+<h3>The Open Agent Workspace</h3>
 
 <p>
   <a href="https://github.com/proliferate-ai/proliferate"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
@@ -19,8 +19,8 @@
 
 <br />
 
-Turn Claude Code, Codex, Cursor, OpenCode, Grok, and open models into repeatable software workflows.<br />
-Use the best agent for each step, run locally or in the cloud, and keep the workflow layer open source.
+An open-source AI IDE for Claude Code, Codex, Cursor, OpenCode, Grok, and open models.<br />
+Run agents in parallel, locally or in cloud sandboxes. Review their work in one place and automate the routines worth repeating.
 
 <br />
 
@@ -29,7 +29,7 @@ Use the best agent for each step, run locally or in the cloud, and keep the work
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/docs/product/quickstart">Quickstart</a>
   &nbsp;&bull;&nbsp;
-  <a href="https://proliferate.com/docs/product/workflows">Workflows</a>
+  <a href="https://proliferate.com/docs">Documentation</a>
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/docs/deployment">Self-hosting</a>
 </p>
@@ -40,36 +40,12 @@ Use the best agent for each step, run locally or in the cloud, and keep the work
 
 <br />
 
-Proliferate is an open-source workspace for turning one-off coding-agent runs
-into work you can repeat, inspect, and share. It keeps each agent's native
-harness intact, gives every task an isolated workspace, and lets you choose the
-model, tools, authentication, and execution environment that fit the job.
+Proliferate is the workspace around your coding agents, not another coding
+agent. Each harness keeps its native tools, authentication, models, and
+configuration. Proliferate adds isolated workspaces, unified review, agent
+collaboration, and reusable workflows.
 
-## Use the Best Agent for Each Step
-
-The best workflow rarely belongs to one model. A release workflow might look
-like this:
-
-```text
-GitHub issue
-  -> Claude Code plans the change
-  -> Codex implements it and runs the tests
-  -> OpenCode + an open model reviews the result
-  -> Proliferate opens a pull request for you to review
-```
-
-Proliferate's workflow editor is in **beta**. Workflows can combine agent
-prompts with typed outputs, scripts, model switches, branches, pull requests,
-notifications, and reusable sub-workflows. Run them manually, on a schedule,
-or from a polling feed, then inspect the sessions, outputs, cost, and status of
-each run.
-
-Use a frontier model for the hard step and a cheaper or self-hosted model for
-routine review and triage. Your workflow stays the same when the model changes.
-
-[Read the workflow guide](https://proliferate.com/docs/product/workflows).
-
-## Bring Your Agent
+## One Workspace for Every Agent
 
 Each agent runs through its native harness, so its authentication, tools,
 models, permissions, and transcript behavior stay intact. Proliferate adds the
@@ -108,22 +84,18 @@ supported harnesses use the same native adapter layer.
 
 [See supported agents and authentication](https://proliferate.com/docs/product/agents).
 
-## From One Agent Run to a Team Workflow
+## Work in Parallel, Local or Cloud
 
 - **Isolated workspaces.** Give every task its own local checkout, worktree, or
   cloud sandbox so agents do not compete over branches and files.
 - **Parallel work.** Run several agents at once, compare approaches, and keep
   each branch reviewable.
+- **Agents working together.** Delegate focused tasks to subagents or have one
+  agent review another agent's plan or diff.
 - **Shared tools.** Configure MCP servers, skills, and integrations once and
   make them available to the agents that need them.
 - **Reviewable output.** Inspect transcripts, terminals, files, tests, and git
   diffs before you merge.
-- **Reusable workflows (beta).** Encode recurring implementation, review,
-  triage, and maintenance work instead of rebuilding the process in chat.
-- **Team execution (beta).** Run shared workflows in organization cloud
-  environments with centralized configuration and run history.
-
-## Run Where the Work Belongs
 
 | Target | Best for | Availability |
 | --- | --- | --- |
@@ -138,11 +110,36 @@ and review model.
 
 [Learn about workspaces](https://proliferate.com/docs/product/workspaces).
 
-## Own the Workflow Layer
+## Turn Repeat Work into Workflows
 
-The workflow is more than a prompt. It accumulates your model choices, tools,
-repository context, environments, triggers, outputs, and operating rules. That
-should not become a dependency on one model vendor's application.
+Workflows are a **beta feature** inside the same agent workspace. Use them when
+a useful sequence should not have to be reconstructed from chats every time. A
+release workflow might look like this:
+
+```text
+GitHub issue
+  -> Claude Code plans the change
+  -> Codex implements it and runs the tests
+  -> OpenCode + an open model reviews the result
+  -> Proliferate opens a pull request for you to review
+```
+
+Workflows can combine agent prompts with typed outputs, scripts, model
+switches, branches, pull requests, notifications, and reusable sub-workflows.
+Run them manually, on a schedule, or from a polling feed, then inspect the
+sessions, outputs, cost, and status of each run.
+
+Use a frontier model for the hard step and a cheaper or self-hosted model for
+routine review and triage. Shared team workflows and organization cloud
+execution are also in beta.
+
+[Read the workflow guide](https://proliferate.com/docs/product/workflows).
+
+## Own Your Agent Workspace
+
+Your agent workspace accumulates model choices, tools, repository context,
+environments, transcripts, review history, and workflows. That layer should
+not become a dependency on one model vendor's application.
 
 Proliferate is licensed under **AGPL-3.0**. You can inspect it, extend it, and
 self-host the control plane. The official self-hosted deployment is currently
