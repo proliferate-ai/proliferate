@@ -2,16 +2,19 @@ import { useMemo } from "react";
 import { flattenWorkflowSteps, type WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
 import {
   coerceRunStatus,
-  deriveStepRunViews,
+  deriveRunTimeline,
   formatRunCostTokens,
   formatRunCostUsd,
   formatRunDuration,
   isTerminalRunStatus,
+  laneStatusLabel,
+  laneStatusTone,
   workflowArgChips,
   workflowRunStatusDetail,
   workflowRunStatusLabel,
   workflowRunStatusTone,
   type WorkflowStepActionSummary,
+  type WorkflowStepRunView,
   type WorkflowStepSessionLink,
 } from "@proliferate/product-domain/workflows/run-status";
 import { workflowTriggerLabel } from "@proliferate/product-domain/workflows/model";
@@ -75,9 +78,13 @@ export function WorkflowRunView({
     [stepActions],
   );
   const flatSteps = useMemo(() => flattenWorkflowSteps(definition), [definition]);
-  const views = useMemo(
+  // Two-dimensional timeline (L30 / track 3a phase 3): a flat definition
+  // derives exactly one sequential segment, byte-identical to the pre-lanes
+  // single-column render (regression); a parallel group becomes its own
+  // segment whose lanes render side-by-side.
+  const segments = useMemo(
     () =>
-      deriveStepRunViews({
+      deriveRunTimeline({
         definition,
         runStatus: status,
         stepCursor: run.stepCursor,
@@ -146,43 +153,82 @@ export function WorkflowRunView({
         ) : null}
       </div>
 
-      <div className="rounded-[12px] border border-border bg-background p-4">
-        {views.map((view, index) => (
-          <WorkflowRunTimelineRow
-            key={view.index}
-            view={view}
-            preview={flatSteps[index] ? workflowStepPreview(flatSteps[index]!.step) : null}
-            connector={index < views.length - 1}
-            onOpenSession={onOpenSession}
-            approvalControls={
-              view.status === "waiting_approval" ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    loading={approvalBusy}
-                    disabled={!approvalEnabled || approvalBusy}
-                    title={
-                      approvalEnabled
-                        ? undefined
-                        : "Cloud-run approvals aren't available in the desktop yet"
-                    }
-                    onClick={onApprove}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={!approvalEnabled || approvalBusy}
-                    onClick={onDeny}
-                  >
-                    Deny
-                  </Button>
-                </div>
-              ) : undefined
+      <div className="flex flex-col gap-4">
+        {segments.map((segment, segmentIndex) => {
+          const approvalControlsFor = (view: WorkflowStepRunView) =>
+            view.status === "waiting_approval" ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  loading={approvalBusy}
+                  disabled={!approvalEnabled || approvalBusy}
+                  title={approvalEnabled ? undefined : "Cloud-run approvals aren't available in the desktop yet"}
+                  onClick={onApprove}
+                >
+                  Approve
+                </Button>
+                <Button size="sm" variant="ghost" disabled={!approvalEnabled || approvalBusy} onClick={onDeny}>
+                  Deny
+                </Button>
+              </div>
+            ) : undefined;
+
+          if (segment.kind === "sequential") {
+            if (segment.steps.length === 0) {
+              return null;
             }
-          />
-        ))}
+            return (
+              <div key={segmentIndex} className="rounded-[12px] border border-border bg-background p-4">
+                {segment.steps.map((view, i) => (
+                  <WorkflowRunTimelineRow
+                    key={view.index}
+                    view={view}
+                    preview={flatSteps[view.index] ? workflowStepPreview(flatSteps[view.index]!.step) : null}
+                    connector={i < segment.steps.length - 1}
+                    onOpenSession={onOpenSession}
+                    approvalControls={approvalControlsFor(view)}
+                  />
+                ))}
+              </div>
+            );
+          }
+
+          // A parallel group (L30 / D-031): lanes render side-by-side, each
+          // its own status pill + step list — layout distinguishes lanes, not
+          // color/border ownership treatments (UI rule; color = status only).
+          return (
+            <div key={segmentIndex} className="rounded-[12px] border border-border bg-background p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground">Run together</span>
+                <span className="text-xs text-muted-foreground">
+                  — concurrent agents; a sibling always finishes before the run fails
+                </span>
+              </div>
+              <div className="flex flex-wrap items-start gap-4">
+                {segment.lanes.map((lane) => (
+                  <div key={lane.lane} className="flex min-w-[240px] flex-1 flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-medium text-foreground">{lane.lane}</span>
+                      <WorkflowStatusPill label={laneStatusLabel(lane.status)} tone={laneStatusTone(lane.status)} />
+                    </div>
+                    <div className="flex flex-col">
+                      {lane.steps.map((view, i) => (
+                        <WorkflowRunTimelineRow
+                          key={view.index}
+                          view={view}
+                          preview={flatSteps[view.index] ? workflowStepPreview(flatSteps[view.index]!.step) : null}
+                          connector={i < lane.steps.length - 1}
+                          onOpenSession={onOpenSession}
+                          approvalControls={approvalControlsFor(view)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

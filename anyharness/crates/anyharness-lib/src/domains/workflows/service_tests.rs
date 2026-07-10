@@ -1,15 +1,18 @@
-use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::collections::{HashMap, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
 use super::engine::{
     CancelToken, EngineProgress, StepExecContext, StepOutcome, WorkflowStepExecutor,
 };
+use super::model::{LaneStatus, WorkflowLaneCursorRecord};
 use super::plan::{PlanStep, StepKind};
-use super::service::{ApprovalInput, WorkflowService};
+use super::service::{lane_visible_outputs, ApprovalInput, WorkflowService};
 use super::store::WorkflowStore;
 use crate::app::test_support;
+use crate::live::workflows::actor::drive_run;
 use crate::persistence::Db;
 
 // --------------------------------------------------------------------------
@@ -563,4 +566,511 @@ fn record_injection_round_trips_and_is_idempotent() {
     assert_eq!(text, "do the thing");
     // An un-injected (human) turn has no row: absence = human, presence = machine.
     assert!(service.store().find_injection("sess-1", "turn-2").unwrap().is_none());
+}
+
+// --------------------------------------------------------------------------
+// L30 parallel lanes: concurrent driving, lane-aware on-fail, crash-resume.
+// Driven through the real actor loop (`drive_run`), which is segment-aware.
+// --------------------------------------------------------------------------
+
+/// An executor keyed by step `key` (not FIFO) so scripting is deterministic
+/// regardless of the nondeterministic order concurrent lanes are polled in.
+struct KeyedExecutor {
+    outcomes: Mutex<HashMap<String, VecDeque<StepOutcome>>>,
+    calls: Mutex<Vec<String>>,
+    /// Optional rendezvous: every `execute_step` waits here first, so N lanes
+    /// must all be concurrently in-flight to make progress (concurrency proof).
+    barrier: Option<Arc<tokio::sync::Barrier>>,
+    /// Records each `merge_lanes_into_run_worktree` call's lane order (M2b).
+    merge_calls: Mutex<Vec<Vec<String>>>,
+    /// When set, `merge_lanes_into_run_worktree` returns this conflict outcome
+    /// instead of succeeding (drives the "conflict → run fails honestly" test).
+    merge_conflict: Option<(String, String)>,
+}
+
+impl KeyedExecutor {
+    fn new(scripts: Vec<(&str, Vec<StepOutcome>)>) -> Self {
+        let mut outcomes = HashMap::new();
+        for (key, seq) in scripts {
+            outcomes.insert(key.to_string(), seq.into_iter().collect());
+        }
+        Self {
+            outcomes: Mutex::new(outcomes),
+            calls: Mutex::new(Vec::new()),
+            barrier: None,
+            merge_calls: Mutex::new(Vec::new()),
+            merge_conflict: None,
+        }
+    }
+
+    fn with_barrier(mut self, barrier: Arc<tokio::sync::Barrier>) -> Self {
+        self.barrier = Some(barrier);
+        self
+    }
+
+    fn with_merge_conflict(mut self, lane: &str) -> Self {
+        self.merge_conflict = Some((
+            "lane_merge_conflict".to_string(),
+            format!("lane '{lane}' could not be merged"),
+        ));
+        self
+    }
+
+    fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+
+    fn merge_calls(&self) -> Vec<Vec<String>> {
+        self.merge_calls.lock().unwrap().clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl WorkflowStepExecutor for KeyedExecutor {
+    async fn execute_step(&self, step: &PlanStep, _ctx: &StepExecContext) -> StepOutcome {
+        if let Some(barrier) = &self.barrier {
+            barrier.wait().await;
+        }
+        self.calls.lock().unwrap().push(step.key.clone());
+        self.outcomes
+            .lock()
+            .unwrap()
+            .get_mut(&step.key)
+            .and_then(|seq| seq.pop_front())
+            .unwrap_or(StepOutcome::Completed {
+                output: serde_json::json!({}),
+            })
+    }
+
+    async fn merge_lanes_into_run_worktree(&self, lanes: &[String]) -> Result<(), StepOutcome> {
+        self.merge_calls.lock().unwrap().push(lanes.to_vec());
+        if let Some((code, message)) = &self.merge_conflict {
+            return Err(StepOutcome::Failed {
+                code: code.clone(),
+                message: Some(message.clone()),
+                output: None,
+            });
+        }
+        Ok(())
+    }
+}
+
+fn parallel_plan(run_id: &str, sessions: &[&str], steps_json: &str) -> String {
+    let sessions_map = sessions
+        .iter()
+        .map(|slot| format!(r#""{slot}": {{ "harness": "claude", "session_binding": "fresh" }}"#))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        r#"{{ "run_id": "{run_id}", "plan_version": 1,
+              "sessions": {{ {sessions_map} }}, "steps": {steps_json} }}"#
+    )
+}
+
+fn create_plan(service: &WorkflowService, plan_json: &str) -> String {
+    let (run, created) = service
+        .create_run_idempotent(plan_json, "workspace-1")
+        .expect("create run");
+    assert!(created);
+    run.run_id
+}
+
+fn lane_cursors(service: &WorkflowService, run_id: &str) -> Vec<WorkflowLaneCursorRecord> {
+    service
+        .store()
+        .with_tx_anyhow(|tx| Ok(WorkflowStore::list_lane_cursors_tx(tx, run_id)?))
+        .unwrap()
+}
+
+fn step_status(service: &WorkflowService, run_id: &str, key: &str) -> WorkflowStepStatus {
+    let (_, steps) = service.get_run_with_steps(run_id).unwrap().unwrap();
+    steps
+        .into_iter()
+        .find(|step| step.step_key == key)
+        .unwrap_or_else(|| panic!("no step {key}"))
+        .status
+}
+
+#[tokio::test]
+async fn parallel_group_runs_all_lanes_and_joins() {
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-par",
+        &["a", "b"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0" },
+            { "key": "0.a.1", "slot": "a", "kind": "shell.run", "command": "a1" },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+
+    let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert_eq!(run.status, WorkflowRunStatus::Completed);
+    assert_eq!(run.step_cursor, 3, "cursor jumps to the group end on join");
+    assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+
+    // Each lane reached its own terminal cursor, independently.
+    let mut cursors = lane_cursors(&service, &run_id);
+    cursors.sort_by(|x, y| x.lane.cmp(&y.lane));
+    assert_eq!(cursors.len(), 2);
+    assert_eq!(cursors[0].lane, "a");
+    assert_eq!(cursors[0].status, LaneStatus::Completed);
+    assert_eq!(cursors[0].cursor, 2);
+    assert_eq!(cursors[1].lane, "b");
+    assert_eq!(cursors[1].status, LaneStatus::Completed);
+    assert_eq!(cursors[1].cursor, 1);
+}
+
+#[tokio::test]
+async fn pre_group_post_run_in_segment_order() {
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-ppp",
+        &["pre", "a", "b", "post"],
+        r#"[
+            { "key": "0.-.0", "slot": "pre",  "kind": "shell.run", "command": "pre" },
+            { "key": "1.a.0", "slot": "a",    "kind": "shell.run", "command": "a0" },
+            { "key": "1.b.0", "slot": "b",    "kind": "shell.run", "command": "b0" },
+            { "key": "2.-.0", "slot": "post", "kind": "shell.run", "command": "post" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+
+    let calls = executor.calls();
+    let pos = |key: &str| calls.iter().position(|c| c == key).unwrap();
+    // Pre-group runs before the group; the group runs before post-group.
+    assert!(pos("0.-.0") < pos("1.a.0") && pos("0.-.0") < pos("1.b.0"));
+    assert!(pos("2.-.0") > pos("1.a.0") && pos("2.-.0") > pos("1.b.0"));
+    let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+}
+
+#[tokio::test]
+async fn lane_failure_completes_siblings_then_fails_run_and_skips_post_group() {
+    // DENY-PATH (d): a lane's stop-on-fail decision fails the lane; the sibling
+    // still runs to completion; the join fails the run; post-group steps never
+    // execute.
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-fail",
+        &["a", "b", "post"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0", "on_fail": { "kind": "stop" } },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" },
+            { "key": "0.b.1", "slot": "b", "kind": "shell.run", "command": "b1" },
+            { "key": "1.-.0", "slot": "post", "kind": "shell.run", "command": "post" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![("0.a.0", vec![failed("boom")])]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+
+    let (run, _) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert_eq!(run.status, WorkflowRunStatus::Failed);
+    assert_eq!(run.error_code.as_deref(), Some("boom"));
+
+    // Lane a failed; lane b ran BOTH its steps to completion (siblings not killed).
+    assert_eq!(step_status(&service, &run_id, "0.a.0"), WorkflowStepStatus::Failed);
+    assert_eq!(step_status(&service, &run_id, "0.b.0"), WorkflowStepStatus::Completed);
+    assert_eq!(step_status(&service, &run_id, "0.b.1"), WorkflowStepStatus::Completed);
+    // Post-group step never executed.
+    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Pending);
+    assert!(!executor.calls().contains(&"1.-.0".to_string()));
+
+    let mut cursors = lane_cursors(&service, &run_id);
+    cursors.sort_by(|x, y| x.lane.cmp(&y.lane));
+    assert_eq!(cursors[0].status, LaneStatus::Failed);
+    assert_eq!(cursors[0].error_code.as_deref(), Some("boom"));
+    assert_eq!(cursors[1].status, LaneStatus::Completed);
+}
+
+#[test]
+fn lane_visible_outputs_hides_sibling_lane_outputs() {
+    // minor m1: with the group starting at flat index 1, lane "a" owns steps
+    // {1, 2}; a sibling lane's step 3 must be invisible, while pre-group step 0
+    // stays visible.
+    let mut outputs: HashMap<usize, serde_json::Value> = HashMap::new();
+    for idx in 0..=3 {
+        outputs.insert(idx, serde_json::json!({ "i": idx }));
+    }
+    let filtered = lane_visible_outputs(outputs, 1, &[1, 2]);
+    let mut visible: Vec<usize> = filtered.keys().copied().collect();
+    visible.sort();
+    assert_eq!(visible, vec![0, 1, 2], "pre-group + own steps only; sibling step 3 hidden");
+}
+
+#[tokio::test]
+async fn clean_join_merges_lanes_back_in_lane_order() {
+    // M2(b): at a clean join every lane's branch merges back into the run-level
+    // worktree, in deterministic lane order, exactly once, before the cursor
+    // advances past the group.
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-merge",
+        &["a", "b", "post"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0" },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" },
+            { "key": "1.-.0", "slot": "post", "kind": "shell.run", "command": "post" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    // Merge-back ran once with the lanes in lane order.
+    assert_eq!(executor.merge_calls(), vec![vec!["a".to_string(), "b".to_string()]]);
+    // Post-group step ran AFTER the merge-back (it sees merged lane work).
+    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Completed);
+}
+
+#[tokio::test]
+async fn failed_join_skips_merge_back() {
+    // M2(b): a FAILED join never merges lanes back — the partial work is left in
+    // the lane worktrees for inspection (the run is failed anyway).
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-nomerge",
+        &["a", "b"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0", "on_fail": { "kind": "stop" } },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![("0.a.0", vec![failed("boom")])]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+    assert!(executor.merge_calls().is_empty(), "a failed join must not merge back");
+}
+
+#[tokio::test]
+async fn merge_conflict_at_join_fails_run_and_skips_post_group() {
+    // M2(b): a merge CONFLICT at a clean join is an honest run failure
+    // (lane_merge_conflict) — never silently dropped; the cursor stays at the
+    // group start so post-group steps never run.
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-conflict",
+        &["a", "b", "post"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0" },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" },
+            { "key": "1.-.0", "slot": "post", "kind": "shell.run", "command": "post" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![]).with_merge_conflict("a");
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+
+    let (run, _) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert_eq!(run.status, WorkflowRunStatus::Failed);
+    assert_eq!(run.error_code.as_deref(), Some("lane_merge_conflict"));
+    // Post-group step never executed (cursor never advanced past the group).
+    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Pending);
+    assert!(!executor.calls().contains(&"1.-.0".to_string()));
+}
+
+#[tokio::test]
+async fn sibling_lanes_are_isolated() {
+    // DENY-PATH (b): each lane only ever runs its OWN steps, and the per-lane
+    // cursor rows are fully partitioned by (node, lane) — one lane never touches
+    // another's bookkeeping. (Worktree/session isolation is slot-keyed and
+    // covered by the executor helper tests.)
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-iso",
+        &["a", "b"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0" },
+            { "key": "0.a.1", "slot": "a", "kind": "shell.run", "command": "a1" },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" },
+            { "key": "0.b.1", "slot": "b", "kind": "shell.run", "command": "b1" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![]);
+    let cancel = CancelToken::new();
+    drive_run(&service, &executor, &run_id, &cancel).await;
+
+    let calls = executor.calls();
+    let lane_a: Vec<&String> = calls.iter().filter(|k| k.starts_with("0.a.")).collect();
+    let lane_b: Vec<&String> = calls.iter().filter(|k| k.starts_with("0.b.")).collect();
+    assert_eq!(lane_a.len(), 2);
+    assert_eq!(lane_b.len(), 2);
+    // Every recorded call belongs to exactly one lane — no cross-lane execution.
+    assert_eq!(lane_a.len() + lane_b.len(), calls.len());
+
+    let cursors = lane_cursors(&service, &run_id);
+    assert_eq!(cursors.len(), 2, "one cursor row per lane, never shared");
+    assert!(cursors.iter().all(|c| c.node_index == 0));
+}
+
+#[tokio::test]
+async fn crash_resume_mid_group_resumes_only_the_unfinished_lane() {
+    // DENY-PATH (c): a run crashed with lane a done and lane b mid-step. On
+    // resume, lane a re-runs nothing and lane b resumes at its cursor; the group
+    // joins correctly.
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-resume",
+        &["a", "b"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0" },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" },
+            { "key": "0.b.1", "slot": "b", "kind": "shell.run", "command": "b1" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    // Hand-craft the crashed state: lane a completed; lane b past its first step.
+    service
+        .store()
+        .with_tx_anyhow(|tx| {
+            let now = chrono::Utc::now().to_rfc3339();
+            for (key, node, lane, cursor, status) in [
+                ("0.a.0", 0i64, "a", 1i64, LaneStatus::Completed),
+                ("0.b.0", 0, "b", 1, LaneStatus::Running),
+            ] {
+                // Cursor row.
+                WorkflowStore::upsert_lane_cursor_tx(
+                    tx,
+                    &WorkflowLaneCursorRecord {
+                        run_id: run_id.clone(),
+                        node_index: node,
+                        lane: lane.to_string(),
+                        cursor,
+                        status,
+                        error_code: None,
+                        error_message: None,
+                        created_at: now.clone(),
+                        updated_at: now.clone(),
+                    },
+                )?;
+                // Mark the already-run step completed.
+                let mut step = WorkflowStore::find_step_run_tx(
+                    tx,
+                    &run_id,
+                    if key == "0.a.0" { 0 } else { 1 },
+                )?
+                .unwrap();
+                step.status = WorkflowStepStatus::Completed;
+                WorkflowStore::update_step_run(tx, &step)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+
+    let executor = KeyedExecutor::new(vec![]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+
+    // ONLY the unfinished lane-b step ran; the completed steps were not re-run.
+    assert_eq!(executor.calls(), vec!["0.b.1".to_string()]);
+    let (run, _) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    assert_eq!(run.status, WorkflowRunStatus::Completed);
+    assert_eq!(run.step_cursor, 3);
+}
+
+#[tokio::test]
+async fn lanes_run_concurrently() {
+    // Concurrency proof: two single-step lanes share a Barrier(2). If the lanes
+    // were driven sequentially, the first would block at the barrier forever;
+    // completing within the timeout proves both were concurrently in-flight.
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-conc",
+        &["a", "b"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0" },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+    let executor = KeyedExecutor::new(vec![]).with_barrier(barrier);
+    let cancel = CancelToken::new();
+    let progress = tokio::time::timeout(
+        Duration::from_secs(5),
+        drive_run(&service, &executor, &run_id, &cancel),
+    )
+    .await
+    .expect("lanes must run concurrently (no sequential deadlock at the barrier)");
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+}
+
+#[tokio::test]
+async fn lane_step_retries_through_the_pure_matrix() {
+    // The pure on-fail matrix applies per lane: a retry step fails once, retries,
+    // then completes — the lane completes at attempt 2.
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-retry",
+        &["a", "b"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "shell.run", "command": "a0", "on_fail": { "kind": "retry", "n": 1 } },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![(
+        "0.a.0",
+        vec![failed("flaky"), completed(serde_json::json!({ "ok": true }))],
+    )]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+
+    let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
+    let a0 = steps.iter().find(|s| s.step_key == "0.a.0").unwrap();
+    assert_eq!(a0.status, WorkflowStepStatus::Completed);
+    assert_eq!(a0.attempt, 2);
+}
+
+#[tokio::test]
+async fn branch_end_inside_a_lane_ends_the_lane_not_the_run() {
+    // A branch `end` inside a lane ends THAT lane (its tail is skipped) but the
+    // group still joins as completed and post-group steps run.
+    let service = test_service();
+    let plan = parallel_plan(
+        "run-lane-end",
+        &["a", "b", "post"],
+        r#"[
+            { "key": "0.a.0", "slot": "a", "kind": "branch", "on": "{{steps[0].output.v}}",
+              "cases": { "ship": { "to": "continue" }, "stop": { "to": "end" } } },
+            { "key": "0.a.1", "slot": "a", "kind": "shell.run", "command": "a1" },
+            { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" },
+            { "key": "1.-.0", "slot": "post", "kind": "shell.run", "command": "post" }
+        ]"#,
+    );
+    let run_id = create_plan(&service, &plan);
+    let executor = KeyedExecutor::new(vec![(
+        "0.a.0",
+        vec![end_run(serde_json::json!({ "value": "stop", "target": "end" }))],
+    )]);
+    let cancel = CancelToken::new();
+    let progress = drive_run(&service, &executor, &run_id, &cancel).await;
+    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+
+    // The lane's branch step completed; its tail step was skipped; the run did
+    // NOT end (post-group step ran).
+    assert_eq!(step_status(&service, &run_id, "0.a.0"), WorkflowStepStatus::Completed);
+    assert_eq!(step_status(&service, &run_id, "0.a.1"), WorkflowStepStatus::Skipped);
+    assert_eq!(step_status(&service, &run_id, "0.b.0"), WorkflowStepStatus::Completed);
+    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Completed);
 }

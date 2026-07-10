@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import WORKFLOW_TRIGGER_MANUAL
 from proliferate.db.models.auth import User
+from proliferate.db.models.cloud.repositories import RepoConfig, RepoEnvironment
+from proliferate.db.models.cloud.workspaces import CloudWorkspace
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
@@ -241,6 +243,226 @@ async def test_template_only_notify_resolves_unchanged(db_session: AsyncSession)
     assert [s["kind"] for s in steps] == ["agent.prompt", "agent.emit", "notify"]
     assert steps[2]["message"] == "done {{steps[1].output.result}}"
     assert "agent_fields" not in steps[2]
+
+
+def _parallel_definition() -> dict:
+    """A standalone node, a 2-lane parallel group, then a joining node. No
+    integrations, so no ready-account seeding is needed to start a run."""
+    return {
+        "version": 1,
+        "inputs": [{"name": "issue", "type": "text", "required": True}],
+        "integrations": [],
+        "agents": [
+            {
+                "slot": "plan",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [
+                    {"kind": "agent.emit", "name": "spec", "prompt": "plan {{inputs.issue}}"}
+                ],
+            },
+            {
+                "parallel": [
+                    {
+                        "slot": "fix_a",
+                        "harness": "claude",
+                        "model": "sonnet",
+                        "steps": [
+                            {"kind": "agent.prompt", "prompt": "impl {{spec.summary}}"},
+                            {"kind": "agent.emit", "name": "result_a", "prompt": "report"},
+                        ],
+                    },
+                    {
+                        "slot": "fix_b",
+                        "harness": "codex",
+                        "model": "gpt-5",
+                        "steps": [{"kind": "shell.run", "command": "make test"}],
+                    },
+                ]
+            },
+            {
+                "slot": "merge",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [
+                    {
+                        "kind": "notify",
+                        "slack_channel_id": "C1",
+                        "message": "done {{result_a.ok}}",
+                    }
+                ],
+            },
+        ],
+    }
+
+
+async def test_start_run_resolves_parallel_group_keys_and_order(
+    db_session: AsyncSession,
+) -> None:
+    user = await _make_user(db_session)
+    workflow, _ = await service.create_workflow(
+        db_session, user, WorkflowCreateRequest(name="parallel", definition=_parallel_definition())
+    )
+    # Parallel is cloud-only in v1 (M1) — run against a cloud workspace.
+    workspace = await _make_ready_cloud_workspace(db_session, user)
+    run = await service.start_run(
+        db_session,
+        user,
+        workflow.id,
+        inputs={"issue": "PROJ-1"},
+        target_mode="personal_cloud",
+        target_workspace_id=workspace.id,
+    )
+    plan = run.resolved_plan_json
+
+    # Lane-qualified keys: standalone entries keep lane "-"; group lanes carry the
+    # slot as the lane segment. Group lanes emit lane-grouped in lane order.
+    assert [s["key"] for s in plan["steps"]] == [
+        "0.-.0",  # plan.spec
+        "1.fix_a.0",  # lane fix_a step 0
+        "1.fix_a.1",  # lane fix_a step 1 (result_a emit)
+        "1.fix_b.0",  # lane fix_b step 0
+        "2.-.0",  # merge.notify
+    ]
+    assert [s["slot"] for s in plan["steps"]] == ["plan", "fix_a", "fix_a", "fix_b", "merge"]
+
+    # sessions map gains every lane slot exactly like a flat slot.
+    assert set(plan["sessions"]) == {"plan", "fix_a", "fix_b", "merge"}
+    assert plan["sessions"]["fix_b"]["harness"] == "codex"
+
+    # Emit refs rewrite to the flat runtime-indexed form. `spec` is flat index 0;
+    # `result_a` is flat index 2 (its emit is the 3rd step in flatten order).
+    assert plan["steps"][1]["prompt"] == "impl {{steps[0].output.summary}}"
+    assert plan["steps"][4]["message"] == "done {{steps[2].output.ok}}"
+    assert plan["inputs"] == {"issue": "PROJ-1"}
+
+
+async def test_start_run_flat_definition_keys_unchanged(db_session: AsyncSession) -> None:
+    # Regression / deny-path: a flat (no-parallel) definition resolves to the same
+    # "<node>.-.<step>" keys it always has — byte-identical to before lanes landed.
+    user = await _make_user(db_session)
+    workflow, _ = await _create_workflow(db_session, user)
+    run = await service.start_run(
+        db_session, user, workflow.id, inputs={"issue": "x", "env": "prod"}, target_mode="local"
+    )
+    keys = [s["key"] for s in run.resolved_plan_json["steps"]]
+    assert keys == ["0.-.0", "0.-.1", "0.-.2"]
+
+
+# --- M1 (L30): v1 parallel isolation bounds ------------------------------------
+
+
+async def test_resolve_run_isolation_parallel_forces_worktree() -> None:
+    # A parallel definition ALWAYS resolves to worktree isolation — even with a
+    # lone session_binding that would otherwise force workspace (moot in practice
+    # since parallel+bindings is rejected upstream, but the invariant is asserted).
+    assert (
+        service._resolve_run_isolation(
+            target_mode="personal_cloud",
+            session_bindings={"main": "sess-x"},
+            definition_has_parallel=True,
+        )
+        == "worktree"
+    )
+    # Flat cloud run: worktree by the 2b default.
+    assert (
+        service._resolve_run_isolation(
+            target_mode="personal_cloud",
+            session_bindings=None,
+            definition_has_parallel=False,
+        )
+        == "worktree"
+    )
+    # Flat bound run: workspace (2b exception, unchanged).
+    assert (
+        service._resolve_run_isolation(
+            target_mode="personal_cloud",
+            session_bindings={"main": "sess-x"},
+            definition_has_parallel=False,
+        )
+        == "workspace"
+    )
+
+
+async def test_start_run_rejects_parallel_on_local_target(db_session: AsyncSession) -> None:
+    # (b) Parallel groups are cloud-only in v1: a local (desktop) target run is
+    # rejected up front (the desktop executor doesn't understand lanes).
+    user = await _make_user(db_session)
+    workflow, _ = await service.create_workflow(
+        db_session, user, WorkflowCreateRequest(name="parallel", definition=_parallel_definition())
+    )
+    with pytest.raises(CloudApiError) as exc:
+        await service.start_run(
+            db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
+        )
+    assert exc.value.code == "parallel_local_unsupported"
+
+
+async def _make_ready_cloud_workspace(db: AsyncSession, user: User) -> "CloudWorkspace":
+    repo_config = RepoConfig(
+        user_id=user.id,
+        git_provider="github",
+        git_owner="acme",
+        git_repo_name="widgets",
+    )
+    db.add(repo_config)
+    await db.flush()
+    repo_environment = RepoEnvironment(
+        repo_config_id=repo_config.id, environment_kind="cloud", local_path=None
+    )
+    db.add(repo_environment)
+    await db.flush()
+    workspace = CloudWorkspace(
+        owner_user_id=user.id,
+        repo_environment_id=repo_environment.id,
+        display_name="widgets",
+        git_branch="feature/x",
+        anyharness_workspace_id="ws-cloud",
+    )
+    db.add(workspace)
+    await db.flush()
+    return workspace
+
+
+async def test_start_run_rejects_parallel_with_session_bindings(db_session: AsyncSession) -> None:
+    # (a) A bound session lives in the pinned checkout and can't be isolated into a
+    # lane worktree — so a laned run rejects session_bindings. Cloud target (local
+    # is rejected first by the parallel_local rule).
+    user = await _make_user(db_session)
+    workflow, _ = await service.create_workflow(
+        db_session, user, WorkflowCreateRequest(name="parallel", definition=_parallel_definition())
+    )
+    workspace = await _make_ready_cloud_workspace(db_session, user)
+    with pytest.raises(CloudApiError) as exc:
+        await service.start_run(
+            db_session,
+            user,
+            workflow.id,
+            inputs={"issue": "x"},
+            target_mode="personal_cloud",
+            target_workspace_id=workspace.id,
+            session_bindings={"fix_a": "sess-x"},
+        )
+    assert exc.value.code == "parallel_bindings_unsupported"
+
+
+async def test_start_run_parallel_cloud_resolves_worktree(db_session: AsyncSession) -> None:
+    # A parallel cloud run (no bindings) resolves isolation=worktree — mandatory
+    # for per-lane worktrees.
+    user = await _make_user(db_session)
+    workflow, _ = await service.create_workflow(
+        db_session, user, WorkflowCreateRequest(name="parallel", definition=_parallel_definition())
+    )
+    workspace = await _make_ready_cloud_workspace(db_session, user)
+    run = await service.start_run(
+        db_session,
+        user,
+        workflow.id,
+        inputs={"issue": "x"},
+        target_mode="personal_cloud",
+        target_workspace_id=workspace.id,
+    )
+    assert run.resolved_plan_json["isolation"] == "worktree"
 
 
 async def test_start_run_rejects_missing_required_arg(db_session: AsyncSession) -> None:

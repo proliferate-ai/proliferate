@@ -119,6 +119,174 @@ impl ResolvedPlan {
     pub fn step_count(&self) -> usize {
         self.steps.len()
     }
+
+    /// True when any step belongs to a parallel lane (its key's lane segment is
+    /// not [`NO_LANE`]). A flat plan — every step in lane `-`, or legacy/keyless
+    /// — returns `false`, and the actor drives it through the single-cursor
+    /// sequential path byte-identically (L30 deny-path a).
+    pub fn has_parallel_groups(&self) -> bool {
+        self.steps
+            .iter()
+            .any(|step| worktree_scope(&step.key) != NO_LANE)
+    }
+
+    fn step_node_lane(&self, idx: usize) -> (usize, String) {
+        match parse_lane_key(&self.steps[idx].key) {
+            Some(key) => (key.node, key.lane),
+            // Legacy/keyless steps (the engine tests, and any pre-L30 plan) are
+            // one flat sequential run: node 0, lane `-`.
+            None => (0, NO_LANE.to_string()),
+        }
+    }
+
+    /// Partition the flat step list into ordered execution [`PlanSegment`]s
+    /// (L30). Maximal contiguous runs of flat (`lane == "-"`) steps become one
+    /// [`PlanSegment::Sequential`] (they run back-to-back against the single
+    /// cursor, even across spine nodes); a contiguous run of lane-qualified steps
+    /// sharing one node becomes a [`PlanSegment::Parallel`] whose lanes run
+    /// concurrently and join at the segment end. Two adjacent parallel groups
+    /// (distinct nodes) are distinct segments with a join between them.
+    ///
+    /// A flat plan yields exactly one `Sequential { 0, step_count }`, which is
+    /// why the sequential driver stays byte-identical for it.
+    pub fn segments(&self) -> Vec<PlanSegment> {
+        let mut segments = Vec::new();
+        let n = self.steps.len();
+        let mut i = 0;
+        while i < n {
+            let (node, lane) = self.step_node_lane(i);
+            if lane == NO_LANE {
+                let start = i;
+                while i < n && self.step_node_lane(i).1 == NO_LANE {
+                    i += 1;
+                }
+                segments.push(PlanSegment::Sequential { start, end: i });
+            } else {
+                let group_node = node;
+                let start = i;
+                let mut lanes: Vec<PlanLane> = Vec::new();
+                while i < n {
+                    let (nd, ln) = self.step_node_lane(i);
+                    if ln == NO_LANE || nd != group_node {
+                        break;
+                    }
+                    match lanes.iter_mut().find(|lane| lane.name == ln) {
+                        Some(existing) => existing.step_indices.push(i),
+                        None => lanes.push(PlanLane {
+                            name: ln,
+                            step_indices: vec![i],
+                        }),
+                    }
+                    i += 1;
+                }
+                segments.push(PlanSegment::Parallel {
+                    node: group_node,
+                    start,
+                    end: i,
+                    lanes,
+                });
+            }
+        }
+        segments
+    }
+
+    /// The segment that owns a given flat step `cursor`, if any.
+    pub fn segment_containing(&self, cursor: usize) -> Option<PlanSegment> {
+        self.segments().into_iter().find(|segment| {
+            let (start, end) = segment.bounds();
+            cursor >= start && cursor < end
+        })
+    }
+}
+
+/// The sentinel lane token for a flat (non-parallel) step key `"<node>.-.<step>"`
+/// (data-contract §4). Steps in this "lane" share the run-level worktree.
+pub const NO_LANE: &str = "-";
+
+/// A parsed structured step key `"<node>.<lane>.<step>"` (data-contract §4 / B5).
+/// The lane is the middle segment (so a slot name containing `.` still parses —
+/// node is before the first `.`, step after the last).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LaneKey {
+    pub node: usize,
+    pub lane: String,
+    pub step: usize,
+}
+
+/// Parse a structured step key into `{node, lane, step}`. Returns `None` for a
+/// shape that is not `<usize>.<lane>.<usize>` with a non-empty lane — legacy /
+/// keyless / malformed keys, which the segmenter treats as flat sequential.
+///
+/// A resolver-injected notify-fields emit (track 3c) carries a 4-segment key
+/// `"<node>.<lane>.<step>.notify_fields"` — a trailing NON-numeric suffix
+/// segment. Such a trailing suffix is stripped first so the injected emit lands
+/// in the SAME `{node, lane, step}` scope (and thus lane/worktree scope) as the
+/// notify it backs. The runtime otherwise treats it as an ordinary step; the
+/// step number colliding with the notify's is harmless (segmentation keys on
+/// `{node, lane}` only, and within a lane both run sequentially by flat index).
+pub fn parse_lane_key(key: &str) -> Option<LaneKey> {
+    // Strip one trailing non-numeric suffix segment (e.g. ".notify_fields") so a
+    // 4-segment injected key parses against its first three segments.
+    let core = match key.rfind('.') {
+        Some(idx) if key[idx + 1..].parse::<usize>().is_err() => &key[..idx],
+        _ => key,
+    };
+    let first = core.find('.')?;
+    let last = core.rfind('.')?;
+    if last <= first {
+        return None;
+    }
+    let node = core[..first].parse::<usize>().ok()?;
+    let lane = core[first + 1..last].to_string();
+    let step = core[last + 1..].parse::<usize>().ok()?;
+    if lane.is_empty() {
+        return None;
+    }
+    Some(LaneKey { node, lane, step })
+}
+
+/// The worktree scope a step belongs to (D-031c): its lane for a grouped step,
+/// or [`NO_LANE`] for a flat / out-of-group / legacy step (which share the
+/// run-level worktree).
+pub fn worktree_scope(key: &str) -> String {
+    match parse_lane_key(key) {
+        Some(key) => key.lane,
+        None => NO_LANE.to_string(),
+    }
+}
+
+/// One lane of a [`PlanSegment::Parallel`]: its name (the slot) and the flat
+/// step indices it owns, in run order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlanLane {
+    pub name: String,
+    pub step_indices: Vec<usize>,
+}
+
+/// One execution segment of a plan (L30). `end` is exclusive.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlanSegment {
+    /// A run of flat steps driven one-at-a-time against the single cursor.
+    Sequential { start: usize, end: usize },
+    /// A parallel group (one spine node): its lanes run concurrently and join at
+    /// `end`. The run's cursor sits at `start` for the group's lifetime and jumps
+    /// to `end` on join.
+    Parallel {
+        node: usize,
+        start: usize,
+        end: usize,
+        lanes: Vec<PlanLane>,
+    },
+}
+
+impl PlanSegment {
+    /// The `[start, end)` flat-index bounds of the segment.
+    pub fn bounds(&self) -> (usize, usize) {
+        match self {
+            PlanSegment::Sequential { start, end } => (*start, *end),
+            PlanSegment::Parallel { start, end, .. } => (*start, *end),
+        }
+    }
 }
 
 /// How one slot's session is provisioned (data-contract §4 `sessions[slot]`).
@@ -711,6 +879,182 @@ mod tests {
         };
         // The message carries indexed refs pointing at the injected emit (index 1).
         assert!(notify.message.contains("{{steps[1].output.summary}}"));
+    }
+
+    #[test]
+    fn parse_lane_key_strips_notify_fields_suffix_flat_and_lane() {
+        // The merged resolver emits a lane-qualified notify-fields key
+        // "<node>.<lane>.<step>.notify_fields". parse_lane_key strips the trailing
+        // non-numeric suffix and resolves it to the SAME {node, lane, step} scope
+        // as the notify it backs — flat and inside a lane.
+        let flat = parse_lane_key("0.-.1.notify_fields").expect("flat 4-segment parses");
+        assert_eq!(flat.node, 0);
+        assert_eq!(flat.lane, "-");
+        assert_eq!(flat.step, 1);
+        assert_eq!(worktree_scope("0.-.1.notify_fields"), NO_LANE);
+
+        let lane = parse_lane_key("2.fix.3.notify_fields").expect("lane 4-segment parses");
+        assert_eq!(lane.node, 2);
+        assert_eq!(lane.lane, "fix");
+        assert_eq!(lane.step, 3);
+        // Lands in the lane's worktree scope, not NO_LANE.
+        assert_eq!(worktree_scope("2.fix.3.notify_fields"), "fix");
+    }
+
+    #[test]
+    fn notify_fields_emit_segments_into_its_lane() {
+        // An injected notify-fields emit keyed "1.fix.0.notify_fields" is grouped
+        // into lane "fix" of node 1's parallel group alongside the notify it backs
+        // — never split out or mis-scoped to NO_LANE.
+        let plan = plan_with_keys(&[
+            "0.-.0",
+            "1.fix.0.notify_fields",
+            "1.fix.0",
+            "1.docs.0",
+        ]);
+        let segments = plan.segments();
+        assert_eq!(
+            segments,
+            vec![
+                PlanSegment::Sequential { start: 0, end: 1 },
+                PlanSegment::Parallel {
+                    node: 1,
+                    start: 1,
+                    end: 4,
+                    lanes: vec![
+                        PlanLane { name: "fix".to_string(), step_indices: vec![1, 2] },
+                        PlanLane { name: "docs".to_string(), step_indices: vec![3] },
+                    ],
+                },
+            ]
+        );
+    }
+
+    // --- L30 lane keys + segmentation ---
+
+    #[test]
+    fn parse_lane_key_reads_node_lane_step() {
+        let key = parse_lane_key("2.fix.3").expect("parse");
+        assert_eq!(key.node, 2);
+        assert_eq!(key.lane, "fix");
+        assert_eq!(key.step, 3);
+        // A flat key: lane is the sentinel `-`.
+        let flat = parse_lane_key("0.-.1").expect("parse flat");
+        assert_eq!(flat.lane, "-");
+        // A slot name containing dots still parses (node before first, step after
+        // last).
+        let dotted = parse_lane_key("1.a.b.c.0").expect("parse dotted");
+        assert_eq!(dotted.node, 1);
+        assert_eq!(dotted.lane, "a.b.c");
+        assert_eq!(dotted.step, 0);
+        // Malformed / legacy shapes → None (segmenter treats as flat).
+        assert!(parse_lane_key("").is_none());
+        assert!(parse_lane_key("0.-").is_none());
+        assert!(parse_lane_key("x.-.0").is_none());
+        assert!(parse_lane_key("0..0").is_none());
+    }
+
+    #[test]
+    fn worktree_scope_is_lane_or_dash() {
+        assert_eq!(worktree_scope("1.fix.0"), "fix");
+        assert_eq!(worktree_scope("0.-.2"), NO_LANE);
+        // Keyless / legacy → run-level scope.
+        assert_eq!(worktree_scope(""), NO_LANE);
+    }
+
+    fn plan_with_keys(keys: &[&str]) -> ResolvedPlan {
+        let steps: Vec<String> = keys
+            .iter()
+            .map(|key| {
+                format!(
+                    r#"{{ "key": "{key}", "slot": "s", "kind": "shell.run", "command": "c" }}"#
+                )
+            })
+            .collect();
+        parse(&format!(
+            r#"{{ "run_id": "r", "sessions": {{}}, "steps": [{}] }}"#,
+            steps.join(",")
+        ))
+        .expect("parse plan")
+    }
+
+    #[test]
+    fn flat_plan_is_one_sequential_segment() {
+        // A multi-node flat plan (all lane `-`) is one continuous sequential
+        // segment — no parallel groups, byte-identical single-cursor driving.
+        let plan = plan_with_keys(&["0.-.0", "1.-.0", "2.-.0"]);
+        assert!(!plan.has_parallel_groups());
+        assert_eq!(
+            plan.segments(),
+            vec![PlanSegment::Sequential { start: 0, end: 3 }]
+        );
+    }
+
+    #[test]
+    fn keyless_plan_is_one_sequential_segment() {
+        // The engine tests deliver keyless steps; the segmenter treats them as
+        // one flat sequential run.
+        let plan = parse(
+            r#"{ "run_id": "r", "sessions": {},
+                 "steps": [ { "kind": "shell.run", "command": "a" },
+                            { "kind": "shell.run", "command": "b" } ] }"#,
+        )
+        .expect("parse");
+        assert!(!plan.has_parallel_groups());
+        assert_eq!(
+            plan.segments(),
+            vec![PlanSegment::Sequential { start: 0, end: 2 }]
+        );
+    }
+
+    #[test]
+    fn pre_group_post_partitions_into_three_segments() {
+        // node 0 flat (pre), node 1 parallel {a,b}, node 2 flat (post).
+        let plan = plan_with_keys(&[
+            "0.-.0", "1.a.0", "1.a.1", "1.b.0", "2.-.0",
+        ]);
+        assert!(plan.has_parallel_groups());
+        let segments = plan.segments();
+        assert_eq!(
+            segments,
+            vec![
+                PlanSegment::Sequential { start: 0, end: 1 },
+                PlanSegment::Parallel {
+                    node: 1,
+                    start: 1,
+                    end: 4,
+                    lanes: vec![
+                        PlanLane { name: "a".to_string(), step_indices: vec![1, 2] },
+                        PlanLane { name: "b".to_string(), step_indices: vec![3] },
+                    ],
+                },
+                PlanSegment::Sequential { start: 4, end: 5 },
+            ]
+        );
+        // segment_containing maps cursors onto their owning segment.
+        assert!(matches!(
+            plan.segment_containing(0),
+            Some(PlanSegment::Sequential { start: 0, .. })
+        ));
+        assert!(matches!(
+            plan.segment_containing(2),
+            Some(PlanSegment::Parallel { node: 1, .. })
+        ));
+        assert!(matches!(
+            plan.segment_containing(4),
+            Some(PlanSegment::Sequential { start: 4, .. })
+        ));
+        assert!(plan.segment_containing(5).is_none());
+    }
+
+    #[test]
+    fn two_adjacent_groups_are_two_segments() {
+        // Distinct nodes → a join between them (never merged into one group).
+        let plan = plan_with_keys(&["0.a.0", "0.b.0", "1.c.0", "1.d.0"]);
+        let segments = plan.segments();
+        assert_eq!(segments.len(), 2);
+        assert!(matches!(segments[0], PlanSegment::Parallel { node: 0, .. }));
+        assert!(matches!(segments[1], PlanSegment::Parallel { node: 1, .. }));
     }
 
     #[test]

@@ -6,11 +6,19 @@
 use anyharness_contract::v1::WorkflowRunStatus;
 
 use crate::domains::workflows::engine::{CancelToken, EngineProgress, WorkflowStepExecutor};
+use crate::domains::workflows::plan::{self, PlanSegment};
 use crate::domains::workflows::service::WorkflowService;
 
 /// Drive the run to a resting point (terminal or suspended-for-approval),
 /// returning how it came to rest. A driver-level error (a malformed plan
 /// surfacing mid-run, or a store failure) fails the run with `engine_error`.
+///
+/// The run is driven segment-by-segment (L30): a [`PlanSegment::Sequential`] run
+/// advances the single cursor one step at a time (bounded to the segment end so
+/// it hands off at a group boundary instead of completing the run), and a
+/// [`PlanSegment::Parallel`] group drives its lanes concurrently and joins. A
+/// flat plan is exactly one sequential segment spanning the whole plan, so this
+/// reduces to the original single-cursor loop byte-identically (deny-path a).
 pub async fn drive_run(
     service: &WorkflowService,
     executor: &dyn WorkflowStepExecutor,
@@ -18,26 +26,68 @@ pub async fn drive_run(
     cancel: &CancelToken,
 ) -> EngineProgress {
     loop {
-        let result = service.run_next_step(run_id, executor, cancel).await;
-        // §3.7/L16: nudge the server after every applied step transition —
-        // mid-run advances, the terminal transition, and the engine-error
-        // failure alike. Fire-and-forget: the cursor has already moved, so a
-        // failed ping is inert and never changes engine state.
-        executor.on_step_transition();
-        match result {
-            Ok(EngineProgress::Advanced) => continue,
-            Ok(other) => return other,
-            Err(error) => {
-                let _ = service.mark_run_terminal(
-                    run_id,
-                    WorkflowRunStatus::Failed,
-                    Some("engine_error".to_string()),
-                    Some(error.to_string()),
-                );
-                return EngineProgress::Finished(WorkflowRunStatus::Failed);
+        let run = match service.get_run(run_id) {
+            Ok(Some(run)) => run,
+            Ok(None) => return EngineProgress::Finished(WorkflowRunStatus::Failed),
+            Err(error) => return fail_engine_error(service, run_id, &error),
+        };
+        if run.is_terminal() {
+            return EngineProgress::Finished(run.status);
+        }
+        let plan = match plan::parse(&run.plan_json) {
+            Ok(plan) => plan,
+            Err(error) => return fail_engine_error(service, run_id, &error),
+        };
+        let step_count = plan.step_count();
+        let cursor = run.step_cursor.max(0) as usize;
+        if cursor >= step_count {
+            let _ = service.mark_run_terminal(run_id, WorkflowRunStatus::Completed, None, None);
+            return EngineProgress::Finished(WorkflowRunStatus::Completed);
+        }
+        let Some(segment) = plan.segment_containing(cursor) else {
+            let _ = service.mark_run_terminal(run_id, WorkflowRunStatus::Completed, None, None);
+            return EngineProgress::Finished(WorkflowRunStatus::Completed);
+        };
+        let result = match segment {
+            PlanSegment::Sequential { end, .. } => {
+                let result = service
+                    .run_next_step_bounded(run_id, executor, cancel, end)
+                    .await;
+                // §3.7/L16: nudge the server after every applied step transition.
+                // Fire-and-forget: the cursor has already moved, so a failed ping
+                // is inert and never changes engine state.
+                executor.on_step_transition();
+                result
             }
+            // The parallel driver fires its own per-lane transition pings; this
+            // one covers the join transition (incl. a run that ends on a group).
+            PlanSegment::Parallel { .. } => {
+                let result = service.run_parallel_group(run_id, executor, cancel).await;
+                executor.on_step_transition();
+                result
+            }
+        };
+        match result {
+            // Advanced / SegmentComplete: more work in this or the next segment.
+            Ok(EngineProgress::Advanced) | Ok(EngineProgress::SegmentComplete) => continue,
+            Ok(other) => return other,
+            Err(error) => return fail_engine_error(service, run_id, &error),
         }
     }
+}
+
+fn fail_engine_error(
+    service: &WorkflowService,
+    run_id: &str,
+    error: &(impl std::fmt::Display + ?Sized),
+) -> EngineProgress {
+    let _ = service.mark_run_terminal(
+        run_id,
+        WorkflowRunStatus::Failed,
+        Some("engine_error".to_string()),
+        Some(error.to_string()),
+    );
+    EngineProgress::Finished(WorkflowRunStatus::Failed)
 }
 
 #[cfg(test)]

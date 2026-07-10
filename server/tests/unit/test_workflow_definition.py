@@ -508,3 +508,203 @@ def test_parse_does_not_mutate_input() -> None:
     before = copy.deepcopy(definition)
     parse_definition(definition)
     assert definition == before
+
+
+# --- parallel groups (L30 / D-031) ---------------------------------------------
+
+
+def _parallel_definition() -> dict:
+    """A spine with a single node, then a 2-lane parallel group, then a joining
+    node that reads a lane emit."""
+    return {
+        "version": 1,
+        "inputs": [{"name": "issue", "type": "text", "required": True}],
+        "integrations": [],
+        "agents": [
+            {
+                "slot": "plan",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [
+                    {"kind": "agent.emit", "name": "spec", "prompt": "plan {{inputs.issue}}"}
+                ],
+            },
+            {
+                "parallel": [
+                    {
+                        "slot": "fix_a",
+                        "harness": "claude",
+                        "model": "sonnet",
+                        "steps": [
+                            {"kind": "agent.prompt", "prompt": "impl {{spec.summary}}"},
+                            {"kind": "agent.emit", "name": "result_a", "prompt": "report"},
+                        ],
+                    },
+                    {
+                        "slot": "fix_b",
+                        "harness": "codex",
+                        "model": "gpt-5",
+                        "steps": [
+                            {"kind": "agent.emit", "name": "result_b", "prompt": "other"},
+                        ],
+                    },
+                ]
+            },
+            {
+                "slot": "merge",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [
+                    {
+                        "kind": "notify",
+                        "slack_channel_id": "C1",
+                        "message": "{{result_a.ok}} {{result_b.ok}}",
+                    }
+                ],
+            },
+        ],
+    }
+
+
+def test_parallel_group_round_trips() -> None:
+    canonical, _ = parse_definition(_parallel_definition())
+    group = canonical["agents"][1]
+    assert "parallel" in group
+    assert [lane["slot"] for lane in group["parallel"]] == ["fix_a", "fix_b"]
+    # Standalone entries keep their flat shape.
+    assert canonical["agents"][0]["slot"] == "plan"
+    assert canonical["agents"][2]["slot"] == "merge"
+
+
+def test_parallel_group_requires_two_nodes() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"] = [definition["agents"][1]["parallel"][0]]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "parallel_too_few"
+
+
+def test_nested_parallel_group_rejected() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0] = {
+        "parallel": [
+            {"slot": "x", "harness": "claude", "model": "s", "steps": [
+                {"kind": "shell.run", "command": "true"}]},
+            {"slot": "y", "harness": "claude", "model": "s", "steps": [
+                {"kind": "shell.run", "command": "true"}]},
+        ]
+    }
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "nested_parallel"
+
+
+def test_parallel_sibling_emit_reference_rejected() -> None:
+    # fix_b cannot see fix_a's emit (parallel sibling) — deny path.
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][1]["steps"][0]["prompt"] = "use {{result_a.ok}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "forward_emit_reference"
+
+
+def test_lane_can_reference_prior_spine_emit() -> None:
+    # fix_a references `spec` (a standalone node BEFORE the group) — accepted.
+    # The baseline _parallel_definition already exercises this; assert it parses.
+    parse_definition(_parallel_definition())
+
+
+def test_post_group_step_sees_all_lane_emits() -> None:
+    # The joining `merge` node reads both result_a and result_b — accepted.
+    # (Baseline exercises it; assert clean parse and that flipping it to a
+    # forward ref before the group fails.)
+    parse_definition(_parallel_definition())
+    definition = _parallel_definition()
+    # A step in the FIRST standalone node cannot see a lane emit that comes later.
+    definition["agents"][0]["steps"][0]["prompt"] = "{{result_a.ok}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "forward_emit_reference"
+
+
+def test_duplicate_emit_across_lanes_rejected() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][1]["steps"][0]["name"] = "result_a"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_emit"
+
+
+def test_notify_agent_fields_in_lane_must_use_lane_slot() -> None:
+    # STEP 0 lane-scope ruling: a notify with agent_fields INSIDE a parallel lane
+    # must name the lane's OWN slot — the injected fields emit runs in that lane's
+    # worktree, so a sibling lane's agent can't fill it.
+    definition = _parallel_definition()
+    # Put a notify-with-agent_fields inside lane fix_a, but point the slot at fix_b.
+    definition["agents"][1]["parallel"][0]["steps"].append(
+        {
+            "kind": "notify",
+            "slack_channel_id": "C1",
+            "message": "status {{fields.summary}}",
+            "agent_fields": {"slot": "fix_b", "schema": {"summary": {"type": "string"}}},
+        }
+    )
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "agent_fields_slot_outside_lane"
+
+
+def test_notify_agent_fields_in_lane_own_slot_ok() -> None:
+    # The same notify with agent_fields.slot = the lane's own slot parses.
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0]["steps"].append(
+        {
+            "kind": "notify",
+            "slack_channel_id": "C1",
+            "message": "status {{fields.summary}}",
+            "agent_fields": {"slot": "fix_a", "schema": {"summary": {"type": "string"}}},
+        }
+    )
+    canonical, _ = parse_definition(definition)
+    notify = canonical["agents"][1]["parallel"][0]["steps"][-1]
+    assert notify["agent_fields"]["slot"] == "fix_a"
+
+
+def test_duplicate_slot_across_lane_and_node_rejected() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0]["slot"] = "plan"  # collides with node 0
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_slot"
+
+
+def test_workflow_include_rejected_inside_parallel_lane() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0]["steps"] = [
+        {"kind": "workflow.include", "workflow_id": str(__import__("uuid").uuid4()), "args": {}}
+    ]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "include_in_parallel"
+
+
+def test_parallel_lanes_count_toward_agent_cap() -> None:
+    from proliferate.constants.workflows import WORKFLOW_MAX_AGENTS
+
+    definition = _parallel_definition()
+    definition["agents"] = [
+        {
+            "parallel": [
+                {
+                    "slot": f"lane_{i}",
+                    "harness": "claude",
+                    "model": "s",
+                    "steps": [{"kind": "shell.run", "command": "true"}],
+                }
+                for i in range(WORKFLOW_MAX_AGENTS + 1)
+            ]
+        }
+    ]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "too_many_agents"

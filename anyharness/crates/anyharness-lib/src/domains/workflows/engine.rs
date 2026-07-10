@@ -107,6 +107,12 @@ pub enum StepDecision {
 pub enum EngineProgress {
     /// The cursor moved (advanced or a retry was re-queued); keep driving.
     Advanced,
+    /// A bounded sequential segment (L30) ran its last step and the cursor now
+    /// sits at the next segment's start (a parallel group). The run is NOT
+    /// terminal; the actor advances to drive the next segment. Never produced by
+    /// an unbounded (flat) run — its only boundary is the plan end, which yields
+    /// `Finished`.
+    SegmentComplete,
     /// The run parked on a durable approval; stop driving until it resolves.
     SuspendedForApproval,
     /// The run reached a terminal state.
@@ -169,6 +175,20 @@ pub trait WorkflowStepExecutor: Send + Sync {
     /// fire-and-forget: a slow or failing side effect here may never stall or
     /// fail the run (the cursor has already moved).
     fn on_step_transition(&self) {}
+
+    /// Merge every finished lane's work back into the run-level worktree, in the
+    /// given lane order (L30 / M2). Called by the driver at a CLEAN parallel-group
+    /// join (every lane completed), BEFORE the cursor advances past the group, so
+    /// post-group steps + `scm.open_pr` see the merged result. A merge conflict
+    /// must surface as `Err(StepOutcome::Failed { code: "lane_merge_conflict", .. })`
+    /// naming the lane — conflicting parallel work is a legitimate, honest failure,
+    /// never silently dropped. Idempotent: a lane already merged (crash-resume
+    /// mid-merge) is skipped. The default is a no-op so scripted test executors and
+    /// the workspace-isolation path (everything shares the pinned checkout) need do
+    /// nothing.
+    async fn merge_lanes_into_run_worktree(&self, _lanes: &[String]) -> Result<(), StepOutcome> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

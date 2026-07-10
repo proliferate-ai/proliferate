@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   createEmptyDefinition,
+  isParallelGroup,
   serializeWorkflowDefinition,
+  spineAgentNodes,
   type WorkflowAgentNode,
   type WorkflowDefinition,
 } from "@proliferate/product-domain/workflows/definition";
@@ -82,7 +84,9 @@ function withDefaultAgent(
 ): WorkflowDefinition {
   const agent = agents?.[0];
   const [first, ...rest] = definition.agents;
-  if (!agent || !first) {
+  // Seed templates are single-node; a parallel-group first entry is left as-is
+  // (re-defaulting a group's harness/model is the editor phase's concern).
+  if (!agent || !first || isParallelGroup(first)) {
     return definition;
   }
   return {
@@ -437,7 +441,7 @@ export function WorkflowsHomeScreen() {
               open
               workflowName={argsModal.workflow.name}
               args={argsModal.definition.inputs}
-              slots={argsModal.definition.agents.map((agent) => ({
+              slots={spineAgentNodes(argsModal.definition).map((agent) => ({
                 slot: agent.slot,
                 harness: agent.harness,
                 model: agent.model,

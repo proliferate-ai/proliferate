@@ -8,7 +8,14 @@
  * (W3/W4) owns the exact output shapes.
  */
 
-import { flattenWorkflowSteps, type WorkflowDefinition, type WorkflowStep, type WorkflowStepKind } from "./definition";
+import {
+  flattenWorkflowSteps,
+  isParallelGroup,
+  type FlatWorkflowStep,
+  type WorkflowDefinition,
+  type WorkflowStep,
+  type WorkflowStepKind,
+} from "./definition";
 import { workflowStepKindLabel, WORKFLOW_STEP_META } from "./presentation";
 
 // --- Run status ----------------------------------------------------------------
@@ -489,6 +496,217 @@ export function deriveStepRunViews(input: DeriveStepRunViewsInput): WorkflowStep
       sessionLink: sessionLinkFor(output, input.anyharnessWorkspaceId ?? null),
     };
   });
+}
+
+// --- Two-dimensional (lane-aware) run timeline (L30 / track 3a phase 3) --------
+
+/** A lane's rollup state within a parallel group, independent of its steps'
+ * individual statuses (D-031b: a lane can be "failed" while its own steps show
+ * a mix of completed + failed + skipped-tail; the run's global `stepCursor`
+ * cannot distinguish this — see `deriveRunTimeline`). */
+export type WorkflowLaneStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+
+export interface WorkflowRunLaneView {
+  /** The node's slot — also the lane name (D-031a: lane name = slot). */
+  lane: string;
+  harness: string;
+  steps: WorkflowStepRunView[];
+  status: WorkflowLaneStatus;
+}
+
+/**
+ * One row of the run timeline: either a plain sequential run of steps (today's
+ * shape, unchanged) or a parallel group's lanes, rendered side-by-side.
+ */
+export type WorkflowRunTimelineSegment =
+  | { kind: "sequential"; steps: WorkflowStepRunView[] }
+  | { kind: "parallel"; spineIndex: number; lanes: WorkflowRunLaneView[] };
+
+function hasRecordedOutput(
+  stepOutputs: Record<string, unknown> | null | undefined,
+  stepKey: string,
+): boolean {
+  return Boolean(
+    stepOutputs
+    && Object.prototype.hasOwnProperty.call(stepOutputs, stepKey)
+    && stepOutputs[stepKey] != null,
+  );
+}
+
+/** Mirrors `baseStepStatus`'s cursor-index case: the status of the one step
+ * currently "live" in a lane (the first step without a recorded output). */
+function liveLaneStepStatus(runStatus: WorkflowRunStatus, isGoalStep: boolean): WorkflowStepRunStatus {
+  switch (runStatus) {
+    case "completed":
+      return "completed";
+    case "failed":
+      return "failed";
+    case "cancelled":
+      return "cancelled";
+    case "waiting_approval":
+      // Unsupported inside a lane (D-031b) — kept for exhaustiveness, never
+      // actually reached since an in-lane approval fails the lane instead.
+      return "waiting_approval";
+    case "running":
+      return isGoalStep ? "goal_iterating" : "running";
+    case "delivered":
+    case "pending_delivery":
+    case "claimable":
+    case "claimed":
+      return "pending";
+    case "missed":
+      return "skipped";
+    case "unknown":
+      return "blocked";
+  }
+}
+
+/** Mirrors `baseStepStatus`'s `index > cursor` case, for steps after a lane's
+ * live step. */
+function tailLaneStepStatus(runStatus: WorkflowRunStatus): WorkflowStepRunStatus {
+  if (runStatus === "cancelled") {
+    return "cancelled";
+  }
+  if (runStatus === "failed") {
+    return "skipped";
+  }
+  return "pending";
+}
+
+/**
+ * Re-derive one lane's step statuses independently of the run's single global
+ * `stepCursor` — which the engine pins at the group's start for the group's
+ * entire lifetime (active or failed), so it cannot tell lanes apart (arch
+ * §3.1: lanes need their own cursor). Each lane's "virtual cursor" is instead
+ * the first step in its own order without a recorded output; steps before it
+ * are completed, the one at it is live, steps after it are pending/skipped —
+ * exactly `baseStepStatus`'s single-cursor rule, just applied per lane.
+ */
+function deriveActiveLaneSteps(
+  laneViews: readonly WorkflowStepRunView[],
+  laneFlatSteps: readonly FlatWorkflowStep[],
+  stepOutputs: Record<string, unknown> | null | undefined,
+  runStatus: WorkflowRunStatus,
+): WorkflowStepRunView[] {
+  const liveIndex = laneFlatSteps.findIndex((fs) => !hasRecordedOutput(stepOutputs, fs.stepKey));
+  return laneViews.map((view, i) => {
+    if (liveIndex === -1 || i < liveIndex) {
+      return { ...view, status: "completed", dotKind: stepRunDotKind("completed") };
+    }
+    if (i === liveIndex) {
+      const step = laneFlatSteps[i]!.step;
+      const isGoalStep = step.kind === "agent.prompt" && step.goal !== undefined;
+      const status = liveLaneStepStatus(runStatus, isGoalStep);
+      return { ...view, status, dotKind: stepRunDotKind(status) };
+    }
+    const status = tailLaneStepStatus(runStatus);
+    return { ...view, status, dotKind: stepRunDotKind(status) };
+  });
+}
+
+/** Roll a lane's per-step statuses up into one lane-level state. */
+function laneRollupStatus(steps: readonly WorkflowStepRunView[]): WorkflowLaneStatus {
+  if (steps.length === 0 || steps.every((s) => s.status === "completed")) {
+    return "completed";
+  }
+  if (steps.some((s) => s.status === "failed")) {
+    return "failed";
+  }
+  if (steps.every((s) => s.status === "cancelled")) {
+    return "cancelled";
+  }
+  if (steps.some((s) => s.status === "running" || s.status === "goal_iterating" || s.status === "waiting_approval")) {
+    return "running";
+  }
+  return "pending";
+}
+
+/**
+ * Project a run into a two-dimensional timeline: sequential stretches render
+ * exactly as `deriveStepRunViews` already does (byte-identical for a flat
+ * definition — no parallel groups means exactly one sequential segment whose
+ * steps are that same array), and each parallel group becomes its own segment
+ * whose lanes are derived independently via `deriveActiveLaneSteps` above.
+ */
+export function deriveRunTimeline(input: DeriveStepRunViewsInput): WorkflowRunTimelineSegment[] {
+  const { definition, runStatus, stepOutputs } = input;
+  const allViews = deriveStepRunViews(input);
+  const flatSteps = flattenWorkflowSteps(definition);
+  const terminalCompleted = runStatus === "completed";
+  const cursor = input.stepCursor ?? (terminalCompleted ? flatSteps.length : 0);
+
+  const segments: WorkflowRunTimelineSegment[] = [];
+  let sequentialBuffer: WorkflowStepRunView[] = [];
+  let flatIndex = 0;
+
+  const flushSequential = () => {
+    if (sequentialBuffer.length > 0) {
+      segments.push({ kind: "sequential", steps: sequentialBuffer });
+      sequentialBuffer = [];
+    }
+  };
+
+  for (const [spineIndex, entry] of definition.agents.entries()) {
+    if (isParallelGroup(entry)) {
+      flushSequential();
+      const groupStart = flatIndex;
+      const groupStepCount = entry.parallel.reduce((n, node) => n + node.steps.length, 0);
+      const groupEnd = groupStart + groupStepCount;
+      const groupActive = cursor >= groupStart && cursor < groupEnd;
+
+      const lanes: WorkflowRunLaneView[] = entry.parallel.map((node) => {
+        const laneStart = flatIndex;
+        const laneStepCount = node.steps.length;
+        flatIndex += laneStepCount;
+        const laneViewsAsReported = allViews.slice(laneStart, laneStart + laneStepCount);
+        const laneFlatSteps = flatSteps.slice(laneStart, laneStart + laneStepCount);
+        const steps = groupActive
+          ? deriveActiveLaneSteps(laneViewsAsReported, laneFlatSteps, stepOutputs, runStatus)
+          : laneViewsAsReported;
+        return { lane: node.slot, harness: node.harness, steps, status: laneRollupStatus(steps) };
+      });
+      segments.push({ kind: "parallel", spineIndex, lanes });
+    } else {
+      const stepCount = entry.steps.length;
+      sequentialBuffer.push(...allViews.slice(flatIndex, flatIndex + stepCount));
+      flatIndex += stepCount;
+    }
+  }
+  flushSequential();
+  return segments;
+}
+
+/** Small-pill label for a lane's rollup state (run-view lane header). */
+export function laneStatusLabel(status: WorkflowLaneStatus): string {
+  switch (status) {
+    case "pending":
+      return "Pending";
+    case "running":
+      return "Running";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+    case "cancelled":
+      return "Cancelled";
+  }
+}
+
+/** Reuses the same tone vocabulary as the run-level status pill — color is
+ * status only, never a per-lane "ownership" treatment (UI rule). */
+export function laneStatusTone(status: WorkflowLaneStatus): WorkflowStatusTone {
+  switch (status) {
+    case "pending":
+      return "muted";
+    case "running":
+      return "running";
+    case "completed":
+      return "positive";
+    case "failed":
+      return "danger";
+    case "cancelled":
+      return "muted";
+  }
 }
 
 // --- Duration / cost / args formatting -----------------------------------------

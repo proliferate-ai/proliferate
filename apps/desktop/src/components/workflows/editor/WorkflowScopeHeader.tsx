@@ -40,6 +40,9 @@ export interface WorkflowScopeHeaderProps {
   onMoveDown?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  /** Extra menu items (e.g. "Add agent in parallel") rendered above the
+   * reorder/delete controls, in the same popover — track 3a (L30 lanes). */
+  extraMenuItems?: (close: () => void) => React.ReactNode;
 }
 
 const CAPTION: Record<WorkflowScopeVariant, string> = {
@@ -61,16 +64,17 @@ export function WorkflowScopeHeader({
   onDuplicate,
   onMoveDown,
   onDelete,
+  extraMenuItems,
 }: WorkflowScopeHeaderProps) {
   const strong = variant === "initial" || variant === "new-session";
-  const hasMenu = Boolean(onDelete || onDuplicate || onMoveUp || onMoveDown);
+  const hasMenu = Boolean(onDelete || onDuplicate || onMoveUp || onMoveDown || extraMenuItems);
 
   const menu = hasMenu ? (
     <PopoverButton
       stopPropagation
       align="end"
       side="bottom"
-      className={`w-40 ${POPOVER_SURFACE_CLASS}`}
+      className={`w-48 ${POPOVER_SURFACE_CLASS}`}
       trigger={(
         <Button variant="ghost" size="icon-sm" aria-label="Scope options">
           <MoreHorizontal className="size-4" />
@@ -79,6 +83,7 @@ export function WorkflowScopeHeader({
     >
       {(close) => (
         <div className="p-1">
+          {extraMenuItems?.(close)}
           {onDuplicate ? (
             <PopoverMenuItem density="compact" label="Duplicate" onClick={() => { close(); onDuplicate(); }} />
           ) : null}

@@ -621,7 +621,78 @@ def _parse_step(item: object, *, field: str) -> dict[str, object]:
     return canonical
 
 
-# --- agents spine (A4) ---------------------------------------------------------
+# --- agents spine (A4 + L30 parallel groups) -----------------------------------
+#
+# D-031a grammar: the ``agents`` spine is an ordered list whose entries are EITHER
+# a single agent node ``{slot, harness, model, steps}`` (unchanged) OR a parallel
+# group ``{"parallel": [<agentNode>, <agentNode>, ...]}`` (2+ plain agent nodes).
+# Flat definitions are byte-identical valid (backward compatible, no version bump).
+# Lane name = the node's slot; slot uniqueness is global, so lane names are
+# collision-free by construction (the "lane collisions" check is exactly the
+# existing global ``duplicate_slot`` assertion). v1 bounds: groups do not nest, and
+# ``workflow.include`` is not supported inside a parallel lane.
+
+
+def _parse_agent_node(
+    node: dict[str, object],
+    *,
+    field: str,
+    require_steps: bool,
+    seen_slots: set[str],
+    reject_include: bool,
+    workflow_integrations: list[str],
+) -> tuple[dict[str, object], int]:
+    """Parse one plain agent node. Returns ``(canonical_node, step_count)``.
+
+    ``reject_include`` is set for nodes inside a parallel group: ``workflow.include``
+    is a v1 bound there (composition inside a lane is a Part II concern).
+
+    A node (standalone or lane) may declare its own ``integrations`` list — a
+    validated subset of the workflow-level list (track 3c phase 2). Absent keeps
+    the workflow-level default.
+    """
+
+    _reject_unknown_keys(node, {"slot", "harness", "model", "steps", "integrations"}, field=field)
+    slot = _require_str(node, "slot", field=field)
+    if not _SLOT_RE.match(slot):
+        raise _err(
+            "invalid_definition",
+            f"{field}.slot '{slot}' must match ^[a-z][a-z0-9_]*$.",
+        )
+    # Global slot uniqueness IS the lane-collision guarantee (lane name = slot).
+    if slot in seen_slots:
+        raise _err("duplicate_slot", f"Duplicate agent slot '{slot}'.")
+    seen_slots.add(slot)
+    harness = _require_str(
+        node, "harness", field=field, max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
+    )
+    model = _require_str(node, "model", field=field, max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH)
+    raw_steps = node.get("steps")
+    if not isinstance(raw_steps, list) or (require_steps and not raw_steps):
+        raise _err("invalid_definition", f"{field}.steps must be a non-empty list.")
+    steps: list[dict[str, object]] = []
+    for step_index, step_item in enumerate(raw_steps):
+        step = _parse_step(step_item, field=f"{field}.steps[{step_index}]")
+        if reject_include and step["kind"] == WORKFLOW_STEP_WORKFLOW_INCLUDE:
+            raise _err(
+                "include_in_parallel",
+                f"{field}.steps[{step_index}]: workflow.include is not supported inside a "
+                "parallel group (v1).",
+            )
+        steps.append(step)
+    canonical: dict[str, object] = {
+        "slot": slot,
+        "harness": harness,
+        "model": model,
+        "steps": steps,
+    }
+    if "integrations" in node:
+        canonical["integrations"] = _parse_agent_integrations(
+            node.get("integrations"),
+            workflow_integrations=workflow_integrations,
+            field=field,
+        )
+    return canonical, len(steps)
 
 
 def _parse_agent_integrations(
@@ -671,66 +742,132 @@ def _parse_agents(
         raise _err("invalid_definition", "'agents' must be a list.")
     if not raw and require_steps:
         raise _err("invalid_definition", "A workflow requires at least one agent node.")
-    if len(raw) > WORKFLOW_MAX_AGENTS:
-        raise _err(
-            "too_many_agents", f"A workflow may declare at most {WORKFLOW_MAX_AGENTS} agent nodes."
-        )
     total_steps = 0
+    node_count = 0
     seen_slots: set[str] = set()
     canonical_agents: list[dict[str, object]] = []
-    for node_index, item in enumerate(raw):
-        node = _require_dict(item, field=f"agents[{node_index}]")
-        _reject_unknown_keys(
-            node,
-            {"slot", "harness", "model", "steps", "integrations"},
-            field=f"agents[{node_index}]",
-        )
-        slot = _require_str(node, "slot", field=f"agents[{node_index}]")
-        if not _SLOT_RE.match(slot):
+    for entry_index, item in enumerate(raw):
+        entry = _require_dict(item, field=f"agents[{entry_index}]")
+        if "parallel" in entry:
+            # Parallel group (D-031a).
+            _reject_unknown_keys(entry, {"parallel"}, field=f"agents[{entry_index}]")
+            raw_lanes = entry.get("parallel")
+            if not isinstance(raw_lanes, list):
+                raise _err(
+                    "invalid_definition",
+                    f"agents[{entry_index}].parallel must be a list of agent nodes.",
+                )
+            if len(raw_lanes) < 2:
+                raise _err(
+                    "parallel_too_few",
+                    f"agents[{entry_index}].parallel requires at least 2 agent nodes "
+                    f"(got {len(raw_lanes)}).",
+                )
+            lanes: list[dict[str, object]] = []
+            for lane_index, lane_item in enumerate(raw_lanes):
+                lane_field = f"agents[{entry_index}].parallel[{lane_index}]"
+                lane = _require_dict(lane_item, field=lane_field)
+                if "parallel" in lane:
+                    raise _err(
+                        "nested_parallel",
+                        f"{lane_field}: parallel groups do not nest (v1).",
+                    )
+                canonical_lane, lane_step_count = _parse_agent_node(
+                    lane,
+                    field=lane_field,
+                    require_steps=require_steps,
+                    seen_slots=seen_slots,
+                    reject_include=True,
+                    workflow_integrations=workflow_integrations,
+                )
+                lanes.append(canonical_lane)
+                total_steps += lane_step_count
+                node_count += 1
+            canonical_agents.append({"parallel": lanes})
+        else:
+            canonical_node, step_count = _parse_agent_node(
+                entry,
+                field=f"agents[{entry_index}]",
+                require_steps=require_steps,
+                seen_slots=seen_slots,
+                reject_include=False,
+                workflow_integrations=workflow_integrations,
+            )
+            canonical_agents.append(canonical_node)
+            total_steps += step_count
+            node_count += 1
+        if node_count > WORKFLOW_MAX_AGENTS:
             raise _err(
-                "invalid_definition",
-                f"agents[{node_index}].slot '{slot}' must match ^[a-z][a-z0-9_]*$.",
+                "too_many_agents",
+                f"A workflow may declare at most {WORKFLOW_MAX_AGENTS} agent nodes.",
             )
-        if slot in seen_slots:
-            raise _err("duplicate_slot", f"Duplicate agent slot '{slot}'.")
-        seen_slots.add(slot)
-        harness = _require_str(
-            node, "harness", field=f"agents[{node_index}]", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
-        )
-        model = _require_str(
-            node, "model", field=f"agents[{node_index}]", max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
-        )
-        raw_steps = node.get("steps")
-        if not isinstance(raw_steps, list) or (require_steps and not raw_steps):
-            raise _err(
-                "invalid_definition",
-                f"agents[{node_index}].steps must be a non-empty list.",
-            )
-        steps: list[dict[str, object]] = []
-        for step_index, step_item in enumerate(raw_steps):
-            steps.append(
-                _parse_step(step_item, field=f"agents[{node_index}].steps[{step_index}]")
-            )
-        total_steps += len(steps)
         if total_steps > WORKFLOW_MAX_STEPS:
             raise _err(
                 "too_many_steps",
                 f"A workflow may declare at most {WORKFLOW_MAX_STEPS} steps.",
             )
-        canonical_node: dict[str, object] = {
-            "slot": slot,
-            "harness": harness,
-            "model": model,
-            "steps": steps,
-        }
-        if "integrations" in node:
-            canonical_node["integrations"] = _parse_agent_integrations(
-                node.get("integrations"),
-                workflow_integrations=workflow_integrations,
-                field=f"agents[{node_index}]",
-            )
-        canonical_agents.append(canonical_node)
     return canonical_agents
+
+
+# --- spine iteration (flatten parallel groups) ---------------------------------
+
+
+def iter_agent_nodes(agents: object) -> Iterator[dict[str, object]]:
+    """Yield every agent node across the spine, flattening parallel groups.
+
+    Defensive (tolerates malformed entries) so grant/scope helpers can walk a
+    stored definition without re-parsing. Single nodes yield as-is; a parallel
+    group yields each of its lane nodes in lane order.
+    """
+
+    if not isinstance(agents, list):
+        return
+    for entry in agents:
+        if not isinstance(entry, dict):
+            continue
+        lanes = entry.get("parallel")
+        if isinstance(lanes, list):
+            for lane in lanes:
+                if isinstance(lane, dict):
+                    yield lane
+        else:
+            yield entry
+
+
+def iter_plan_nodes(
+    agents: list[dict[str, object]],
+) -> Iterator[tuple[int, str, dict[str, object]]]:
+    """Yield ``(spine_index, lane, node)`` for every agent node in flatten order.
+
+    ``lane`` is ``"-"`` for a standalone node and the node's slot for a
+    parallel-group lane — the middle segment of the ``"<node>.<lane>.<step>"``
+    resolved step key (data-contract §4). A parallel group occupies ONE spine
+    index; its lanes emit lane-grouped in lane order (deterministic — the runtime
+    schedules by key). Consumes the canonical (already-parsed) agents spine.
+    """
+
+    for spine_index, entry in enumerate(agents):
+        lanes = entry.get("parallel") if isinstance(entry, dict) else None
+        if isinstance(lanes, list):
+            for lane in lanes:
+                yield spine_index, str(lane["slot"]), lane
+        else:
+            yield spine_index, "-", entry
+
+
+def has_parallel_groups(agents: object) -> bool:
+    """True when the agents spine contains at least one parallel group (L30).
+
+    Defensive (tolerates a raw stored/unparsed spine): a group entry is a dict
+    carrying a ``parallel`` list. Used to gate v1 parallel bounds (M1): parallel
+    forces worktree isolation, and rejects both session_bindings and local
+    targets."""
+
+    if not isinstance(agents, list):
+        return False
+    return any(
+        isinstance(entry, dict) and isinstance(entry.get("parallel"), list) for entry in agents
+    )
 
 
 # --- template reference + emit validation --------------------------------------
@@ -763,11 +900,127 @@ def _iter_step_strings(step: dict[str, object]) -> Iterator[tuple[str, str]]:
                     yield key, sub
 
 
+def _validate_step_refs(
+    step: dict[str, object],
+    *,
+    input_names: frozenset[str],
+    visible_emits: frozenset[str],
+    all_slots: frozenset[str],
+    include_names: set[str],
+    lane_slot: str | None,
+) -> None:
+    """Validate every templated string in one step against the emits visible at
+    its run-order position (§1.3). Raises on the first bad reference.
+
+    ``all_slots`` is every slot in the definition; ``lane_slot`` is the slot of
+    the parallel lane this step lives in (``None`` for a standalone node). A
+    notify's ``agent_fields`` block is scoped here (track 3c): its ``{{fields.*}}``
+    are legal only in the notify ``message``, and its ``slot`` must name a real
+    agent — and, inside a parallel lane, MUST be the lane's own slot (a lane's
+    notify-fields emit runs in that lane's session/worktree, so it can't be filled
+    by a sibling lane's agent)."""
+
+    agent_fields = step.get("agent_fields") if step["kind"] == WORKFLOW_STEP_NOTIFY else None
+    allowed_fields: frozenset[str] | None = None
+    if isinstance(agent_fields, dict):
+        schema = agent_fields.get("schema", {})
+        allowed_fields = frozenset(schema.keys() if isinstance(schema, dict) else ())
+        slot = agent_fields.get("slot")
+        if lane_slot is not None:
+            # Inside a parallel lane: the fields emit runs in this lane, so it must
+            # be filled by this lane's own agent — never a sibling lane's slot.
+            if slot != lane_slot:
+                raise _err(
+                    "agent_fields_slot_outside_lane",
+                    f"notify agent_fields.slot '{slot}' must be the lane's own slot "
+                    f"'{lane_slot}' when the notify is inside a parallel group.",
+                )
+        elif slot not in all_slots:
+            raise _err(
+                "unknown_slot",
+                f"notify agent_fields.slot '{slot}' is not an agent slot in this workflow.",
+            )
+
+    for field_name, value in _iter_step_strings(step):
+        # {{fields.*}} is scoped to the notify `message` that declared
+        # agent_fields; anywhere else it is a validation error (None scope).
+        fields_scope = allowed_fields if field_name == "message" else None
+        for reference in iter_references(value):
+            if isinstance(reference, EmitReference) and reference.emit in include_names:
+                raise _err(
+                    "include_step_reference",
+                    f"Template references workflow.include step "
+                    f"'{reference.emit}', which has no output.",
+                )
+        try:
+            validate_string_references(
+                value,
+                input_names=input_names,
+                prior_emit_names=visible_emits,
+                allowed_fields=fields_scope,
+            )
+        except TemplateReferenceError as exc:
+            raise _err(exc.code, exc.message) from exc
+
+
+def _validate_node_steps(
+    node: dict[str, object],
+    *,
+    input_names: frozenset[str],
+    base_visible: frozenset[str],
+    all_emits: set[str],
+    all_slots: frozenset[str],
+    include_names: set[str],
+    lane_slot: str | None,
+) -> set[str]:
+    """Validate one agent node's steps against ``base_visible`` (emits visible at
+    the node's start) plus the node's own earlier emits. Returns the emit names
+    this node produced. ``all_emits`` is the whole-definition uniqueness ledger.
+
+    ``lane_slot`` is this node's lane slot when it is a parallel-group lane, else
+    ``None`` (a standalone node); it gates the notify ``agent_fields.slot`` rule."""
+
+    local_visible: set[str] = set(base_visible)
+    produced: set[str] = set()
+    for step in node["steps"]:  # type: ignore[index]
+        _validate_step_refs(
+            step,
+            input_names=input_names,
+            visible_emits=frozenset(local_visible),
+            all_slots=all_slots,
+            include_names=include_names,
+            lane_slot=lane_slot,
+        )
+        if step["kind"] == WORKFLOW_STEP_BRANCH:
+            _validate_branch_on(step, local_visible)
+        # Register this step's emit AFTER validating its own refs (a step can
+        # never reference its own output).
+        if step["kind"] == WORKFLOW_STEP_AGENT_EMIT:
+            name = step["name"]
+            if name in all_emits:
+                raise _err("duplicate_emit", f"Duplicate emit name '{name}'.")
+            all_emits.add(name)  # type: ignore[arg-type]
+            produced.add(name)  # type: ignore[arg-type]
+            local_visible.add(name)  # type: ignore[arg-type]
+        elif step["kind"] == WORKFLOW_STEP_WORKFLOW_INCLUDE:
+            include_name = step.get("name")
+            if isinstance(include_name, str):
+                include_names.add(include_name)
+    return produced
+
+
 def _validate_spine_references(
     agents: list[dict[str, object]], input_names: frozenset[str]
 ) -> None:
     """Walk the flattened run order enforcing emit-name uniqueness (whole
     definition) and strictly-prior ref visibility, plus branch semantics.
+
+    Visibility extended to lanes (data-contract §1.3, D-031): a ref inside a lane
+    of a parallel group may name emits from earlier SPINE entries in full and
+    earlier steps in the SAME lane — never a parallel sibling's emits. Emits from
+    every lane become visible to steps AFTER the group (they are "earlier spine
+    nodes in full"). Emit-name uniqueness still spans the WHOLE definition, so two
+    lanes can never publish the same emit name.
 
     ``workflow.include`` steps are validated too (their input-mapping values are
     parent-context templates), but they produce no emit of their own — a parent
@@ -775,61 +1028,40 @@ def _validate_spine_references(
     child's emits are namespaced away at resolution and are never visible here
     (cross-spine refs are a Part II concern)."""
 
-    all_slots = frozenset(str(node["slot"]) for node in agents)
-    prior_emits: set[str] = set()
+    all_slots = frozenset(str(node["slot"]) for node in iter_agent_nodes(agents))
+    visible_emits: set[str] = set()  # emits visible at the current spine position
+    all_emits: set[str] = set()  # every emit seen (whole-definition uniqueness)
     include_names: set[str] = set()
-    for node in agents:
-        for step in node["steps"]:  # type: ignore[index]
-            agent_fields = (
-                step.get("agent_fields") if step["kind"] == WORKFLOW_STEP_NOTIFY else None
+    for entry in agents:
+        lanes = entry.get("parallel") if isinstance(entry, dict) else None
+        if isinstance(lanes, list):
+            # Each lane sees only the emits visible BEFORE the group (snapshot) +
+            # its own earlier steps; sibling lanes are invisible to each other.
+            group_snapshot = frozenset(visible_emits)
+            group_produced: set[str] = set()
+            for lane in lanes:
+                group_produced |= _validate_node_steps(
+                    lane,
+                    input_names=input_names,
+                    base_visible=group_snapshot,
+                    all_emits=all_emits,
+                    all_slots=all_slots,
+                    include_names=include_names,
+                    # A lane's notify agent_fields.slot must be the lane's own slot.
+                    lane_slot=str(lane["slot"]),
+                )
+            # Join: every lane's emits are visible to later spine entries.
+            visible_emits |= group_produced
+        else:
+            visible_emits |= _validate_node_steps(
+                entry,
+                input_names=input_names,
+                base_visible=frozenset(visible_emits),
+                all_emits=all_emits,
+                all_slots=all_slots,
+                include_names=include_names,
+                lane_slot=None,
             )
-            allowed_fields: frozenset[str] | None = None
-            if isinstance(agent_fields, dict):
-                schema = agent_fields.get("schema", {})
-                allowed_fields = frozenset(schema.keys() if isinstance(schema, dict) else ())
-                slot = agent_fields.get("slot")
-                if slot not in all_slots:
-                    raise _err(
-                        "unknown_slot",
-                        f"notify agent_fields.slot '{slot}' is not an agent slot in this "
-                        "workflow.",
-                    )
-            for field_name, value in _iter_step_strings(step):
-                # {{fields.*}} is scoped to the notify `message` that declared
-                # agent_fields; anywhere else it is a validation error (None scope).
-                fields_scope = allowed_fields if field_name == "message" else None
-                for reference in iter_references(value):
-                    if (
-                        isinstance(reference, EmitReference)
-                        and reference.emit in include_names
-                    ):
-                        raise _err(
-                            "include_step_reference",
-                            f"Template references workflow.include step "
-                            f"'{reference.emit}', which has no output.",
-                        )
-                try:
-                    validate_string_references(
-                        value,
-                        input_names=input_names,
-                        prior_emit_names=frozenset(prior_emits),
-                        allowed_fields=fields_scope,
-                    )
-                except TemplateReferenceError as exc:
-                    raise _err(exc.code, exc.message) from exc
-            if step["kind"] == WORKFLOW_STEP_BRANCH:
-                _validate_branch_on(step, prior_emits)
-            # Register this step's emit AFTER validating its own refs (a step
-            # can never reference its own output).
-            if step["kind"] == WORKFLOW_STEP_AGENT_EMIT:
-                name = step["name"]
-                if name in prior_emits:
-                    raise _err("duplicate_emit", f"Duplicate emit name '{name}'.")
-                prior_emits.add(name)  # type: ignore[arg-type]
-            elif step["kind"] == WORKFLOW_STEP_WORKFLOW_INCLUDE:
-                include_name = step.get("name")
-                if isinstance(include_name, str):
-                    include_names.add(include_name)
 
 
 def _validate_branch_on(step: dict[str, object], prior_emits: set[str]) -> None:

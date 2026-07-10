@@ -1,6 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
+import {
+  spineAgentNodes,
+  type WorkflowDefinition,
+} from "@proliferate/product-domain/workflows/definition";
 import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
 import {
   deriveLastUsedTarget,
@@ -198,7 +201,7 @@ export function useWorkflowRunLauncher(): WorkflowRunLauncher {
             open
             workflowName={state.workflow.name}
             args={state.definition.inputs}
-            slots={state.definition.agents.map((agent) => ({
+            slots={spineAgentNodes(state.definition).map((agent) => ({
               slot: agent.slot,
               harness: agent.harness,
               model: agent.model,

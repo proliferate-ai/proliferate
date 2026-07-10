@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import {
   parseWorkflowDefinition,
+  spineAgentNodes,
   type WorkflowDefinition,
 } from "@proliferate/product-domain/workflows/definition";
 import { workflowStepStrip } from "@proliferate/product-domain/workflows/presentation";
@@ -128,7 +129,7 @@ function WorkflowRecommendedCard({
     if (!definition) {
       return [];
     }
-    return Array.from(new Set(definition.agents.map((agent) => agent.harness)));
+    return Array.from(new Set(spineAgentNodes(definition).map((agent) => agent.harness)));
   }, [definition]);
 
   const glyphs = useMemo(() => (definition ? workflowStepStrip(definition) : []), [definition]);

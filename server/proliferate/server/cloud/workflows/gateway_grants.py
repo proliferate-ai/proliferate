@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE
 from proliferate.constants.workflows import WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS
+from proliferate.server.cloud.workflows.domain.definition import iter_agent_nodes
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
@@ -71,7 +72,9 @@ def resolve_run_scope(definition: dict[str, object]) -> dict[str, dict[str, obje
             namespaces.append(item)
 
     scope: dict[str, dict[str, object]] = {}
-    for node in definition.get("agents") or []:
+    # Flatten parallel groups (L30): every lane is its own slot/session and must
+    # get its own grant entry, exactly like a standalone node.
+    for node in iter_agent_nodes(definition.get("agents") or []):
         if not isinstance(node, dict):
             continue
         slot = node.get("slot")

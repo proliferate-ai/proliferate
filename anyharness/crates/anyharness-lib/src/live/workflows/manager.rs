@@ -258,7 +258,9 @@ impl WorkflowRunManager {
                 // Terminal (completed/failed/cancelled): release ownership +
                 // gateway bindings, keep sessions alive/demoted (C13 / items 2–4).
                 EngineProgress::Finished(_) => manager.release_on_terminal(&run_id),
-                EngineProgress::Advanced => {}
+                // `drive_run` loops on both of these, so they never surface as a
+                // resting point; handled for exhaustiveness.
+                EngineProgress::Advanced | EngineProgress::SegmentComplete => {}
             }
         });
     }

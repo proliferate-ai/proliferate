@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  flattenWorkflowSteps,
   parseWorkflowDefinition,
   serializeWorkflowDefinition,
   type WorkflowDefinition,
@@ -13,6 +14,7 @@ import {
 import { validateWorkflowDefinition } from "./validation";
 import {
   coerceRunStatus,
+  deriveRunTimeline,
   deriveStepRunViews,
   isTerminalRunStatus,
   shouldPollRun,
@@ -288,6 +290,149 @@ describe("editor multi-agent round-trip (track 1a′ battery line 1)", () => {
     };
     const issues = validateWorkflowDefinition(definition);
     expect(issues.some((issue) => issue.code === "duplicate_slot")).toBe(true);
+  });
+});
+
+describe("parallel groups (L30 / D-031)", () => {
+  function parallelDefinition(): WorkflowDefinition {
+    return {
+      version: 1,
+      inputs: [{ name: "issue", type: "text", required: true }],
+      integrations: [],
+      agents: [
+        {
+          slot: "plan",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.emit", onFail: { kind: "stop" }, name: "spec", prompt: "{{inputs.issue}}" }],
+        },
+        {
+          parallel: [
+            {
+              slot: "fix_a",
+              harness: "claude",
+              model: "sonnet",
+              steps: [
+                { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "impl {{spec.summary}}" },
+                { kind: "agent.emit", onFail: { kind: "stop" }, name: "result_a", prompt: "report" },
+              ],
+            },
+            {
+              slot: "fix_b",
+              harness: "codex",
+              model: "gpt-5",
+              steps: [{ kind: "shell.run", onFail: { kind: "stop" }, command: "make test" }],
+            },
+          ],
+        },
+        {
+          slot: "merge",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "notify", onFail: { kind: "stop" }, slackChannelId: "C1", message: "{{result_a.ok}}" }],
+        },
+      ],
+    };
+  }
+
+  it("round-trips a parallel-group wire dict and flattens lane-qualified keys", () => {
+    const definition = parallelDefinition();
+    expect(validateWorkflowDefinition(definition)).toEqual([]);
+
+    const wire = serializeWorkflowDefinition(definition);
+    expect((wire.agents as Record<string, unknown>[])[1]).toEqual({
+      parallel: [
+        expect.objectContaining({ slot: "fix_a" }),
+        expect.objectContaining({ slot: "fix_b" }),
+      ],
+    });
+    const reparsed = parseWorkflowDefinition(wire);
+    expect(reparsed).toEqual(definition);
+
+    // Flatten mirrors the server resolver: standalone "-" lane, group lanes keyed
+    // by slot, lane-grouped in lane order.
+    expect(flattenWorkflowSteps(definition).map((f) => f.stepKey)).toEqual([
+      "0.-.0",
+      "1.fix_a.0",
+      "1.fix_a.1",
+      "1.fix_b.0",
+      "2.-.0",
+    ]);
+  });
+
+  it("rejects a sibling-lane emit reference (deny path)", () => {
+    const definition = parallelDefinition();
+    const group = definition.agents[1] as { parallel: { steps: unknown[] }[] };
+    group.parallel[1]!.steps[0] = {
+      kind: "agent.prompt",
+      onFail: { kind: "stop" },
+      prompt: "use {{result_a.ok}}",
+    };
+    const codes = validateWorkflowDefinition(definition).map((i) => i.code);
+    expect(codes).toContain("forward_emit_reference");
+  });
+
+  it("accepts a lane referencing a prior spine emit, and post-group refs to any lane", () => {
+    // The baseline exercises both (fix_a reads `spec`; merge reads `result_a`).
+    expect(validateWorkflowDefinition(parallelDefinition())).toEqual([]);
+  });
+
+  it("flags a single-node parallel group", () => {
+    const definition = parallelDefinition();
+    (definition.agents[1] as { parallel: unknown[] }).parallel.pop();
+    expect(validateWorkflowDefinition(definition).map((i) => i.code)).toContain("parallel_too_few");
+  });
+
+  it("flags a duplicate emit across lanes and a duplicate slot across lane+node", () => {
+    const dupEmit = parallelDefinition();
+    (dupEmit.agents[1] as { parallel: { steps: unknown[] }[] }).parallel[1]!.steps[0] = {
+      kind: "agent.emit",
+      onFail: { kind: "stop" },
+      name: "result_a",
+      prompt: "x",
+    };
+    expect(validateWorkflowDefinition(dupEmit).map((i) => i.code)).toContain("duplicate_emit");
+
+    const dupSlot = parallelDefinition();
+    (dupSlot.agents[1] as { parallel: { slot: string }[] }).parallel[0]!.slot = "plan";
+    expect(validateWorkflowDefinition(dupSlot).map((i) => i.code)).toContain("duplicate_slot");
+  });
+
+  it("flags workflow.include inside a parallel lane", () => {
+    const definition = parallelDefinition();
+    (definition.agents[1] as { parallel: { steps: unknown[] }[] }).parallel[0]!.steps = [
+      { kind: "workflow.include", onFail: { kind: "stop" }, workflowId: "wf", args: {} },
+    ];
+    expect(validateWorkflowDefinition(definition).map((i) => i.code)).toContain("include_in_parallel");
+  });
+
+  it("flags a notify agentFields.slot that is not the enclosing lane's own slot", () => {
+    // STEP 0 lane-scope ruling: inside a lane, the fields emit runs in that lane's
+    // worktree, so agentFields.slot must be the lane's OWN slot — a sibling's is
+    // rejected (agent_fields_slot_outside_lane), even though it's a real slot.
+    const definition = parallelDefinition();
+    (definition.agents[1] as { parallel: { steps: unknown[] }[] }).parallel[0]!.steps.push({
+      kind: "notify",
+      onFail: { kind: "stop" },
+      slackChannelId: "C1",
+      message: "status {{fields.summary}}",
+      agentFields: { slot: "fix_b", schema: { summary: { type: "string" } } },
+    });
+    expect(validateWorkflowDefinition(definition).map((i) => i.code)).toContain(
+      "agent_fields_slot_outside_lane",
+    );
+  });
+
+  it("accepts a notify agentFields.slot that is the enclosing lane's own slot", () => {
+    const definition = parallelDefinition();
+    (definition.agents[1] as { parallel: { steps: unknown[] }[] }).parallel[0]!.steps.push({
+      kind: "notify",
+      onFail: { kind: "stop" },
+      slackChannelId: "C1",
+      message: "status {{fields.summary}}",
+      agentFields: { slot: "fix_a", schema: { summary: { type: "string" } } },
+    });
+    expect(validateWorkflowDefinition(definition)).toEqual([]);
   });
 });
 
@@ -745,6 +890,129 @@ describe("run-status derivation", () => {
     // Later steps stay "pending" (not "skipped"): an unrecognized status
     // might still resume, unlike a genuine terminal failure.
     expect(views[2]!.status).toBe("pending");
+  });
+});
+
+// Track 3a phase 3: the two-dimensional (lane-aware) run timeline. The
+// engine pins the run's single global `stepCursor` at a parallel group's
+// start for the group's whole lifetime (arch §3.1), so per-lane progress
+// inside an active/failed group must be derived independently — this is
+// what `deriveRunTimeline` adds on top of `deriveStepRunViews`.
+describe("run-status: two-dimensional lane timeline (deriveRunTimeline)", () => {
+  function lanedDefinition(): WorkflowDefinition {
+    return {
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "plan",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "agent.emit", onFail: { kind: "stop" }, name: "spec", prompt: "go" }],
+        },
+        {
+          parallel: [
+            {
+              slot: "fix_a",
+              harness: "claude",
+              model: "sonnet",
+              steps: [
+                { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "impl a" },
+                { kind: "agent.emit", onFail: { kind: "stop" }, name: "result_a", prompt: "report" },
+              ],
+            },
+            {
+              slot: "fix_b",
+              harness: "codex",
+              model: "gpt-5",
+              steps: [{ kind: "shell.run", onFail: { kind: "stop" }, command: "make test" }],
+            },
+          ],
+        },
+        {
+          slot: "merge",
+          harness: "claude",
+          model: "sonnet",
+          steps: [{ kind: "notify", onFail: { kind: "stop" }, slackChannelId: "C1", message: "done" }],
+        },
+      ],
+    };
+  }
+
+  it("a flat definition (no parallel groups) is one sequential segment, byte-identical to deriveStepRunViews", () => {
+    const definition = WORKFLOW_TEMPLATES[0]!.definition;
+    const input = { definition, runStatus: "running" as const, stepCursor: 1 };
+    expect(deriveRunTimeline(input)).toEqual([{ kind: "sequential", steps: deriveStepRunViews(input) }]);
+  });
+
+  it("a group not yet reached renders every lane pending, matching the pre-group sequential prefix", () => {
+    const definition = lanedDefinition();
+    const segments = deriveRunTimeline({ definition, runStatus: "running", stepCursor: 0 });
+    expect(segments[0]).toEqual({ kind: "sequential", steps: [expect.objectContaining({ status: "running" })] });
+    const group = segments[1] as { kind: "parallel"; lanes: { lane: string; status: string; steps: { status: string }[] }[] };
+    expect(group.kind).toBe("parallel");
+    expect(group.lanes.map((l) => l.status)).toEqual(["pending", "pending"]);
+    expect(group.lanes.every((l) => l.steps.every((s) => s.status === "pending"))).toBe(true);
+  });
+
+  it("an active group derives each lane's live step independently, ahead-sibling included", () => {
+    const definition = lanedDefinition();
+    const segments = deriveRunTimeline({
+      definition,
+      runStatus: "running",
+      stepCursor: 1, // pinned at the group's start the whole time it's active
+      stepOutputs: {
+        "1.fix_a.0": { ok: true },
+        "1.fix_a.1": { ok: true }, // fix_a finished both its steps already
+        // fix_b has no output yet — it's the live lane
+      },
+    });
+    const group = segments[1] as {
+      kind: "parallel";
+      lanes: { lane: string; status: string; steps: { status: string }[] }[];
+    };
+    const fixA = group.lanes.find((l) => l.lane === "fix_a")!;
+    const fixB = group.lanes.find((l) => l.lane === "fix_b")!;
+    expect(fixA.status).toBe("completed");
+    expect(fixA.steps.map((s) => s.status)).toEqual(["completed", "completed"]);
+    expect(fixB.status).toBe("running");
+    expect(fixB.steps.map((s) => s.status)).toEqual(["running"]);
+  });
+
+  it("a failed join renders the failed lane honestly alongside a sibling that ran to completion", () => {
+    const definition = lanedDefinition();
+    const segments = deriveRunTimeline({
+      definition,
+      runStatus: "failed",
+      stepCursor: 1, // the engine never advances the cursor past a failed group
+      stepOutputs: {
+        "1.fix_a.0": { ok: true },
+        "1.fix_a.1": { ok: true },
+        // fix_b never produced an output — it's the lane that failed
+      },
+    });
+    const group = segments[1] as {
+      kind: "parallel";
+      lanes: { lane: string; status: string; steps: { status: string }[] }[];
+    };
+    const fixA = group.lanes.find((l) => l.lane === "fix_a")!;
+    const fixB = group.lanes.find((l) => l.lane === "fix_b")!;
+    expect(fixA.status).toBe("completed");
+    expect(fixB.status).toBe("failed");
+    expect(fixB.steps.map((s) => s.status)).toEqual(["failed"]);
+    // Steps after the group never ran — the join fails the run (D-031b).
+    const post = segments[2] as { kind: "sequential"; steps: { status: string }[] };
+    expect(post.steps.map((s) => s.status)).toEqual(["skipped"]);
+  });
+
+  it("a completed run renders every lane and the post-group step completed", () => {
+    const definition = lanedDefinition();
+    const segments = deriveRunTimeline({ definition, runStatus: "completed", stepCursor: null });
+    const group = segments[1] as { kind: "parallel"; lanes: { status: string }[] };
+    expect(group.lanes.every((l) => l.status === "completed")).toBe(true);
+    const post = segments[2] as { kind: "sequential"; steps: { status: string }[] };
+    expect(post.steps.map((s) => s.status)).toEqual(["completed"]);
   });
 });
 

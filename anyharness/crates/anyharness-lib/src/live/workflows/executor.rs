@@ -28,9 +28,9 @@ use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
 use crate::domains::workflows::model::WorkflowRunRecord;
 use crate::domains::workflows::plan::{
-    AgentConfigStep, AgentEmitStep, AgentPromptStep, BranchStep, BranchTarget, GoalSpec, Isolation,
-    OnBlocked, PlanGateway, PlanStep, RequiredInvocation, ScmOpenPrStep, SessionSpec, ShellRunStep,
-    StepKind,
+    worktree_scope, AgentConfigStep, AgentEmitStep, AgentPromptStep, BranchStep, BranchTarget,
+    GoalSpec, Isolation, OnBlocked, PlanGateway, PlanStep, RequiredInvocation, ScmOpenPrStep,
+    SessionSpec, ShellRunStep, StepKind, NO_LANE,
 };
 use crate::domains::workflows::service::WorkflowService;
 use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
@@ -132,7 +132,18 @@ pub struct WorkflowStepExecutorImpl {
     /// A [`tokio::sync::Mutex`] (not `std`): the memo is held across the
     /// `spawn_blocking` mint await, so it must be an async-aware lock (holding a
     /// `std` guard across `.await` would block the runtime worker).
+    ///
+    /// This is the RUN-LEVEL worktree (scope [`NO_LANE`]) — flat runs and any
+    /// out-of-group step. Steps inside a parallel lane resolve to a per-lane
+    /// worktree instead (D-031c), memoized in [`Self::lane_workspaces`].
     effective_workspace: tokio::sync::Mutex<Option<String>>,
+    /// Per-LANE effective workspaces (D-031c), keyed by lane name (the step's
+    /// worktree scope). Under [`Isolation::Worktree`] each parallel lane mints
+    /// its own worktree (branch `workflow-run/<run_id>/<lane>`, path
+    /// `wf-run-<run_id>-<lane>`) so write-parallel lanes never share a checkout.
+    /// Empty for flat runs and under [`Isolation::Workspace`] (everything shares
+    /// the pinned checkout). Recovered on resume in [`Self::hydrate_from_run`].
+    lane_workspaces: tokio::sync::Mutex<HashMap<String, String>>,
     /// Per-slot session provisioning, straight from the resolved plan.
     sessions: BTreeMap<String, SessionSpec>,
     /// slot -> the live session opened for it.
@@ -166,6 +177,7 @@ impl WorkflowStepExecutorImpl {
             workspace_id,
             isolation,
             effective_workspace: tokio::sync::Mutex::new(None),
+            lane_workspaces: tokio::sync::Mutex::new(HashMap::new()),
             sessions,
             current: Mutex::new(HashMap::new()),
             models: Mutex::new(models),
@@ -180,16 +192,37 @@ impl WorkflowStepExecutorImpl {
     /// cursor, so no extra state is stored on resume.
     pub async fn hydrate_from_run(&self, run: &WorkflowRunRecord) {
         self.recompute_models(run);
-        // The workspace of the FIRST recovered slot session (worktree isolation):
-        // a persisted session already lives in the run's minted worktree, so its
-        // workspace IS the effective workspace.
-        let mut recovered_session_ws: Option<String> = None;
+        // Map each slot to its worktree scope (D-031c): a parallel lane's slot →
+        // its own lane worktree; every other slot → the run-level worktree
+        // ([`NO_LANE`]). Also the set of distinct lane scopes to recover.
+        let mut slot_scope: HashMap<String, String> = HashMap::new();
+        let mut lane_scopes: Vec<String> = Vec::new();
+        if let Ok(plan) = crate::domains::workflows::plan::parse(&run.plan_json) {
+            for step in &plan.steps {
+                let scope = worktree_scope(&step.key);
+                slot_scope.insert(step.slot.clone(), scope.clone());
+                if scope != NO_LANE && !lane_scopes.contains(&scope) {
+                    lane_scopes.push(scope);
+                }
+            }
+        }
+
+        // The workspace of the recovered session PER SCOPE (worktree isolation): a
+        // persisted session already lives in its scope's minted worktree, so its
+        // workspace IS that scope's effective workspace.
+        let mut recovered_by_scope: HashMap<String, String> = HashMap::new();
         {
             let mut current = self.current.lock().unwrap();
             for (slot, session_id) in run.sessions() {
                 if let Ok(Some(session)) = self.deps.session_service.get_session(session_id) {
-                    if self.isolation == Isolation::Worktree && recovered_session_ws.is_none() {
-                        recovered_session_ws = Some(session.workspace_id.clone());
+                    if self.isolation == Isolation::Worktree {
+                        let scope = slot_scope
+                            .get(slot)
+                            .cloned()
+                            .unwrap_or_else(|| NO_LANE.to_string());
+                        recovered_by_scope
+                            .entry(scope)
+                            .or_insert_with(|| session.workspace_id.clone());
                     }
                     // Re-arm the always-bypass safety net for the resumed session
                     // (the registry is in-memory, so a restart would otherwise drop
@@ -213,25 +246,48 @@ impl WorkflowStepExecutorImpl {
             // Drop the std guard before any await below (never hold it across .await).
         }
 
-        // Wave 2b crash-recovery (finding 1, belt-and-suspenders): recover the
-        // run's effective worktree so post-resume sessions/shells resolve to the
-        // SAME worktree instead of re-minting. A persisted session's workspace
-        // wins; otherwise — the session-less crash hole, where a shell.run /
-        // scm.open_pr prefix minted the worktree but persisted NO session to
-        // recover from — ADOPT the run's own worktree record if one exists (keyed
-        // by the run's deterministic path + branch, so resume adopts even before
-        // the first step executes). Run-scoped only; never a general adopt.
-        if self.isolation == Isolation::Worktree {
-            let expected_branch = run_worktree_branch_name(&self.run_id);
-            let recovered = recover_resume_worktree(recovered_session_ws, &expected_branch, || async {
-                self.lookup_run_worktree_for_resume()
-            })
+        if self.isolation != Isolation::Worktree {
+            return;
+        }
+
+        // Wave 2b crash-recovery (finding 1, belt-and-suspenders), now per scope:
+        // recover each scope's effective worktree so post-resume sessions/shells
+        // resolve to the SAME worktree instead of re-minting. A persisted session's
+        // workspace wins; otherwise — the session-less crash hole, where a shell.run
+        // / scm.open_pr prefix minted the worktree but persisted NO session to
+        // recover from — ADOPT that scope's own worktree record if one exists (keyed
+        // by the scope's deterministic path + branch). Scope-scoped only; never a
+        // general adopt.
+        //
+        // Run-level ([`NO_LANE`]) worktree.
+        let expected_branch = worktree_branch_for_scope(&self.run_id, NO_LANE);
+        let recovered = recover_resume_worktree(
+            recovered_by_scope.get(NO_LANE).cloned(),
+            &expected_branch,
+            || async { self.lookup_run_worktree_for_resume(NO_LANE) },
+        )
+        .await;
+        if let Ok(Some(ws)) = recovered {
+            let mut eff = self.effective_workspace.lock().await;
+            if eff.is_none() {
+                *eff = Some(ws);
+            }
+        }
+
+        // Per-lane worktrees (D-031c): recover each lane independently so a run
+        // that crashed with lane A done and lane B mid-step resumes each lane in
+        // its OWN worktree (deny-path e — distinct + adopted on resume).
+        for scope in &lane_scopes {
+            let expected_branch = worktree_branch_for_scope(&self.run_id, scope);
+            let recovered = recover_resume_worktree(
+                recovered_by_scope.get(scope).cloned(),
+                &expected_branch,
+                || async { self.lookup_run_worktree_for_resume(scope) },
+            )
             .await;
             if let Ok(Some(ws)) = recovered {
-                let mut eff = self.effective_workspace.lock().await;
-                if eff.is_none() {
-                    *eff = Some(ws);
-                }
+                let mut lanes = self.lane_workspaces.lock().await;
+                lanes.entry(scope.clone()).or_insert(ws);
             }
         }
     }
@@ -242,7 +298,10 @@ impl WorkflowStepExecutorImpl {
     /// its checked-out branch) if one exists. Returns `None` (never an error that
     /// would fail resume) when there's simply nothing to adopt; the run-scoped
     /// branch gate is applied by [`adoptable_run_worktree`] in the caller.
-    fn lookup_run_worktree_for_resume(&self) -> Result<Option<AdoptedWorktree>, StepOutcome> {
+    fn lookup_run_worktree_for_resume(
+        &self,
+        scope: &str,
+    ) -> Result<Option<AdoptedWorktree>, StepOutcome> {
         let pinned = self
             .deps
             .workspace_runtime
@@ -251,7 +310,8 @@ impl WorkflowStepExecutorImpl {
         let Some(pinned) = pinned else {
             return Ok(None);
         };
-        let Some(target_path) = run_worktree_target_path(&pinned.path, &self.run_id) else {
+        let Some(target_path) = worktree_target_path_for_scope(&pinned.path, &self.run_id, scope)
+        else {
             return Ok(None);
         };
         Ok(lookup_run_worktree_record(&self.deps.workspace_runtime, &target_path)?)
@@ -302,29 +362,74 @@ impl WorkflowStepExecutorImpl {
     /// (deny-path: no silent fallback to the pinned workspace, which would
     /// defeat isolation). Holds the memo lock across the (async, `spawn_blocking`)
     /// mint so two slots can never race into two worktrees.
-    async fn effective_workspace_id(&self) -> Result<String, StepOutcome> {
+    async fn effective_workspace_id(&self, scope: &str) -> Result<String, StepOutcome> {
+        if scope == NO_LANE {
+            return self.run_level_workspace_id().await;
+        }
+        // Per-lane worktree (D-031c). Under Workspace isolation everything still
+        // shares the pinned checkout; under Worktree each lane mints its own.
+        match self.isolation {
+            Isolation::Workspace => Ok(self.workspace_id.clone()),
+            Isolation::Worktree => {
+                // M2(a): a lane worktree bases off the RUN-LEVEL worktree's HEAD,
+                // not the pinned checkout — so any pre-group commit flows into
+                // every lane. Ensure the run-level worktree exists first (mint it
+                // lazily if no pre-group step already did).
+                let run_level_id = self.run_level_workspace_id().await?;
+                let base_workspace_id =
+                    worktree_base_workspace_id(scope, &self.workspace_id, &run_level_id).to_string();
+                let mut guard = self.lane_workspaces.lock().await;
+                if let Some(id) = guard.get(scope) {
+                    return Ok(id.clone());
+                }
+                let id = self.mint_worktree_for_scope(scope, base_workspace_id).await?;
+                guard.insert(scope.to_string(), id.clone());
+                Ok(id)
+            }
+        }
+    }
+
+    /// The run-level worktree ([`NO_LANE`], scope `-`): flat / out-of-group /
+    /// post-group steps resolve here, and every lane worktree bases off it (M2).
+    /// Byte-identical to wave 2b — same memo, same mint, same branch/path. Under
+    /// `Worktree` isolation it bases off the pinned checkout's HEAD.
+    async fn run_level_workspace_id(&self) -> Result<String, StepOutcome> {
+        let pinned = self.workspace_id.clone();
         resolve_effective_workspace(
             self.isolation,
             &self.workspace_id,
             &self.effective_workspace,
-            || self.mint_run_worktree(),
+            || self.mint_worktree_for_scope(NO_LANE, pinned),
         )
         .await
     }
 
-    /// Mint (or ADOPT) the run's git worktree and return its workspace id.
+    /// Mint (or ADOPT) the worktree for a given scope and return its workspace
+    /// id. Scope [`NO_LANE`] is the run-level worktree (wave 2b); a lane name is
+    /// a per-lane worktree (D-031c).
     ///
     /// The blocking git (`std::process::Command`) + synchronous DB work runs on a
     /// `spawn_blocking` pool thread, never on the async executor worker (matching
     /// every other `create_worktree` consumer in this crate); the memo lock is an
     /// async [`tokio::sync::Mutex`] held across this await, so no `std` guard is
     /// pinned across `.await`.
-    async fn mint_run_worktree(&self) -> Result<String, StepOutcome> {
+    async fn mint_worktree_for_scope(
+        &self,
+        scope: &str,
+        base_workspace_id: String,
+    ) -> Result<String, StepOutcome> {
         let workspace_runtime = self.deps.workspace_runtime.clone();
         let pinned_workspace_id = self.workspace_id.clone();
         let run_id = self.run_id.clone();
+        let scope = scope.to_string();
         tokio::task::spawn_blocking(move || {
-            mint_or_adopt_run_worktree_blocking(&workspace_runtime, &pinned_workspace_id, &run_id)
+            mint_or_adopt_run_worktree_blocking(
+                &workspace_runtime,
+                &pinned_workspace_id,
+                &base_workspace_id,
+                &run_id,
+                &scope,
+            )
         })
         .await
         .map_err(|error| {
@@ -340,7 +445,7 @@ impl WorkflowStepExecutorImpl {
     /// machinery. A slot carrying `bind_session_id` (L29 / PR F) loads the
     /// existing session instead of creating one; that field is always absent
     /// until the session-plane PR lands.
-    async fn ensure_session(&self, slot: &str) -> Result<String, StepOutcome> {
+    async fn ensure_session(&self, slot: &str, scope: &str) -> Result<String, StepOutcome> {
         // §5.3 builder obligation (L22 fail-fast): a gateway block that grants
         // integration scopes but carries no usable gateway in this lane (empty
         // authorization/URL, e.g. the local lane where nothing mints a per-run
@@ -424,7 +529,7 @@ impl WorkflowStepExecutorImpl {
             // session. Under worktree isolation this mints the per-run worktree
             // (once); a mint failure returns here, so the session is NEVER
             // created in the shared pinned checkout.
-            let session_workspace_id = self.effective_workspace_id().await?;
+            let session_workspace_id = self.effective_workspace_id(scope).await?;
             // Split create/start (as reviews/subagents do) so the per-run gateway
             // server and workflow ownership can be registered BEFORE launch — the
             // launch extension reads both from their in-memory registries, and MCP
@@ -543,8 +648,14 @@ impl WorkflowStepExecutorImpl {
         Ok(handle.subscribe())
     }
 
-    async fn run_prompt(&self, slot: &str, agent: &AgentPromptStep, meta: &InjectionMeta) -> StepOutcome {
-        let session_id = match self.ensure_session(slot).await {
+    async fn run_prompt(
+        &self,
+        slot: &str,
+        agent: &AgentPromptStep,
+        meta: &InjectionMeta,
+        scope: &str,
+    ) -> StepOutcome {
+        let session_id = match self.ensure_session(slot, scope).await {
             Ok(id) => id,
             Err(outcome) => return outcome,
         };
@@ -593,8 +704,17 @@ impl WorkflowStepExecutorImpl {
         .await
     }
 
-    async fn run_goal(&self, slot: &str, agent: &AgentPromptStep, goal: &GoalSpec, step_index: usize, meta: &InjectionMeta) -> StepOutcome {
-        let session_id = match self.ensure_session(slot).await {
+    #[allow(clippy::too_many_arguments)]
+    async fn run_goal(
+        &self,
+        slot: &str,
+        agent: &AgentPromptStep,
+        goal: &GoalSpec,
+        step_index: usize,
+        meta: &InjectionMeta,
+        scope: &str,
+    ) -> StepOutcome {
+        let session_id = match self.ensure_session(slot, scope).await {
             Ok(id) => id,
             Err(outcome) => return outcome,
         };
@@ -637,7 +757,7 @@ impl WorkflowStepExecutorImpl {
                         }
                     }
                     Some(verify) => {
-                        let (workspace_path, env) = match self.workspace_ctx().await {
+                        let (workspace_path, env) = match self.workspace_ctx(scope).await {
                             Ok(ctx) => ctx,
                             Err(outcome) => return outcome,
                         };
@@ -732,11 +852,15 @@ impl WorkflowStepExecutorImpl {
         let _ = self.deps.goal_runtime.clear_goal(session_id).await;
     }
 
-    async fn workspace_ctx(&self) -> Result<(PathBuf, Vec<(String, String)>), StepOutcome> {
-        // Wave 2b: shells / emit-file drops / verify run in the run's effective
-        // workspace — the per-run worktree under worktree isolation (minting it
-        // if a shell is the run's first step), else the pinned workspace.
-        let workspace_id = self.effective_workspace_id().await?;
+    async fn workspace_ctx(
+        &self,
+        scope: &str,
+    ) -> Result<(PathBuf, Vec<(String, String)>), StepOutcome> {
+        // Wave 2b: shells / emit-file drops / verify run in the step's effective
+        // workspace — the per-run (or, for a grouped step, per-lane) worktree
+        // under worktree isolation (minting it if a shell is the scope's first
+        // step), else the pinned workspace.
+        let workspace_id = self.effective_workspace_id(scope).await?;
         let workspace = self
             .deps
             .workspace_runtime
@@ -751,16 +875,16 @@ impl WorkflowStepExecutorImpl {
         Ok((PathBuf::from(&workspace.path), env))
     }
 
-    async fn run_shell(&self, step: &ShellRunStep) -> StepOutcome {
-        let (workspace_path, env) = match self.workspace_ctx().await {
+    async fn run_shell(&self, step: &ShellRunStep, scope: &str) -> StepOutcome {
+        let (workspace_path, env) = match self.workspace_ctx(scope).await {
             Ok(ctx) => ctx,
             Err(outcome) => return outcome,
         };
         commands::run_shell_step(&workspace_path, &env, step).await
     }
 
-    async fn run_scm(&self, step: &ScmOpenPrStep) -> StepOutcome {
-        let (workspace_path, env) = match self.workspace_ctx().await {
+    async fn run_scm(&self, step: &ScmOpenPrStep, scope: &str) -> StepOutcome {
+        let (workspace_path, env) = match self.workspace_ctx(scope).await {
             Ok(ctx) => ctx,
             Err(outcome) => return outcome,
         };
@@ -814,12 +938,20 @@ impl WorkflowStepExecutorImpl {
     /// concrete errors, up to the plan's `max_attempts` (C12: sourced from the
     /// plan, no longer a hardcoded constant); the validated object becomes the
     /// step's entire output. Exhaustion fails `emit_invalid`.
-    async fn run_emit(&self, slot: &str, step: &AgentEmitStep, step_index: usize, meta: &InjectionMeta) -> StepOutcome {
-        let session_id = match self.ensure_session(slot).await {
+    #[allow(clippy::too_many_arguments)]
+    async fn run_emit(
+        &self,
+        slot: &str,
+        step: &AgentEmitStep,
+        step_index: usize,
+        meta: &InjectionMeta,
+        scope: &str,
+    ) -> StepOutcome {
+        let session_id = match self.ensure_session(slot, scope).await {
             Ok(id) => id,
             Err(outcome) => return outcome,
         };
-        let (workspace_path, _env) = match self.workspace_ctx().await {
+        let (workspace_path, _env) = match self.workspace_ctx(scope).await {
             Ok(ctx) => ctx,
             Err(outcome) => return outcome,
         };
@@ -907,16 +1039,21 @@ fn evaluate_branch(step: &BranchStep) -> StepOutcome {
 impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
     async fn execute_step(&self, step: &PlanStep, ctx: &StepExecContext) -> StepOutcome {
         let slot = step.slot.as_str();
+        // The worktree scope this step resolves to (D-031c): its lane for a
+        // grouped step, or the run-level worktree ([`NO_LANE`]) otherwise.
+        let scope = worktree_scope(&step.key);
         let meta = InjectionMeta::from_step(step);
         match &step.kind {
             StepKind::AgentConfig(cfg) => self.run_agent_config(slot, cfg).await,
             StepKind::AgentPrompt(agent) => match &agent.goal {
-                None => self.run_prompt(slot, agent, &meta).await,
-                Some(goal) => self.run_goal(slot, agent, goal, ctx.step_index, &meta).await,
+                None => self.run_prompt(slot, agent, &meta, &scope).await,
+                Some(goal) => self.run_goal(slot, agent, goal, ctx.step_index, &meta, &scope).await,
             },
-            StepKind::AgentEmit(emit) => self.run_emit(slot, emit, ctx.step_index, &meta).await,
-            StepKind::ShellRun(shell) => self.run_shell(shell).await,
-            StepKind::ScmOpenPr(pr) => self.run_scm(pr).await,
+            StepKind::AgentEmit(emit) => {
+                self.run_emit(slot, emit, ctx.step_index, &meta, &scope).await
+            }
+            StepKind::ShellRun(shell) => self.run_shell(shell, &scope).await,
+            StepKind::ScmOpenPr(pr) => self.run_scm(pr, &scope).await,
             StepKind::Notify(notify) => {
                 commands::notify_step(&notify.message, &notify.slack_channel_id)
             }
@@ -928,6 +1065,50 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
     /// No gateway block → no ping. Fire-and-forget via the injected sink.
     fn on_step_transition(&self) {
         fire_run_ping(self.gateway.as_ref(), self.deps.run_ping_sink.as_ref());
+    }
+
+    /// M2(b): at a clean parallel-group join, merge each lane's branch back into
+    /// the run-level worktree, in lane order (deterministic). Under `Workspace`
+    /// isolation everything already shared the pinned checkout (nothing to merge);
+    /// a lane that never minted a worktree (no workspace-using step ran) has
+    /// nothing to merge either. A conflict fails the run honestly
+    /// (`lane_merge_conflict`); an already-merged lane (crash-resume mid-merge) is
+    /// skipped by the blocking helper's merge-base guard.
+    async fn merge_lanes_into_run_worktree(&self, lanes: &[String]) -> Result<(), StepOutcome> {
+        if self.isolation == Isolation::Workspace {
+            return Ok(());
+        }
+        // Only lanes that actually minted a worktree have anything to merge.
+        let lane_targets: Vec<(String, String)> = {
+            let guard = self.lane_workspaces.lock().await;
+            lanes
+                .iter()
+                .filter_map(|lane| guard.get(lane).map(|id| (lane.clone(), id.clone())))
+                .collect()
+        };
+        if lane_targets.is_empty() {
+            return Ok(());
+        }
+        // The merge target — the run-level worktree the lanes were based off (so
+        // it exists; resolving is a memo hit). Mint defensively if somehow absent.
+        let run_level_id = self.run_level_workspace_id().await?;
+        let workspace_runtime = self.deps.workspace_runtime.clone();
+        let run_id = self.run_id.clone();
+        tokio::task::spawn_blocking(move || {
+            merge_lanes_into_run_worktree_blocking(
+                &workspace_runtime,
+                &run_id,
+                &run_level_id,
+                &lane_targets,
+            )
+        })
+        .await
+        .map_err(|error| {
+            failed_msg(
+                "lane_merge_failed",
+                format!("lane merge-back task failed: {error}"),
+            )
+        })?
     }
 }
 
@@ -1309,7 +1490,9 @@ fn adoptable_run_worktree(found: Option<AdoptedWorktree>, expected_branch: &str)
 fn mint_or_adopt_run_worktree_blocking(
     workspace_runtime: &WorkspaceRuntime,
     pinned_workspace_id: &str,
+    base_workspace_id: &str,
     run_id: &str,
+    scope: &str,
 ) -> Result<String, StepOutcome> {
     let pinned = workspace_runtime
         .get_workspace(pinned_workspace_id)
@@ -1325,13 +1508,14 @@ fn mint_or_adopt_run_worktree_blocking(
                 format!("pinned workspace {pinned_workspace_id} not found"),
             )
         })?;
-    let target_path = run_worktree_target_path(&pinned.path, run_id).ok_or_else(|| {
-        failed_msg(
-            "worktree_mint_failed",
-            format!("could not derive a worktree path from {}", pinned.path),
-        )
-    })?;
-    let branch_name = run_worktree_branch_name(run_id);
+    let target_path =
+        worktree_target_path_for_scope(&pinned.path, run_id, scope).ok_or_else(|| {
+            failed_msg(
+                "worktree_mint_failed",
+                format!("could not derive a worktree path from {}", pinned.path),
+            )
+        })?;
+    let branch_name = worktree_branch_for_scope(run_id, scope);
 
     // Crash-recovery adoption: return the run's own already-minted worktree if a
     // record for it exists (run-scoped by path + branch).
@@ -1347,11 +1531,32 @@ fn mint_or_adopt_run_worktree_blocking(
         return Ok(id);
     }
 
-    // Base the worktree on the pinned checkout's CURRENT HEAD (exact commit),
-    // so isolation is faithful even when the pinned workspace is itself a
-    // branch/worktree. Falls back to the source repo's HEAD when the SHA
-    // can't be read (base_branch=None → git's default HEAD).
-    let base_ref = run_worktree_base_ref(&pinned.path);
+    // Base the worktree on the BASE workspace's CURRENT HEAD (exact commit), so
+    // isolation is faithful even when the base is itself a branch/worktree. For
+    // the run-level worktree the base IS the pinned checkout (wave 2b, unchanged);
+    // for a parallel lane the base is the RUN-LEVEL worktree (M2a), so any
+    // pre-group commit flows into every lane. Falls back to the source repo's HEAD
+    // when the SHA can't be read (base_branch=None → git's default HEAD).
+    let base_path = if base_workspace_id == pinned_workspace_id {
+        pinned.path.clone()
+    } else {
+        workspace_runtime
+            .get_workspace(base_workspace_id)
+            .map_err(|error| {
+                failed_msg(
+                    "worktree_mint_failed",
+                    format!("could not load base workspace: {error}"),
+                )
+            })?
+            .ok_or_else(|| {
+                failed_msg(
+                    "worktree_mint_failed",
+                    format!("base workspace {base_workspace_id} not found"),
+                )
+            })?
+            .path
+    };
+    let base_ref = run_worktree_base_ref(&base_path);
     // Finding 3: tag the worktree with the run as its creator (there is no
     // free-form origin/label on `OriginContext`, but `WorkspaceCreatorContext`
     // carries `automationRunId` + `label`), so a future retention reaper can
@@ -1471,6 +1676,42 @@ fn run_worktree_target_path(pinned_path: &str, run_id: &str) -> Option<String> {
         })
 }
 
+/// The branch name for a worktree SCOPE (D-031c): the run-level worktree
+/// ([`NO_LANE`]) is `workflow-run/<run_id>` (byte-identical to wave 2b); a
+/// parallel lane is `workflow-run/<run_id>/<lane>`, so sibling lanes never
+/// collide on a branch.
+fn worktree_branch_for_scope(run_id: &str, scope: &str) -> String {
+    if scope == NO_LANE {
+        run_worktree_branch_name(run_id)
+    } else {
+        format!(
+            "workflow-run/{}/{}",
+            sanitize_run_token(run_id),
+            sanitize_run_token(scope)
+        )
+    }
+}
+
+/// The checkout path for a worktree SCOPE (D-031c): the run-level worktree is
+/// `wf-run-<run_id>` (unchanged); a parallel lane is `wf-run-<run_id>-<lane>`,
+/// so sibling lanes never collide on a path. `None` when the pinned path has no
+/// parent.
+fn worktree_target_path_for_scope(pinned_path: &str, run_id: &str, scope: &str) -> Option<String> {
+    if scope == NO_LANE {
+        return run_worktree_target_path(pinned_path, run_id);
+    }
+    Path::new(pinned_path).parent().map(|parent| {
+        parent
+            .join(format!(
+                "wf-run-{}-{}",
+                sanitize_run_token(run_id),
+                sanitize_run_token(scope)
+            ))
+            .to_string_lossy()
+            .to_string()
+    })
+}
+
 /// The pinned checkout's current HEAD commit SHA, used as the exact base for the
 /// per-run worktree ("off the checkout's current HEAD"). `None` when it can't be
 /// read, in which case the caller lets git default to the source repo's HEAD.
@@ -1481,6 +1722,122 @@ fn run_worktree_base_ref(pinned_path: &str) -> Option<String> {
     )
     .ok()
     .filter(|sha| !sha.is_empty())
+}
+
+/// Which workspace a scope's worktree bases off at mint time (M2a), pure so the
+/// "a lane bases off the run-level worktree, not the pinned checkout" contract is
+/// unit-testable: the run-level worktree ([`NO_LANE`]) bases off the pinned
+/// checkout (wave 2b, unchanged); a parallel lane bases off the RUN-LEVEL
+/// worktree, so any pre-group commit flows into every lane.
+fn worktree_base_workspace_id<'a>(
+    scope: &str,
+    pinned_workspace_id: &'a str,
+    run_level_workspace_id: &'a str,
+) -> &'a str {
+    if scope == NO_LANE {
+        pinned_workspace_id
+    } else {
+        run_level_workspace_id
+    }
+}
+
+/// The per-lane merge-back decision (M2b), pure so the idempotency contract is
+/// unit-testable without a live repo: a lane whose branch is already an ancestor
+/// of the run-level worktree HEAD is SKIPPED (already merged — crash-resume mid
+/// merge-back must never double-merge), otherwise it is MERGED.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LaneMergeAction {
+    Skip,
+    Merge,
+}
+
+fn decide_lane_merge(lane_branch_is_ancestor_of_run_head: bool) -> LaneMergeAction {
+    if lane_branch_is_ancestor_of_run_head {
+        LaneMergeAction::Skip
+    } else {
+        LaneMergeAction::Merge
+    }
+}
+
+/// Merge every finished lane's branch into the run-level worktree, sequentially
+/// in the given lane order (M2b). Runs blocking git in `spawn_blocking`. Each
+/// merge is idempotent (skipped when already an ancestor of the run HEAD — see
+/// [`decide_lane_merge`]) and a conflict aborts + fails the run
+/// (`lane_merge_conflict`), never silently dropping conflicting work.
+fn merge_lanes_into_run_worktree_blocking(
+    workspace_runtime: &WorkspaceRuntime,
+    run_id: &str,
+    run_level_id: &str,
+    lane_targets: &[(String, String)],
+) -> Result<(), StepOutcome> {
+    let run_level = workspace_runtime
+        .get_workspace(run_level_id)
+        .map_err(|error| {
+            failed_msg(
+                "lane_merge_failed",
+                format!("could not load run-level worktree: {error}"),
+            )
+        })?
+        .ok_or_else(|| {
+            failed_msg(
+                "lane_merge_failed",
+                format!("run-level worktree {run_level_id} not found"),
+            )
+        })?;
+    let run_level_path = Path::new(&run_level.path);
+    for (lane_name, _lane_workspace_id) in lane_targets {
+        let lane_branch = worktree_branch_for_scope(run_id, lane_name);
+        // Idempotency guard (crash-resume): the lane branch already merged (its
+        // tip is an ancestor of the run-level HEAD) → skip, never double-merge.
+        let already_merged = std::process::Command::new("git")
+            .current_dir(run_level_path)
+            .args(["merge-base", "--is-ancestor", &lane_branch, "HEAD"])
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        if decide_lane_merge(already_merged) == LaneMergeAction::Skip {
+            tracing::info!(
+                run_id = %run_id,
+                lane = %lane_name,
+                branch = %lane_branch,
+                "lane already merged into run worktree — skipping (idempotent)"
+            );
+            continue;
+        }
+        // Default merge (no squash), non-interactive. A conflict returns non-zero;
+        // abort to leave the run-level worktree clean for inspection, then fail.
+        let output = std::process::Command::new("git")
+            .current_dir(run_level_path)
+            .args(["merge", "--no-edit", &lane_branch])
+            .output()
+            .map_err(|error| {
+                failed_msg(
+                    "lane_merge_failed",
+                    format!("git merge for lane '{lane_name}' failed to spawn: {error}"),
+                )
+            })?;
+        if !output.status.success() {
+            let _ = std::process::Command::new("git")
+                .current_dir(run_level_path)
+                .args(["merge", "--abort"])
+                .output();
+            return Err(failed_msg(
+                "lane_merge_conflict",
+                format!(
+                    "lane '{lane_name}' could not be merged into the run worktree \
+                     (conflicting parallel work): {}",
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ),
+            ));
+        }
+        tracing::info!(
+            run_id = %run_id,
+            lane = %lane_name,
+            branch = %lane_branch,
+            "merged lane into run worktree"
+        );
+    }
+    Ok(())
 }
 
 // --- agent.emit file-drop helpers (§7.3 + §7.4) ---
@@ -2479,11 +2836,99 @@ mod tests {
         assert_eq!(a_path, "/sandbox/wf-run-run-aaa");
     }
 
+    // --- M2: lane worktree base-ref + merge-back ---
+
+    #[test]
+    fn lane_worktree_bases_off_run_level_not_pinned() {
+        // M2(a): the run-level worktree bases off the pinned checkout; a lane
+        // worktree bases off the RUN-LEVEL worktree (so pre-group commits flow in).
+        assert_eq!(
+            worktree_base_workspace_id(NO_LANE, "ws-pinned", "ws-run-level"),
+            "ws-pinned"
+        );
+        assert_eq!(
+            worktree_base_workspace_id("fix", "ws-pinned", "ws-run-level"),
+            "ws-run-level"
+        );
+        assert_eq!(
+            worktree_base_workspace_id("docs", "ws-pinned", "ws-run-level"),
+            "ws-run-level"
+        );
+    }
+
+    #[test]
+    fn decide_lane_merge_skips_when_already_ancestor() {
+        // M2(b) idempotency: a lane whose branch is already an ancestor of the
+        // run-level HEAD (crash-resume mid merge-back) is skipped, never re-merged;
+        // otherwise it is merged.
+        assert_eq!(decide_lane_merge(true), LaneMergeAction::Skip);
+        assert_eq!(decide_lane_merge(false), LaneMergeAction::Merge);
+    }
+
     #[test]
     fn run_worktree_target_path_needs_a_parent() {
         // A filesystem root has no parent → no derivable worktree path (mint
         // then fails with worktree_mint_failed rather than corrupting `/`).
         assert!(run_worktree_target_path("/", "run-x").is_none());
+    }
+
+    // --- L30 worktree-per-lane addressing (D-031c) ---
+
+    #[test]
+    fn lane_worktree_addressing_is_distinct_per_lane() {
+        // DENY-PATH (e): each lane of a run gets a DISTINCT worktree branch AND
+        // path (no collision between sibling lanes, nor with the run-level
+        // worktree). The run-level scope stays byte-identical to wave 2b.
+        let run = "run-z";
+        let pinned = "/sandbox/repo";
+
+        // Run-level scope == the exact wave-2b strings (byte-identical for flat).
+        assert_eq!(
+            worktree_branch_for_scope(run, NO_LANE),
+            run_worktree_branch_name(run)
+        );
+        assert_eq!(
+            worktree_target_path_for_scope(pinned, run, NO_LANE),
+            run_worktree_target_path(pinned, run)
+        );
+
+        let a_branch = worktree_branch_for_scope(run, "a");
+        let b_branch = worktree_branch_for_scope(run, "b");
+        let run_branch = worktree_branch_for_scope(run, NO_LANE);
+        assert_eq!(a_branch, "workflow-run/run-z/a");
+        assert_ne!(a_branch, b_branch);
+        assert_ne!(a_branch, run_branch);
+        assert_ne!(b_branch, run_branch);
+
+        let a_path = worktree_target_path_for_scope(pinned, run, "a").unwrap();
+        let b_path = worktree_target_path_for_scope(pinned, run, "b").unwrap();
+        let run_path = worktree_target_path_for_scope(pinned, run, NO_LANE).unwrap();
+        assert_eq!(a_path, "/sandbox/wf-run-run-z-a");
+        assert_ne!(a_path, b_path);
+        assert_ne!(a_path, run_path);
+        assert_ne!(b_path, run_path);
+        // Deterministic: the same lane always addresses the same worktree
+        // (resume/adopt is safe).
+        assert_eq!(a_branch, worktree_branch_for_scope(run, "a"));
+        assert_eq!(a_path, worktree_target_path_for_scope(pinned, run, "a").unwrap());
+    }
+
+    #[test]
+    fn lane_worktree_adoption_is_scoped_to_the_lanes_own_branch() {
+        // DENY-PATH (e), resume half: a lane adopts ONLY its own branch. A record
+        // on lane a's branch is adopted when resuming lane a, but NOT when
+        // resuming lane b (whose expected branch differs), so lanes never adopt
+        // each other's worktrees on crash-resume.
+        let run = "run-z";
+        let a_branch = worktree_branch_for_scope(run, "a");
+        let b_branch = worktree_branch_for_scope(run, "b");
+        let found_on_a = Some(("ws-lane-a".to_string(), Some(a_branch.clone())));
+        assert_eq!(
+            adoptable_run_worktree(found_on_a.clone(), &a_branch),
+            Some("ws-lane-a".to_string())
+        );
+        // Lane b's resume must not adopt lane a's worktree.
+        assert_eq!(adoptable_run_worktree(found_on_a, &b_branch), None);
     }
 
     #[test]

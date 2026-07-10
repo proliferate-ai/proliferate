@@ -13,7 +13,7 @@
  * Pure function, no side effects.
  */
 
-import type { WorkflowDefinition } from "./definition";
+import { spineAgentNodes, type WorkflowDefinition } from "./definition";
 
 export interface StepEffectiveConfig {
   /** The harness in effect for this step (fixed per agent node). */
@@ -32,7 +32,9 @@ export interface StepEffectiveConfig {
 export function deriveEffectiveConfigs(definition: WorkflowDefinition): StepEffectiveConfig[] {
   const results: StepEffectiveConfig[] = [];
 
-  definition.agents.forEach((node, nodeIndex) => {
+  // Flatten parallel groups: every lane is its own agent node / session, so each
+  // gets its own scope index (contiguous in the lane-grouped flatten order).
+  spineAgentNodes(definition).forEach((node, nodeIndex) => {
     let effectiveModel = node.model;
     node.steps.forEach((step, stepInNode) => {
       if (step.kind === "agent.config") {

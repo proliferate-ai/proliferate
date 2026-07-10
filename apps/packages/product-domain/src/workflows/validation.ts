@@ -11,9 +11,11 @@
  */
 
 import {
+  isParallelGroup,
   isWorkflowIdentifier,
   isWorkflowNotifyFieldType,
   isWorkflowSlot,
+  spineAgentNodes,
   WORKFLOW_BRANCH_TARGETS,
   WORKFLOW_MAX_AGENTS,
   WORKFLOW_MAX_ARGS,
@@ -23,6 +25,7 @@ import {
   type WorkflowAgentNode,
   type WorkflowDefinition,
   type WorkflowInputSpec,
+  type WorkflowParallelGroup,
   type WorkflowStep,
 } from "./definition";
 import { iterReferences, validateStringReferences } from "./interpolation";
@@ -166,6 +169,7 @@ function validateStep(
   harness: string,
   priorEmitNames: ReadonlySet<string>,
   allSlots: ReadonlySet<string>,
+  laneSlot: string | null,
 ): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
   const push = (issue: WorkflowIssue | null) => {
@@ -257,7 +261,17 @@ function validateStep(
         });
       }
       if (step.agentFields) {
-        if (!allSlots.has(step.agentFields.slot)) {
+        if (laneSlot !== null) {
+          // Inside a parallel lane the fields emit runs in this lane, so it must
+          // be filled by this lane's own agent — never a sibling lane's slot.
+          if (step.agentFields.slot !== laneSlot) {
+            push({
+              code: "agent_fields_slot_outside_lane",
+              message: `Agent-fields slot '${step.agentFields.slot}' must be the lane's own slot '${laneSlot}' when the notify is inside a parallel group.`,
+              location: { scope: "step", stepIndex, field: "agentFields.slot" },
+            });
+          }
+        } else if (!allSlots.has(step.agentFields.slot)) {
           push({
             code: "unknown_slot",
             message: `Agent-fields slot '${step.agentFields.slot}' is not an agent in this workflow.`,
@@ -416,6 +430,19 @@ function validateNode(
   return issues;
 }
 
+/** Structural checks on a parallel group (L30 / D-031): needs 2+ lanes. */
+function validateParallelStructure(group: WorkflowParallelGroup): WorkflowIssue[] {
+  const issues: WorkflowIssue[] = [];
+  if (group.parallel.length < 2) {
+    issues.push({
+      code: "parallel_too_few",
+      message: `A parallel group requires at least 2 agent nodes (got ${group.parallel.length}).`,
+      location: { scope: "agents" },
+    });
+  }
+  return issues;
+}
+
 /** Validate a full definition. Returns all issues (empty when the draft is valid). */
 export function validateWorkflowDefinition(
   definition: WorkflowDefinition,
@@ -425,14 +452,15 @@ export function validateWorkflowDefinition(
 
   issues.push(...validateInputs(definition.inputs));
 
-  if (definition.agents.length === 0) {
+  const allNodes = spineAgentNodes(definition);
+  if (allNodes.length === 0) {
     issues.push({
       code: "invalid_definition",
       message: "A workflow needs at least one agent node.",
       location: { scope: "agents" },
     });
   }
-  if (definition.agents.length > WORKFLOW_MAX_AGENTS) {
+  if (allNodes.length > WORKFLOW_MAX_AGENTS) {
     issues.push({
       code: "too_many_agents",
       message: `A workflow may declare at most ${WORKFLOW_MAX_AGENTS} agent nodes.`,
@@ -441,19 +469,42 @@ export function validateWorkflowDefinition(
   }
 
   const inputNames = new Set(definition.inputs.map((input) => input.name));
-  const allSlots = new Set(definition.agents.map((node) => node.slot));
+  // Flatten parallel groups: a group entry has no top-level slot, so mapping
+  // `definition.agents` directly would miss lane slots (and yield undefined).
+  const allSlots = new Set(allNodes.map((node) => node.slot));
   const seenSlots = new Set<string>();
-  const seenEmits = new Set<string>();
-  const priorEmits = new Set<string>();
+  const seenEmits = new Set<string>(); // whole-definition emit uniqueness
   let totalSteps = 0;
   let flatIndex = 0;
+  let nodeIndex = 0;
 
-  definition.agents.forEach((node, nodeIndex) => {
+  // Validate one node against the emits visible at its start (`baseVisible`) plus
+  // its own earlier emits; return the emits it produced. `rejectInclude` flags a
+  // `workflow.include` inside a parallel lane (v1 bound). `laneSlot` is the lane's
+  // own slot when the node is a parallel-group lane (else null) — it gates the
+  // notify `agentFields.slot` rule.
+  const runNode = (
+    node: WorkflowAgentNode,
+    baseVisible: ReadonlySet<string>,
+    rejectInclude: boolean,
+    laneSlot: string | null,
+  ): Set<string> => {
     issues.push(...validateNode(node, nodeIndex, seenSlots, definition.integrations));
     totalSteps += node.steps.length;
+    const localVisible = new Set(baseVisible);
+    const produced = new Set<string>();
     node.steps.forEach((step) => {
       const stepIndex = flatIndex;
-      issues.push(...validateStep(step, stepIndex, options, node.harness, priorEmits, allSlots));
+      if (rejectInclude && step.kind === "workflow.include") {
+        issues.push({
+          code: "include_in_parallel",
+          message: "workflow.include is not supported inside a parallel group.",
+          location: { scope: "step", stepIndex, field: "workflowId" },
+        });
+      }
+      issues.push(
+        ...validateStep(step, stepIndex, options, node.harness, localVisible, allSlots, laneSlot),
+      );
       // {{fields.*}} is scoped to a notify message that declared agent_fields.
       const allowedFields =
         step.kind === "notify" && step.agentFields
@@ -463,7 +514,7 @@ export function validateWorkflowDefinition(
         const fieldsScope = field === "message" ? allowedFields : null;
         for (const refIssue of validateStringReferences(value, {
           inputNames,
-          priorEmitNames: priorEmits,
+          priorEmitNames: localVisible,
           allowedFields: fieldsScope,
         })) {
           issues.push({
@@ -483,10 +534,38 @@ export function validateWorkflowDefinition(
           });
         }
         seenEmits.add(step.name);
-        priorEmits.add(step.name);
+        produced.add(step.name);
+        localVisible.add(step.name);
       }
       flatIndex += 1;
     });
+    nodeIndex += 1;
+    return produced;
+  };
+
+  // Emits visible at the current spine position. A parallel group's lanes each
+  // see only the pre-group snapshot + their own steps (never a sibling lane);
+  // every lane's emits join into `visible` for steps AFTER the group (§1.3).
+  const visible = new Set<string>();
+  definition.agents.forEach((entry) => {
+    if (isParallelGroup(entry)) {
+      issues.push(...validateParallelStructure(entry));
+      const snapshot = new Set(visible);
+      const groupProduced = new Set<string>();
+      for (const lane of entry.parallel) {
+        // A lane's notify agentFields.slot must be the lane's own slot.
+        for (const emit of runNode(lane, snapshot, true, lane.slot)) {
+          groupProduced.add(emit);
+        }
+      }
+      for (const emit of groupProduced) {
+        visible.add(emit);
+      }
+    } else {
+      for (const emit of runNode(entry, visible, false, null)) {
+        visible.add(emit);
+      }
+    }
   });
 
   if (totalSteps > WORKFLOW_MAX_STEPS) {

@@ -3,7 +3,7 @@
 //! The durable truth (records, plan, cursor, transitions) lives in
 //! `domains/workflows`; this layer owns only the live actor state.
 
-mod actor;
+pub(crate) mod actor;
 mod commands;
 mod exec_policy;
 mod executor;

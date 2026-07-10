@@ -259,13 +259,64 @@ export interface WorkflowAgentNode {
   integrations?: string[];
 }
 
+/**
+ * A parallel group (L30 / D-031): 2+ agent nodes that run as concurrent lanes,
+ * joining at the group's end. Lane name = the node's slot. Groups do not nest and
+ * a lane may not contain a `workflow.include` step (v1 bounds — enforced by the
+ * server; mirrored in validation.ts for editor feedback).
+ */
+export interface WorkflowParallelGroup {
+  parallel: WorkflowAgentNode[];
+}
+
+/** A spine entry: either a standalone agent node or a parallel group. */
+export type WorkflowSpineEntry = WorkflowAgentNode | WorkflowParallelGroup;
+
+export function isParallelGroup(entry: WorkflowSpineEntry): entry is WorkflowParallelGroup {
+  return Array.isArray((entry as WorkflowParallelGroup).parallel);
+}
+
 export interface WorkflowDefinition {
   version: 1;
   name?: string;
   description?: string;
   inputs: WorkflowInputSpec[];
   integrations: string[];
-  agents: WorkflowAgentNode[];
+  agents: WorkflowSpineEntry[];
+}
+
+/** One agent node with the spine context that positions it (flatten order). */
+export interface SpineNodeEntry {
+  node: WorkflowAgentNode;
+  /** Spine entry index — a whole parallel group counts as one entry. */
+  spineIndex: number;
+  /** Lane name: the node's slot for a parallel-group lane, "-" for a standalone node. */
+  lane: string;
+}
+
+/**
+ * Every agent node across the spine, in flatten order (lane-grouped, lane order),
+ * with its spine index + lane. A parallel group occupies one spine index; each of
+ * its lanes yields separately. Standalone nodes yield lane "-". Mirrors the
+ * server's `iter_plan_nodes`.
+ */
+export function iterSpineNodes(definition: WorkflowDefinition): SpineNodeEntry[] {
+  const out: SpineNodeEntry[] = [];
+  definition.agents.forEach((entry, spineIndex) => {
+    if (isParallelGroup(entry)) {
+      for (const lane of entry.parallel) {
+        out.push({ node: lane, spineIndex, lane: lane.slot });
+      }
+    } else {
+      out.push({ node: entry, spineIndex, lane: "-" });
+    }
+  });
+  return out;
+}
+
+/** Every agent node across the spine, flattening parallel groups (node order). */
+export function spineAgentNodes(definition: WorkflowDefinition): WorkflowAgentNode[] {
+  return iterSpineNodes(definition).map((e) => e.node);
 }
 
 // --- Constructors --------------------------------------------------------------
@@ -554,6 +605,18 @@ function parseAgentNode(raw: unknown): WorkflowAgentNode | null {
   return node;
 }
 
+/** Parse one spine entry: a parallel group (`{parallel: [...]}`) or a node. */
+function parseSpineEntry(raw: unknown): WorkflowSpineEntry | null {
+  const record = asRecord(raw);
+  if (record && Array.isArray(record.parallel)) {
+    const lanes = record.parallel
+      .map(parseAgentNode)
+      .filter((n): n is WorkflowAgentNode => n !== null);
+    return { parallel: lanes };
+  }
+  return parseAgentNode(raw);
+}
+
 /**
  * Lenient parse of a stored definition dict into the model. Never throws.
  */
@@ -566,7 +629,7 @@ export function parseWorkflowDefinition(raw: unknown): WorkflowDefinition {
     ? record.integrations.filter((v): v is string => typeof v === "string")
     : [];
   const agents = Array.isArray(record?.agents)
-    ? record.agents.map(parseAgentNode).filter((n): n is WorkflowAgentNode => n !== null)
+    ? record.agents.map(parseSpineEntry).filter((n): n is WorkflowSpineEntry => n !== null)
     : [];
   const def: WorkflowDefinition = { version: 1, inputs, integrations, agents };
   const name = asString(record?.name);
@@ -723,6 +786,12 @@ function serializeAgentNode(node: WorkflowAgentNode): Record<string, unknown> {
   return out;
 }
 
+function serializeSpineEntry(entry: WorkflowSpineEntry): Record<string, unknown> {
+  return isParallelGroup(entry)
+    ? { parallel: entry.parallel.map(serializeAgentNode) }
+    : serializeAgentNode(entry);
+}
+
 /** The snake_case definition dict to POST/PATCH. Inverse of parse. */
 export function serializeWorkflowDefinition(
   definition: WorkflowDefinition,
@@ -731,7 +800,7 @@ export function serializeWorkflowDefinition(
     version: 1,
     inputs: definition.inputs.map(serializeInput),
     integrations: [...definition.integrations],
-    agents: definition.agents.map(serializeAgentNode),
+    agents: definition.agents.map(serializeSpineEntry),
   };
   if (definition.name !== undefined) {
     out.name = definition.name;
@@ -751,29 +820,32 @@ export interface FlatWorkflowStep {
   slot: string;
   harness: string;
   /**
-   * The resolved plan's structured step key (service.py `_resolve_definition`):
-   * `${nodeIndex}.-.${stepIndexInNode}` — the "-" lane placeholder is reserved
-   * for the future parallel-lane shape (§4) and never re-keys the contract.
-   * This is how the server addresses step outputs / actions on the wire.
+   * The resolved plan's structured step key (service.py `_resolve_plan`):
+   * `${spineIndex}.${lane}.${stepIndexInNode}` — lane is "-" for a standalone
+   * node and the node's slot for a parallel-group lane (§4 / L30). This is how
+   * the server addresses step outputs / actions on the wire.
    */
   stepKey: string;
 }
 
 /**
- * Flatten every agent node's steps into one run-ordered list (spine order).
- * Consumers that need a single "step index" across the whole definition
- * (presentation, run-status, effective-config) build on this.
+ * Flatten every agent node's steps into one run-ordered list (spine order,
+ * parallel groups lane-grouped in lane order — matching the server resolver).
+ * `nodeIndex` is the flattened node ordinal (each lane is its own node/session);
+ * `stepKey` carries the spine index + lane. Consumers that need a single "step
+ * index" across the whole definition (presentation, run-status, effective-config)
+ * build on this.
  */
 export function flattenWorkflowSteps(definition: WorkflowDefinition): FlatWorkflowStep[] {
   const out: FlatWorkflowStep[] = [];
-  definition.agents.forEach((node, nodeIndex) => {
+  iterSpineNodes(definition).forEach(({ node, spineIndex, lane }, nodeIndex) => {
     node.steps.forEach((step, stepIndex) => {
       out.push({
         step,
         nodeIndex,
         slot: node.slot,
         harness: node.harness,
-        stepKey: `${nodeIndex}.-.${stepIndex}`,
+        stepKey: `${spineIndex}.${lane}.${stepIndex}`,
       });
     });
   });

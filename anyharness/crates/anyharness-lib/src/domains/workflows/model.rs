@@ -74,6 +74,48 @@ impl WorkflowStepRunRecord {
     }
 }
 
+/// A parallel lane's own terminal state (L30). Distinct from the run status:
+/// a lane failing does NOT immediately fail the run — siblings run to
+/// completion first, then the group's join fails the run (D-031b).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaneStatus {
+    Running,
+    Completed,
+    Failed,
+}
+
+pub fn lane_status_to_db(status: LaneStatus) -> &'static str {
+    match status {
+        LaneStatus::Running => "running",
+        LaneStatus::Completed => "completed",
+        LaneStatus::Failed => "failed",
+    }
+}
+
+pub fn lane_status_from_db(value: &str) -> Option<LaneStatus> {
+    match value {
+        "running" => Some(LaneStatus::Running),
+        "completed" => Some(LaneStatus::Completed),
+        "failed" => Some(LaneStatus::Failed),
+        _ => None,
+    }
+}
+
+/// One lane's per-lane cursor row (L30). `cursor` is the 0-based index into the
+/// lane's own step list (not a flat step index).
+#[derive(Debug, Clone)]
+pub struct WorkflowLaneCursorRecord {
+    pub run_id: String,
+    pub node_index: i64,
+    pub lane: String,
+    pub cursor: i64,
+    pub status: LaneStatus,
+    pub error_code: Option<String>,
+    pub error_message: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 pub fn run_status_is_terminal(status: WorkflowRunStatus) -> bool {
     matches!(
         status,

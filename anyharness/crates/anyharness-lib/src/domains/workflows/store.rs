@@ -1,8 +1,9 @@
 use rusqlite::{params, types::Type, Connection, OptionalExtension, Row};
 
 use super::model::{
-    run_status_from_db, run_status_to_db, step_status_from_db, step_status_to_db,
-    WorkflowRunRecord, WorkflowStepRunRecord,
+    lane_status_from_db, lane_status_to_db, run_status_from_db, run_status_to_db,
+    step_status_from_db, step_status_to_db, WorkflowLaneCursorRecord, WorkflowRunRecord,
+    WorkflowStepRunRecord,
 };
 use crate::persistence::Db;
 
@@ -243,6 +244,71 @@ impl WorkflowStore {
         })
     }
 
+    // ---------------------------------------------------------------------
+    // Per-lane cursors (L30). Present only for runs with parallel groups.
+    // ---------------------------------------------------------------------
+
+    pub fn find_lane_cursor_tx(
+        tx: &Connection,
+        run_id: &str,
+        node_index: i64,
+        lane: &str,
+    ) -> rusqlite::Result<Option<WorkflowLaneCursorRecord>> {
+        tx.query_row(
+            "SELECT * FROM workflow_lane_cursors
+             WHERE run_id = ?1 AND node_index = ?2 AND lane = ?3",
+            params![run_id, node_index, lane],
+            map_lane_cursor,
+        )
+        .optional()
+    }
+
+    pub fn list_lane_cursors_tx(
+        tx: &Connection,
+        run_id: &str,
+    ) -> rusqlite::Result<Vec<WorkflowLaneCursorRecord>> {
+        let mut stmt = tx.prepare(
+            "SELECT * FROM workflow_lane_cursors WHERE run_id = ?1
+             ORDER BY node_index ASC, lane ASC",
+        )?;
+        let rows = stmt.query_map([run_id], map_lane_cursor)?;
+        rows.collect()
+    }
+
+    /// Insert-or-update a lane cursor row (idempotent on the PK). The row IS the
+    /// lane's durable progress: cursor advance + terminal status land here in the
+    /// same transaction as the step-run write, so a crash-resume reads the lane
+    /// back exactly where it was.
+    pub fn upsert_lane_cursor_tx(
+        tx: &Connection,
+        record: &WorkflowLaneCursorRecord,
+    ) -> rusqlite::Result<()> {
+        tx.execute(
+            "INSERT INTO workflow_lane_cursors (
+                run_id, node_index, lane, cursor, status,
+                error_code, error_message, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(run_id, node_index, lane) DO UPDATE SET
+                cursor = excluded.cursor,
+                status = excluded.status,
+                error_code = excluded.error_code,
+                error_message = excluded.error_message,
+                updated_at = excluded.updated_at",
+            params![
+                record.run_id,
+                record.node_index,
+                record.lane,
+                record.cursor,
+                lane_status_to_db(record.status),
+                record.error_code,
+                record.error_message,
+                record.created_at,
+                record.updated_at,
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn update_step_run(
         tx: &Connection,
         step: &WorkflowStepRunRecord,
@@ -311,6 +377,28 @@ fn map_run(row: &Row<'_>) -> rusqlite::Result<WorkflowRunRecord> {
         status,
         step_cursor: row.get("step_cursor")?,
         session_ids: decode_session_ids(row.get("session_ids_json")?),
+        error_code: row.get("error_code")?,
+        error_message: row.get("error_message")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
+fn map_lane_cursor(row: &Row<'_>) -> rusqlite::Result<WorkflowLaneCursorRecord> {
+    let status_raw: String = row.get("status")?;
+    let status = lane_status_from_db(&status_raw).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            0,
+            Type::Text,
+            format!("unknown workflow lane status: {status_raw}").into(),
+        )
+    })?;
+    Ok(WorkflowLaneCursorRecord {
+        run_id: row.get("run_id")?,
+        node_index: row.get("node_index")?,
+        lane: row.get("lane")?,
+        cursor: row.get("cursor")?,
+        status,
         error_code: row.get("error_code")?,
         error_message: row.get("error_message")?,
         created_at: row.get("created_at")?,

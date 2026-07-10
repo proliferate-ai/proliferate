@@ -367,6 +367,12 @@ async def resolve_included_agents(
 
     resolved: list[dict[str, object]] = []
     for node in agents:
+        # L30 parallel group: workflow.include is rejected inside a lane at parse
+        # time (v1 bound), so a group entry carries nothing to inline — pass it
+        # through unchanged (composition never reshapes the spine's structure).
+        if "parallel" in node:
+            resolved.append(node)
+            continue
         steps = await resolve_included_steps(
             db, owner_user_id=owner_user_id, steps=list(node.get("steps", []))
         )

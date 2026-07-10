@@ -487,6 +487,20 @@ CREATE TABLE terminal_command_runs (
     updated_at TEXT NOT NULL
 );
 
+-- table: workflow_lane_cursors
+CREATE TABLE workflow_lane_cursors (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    node_index INTEGER NOT NULL,
+    lane TEXT NOT NULL,
+    cursor INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'running',
+    error_code TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, node_index, lane)
+);
+
 -- table: workflow_runs
 CREATE TABLE workflow_runs (
     run_id TEXT PRIMARY KEY,
@@ -772,6 +786,10 @@ CREATE INDEX idx_terminal_command_runs_workspace_created
 -- index: idx_workflow_injections_run
 CREATE INDEX idx_workflow_injections_run
     ON workflow_session_injections(run_id, step_key);
+
+-- index: idx_workflow_lane_cursors_run
+CREATE INDEX idx_workflow_lane_cursors_run
+    ON workflow_lane_cursors(run_id);
 
 -- index: idx_workflow_runs_status
 CREATE INDEX idx_workflow_runs_status
