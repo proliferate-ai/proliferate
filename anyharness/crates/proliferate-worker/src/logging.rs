@@ -29,7 +29,7 @@ fn env_filter_from_env() -> tracing_subscriber::EnvFilter {
 }
 
 fn default_release() -> String {
-    format!("proliferate-worker@{}", env!("CARGO_PKG_VERSION"))
+    format!("proliferate-worker@{}", env!("PROLIFERATE_STAMPED_VERSION"))
 }
 
 fn scrub_text(value: &str) -> String {

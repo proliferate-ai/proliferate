@@ -70,7 +70,7 @@ pub fn init(command: &Commands) -> TelemetryGuards {
                 release: Some(
                     env_or_default(
                         "ANYHARNESS_SENTRY_RELEASE",
-                        &format!("anyharness@{}", env!("CARGO_PKG_VERSION")),
+                        &format!("anyharness@{}", env!("PROLIFERATE_STAMPED_VERSION")),
                     )
                     .into(),
                 ),

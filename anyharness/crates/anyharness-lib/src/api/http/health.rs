@@ -24,7 +24,7 @@ pub async fn get_health(
 ) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".into(),
-        version: env!("CARGO_PKG_VERSION").into(),
+        version: env!("PROLIFERATE_STAMPED_VERSION").into(),
         runtime_home: state.runtime_home.display().to_string(),
         capabilities: RuntimeCapabilities {
             replay: crate::domains::sessions::replay::replay_enabled(),
@@ -62,5 +62,19 @@ fn resource_pressure_to_contract(
         }),
         pressure_percent: pressure.pressure_percent,
         collected_at: pressure.collected_at,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn health_version_is_the_stamped_release_version() {
+        // `/health` reports the build-stamped version so the worker self-update
+        // health-gate can converge on a pinned semver. Dev and test builds
+        // leave PROLIFERATE_BUILD_VERSION unset, so the stamp falls back to the
+        // crate's Cargo.toml version.
+        let reported = env!("PROLIFERATE_STAMPED_VERSION");
+        assert!(!reported.is_empty());
+        assert_eq!(reported, env!("CARGO_PKG_VERSION"));
     }
 }
