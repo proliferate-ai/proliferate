@@ -9,10 +9,12 @@ Cloud; AnyHarness only ever holds the gateway bearer token.
 from __future__ import annotations
 
 import json
+import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.store.integrations import accounts as accounts_store
+from proliferate.db.store.integrations import tool_call_events as tool_call_events_store
 from proliferate.db.store.integrations.accounts import ReadyAccountRow
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.integrations import mcp_remote
@@ -130,19 +132,49 @@ async def call_provider_tool(
     tool: str,
     arguments: dict[str, object],
 ) -> dict[str, object]:
-    pair = await account_for_provider(db, grant=grant, provider=provider)
-    url, headers, query = await resolve_launch(db, pair.account, pair.definition)
-    result = await mcp_remote.call_tool(
-        url=url,
-        headers=headers,
-        tool_name=tool,
-        arguments=arguments,
-        query=query or None,
-    )
-    return {
-        "content": result.get("content", []),
-        "isError": bool(result.get("isError", False)),
-    }
+    # Audit the proxied call on every path — provider-resolution or account
+    # failures, upstream transport failures, and a returned tool-level error
+    # all count as evidence the call happened. ``ok`` is only True when the
+    # upstream returned a non-error result.
+    started = time.perf_counter()
+    ok = False
+    error_code: str | None = None
+    try:
+        pair = await account_for_provider(db, grant=grant, provider=provider)
+        url, headers, query = await resolve_launch(db, pair.account, pair.definition)
+        result = await mcp_remote.call_tool(
+            url=url,
+            headers=headers,
+            tool_name=tool,
+            arguments=arguments,
+            query=query or None,
+        )
+        is_error = bool(result.get("isError", False))
+        ok = not is_error
+        if is_error:
+            error_code = "tool_error"
+        return {
+            "content": result.get("content", []),
+            "isError": is_error,
+        }
+    except CloudApiError as error:
+        error_code = error.code
+        raise
+    except McpRemoteError as error:
+        error_code = error.code or "mcp_error"
+        raise
+    finally:
+        await tool_call_events_store.record_tool_call_event(
+            db,
+            user_id=grant.owner_user_id,
+            organization_id=grant.organization_id,
+            runtime_worker_id=grant.runtime_worker_id,
+            integration_namespace=provider,
+            tool_name=tool,
+            ok=ok,
+            error_code=error_code,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
 
 
 def _initialize_result() -> dict[str, object]:
