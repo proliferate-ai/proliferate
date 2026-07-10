@@ -2,6 +2,7 @@ import type {
   Goal,
   PendingInteraction,
   SessionActionCapabilities,
+  SessionActivity,
   SessionExecutionSummary,
   SessionLiveConfigSnapshot,
   SessionMcpBindingSummary,
@@ -25,6 +26,11 @@ export type SessionStreamConnectionState =
 
 export interface SessionDirectoryActivitySummary {
   isStreaming: boolean;
+  /**
+   * Latest in-progress turn already ends in completed assistant prose — the
+   * settling window where sidebar/session status must not read "iterating".
+   */
+  endsInFinalAssistantProse: boolean;
   pendingInteractions: PendingInteraction[];
   transcriptTitle: string | null;
   errorAttentionKey: string | null;
@@ -46,6 +52,12 @@ export interface SessionDirectoryEntry {
   pendingConfigChanges: PendingSessionConfigChanges;
   /** Mirrored native goal (latest non-cleared); null when no goal exists. */
   activeGoal: Goal | null;
+  /**
+   * Mirrored SessionActivity roster aggregate (loops + processes + subagents);
+   * null when the session has no live activity. Seeded from `Session.activity`
+   * and folded forward by the loop/process/subagent stream events.
+   */
+  sessionActivity: SessionActivity | null;
   status: SessionStatus | null;
   lastPromptAt: string | null;
   hasAttemptedPrompt: boolean;
@@ -70,6 +82,7 @@ export interface DirectoryEntryInput {
   mcpBindingSummaries?: SessionMcpBindingSummary[] | null;
   pendingConfigChanges?: PendingSessionConfigChanges;
   activeGoal?: Goal | null;
+  sessionActivity?: SessionActivity | null;
   status?: SessionStatus | null;
   lastPromptAt?: string | null;
   hasAttemptedPrompt?: boolean;
@@ -90,6 +103,7 @@ export const DEFAULT_SESSION_ACTION_CAPABILITIES: SessionActionCapabilities = {
 
 export const EMPTY_DIRECTORY_ACTIVITY: SessionDirectoryActivitySummary = {
   isStreaming: false,
+  endsInFinalAssistantProse: false,
   pendingInteractions: [],
   transcriptTitle: null,
   errorAttentionKey: null,
@@ -131,6 +145,10 @@ export function normalizeDirectoryEntryInput(
       input.activeGoal !== undefined
         ? input.activeGoal
         : existing?.activeGoal ?? null,
+    sessionActivity:
+      input.sessionActivity !== undefined
+        ? input.sessionActivity
+        : existing?.sessionActivity ?? null,
     status: input.status ?? existing?.status ?? null,
     lastPromptAt: input.lastPromptAt ?? existing?.lastPromptAt ?? null,
     hasAttemptedPrompt:
@@ -187,6 +205,7 @@ export function directoryEntryEqual(
     && a.mcpBindingSummaries === b.mcpBindingSummaries
     && a.pendingConfigChanges === b.pendingConfigChanges
     && a.activeGoal === b.activeGoal
+    && a.sessionActivity === b.sessionActivity
     && a.status === b.status
     && a.lastPromptAt === b.lastPromptAt
     && a.hasAttemptedPrompt === b.hasAttemptedPrompt
@@ -201,6 +220,7 @@ export function activitySummaryEqual(
   b: SessionDirectoryActivitySummary,
 ): boolean {
   return a.isStreaming === b.isStreaming
+    && a.endsInFinalAssistantProse === b.endsInFinalAssistantProse
     && a.pendingInteractions === b.pendingInteractions
     && a.transcriptTitle === b.transcriptTitle
     && a.errorAttentionKey === b.errorAttentionKey;

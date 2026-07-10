@@ -83,6 +83,17 @@ pub(super) fn map_create_session_error(error: CreateAndStartSessionError) -> Api
             format!("model '{model_id}' is not supported for agent '{agent_kind}'"),
             "SESSION_MODEL_UNSUPPORTED",
         ),
+        CreateAndStartSessionError::ModelGated {
+            agent_kind,
+            model_id,
+            required_contexts,
+        } => ApiError::model_gated(
+            format!(
+                "model '{model_id}' for agent '{agent_kind}' is gated behind auth contexts \
+                 {required_contexts:?}"
+            ),
+            required_contexts,
+        ),
         CreateAndStartSessionError::ModeUnsupported {
             agent_kind,
             mode_id,
@@ -283,7 +294,7 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
-    use crate::domains::sessions::runtime::ResolveInteractionError;
+    use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
     #[test]
@@ -324,6 +335,18 @@ mod tests {
         ))
         .into_response();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn model_gated_maps_to_bad_request() {
+        let response = super::map_create_session_error(CreateAndStartSessionError::ModelGated {
+            agent_kind: "claude".to_string(),
+            model_id: "opus".to_string(),
+            required_contexts: vec!["anthropic-api".to_string()],
+        })
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]

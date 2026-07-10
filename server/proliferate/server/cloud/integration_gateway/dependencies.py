@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
 from proliferate.db.store import cloud_workflows as workflows_store
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.server.cloud.errors import CloudApiError
@@ -116,6 +117,22 @@ async def require_integration_gateway_grant(
             "Gateway token is invalid or revoked.",
             status_code=401,
         )
+    # The org scope was membership-validated at enrollment, but workers are
+    # long-lived: re-validate on every request so a worker enrolled under an
+    # org stops serving the moment its owner is removed from that org, rather
+    # than keeping the org-scoped grant alive until the next re-enrollment.
+    if grant.organization_id is not None:
+        membership = await organization_store.get_active_membership(
+            db,
+            organization_id=grant.organization_id,
+            user_id=grant.owner_user_id,
+        )
+        if membership is None:
+            raise CloudApiError(
+                "integration_gateway_unauthorized",
+                "Gateway token is invalid or revoked.",
+                status_code=401,
+            )
     # §2 default access modes: a per-worker (chat/interactive) grant is subject to the
     # org's CONFIGURABLE default-access policy — computed live from
     # ``CloudIntegrationPolicy.scope_json`` so a chat session gets a default set of

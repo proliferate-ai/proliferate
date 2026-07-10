@@ -1,13 +1,13 @@
 import { isValidElement, type ReactNode } from "react";
 import {
-  MarkdownCodeBlockShell,
   type MarkdownCodeBlockRenderInput,
   type MarkdownInlineCodeRenderInput,
   type MarkdownLinkRenderInput,
 } from "@proliferate/product-ui/chat/transcript/MarkdownBody";
+import { CodeBlock } from "@proliferate/product-ui/code/CodeBlock";
 import { isExternalHttpLink } from "@proliferate/product-ui/chat/transcript/ProviderLinkMention";
 import { FilePathLink } from "@/components/content/ui/FilePathLink";
-import { useHighlightedCode } from "@/hooks/ui/highlighting/use-highlighted-code";
+import { useHighlightedTokens } from "@/hooks/ui/highlighting/use-highlighted-tokens";
 import {
   looksLikeFileReferenceHref,
   looksLikePath,
@@ -63,11 +63,9 @@ function TranscriptHighlightedCodeBlock({
   code: string;
   language: string | null;
 }) {
-  const html = useHighlightedCode(code, language ?? "text");
+  const tokens = useHighlightedTokens(code, language ?? "text");
   return (
-    <MarkdownCodeBlockShell code={code} label={language}>
-      {html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : undefined}
-    </MarkdownCodeBlockShell>
+    <CodeBlock code={code} label={language} tokens={tokens} />
   );
 }
 

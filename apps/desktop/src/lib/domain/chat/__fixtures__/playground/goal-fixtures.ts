@@ -18,18 +18,22 @@ function goalFixture(overrides: Partial<GoalWire>): GoalWire {
   };
 }
 
-/** Codex-shaped capability: native goals with a native pause path. */
+/** Codex-shaped capability: native goals with a native pause path; edits
+ * steer the running turn live, so no set/edit transcript rows. */
 export const GOAL_CAPABILITIES_PAUSABLE: GoalCapabilities = {
   supported: true,
   native: true,
   pause: true,
+  setEditTranscriptRows: false,
 };
 
-/** Claude-shaped capability: native goals, no native pause. */
+/** Claude-shaped capability: native goals, no native pause; edits arm at the
+ * turn boundary, so set/edit render as transcript rows. */
 export const GOAL_CAPABILITIES_NO_PAUSE: GoalCapabilities = {
   supported: true,
   native: true,
   pause: false,
+  setEditTranscriptRows: true,
 };
 
 export const GOAL_ACTIVE_SHORT = goalFixture({});
@@ -63,13 +67,44 @@ export const GOAL_PAUSED = goalFixture({
 export const GOAL_MET = goalFixture({
   status: "met",
   nativeStatus: "complete",
-  metReason: "DONE.txt exists in the repo root and its contents are exactly \"done\"",
-  iterations: 4,
+  // Deliberately shaped like the live-feedback bug report: an evaluator
+  // reason that quotes raw tool output verbatim. The collapsed bar must
+  // never show this (it shows the objective) — this fixture proves it stays
+  // readable once expanded instead of being CSS-ellipsis-truncated inline.
+  metReason:
+    "File created successfully at: /Users/pablo/proliferate/cowork/t-9f21/DONE.txt\n\n"
+    + "Verified contents:\n```\ndone\n```\n\n"
+    + "DONE.txt exists in the repo root and its contents are exactly \"done\" — goal condition satisfied.",
+  iterations: 6,
+  tokensUsed: 128_430,
+  timeUsedSeconds: 734,
+});
+
+export const GOAL_MET_LONG_OBJECTIVE = goalFixture({
+  status: "met",
+  nativeStatus: "complete",
+  objective:
+    "All 14 flaky integration tests in tests/live_sessions/ pass 20 consecutive runs "
+    + "under the stress harness, the root-cause fix is committed with a regression test "
+    + "per failure mode, and CHANGELOG.md documents each fix with a link to the failing run",
+  metReason:
+    "20/20 consecutive runs green under the stress harness. Each of the 14 flaky tests "
+    + "had a distinct root cause (5 were unseeded RNG, 6 were unbounded async waits, 3 were "
+    + "shared fixture state) — every fix has a dedicated regression test and a CHANGELOG.md "
+    + "entry linking the original failing run.",
+  iterations: 9,
+  tokensUsed: 96_240,
+  timeUsedSeconds: 1_845,
 });
 
 export const GOAL_BLOCKED = goalFixture({
   status: "blocked",
   nativeStatus: "blocked",
+  objective: "Ship the staging deploy for the auth revamp",
+  metReason:
+    "Deploy requires a production database migration approval that only a human can grant. "
+    + "I've applied the schema changes to staging and verified them there — approve the prod "
+    + "migration to let me continue.",
   tokensUsed: 88_310,
   timeUsedSeconds: 1_240,
 });
@@ -88,6 +123,7 @@ export type GoalFixtureKey =
   | "active-claude"
   | "paused"
   | "met"
+  | "met-long-objective"
   | "blocked"
   | "failed-budget";
 
@@ -102,6 +138,7 @@ export const GOAL_FIXTURES: Record<GoalFixtureKey, GoalFixtureState> = {
   "active-claude": { goal: GOAL_ACTIVE_SHORT, capabilities: GOAL_CAPABILITIES_NO_PAUSE },
   "paused": { goal: GOAL_PAUSED, capabilities: GOAL_CAPABILITIES_PAUSABLE },
   "met": { goal: GOAL_MET, capabilities: GOAL_CAPABILITIES_NO_PAUSE },
+  "met-long-objective": { goal: GOAL_MET_LONG_OBJECTIVE, capabilities: GOAL_CAPABILITIES_NO_PAUSE },
   "blocked": { goal: GOAL_BLOCKED, capabilities: GOAL_CAPABILITIES_PAUSABLE },
   "failed-budget": { goal: GOAL_FAILED_BUDGET, capabilities: GOAL_CAPABILITIES_PAUSABLE },
 };

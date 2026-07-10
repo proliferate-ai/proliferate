@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import Row, and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
 
 from proliferate.db.models.cloud.integrations import (
     CloudIntegrationAccount,
@@ -32,7 +33,7 @@ class IntegrationAccountRecord:
     status: str
     auth_kind: str
     credential_ciphertext: str | None
-    credential_format: str
+    credential_format: str | None
     auth_version: int
     settings_json: str
     token_expires_at: datetime | None
@@ -107,51 +108,73 @@ async def list_accounts_for_user(
     return tuple(_record(account) for account in accounts)
 
 
+@dataclass(frozen=True)
+class ReadyAccountRow:
+    """A ready account joined with its definition and (optionally) org policy.
+
+    ``org_policy_enabled`` is the org's policy verdict for the definition, or
+    ``None`` when the org has no policy row (or no org scope was requested).
+    """
+
+    account: IntegrationAccountRecord
+    definition: definitions_store.IntegrationDefinitionRecord
+    org_policy_enabled: bool | None
+
+
+def _ready_accounts_stmt(user_id: UUID, organization_id: UUID | None) -> Select:
+    """Ready accounts + non-archived definitions, LEFT JOINed to the org policy.
+
+    The policy overlay joins in the same query (one round-trip, no
+    per-definition lookups); without an org there is no policy join at all.
+    """
+    stmt = select(CloudIntegrationAccount, CloudIntegrationDefinition).join(
+        CloudIntegrationDefinition,
+        CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
+    )
+    if organization_id is not None:
+        stmt = stmt.add_columns(CloudIntegrationPolicy.enabled).outerjoin(
+            CloudIntegrationPolicy,
+            and_(
+                CloudIntegrationPolicy.definition_id == CloudIntegrationAccount.definition_id,
+                CloudIntegrationPolicy.organization_id == organization_id,
+            ),
+        )
+    return stmt.where(
+        CloudIntegrationAccount.owner_user_id == user_id,
+        CloudIntegrationAccount.enabled.is_(True),
+        CloudIntegrationAccount.status == "ready",
+        CloudIntegrationDefinition.archived_at.is_(None),
+        # Definition visibility mirrors the admin API: seeds are global,
+        # org_custom definitions are served only under their owning org's
+        # scope (for org-less requests this collapses to seeds only). Without
+        # this, an org-B-scoped grant would expose the user's accounts on org
+        # A's custom definitions — which org B's admins can neither see nor
+        # policy-control — and provider-name resolution could land on another
+        # org's custom definition that shares a seed namespace.
+        or_(
+            CloudIntegrationDefinition.organization_id.is_(None),
+            CloudIntegrationDefinition.organization_id == organization_id,
+        ),
+    ).order_by(CloudIntegrationAccount.created_at.asc())
+
+
+def _ready_account_row(row: Row, organization_id: UUID | None) -> ReadyAccountRow:
+    return ReadyAccountRow(
+        account=_record(row[0]),
+        definition=definitions_store.record_from_row(row[1]),
+        org_policy_enabled=row[2] if organization_id is not None else None,
+    )
+
+
 async def list_ready_accounts_for_user(
     db: AsyncSession,
     user_id: UUID,
     *,
     organization_id: UUID | None = None,
-) -> tuple[IntegrationAccountRecord, ...]:
-    """The user's enabled, ready accounts (non-archived definitions).
-
-    When ``organization_id`` is given the org's integration policy is enforced —
-    an account is excluded when the org has disabled that definition (a policy row
-    with ``enabled = false``, or no policy row and the definition is not
-    ``enabled_by_default``). This mirrors ``get_ready_account_for_provider`` so a
-    personally-connected account cannot bypass an org's disable decision. Callers
-    with a real org context (e.g. the integration gateway) MUST pass it.
-    """
-    stmt = (
-        select(CloudIntegrationAccount)
-        .join(
-            CloudIntegrationDefinition,
-            CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
-        )
-        .where(
-            CloudIntegrationAccount.owner_user_id == user_id,
-            CloudIntegrationAccount.enabled.is_(True),
-            CloudIntegrationAccount.status == "ready",
-            CloudIntegrationDefinition.archived_at.is_(None),
-        )
-    )
-    if organization_id is not None:
-        stmt = stmt.outerjoin(
-            CloudIntegrationPolicy,
-            (CloudIntegrationPolicy.definition_id == CloudIntegrationDefinition.id)
-            & (CloudIntegrationPolicy.organization_id == organization_id),
-        ).where(
-            func.coalesce(
-                CloudIntegrationPolicy.enabled,
-                CloudIntegrationDefinition.enabled_by_default,
-            ).is_(True)
-        )
-    accounts = (
-        (await db.execute(stmt.order_by(CloudIntegrationAccount.created_at.asc())))
-        .scalars()
-        .all()
-    )
-    return tuple(_record(account) for account in accounts)
+) -> tuple[ReadyAccountRow, ...]:
+    """The user's enabled, ready accounts with non-archived definitions."""
+    rows = (await db.execute(_ready_accounts_stmt(user_id, organization_id))).all()
+    return tuple(_ready_account_row(row, organization_id) for row in rows)
 
 
 async def get_ready_account_for_provider(
@@ -160,51 +183,16 @@ async def get_ready_account_for_provider(
     namespace: str,
     *,
     organization_id: UUID | None = None,
-) -> tuple[IntegrationAccountRecord, definitions_store.IntegrationDefinitionRecord] | None:
-    """The user's enabled, ready account whose non-archived definition matches ``namespace``.
-
-    When ``organization_id`` is given the org's integration policy is enforced:
-    an account is excluded when the org has disabled that definition (a policy
-    row with ``enabled = false``, or no policy row and the definition is not
-    ``enabled_by_default``). Callers with a real org context must pass it so a
-    personally-connected account cannot bypass an org's disable decision.
-    """
-    stmt = (
-        select(CloudIntegrationAccount, CloudIntegrationDefinition)
-        .join(
-            CloudIntegrationDefinition,
-            CloudIntegrationDefinition.id == CloudIntegrationAccount.definition_id,
-        )
-        .where(
-            CloudIntegrationAccount.owner_user_id == user_id,
-            CloudIntegrationAccount.enabled.is_(True),
-            CloudIntegrationAccount.status == "ready",
-            CloudIntegrationDefinition.namespace == namespace,
-            CloudIntegrationDefinition.archived_at.is_(None),
-        )
-    )
-    if organization_id is not None:
-        # LEFT JOIN the org's policy row for this definition; enabled state is the
-        # policy's when present, else the definition's default. Disabled => excluded.
-        stmt = stmt.outerjoin(
-            CloudIntegrationPolicy,
-            (CloudIntegrationPolicy.definition_id == CloudIntegrationDefinition.id)
-            & (CloudIntegrationPolicy.organization_id == organization_id),
-        ).where(
-            func.coalesce(
-                CloudIntegrationPolicy.enabled,
-                CloudIntegrationDefinition.enabled_by_default,
-            ).is_(True)
-        )
+) -> ReadyAccountRow | None:
+    """The user's enabled, ready account whose non-archived definition matches ``namespace``."""
     row = (
         await db.execute(
-            stmt.order_by(CloudIntegrationAccount.created_at.asc()).limit(1)
+            _ready_accounts_stmt(user_id, organization_id)
+            .where(CloudIntegrationDefinition.namespace == namespace)
+            .limit(1)
         )
     ).first()
-    if row is None:
-        return None
-    account, definition = row
-    return _record(account), definitions_store._record(definition)
+    return _ready_account_row(row, organization_id) if row is not None else None
 
 
 async def upsert_account(

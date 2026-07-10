@@ -30,6 +30,27 @@ export function lastTopLevelItemIsAssistantProseWithText(
   return item?.kind === "assistant_prose" && !!item.text;
 }
 
+/**
+ * True when the transcript's latest turn is still in progress but already
+ * ends in completed assistant prose — the "settling" window between the final
+ * rendered answer and the backend's turn_ended/phase flip. Session-level
+ * status presentation uses this to stop showing "iterating" once the answer
+ * is fully on screen, mirroring how shouldAllowTurnTrailingStatus suppresses
+ * the trailing "Thinking…" indicator. A prose tail that is still streaming
+ * does NOT count: genuinely running states stay authoritative.
+ */
+export function transcriptEndsInFinalAssistantProse(
+  transcript: TranscriptState,
+): boolean {
+  const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1];
+  const turn = latestTurnId ? transcript.turnsById[latestTurnId] : undefined;
+  if (!turn || turn.completedAt !== null) {
+    return false;
+  }
+  const item = findLastTopLevelItem(turn, transcript);
+  return item?.kind === "assistant_prose" && !!item.text && !item.isStreaming;
+}
+
 export function latestTransientStatusText(
   turn: { itemOrder: readonly string[] },
   transcript: TranscriptState,

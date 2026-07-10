@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from proliferate.background.config import (
-    PERIODIC_DEFAULT_QUEUE,
-    SUPPORT_TRACKER_RECONCILE_PASS_TASK,
-)
+from celery.schedules import crontab
+
+from proliferate.background.config import CUSTOMERIO_ENGAGEMENT_SYNC_TASK
 from proliferate.config import Settings, settings
 
 BeatSchedule = dict[str, dict[str, object]]
@@ -15,10 +14,11 @@ def build_beat_schedule(config: Settings = settings) -> BeatSchedule:
     """Return the currently registered Beat schedule."""
 
     schedule: BeatSchedule = {}
-    if config.support_tracker_enabled:
-        schedule["support-tracker-reconcile"] = {
-            "task": SUPPORT_TRACKER_RECONCILE_PASS_TASK,
-            "schedule": max(config.support_tracker_reconciler_interval_seconds, 1.0),
-            "options": {"queue": PERIODIC_DEFAULT_QUEUE},
+
+    if config.customerio_site_id and config.customerio_api_key:
+        schedule["customerio-engagement-sync"] = {
+            "task": CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
+            "schedule": crontab(minute="0", hour="9"),
         }
+
     return schedule

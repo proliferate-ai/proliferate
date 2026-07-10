@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildComposerSessionControlGroups,
-  summarizeComposerModelConfigControls,
 } from "./composer-control-groups";
 import type { LiveSessionControlDescriptor } from "./session-controls";
 
@@ -84,28 +83,6 @@ describe("buildComposerSessionControlGroups", () => {
       modeControl: cursorMode,
       modelConfigControls: [effort],
     });
-  });
-});
-
-describe("summarizeComposerModelConfigControls", () => {
-  it("summarizes visible reasoning and speed state", () => {
-    expect(summarizeComposerModelConfigControls("codex", [
-      descriptor({
-        key: "effort",
-        label: "Reasoning effort",
-        detail: "High",
-        options: [
-          { value: "high", label: "High", selected: true },
-        ],
-      }),
-      descriptor({
-        key: "fast_mode",
-        label: "Fast mode",
-        detail: "On",
-        kind: "toggle",
-        isEnabled: true,
-      }),
-    ])).toBe("High · Fast");
   });
 });
 

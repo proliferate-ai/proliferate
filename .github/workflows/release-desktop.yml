@@ -345,12 +345,16 @@ jobs:
           _API_KEY: ${{ secrets.APPLE_API_KEY }}
           ALLOW_UNSIGNED: ${{ inputs.allow_unsigned && 'true' || 'false' }}
         run: |
-          export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${PROLIFERATE_RELEASE_VERSION}}"
+          desktop_version="$(node -p "require('./package.json').version")"
+          anyharness_version="$(grep '^version' ../../anyharness/crates/anyharness/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')"
+          short_sha="${GITHUB_SHA:0:12}"
+
+          export VITE_PROLIFERATE_RELEASE="${VITE_PROLIFERATE_RELEASE:-proliferate-desktop@${desktop_version}+${short_sha}}"
           # Launch gate: ship with cloud compute hidden (identity/billing stay
           # enabled). Remove this line to re-enable cloud workspaces in builds.
           export VITE_PROLIFERATE_DISABLE_CLOUD_COMPUTE=1
-          export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${PROLIFERATE_RELEASE_VERSION}}"
-          export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness-sidecar@${PROLIFERATE_RELEASE_VERSION}}"
+          export PROLIFERATE_DESKTOP_SENTRY_RELEASE="${PROLIFERATE_DESKTOP_SENTRY_RELEASE:-proliferate-desktop-native@${desktop_version}+${short_sha}}"
+          export ANYHARNESS_SENTRY_RELEASE="${ANYHARNESS_SENTRY_RELEASE:-anyharness@${anyharness_version}+${short_sha}}"
 
           if [[ "${{ matrix.runner_os }}" == "windows" ]]; then
             export ANYHARNESS_BIN="$PWD/src-tauri/binaries/anyharness-${{ matrix.target }}.exe"

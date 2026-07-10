@@ -7,9 +7,57 @@
     "dist"
   ],
   "exports": {
+    "./code/code-theme-tokens": {
+      "types": "./dist/code/code-theme-tokens.d.ts",
+      "import": "./dist/code/code-theme-tokens.js"
+    },
+    "./code/types": {
+      "types": "./dist/code/types.d.ts",
+      "import": "./dist/code/types.js"
+    },
+    "./code/CodeTokenLine": {
+      "types": "./dist/code/CodeTokenLine.d.ts",
+      "import": "./dist/code/CodeTokenLine.js"
+    },
+    "./code/CodeBlock": {
+      "types": "./dist/code/CodeBlock.d.ts",
+      "import": "./dist/code/CodeBlock.js"
+    },
+    "./code/CodeBlockTokenContent": {
+      "types": "./dist/code/CodeBlockTokenContent.d.ts",
+      "import": "./dist/code/CodeBlockTokenContent.js"
+    },
+    "./code/VirtualizedCodeContent": {
+      "types": "./dist/code/VirtualizedCodeContent.d.ts",
+      "import": "./dist/code/VirtualizedCodeContent.js"
+    },
     "./activity/GoalBar": {
       "types": "./dist/activity/GoalBar.d.ts",
       "import": "./dist/activity/GoalBar.js"
+    },
+    "./activity/ActivityChips": {
+      "types": "./dist/activity/ActivityChips.d.ts",
+      "import": "./dist/activity/ActivityChips.js"
+    },
+    "./activity/LoopsPanel": {
+      "types": "./dist/activity/LoopsPanel.d.ts",
+      "import": "./dist/activity/LoopsPanel.js"
+    },
+    "./activity/TerminalRosterRow": {
+      "types": "./dist/activity/TerminalRosterRow.d.ts",
+      "import": "./dist/activity/TerminalRosterRow.js"
+    },
+    "./activity/TerminalsRosterPanel": {
+      "types": "./dist/activity/TerminalsRosterPanel.d.ts",
+      "import": "./dist/activity/TerminalsRosterPanel.js"
+    },
+    "./activity/SubagentRosterRow": {
+      "types": "./dist/activity/SubagentRosterRow.d.ts",
+      "import": "./dist/activity/SubagentRosterRow.js"
+    },
+    "./activity/AgentsRosterPanel": {
+      "types": "./dist/activity/AgentsRosterPanel.d.ts",
+      "import": "./dist/activity/AgentsRosterPanel.js"
     },
     "./account/AccountIdentityCard": {
       "types": "./dist/account/AccountIdentityCard.d.ts",
@@ -147,6 +195,10 @@
       "types": "./dist/chat/transcript/AssistantMessage.d.ts",
       "import": "./dist/chat/transcript/AssistantMessage.js"
     },
+    "./chat/transcript/CloudChatTranscriptRowItems": {
+      "types": "./dist/chat/transcript/CloudChatTranscriptRowItems.d.ts",
+      "import": "./dist/chat/transcript/CloudChatTranscriptRowItems.js"
+    },
     "./chat/transcript/MarkdownBody": {
       "types": "./dist/chat/transcript/MarkdownBody.d.ts",
       "import": "./dist/chat/transcript/MarkdownBody.js"
@@ -198,6 +250,10 @@
     "./settings/ModelConfigGrid": {
       "types": "./dist/settings/ModelConfigGrid.d.ts",
       "import": "./dist/settings/ModelConfigGrid.js"
+    },
+    "./settings/ModelTable": {
+      "types": "./dist/settings/ModelTable.d.ts",
+      "import": "./dist/settings/ModelTable.js"
     },
     "./settings/SettingsPageHeader": {
       "types": "./dist/settings/SettingsPageHeader.d.ts",

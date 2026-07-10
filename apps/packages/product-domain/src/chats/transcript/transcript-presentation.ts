@@ -4,6 +4,7 @@ import type {
   TurnRecord,
 } from "@anyharness/sdk";
 import { isSubagentCreationAction } from "../subagents/subagent-tool-presentation";
+import { isSubagentWorkComplete } from "../subagents/subagent-launch";
 import { isKnownModeSwitchToolCall } from "../tools/mode-switch-display";
 
 export type TurnDisplayBlock =
@@ -11,22 +12,7 @@ export type TurnDisplayBlock =
   | { kind: "inline_tool"; itemId: string }
   | { kind: "inline_tools"; blockId: string; itemIds: string[] }
   | { kind: "collapsed_actions"; blockId: string; itemIds: string[] }
-  | { kind: "subagent_creations"; blockId: string; itemIds: string[] }
-  // A native-harness subagent's own work (Claude Task tool) that streamed in
-  // AFTER its launching `Agent` tool call — the background/async case, where
-  // the inner tool calls arrive in a later turn than the launch. `buildTurnPresentation`
-  // can only attach `parentToolCallId` children living in the SAME turn as their
-  // parent; background subagent activity orphans across turns and would otherwise
-  // leak into the main thread as loose actions. This block re-binds those orphans
-  // to their launching Agent (`parentToolCallId`) as one bounded, collapsible unit
-  // with its own start → running → ended lifecycle. `itemIds` are the subagent's
-  // root activity items in this turn; nested children hang off `childrenByParentId`.
-  | {
-      kind: "subagent_activity";
-      blockId: string;
-      parentToolCallId: string;
-      itemIds: string[];
-    };
+  | { kind: "subagent_creations"; blockId: string; itemIds: string[] };
 
 export interface CompletedHistorySummary {
   messages: number;
@@ -37,32 +23,27 @@ export interface CompletedHistorySummary {
 export interface TurnPresentation {
   rootIds: string[];
   childrenByParentId: Map<string, string[]>;
-  /** See the `subagent_activity` block — orphaned background-subagent roots keyed to their launching Agent. */
-  subagentActivityParentByRootId: Map<string, string>;
   displayBlocks: TurnDisplayBlock[];
   finalAssistantItemId: string | null;
   completedHistoryRootIds: string[];
   completedHistorySummary: CompletedHistorySummary | null;
+  /**
+   * Top-level assistant-prose item ids that begin a NEW assistant message and
+   * should render a message-boundary divider immediately before them (see
+   * `computeMessageBoundaryItemIds`).
+   */
+  messageBoundaryItemIds: Set<string>;
 }
 
 export function buildTranscriptDisplayBlocks({
   rootIds,
   transcript,
   childrenByParentId,
-  subagentActivityParentByRootId = EMPTY_SUBAGENT_ACTIVITY_MAP,
 }: {
   rootIds: readonly string[];
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   isComplete: boolean;
-  /**
-   * Root items that are actually a native-harness subagent's own work whose
-   * launching `Agent` tool call lives in an EARLIER turn (background/async
-   * subagents — see the `subagent_activity` block doc). Maps each such root
-   * item id to the launching `parentToolCallId`. Empty for same-turn work and
-   * for scoped recursion (where children are already bound to their agent).
-   */
-  subagentActivityParentByRootId?: ReadonlyMap<string, string>;
 }): TurnDisplayBlock[] {
   const visibleRootIds = rootIds.filter((itemId) =>
     !isHiddenTranscriptPresentationItem(transcript.itemsById[itemId])
@@ -70,14 +51,6 @@ export function buildTranscriptDisplayBlocks({
   const blocks: TurnDisplayBlock[] = [];
   let pendingActionIds: string[] = [];
   let pendingSubagentCreationIds: string[] = [];
-  // One subagent_activity block per launching Agent, positioned at that
-  // subagent's first appearance. Interleaved concurrent subagents each get a
-  // single bounded block (not one per burst), so N background subagents read
-  // as exactly N labeled units — the point of the grouping.
-  const subagentActivityBlockByParent = new Map<
-    string,
-    Extract<TurnDisplayBlock, { kind: "subagent_activity" }>
-  >();
 
   const flushActions = () => {
     if (pendingActionIds.length === 0) return;
@@ -101,38 +74,26 @@ export function buildTranscriptDisplayBlocks({
     });
     pendingSubagentCreationIds = [];
   };
-  const flushAll = () => {
-    flushSubagentCreations();
-    flushActions();
-  };
 
   for (const itemId of visibleRootIds) {
     const item = transcript.itemsById[itemId];
     if (!item) continue;
 
-    const activityParent = subagentActivityParentByRootId.get(itemId);
-    if (activityParent) {
-      flushSubagentCreations();
+    // Route finished subagents (both MCP create_subagent and native Agent) to
+    // subagent_creations blocks. Running native subagents are hidden by the
+    // renderer (TranscriptAgentGroupBlock returns null), so they never reach
+    // this classification path.
+    if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
       flushActions();
-      const existing = subagentActivityBlockByParent.get(activityParent);
-      if (existing) {
-        // Same subagent reappearing after other work interleaved — append to
-        // its one block rather than opening a second.
-        existing.itemIds.push(itemId);
-      } else {
-        const block: Extract<TurnDisplayBlock, { kind: "subagent_activity" }> = {
-          kind: "subagent_activity",
-          blockId: `subagent-activity-${activityParent}`,
-          parentToolCallId: activityParent,
-          itemIds: [itemId],
-        };
-        subagentActivityBlockByParent.set(activityParent, block);
-        blocks.push(block);
-      }
+      pendingSubagentCreationIds.push(itemId);
       continue;
     }
 
-    if (item.kind === "tool_call" && isSubagentCreationAction(item)) {
+    if (
+      item.kind === "tool_call"
+      && isFinishedNativeAgentSubagent(item)
+      && isSubagentWorkComplete(item)
+    ) {
       flushActions();
       pendingSubagentCreationIds.push(itemId);
       continue;
@@ -144,15 +105,15 @@ export function buildTranscriptDisplayBlocks({
       continue;
     }
 
-    flushAll();
+    flushSubagentCreations();
+    flushActions();
     blocks.push({ kind: "item", itemId });
   }
 
-  flushAll();
+  flushSubagentCreations();
+  flushActions();
   return blocks;
 }
-
-const EMPTY_SUBAGENT_ACTIVITY_MAP: ReadonlyMap<string, string> = new Map();
 
 export function buildTurnPresentation(
   turn: TurnRecord,
@@ -169,19 +130,6 @@ export function buildTurnPresentation(
   const itemIds = new Set(orderedItemIds);
   const childrenByParentId = new Map<string, string[]>();
   const rootIds: string[] = [];
-  // Native-harness (Claude Task) subagent activity whose launching `Agent` tool
-  // call is NOT in this turn — the background/async case. These items carry a
-  // `parentToolCallId` pointing at an out-of-turn Agent, so they can't attach to
-  // a same-turn parent and would otherwise render as loose main-thread actions.
-  // We re-collect them under their launching id here (deepest-first, so nested
-  // tool calls hang off their own parent within the subagent) and hand the
-  // roots' parent map to the block builder to wrap them in one bounded block.
-  const subagentActivityParentByRootId = new Map<string, string>();
-
-  // Items re-parented under an in-turn parent that itself belongs to orphaned
-  // subagent activity — tracked so their own descendants keep nesting instead
-  // of surfacing as fresh activity roots.
-  const nestedSubagentActivityItemIds = new Set<string>();
 
   for (const itemId of orderedItemIds) {
     const item = transcript.itemsById[itemId];
@@ -198,31 +146,6 @@ export function buildTurnPresentation(
       ]);
       continue;
     }
-    // In-turn parent that is itself part of orphaned subagent activity: keep
-    // this item nested under it (not a fresh activity root) so deep subagent
-    // tool trees render inside the one bounded block.
-    if (
-      parentId
-      && itemIds.has(parentId)
-      && (subagentActivityParentByRootId.has(parentId)
-        || nestedSubagentActivityItemIds.has(parentId))
-    ) {
-      childrenByParentId.set(parentId, [
-        ...(childrenByParentId.get(parentId) ?? []),
-        itemId,
-      ]);
-      nestedSubagentActivityItemIds.add(itemId);
-      continue;
-    }
-    // Orphaned subagent activity: `parentToolCallId` names a native `Agent`
-    // launch that lived in an earlier turn (so it isn't in `itemIds`, and its
-    // record isn't loaded here). Surface it as an activity root keyed to the
-    // launching id; the block builder re-binds consecutive roots into one block.
-    if (parentId && !itemIds.has(parentId)) {
-      subagentActivityParentByRootId.set(itemId, parentId);
-      rootIds.push(itemId);
-      continue;
-    }
     rootIds.push(itemId);
   }
 
@@ -234,28 +157,86 @@ export function buildTurnPresentation(
     transcript,
     turn.completedAt,
     finalAssistantItemId,
-    subagentActivityParentByRootId,
+  );
+
+  const displayBlocks = buildTranscriptDisplayBlocks({
+    rootIds,
+    transcript,
+    childrenByParentId,
+    isComplete: !!turn.completedAt,
+  });
+  const completedHistorySummary = summarizeCompletedHistory(
+    completedHistoryRootIds,
+    transcript,
+    childrenByParentId,
   );
 
   return {
     rootIds,
     childrenByParentId,
-    subagentActivityParentByRootId,
-    displayBlocks: buildTranscriptDisplayBlocks({
-      rootIds,
-      transcript,
-      childrenByParentId,
-      isComplete: !!turn.completedAt,
-      subagentActivityParentByRootId,
-    }),
+    displayBlocks,
     finalAssistantItemId,
     completedHistoryRootIds,
-    completedHistorySummary: summarizeCompletedHistory(
-      completedHistoryRootIds,
+    completedHistorySummary,
+    messageBoundaryItemIds: computeMessageBoundaryItemIds({
+      displayBlocks,
       transcript,
-      childrenByParentId,
-    ),
+      completedHistoryRootIds: new Set(completedHistoryRootIds),
+      hasCompletedHistorySummary: completedHistorySummary !== null,
+    }),
   };
+}
+
+/**
+ * Compute the set of top-level assistant-prose item ids that begin a NEW
+ * assistant message and therefore need a leading message-boundary divider.
+ *
+ * A boundary is inserted before a top-level `assistant_prose` `item` block when
+ * an earlier top-level `assistant_prose` block has already rendered in the same
+ * turn's displayed sequence. Blocks in between (tool activity, reasoning, plans)
+ * belong to whichever message and never reset the tracking — the divider marks
+ * the transition from one prose message to a later prose message.
+ *
+ * Blocks collapsed into the "Work history" summary are excluded: they render as
+ * a single group with its own "Final message" separator, so they must not count
+ * as top-level prose nor receive a boundary.
+ */
+export function computeMessageBoundaryItemIds({
+  displayBlocks,
+  transcript,
+  completedHistoryRootIds,
+  hasCompletedHistorySummary,
+}: {
+  displayBlocks: readonly TurnDisplayBlock[];
+  transcript: TranscriptState;
+  completedHistoryRootIds: ReadonlySet<string>;
+  hasCompletedHistorySummary: boolean;
+}): Set<string> {
+  const boundaryItemIds = new Set<string>();
+  let hasRenderedAssistantProse = false;
+
+  for (const block of displayBlocks) {
+    if (
+      hasCompletedHistorySummary
+      && block.kind === "item"
+      && completedHistoryRootIds.has(block.itemId)
+    ) {
+      // Collapsed into the Work history summary — not a top-level block.
+      continue;
+    }
+
+    if (
+      block.kind === "item"
+      && transcript.itemsById[block.itemId]?.kind === "assistant_prose"
+    ) {
+      if (hasRenderedAssistantProse) {
+        boundaryItemIds.add(block.itemId);
+      }
+      hasRenderedAssistantProse = true;
+    }
+  }
+
+  return boundaryItemIds;
 }
 
 export function isTransientTranscriptItem(item: TranscriptItem | undefined): boolean {
@@ -303,7 +284,6 @@ function buildCompletedHistoryRootIds(
   transcript: TranscriptState,
   completedAt: string | null,
   finalAssistantItemId: string | null,
-  subagentActivityParentByRootId: ReadonlyMap<string, string>,
 ): string[] {
   if (!completedAt || !finalAssistantItemId) {
     return [];
@@ -315,16 +295,11 @@ function buildCompletedHistoryRootIds(
   }
 
   return rootIds.filter((itemId, index) =>
-    index < finalAssistantIndex
-    && transcript.itemsById[itemId]?.kind !== "user_message"
-    // Background subagent activity stays a bounded block (with its own agent
-    // identity + ended chip) even in completed turns — never buried in the
-    // generic "Work history" collapse.
-    && !subagentActivityParentByRootId.has(itemId)
+    index < finalAssistantIndex && transcript.itemsById[itemId]?.kind !== "user_message"
   );
 }
 
-function summarizeCompletedHistory(
+export function summarizeCompletedHistory(
   rootIds: readonly string[],
   transcript: TranscriptState,
   childrenByParentId: Map<string, string[]>,
@@ -391,4 +366,14 @@ function isCollapsibleAction(
     && item.semanticKind !== "cowork_artifact_create"
     && item.semanticKind !== "cowork_artifact_update"
     && item.nativeToolName !== "Agent";
+}
+
+function isFinishedNativeAgentSubagent(
+  item: Extract<TranscriptItem, { kind: "tool_call" }>,
+): boolean {
+  // Only native Agent tool calls. MCP subagent communication tools
+  // (send_subagent_message, get_subagent_status, etc.) have semanticKind
+  // "subagent" but are NOT creation actions — they render via their own
+  // blocks (TranscriptMcpSubagentActionBlock).
+  return item.nativeToolName === "Agent";
 }

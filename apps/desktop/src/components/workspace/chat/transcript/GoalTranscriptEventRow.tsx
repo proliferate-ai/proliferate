@@ -5,39 +5,73 @@ import { useState } from "react";
 import { CircleAlert, CircleCheck, Target } from "lucide-react";
 import { truncateGoalObjective } from "@proliferate/product-domain/activity/goal";
 import type { GoalTranscriptEvent } from "@proliferate/product-domain/activity/goal-transcript-events";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 // Compact row preview cap — the row also CSS-truncates to one line, but this
 // keeps the label text itself short for the disclosure toggle's threshold.
 const ROW_PREVIEW_MAX_CHARS = 88;
 
 /**
- * A quiet, single-line system row for a goal lifecycle transition
- * (goal_updated/goal_met/goal_cleared), interleaved into the transcript by
- * seq alongside turn content — client-side composition only (see
+ * A goal lifecycle transition row (goal_updated/goal_met/goal_cleared),
+ * interleaved into the transcript by seq — client-side composition only (see
  * `deriveGoalTranscriptEvents`; the runtime keeps these chunks out of stored
- * transcript content). Styled like the transcript's other quiet system rows
- * (`ModeTransitionDivider`): small muted icon, single line, no card chrome.
- * A long `goal_met` reason discloses on click, matching `SessionErrorItem`'s
- * "Details" toggle.
+ * transcript content). User-initiated events (set/edited) render as a
+ * right-aligned compact chip (matching the "user placed this marker"
+ * affordance); system outcomes (met/failed/blocked/cleared) render as quiet
+ * left-aligned system rows. A long `goal_met` reason discloses on click,
+ * matching `SessionErrorItem`'s "Details" toggle.
  */
 export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }) {
   const [expanded, setExpanded] = useState(false);
   const presentation = presentGoalTranscriptEvent(event);
   const canExpand = presentation.fullDetail !== null
     && presentation.fullDetail !== presentation.detailPreview;
+  const isUserInitiated = event.kind === "set" || event.kind === "edited";
 
+  if (isUserInitiated) {
+    // User-initiated SET/EDIT events: right-aligned compact chip
+    return (
+      <div data-goal-transcript-event={event.kind} className="flex justify-end py-1">
+        <Button
+          variant="unstyled"
+          size="unstyled"
+          type="button"
+          disabled
+          className="inline-flex items-start gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-ui-sm text-muted-foreground disabled:cursor-default"
+        >
+          {/* items-start + line-height-matched offset: the glyph registers on
+              the FIRST text line instead of floating against the block's
+              vertical center when the objective wraps. */}
+          <presentation.Icon
+            aria-hidden="true"
+            className={`mt-[0.2em] size-3 shrink-0 ${presentation.iconClassName}`}
+          />
+          <span className="truncate">
+            {presentation.label}
+            {presentation.detailPreview && (
+              <span className="text-faint"> — {presentation.detailPreview}</span>
+            )}
+          </span>
+        </Button>
+      </div>
+    );
+  }
+
+  // System outcome events: left-aligned quiet row
   return (
     <div data-goal-transcript-event={event.kind} className="py-1">
-      <button
+      <Button
+        variant="unstyled"
+        size="unstyled"
         type="button"
         disabled={!canExpand}
         onClick={canExpand ? () => setExpanded((value) => !value) : undefined}
         aria-expanded={canExpand ? expanded : undefined}
-        className="flex w-full min-w-0 items-center gap-1.5 text-left text-ui-sm text-muted-foreground disabled:cursor-default"
+        className="flex w-full min-w-0 items-start gap-1.5 text-left text-ui-sm text-muted-foreground disabled:cursor-default"
       >
         <presentation.Icon
           aria-hidden="true"
-          className={`size-3 shrink-0 ${presentation.iconClassName}`}
+          className={`mt-[0.2em] size-3 shrink-0 ${presentation.iconClassName}`}
         />
         <span className="min-w-0 truncate">
           {presentation.label}
@@ -50,7 +84,7 @@ export function GoalTranscriptEventRow({ event }: { event: GoalTranscriptEvent }
             {expanded ? "Hide" : "Details"}
           </span>
         )}
-      </button>
+      </Button>
       {expanded && presentation.fullDetail && (
         <div className="mt-1 whitespace-pre-wrap rounded-md border border-border bg-card px-3.5 py-2.5 text-ui-sm leading-[1.65] tracking-[-0.01em] text-muted-foreground select-text">
           {presentation.fullDetail}
@@ -123,7 +157,7 @@ function presentGoalTranscriptEvent(event: GoalTranscriptEvent): GoalTranscriptE
     case "met":
       return {
         Icon: CircleCheck,
-        iconClassName: "text-success",
+        iconClassName: "text-muted-foreground",
         label: "Goal met",
         detailPreview: event.detail ? truncateGoalObjective(event.detail, ROW_PREVIEW_MAX_CHARS) : null,
         fullDetail: event.detail,

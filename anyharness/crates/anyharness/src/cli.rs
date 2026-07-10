@@ -7,7 +7,7 @@ use crate::commands::serve::ServeArgs;
 #[derive(Parser)]
 #[command(name = "anyharness")]
 #[command(about = "AnyHarness: a runtime for coding agents")]
-#[command(version)]
+#[command(version = env!("PROLIFERATE_STAMPED_VERSION"))]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,

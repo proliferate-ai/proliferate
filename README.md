@@ -15,7 +15,7 @@
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat" /></a>
   <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
   <a href="https://proliferate.com"><img alt="Website" src="https://img.shields.io/badge/website-visit-0969DA?style=flat" /></a>
-  <a href="https://discord.gg/wCEgUnEuF"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
+  <a href="https://discord.gg/7b5afMTqW"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
 </p>
 
 <br />
@@ -32,7 +32,7 @@ Move running sessions between your machine and the cloud. Works solo or across a
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/changelog">Changelog</a>
   &nbsp;&bull;&nbsp;
-  <a href="https://discord.gg/wCEgUnEuF">Discord</a>
+  <a href="https://discord.gg/7b5afMTqW">Discord</a>
 </p>
 
 <img width="full" alt="Proliferate" src="./specs/developing/assets/readme/hero.png" />
@@ -165,7 +165,7 @@ on the way.
 
 Point the desktop app at your control plane by setting `apiBaseUrl` in
 `~/.proliferate/config.json`. Expect rough edges — [open an issue](../../issues/new/choose) or ask in
-[Discord](https://discord.gg/wCEgUnEuF) if you hit problems, and see
+[Discord](https://discord.gg/7b5afMTqW) if you hit problems, and see
 [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
 
 </details>
@@ -193,7 +193,7 @@ self-host experience will be polished as Cloud moves toward GA.
 
 ## Community
 
-Join our community on [Discord](https://discord.gg/wCEgUnEuF)!
+Join our community on [Discord](https://discord.gg/7b5afMTqW)!
 
 ## Contributing
 

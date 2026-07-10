@@ -32,6 +32,11 @@ class SupportReportSnapshot:
     object_manifest: dict[str, object]
     expected_uploads: dict[str, object]
     public_content_consent: bool
+    kind: str
+    credit_consent: bool
+    credit_name: str | None
+    urgent: bool
+    notify_me: bool
     request_id: str | None
     complete_request_id: str | None
     request_object_written_at: datetime | None
@@ -109,8 +114,13 @@ async def create_report(
     telemetry_refs: dict[str, object],
     expected_uploads: dict[str, object],
     public_content_consent: bool,
-    request_id: str | None,
-    cloud_diagnostics_status: str,
+    kind: str,
+    credit_consent: bool,
+    credit_name: str | None = None,
+    urgent: bool = False,
+    notify_me: bool = False,
+    request_id: str | None = None,
+    cloud_diagnostics_status: str = "not_applicable",
 ) -> SupportReportSnapshot:
     now = utcnow()
     row = SupportReport(
@@ -130,6 +140,11 @@ async def create_report(
         object_manifest_json=_dump_json({}),
         expected_uploads_json=_dump_json(expected_uploads),
         public_content_consent=public_content_consent,
+        kind=kind,
+        credit_consent=credit_consent,
+        credit_name=credit_name,
+        urgent=urgent,
+        notify_me=notify_me,
         request_id=request_id,
         cloud_diagnostics_status=cloud_diagnostics_status,
         created_at=now,
@@ -397,6 +412,11 @@ def _snapshot(row: SupportReport) -> SupportReportSnapshot:
         object_manifest=_dict_json(row.object_manifest_json),
         expected_uploads=_dict_json(row.expected_uploads_json),
         public_content_consent=row.public_content_consent,
+        kind=row.kind,
+        credit_consent=row.credit_consent,
+        credit_name=row.credit_name,
+        urgent=row.urgent,
+        notify_me=row.notify_me,
         request_id=row.request_id,
         complete_request_id=row.complete_request_id,
         request_object_written_at=row.request_object_written_at,

@@ -1,4 +1,5 @@
 import { buildProliferateApiUrl } from "@/lib/infra/proliferate-api";
+import packageJson from "../../../../package.json";
 
 function envFlagEnabled(value: string | undefined, defaultValue: boolean): boolean {
   if (value === undefined) return defaultValue;
@@ -23,6 +24,7 @@ export interface DesktopTelemetryConfig {
     dsn: string | null;
     tracesSampleRate: number;
     enableLogs: boolean;
+    replaysOnErrorSampleRate: number;
   };
   posthog: {
     enabled: boolean;
@@ -42,7 +44,7 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
       || (import.meta.env.DEV ? "development" : "trusted-beta"),
     release:
       import.meta.env.VITE_PROLIFERATE_RELEASE?.trim()
-      || "proliferate-desktop@0.1.0",
+      || `proliferate-desktop@${packageJson.version}`,
     sentry: {
       enabled: sentryDsn !== null,
       dsn: sentryDsn,
@@ -53,6 +55,10 @@ export function getDesktopTelemetryConfig(): DesktopTelemetryConfig {
       enableLogs: envFlagEnabled(
         import.meta.env.VITE_PROLIFERATE_SENTRY_ENABLE_LOGS,
         true,
+      ),
+      replaysOnErrorSampleRate: envFloat(
+        import.meta.env.VITE_PROLIFERATE_SENTRY_REPLAY_ON_ERROR_SAMPLE_RATE,
+        1.0,
       ),
     },
     posthog: {

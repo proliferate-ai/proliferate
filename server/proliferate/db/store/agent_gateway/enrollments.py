@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from proliferate.constants.agent_gateway import (
+    AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
     AGENT_GATEWAY_CIPHERTEXT_KEY_ID,
     AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
     AGENT_GATEWAY_SUBJECT_KIND_USER,
@@ -341,6 +342,40 @@ async def list_billing_subject_ids_with_active_enrollments(
         .all()
     )
     return list(rows)
+
+
+async def list_organizations_with_limit_reached_enrollments(
+    db: AsyncSession,
+    *,
+    limit: int = 500,
+    after: UUID | None = None,
+) -> list[tuple[UUID, UUID]]:
+    """(organization_id, billing_subject_id) pairs holding a ``limit_reached`` member.
+
+    The org-cap enforcement pass only re-evaluates orgs with *new* spend in the
+    imported batch (see ``_enforce_org_llm_limits`` callers). If an org-wide cap
+    disabled every member's key, the org stops producing new spend entirely, so
+    a later cap raise or limit-disable would never be re-applied without this
+    sweep: it finds every org still holding a ``limit_reached`` enrollment so
+    the importer can re-check its cap each tick regardless of fresh spend.
+
+    Keyset-paginated by ``organization_id`` so callers can walk every such org
+    across pages, mirroring ``list_billing_subject_ids_with_active_enrollments``.
+    """
+    query = select(
+        AgentGatewayEnrollment.organization_id,
+        AgentGatewayEnrollment.billing_subject_id,
+    ).where(
+        AgentGatewayEnrollment.revoked_at.is_(None),
+        AgentGatewayEnrollment.organization_id.is_not(None),
+        AgentGatewayEnrollment.budget_status == AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
+    )
+    if after is not None:
+        query = query.where(AgentGatewayEnrollment.organization_id > after)
+    rows = await db.execute(
+        query.distinct().order_by(AgentGatewayEnrollment.organization_id).limit(limit)
+    )
+    return [(organization_id, billing_subject_id) for organization_id, billing_subject_id in rows]
 
 
 async def set_enrollment_budget_status(

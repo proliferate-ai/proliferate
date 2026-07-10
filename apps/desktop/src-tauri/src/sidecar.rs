@@ -7,12 +7,19 @@ use tokio::sync::Mutex;
 
 use crate::agent_seed_env::current_target_triple;
 use crate::app_config::{write_runtime_info_record, RuntimeInfoRecord};
-use crate::desktop_telemetry_mode::{resolve_desktop_telemetry_mode, DesktopTelemetryMode};
+use crate::desktop_telemetry_mode::{
+    current_api_origin, resolve_desktop_telemetry_mode, DesktopTelemetryMode,
+};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const HEALTH_POLL_TIMEOUT: Duration = Duration::from_secs(60);
 const ANYHARNESS_DEFER_STARTUP_RETENTION_ENV: &str = "ANYHARNESS_DEFER_STARTUP_RETENTION";
+/// Read by anyharness's route-auth render plane to guard against injecting a
+/// previous server's gateway credentials right after a connect-to-server
+/// switch (self-hosting-v1 §3.5). Must match
+/// `route_auth::CURRENT_SERVER_ORIGIN_ENV` in anyharness-lib exactly.
+const PROLIFERATE_API_BASE_URL_ORIGIN_ENV: &str = "PROLIFERATE_API_BASE_URL_ORIGIN";
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -223,6 +230,8 @@ where
         }
     }
 
+    env.insert("PROLIFERATE_RUNTIME_ENV".to_string(), "local".to_string());
+
     env
 }
 
@@ -338,6 +347,13 @@ fn build_spawn_command(binary: &str, port: u16, launch_env: &HashMap<String, Str
     runtime_env.insert(
         ANYHARNESS_DEFER_STARTUP_RETENTION_ENV.to_string(),
         "1".to_string(),
+    );
+    // Unconditional (unlike the hosted-only block above): every desktop
+    // install, self-hosted or not, needs this so the render plane can tell a
+    // stale-server state file apart from a fresh one.
+    runtime_env.insert(
+        PROLIFERATE_API_BASE_URL_ORIGIN_ENV.to_string(),
+        current_api_origin(),
     );
     runtime_env.extend(launch_env.clone());
 

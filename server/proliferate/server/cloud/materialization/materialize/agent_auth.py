@@ -80,6 +80,7 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
+from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
 from proliferate.server.cloud.materialization import operation, paths, sandbox_io
 
 logger = logging.getLogger("proliferate.cloud.materialization")
@@ -103,6 +104,7 @@ class AgentAuthStateInputs:
     enrollment_sync_status: str | None
     gateway_virtual_key: str | None
     gateway_base_url: str | None
+    harness_settings: Mapping[str, dict[str, object]]  # keyed by harness_kind
 
 
 def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, object], str]:
@@ -129,9 +131,14 @@ def render_agent_auth_state(inputs: AgentAuthStateInputs) -> tuple[dict[str, obj
     harnesses: list[dict[str, object]] = []
     for harness_kind in sorted(by_harness):
         ordered = sorted(by_harness[harness_kind], key=lambda item: item[0])
-        harnesses.append(
-            {"harness_kind": harness_kind, "sources": [source for _, source in ordered]}
-        )
+        harness_entry: dict[str, object] = {
+            "harness_kind": harness_kind,
+            "sources": [source for _, source in ordered],
+        }
+        harness_settings = inputs.harness_settings.get(harness_kind)
+        if harness_settings:
+            harness_entry["settings"] = harness_settings
+        harnesses.append(harness_entry)
 
     state: dict[str, object] = {
         "version": AGENT_AUTH_STATE_VERSION,
@@ -266,12 +273,32 @@ async def _load_state_inputs(
         if enrollment is not None:
             enrollment_sync_status = enrollment.sync_status
             if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
-                gateway_virtual_key = (
-                    await agent_gateway_store.get_enrollment_virtual_key_decrypted(
-                        db,
-                        enrollment_id=enrollment.id,
+                # Second enforcement wall for LLM-credit exhaustion (the first
+                # is the importer disabling the LiteLLM virtual key): an
+                # exhausted subject stops being handed the key at all, so a
+                # lagging or failed key-disable cannot leak gateway access.
+                # The gateway source then renders unsatisfiable and is dropped;
+                # the runtime fails closed at launch.
+                if await is_gateway_budget_available(db, user_id):
+                    gateway_virtual_key = (
+                        await agent_gateway_store.get_enrollment_virtual_key_decrypted(
+                            db,
+                            enrollment_id=enrollment.id,
+                        )
                     )
-                )
+                else:
+                    logger.warning(
+                        "Withholding gateway virtual key: LLM credit exhausted "
+                        "(user=%s, surface=%s)",
+                        user_id,
+                        surface,
+                    )
+
+    harness_settings = await agent_gateway_store.list_harness_settings_for_surface(
+        db,
+        user_id=user_id,
+        surface=surface,
+    )
 
     return AgentAuthStateInputs(
         user_id=user_id,
@@ -281,6 +308,7 @@ async def _load_state_inputs(
         enrollment_sync_status=enrollment_sync_status,
         gateway_virtual_key=gateway_virtual_key,
         gateway_base_url=settings.agent_gateway_litellm_public_base_url or None,
+        harness_settings=harness_settings,
     )
 
 

@@ -19,6 +19,7 @@ _PIN_ENV_VARS = (
     "SERVER_VERSION",
     "DESKTOP_VERSION",
     "RUNTIME_VERSION",
+    "WORKER_VERSION",
     "MIN_DESKTOP_VERSION",
     "DESKTOP_DOWNLOADS_BASE_URL",
 )
@@ -41,6 +42,7 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
     monkeypatch.setenv("SERVER_VERSION", "0.3.0")
     monkeypatch.setenv("DESKTOP_VERSION", "0.3.2")
     monkeypatch.setenv("RUNTIME_VERSION", "0.3.1")
+    monkeypatch.setenv("WORKER_VERSION", "0.3.4")
     monkeypatch.setenv("MIN_DESKTOP_VERSION", "0.3.0")
 
     body = _client().get("/meta").json()
@@ -49,6 +51,7 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
         "serverVersion": "0.3.0",
         "desktopVersion": "0.3.2",
         "runtimeVersion": "0.3.1",
+        "workerVersion": "0.3.4",
         "minDesktopVersion": "0.3.0",
     }
 
@@ -62,10 +65,40 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
         "serverVersion",
         "desktopVersion",
         "runtimeVersion",
+        "workerVersion",
         "minDesktopVersion",
     }
     for value in body.values():
         assert isinstance(value, str) and value
+
+
+# T1-SH-3 (specs/developing/testing/self-hosting.md): the /meta wire contract.
+#
+# `/meta` is the shape the desktop's connect-to-a-server dialog reads to render
+# its trust-confirmation screen ("Server version X"). A silent field rename or
+# reorder breaks every desktop that talks to a self-hosted server, and no other
+# test would notice. This golden test pins the exact field names AND their
+# order, both on the response model and on the live JSON, so a rename mechanically
+# fails here. Field-set membership is covered above; this is the rename guard.
+_META_GOLDEN_FIELDS = [
+    "serverVersion",
+    "desktopVersion",
+    "runtimeVersion",
+    "workerVersion",
+    "minDesktopVersion",
+]
+
+
+def test_meta_response_golden_contract(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    # The declared response model is the contract of record.
+    assert list(meta_module.MetaResponse.model_fields.keys()) == _META_GOLDEN_FIELDS
+
+    _clear_pin_env(monkeypatch)
+    body = _client().get("/meta").json()
+
+    # The serialized wire order matches the model exactly (dict preserves
+    # insertion order, so this catches a reorder as well as a rename).
+    assert list(body.keys()) == _META_GOLDEN_FIELDS
 
 
 def test_meta_pins_fall_back_to_server_version(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -76,6 +109,7 @@ def test_meta_pins_fall_back_to_server_version(monkeypatch) -> None:  # type: ig
 
     assert body["desktopVersion"] == "1.2.3"
     assert body["runtimeVersion"] == "1.2.3"
+    assert body["workerVersion"] == "1.2.3"
     assert body["minDesktopVersion"] == "1.2.3"
 
 

@@ -135,6 +135,10 @@
       "types": "./dist/primitives/ComposerControlButton.d.ts",
       "import": "./dist/primitives/ComposerControlButton.js"
     },
+    "./primitives/LevelBarsButton": {
+      "types": "./dist/primitives/LevelBarsButton.d.ts",
+      "import": "./dist/primitives/LevelBarsButton.js"
+    },
     "./primitives/ComposerTextarea": {
       "types": "./dist/primitives/ComposerTextarea.d.ts",
       "import": "./dist/primitives/ComposerTextarea.js"
@@ -227,6 +231,10 @@
       "types": "./dist/primitives/Switch.d.ts",
       "import": "./dist/primitives/Switch.js"
     },
+    "./primitives/ThinkingText": {
+      "types": "./dist/primitives/ThinkingText.d.ts",
+      "import": "./dist/primitives/ThinkingText.js"
+    },
     "./primitives/Tabs": {
       "types": "./dist/primitives/Tabs.d.ts",
       "import": "./dist/primitives/Tabs.js"
@@ -302,10 +310,6 @@
     "./kit/Separator": {
       "types": "./dist/kit/Separator.d.ts",
       "import": "./dist/kit/Separator.js"
-    },
-    "./kit/Skeleton": {
-      "types": "./dist/kit/Skeleton.d.ts",
-      "import": "./dist/kit/Skeleton.js"
     },
     "./kit/Sonner": {
       "types": "./dist/kit/Sonner.d.ts",

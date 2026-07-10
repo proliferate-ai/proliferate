@@ -9,13 +9,20 @@ byte-for-byte consistent: same email normalization, same password policy, same
 Validation failures raise ``AccountValidationError`` so each transport can map
 them onto its own error shape (HTML form error for /setup, JSON error for the
 registration route).
+
+Email syntax is validated with the same ``pydantic.EmailStr`` rules the read
+model (``UserRead``, via ``fastapi_users.schemas.BaseUser``) used to enforce at
+serialization time (see #1012): reserved/special-use TLDs such as ``.test``,
+``.invalid``, ``.local``, and ``.localhost`` are rejected here, at creation,
+with a clean 400/403 instead of being written and then 500ing on
+``GET /users/me``.
 """
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.store import create_auth_user
@@ -29,7 +36,7 @@ from proliferate.constants.auth import PASSWORD_EMAIL_MAX_LENGTH
 from proliferate.db.models.auth import User
 from proliferate.db.store.auth_passwords import update_user_password_hash
 
-_EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+_email_syntax_adapter = TypeAdapter(EmailStr)
 
 
 class AccountValidationError(Exception):
@@ -45,13 +52,17 @@ def normalize_account_email(email: str) -> str:
 
     The length cap matches the users email column (String(320)) so an
     oversized value fails validation here instead of blowing up on the insert.
-    Shared by the first-run claim and invited self-registration.
+    Syntax is checked with ``EmailStr`` so the write path can never accept an
+    address the read model (``UserRead``) would refuse to serialize. Shared by
+    the first-run claim and invited self-registration.
     """
     normalized_email = normalize_password_email(email)
-    if len(normalized_email) > PASSWORD_EMAIL_MAX_LENGTH or not _EMAIL_PATTERN.fullmatch(
-        normalized_email
-    ):
+    if len(normalized_email) > PASSWORD_EMAIL_MAX_LENGTH:
         raise AccountValidationError("Enter a valid email address.")
+    try:
+        _email_syntax_adapter.validate_python(normalized_email)
+    except ValidationError as exc:
+        raise AccountValidationError("Enter a valid email address.") from exc
     return normalized_email
 
 

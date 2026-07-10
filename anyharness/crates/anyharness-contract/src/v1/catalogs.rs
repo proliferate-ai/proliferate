@@ -13,3 +13,13 @@ pub struct ApplyAgentCatalogResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub to_version: Option<String>,
 }
+
+/// The runtime's active agent catalog version and its provenance.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentCatalogVersionResponse {
+    /// The `catalogVersion` string from the active document.
+    pub catalog_version: String,
+    /// Where the active catalog came from: `"bundled"` or `"fetched"`.
+    pub source: String,
+}

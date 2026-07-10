@@ -10,16 +10,16 @@
       defaults MUST match that table's default preset — drift-locked by
       appearance-css-drift.test.ts in apps/desktop. -- */
 @theme {
-  --text-ui: 13px;                    /* rows, pills, controls, popover items, menus, card titles */
-  --text-ui--line-height: 18px;       /* font size + 5px */
-  --text-ui-sm: 12px;                 /* descriptions, secondary labels, notices, meta */
-  --text-ui-sm--line-height: 16px;    /* font size + 4px */
-  --text-composer: 14px;              /* composer input text only */
-  --text-composer--line-height: 22px; /* font size + 8px */
-  --text-title: 20px;                 /* page/settings titles (SettingsPageHeader pairing) */
-  --text-title--line-height: 24px;    /* 1.2 × font size */
-  --text-hero: 28px;                  /* home hero heading */
-  --text-hero--line-height: 36px;     /* font size + 8px */
+  --text-ui: 11px;                    /* rows, pills, controls, popover items, menus, card titles */
+  --text-ui--line-height: 16px;       /* font size + 5px */
+  --text-ui-sm: 10px;                 /* descriptions, secondary labels, notices, meta */
+  --text-ui-sm--line-height: 14px;    /* font size + 4px */
+  --text-composer: 12px;              /* composer input text only */
+  --text-composer--line-height: 20px; /* font size + 8px */
+  --text-title: 18px;                 /* page/settings titles (SettingsPageHeader pairing) */
+  --text-title--line-height: 22px;    /* 1.2 × font size */
+  --text-hero: 25px;                  /* home hero heading */
+  --text-hero--line-height: 33px;     /* font size + 8px */
 }
 
 :root {
@@ -47,7 +47,16 @@
   /* Meta text (message timestamps, code-block language labels) tracks the
      chat font size — including runtime text-scale changes — but always sits
      one step below it. */
-  --text-chat-meta: calc(var(--text-chat, 12px) - 2px);
+  --text-chat-meta: calc(var(--text-chat, 10px) - 2px);
+  /* Message body prose (assistant + user transcript bodies) reads at the
+     composer size, so typed text and sent text match. Secondary chrome
+     (tool/action rows, plans, work history) stays on --text-chat. Declared as
+     an alias of --text-composer rather than a separate scale entry so it
+     tracks the composer across every appearance preset with no drift lock to
+     keep in sync. Message surfaces opt in via --prose-text-size (below);
+     everything else falls back to --text-chat. */
+  --text-message: var(--text-composer);
+  --text-message--line-height: var(--text-composer--line-height);
 }
 
 * {
@@ -167,35 +176,201 @@ body {
   animation-delay: var(--shimmer-delay, 0s);
 }
 
+/* Reduced motion: drop the travelling sweep and breathe the block's opacity
+   instead — a calm fade rather than a static grey slab or a moving band. */
+@keyframes skeleton-fade {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton-shimmer::before {
     animation: none;
   }
+  .skeleton-shimmer {
+    animation: skeleton-fade 2s ease-in-out infinite;
+    animation-delay: var(--shimmer-delay, 0s);
+  }
 }
 
-/* ---- Proliferate icon: one-shot resolve animation ---- */
-@keyframes proliferate-resolve {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
+/* ---- Content fade-in ----
+   Shared one-shot entrance for content that replaces a loading state. Opacity
+   only (never transform/size) so it can never contribute to layout shift; the
+   element's resting opacity is 1, so with the animation disabled it stays
+   visible. */
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.animate-resolve-0 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0s forwards; }
-.animate-resolve-1 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.05s forwards; }
-.animate-resolve-2 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.1s forwards; }
-.animate-resolve-3 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.15s forwards; }
-.animate-resolve-4 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.2s forwards; }
-.animate-resolve-5 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.25s forwards; }
-.animate-resolve-6 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.3s forwards; }
-.animate-resolve-7 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.35s forwards; }
-.animate-resolve-8 { opacity: 0; animation: proliferate-resolve 0.25s ease-out 0.4s forwards; }
-
-@keyframes brand-mark-fade-out {
-  0% { opacity: 1; }
-  100% { opacity: 0; }
+.animate-content-fade-in {
+  animation: content-fade-in 150ms ease-out;
 }
 
-.animate-brand-mark-fade-out {
-  animation: brand-mark-fade-out 0.22s ease-out forwards;
+@media (prefers-reduced-motion: reduce) {
+  .animate-content-fade-in {
+    animation: none;
+  }
+}
+
+/* ---- Stream word reveal ----
+   Word-level opacity fade for the live streaming tail. Each word mounts at
+   near-invisible and fades to full over 200ms. Opacity-only: cannot cause
+   layout shift, preserving the anchor invariant (newest content occupies its
+   final position instantly). Starts at 0.05 (not 0) so the bottom-most line
+   never looks empty while animating. */
+@keyframes stream-word-in {
+  from { opacity: 0.05; }
+  to { opacity: 1; }
+}
+
+.stream-word {
+  animation: stream-word-in 0.2s cubic-bezier(0.37, 0.55, 0.86, 0.88) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-word {
+    animation: none;
+  }
+}
+
+/* Thinking indicator — a light left→right gleam, compositor-only.
+   The "agent is working" label sits at a dim muted base; a brighter highlight
+   sweeps across it left→right with a comet-like trailing edge, momentarily
+   lifting the passing slice to full foreground — a light gleam, never a dark
+   band. A masked band window (.thinking-text-band) translates across while its
+   glyph copy inside counter-translates in lockstep, so the bright copy stays
+   glyph-aligned; both transforms run on the compositor and the soft-edge mask
+   is static, so there is no per-frame paint to jitter and no layout to bump.
+   The gleam color is --color-foreground, so it reads as "brighten to full" in
+   either theme (light on dark, dark on light). 1.8s duration + ease-in-out
+   keeps it alive without feeling frantic. Reduced motion renders a static
+   muted label. */
+@keyframes thinking-band-sweep {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(125%);
+  }
+}
+
+@keyframes thinking-band-glyphs-sweep {
+  from {
+    transform: translateX(50%);
+  }
+  to {
+    transform: translateX(-125%);
+  }
+}
+
+.thinking-text {
+  position: relative;
+  /* Dim base so the traveling gleam clearly stands out against it. */
+  color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
+}
+
+.thinking-text-band {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  /* A wider trailing-edge tail so the sweep reads as a comet, not a thin line.
+     The solid core is ~10% wide, but the long fade-out behind it lingers. */
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 2%,
+    black 14%,
+    black 24%,
+    transparent 42%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 2%,
+    black 14%,
+    black 24%,
+    transparent 42%
+  );
+  will-change: transform;
+  animation: thinking-band-sweep var(--thinking-text-duration, 1.8s)
+    var(--thinking-text-easing, cubic-bezier(0.45, 0.05, 0.55, 0.95)) infinite;
+}
+
+.thinking-text-band-glyphs {
+  display: block;
+  /* Same width as the label so the copy lays out (and truncates) identically
+     to the base text beneath it. */
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* The gleam: the passing slice reaches full foreground contrast. */
+  color: var(--color-foreground);
+  will-change: transform;
+  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 1.8s)
+    var(--thinking-text-easing, cubic-bezier(0.45, 0.05, 0.55, 0.95)) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-text {
+    color: var(--color-muted-foreground);
+  }
+
+  .thinking-text-band {
+    display: none;
+  }
+}
+/* ---- end thinking indicator ---- */
+
+/* ---- Brand mark breathe (auth / pre-app loading) ----
+   The living mark is the plain brand icon, quietly alive: a slow opacity
+   breathe while the app resolves, settling to full presence when done.
+   Opacity-only (compositor), no scale — the mark must feel patient, not
+   busy. Reduced motion renders the static icon (no classes applied). */
+@keyframes brand-mark-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-brand-mark-breathe {
+  animation: brand-mark-breathe 2.6s ease-in-out infinite;
+}
+
+/* One-shot settle: eases the mark from mid-breathe back to full opacity
+   when the session check resolves, so stopping the loop never snaps. */
+@keyframes brand-mark-settle {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-brand-mark-settle {
+  animation: brand-mark-settle 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-brand-mark-breathe,
+  .animate-brand-mark-settle {
+    animation: none;
+  }
 }
 
 @keyframes web-sidebar-panel-slide-in {

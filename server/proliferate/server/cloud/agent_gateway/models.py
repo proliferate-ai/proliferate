@@ -91,6 +91,11 @@ class AgentAuthSourceInput(AgentGatewayBaseModel):
 
 class AgentAuthSelectionsPutRequest(AgentGatewayBaseModel):
     sources: list[AgentAuthSourceInput]
+    # Per-harness advanced settings (catalog-declared toggles). Keys are setting
+    # keys from the agent catalog; values are booleans (v1). Null/absent means
+    # "no change to settings". The server validates shape (dict[str, bool]) but
+    # does NOT validate keys against the catalog (runtime-only artifact).
+    settings: dict[str, Any] | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -111,6 +116,7 @@ class AgentAuthStateSource(BaseModel):
 class AgentAuthStateHarness(BaseModel):
     harness_kind: str
     sources: list[AgentAuthStateSource]
+    settings: dict[str, Any] | None = None
 
 
 class AgentAuthStateResponse(BaseModel):
@@ -165,6 +171,20 @@ class AgentGatewayCatalogRefreshRequest(AgentGatewayBaseModel):
     surface: AgentAuthSurface
     route: AgentAuthRoute
     models_json: str | None = Field(default=None, alias="modelsJson")
+
+
+class AgentGatewayCatalogMirrorRequest(AgentGatewayBaseModel):
+    """A runtime's push of its own resolved probe result (contract §4).
+
+    Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
+    AnyHarness today), not the product UI, and ``probed_at`` reflects when the
+    runtime actually probed rather than when this request landed.
+    """
+
+    surface: AgentAuthSurface
+    route: AgentAuthRoute
+    models_json: str = Field(alias="modelsJson")
+    probed_at: str = Field(alias="probedAt")
 
 
 class AgentGatewayCatalogOverrideUpsertRequest(AgentGatewayBaseModel):

@@ -2,6 +2,10 @@
 
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  SupportReportCompleteRequest,
+  SupportReportCreateRequest,
+} from "@proliferate/cloud-sdk/types";
 import { useSupportReportUploadQueue } from "@/hooks/support/lifecycle/use-support-report-upload-queue";
 import type { SupportReportJob } from "@/lib/domain/support/report-types";
 
@@ -323,6 +327,34 @@ describe("useSupportReportUploadQueue", () => {
     );
   });
 
+  it("skips diagnostics and completes directly when logs are excluded and there are no attachments", async () => {
+    renderHook(() => useSupportReportUploadQueue());
+
+    await waitFor(() => {
+      expect(activeListeners()).toHaveLength(1);
+    });
+
+    const job = makeSupportReportJob("job-no-logs", recentIso());
+    job.includeLogs = false;
+    activeListeners()[0]?.handler(job);
+
+    await waitFor(() => {
+      expect(cloudSupportMocks.completeSupportReportUpload).toHaveBeenCalledTimes(1);
+    });
+    // No diagnostics collected, no upload targets requested, complete carries no
+    // diagnostics object.
+    expect(uploadWorkflowMocks.buildSupportReportPackage).not.toHaveBeenCalled();
+    expect(cloudSupportMocks.createSupportReportUploadTargets).not.toHaveBeenCalled();
+    const completeArgs = cloudSupportMocks.completeSupportReportUpload.mock.calls[0] as
+      unknown as [string, SupportReportCompleteRequest];
+    expect(completeArgs[1].diagnostics ?? null).toBeNull();
+
+    // Create request declared diagnostics=false.
+    const createArgs = cloudSupportMocks.createSupportReport.mock.calls[0] as
+      unknown as [SupportReportCreateRequest];
+    expect(createArgs[0].expectedClientUploads?.diagnostics).toBe(false);
+  });
+
   it("cleans up a queued job when create returns an already completed report", async () => {
     cloudSupportMocks.createSupportReport.mockResolvedValueOnce({
       reportId: "report-1",
@@ -353,7 +385,6 @@ describe("useSupportReportUploadQueue", () => {
       expect(cloudSupportMocks.createSupportReport).toHaveBeenCalledTimes(1);
       expect(cloudSupportMocks.createSupportReportUploadTargets).not.toHaveBeenCalled();
       expect(cloudSupportMocks.completeSupportReportUpload).not.toHaveBeenCalled();
-      expect(cloudSupportMocks.ensureSupportReportTracker).toHaveBeenCalledWith("report-1");
     });
   });
 });
@@ -384,7 +415,9 @@ function makeSupportReportJob(
       kind: "app_only",
       workspaceIds: [],
     },
-    publicContentConsent: true,
+    publicContentConsent: false,
+    kind: "bug",
+    creditConsent: false,
     snapshot: {
       openedAt: "2026-05-31T12:00:00.000Z",
       source: "sidebar",

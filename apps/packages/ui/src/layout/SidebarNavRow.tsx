@@ -35,7 +35,7 @@ export function SidebarNavRow({
       className={`min-h-[calc(1lh+0.5rem)] gap-2 px-2 py-1 text-ui leading-5 focus-visible:outline-offset-[-2px] ${className}`}
       {...props}
     >
-      <div className="flex size-[17px] shrink-0 items-center justify-center [&>svg]:size-full [&>svg]:shrink-0">
+      <div className="flex size-4 shrink-0 items-center justify-center text-sidebar-muted-foreground transition-colors group-hover:text-sidebar-foreground group-focus-visible:text-sidebar-foreground group-data-[active=true]:text-sidebar-foreground [&>svg]:size-full [&>svg]:shrink-0">
         {icon}
       </div>
       <div className="flex min-w-0 flex-1 items-center text-ui leading-5 text-current">

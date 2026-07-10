@@ -29,7 +29,7 @@ from proliferate.server.setup.domain.tokens import (
 )
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 
-CLAIM_EMAIL = "owner@acme.test"
+CLAIM_EMAIL = "owner@acme.example.com"
 CLAIM_PASSWORD = "a-strong-enough-password"
 
 
@@ -183,7 +183,11 @@ async def test_setup_routes_close_after_claim(single_org_client, test_engine, tm
     assert (await single_org_client.get("/setup")).status_code == 404
     replay = await single_org_client.post(
         "/setup",
-        data={"email": "second@acme.test", "password": CLAIM_PASSWORD, "setup_token": token},
+        data={
+            "email": "second@acme.example.com",
+            "password": CLAIM_PASSWORD,
+            "setup_token": token,
+        },
     )
     assert replay.status_code == 404
 
@@ -232,7 +236,7 @@ async def test_claim_validates_password(single_org_client, test_engine, tmp_path
 async def test_claim_rejects_oversized_email(single_org_client, test_engine, tmp_path):
     """An email longer than the users column (320) is a 400, not a 500."""
     token = await _seed_setup_token(test_engine, tmp_path)
-    oversized_email = f"{'a' * 320}@acme.test"
+    oversized_email = f"{'a' * 320}@acme.example.com"
     response = await single_org_client.post(
         "/setup",
         data={"email": oversized_email, "password": CLAIM_PASSWORD, "setup_token": token},
@@ -363,11 +367,19 @@ async def test_concurrent_double_claim_yields_exactly_one_owner(
     first, second = await asyncio.gather(
         single_org_client.post(
             "/setup",
-            data={"email": "one@acme.test", "password": CLAIM_PASSWORD, "setup_token": token},
+            data={
+                "email": "one@acme.example.com",
+                "password": CLAIM_PASSWORD,
+                "setup_token": token,
+            },
         ),
         single_org_client.post(
             "/setup",
-            data={"email": "two@acme.test", "password": CLAIM_PASSWORD, "setup_token": token},
+            data={
+                "email": "two@acme.example.com",
+                "password": CLAIM_PASSWORD,
+                "setup_token": token,
+            },
         ),
     )
 

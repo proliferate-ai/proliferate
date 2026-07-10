@@ -5,12 +5,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
-
-const openSupportReportWindow = vi.hoisted(() => vi.fn(async () => {}));
-
-vi.mock("@/lib/access/tauri/support", () => ({
-  openSupportReportWindow,
-}));
+import { useSupportModalStore } from "@/stores/support/support-modal-store";
 
 vi.mock("@/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -141,6 +136,24 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
   }),
 }));
 
+vi.mock("@/hooks/support/workflows/use-open-support-report-window", () => ({
+  useOpenSupportReportWindow: () => ({
+    openBug: vi.fn(() => {
+      useSupportModalStore.getState().openFeedback();
+    }),
+    openFeature: vi.fn(),
+    canSubmit: true,
+    disabledReason: null,
+  }),
+}));
+
+vi.mock("@/hooks/support/facade/use-support-availability", () => ({
+  useSupportAvailability: () => ({
+    canSubmit: true,
+    disabledReason: null,
+  }),
+}));
+
 vi.mock("@/stores/sessions/session-selection-store", () => ({
   useSessionSelectionStore: (selector: (state: { pendingWorkspaceEntry: null }) => unknown) =>
     selector({ pendingWorkspaceEntry: null }),
@@ -252,14 +265,15 @@ function renderMainSidebar() {
   );
 }
 
-describe("MainSidebar support window", () => {
-  it("opens the support report window from Support", async () => {
+describe("MainSidebar support modal", () => {
+  it("opens the feedback modal from Support", async () => {
     renderMainSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: /Support/ }));
 
     await waitFor(() => {
-      expect(openSupportReportWindow).toHaveBeenCalledTimes(1);
+      expect(useSupportModalStore.getState().open).toBe(true);
+      expect(useSupportModalStore.getState().kind).toBe("bug");
     });
   });
 });

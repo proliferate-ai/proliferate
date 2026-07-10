@@ -1,5 +1,6 @@
 pub mod access;
 pub mod agent_auth;
+pub mod agent_gateway_catalog;
 pub mod agents;
 mod agents_contract;
 mod agents_errors;
@@ -15,6 +16,7 @@ mod git_contract;
 mod git_task;
 pub mod goals;
 pub mod health;
+pub mod loops;
 pub mod hosting;
 pub mod mobility;
 mod mobility_archive_contract;

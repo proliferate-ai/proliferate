@@ -162,15 +162,91 @@ fn baseline_counts_as_a_context_when_active() {
 fn visible_models_are_the_default_visible_subset_of_available() {
     let catalog = draft_catalog();
 
-    // claude-opus-4-8 is available under oauth (trial-proven) but not
-    // defaultVisible: in models(), out of visible_models(). Fable 5 is the
-    // counter-case — trial-proven AND curation-advertised.
+    // claude-fable-5 and claude-opus-4-8 are oauth/api-only (the us.anthropic.*
+    // Bedrock variants are unavailable here), so they are NOT gateway duplicates
+    // and stay visible on native/api — an OAuth login serves them and this is
+    // the only form it can use.
     let available = model_ids(catalog.models("claude", &contexts(&["anthropic-oauth"])));
     assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
         model_ids(catalog.visible_models("claude", &contexts(&["anthropic-oauth"]))),
-        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5"]
+        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5", "claude-opus-4-8"]
     );
+}
+
+#[test]
+fn bedrock_account_gates_bare_ids_and_shows_only_region_prefixed_models() {
+    // A Bedrock-routed account (CLAUDE_CODE_USE_BEDROCK=1) classifies as
+    // `bedrock`. Bedrock serves only us.anthropic.* inference-profile ids, so
+    // the bare current-gen ids must be gated (the account 400s on them) and
+    // the menu must be the us.anthropic.* rows.
+    let catalog = draft_catalog();
+
+    for bare in ["default", "haiku", "opus", "sonnet", "claude-opus-4-8"] {
+        let gated = catalog
+            .validate_launch("claude", &contexts(&["bedrock"]), Some(bare), None)
+            .unwrap_err();
+        assert!(
+            matches!(gated, SelectionUnsupported::ModelGated { .. }),
+            "bare id {bare:?} must be gated under bedrock, got {gated:?}"
+        );
+    }
+
+    // A us.anthropic.* id launches on the same account.
+    let ok = catalog
+        .validate_launch(
+            "claude",
+            &contexts(&["bedrock"]),
+            Some("us.anthropic.claude-opus-4-8"),
+            None,
+        )
+        .expect("region-prefixed id is available under bedrock");
+    assert_eq!(ok.model_id.as_deref(), Some("us.anthropic.claude-opus-4-8"));
+
+    // The menu carries only region-prefixed rows — never a bare id.
+    let menu = model_ids(catalog.visible_models("claude", &contexts(&["bedrock"])));
+    assert!(!menu.is_empty());
+    for id in &menu {
+        assert!(
+            id.contains(".anthropic."),
+            "bedrock menu must be region-prefixed only, saw bare id {id:?}"
+        );
+    }
+
+    // No requested model resolves to the curated bedrock default, not a bare id.
+    let default = catalog
+        .validate_launch("claude", &contexts(&["bedrock"]), None, None)
+        .expect("bedrock default resolves");
+    assert_eq!(
+        default.model_id.as_deref(),
+        Some("us.anthropic.claude-sonnet-4-6")
+    );
+}
+
+#[test]
+fn oauth_account_keeps_bare_ids_unchanged() {
+    // The #975 guarantee: a normal claude.ai OAuth login (no bedrock context)
+    // still sees and launches the bare current-gen ids — the only form it can
+    // use, since the us.anthropic.* rows are Bedrock-gated for it.
+    let catalog = draft_catalog();
+
+    for bare in ["default", "haiku", "opus", "sonnet", "claude-opus-4-8"] {
+        let ok = catalog
+            .validate_launch("claude", &contexts(&["anthropic-oauth"]), Some(bare), None)
+            .unwrap_or_else(|error| panic!("bare id {bare:?} must launch under oauth: {error:?}"));
+        assert_eq!(ok.model_id.as_deref(), Some(bare));
+    }
+
+    // A us.anthropic.* id is gated for a first-party OAuth login.
+    let gated = catalog
+        .validate_launch(
+            "claude",
+            &contexts(&["anthropic-oauth"]),
+            Some("us.anthropic.claude-opus-4-8"),
+            None,
+        )
+        .unwrap_err();
+    assert!(matches!(gated, SelectionUnsupported::ModelGated { .. }));
 }
 
 #[test]

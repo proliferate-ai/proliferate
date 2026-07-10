@@ -16,6 +16,11 @@ from pydantic.alias_generators import to_camel
 AuthKind = Literal["oauth2", "api_key", "none"]
 Surface = Literal["desktop", "web"]
 
+# How the auth kind of an org-custom definition was determined at creation:
+# probe found an OAuth challenge ("detected"), probe found none ("none"),
+# probe timed out ("unreachable"), or the admin chose explicitly ("forced").
+AuthDetection = Literal["detected", "none", "unreachable", "forced"]
+
 
 class _CamelModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
@@ -148,12 +153,14 @@ class AdminIntegrationDefinitionResponse(_CamelModel):
     # Per-tool restriction shares the same column but has no settings-UI control
     # yet — this coarse in/out toggle is the phase-3 surface.
     default_chat_included: bool = True
+    auth_detection: AuthDetection | None = None
 
 
 class CreateAdminIntegrationDefinitionRequest(_CamelModel):
     display_name: str
     namespace: str
     mcp_url: str
+    auth_kind: Literal["auto", "none", "oauth2"] = "auto"
 
 
 class SetIntegrationEnabledRequest(_CamelModel):

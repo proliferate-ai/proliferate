@@ -18,7 +18,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Users:Update Current User */
+        patch: operations["users_update_current_user_users_me_patch"];
         trace?: never;
     };
     "/auth/desktop/methods": {
@@ -1405,6 +1406,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/agent-gateway/catalog/{harness_kind}/mirror": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mirror Agent Catalog Endpoint
+         * @description Store the caller's own runtime-probed catalog as a read-model snapshot.
+         *
+         *     Distinct from ``.../refresh``: the runtime already did the probing (a
+         *     harness/gateway reachability check, possibly server-side via LiteLLM) and
+         *     is pushing the result here fire-and-forget, so this endpoint never talks
+         *     to an upstream itself.
+         */
+        post: operations["mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/agent-gateway/catalog/{harness_kind}/override": {
         parameters: {
             query?: never;
@@ -1934,6 +1960,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/workers/desktop/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Desktop Worker Endpoint */
+        post: operations["revoke_desktop_worker_endpoint_v1_cloud_workers_desktop_revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/worker/enroll": {
         parameters: {
             query?: never;
@@ -1962,6 +2005,54 @@ export interface paths {
         put?: never;
         /** Worker Heartbeat Endpoint */
         post: operations["worker_heartbeat_endpoint_v1_cloud_worker_heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/worker/download/{target}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Worker Artifact Download Endpoint
+         * @description 302 to the pinned worker binary (or its ``.sha256``) on the downloads CDN.
+         *
+         *     Unauthenticated by design, like the desktop updater redirect: install
+         *     scripts fetch the binary before any worker identity exists, and the CDN
+         *     artifacts are public.
+         */
+        get: operations["worker_artifact_download_endpoint_v1_cloud_worker_download__target___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/runtime/download/{target}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Artifact Download Endpoint
+         * @description 302 to the pinned AnyHarness binary (or its ``.sha256``) on the downloads CDN.
+         *
+         *     Unauthenticated by design, like the worker artifact redirect: the sandbox
+         *     worker fetches the runtime binary over a public CDN URL behind this 302, so
+         *     the sandbox never needs GitHub egress or credentials.
+         */
+        get: operations["runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2312,6 +2403,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/support/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Support Message Endpoint */
+        post: operations["send_support_message_endpoint_v1_support_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/report-uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Upload Endpoint */
+        post: operations["create_support_report_upload_endpoint_v1_support_report_uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Endpoint */
+        post: operations["create_support_report_endpoint_v1_support_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports/{report_id}/upload-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Support Report Upload Targets Endpoint */
+        post: operations["create_support_report_upload_targets_endpoint_v1_support_reports__report_id__upload_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/support/reports/{report_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Support Report Upload Endpoint */
+        post: operations["complete_support_report_upload_endpoint_v1_support_reports__report_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing/team-checkout": {
         parameters: {
             query?: never;
@@ -2406,6 +2582,57 @@ export interface paths {
         };
         /** Get Overview */
         get: operations["get_overview_v1_billing_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/usage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Usage Summary Endpoint */
+        get: operations["get_usage_summary_endpoint_v1_billing_usage_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/usage/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Usage Timeseries Endpoint */
+        get: operations["get_usage_timeseries_endpoint_v1_billing_usage_timeseries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/llm-balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Llm Balance Endpoint */
+        get: operations["get_llm_balance_endpoint_v1_billing_llm_balance_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2776,6 +3003,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/organizations/{organization_id}/usage/by-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Usage By User Endpoint */
+        get: operations["get_usage_by_user_endpoint_v1_organizations__organization_id__usage_by_user_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/usage/users/{user_id}/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get User Usage Timeseries Endpoint */
+        get: operations["get_user_usage_timeseries_endpoint_v1_organizations__organization_id__usage_users__user_id__timeseries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/organizations/{organization_id}/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Limits Endpoint */
+        get: operations["get_limits_endpoint_v1_organizations__organization_id__limits_get"];
+        /** Put Limits Endpoint */
+        put: operations["put_limits_endpoint_v1_organizations__organization_id__limits_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/dev/desktop-handoff": {
         parameters: {
             query?: never;
@@ -2871,6 +3150,8 @@ export interface components {
              * @default true
              */
             defaultChatIncluded: boolean;
+            /** Authdetection */
+            authDetection?: ("detected" | "none" | "unreachable" | "forced") | null;
         };
         /** AgentApiKeyCreateRequest */
         AgentApiKeyCreateRequest: {
@@ -2927,6 +3208,10 @@ export interface components {
         AgentAuthSelectionsPutRequest: {
             /** Sources */
             sources: components["schemas"]["AgentAuthSourceInput"][];
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthSourceInput
@@ -2956,6 +3241,10 @@ export interface components {
             harness_kind: string;
             /** Sources */
             sources: components["schemas"]["AgentAuthStateSource"][];
+            /** Settings */
+            settings?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * AgentAuthStateResponse
@@ -3267,6 +3556,30 @@ export interface components {
             publicBaseUrl: string | null;
             /** Enrollmentstatus */
             enrollmentStatus: string;
+        };
+        /**
+         * AgentGatewayCatalogMirrorRequest
+         * @description A runtime's push of its own resolved probe result (contract §4).
+         *
+         *     Unlike ``.../refresh``, the caller is a signed-in client runtime (desktop
+         *     AnyHarness today), not the product UI, and ``probed_at`` reflects when the
+         *     runtime actually probed rather than when this request landed.
+         */
+        AgentGatewayCatalogMirrorRequest: {
+            /**
+             * Surface
+             * @enum {string}
+             */
+            surface: "local" | "cloud";
+            /**
+             * Route
+             * @enum {string}
+             */
+            route: "native" | "api_key" | "gateway";
+            /** Modelsjson */
+            modelsJson: string;
+            /** Probedat */
+            probedAt: string;
         };
         /** AgentGatewayCatalogOverrideResponse */
         AgentGatewayCatalogOverrideResponse: {
@@ -3846,6 +4159,76 @@ export interface components {
             /** File */
             file: string;
         };
+        /** BudgetLimit */
+        BudgetLimit: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Userid */
+            userId: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compute" | "llm";
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "day" | "month";
+            /** Capvalue */
+            capValue: number;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /** BudgetLimitInput */
+        BudgetLimitInput: {
+            /** Userid */
+            userId?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "compute" | "llm";
+            /**
+             * Window
+             * @enum {string}
+             */
+            window: "day" | "month";
+            /** Capvalue */
+            capValue: number;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /**
+         * BudgetLimitWindowUsage
+         * @description The tightest applicable enabled limit for a user/kind, with this window's usage (§3.1).
+         */
+        BudgetLimitWindowUsage: {
+            /** Window */
+            window: string;
+            /** Capvalue */
+            capValue: number;
+            /** Usedvalue */
+            usedValue: number;
+            /** Blocked */
+            blocked: boolean;
+        };
+        /** BudgetLimitsResponse */
+        BudgetLimitsResponse: {
+            /** Limits */
+            limits: components["schemas"]["BudgetLimit"][];
+        };
         /** ClientDailyActivityRequest */
         ClientDailyActivityRequest: {
             /**
@@ -4118,6 +4501,12 @@ export interface components {
             namespace: string;
             /** Mcpurl */
             mcpUrl: string;
+            /**
+             * Authkind
+             * @default auto
+             * @enum {string}
+             */
+            authKind: "auto" | "none" | "oauth2";
         };
         /** CreateCloudWorkspaceRequest */
         CreateCloudWorkspaceRequest: {
@@ -4176,6 +4565,8 @@ export interface components {
         DesktopWorkerEnrollmentRequest: {
             /** Desktopinstallid */
             desktopInstallId: string;
+            /** Organizationid */
+            organizationId?: string | null;
         };
         /** DesktopWorkerEnrollmentResponse */
         DesktopWorkerEnrollmentResponse: {
@@ -4186,6 +4577,16 @@ export interface components {
              * Format: date-time
              */
             expiresAt: string;
+        };
+        /** DesktopWorkerRevokeRequest */
+        DesktopWorkerRevokeRequest: {
+            /** Desktopinstallid */
+            desktopInstallId: string;
+        };
+        /** DesktopWorkerRevokeResponse */
+        DesktopWorkerRevokeResponse: {
+            /** Revoked */
+            revoked: boolean;
         };
         /** DevDesktopHandoffPollResponse */
         DevDesktopHandoffPollResponse: {
@@ -4530,6 +4931,15 @@ export interface components {
             /** Finalsurface */
             finalSurface: string;
         };
+        /** LlmBalance */
+        LlmBalance: {
+            /** Grantedusd */
+            grantedUsd: number;
+            /** Usedusd */
+            usedUsd: number;
+            /** Remainingusd */
+            remainingUsd: number;
+        };
         /**
          * LocalWorkflowClaimActionRequest
          * @description A per-run action (heartbeat) proving which claim the executor holds.
@@ -4582,6 +4992,8 @@ export interface components {
             desktopVersion: string;
             /** Runtimeversion */
             runtimeVersion: string;
+            /** Workerversion */
+            workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
         };
@@ -4642,6 +5054,36 @@ export interface components {
         OrgAgentPolicyViolationListResponse: {
             /** Violations */
             violations: components["schemas"]["OrgAgentPolicyViolation"][];
+        };
+        /** OrgUsageByUserResponse */
+        OrgUsageByUserResponse: {
+            /** Users */
+            users: components["schemas"]["OrgUserUsageRow"][];
+        };
+        /** OrgUserUsageRow */
+        OrgUserUsageRow: {
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+            /** Displayname */
+            displayName: string | null;
+            /** Email */
+            email: string;
+            /** Computeseconds */
+            computeSeconds: number;
+            /** Llmcostusd */
+            llmCostUsd: number;
+            /** Computelimitcapseconds */
+            computeLimitCapSeconds: number | null;
+            /** Llmlimitcapusd */
+            llmLimitCapUsd: number | null;
+        };
+        /** OrgUserUsageTimeseriesResponse */
+        OrgUserUsageTimeseriesResponse: {
+            /** Buckets */
+            buckets: components["schemas"]["UsageTimeseriesBucket"][];
         };
         /** OrganizationInvitationAcceptRequest */
         OrganizationInvitationAcceptRequest: {
@@ -5196,6 +5638,25 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * ProfileUpdateRequest
+         * @description Editable fields on the authenticated user's own profile.
+         *
+         *     ``outreach_email`` is an optional override address for support/outreach
+         *     follow-up. Sending ``null`` or an empty/whitespace string clears it (falls
+         *     back to the account email); any other value must look like an email.
+         *     Unknown fields are rejected (422) so credential fields like ``password``
+         *     can never ride through this endpoint.
+         */
+        ProfileUpdateRequest: {
+            /** Outreach Email */
+            outreach_email?: string | null;
+        };
+        /** PutBudgetLimitsRequest */
+        PutBudgetLimitsRequest: {
+            /** Limits */
+            limits: components["schemas"]["BudgetLimitInput"][];
+        };
         /** PutCloudSecretEnvVarRequest */
         PutCloudSecretEnvVarRequest: {
             /** Value */
@@ -5559,6 +6020,323 @@ export interface components {
             /** Livemode */
             livemode?: boolean | null;
         };
+        /** SupportMessageContext */
+        SupportMessageContext: {
+            /**
+             * Source
+             * @default sidebar
+             * @enum {string}
+             */
+            source: "sidebar" | "home" | "settings" | "cloud_gated";
+            /**
+             * Intent
+             * @default general
+             * @enum {string}
+             */
+            intent: "general" | "unlimited_cloud" | "team_features";
+            /** Pathname */
+            pathname?: string | null;
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Workspacename */
+            workspaceName?: string | null;
+            /** Workspacelocation */
+            workspaceLocation?: ("local" | "cloud") | null;
+        };
+        /** SupportMessageRequest */
+        SupportMessageRequest: {
+            /** Message */
+            message: string;
+            context?: components["schemas"]["SupportMessageContext"] | null;
+        };
+        /** SupportMessageResponse */
+        SupportMessageResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+        };
+        /** SupportReportAttachmentUploadTarget */
+        SupportReportAttachmentUploadTarget: {
+            /** Objectkey */
+            objectKey: string;
+            /** Puturl */
+            putUrl: string;
+            /** Contenttype */
+            contentType: string;
+            /** Maxsizebytes */
+            maxSizeBytes: number;
+            /** Expiresinseconds */
+            expiresInSeconds: number;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+            /** Clientfileid */
+            clientFileId: string;
+        };
+        /** SupportReportCompleteRequest */
+        SupportReportCompleteRequest: {
+            diagnostics?: components["schemas"]["SupportReportCompletedObject"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportCompletedObject"][];
+            /** Packagemanifest */
+            packageManifest?: {
+                [key: string]: unknown;
+            };
+        };
+        /** SupportReportCompleteResponse */
+        SupportReportCompleteResponse: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Reportid */
+            reportId: string;
+        };
+        /** SupportReportCompletedObject */
+        SupportReportCompletedObject: {
+            /** Objectkey */
+            objectKey: string;
+            /** Sha256 */
+            sha256: string;
+            /** Sizebytes */
+            sizeBytes: number;
+        };
+        /** SupportReportCreateRequest */
+        SupportReportCreateRequest: {
+            /** Clientjobid */
+            clientJobId: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Sourcesurface
+             * @default desktop
+             * @enum {string}
+             */
+            sourceSurface: "desktop" | "web" | "mobile" | "cloud_api";
+            context?: components["schemas"]["SupportMessageContext"] | null;
+            scope: components["schemas"]["SupportReportWorkspaceScope"];
+            /** Workspacerefs */
+            workspaceRefs?: components["schemas"]["SupportReportWorkspaceReference"][];
+            telemetryRefs?: components["schemas"]["SupportReportTelemetryReferences"] | null;
+            expectedClientUploads?: components["schemas"]["SupportReportExpectedClientUploads"];
+            /** Publiccontentconsent */
+            publicContentConsent?: boolean | null;
+            /**
+             * Kind
+             * @default bug
+             * @enum {string}
+             */
+            kind: "bug" | "feature";
+            /**
+             * Creditconsent
+             * @default false
+             */
+            creditConsent: boolean;
+            /** Creditname */
+            creditName?: string | null;
+            /**
+             * Urgent
+             * @default false
+             */
+            urgent: boolean;
+            /**
+             * Notifyme
+             * @default false
+             */
+            notifyMe: boolean;
+        };
+        /** SupportReportCreateResponse */
+        SupportReportCreateResponse: {
+            /** Reportid */
+            reportId: string;
+            /** Clientjobid */
+            clientJobId: string;
+            /** Status */
+            status: string;
+            serverCorrelation: components["schemas"]["SupportReportServerCorrelation"];
+            /** Clouddiagnosticsstatus */
+            cloudDiagnosticsStatus: string;
+        };
+        /** SupportReportDiagnosticsUpload */
+        SupportReportDiagnosticsUpload: {
+            /**
+             * Contenttype
+             * @default application/json
+             */
+            contentType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** SupportReportExpectedClientUploads */
+        SupportReportExpectedClientUploads: {
+            /**
+             * Diagnostics
+             * @default true
+             */
+            diagnostics: boolean;
+            /**
+             * Attachmentcount
+             * @default 0
+             */
+            attachmentCount: number;
+        };
+        /** SupportReportServerCorrelation */
+        SupportReportServerCorrelation: {
+            /** Reportid */
+            reportId: string;
+            /** Requestid */
+            requestId?: string | null;
+            /** Owneruserid */
+            ownerUserId: string;
+            /** Primaryorganizationid */
+            primaryOrganizationId?: string | null;
+            /** Primarytenantid */
+            primaryTenantId: string;
+            /** Tenantids */
+            tenantIds?: string[];
+            /** Cloudworkspaceids */
+            cloudWorkspaceIds?: string[];
+            /** Cloudtargetids */
+            cloudTargetIds?: string[];
+            /** Anyharnessworkspaceids */
+            anyharnessWorkspaceIds?: string[];
+            /** Sessionids */
+            sessionIds?: string[];
+        };
+        /** SupportReportTelemetryReferences */
+        SupportReportTelemetryReferences: {
+            /** Posthogdistinctid */
+            posthogDistinctId?: string | null;
+            /** Posthogsessionid */
+            posthogSessionId?: string | null;
+            /** Sentryeventids */
+            sentryEventIds?: string[];
+        };
+        /** SupportReportUploadFile */
+        SupportReportUploadFile: {
+            /** Clientfileid */
+            clientFileId: string;
+            /** Filename */
+            fileName: string;
+            /**
+             * Contenttype
+             * @default application/octet-stream
+             */
+            contentType: string;
+            /** Sizebytes */
+            sizeBytes: number;
+            /** Sha256 */
+            sha256: string;
+        };
+        /** SupportReportUploadRequest */
+        SupportReportUploadRequest: {
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            context?: components["schemas"]["SupportMessageContext"] | null;
+            scope: components["schemas"]["SupportReportWorkspaceScope"];
+            diagnostics?: components["schemas"]["SupportReportDiagnosticsUpload"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportUploadFile"][];
+            /** Publiccontentconsent */
+            publicContentConsent?: boolean | null;
+            /**
+             * Kind
+             * @default bug
+             * @enum {string}
+             */
+            kind: "bug" | "feature";
+            /**
+             * Creditconsent
+             * @default false
+             */
+            creditConsent: boolean;
+            /** Creditname */
+            creditName?: string | null;
+        };
+        /** SupportReportUploadResponse */
+        SupportReportUploadResponse: {
+            /** Reportid */
+            reportId: string;
+            diagnostics?: components["schemas"]["SupportReportUploadTarget"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportAttachmentUploadTarget"][];
+        };
+        /** SupportReportUploadTarget */
+        SupportReportUploadTarget: {
+            /** Objectkey */
+            objectKey: string;
+            /** Puturl */
+            putUrl: string;
+            /** Contenttype */
+            contentType: string;
+            /** Maxsizebytes */
+            maxSizeBytes: number;
+            /** Expiresinseconds */
+            expiresInSeconds: number;
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            };
+        };
+        /** SupportReportUploadTargetsRequest */
+        SupportReportUploadTargetsRequest: {
+            diagnostics?: components["schemas"]["SupportReportDiagnosticsUpload"] | null;
+            /** Attachments */
+            attachments?: components["schemas"]["SupportReportUploadFile"][];
+        };
+        /** SupportReportWorkspaceReference */
+        SupportReportWorkspaceReference: {
+            /** Id */
+            id: string;
+            /**
+             * Location
+             * @enum {string}
+             */
+            location: "local" | "cloud";
+            /** Cloudworkspaceid */
+            cloudWorkspaceId?: string | null;
+            /** Cloudtargetid */
+            cloudTargetId?: string | null;
+            /** Sandboxprofileid */
+            sandboxProfileId?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Exposureid */
+            exposureId?: string | null;
+            /** Materializationid */
+            materializationId?: string | null;
+            /** Sessionids */
+            sessionIds?: string[];
+            /** Status */
+            status?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+            /** Sandboxtype */
+            sandboxType?: string | null;
+        };
+        /** SupportReportWorkspaceScope */
+        SupportReportWorkspaceScope: {
+            /**
+             * Kind
+             * @default most_recent_workspace
+             * @enum {string}
+             */
+            kind: "most_recent_workspace" | "choose_workspace" | "app_only";
+            /** Workspaceids */
+            workspaceIds?: string[];
+        };
         /** TeamCheckoutIntentResponse */
         TeamCheckoutIntentResponse: {
             /** Id */
@@ -5727,6 +6505,38 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** UsageSummary */
+        UsageSummary: {
+            /** Computeusedsecondsmtd */
+            computeUsedSecondsMtd: number;
+            /** Computeremainingseconds */
+            computeRemainingSeconds: number | null;
+            /** Llmusedusdmtd */
+            llmUsedUsdMtd: number;
+            /** Llmremainingusd */
+            llmRemainingUsd: number;
+            computeLimit: components["schemas"]["BudgetLimitWindowUsage"] | null;
+            llmLimit: components["schemas"]["BudgetLimitWindowUsage"] | null;
+            /** Canselfservetopup */
+            canSelfServeTopUp: boolean;
+        };
+        /** UsageTimeseries */
+        UsageTimeseries: {
+            /** Buckets */
+            buckets: components["schemas"]["UsageTimeseriesBucket"][];
+        };
+        /** UsageTimeseriesBucket */
+        UsageTimeseriesBucket: {
+            /**
+             * Bucketstart
+             * Format: date-time
+             */
+            bucketStart: string;
+            /** Computeseconds */
+            computeSeconds: number;
+            /** Llmcostusd */
+            llmCostUsd: number;
+        };
         /** UserRead */
         UserRead: {
             /**
@@ -5734,10 +6544,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Email
-             * Format: email
-             */
+            /** Email */
             email: string;
             /**
              * Is Active
@@ -5760,6 +6567,8 @@ export interface components {
             github_login?: string | null;
             /** Avatar Url */
             avatar_url?: string | null;
+            /** Outreach Email */
+            outreach_email?: string | null;
             /** @default user */
             role: components["schemas"]["UserRole"];
         };
@@ -5780,6 +6589,18 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * WorkerDesiredVersions
+         * @description The component versions this server pins; workers converge onto these.
+         */
+        WorkerDesiredVersions: {
+            /** Worker */
+            worker?: string | null;
+            /** Anyharness */
+            anyharness?: string | null;
+            /** Catalogversion */
+            catalogVersion?: string | null;
         };
         /** WorkerEnrollRequest */
         WorkerEnrollRequest: {
@@ -5808,6 +6629,10 @@ export interface components {
         WorkerHeartbeatRequest: {
             /** Status */
             status?: string | null;
+            /** Workerversion */
+            workerVersion?: string | null;
+            /** Anyharnessversion */
+            anyharnessVersion?: string | null;
         };
         /** WorkerHeartbeatResponse */
         WorkerHeartbeatResponse: {
@@ -5820,6 +6645,7 @@ export interface components {
             serverTime: string;
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
+            desiredVersions: components["schemas"]["WorkerDesiredVersions"];
         };
         /** WorkflowCreateRequest */
         WorkflowCreateRequest: {
@@ -6433,6 +7259,44 @@ export interface operations {
             };
         };
     };
+    users_update_current_user_users_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Missing token or inactive user. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description outreach_email is not a valid email address. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     desktop_auth_methods_auth_desktop_methods_get: {
         parameters: {
             query?: never;
@@ -6726,6 +7590,7 @@ export interface operations {
                 email?: string | null;
                 organizationId?: string | null;
                 connectionId?: string | null;
+                slug?: string | null;
             };
             header?: never;
             path?: never;
@@ -9213,6 +10078,41 @@ export interface operations {
             };
         };
     };
+    mirror_agent_catalog_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__mirror_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                harness_kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentGatewayCatalogMirrorRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentGatewayCatalogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upsert_agent_catalog_override_endpoint_v1_cloud_agent_gateway_catalog__harness_kind__override_put: {
         parameters: {
             query?: never;
@@ -10481,6 +11381,39 @@ export interface operations {
             };
         };
     };
+    revoke_desktop_worker_endpoint_v1_cloud_workers_desktop_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesktopWorkerRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesktopWorkerRevokeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     enroll_worker_endpoint_v1_cloud_worker_enroll_post: {
         parameters: {
             query?: never;
@@ -10534,6 +11467,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkerHeartbeatResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    worker_artifact_download_endpoint_v1_cloud_worker_download__target___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -11312,6 +12309,175 @@ export interface operations {
             };
         };
     };
+    send_support_message_endpoint_v1_support_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportMessageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_upload_endpoint_v1_support_report_uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportUploadRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_endpoint_v1_support_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_support_report_upload_targets_endpoint_v1_support_reports__report_id__upload_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportUploadTargetsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportUploadResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_support_report_upload_endpoint_v1_support_reports__report_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportReportCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReportCompleteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_team_checkout_v1_billing_team_checkout_post: {
         parameters: {
             query?: never;
@@ -11477,6 +12643,120 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingOverview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_usage_summary_endpoint_v1_billing_usage_summary_get: {
+        parameters: {
+            query?: {
+                ownerScope?: ("personal" | "organization") | null;
+                organizationId?: string | null;
+            };
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_usage_timeseries_endpoint_v1_billing_usage_timeseries_get: {
+        parameters: {
+            query?: {
+                granularity?: "day" | "week" | "month";
+                days?: number;
+                kind?: "compute" | "llm" | "all";
+                ownerScope?: ("personal" | "organization") | null;
+                organizationId?: string | null;
+            };
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageTimeseries"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_llm_balance_endpoint_v1_billing_llm_balance_get: {
+        parameters: {
+            query?: {
+                ownerScope?: ("personal" | "organization") | null;
+                organizationId?: string | null;
+            };
+            header?: {
+                "X-Proliferate-Owner-Scope"?: ("personal" | "organization") | null;
+                "X-Proliferate-Org-Id"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                proliferate_org_id?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmBalance"];
                 };
             };
             /** @description Validation Error */
@@ -12300,6 +13580,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationSsoConnectionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_usage_by_user_endpoint_v1_organizations__organization_id__usage_by_user_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgUsageByUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_user_usage_timeseries_endpoint_v1_organizations__organization_id__usage_users__user_id__timeseries_get: {
+        parameters: {
+            query?: {
+                granularity?: "day" | "week" | "month";
+                days?: number;
+                kind?: "compute" | "llm" | "all";
+            };
+            header?: never;
+            path: {
+                user_id: string;
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgUserUsageTimeseriesResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_limits_endpoint_v1_organizations__organization_id__limits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetLimitsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_limits_endpoint_v1_organizations__organization_id__limits_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutBudgetLimitsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetLimitsResponse"];
                 };
             };
             /** @description Validation Error */

@@ -10,7 +10,7 @@ mod util;
 
 use std::path::Path;
 
-pub use facts::{collect_facts, fact_kinds, CredentialFact};
+pub use facts::{collect_facts, fact_kinds, route_kinds, CredentialFact};
 pub use types::{
     ConfigMarkerKind, LocalAuthSource, LocalAuthState, PortableAuthExport, PortableAuthFile,
     PortableRelativePath, ProviderId,

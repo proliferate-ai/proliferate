@@ -186,6 +186,17 @@ export function MessageSquare({ className, ...props }: IconProps) {
   );
 }
 
+/** Speech-square with a centered plus — "start a new thread" affordance. */
+export function MessageSquarePlus({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <path d="M9 10h6" />
+      <path d="M12 7v6" />
+    </svg>
+  );
+}
+
 export function StickyNote({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -247,6 +258,16 @@ export function BotMessageSquare({ className, ...props }: IconProps) {
       <path d="M9 13h.01" />
       <path d="M15 13h.01" />
       <path d="M10 16h4" />
+    </svg>
+  );
+}
+
+export function Target({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
     </svg>
   );
 }

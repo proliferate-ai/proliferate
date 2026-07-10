@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+mod anyharness_update;
 mod connection;
 mod identity;
 mod migrations;

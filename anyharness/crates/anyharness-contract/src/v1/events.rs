@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::activity::{ActivityProcess, ActivitySubagent};
 use super::goals::Goal;
 use super::interactions::{InteractionRequestedEvent, InteractionResolvedEvent};
+use super::loops::Loop;
 use super::SessionLiveConfigSnapshot;
 
 // ---------------------------------------------------------------------------
@@ -59,6 +61,17 @@ pub enum SessionEvent {
     GoalUpdated(GoalUpdatedPayload),
     GoalMet(GoalMetPayload),
     GoalCleared(GoalClearedPayload),
+    LoopUpserted(LoopUpsertedPayload),
+    LoopRemoved(LoopRemovedPayload),
+    LoopFired(LoopFiredPayload),
+    // Renamed off the default snake_case of the variant name so the `"type"`
+    // tag matches the wire's tagged-chunk `transcriptEvent` vocabulary
+    // (`NON_TRANSCRIPT_CHUNK_EVENTS`) verbatim — same string as
+    // `event_type()` below.
+    #[serde(rename = "process_upserted")]
+    ActivityProcessUpserted(ActivityProcessUpsertedPayload),
+    #[serde(rename = "subagent_upserted")]
+    ActivitySubagentUpserted(ActivitySubagentUpsertedPayload),
 
     PendingPromptAdded(PendingPromptAddedPayload),
     PendingPromptUpdated(PendingPromptUpdatedPayload),
@@ -93,6 +106,11 @@ impl SessionEvent {
             Self::GoalUpdated(_) => "goal_updated",
             Self::GoalMet(_) => "goal_met",
             Self::GoalCleared(_) => "goal_cleared",
+            Self::LoopUpserted(_) => "loop_upserted",
+            Self::LoopRemoved(_) => "loop_removed",
+            Self::LoopFired(_) => "loop_fired",
+            Self::ActivityProcessUpserted(_) => "process_upserted",
+            Self::ActivitySubagentUpserted(_) => "subagent_upserted",
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
             Self::PendingPromptRemoved(_) => "pending_prompt_removed",
@@ -723,6 +741,41 @@ pub struct GoalClearedPayload {
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+pub struct LoopUpsertedPayload {
+    #[serde(rename = "loop")]
+    pub r#loop: Loop,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LoopRemovedPayload {
+    pub loop_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LoopFiredPayload {
+    #[serde(rename = "loop")]
+    pub r#loop: Loop,
+    pub fired_at_ms: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityProcessUpsertedPayload {
+    pub process: ActivityProcess,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivitySubagentUpsertedPayload {
+    pub agent: ActivitySubagent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UsageUpdatePayload {
     pub used: u64,
     pub size: u64,
@@ -797,6 +850,11 @@ pub enum ErrorEventDetails {
         limit: u64,
         unit: String,
         fallback_model_id: String,
+    },
+    #[serde(rename_all = "camelCase")]
+    NetworkConnection {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
     },
 }
 
@@ -984,5 +1042,102 @@ mod tests {
             payload.status,
             super::super::reviews::ReviewRunStatus::ParentRevising
         );
+    }
+
+    fn sample_loop() -> super::super::loops::Loop {
+        use super::super::loops::{Loop, LoopSchedule, LoopScheduleKind, LoopStatus};
+        Loop {
+            loop_id: "cron-1".to_string(),
+            prompt: "ping".to_string(),
+            schedule: LoopSchedule {
+                kind: LoopScheduleKind::Cron,
+                expr: "*/1 * * * *".to_string(),
+            },
+            recurring: true,
+            status: LoopStatus::Active,
+            native: true,
+            last_fired_at_ms: None,
+            fire_count: 0,
+            updated_at_ms: 1,
+        }
+    }
+
+    #[test]
+    fn loop_upserted_event_round_trips_with_loop_tag() {
+        let event = SessionEvent::LoopUpserted(LoopUpsertedPayload {
+            r#loop: sample_loop(),
+        });
+        let json = serde_json::to_value(&event).expect("serialize loop upserted event");
+        assert_eq!(json["type"], "loop_upserted");
+        assert_eq!(json["loop"]["loopId"], "cron-1");
+
+        let round_tripped: SessionEvent =
+            serde_json::from_value(json).expect("deserialize loop upserted event");
+        assert_eq!(round_tripped.event_type(), "loop_upserted");
+    }
+
+    #[test]
+    fn loop_removed_and_fired_events_round_trip() {
+        let removed = SessionEvent::LoopRemoved(LoopRemovedPayload {
+            loop_id: "cron-1".to_string(),
+        });
+        assert_eq!(removed.event_type(), "loop_removed");
+        let json = serde_json::to_value(&removed).expect("serialize loop removed event");
+        assert_eq!(json, serde_json::json!({ "type": "loop_removed", "loopId": "cron-1" }));
+
+        let fired = SessionEvent::LoopFired(LoopFiredPayload {
+            r#loop: sample_loop(),
+            fired_at_ms: 2,
+            turn_id: Some("turn-1".to_string()),
+        });
+        assert_eq!(fired.event_type(), "loop_fired");
+        let json = serde_json::to_value(&fired).expect("serialize loop fired event");
+        assert_eq!(json["type"], "loop_fired");
+        assert_eq!(json["firedAtMs"], 2);
+        assert_eq!(json["turnId"], "turn-1");
+    }
+
+    #[test]
+    fn activity_events_serialize_with_wire_matching_type_tags() {
+        use super::super::activity::{ActivityProcess, ActivitySubagent, ProcessStatus, SubagentStatus};
+
+        let process_event = SessionEvent::ActivityProcessUpserted(ActivityProcessUpsertedPayload {
+            process: ActivityProcess {
+                id: "proc-1".to_string(),
+                command: "sleep 30 && echo OK > out.txt".to_string(),
+                cwd: None,
+                status: ProcessStatus::Running,
+                pid: None,
+                started_at: "2026-07-02T00:00:00Z".to_string(),
+                ended_at: None,
+                feed: None,
+            },
+        });
+        assert_eq!(process_event.event_type(), "process_upserted");
+        let json = serde_json::to_value(&process_event).expect("serialize process event");
+        assert_eq!(json["type"], "process_upserted");
+        let round_tripped: SessionEvent =
+            serde_json::from_value(json).expect("deserialize process event");
+        assert_eq!(round_tripped.event_type(), "process_upserted");
+
+        let subagent_event =
+            SessionEvent::ActivitySubagentUpserted(ActivitySubagentUpsertedPayload {
+                agent: ActivitySubagent {
+                    id: "agent-1".to_string(),
+                    agent_type: Some("reviewer".to_string()),
+                    description: None,
+                    model: None,
+                    background: true,
+                    status: SubagentStatus::Running,
+                    usage: None,
+                    feed: None,
+                },
+            });
+        assert_eq!(subagent_event.event_type(), "subagent_upserted");
+        let json = serde_json::to_value(&subagent_event).expect("serialize subagent event");
+        assert_eq!(json["type"], "subagent_upserted");
+        let round_tripped: SessionEvent =
+            serde_json::from_value(json).expect("deserialize subagent event");
+        assert_eq!(round_tripped.event_type(), "subagent_upserted");
     }
 }

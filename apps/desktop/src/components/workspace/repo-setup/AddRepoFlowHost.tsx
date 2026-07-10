@@ -15,9 +15,10 @@ import { useToastStore } from "@/stores/toast/toast-store";
 
 /**
  * App-level host for the unified add-repository flow (UX_SPEC §4).
- * Entry offers three options; local paths run the existing add-repo
- * workflow, the cloud path runs the authorize → pick → create sequence
- * as an in-dialog step backed by useAddCloudEnvironment.
+ * Entry offers three options; local paths immediately add after the
+ * native folder picker returns, the cloud path runs the authorize →
+ * pick → create sequence as an in-dialog step backed by
+ * useAddCloudEnvironment.
  */
 export function AddRepoFlowHost() {
   const open = useAddRepoFlowStore((state) => state.open);
@@ -30,8 +31,6 @@ export function AddRepoFlowHost() {
   const { openExternal, pickFolder } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const [flowError, setFlowError] = useState<string | null>(null);
-
-  const canCreateCloudEnvironment = activeOrganizationId !== null;
 
   const cloudPicker = useAddCloudEnvironment({
     enabled: open && step.kind === "cloud",
@@ -61,23 +60,15 @@ export function AddRepoFlowHost() {
     }
     // "link-local" and "add-local" both start from the native folder picker;
     // they differ in intent copy only — the same registration flow backs both.
+    // The folder picker IS the intent signal; no confirmation step needed.
     void (async () => {
       const path = await pickFolder();
       if (!path) {
         return;
       }
-      setStep({ kind: "confirm-local", path });
-    })();
-  }, [pickFolder, setStep]);
-
-  const handleConfirmLocal = useCallback((options: { createCloudEnvironment: boolean }) => {
-    if (step.kind !== "confirm-local") {
-      return;
-    }
-    setFlowError(null);
-    void addRepoFromPath(step.path, {
-      createCloudEnvironment: canCreateCloudEnvironment && options.createCloudEnvironment,
-    }).then((result) => {
+      const result = await addRepoFromPath(path, {
+        createCloudEnvironment: false,
+      });
       if (result.succeeded) {
         // Read before closeFlow — close() clears the completion callback.
         const onCompleted = useAddRepoFlowStore.getState().onCompleted;
@@ -88,8 +79,8 @@ export function AddRepoFlowHost() {
       // Failures also toast from useAddRepo; surface the reason inline and
       // keep the dialog open so the user can retry or back out.
       setFlowError(result.error);
-    });
-  }, [addRepoFromPath, canCreateCloudEnvironment, closeFlow, step]);
+    })();
+  }, [addRepoFromPath, closeFlow, pickFolder, setStep]);
 
   const handleBack = useCallback(() => {
     setFlowError(null);
@@ -109,18 +100,11 @@ export function AddRepoFlowHost() {
   return (
     <AddRepoFlow
       open={open}
-      step={step.kind === "confirm-local"
-        ? {
-          kind: "confirm-local",
-          path: step.path,
-          canCreateCloudEnvironment,
-        }
-        : step}
-      confirming={isAddingRepo}
+      step={step}
+      adding={isAddingRepo}
       error={step.kind === "cloud" ? null : flowError}
       cloudPicker={step.kind === "cloud" ? cloudPicker : null}
       onPickOption={handlePickOption}
-      onConfirmLocal={handleConfirmLocal}
       onBack={handleBack}
       onClose={handleClose}
     />

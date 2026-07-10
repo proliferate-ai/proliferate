@@ -6,7 +6,9 @@ use anyharness_contract::v1::{
     McpElicitationSubmittedField, SessionMcpBindingSummary, UserInputSubmittedAnswer,
 };
 
+use super::active_activity_roster::ActivityRosterResolver;
 use super::active_goals::ActiveGoalResolver;
+use super::active_loops::LoopsResolver;
 use super::links::model::SessionLinkRecord;
 use super::links::service::SessionLinkService;
 use super::mcp_bindings::crypto::SessionDataCipher;
@@ -15,7 +17,7 @@ use super::mcp_bindings::product_catalog::ProductMcpLaunchCatalog;
 use super::model::SessionRecord;
 use super::plan_references::{PlanInteractionLinkResolver, PlanReferenceResolver};
 use super::service::SessionService;
-use crate::domains::agents::route_auth::RouteAuthError;
+use crate::domains::agents::route_auth::{GatewayModelResolve, RouteAuthError};
 use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
@@ -49,6 +51,9 @@ pub struct SessionRuntime {
     access_gate: Arc<WorkspaceAccessGate>,
     plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
     plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+    /// Catalog-driven gateway model resolver (spec §3): supplies the render
+    /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
+    gateway_model_resolver: Arc<dyn GatewayModelResolve>,
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
     /// L17 lockout (C13 / E8): a session held by a non-terminal workflow run
     /// rejects every mutating verb with 409 `SESSION_WORKFLOW_HELD`; take-over is
@@ -57,6 +62,8 @@ pub struct SessionRuntime {
     /// cache). The executor is exempt by construction: it drives sessions through
     /// the internal provenance path, never these public methods.
     workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
+    loops_resolver: Arc<dyn LoopsResolver>,
+    activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
 }
 
 impl SessionRuntime {
@@ -79,6 +86,13 @@ pub enum CreateAndStartSessionError {
     ModelUnsupported {
         agent_kind: String,
         model_id: String,
+    },
+    /// The model is gated behind inactive auth contexts (decisions ledger 16).
+    /// Carries the unlock condition (`required_contexts`) for the API layer.
+    ModelGated {
+        agent_kind: String,
+        model_id: String,
+        required_contexts: Vec<String>,
     },
     ModeUnsupported {
         agent_kind: String,
@@ -310,8 +324,11 @@ impl SessionRuntime {
         access_gate: Arc<WorkspaceAccessGate>,
         plan_reference_resolver: Arc<dyn PlanReferenceResolver + Send + Sync>,
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
+        gateway_model_resolver: Arc<dyn GatewayModelResolve>,
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
         workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
+        loops_resolver: Arc<dyn LoopsResolver>,
+        activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
     ) -> Self {
         Self {
             session_service,
@@ -325,8 +342,11 @@ impl SessionRuntime {
             access_gate,
             plan_reference_resolver,
             plan_interaction_link_resolver,
+            gateway_model_resolver,
             active_goal_resolver,
             workflow_owned_sessions,
+            loops_resolver,
+            activity_roster_resolver,
         }
     }
 

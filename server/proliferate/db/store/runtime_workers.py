@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -90,6 +90,10 @@ class RuntimeWorkerValue:
     cloud_sandbox_id: UUID | None
     desktop_install_id: str | None
     status: str
+    worker_version: str | None
+    anyharness_version: str | None
+    hostname: str | None
+    machine_fingerprint: str | None
     enrolled_at: datetime
     last_seen_at: datetime | None
 
@@ -158,6 +162,10 @@ def _worker_value(row: CloudRuntimeWorker) -> RuntimeWorkerValue:
         cloud_sandbox_id=row.cloud_sandbox_id,
         desktop_install_id=row.desktop_install_id,
         status=row.status,
+        worker_version=row.worker_version,
+        anyharness_version=row.anyharness_version,
+        hostname=row.hostname,
+        machine_fingerprint=row.machine_fingerprint,
         enrolled_at=row.enrolled_at,
         last_seen_at=row.last_seen_at,
     )
@@ -243,6 +251,32 @@ async def revoke_active_workers_for_identity(
             CloudRuntimeWorker.owner_user_id == owner_user_id,
             CloudRuntimeWorker.desktop_install_id == desktop_install_id,
         )
+    await _revoke_workers_and_gateway_tokens(db, stmt)
+
+
+async def revoke_active_workers_for_desktop_install(
+    db: AsyncSession,
+    *,
+    desktop_install_id: str,
+) -> None:
+    """Revoke every non-revoked worker (and gateway token) on a desktop install.
+
+    Deliberately ignores the owner: a desktop install runs exactly one physical
+    worker process, so a fresh enrollment — possibly by a different user on the
+    same machine — must retire all predecessors, or the previous user's worker
+    row stays "online" and its gateway token stays a live credential.
+    """
+    stmt = select(CloudRuntimeWorker).where(
+        CloudRuntimeWorker.status != "revoked",
+        CloudRuntimeWorker.desktop_install_id == desktop_install_id,
+    )
+    await _revoke_workers_and_gateway_tokens(db, stmt)
+
+
+async def _revoke_workers_and_gateway_tokens(
+    db: AsyncSession,
+    stmt: Select[tuple[CloudRuntimeWorker]],
+) -> None:
     workers = (await db.execute(stmt.with_for_update())).scalars().all()
     now = utcnow()
     for worker in workers:
@@ -283,6 +317,10 @@ async def create_worker(
     *,
     enrollment: RuntimeWorkerEnrollmentValue,
     token_hash: str,
+    worker_version: str | None = None,
+    anyharness_version: str | None = None,
+    hostname: str | None = None,
+    machine_fingerprint: str | None = None,
 ) -> RuntimeWorkerValue:
     now = utcnow()
     row = CloudRuntimeWorker(
@@ -293,6 +331,10 @@ async def create_worker(
         desktop_install_id=enrollment.desktop_install_id,
         token_hash=token_hash,
         status="online",
+        worker_version=worker_version,
+        anyharness_version=anyharness_version,
+        hostname=hostname,
+        machine_fingerprint=machine_fingerprint,
         enrolled_at=now,
         last_seen_at=now,
     )
@@ -339,13 +381,24 @@ async def touch_worker_heartbeat(
     db: AsyncSession,
     *,
     worker_id: UUID,
+    worker_version: str | None = None,
+    anyharness_version: str | None = None,
 ) -> None:
+    """Stamp liveness and, when self-reported, the running component versions.
+
+    Versions only move forward on report (post-swap); an omitted field never
+    clears what enrollment or a prior heartbeat recorded.
+    """
     row = await db.get(CloudRuntimeWorker, worker_id)
     if row is None or row.status == "revoked":
         return
     now = utcnow()
     row.status = "online"
     row.last_seen_at = now
+    if worker_version is not None and worker_version != row.worker_version:
+        row.worker_version = worker_version
+    if anyharness_version is not None and anyharness_version != row.anyharness_version:
+        row.anyharness_version = anyharness_version
     row.updated_at = now
     await db.flush()
 
@@ -369,10 +422,8 @@ async def get_grant_by_gateway_token_hash(
     worker = await db.get(CloudRuntimeWorker, token.runtime_worker_id)
     if worker is None or worker.status == "revoked":
         return None
-    now = utcnow()
-    token.last_used_at = now
-    token.updated_at = now
-    await db.flush()
+    # Deliberately no last_used_at stamp: this is the gateway hot path and a
+    # per-request row write + flush is not worth the bookkeeping.
     return IntegrationGatewayGrant(
         runtime_worker_id=worker.id,
         runtime_kind=worker.runtime_kind,

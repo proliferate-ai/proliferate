@@ -39,6 +39,7 @@ from proliferate.config import settings
 from proliferate.constants.auth import SUPPORTED_CODE_CHALLENGE_METHODS
 from proliferate.db.models.auth import User
 from proliferate.db.store import auth_sso as sso_store
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.auth import create_auth_code
 from proliferate.integrations.sso.errors import SsoIntegrationError
 from proliferate.integrations.sso.oidc import (
@@ -70,12 +71,63 @@ class SsoStart:
     connection: SsoConnectionSnapshot
 
 
+# Uniform "no SSO here" answer for slug-driven discovery. A nonexistent slug,
+# an org with no SSO, and an org whose SSO is disabled all return this identical
+# response so a caller cannot probe which orgs exist by cycling slugs.
+_SLUG_UNAVAILABLE = SsoDiscovery(
+    enabled=False,
+    scope=None,
+    connection_id=None,
+    organization_id=None,
+    protocol=None,
+    display_name=None,
+    reason="not_available",
+)
+
+
 async def discover_sso(
     db: AsyncSession,
     *,
     email: str | None,
     organization_id: UUID | None = None,
     connection_id: UUID | None = None,
+    slug: str | None = None,
+) -> SsoDiscovery:
+    if slug is not None:
+        resolved_organization_id = await _organization_id_for_slug(db, slug)
+        if resolved_organization_id is None:
+            return _SLUG_UNAVAILABLE
+        discovery = await _discover_for_context(
+            db,
+            email=None,
+            organization_id=resolved_organization_id,
+            connection_id=None,
+        )
+        # Only surface the ids needed to start the flow once SSO is actually
+        # usable; every other outcome collapses to the generic response.
+        return discovery if discovery.enabled else _SLUG_UNAVAILABLE
+    return await _discover_for_context(
+        db,
+        email=email,
+        organization_id=organization_id,
+        connection_id=connection_id,
+    )
+
+
+async def _organization_id_for_slug(db: AsyncSession, slug: str) -> UUID | None:
+    cleaned = slug.strip()
+    if not cleaned:
+        return None
+    organization = await organization_store.get_organization_by_slug(db, cleaned)
+    return organization.id if organization is not None else None
+
+
+async def _discover_for_context(
+    db: AsyncSession,
+    *,
+    email: str | None,
+    organization_id: UUID | None,
+    connection_id: UUID | None,
 ) -> SsoDiscovery:
     connection = await _connection_for_start(
         db,

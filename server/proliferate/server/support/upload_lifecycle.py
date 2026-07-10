@@ -115,30 +115,6 @@ def expected_completed_object_entry(
     return ExpectedCompletedObject(size_bytes=expected_size)
 
 
-def tracker_initial_statuses() -> dict[str, str]:
-    if not settings.support_tracker_enabled:
-        return {
-            "tracker_status": "disabled",
-            "github_status": "disabled",
-            "linear_status": "disabled",
-            "crosslink_status": "disabled",
-        }
-    linear_status = "pending" if support_linear_configured() else "disabled"
-    crosslink_status = "pending" if linear_status == "pending" else "disabled"
-    return {
-        "tracker_status": "pending",
-        "github_status": "pending",
-        "linear_status": linear_status,
-        "crosslink_status": crosslink_status,
-    }
-
-
-def support_linear_configured() -> bool:
-    return bool(
-        settings.support_linear_api_key.strip() and settings.support_linear_team_id.strip()
-    )
-
-
 async def create_upload_targets_for_report(
     *,
     report: support_reports.SupportReportSnapshot,

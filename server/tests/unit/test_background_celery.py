@@ -4,13 +4,12 @@ from celery import Celery
 from kombu import Queue
 
 from proliferate.background.config import (
-    BILLING_RECONCILE_PASS_TASK,
+    CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
     DEFAULT_QUEUE,
     HEALTH_NOOP_TASK,
     NOTIFICATIONS_QUEUE,
     NOTIFICATIONS_SEND_SLACK_TASK,
     PERIODIC_DEFAULT_QUEUE,
-    SUPPORT_TRACKER_RECONCILE_PASS_TASK,
     build_celery_config,
     enabled_worker_queues,
 )
@@ -35,27 +34,7 @@ def test_celery_app_import_registers_noop_task_without_broker_connection() -> No
     assert isinstance(celery_app, Celery)
     assert HEALTH_NOOP_TASK in celery_app.tasks
     assert NOTIFICATIONS_SEND_SLACK_TASK in celery_app.tasks
-    assert SUPPORT_TRACKER_RECONCILE_PASS_TASK in celery_app.tasks
     assert celery_app.tasks[HEALTH_NOOP_TASK].run() == "ok"
-
-
-def test_support_tracker_task_dispatches_reconcile_pass(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    from proliferate.background.tasks import support
-
-    calls: list[str] = []
-
-    async def fake_run_support_tracker_reconcile_pass() -> int:
-        calls.append("reconcile")
-        return 3
-
-    monkeypatch.setattr(
-        support,
-        "run_support_tracker_reconcile_pass",
-        fake_run_support_tracker_reconcile_pass,
-    )
-
-    assert support.reconcile_tracker.run() == 3
-    assert calls == ["reconcile"]
 
 
 def test_celery_routes_and_queues_match_ratified_names() -> None:
@@ -70,8 +49,7 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
     assert celery_app.conf.task_routes == {
         HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
         NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
-        BILLING_RECONCILE_PASS_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
-        SUPPORT_TRACKER_RECONCILE_PASS_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+        CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     }
     assert (
         celery_app.amqp.router.route({}, HEALTH_NOOP_TASK, args=(), kwargs={})["queue"].name
@@ -81,25 +59,8 @@ def test_celery_routes_and_queues_match_ratified_names() -> None:
     assert celery_app.conf.result_backend is None
 
 
-def test_beat_schedule_registers_enabled_support_tracker() -> None:
-    schedule = build_beat_schedule(
-        _test_settings(
-            support_tracker_enabled=True,
-            support_tracker_reconciler_interval_seconds=0.5,
-        )
-    )
-
-    assert schedule == {
-        "support-tracker-reconcile": {
-            "task": SUPPORT_TRACKER_RECONCILE_PASS_TASK,
-            "schedule": 1.0,
-            "options": {"queue": PERIODIC_DEFAULT_QUEUE},
-        }
-    }
-
-
-def test_beat_schedule_omits_disabled_support_tracker() -> None:
-    assert build_beat_schedule(_test_settings(support_tracker_enabled=False)) == {}
+def test_beat_schedule_empty_by_default() -> None:
+    assert build_beat_schedule(_test_settings()) == {}
 
 
 def test_celery_config_reads_settings_without_result_backend() -> None:

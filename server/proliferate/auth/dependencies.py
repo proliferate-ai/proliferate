@@ -12,6 +12,7 @@ from proliferate.auth.users import get_user_manager
 from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.db.store.auth_sso import user_has_active_organization_sso_membership
 from proliferate.errors import PermissionDenied
 from proliferate.integrations.sentry import set_server_sentry_user
 from proliferate.middleware.request_context import set_authenticated_user_context
@@ -55,6 +56,23 @@ async def current_product_user(
     user: User = Depends(current_limited_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> User:
+    """Acting user for Proliferate Cloud product surfaces (secrets, workspaces, repos).
+
+    Hosted keeps the GitHub product-readiness gate, byte-for-byte the same as
+    ``current_organization_actor``. Single-org (self-hosted) instances admit
+    password-only accounts: the product surfaces themselves must work with no
+    GitHub OAuth app configured. Endpoints that genuinely need a GitHub token
+    (e.g. repo import) enforce that at the point of use instead of here.
+
+    Users who arrived through an organization's SSO connection also pass: the
+    org relationship is the vetting, so a linked GitHub identity is not required
+    to reach product surfaces. GitHub stays enforced at the point of use, and
+    free-trial credits stay GitHub-gated.
+    """
+    if settings.single_org_mode:
+        return user
+    if await user_has_active_organization_sso_membership(db, user_id=user.id):
+        return user
     return await _require_product_ready(db, user)
 
 

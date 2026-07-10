@@ -5,10 +5,8 @@ export type SettingsNavIconId =
   | "agent-api-keys"
   | "agent-claude"
   | "agent-codex"
-  | "agent-defaults"
   | "agent-grok"
   | "agent-opencode"
-  | "agents"
   | "appearance"
   | "billing"
   | "check-for-updates"
@@ -101,6 +99,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "organization", label: "Organization settings", iconId: "organization", adminOnly: true },
           { kind: "section", id: "organization-members", label: "Members", iconId: "organization-members", adminOnly: true },
           { kind: "section", id: "billing", label: "Billing", iconId: "billing", adminOnly: true },
+          { kind: "section", id: "organization-limits", label: "Usage & limits", iconId: "organization-limits", adminOnly: true },
           { kind: "section", id: "organization-secrets", label: "Organization secrets", iconId: "organization-secrets", adminOnly: true },
           { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
           { kind: "section", id: "organization-gateway-defaults", label: "Gateway defaults", iconId: "organization-gateway-defaults", adminOnly: true },
@@ -143,13 +142,11 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
         id: "agents_main",
         heading: null,
         items: [
-          { kind: "section", id: "agents", label: "Overview", iconId: "agents" },
           { kind: "section", id: "agent-claude", label: "Claude Code", iconId: "agent-claude" },
           { kind: "section", id: "agent-codex", label: "Codex", iconId: "agent-codex" },
           { kind: "section", id: "agent-opencode", label: "OpenCode", iconId: "agent-opencode" },
           { kind: "section", id: "agent-grok", label: "Grok", iconId: "agent-grok" },
           { kind: "section", id: "agent-api-keys", label: "API keys", iconId: "agent-api-keys" },
-          { kind: "section", id: "agent-defaults", label: "Defaults", iconId: "agent-defaults" },
         ],
       },
     ],
@@ -218,7 +215,6 @@ const SECTION_TO_SCOPE = new Map<SettingsSection, SettingsScope>(
  * to "user".
  */
 const PARKED_SECTION_SCOPES: Partial<Record<string, SettingsScope>> = {
-  "organization-limits": "org",
   "slack-bot": "org",
 };
 

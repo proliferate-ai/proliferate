@@ -233,9 +233,6 @@ class Settings(BaseSettings):
     # Customer.io (optional)
     customerio_site_id: str = ""
     customerio_api_key: str = ""
-    customerio_app_api_key: str = ""
-    customerio_from_email: str = "hello@proliferate.com"
-    customerio_welcome_transactional_message_id: str = ""
     resend_api_key: str = ""
     resend_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""
@@ -257,7 +254,7 @@ class Settings(BaseSettings):
     # Observability
     sentry_dsn: str = ""
     sentry_environment: str = "trusted-beta"
-    sentry_release: str = "proliferate-server@0.1.0"
+    sentry_release: str = ""
     sentry_traces_sample_rate: float = 1.0
 
     # Secondary LLM flows
@@ -282,23 +279,6 @@ class Settings(BaseSettings):
     support_report_attachment_max_bytes: int = 25 * 1024 * 1024
     support_report_total_attachment_max_bytes: int = 100 * 1024 * 1024
     support_report_internal_base_url: str = ""
-    support_tracker_enabled: bool = False
-    support_tracker_reconciler_interval_seconds: float = 30.0
-    support_tracker_reconciler_batch_size: int = 10
-    support_tracker_max_attempts: int = 8
-    support_tracker_retry_base_seconds: float = 60.0
-    support_github_app_id: str = ""
-    support_github_app_private_key: str = ""
-    support_github_app_installation_id: str = ""
-    support_github_owner: str = ""
-    support_github_repo: str = ""
-    support_github_label_support: str = "support"
-    support_github_label_private: str = "private-details"
-    support_linear_api_key: str = ""
-    support_linear_team_id: str = ""
-    support_linear_project_id: str = ""
-    support_linear_label_ids: str = ""
-    support_linear_private_details_label_id: str = ""
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""

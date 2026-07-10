@@ -67,6 +67,7 @@ describe("resolveComposerDockSlots", () => {
         ambientSlot: { kind: "workspace_status" },
         delegatedWork: false,
         sessionGoal: false,
+        sessionActivity: false,
       },
     });
   });
@@ -79,7 +80,28 @@ describe("resolveComposerDockSlots", () => {
       ambientSlot: null,
       delegatedWork: false,
       sessionGoal: true,
+      sessionActivity: false,
     });
+  });
+
+  it("attaches the activity chips bar even with no goal set", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      hasSessionActivity: true,
+    }).attachedSlot).toEqual({
+      ambientSlot: null,
+      delegatedWork: false,
+      sessionGoal: false,
+      sessionActivity: true,
+    });
+  });
+
+  it("keeps activity chips behind the session suppression flag", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      suppressSessionSlots: true,
+      hasSessionActivity: true,
+    }).attachedSlot).toBeNull();
   });
 
   it("prioritizes workspace status over cloud runtime ambient context", () => {
@@ -92,6 +114,7 @@ describe("resolveComposerDockSlots", () => {
       ambientSlot: { kind: "workspace_status" },
       delegatedWork: true,
       sessionGoal: false,
+      sessionActivity: false,
     });
   });
 
@@ -106,6 +129,7 @@ describe("resolveComposerDockSlots", () => {
       ambientSlot: null,
       delegatedWork: true,
       sessionGoal: false,
+      sessionActivity: false,
     });
   });
 });

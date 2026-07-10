@@ -65,6 +65,7 @@ export function VirtualizedTranscriptRowList({
   virtualizationMode,
 }: VirtualizedTranscriptRowListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const pendingAnchorRef = useRef<VirtualScrollAnchor | null>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
@@ -300,6 +301,31 @@ export function VirtualizedTranscriptRowList({
     totalContentHeight,
   ]);
 
+  // Row content can grow between virtualizer measurements (tool-call output
+  // streaming, status flips, expanding panels). The snap effect above only
+  // fires when totalContentHeight changes — but with
+  // useAnimationFrameWithResizeObserver the virtualizer defers re-measurement
+  // by one frame, leaving a window where the DOM has grown but no snap runs.
+  // Bridge that gap with a ResizeObserver on the content wrapper (same pattern
+  // as FullTranscriptRowList) that re-snaps immediately on any size increase
+  // while pinned, regardless of whether the virtualizer has re-measured yet.
+  useEffect(() => {
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (!pinnedRef.current) {
+        return;
+      }
+      scrollToBottom();
+    });
+    observer.observe(content);
+    return () => {
+      observer.disconnect();
+    };
+  }, [pinnedRef, scrollToBottom]);
+
   useLayoutEffect(() => () => {
     const viewport = scrollRef.current;
     if (!viewport || pinnedRef.current) {
@@ -346,6 +372,7 @@ export function VirtualizedTranscriptRowList({
       <VirtualTranscriptViewport
         bottomSpacerHeight={bottomSpacerHeight}
         columnClassName={columnClassName}
+        contentRef={contentRef}
         gutterClassName={gutterClassName}
         measureElement={virtualizer.measureElement}
         onViewportScroll={handleViewportScroll}

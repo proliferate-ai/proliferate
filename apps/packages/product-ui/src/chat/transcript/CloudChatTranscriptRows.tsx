@@ -53,7 +53,7 @@ export function CloudChatTranscriptRow({
       <article className="flex justify-start">
         <div className="flex min-w-0 max-w-full flex-col break-words" data-telemetry-mask>
           {row.title ? (
-            <div className="mb-1 text-xs font-medium text-muted-foreground">{row.title}</div>
+            <div className="mb-1 text-chat font-medium leading-[var(--text-chat--line-height)] text-muted-foreground">{row.title}</div>
           ) : null}
           <AssistantMessage
             content={row.body ?? ""}

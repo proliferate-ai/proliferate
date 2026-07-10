@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  adminIntegrationAuthKindLabel,
   adminIntegrationEnabledView,
   adminIntegrationSourceLabel,
+  customIntegrationCreatedMessage,
   customIntegrationSubmitError,
   validateCustomIntegrationForm,
 } from "@/lib/domain/settings/org-integrations-presentation";
@@ -10,6 +12,56 @@ describe("adminIntegrationSourceLabel", () => {
   it("marks seed definitions as built-in and org customs as custom", () => {
     expect(adminIntegrationSourceLabel("seed")).toBe("Built-in");
     expect(adminIntegrationSourceLabel("org_custom")).toBe("Custom");
+  });
+});
+
+describe("adminIntegrationAuthKindLabel", () => {
+  it("labels the known auth kinds like the user pane", () => {
+    expect(adminIntegrationAuthKindLabel("oauth2")).toBe("OAuth");
+    expect(adminIntegrationAuthKindLabel("api_key")).toBe("API key");
+    expect(adminIntegrationAuthKindLabel("none")).toBe("No auth");
+  });
+
+  it("passes unknown kinds through unchanged", () => {
+    expect(adminIntegrationAuthKindLabel("mystery")).toBe("mystery");
+  });
+});
+
+describe("customIntegrationCreatedMessage", () => {
+  it("tells admins where members connect when OAuth was detected or forced", () => {
+    for (const authDetection of ["detected", "forced"] as const) {
+      expect(customIntegrationCreatedMessage({
+        displayName: "Internal tools",
+        authKind: "oauth2",
+        authDetection,
+      })).toBe(
+        "Internal tools added. OAuth required — members connect from Settings → Integrations.",
+      );
+    }
+  });
+
+  it("admits when the probe could not reach the server", () => {
+    expect(customIntegrationCreatedMessage({
+      displayName: "Internal tools",
+      authKind: "none",
+      authDetection: "unreachable",
+    })).toBe(
+      "Internal tools added, but the server could not be reached to verify "
+      + "authentication. It is saved without auth.",
+    );
+  });
+
+  it("confirms open servers plainly", () => {
+    expect(customIntegrationCreatedMessage({
+      displayName: "Internal tools",
+      authKind: "none",
+      authDetection: "none",
+    })).toBe("Internal tools added. No authentication required.");
+    expect(customIntegrationCreatedMessage({
+      displayName: "Internal tools",
+      authKind: "none",
+      authDetection: "forced",
+    })).toBe("Internal tools added. No authentication required.");
   });
 });
 
@@ -41,6 +93,7 @@ describe("validateCustomIntegrationForm", () => {
     displayName: "Internal tools",
     namespace: "internal-tools",
     mcpUrl: "https://mcp.example.com/mcp",
+    authKind: "auto" as const,
   };
 
   it("accepts a valid form", () => {
@@ -79,7 +132,12 @@ describe("validateCustomIntegrationForm", () => {
   });
 
   it("reports every invalid field at once", () => {
-    expect(validateCustomIntegrationForm({ displayName: "", namespace: "!", mcpUrl: "nope" }))
+    expect(validateCustomIntegrationForm({
+      displayName: "",
+      namespace: "!",
+      mcpUrl: "nope",
+      authKind: "auto",
+    }))
       .toEqual({
         displayName: "Display name is required.",
         namespace:

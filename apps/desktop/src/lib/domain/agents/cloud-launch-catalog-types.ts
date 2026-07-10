@@ -92,6 +92,7 @@ export interface DesktopAgentLaunchCatalog {
   schemaVersion: 2;
   catalogVersion: string;
   generatedAt: string;
+  defaultAgentKind: string | null;
   workspaceId: string | null;
   agents: DesktopAgentLaunchAgent[];
 }
@@ -126,6 +127,7 @@ export interface CloudAgentCatalogResponseInput {
   schemaVersion: 2;
   catalogVersion: string;
   generatedAt: string;
+  defaultAgentKind?: string | null;
   probedAgainst?: Record<string, unknown> | null;
   agents: CloudAgentCatalogAgentInput[];
 }

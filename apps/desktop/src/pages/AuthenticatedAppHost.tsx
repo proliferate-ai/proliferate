@@ -8,7 +8,6 @@ import { WorkflowsHomePage } from "@/pages/WorkflowsHomePage";
 import { WorkflowEditorPage } from "@/pages/WorkflowEditorPage";
 import { WorkflowRunPage } from "@/pages/WorkflowRunPage";
 import { WorkspacesPage } from "@/pages/WorkspacesPage";
-import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment";
 import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
@@ -24,7 +23,6 @@ export function AuthenticatedAppHost({
   SettingsComponent = SettingsPage,
 }: AuthenticatedAppHostProps = {}) {
   useOrganizationSelectionLifecycle();
-  useDesktopWorkerEnrollment();
   const location = useLocation();
   const isSettingsRoute = location.pathname === APP_ROUTES.settings;
   const lastNonSettingsHrefRef = useRef<string>(APP_ROUTES.home);
@@ -37,20 +35,22 @@ export function AuthenticatedAppHost({
   }, [isSettingsRoute, location.hash, location.pathname, location.search]);
 
   const isHomeRoute = location.pathname === APP_ROUTES.home;
-  const shouldRenderWorkspace = isHomeRoute || isSettingsRoute;
+  // The workspace shell stays mounted (hidden) across every authenticated
+  // route: cold-mounting it on return from /workflows or /workspaces is
+  // seconds of synchronous hydration work.
   const workspaceHostClassName = isSettingsRoute
     ? "pointer-events-none"
-    : shouldRenderWorkspace
+    : isHomeRoute
       ? undefined
       : "hidden";
 
   return (
     <>
       <div
-        aria-hidden={isSettingsRoute ? "true" : undefined}
+        aria-hidden={isHomeRoute ? undefined : "true"}
         className={workspaceHostClassName}
       >
-        {shouldRenderWorkspace && <MainComponent workspaceVisible={!isSettingsRoute} />}
+        <MainComponent workspaceVisible={isHomeRoute} />
       </div>
 
       {isSettingsRoute ? (

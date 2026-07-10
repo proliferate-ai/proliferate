@@ -34,6 +34,29 @@ export const AUTH_LOGIN_LABELS = {
   passwordWaiting: "Signing in...",
 } as const;
 
+// Connect-to-a-self-hosted-server flow (self-hosting-v1 §3.5, B4-desktop):
+// the sign-in screen's quiet secondary affordance + its dialog copy.
+export const CONNECT_SERVER_LABELS = {
+  connectAffordance: "Connect to a server",
+  connectedPrefix: "Connected to",
+  reset: "Reset",
+  dialogTitle: "Connect to a server",
+  entryDescription: "Point this app at a self-hosted Proliferate server.",
+  addressFieldLabel: "Server address",
+  addressFieldPlaceholder: "https://proliferate.corp.example",
+  continue: "Continue",
+  checking: "Checking…",
+  cancel: "Cancel",
+  trustDescription: (host: string) => `You're connecting to ${host}.`,
+  serverVersionLabel: (version: string) => `Server version ${version}`,
+  connect: "Connect",
+  connecting: "Connecting…",
+  useDifferentAddress: "Use a different address",
+  // Shown when the connect flow is opened from an invite link issued by a
+  // different server than the one this desktop is pointed at.
+  inviteContext: "This invitation is hosted on a different Proliferate server.",
+} as const;
+
 export const AUTH_ACCOUNT_LABELS = {
   devBypassBadge: "Dev bypass",
   devBypassTitle: "Local development mode",

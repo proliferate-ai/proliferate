@@ -24,6 +24,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -73,7 +74,11 @@ class CloudIntegrationDefinition(Base):
     namespace: Mapped[str] = mapped_column(String(255))
     display_name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
     auth_kind: Mapped[str] = mapped_column(String(32))
     oauth_client_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Rendered launch + auth config (transport, url template, header/query
@@ -98,8 +103,14 @@ class CloudIntegrationPolicy(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    organization_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    definition_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organization.id", ondelete="CASCADE"),
+        index=True,
+    )
+    definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_integration_definition.id"),
+        index=True,
+    )
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # L25 admin key: the org-level scope this definition is allowed to expose to a
     # worker's gateway token (a tool-name allowlist, ``["claim", ...]``). NULL means
@@ -108,7 +119,11 @@ class CloudIntegrationPolicy(Base):
     # gateway enforcement in A–E (enforcement reads the worker token's scope_json);
     # kept nullable so it can be authored without touching existing rows.
     scope_json: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
-    updated_by_user_id: Mapped[uuid.UUID] = mapped_column()
+    # Attribution, not ownership: NO ACTION so deleting the acting admin can
+    # never cascade away (and silently re-enable) the org's policy.
+    updated_by_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id"),
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -138,15 +153,23 @@ class CloudIntegrationAccount(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    definition_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_integration_definition.id"),
+        index=True,
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
     # 'personal' today; column reserved for future org-shared accounts.
     owner_scope: Mapped[str] = mapped_column(String(32), default="personal")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     status: Mapped[str] = mapped_column(String(32), default="setup_required")
     auth_kind: Mapped[str] = mapped_column(String(32))
     credential_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
-    credential_format: Mapped[str] = mapped_column(String(64), default="json-v1")
+    # NULL until credentials are stored; set_account_credentials always writes
+    # the real format ('secret-fields-v1' / 'oauth-bundle-v1') with the bundle.
+    credential_format: Mapped[str | None] = mapped_column(String(64), nullable=True)
     auth_version: Mapped[int] = mapped_column(Integer, default=1)
     settings_json: Mapped[str] = mapped_column(Text, default="{}")
     token_expires_at: Mapped[datetime | None] = mapped_column(
@@ -171,7 +194,10 @@ class CloudIntegrationOAuthClient(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    definition_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_integration_definition.id"),
+        index=True,
+    )
     issuer: Mapped[str] = mapped_column(Text)
     redirect_uri: Mapped[str] = mapped_column(Text)
     resource: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -209,9 +235,19 @@ class CloudIntegrationOAuthFlow(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    account_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    definition_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_integration_account.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+    )
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+        index=True,
+    )
+    definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_integration_definition.id"),
+        index=True,
+    )
     state_hash: Mapped[str] = mapped_column(String(128))
     code_verifier_ciphertext: Mapped[str] = mapped_column(Text)
     issuer: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -239,21 +275,71 @@ class CloudIntegrationToolSchemaCache(Base):
     __tablename__ = "cloud_integration_tool_schema_cache"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('ready', 'stale', 'error')",
+            "status IN ('ready', 'error')",
             name="ck_cloud_integration_tool_schema_cache_status",
         ),
     )
 
-    account_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cloud_integration_account.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
     # Snapshot of the account's auth_version the cache was fetched under; a
     # mismatch means the cache is stale and must be refreshed.
     auth_version: Mapped[int] = mapped_column(Integer, default=0)
     tools_json: Mapped[str] = mapped_column(Text, default="[]")
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), default="stale")
+    # Always supplied at insert by the upsert; staleness is derived from the
+    # auth_version snapshot + fetched_at age, never stored as a status.
+    status: Mapped[str] = mapped_column(String(32))
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class CloudIntegrationToolCallEvent(Base):
+    """Per-tool-call audit row for the integration gateway proxy.
+
+    Every ``integrations.call_tool`` proxied to an upstream provider writes one
+    row here — success or failure — so there is queryable evidence a tool call
+    happened and how it went. The gateway grant supplies the acting user/org and
+    the originating runtime worker; namespace + tool name identify the call.
+    User/org use SET NULL so the audit trail outlives a deleted user or org.
+    """
+
+    __tablename__ = "cloud_integration_tool_call_event"
+    __table_args__ = (
+        Index(
+            "ix_cloud_integration_tool_call_event_org_created",
+            "organization_id",
+            "created_at",
+        ),
+        Index(
+            "ix_cloud_integration_tool_call_event_user_created",
+            "user_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("organization.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    runtime_worker_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cloud_runtime_worker.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    integration_namespace: Mapped[str] = mapped_column(String(64))
+    tool_name: Mapped[str] = mapped_column(String(255))
+    ok: Mapped[bool] = mapped_column(Boolean)
+    error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer)

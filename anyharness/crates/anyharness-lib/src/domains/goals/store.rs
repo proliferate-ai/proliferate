@@ -217,6 +217,17 @@ impl GoalStore {
         Ok(())
     }
 
+    /// Clear pending_op on a goal row within an existing transaction, without
+    /// touching revision or emitting any event. Used when an ingest confirms
+    /// content-identical state while a pending_op marker is outstanding.
+    pub fn clear_pending_op_tx(tx: &Connection, goal_id: &str) -> rusqlite::Result<()> {
+        tx.execute(
+            "UPDATE goals SET pending_op = NULL, updated_at = ?2 WHERE id = ?1",
+            params![goal_id, chrono::Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
     pub fn insert_event(tx: &Connection, record: &SessionEventRecord) -> rusqlite::Result<()> {
         tx.execute(
             "INSERT INTO session_events (session_id, seq, timestamp, event_type, turn_id, item_id, payload_json)

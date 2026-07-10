@@ -4,7 +4,7 @@ use anyharness_contract::v1::{
     CommitRequest, CommitResponse, GitBranchDiffFilesResponse, GitBranchRef, GitDiffResponse,
     GitDiffScope as ContractGitDiffScope, GitRevertPatchesRequest, GitRevertPatchesResponse,
     GitStatusSnapshot, PushRequest, PushResponse, RenameBranchRequest, RenameBranchResponse,
-    StagePathsRequest, UnstagePathsRequest,
+    StagePatchRequest, StagePathsRequest, UnstagePatchRequest, UnstagePathsRequest,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -355,6 +355,82 @@ pub async fn unstage_paths(
         move |_, ws_path| {
             GitService::unstage_paths(&ws_path, &paths)
                 .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_UNSTAGE_FAILED"))?;
+            Ok(())
+        },
+    )
+    .await?;
+
+    Ok(Json(()))
+}
+
+// ---------------------------------------------------------------------------
+// Stage patch (hunk-level)
+// ---------------------------------------------------------------------------
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/git/stage-patch",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = StagePatchRequest,
+    responses(
+        (status = 200, description = "Patch staged"),
+        (status = 400, description = "Patch could not be applied", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "git"
+)]
+pub async fn stage_patch(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Json(req): Json<StagePatchRequest>,
+) -> Result<Json<()>, ApiError> {
+    let patch = req.patch;
+    run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Write,
+        "git stage patch",
+        move |_, ws_path| {
+            GitService::stage_patch(&ws_path, &patch)
+                .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_STAGE_PATCH_FAILED"))?;
+            Ok(())
+        },
+    )
+    .await?;
+
+    Ok(Json(()))
+}
+
+// ---------------------------------------------------------------------------
+// Unstage patch (hunk-level)
+// ---------------------------------------------------------------------------
+
+#[utoipa::path(
+    post,
+    path = "/v1/workspaces/{workspace_id}/git/unstage-patch",
+    params(("workspace_id" = String, Path, description = "Workspace ID")),
+    request_body = UnstagePatchRequest,
+    responses(
+        (status = 200, description = "Patch unstaged"),
+        (status = 400, description = "Patch could not be removed from index", body = anyharness_contract::v1::ProblemDetails),
+        (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "git"
+)]
+pub async fn unstage_patch(
+    State(state): State<AppState>,
+    Path(workspace_id): Path<String>,
+    Json(req): Json<UnstagePatchRequest>,
+) -> Result<Json<()>, ApiError> {
+    let patch = req.patch;
+    run_git_task(
+        &state,
+        workspace_id,
+        GitTaskAccess::Write,
+        "git unstage patch",
+        move |_, ws_path| {
+            GitService::unstage_patch(&ws_path, &patch)
+                .map_err(|e| ApiError::bad_request(e.to_string(), "GIT_UNSTAGE_PATCH_FAILED"))?;
             Ok(())
         },
     )

@@ -28,6 +28,7 @@ from proliferate.server.cloud.agent_gateway.topups import (
     create_llm_topup_grant,
     run_llm_topups,
 )
+from proliferate.server.cloud.materialization import service as materialization_service
 from tests.integration.agent_gateway_topups_shared import (
     StubLiteLLM,
     StubStripe,
@@ -364,3 +365,55 @@ async def test_importer_leaves_overage_subjects_to_the_topup_worker(
     # key; the top-up worker refunds the ledger instead.
     assert enforced is False
     assert disabled == []
+
+
+@pytest.mark.asyncio
+async def test_remint_schedules_materialization(
+    db_session: AsyncSession,
+    stub_litellm: StubLiteLLM,
+    stub_stripe: StubStripe,
+    topup_settings: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a virtual key rotation during top-up reactivation, agent-auth
+    materialization is scheduled for the affected user."""
+    monkeypatch.setattr(settings, "agent_gateway_free_credit_usd", "5")
+    user_id = await _create_user(db_session)
+    enrollment = await ensure_user_enrollment(db_session, user_id)
+    old_key_id = enrollment.virtual_key_id
+    assert old_key_id is not None
+    await _spend(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        cost_usd=6.0,
+    )
+    await store.set_enrollment_budget_status(
+        db_session,
+        enrollment_id=enrollment.id,
+        budget_status="exhausted",
+    )
+
+    scheduled_users: list[uuid.UUID] = []
+
+    async def record_schedule(db: AsyncSession, *, user_id: uuid.UUID) -> None:
+        scheduled_users.append(user_id)
+
+    monkeypatch.setattr(
+        materialization_service,
+        "schedule_materialize_agent_auth",
+        record_schedule,
+        raising=False,
+    )
+
+    # Unblock will fail, triggering the remint path.
+    stub_litellm.fail_unblock = True
+    await create_llm_topup_grant(
+        db_session,
+        billing_subject_id=enrollment.billing_subject_id,
+        amount_usd=Decimal("10"),
+        source_ref=f"llm_topup:in_remint_{uuid.uuid4().hex[:6]}",
+    )
+
+    # The key was rotated and materialization was scheduled.
+    assert stub_litellm.rotated == [old_key_id]
+    assert scheduled_users == [user_id]

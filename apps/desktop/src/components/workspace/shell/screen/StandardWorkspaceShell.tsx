@@ -21,6 +21,7 @@ import {
   WorkspaceSidebarHeaderControls,
 } from "@/components/workspace/shell/sidebar/WorkspaceSidebarHeaderControls";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
+import { OfflineIndicator } from "@/components/app/OfflineIndicator";
 import { useMainScreenState } from "@/hooks/main/facade/use-main-screen-state";
 import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-shortcuts";
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
@@ -290,6 +291,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                     </DebugProfiler>
                   </div>
 
+                  <OfflineIndicator />
                   <div className="flex min-h-0 flex-1 overflow-hidden bg-sidebar-background">
                     {hasLaunchIntentOnlyShell ? (
                       <DebugProfiler id="workspace-content-frame">

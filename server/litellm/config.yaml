@@ -95,5 +95,57 @@ model_list:
       model: xai/grok-3-mini-latest
       api_key: os.environ/XAI_API_KEY
 
+  # AWS Bedrock. Credentials come from the AWS default credential chain:
+  # deployed (prod/staging): the ECS task role with attached policy
+  # arn:aws:iam::157466816238:policy/proliferate-gateway-bedrock-invoke;
+  # local dev: GATEWAY_AWS_ACCESS_KEY_ID + GATEWAY_AWS_SECRET_ACCESS_KEY
+  # environment variables (optional; stack boots without them). Model names
+  # are the REAL inference-profile IDs so the family-key join enriches rows
+  # and Bedrock-pinned harness IDs resolve. LiteLLM's bedrock provider
+  # accepts pass-through for cross-region inference profiles (us.*, eu.*,
+  # global.*) — these IDs are verified to exist in the LiteLLM manifest.
+  #
+  # Anthropic on Bedrock (us. cross-region profiles):
+  - model_name: us.anthropic.claude-sonnet-4-6
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-4-6
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-sonnet-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-sonnet-5
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-opus-4-7
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-4-7
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-opus-4-8
+    litellm_params:
+      model: bedrock/us.anthropic.claude-opus-4-8
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-fable-5
+    litellm_params:
+      model: bedrock/us.anthropic.claude-fable-5
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: us.anthropic.claude-haiku-4-5-20251001-v1:0
+    litellm_params:
+      model: bedrock/us.anthropic.claude-haiku-4-5-20251001-v1:0
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  #
+  # Anthropic on Bedrock (global. cross-region profiles):
+  - model_name: global.anthropic.claude-fable-5
+    litellm_params:
+      model: bedrock/global.anthropic.claude-fable-5
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  #
+  # OpenAI open-weight on Bedrock:
+  - model_name: openai.gpt-oss-120b-1:0
+    litellm_params:
+      model: bedrock/openai.gpt-oss-120b-1:0
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+  - model_name: openai.gpt-oss-20b-1:0
+    litellm_params:
+      model: bedrock/openai.gpt-oss-20b-1:0
+      aws_region_name: os.environ/AWS_BEDROCK_REGION
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

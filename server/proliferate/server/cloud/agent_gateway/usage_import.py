@@ -32,20 +32,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
     AGENT_GATEWAY_BUDGET_STATUS_EXHAUSTED,
+    AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
     AGENT_USAGE_EVENT_STATUS_IMPORTED,
     AGENT_USAGE_EVENT_STATUS_NEEDS_REVIEW,
 )
 from proliferate.db.store import agent_gateway as agent_gateway_store
+from proliferate.db.store import billing as billing_store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
+from proliferate.db.store.agent_gateway import usage as llm_usage_store
 from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMSpendLogEntry
-from proliferate.server.cloud.agent_gateway.topups import topups_enabled
+from proliferate.server.billing.budget_limits import window_bounds
+from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
+from proliferate.server.cloud.agent_gateway.topups import (
+    reactivate_enrollment_if_credited,
+    topups_enabled,
+)
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
 
 _ZERO = Decimal("0")
+
+# Keyset-pagination page size for the limit_reached sweep below.
+_LIMIT_REACHED_SWEEP_PAGE_SIZE = 500
 
 
 @dataclass(frozen=True)
@@ -106,6 +117,11 @@ async def run_usage_import(
     from there (minus the overlap). Rows whose virtual key cannot be resolved
     to an enrollment are still recorded (with null subject links and a
     ``needs_review`` status) so spend is never silently dropped.
+
+    Org-wide LLM cap enforcement runs twice: once for orgs with new spend this
+    tick, and once as a sweep over every org still holding a ``limit_reached``
+    member (regardless of new spend) so a cap raise/disable can re-enable a
+    fully-disabled org even on a tick with zero imported rows.
     """
     at = now or utcnow()
     cursor = await agent_gateway_store.get_usage_import_cursor(db)
@@ -218,6 +234,49 @@ async def run_usage_import(
         if await _enforce_subject_exhaustion(db, subject_id, subject_enrollments, now=at):
             exhausted += len(subject_enrollments)
 
+    # Org budget-limit enforcement (spec §4.1): for every org touched this tick,
+    # apply its enabled LLM caps to all member keys (org enrollments share the
+    # org's billing subject).
+    affected_orgs: dict[UUID, UUID] = {
+        enrollment.organization_id: enrollment.billing_subject_id
+        for enrollment in touched.values()
+        if enrollment.organization_id is not None
+    }
+    for organization_id, subject_id in affected_orgs.items():
+        await _enforce_org_llm_limits(
+            db,
+            organization_id=organization_id,
+            billing_subject_id=subject_id,
+            now=at,
+        )
+
+    # Sweep every org still holding a ``limit_reached`` member, regardless of
+    # whether it had new spend this tick. An org-wide cap that disables every
+    # member key stops the org from producing any new spend at all, so
+    # ``affected_orgs`` above would never see it again — a later cap raise or
+    # limit-disable must still be able to clear ``limit_reached`` on a
+    # zero-new-spend tick.
+    after: UUID | None = None
+    while True:
+        page = await agent_gateway_store.list_organizations_with_limit_reached_enrollments(
+            db,
+            limit=_LIMIT_REACHED_SWEEP_PAGE_SIZE,
+            after=after,
+        )
+        if not page:
+            break
+        for organization_id, subject_id in page:
+            if organization_id not in affected_orgs:
+                await _enforce_org_llm_limits(
+                    db,
+                    organization_id=organization_id,
+                    billing_subject_id=subject_id,
+                    now=at,
+                )
+        if len(page) < _LIMIT_REACHED_SWEEP_PAGE_SIZE:
+            break
+        after = page[-1][0]
+
     await agent_gateway_store.advance_usage_import_cursor(
         db,
         last_seen_occurred_at=max_occurred_at,
@@ -296,24 +355,107 @@ async def _enforce_subject_exhaustion(
     return enforced
 
 
-async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
-    """Whether a user may launch a gateway-route session (later launch-gating).
+async def _enforce_org_llm_limits(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    billing_subject_id: UUID,
+    now: datetime,
+) -> None:
+    """Apply the org's enabled LLM budget caps to its member virtual keys.
 
-    True when the gateway is disabled (LiteLLM budgets are the only guardrail),
-    or the user has no credit grant (default-budget subjects are never blocked
-    on the ledger), or their remaining LLM credit is above zero. False only when
-    a granted subject has spent its credit — the exhaustion signal PR 4's
-    capabilities endpoint will consume.
+    Every enabled limit row is checked independently (spec: ``BillingBudgetLimit``
+    docstring — "both can coexist; enforcement checks both"): a per-user row is
+    compared against that member's own window spend, an org-wide row against the
+    whole subject's window spend. A member is over cap if ANY applicable limit
+    breaches — not just the raw-tightest one, since caps on different windows
+    (e.g. a per-user $5/day cap and an org-wide $100/month cap) aren't
+    comparable by raw value. Over cap disables the key and sets
+    ``budget_status='limit_reached'`` (only from ``ok`` — never overriding
+    ``exhausted``); back under cap with positive credit re-enables it.
     """
-    if not settings.agent_gateway_enabled:
-        return True
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
-    if enrollment is None:
-        return True
-    balance = await agent_gateway_store.get_remaining_credit_usd(
+    limits = await billing_store.list_budget_limits(db, organization_id)
+    enabled_llm_limits = [limit for limit in limits if limit.kind == "llm" and limit.enabled]
+    enrollments = await agent_gateway_store.list_active_enrollments_for_subject(
         db,
-        enrollment.billing_subject_id,
+        billing_subject_id=billing_subject_id,
     )
-    if balance.granted_usd <= _ZERO:
-        return True
-    return balance.remaining_usd > _ZERO
+    if not enrollments:
+        return
+
+    spend_cache: dict[tuple[str, UUID | None], float] = {}
+
+    async def _window_spend(window: str, scope_user_id: UUID | None) -> float:
+        key = (window, scope_user_id)
+        if key not in spend_cache:
+            start, end = window_bounds(window, now)
+            spend_cache[key] = await llm_usage_store.llm_cost_usd_in_window(
+                db,
+                billing_subject_id=billing_subject_id,
+                start=start,
+                end=end,
+                user_id=scope_user_id,
+            )
+        return spend_cache[key]
+
+    for enrollment in enrollments:
+        if enrollment.user_id is None:
+            continue
+        over_cap = False
+        for limit in enabled_llm_limits:
+            if limit.user_id is not None and limit.user_id != enrollment.user_id:
+                continue
+            scope_user_id = enrollment.user_id if limit.user_id is not None else None
+            used = await _window_spend(limit.window, scope_user_id)
+            if used >= float(limit.cap_value):
+                over_cap = True
+                break
+
+        if over_cap:
+            await _apply_llm_limit_reached(db, enrollment)
+        elif enrollment.budget_status == AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED:
+            await reactivate_enrollment_if_credited(
+                db,
+                billing_subject_id,
+                enrollment,
+                now=now,
+            )
+
+
+async def _apply_llm_limit_reached(
+    db: AsyncSession,
+    enrollment: AgentGatewayEnrollmentRecord,
+) -> None:
+    """Disable a member's key and flip it to ``limit_reached`` (idempotent).
+
+    Skips enrollments already ``limit_reached`` or ``exhausted`` — credit
+    exhaustion is the stronger signal and is cleared by top-up reactivation.
+    """
+    if enrollment.budget_status in (
+        AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
+        AGENT_GATEWAY_BUDGET_STATUS_EXHAUSTED,
+    ):
+        return
+    if enrollment.virtual_key_id:
+        try:
+            await litellm.disable_virtual_key(key_or_token_id=enrollment.virtual_key_id)
+        except LiteLLMIntegrationError as error:
+            logger.warning(
+                "Failed to disable virtual key at budget limit",
+                extra={
+                    "enrollment_id": str(enrollment.id),
+                    "error_code": error.code,
+                },
+            )
+            return
+    await agent_gateway_store.set_enrollment_budget_status(
+        db,
+        enrollment_id=enrollment.id,
+        budget_status=AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
+    )
+
+
+# Re-exported for existing importers; the predicate lives in the leaf
+# ``budget`` module so the agent-auth state renderer can consume it without
+# creating an import cycle through topups -> materialization.
+__all__ = ["UsageImportResult", "is_gateway_budget_available", "run_usage_import"]

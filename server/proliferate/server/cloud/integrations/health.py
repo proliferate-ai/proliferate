@@ -8,7 +8,9 @@ surfaces as ``needs_reauth`` rather than failing mid-session.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -16,6 +18,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.db import session_ops
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
@@ -25,6 +28,13 @@ from proliferate.db.store.integrations.accounts import IntegrationAccountRecord
 from proliferate.db.store.integrations.definitions import IntegrationDefinitionRecord
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.access import ensure_provider_access
+
+logger = logging.getLogger(__name__)
+
+# Cap on concurrent account probes per request: each OAuth probe can spend a
+# provider round-trip (and a short DB session) refreshing a token, so an
+# unbounded fan-out under a slow provider would pile up connections/requests.
+_PROBE_CONCURRENCY = 4
 
 
 class HealthVerdict(StrEnum):
@@ -88,6 +98,44 @@ async def _account_health(
     return HealthVerdict.READY, None
 
 
+async def _probe_account_health(
+    *,
+    semaphore: asyncio.Semaphore,
+    account: IntegrationAccountRecord,
+    definition: IntegrationDefinitionRecord,
+) -> tuple[HealthVerdict, str | None]:
+    """Run one account probe on its own session so probes can run concurrently.
+
+    An ``AsyncSession`` is not concurrency-safe, so concurrent probes must not
+    share the request's session; each gets a dedicated (lazily-connecting) one.
+    The OAuth refresh itself opens and commits its own short-lived sessions
+    (see ``access._refresh_oauth_bundle``) so no connection is held across the
+    provider round-trip, and the semaphore bounds how many probes are in
+    flight at once.
+
+    One account's probe must never sink the whole health response. Because the
+    probes fan out through ``asyncio.gather`` (which propagates the first
+    exception by default), a non-``CloudApiError`` raised here — a provider or
+    network timeout, a ``SQLAlchemyError`` from the probe session or its
+    commit — would otherwise 500 the entire endpoint. ``_account_health``
+    already maps ``CloudApiError`` to a verdict; anything else is isolated to
+    this account as a generic error so every other integration still reports.
+    """
+    try:
+        async with semaphore, session_ops.open_async_session() as probe_db:
+            result = await _account_health(probe_db, account=account, definition=definition)
+            await session_ops.commit_session(probe_db)
+            return result
+    except Exception:
+        logger.warning(
+            "integration health probe failed for account %s (definition %s)",
+            account.id,
+            definition.id,
+            exc_info=True,
+        )
+        return HealthVerdict.ERROR, "probe_failed"
+
+
 async def list_integration_health(
     db: AsyncSession,
     *,
@@ -118,14 +166,37 @@ async def list_integration_health(
         for account in await accounts_store.list_accounts_for_user(db, user_id)
     }
 
-    items: list[IntegrationHealth] = []
-    for definition in definitions:
-        if definition.archived_at is not None:
-            continue
+    visible = [definition for definition in definitions if definition.archived_at is None]
+
+    def _effective_enabled(definition: IntegrationDefinitionRecord) -> bool:
         policy_enabled = policies.get(definition.id)
-        effective_enabled = (
-            policy_enabled if policy_enabled is not None else definition.enabled_by_default
+        return policy_enabled if policy_enabled is not None else definition.enabled_by_default
+
+    # Account probes are independent (OAuth ones do a network round-trip), so
+    # run them concurrently; see _probe_account_health for the session story.
+    probe_targets = [
+        (definition, account)
+        for definition in visible
+        if _effective_enabled(definition) and (account := accounts.get(definition.id)) is not None
+    ]
+    probe_semaphore = asyncio.Semaphore(_PROBE_CONCURRENCY)
+    probe_outcomes = await asyncio.gather(
+        *(
+            _probe_account_health(
+                semaphore=probe_semaphore, account=account, definition=definition
+            )
+            for definition, account in probe_targets
         )
+    )
+    probed = {
+        definition.id: outcome
+        for (definition, _), outcome in zip(probe_targets, probe_outcomes, strict=True)
+    }
+
+    items: list[IntegrationHealth] = []
+    for definition in visible:
+        policy_enabled = policies.get(definition.id)
+        effective_enabled = _effective_enabled(definition)
         account = accounts.get(definition.id)
 
         if not effective_enabled:
@@ -135,7 +206,7 @@ async def list_integration_health(
             health = HealthVerdict.NEEDS_AUTH
             last_error = None
         else:
-            health, last_error = await _account_health(db, account=account, definition=definition)
+            health, last_error = probed[definition.id]
 
         items.append(
             IntegrationHealth(

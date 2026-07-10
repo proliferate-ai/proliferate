@@ -43,4 +43,37 @@ pub enum WorkerError {
     SetPrivatePermissions { path: PathBuf, source: io::Error },
     #[error("failed to write integration-gateway dotfile at {path}")]
     WriteIntegrationGateway { path: PathBuf, source: io::Error },
+    #[error("worker self-update is unsupported on {os}/{arch}")]
+    SelfUpdateUnsupported {
+        os: &'static str,
+        arch: &'static str,
+    },
+    #[error("worker artifact checksum file was empty or malformed")]
+    SelfUpdateChecksumMalformed,
+    #[error("worker artifact checksum mismatch (expected {expected}, got {actual})")]
+    SelfUpdateChecksumMismatch { expected: String, actual: String },
+    #[error("failed to locate the running worker binary")]
+    SelfUpdateCurrentExe(#[source] io::Error),
+    #[error("failed to stage the new worker binary at {path}")]
+    SelfUpdateStage { path: PathBuf, source: io::Error },
+    #[error("staged worker binary failed its preflight check: {detail}")]
+    SelfUpdatePreflight { detail: String },
+    #[error("failed to swap the worker binary at {path}")]
+    SelfUpdateSwap { path: PathBuf, source: io::Error },
+    #[error("failed to re-exec the swapped worker binary at {path}")]
+    SelfUpdateExec { path: PathBuf, source: io::Error },
+    #[error("anyharness self-update requires {field} in the worker config but it is unset")]
+    AnyharnessUpdateMissingPath { field: &'static str },
+    #[error("failed to stage the new anyharness binary at {path}")]
+    AnyharnessUpdateStage { path: PathBuf, source: io::Error },
+    #[error("staged anyharness binary failed its preflight check: {detail}")]
+    AnyharnessUpdatePreflight { detail: String },
+    #[error("failed to stop the running anyharness runtime: {detail}")]
+    AnyharnessUpdateStop { detail: String },
+    #[error("failed to swap the anyharness binary at {path}")]
+    AnyharnessUpdateSwap { path: PathBuf, source: io::Error },
+    #[error("failed to relaunch the anyharness runtime via {path}")]
+    AnyharnessUpdateRelaunch { path: PathBuf, detail: String },
+    #[error("anyharness runtime did not report version {expected} as healthy after the swap")]
+    AnyharnessUpdateHealthGate { expected: String },
 }

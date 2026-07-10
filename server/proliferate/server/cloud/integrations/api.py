@@ -232,6 +232,7 @@ async def create_admin_integration_definition_endpoint(
         display_name=body.display_name,
         namespace=body.namespace,
         mcp_url=body.mcp_url,
+        auth_kind=body.auth_kind,
     )
 
 

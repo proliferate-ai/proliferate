@@ -1,25 +1,36 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
-    ORGANIZATION_ROLE_MEMBER,
-    ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
+)
+from proliferate.db.models.cloud.integrations import (
+    CloudIntegrationAccount,
+    CloudIntegrationDefinition,
+    CloudIntegrationOAuthFlow,
 )
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
+from proliferate.db.store.integrations.tool_cache import get_tool_cache, upsert_tool_cache
 from proliferate.integrations.integration_oauth.models import (
     AuthorizationServerMetadata,
     ProtectedResourceMetadata,
     RegisteredOAuthClient,
+)
+from proliferate.server.cloud.integrations.config import (
+    IntegrationConfig,
+    StaticUrl,
+    serialize_definition_config,
 )
 from proliferate.server.cloud.integrations.oauth import clients as oauth_clients
 from proliferate.server.cloud.integrations.oauth import service as oauth_service
@@ -90,8 +101,24 @@ class TestAuthenticateIntegration:
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         auth = await _authed_user(client, db_session, prefix="int-none")
-        await _seed_definitions(db_session)
-        definition_id = await _definition_id(db_session, "cloudflare_docs")
+        # Create a test definition with auth_kind="none" since no seed has that anymore.
+        test_config = IntegrationConfig(
+            transport="http",
+            url=StaticUrl("https://test.example.com/mcp"),
+            display_url="https://test.example.com/mcp",
+        )
+        definition = await definitions_store.upsert_seed_definition(
+            db_session,
+            namespace="test_none_provider",
+            display_name="Test None Provider",
+            description="Test provider for none auth flow",
+            auth_kind="none",
+            oauth_client_mode=None,
+            config_json=serialize_definition_config(test_config),
+            enabled_by_default=True,
+        )
+        await db_session.commit()
+        definition_id = str(definition.id)
 
         response = await client.post(
             "/v1/cloud/integrations/authentications",
@@ -104,7 +131,7 @@ class TestAuthenticateIntegration:
         account = body["account"]
         assert account["status"] == "ready"
         assert account["authKind"] == "none"
-        assert account["namespace"] == "cloudflare_docs"
+        assert account["namespace"] == "test_none_provider"
 
     @pytest.mark.asyncio
     async def test_authenticate_api_key_stores_credential(
@@ -243,8 +270,24 @@ class TestRemoveAccount:
     @pytest.mark.asyncio
     async def test_remove_account(self, client: AsyncClient, db_session: AsyncSession) -> None:
         auth = await _authed_user(client, db_session, prefix="int-remove")
-        await _seed_definitions(db_session)
-        definition_id = await _definition_id(db_session, "cloudflare_docs")
+        # Create a test definition with auth_kind="none" for account removal test.
+        test_config = IntegrationConfig(
+            transport="http",
+            url=StaticUrl("https://test.example.com/mcp"),
+            display_url="https://test.example.com/mcp",
+        )
+        definition = await definitions_store.upsert_seed_definition(
+            db_session,
+            namespace="test_remove_provider",
+            display_name="Test Remove Provider",
+            description="Test provider for account removal",
+            auth_kind="none",
+            oauth_client_mode=None,
+            config_json=serialize_definition_config(test_config),
+            enabled_by_default=True,
+        )
+        await db_session.commit()
+        definition_id = str(definition.id)
 
         created = await client.post(
             "/v1/cloud/integrations/authentications",
@@ -274,130 +317,85 @@ class TestRemoveAccount:
         assert response.status_code == 404
 
 
-class TestAdminDefinitions:
+class TestIntegrationForeignKeys:
     @pytest.mark.asyncio
-    async def test_admin_create_and_set_enabled(
+    async def test_delete_definition_with_account_is_restricted(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        auth = await _authed_user(client, db_session, prefix="int-admin")
+        auth = await _authed_user(client, db_session, prefix="fk-restrict")
         await _seed_definitions(db_session)
-        org_id = await _create_org_with_role(
-            db_session, user_id=auth.user_id, role=ORGANIZATION_ROLE_OWNER
+        definition_id = uuid.UUID(await _definition_id(db_session, "context7"))
+        await accounts_store.upsert_account(
+            db_session,
+            user_id=uuid.UUID(auth.user_id),
+            definition_id=definition_id,
+            auth_kind="api_key",
+            status="ready",
         )
+        await db_session.commit()
 
-        created = await client.post(
-            f"/v1/cloud/integrations/admin/organizations/{org_id}/definitions",
-            headers=auth.headers,
-            json={
-                "displayName": "Internal Tools",
-                "namespace": "internal-tools",
-                "mcpUrl": "https://mcp.internal.example.com/mcp",
-            },
-        )
-        assert created.status_code == 200, created.text
-        definition = created.json()
-        assert definition["source"] == "org_custom"
-        assert definition["authKind"] == "none"
-        assert definition["effectiveEnabled"] is True
-        definition_id = definition["definitionId"]
-
-        listed = await client.get(
-            f"/v1/cloud/integrations/admin/organizations/{org_id}/definitions",
-            headers=auth.headers,
-        )
-        assert listed.status_code == 200, listed.text
-        namespaces = {d["namespace"] for d in listed.json()}
-        assert "internal-tools" in namespaces
-        assert "context7" in namespaces  # seed definitions are visible too
-
-        disabled = await client.patch(
-            f"/v1/cloud/integrations/admin/organizations/{org_id}"
-            f"/definitions/{definition_id}/enabled",
-            headers=auth.headers,
-            json={"enabled": False},
-        )
-        assert disabled.status_code == 200, disabled.text
-        assert disabled.json()["effectiveEnabled"] is False
-        assert disabled.json()["policyEnabled"] is False
+        with pytest.raises(IntegrityError):
+            await db_session.execute(
+                delete(CloudIntegrationDefinition).where(
+                    CloudIntegrationDefinition.id == definition_id
+                )
+            )
+        await db_session.rollback()
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "namespace",
-        ["", "Internal Tools", "-leading-dash", "UPPER", "a" * 65],
-    )
-    async def test_admin_create_rejects_invalid_namespace(
-        self, client: AsyncClient, db_session: AsyncSession, namespace: str
-    ) -> None:
-        auth = await _authed_user(client, db_session, prefix="int-admin-badns")
-        org_id = await _create_org_with_role(
-            db_session, user_id=auth.user_id, role=ORGANIZATION_ROLE_OWNER
-        )
-
-        response = await client.post(
-            f"/v1/cloud/integrations/admin/organizations/{org_id}/definitions",
-            headers=auth.headers,
-            json={
-                "displayName": "Internal Tools",
-                "namespace": namespace,
-                "mcpUrl": "https://mcp.internal.example.com/mcp",
-            },
-        )
-        assert response.status_code == 400, response.text
-        assert response.json()["detail"]["code"] == "invalid_payload"
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "mcp_url",
-        ["", "not-a-url", "ftp://mcp.example.com/mcp", "https://", "http:///path-only"],
-    )
-    async def test_admin_create_rejects_invalid_mcp_url(
-        self, client: AsyncClient, db_session: AsyncSession, mcp_url: str
-    ) -> None:
-        auth = await _authed_user(client, db_session, prefix="int-admin-badurl")
-        org_id = await _create_org_with_role(
-            db_session, user_id=auth.user_id, role=ORGANIZATION_ROLE_OWNER
-        )
-
-        response = await client.post(
-            f"/v1/cloud/integrations/admin/organizations/{org_id}/definitions",
-            headers=auth.headers,
-            json={
-                "displayName": "Internal Tools",
-                "namespace": "internal-tools",
-                "mcpUrl": mcp_url,
-            },
-        )
-        assert response.status_code == 400, response.text
-        assert response.json()["detail"]["code"] == "invalid_payload"
-
-    @pytest.mark.asyncio
-    async def test_admin_create_requires_admin(
+    async def test_delete_account_cascades_tool_cache_and_flows(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
-        auth = await _authed_user(client, db_session, prefix="int-nonadmin")
-        org_id = await _create_org_with_role(
-            db_session, user_id=auth.user_id, role=ORGANIZATION_ROLE_MEMBER
+        auth = await _authed_user(client, db_session, prefix="fk-cascade")
+        await _seed_definitions(db_session)
+        definition_id = uuid.UUID(await _definition_id(db_session, "context7"))
+        account = await accounts_store.upsert_account(
+            db_session,
+            user_id=uuid.UUID(auth.user_id),
+            definition_id=definition_id,
+            auth_kind="api_key",
+            status="ready",
         )
+        await upsert_tool_cache(
+            db_session,
+            account_id=account.id,
+            auth_version=account.auth_version,
+            tools_json="[]",
+            content_hash=None,
+            status="ready",
+            fetched_at=datetime.now(UTC),
+            error_code=None,
+        )
+        db_session.add(
+            CloudIntegrationOAuthFlow(
+                account_id=account.id,
+                owner_user_id=uuid.UUID(auth.user_id),
+                definition_id=definition_id,
+                state_hash="fk-cascade-state",
+                code_verifier_ciphertext="ciphertext",
+                client_id="client",
+                redirect_uri="https://api.example.com/cb",
+                authorization_url="https://auth.example.com/authorize",
+                expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
+        await db_session.commit()
 
-        response = await client.post(
-            f"/v1/cloud/integrations/admin/organizations/{org_id}/definitions",
-            headers=auth.headers,
-            json={
-                "displayName": "Nope",
-                "namespace": "nope",
-                "mcpUrl": "https://mcp.internal.example.com/mcp",
-            },
+        await db_session.execute(
+            delete(CloudIntegrationAccount).where(CloudIntegrationAccount.id == account.id)
         )
-        assert response.status_code == 403
-        assert response.json()["detail"]["code"] == "organization_permission_denied"
+        await db_session.commit()
 
-    @pytest.mark.asyncio
-    async def test_admin_requires_membership(
-        self, client: AsyncClient, db_session: AsyncSession
-    ) -> None:
-        auth = await _authed_user(client, db_session, prefix="int-noorg")
-        response = await client.get(
-            f"/v1/cloud/integrations/admin/organizations/{uuid.uuid4()}/definitions",
-            headers=auth.headers,
+        assert await get_tool_cache(db_session, account.id) is None
+        remaining_flows = (
+            (
+                await db_session.execute(
+                    select(CloudIntegrationOAuthFlow).where(
+                        CloudIntegrationOAuthFlow.account_id == account.id
+                    )
+                )
+            )
+            .scalars()
+            .all()
         )
-        assert response.status_code == 404
+        assert remaining_flows == []

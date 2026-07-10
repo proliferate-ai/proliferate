@@ -34,6 +34,18 @@ vi.mock("@anyharness/sdk-react", () => ({
     mutateAsync: vi.fn(),
     isPending: false,
   }),
+  useStagePatchMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useUnstagePatchMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useReadWorkspaceFileMutation: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
 }));
 
 vi.mock("@/hooks/workspaces/facade/files/use-workspace-file-actions", () => ({
@@ -156,12 +168,14 @@ describe("GitPanel", () => {
       wrapLongLines: true,
       fileTreeOpen: false,
       allFilesCollapsed: false,
+      reviewEntries: [],
       onFilterChange: vi.fn(),
       onBaseRefChange: vi.fn(),
       onToggleLayout: vi.fn(),
       onToggleWrap: vi.fn(),
       onToggleFileTree: vi.fn(),
       onToggleAllFiles: vi.fn(),
+      onFocusFile: vi.fn(),
       onRefresh: vi.fn(),
     };
 
@@ -199,6 +213,7 @@ describe("GitPanel", () => {
         wrapLongLines: false,
         fileTreeOpen: false,
         allFilesCollapsed: false,
+        reviewEntries: [],
         changesFilter: "unstaged",
         onFilterChange: vi.fn(),
         onBaseRefChange: vi.fn(),
@@ -206,6 +221,7 @@ describe("GitPanel", () => {
         onToggleWrap: vi.fn(),
         onToggleFileTree: vi.fn(),
         onToggleAllFiles: vi.fn(),
+        onFocusFile: vi.fn(),
         onRefresh: vi.fn(),
       }),
     );

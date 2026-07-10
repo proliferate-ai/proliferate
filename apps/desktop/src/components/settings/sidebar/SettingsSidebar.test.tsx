@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,13 +15,7 @@ import {
   getShortcutHandler,
   runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
-import { requestSupportDialog } from "@/lib/infra/support/support-dialog-request";
-
-const openSupportReportWindow = vi.hoisted(() => vi.fn(async () => {}));
-
-vi.mock("@/lib/access/tauri/support", () => ({
-  openSupportReportWindow,
-}));
+import { useSupportModalStore } from "@/stores/support/support-modal-store";
 
 vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
@@ -39,6 +33,15 @@ vi.mock("@/hooks/support/derived/use-support-report-snapshot", () => ({
     defaultScope: "app_only",
     defaultWorkspaceId: null,
     workspaceOptions: [],
+  }),
+}));
+
+vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
+  useAgentCatalog: () => ({
+    agents: [],
+    agentsByKind: new Map(),
+    isLoading: false,
+    isReconciling: false,
   }),
 }));
 
@@ -97,26 +100,15 @@ function renderSettingsSidebar({
   );
 }
 
-describe("SettingsSidebar support window", () => {
-  it("opens the support report window from Support", async () => {
+describe("SettingsSidebar support modal", () => {
+  it("opens the feedback modal from Support", async () => {
     renderSettingsSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: "Support" }));
 
     await waitFor(() => {
-      expect(openSupportReportWindow).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("opens the support report window from the global support request", async () => {
-    renderSettingsSidebar();
-
-    act(() => {
-      requestSupportDialog();
-    });
-
-    await waitFor(() => {
-      expect(openSupportReportWindow).toHaveBeenCalledTimes(1);
+      expect(useSupportModalStore.getState().open).toBe(true);
+      expect(useSupportModalStore.getState().kind).toBe("bug");
     });
   });
 });
@@ -158,11 +150,10 @@ describe("SettingsSidebar layout and shortcuts", () => {
   });
 
   it("gives every harness its own entry in the Agents scope, in order", () => {
-    renderSettingsSidebar({ activeScope: "agents", activeSection: "agents" });
+    renderSettingsSidebar({ activeScope: "agents", activeSection: "agent-claude" });
 
     const navText = screen.getByRole("navigation", { name: "Settings" }).textContent ?? "";
     const expectedOrder = [
-      "Overview",
       "Claude Code",
       "Codex",
       "OpenCode",

@@ -30,7 +30,7 @@ export function McpElicitationFieldControl({
         <div className="flex items-center gap-2">
           <Checkbox
             checked={Boolean(value)}
-            onChange={(event) => onChange(event.currentTarget.checked)}
+            onCheckedChange={(checked) => onChange(checked === true)}
           />
           <Label className="mb-0 text-sm text-foreground">{label}</Label>
         </div>

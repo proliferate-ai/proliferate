@@ -61,21 +61,21 @@
      appearance-css-drift.test.ts in apps/desktop. The semantic tokens
      (--text-ui, --text-ui-sm, --text-composer, --text-title, --text-hero)
      are declared in dom.css, which this file imports. */
-  --text-xs: 0.5rem;                  /* 8px  — badges, counters */
-  --text-xs--line-height: 0.75rem;
-  --text-sm: 0.625rem;                /* 10px — settings labels, descriptions */
-  --text-sm--line-height: 1rem;
-  --text-base: 0.6875rem;             /* 11px — body, buttons, tabs, sidebar */
-  --text-base--line-height: 1rem;
-  --text-chat: 12px;                  /* default chat/message text (UI_FONT_SCALES default preset) */
+  --text-xs: 0.4375rem;               /* 7px  — badges, counters */
+  --text-xs--line-height: 0.6875rem;
+  --text-sm: 0.5rem;                  /* 8px — settings labels, descriptions */
+  --text-sm--line-height: 0.8125rem;
+  --text-base: 0.5625rem;             /* 9px — body, buttons, tabs, sidebar */
+  --text-base--line-height: 0.875rem;
+  --text-chat: 10px;                  /* default chat/message text (UI_FONT_SCALES default preset) */
   /* NOTE: --text-chat--line-height is load-bearing for the no-scroll-bump
      streaming handoff in MessageList.tsx. TRAILING_STATUS_MIN_HEIGHT derives
      from this token, so keep the two in sync structurally. */
-  --text-chat--line-height: 20px;     /* font size + 8px */
-  --text-lg: 0.875rem;                /* 14px — emphasis, section labels */
-  --text-lg--line-height: 1.25rem;
-  --text-xl: 1.125rem;                /* 18px — unchanged */
-  --text-xl--line-height: 1.75rem;
+  --text-chat--line-height: 18px;     /* font size + 8px */
+  --text-lg: 0.75rem;                 /* 12px — emphasis, section labels */
+  --text-lg--line-height: 1.125rem;
+  --text-xl: 1rem;                    /* 16px — unchanged */
+  --text-xl--line-height: 1.5rem;
 
   /* -- Animations -- */
   --animate-blink-cursor: blink-cursor 1s step-end infinite;
@@ -126,7 +126,7 @@
   --color-input: rgba(255, 255, 255, 0.15);
   --color-input-border: rgba(255, 255, 255, 0.15);
   --color-separator: #232323;
-  --color-ring: rgba(131, 195, 255, 0.76);
+  --color-ring: rgba(255, 255, 255, 0.28);
   --color-border-light: rgba(255, 255, 255, 0.05);
   --color-border-heavy: rgba(255, 255, 255, 0.15);
 
@@ -314,15 +314,15 @@
   --color-diff-added: #00a240;
   --color-diff-deleted: #e02e2a;
   --diffs-font-family: var(--font-mono);
-  --diffs-font-size: 11px;
-  --diffs-line-height: calc(var(--diffs-font-size, 11px) * 1.8);
+  --diffs-font-size: 12px;
+  --diffs-line-height: calc(var(--diffs-font-size, 12px) * 1.8);
   --scratch-font-family: var(--font-sans);
   --scratch-code-font-family: var(--font-mono);
-  --scratch-font-size: var(--text-chat, 12px);
-  --scratch-line-height: var(--text-chat--line-height, 20px);
+  --scratch-font-size: var(--text-chat, 10px);
+  --scratch-line-height: var(--text-chat--line-height, 18px);
   --scratch-list-marker-leading-space: 0.48em;
   --scratch-task-box-size: 0.82em;
-  --readable-code-font-size: 0.6875rem;
+  --readable-code-font-size: 0.5625rem;
   --readable-code-line-height: 1.625;
   --diffs-min-number-column-width: 4ch;
   --diffs-fg: #fcfcfc;
@@ -340,10 +340,12 @@
   --diffs-bg-context-override: var(--codex-diffs-context-surface);
   --diffs-bg-separator-override: var(--codex-diffs-separator-surface);
   --diffs-bg-hover-override: var(--codex-diffs-hover-surface);
-  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #00a240);
-  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 86%, #e02e2a);
-  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #00a240);
-  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 89%, #e02e2a);
+  --diffs-bg-addition-override: color-mix(in srgb, var(--color-diff-main-surface) 88%, #00a240);
+  --diffs-bg-deletion-override: color-mix(in srgb, var(--color-diff-main-surface) 88%, #e02e2a);
+  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--color-diff-main-surface) 82%, #00a240);
+  --diffs-bg-deletion-hover-override: color-mix(in srgb, var(--color-diff-main-surface) 82%, #e02e2a);
+  --diffs-bg-addition-number-override: color-mix(in srgb, var(--color-diff-main-surface) 91%, #00a240);
+  --diffs-bg-deletion-number-override: color-mix(in srgb, var(--color-diff-main-surface) 91%, #e02e2a);
   --color-diff-added-bg: var(--diffs-bg-addition-override);
   --color-diff-deleted-bg: var(--diffs-bg-deletion-override);
 
@@ -360,7 +362,7 @@
   --color-input: color-mix(in oklab, #ffffff 12%, transparent);
   --color-input-border: color-mix(in oklab, #ffffff 12%, transparent);
   --color-separator: color-mix(in oklab, #ffffff 4%, transparent);
-  --color-ring: color-mix(in oklab, #339cff 70%, transparent);
+  --color-ring: color-mix(in oklab, #ffffff 28%, transparent);
   --color-border-light: color-mix(in oklab, #ffffff 5%, transparent);
   --color-border-heavy: color-mix(in oklab, #ffffff 12%, transparent);
   --color-surface-control: color-mix(in oklab, #2b2b2b 96%, transparent);
@@ -405,6 +407,15 @@
 }
 
 .file-source-view:hover .file-source-scroll {
+  scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
+}
+
+.file-tree-scroll {
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+.file-tree-scroll:hover {
   scrollbar-color: var(--color-scrollbar-thumb-active) transparent;
 }
 
@@ -497,7 +508,7 @@ mark.codex-thread-find-active {
   --color-input: rgba(13, 13, 13, 0.1);
   --color-input-border: rgba(13, 13, 13, 0.1);
   --color-separator: #f5f5f5;
-  --color-ring: #0285ff;
+  --color-ring: rgba(13, 13, 13, 0.3);
   --color-border-light: rgba(13, 13, 13, 0.05);
   --color-border-heavy: rgba(13, 13, 13, 0.12);
   --color-surface: #ffffff;
@@ -667,7 +678,7 @@ mark.codex-thread-find-active {
   --color-input: var(--color-surface-control);
   --color-input-border: var(--color-border);
   --color-separator: var(--color-border-light);
-  --color-ring: #339cff;
+  --color-ring: color-mix(in oklab, var(--color-foreground) 30%, transparent);
 
   /* Codex electron-light accent is blue-300 #339cff even on white
      (text-accent/icon-accent/border-focus all use it). */
@@ -810,6 +821,8 @@ mark.codex-thread-find-active {
   --color-file-icon-red: hsl(0 0% 17%);
   --diffs-bg-addition-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-addition-color-override));
   --diffs-bg-deletion-override: color-mix(in srgb, var(--codex-diffs-surface) 84%, var(--diffs-deletion-color-override));
+  --diffs-bg-addition-hover-override: color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-addition-color-override));
+  --diffs-bg-deletion-hover-override: color-mix(in srgb, var(--codex-diffs-surface) 78%, var(--diffs-deletion-color-override));
   --color-diff-chat-turn-header-surface: var(--color-diff-surface);
   --color-diff-chat-inline-tool-header-surface: var(--color-diff-surface);
 }
@@ -833,6 +846,24 @@ mark.codex-thread-find-active {
 .thread-diff-virtualized {
   content-visibility: auto;
   contain-intrinsic-size: auto 36px;
+}
+
+/*
+ * Row-level virtualization for LARGE sidebar review diffs (opted in per card
+ * via data-diff-row-virtualization when the patch exceeds
+ * DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD). Every diff row cell — gutter and
+ * content are separate grid children in all three viewers — skips layout and
+ * paint while outside its scrollport, so scrolling one multi-thousand-row
+ * diff no longer keeps every row painted. `auto` in contain-intrinsic-size
+ * remembers each cell's real rendered height, so wrapped lines and per-gap
+ * context expanders don't make the scrollbar jump after first paint; the
+ * one-line-height fallback matches the min-height every unwrapped row has,
+ * keeping subgrid track sizing stable for cells that were never rendered.
+ */
+[data-diff-row-virtualization] .diff-gutter-cell,
+[data-diff-row-virtualization] .diff-content-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--diffs-line-height);
 }
 
 .composer-diff-simple-line {
@@ -879,6 +910,29 @@ mark.codex-thread-find-active {
 
 .composer-diff-simple-line [data-line-type="change-deletion"] {
   background-color: var(--diffs-bg-deletion-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-addition"]:hover,
+.composer-diff-simple-line [data-line-type="change-addition"]:hover > .diff-gutter-cell {
+  background-color: var(--diffs-bg-addition-hover-override);
+}
+
+.composer-diff-simple-line [data-line-type="change-deletion"]:hover,
+.composer-diff-simple-line [data-line-type="change-deletion"]:hover > .diff-gutter-cell {
+  background-color: var(--diffs-bg-deletion-hover-override);
+}
+
+.composer-diff-simple-line .diff-gutter-cell[data-line-type="context"],
+.composer-diff-simple-line .diff-content-cell[data-line-type="context"] {
+  color: color-mix(in srgb, var(--diffs-fg) 30%, transparent);
+}
+
+.composer-diff-simple-line .diff-content-cell[data-line-type="change-addition"] {
+  color: var(--color-diff-added);
+}
+
+.composer-diff-simple-line .diff-content-cell[data-line-type="change-deletion"] {
+  color: var(--color-diff-deleted);
 }
 
 .composer-diff-simple-line [data-separator] {
@@ -1043,6 +1097,52 @@ body {
   }
 }
 
+/* ---- Shared modal enter/exit (ModalShell / kit Dialog) ----
+   Simple clean fade: overlay and panel both fade, no motion.
+   Radix Presence holds the node mounted until the exit animation ends, so
+   the out keyframes drive the close. Compositor-only (opacity/transform). */
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+/* Opacity ONLY — the panel is centered via Tailwind's standalone translate
+   property; putting translate() in these keyframes double-shifts the panel
+   during the animation and it snaps to center when the keyframe ends. */
+@keyframes modal-panel-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-panel-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.modal-overlay-animated[data-state="open"] {
+  animation: modal-overlay-in 150ms cubic-bezier(0.19, 1, 0.22, 1);
+}
+.modal-overlay-animated[data-state="closed"] {
+  animation: modal-overlay-out 120ms ease-in forwards;
+}
+.modal-panel-animated[data-state="open"] {
+  animation: modal-panel-in 150ms cubic-bezier(0.19, 1, 0.22, 1);
+}
+.modal-panel-animated[data-state="closed"] {
+  animation: modal-panel-out 120ms ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay-animated[data-state="open"],
+  .modal-overlay-animated[data-state="closed"],
+  .modal-panel-animated[data-state="open"],
+  .modal-panel-animated[data-state="closed"] {
+    animation: none;
+  }
+}
+
 /* ---- Composer dock card motion (interaction cards / todo tracker) ----
    Owned by useComposerDockCardPresence (apps/desktop). Mount rides the codex
    chip-enter recipe — 280ms cubic-bezier(.23,1,.32,1) with a soft overshoot
@@ -1050,7 +1150,7 @@ body {
    composer, transform-origin bottom). Resolve fades the card out for 150ms
    (CARD_EXIT_DURATION_MS must match) before the slot unmounts it.
    Compositor-only by owner rule: transform/opacity ONLY (see the
-   thinking-text block below). */
+   thinking-text block in dom.css). */
 @keyframes composer-dock-card-enter {
   0% {
     opacity: 0;
@@ -1179,115 +1279,11 @@ body {
   animation: status-crossfade 150ms ease-out;
 }
 
-/* Thinking indicator — codex-grade shimmer, compositor-only.
-   OWNER RULE: this animation may only use transform/opacity. Codex's own
-   .loading-shimmer animates background-position on background-clip:text,
-   which repaints on the MAIN thread every frame; here the same look rides
-   codex's cadencedShimmer architecture instead — a masked band window
-   (.thinking-text-band) whose transform sweeps across the text while the
-   glyph copy inside counter-translates in lockstep. Both transforms run on
-   the compositor and the soft-edge mask is static (rasterized once), so no
-   per-frame paint exists to jitter.
-   Geometry contract: band window and glyph copy are both exactly the label
-   width; the glyph sweep is the negation of the band sweep (-50%→125%
-   pairs with 50%→-125%), so the copy stays glyph-aligned under any easing.
-   Change one, change both.
-   Color math (codex .loading-shimmer): base text = the ~50%-of-foreground
-   description color (--color-faint) at 45% dark / 55% light — dimmer and
-   calmer than body text. Band contrast: in dark the band is a soft SHADOW
-   (#0009 — darker than the base, a shadow passing through gray text, not a
-   shine); in light it is #ffffffbf. Motion is a smooth continuous sweep —
-   never steps(): the old cadence read as stutter at this size.
-   Hover is intentionally inert (no color or band change): the previous
-   shimmer deleted the band and recolored on mouse-over, which flickered
-   whenever the pointer crossed the transcript. */
-@keyframes thinking-band-sweep {
-  from {
-    transform: translateX(-50%);
-  }
-  to {
-    transform: translateX(125%);
-  }
-}
-
-@keyframes thinking-band-glyphs-sweep {
-  from {
-    transform: translateX(50%);
-  }
-  to {
-    transform: translateX(-125%);
-  }
-}
-
-.thinking-text {
-  position: relative;
-  color: color-mix(in srgb, var(--color-faint) 45%, transparent);
-}
-
-:root[data-mode="light"] .thinking-text {
-  color: color-mix(in srgb, var(--color-faint) 55%, transparent);
-}
-
-.thinking-text-band {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 100%;
-  overflow: hidden;
-  pointer-events: none;
-  /* Codex cadencedShimmer mask: soft-edged band, solid core 20–30%,
-     nothing beyond 50% — the sweep reads as a gentle pass, not a wipe. */
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    black 20%,
-    black 30%,
-    transparent 50%
-  );
-  mask-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    black 20%,
-    black 30%,
-    transparent 50%
-  );
-  will-change: transform;
-  animation: thinking-band-sweep var(--thinking-text-duration, 2.2s)
-    var(--thinking-text-easing, linear) infinite;
-}
-
-.thinking-text-band-glyphs {
-  display: block;
-  /* Same width as the label, so the copy lays out (and truncates)
-     identically to the base text beneath it. */
-  width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: rgb(0 0 0 / 0.6);
-  will-change: transform;
-  animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 2.2s)
-    var(--thinking-text-easing, linear) infinite;
-}
-
-:root[data-mode="light"] .thinking-text-band-glyphs {
-  color: rgb(255 255 255 / 0.75);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thinking-text {
-    color: var(--color-muted-foreground);
-  }
-
-  .thinking-text-band {
-    display: none;
-  }
-}
-
 /* ---- Sidebar update pill ---- */
 /* One-shot "ready" text sweep. Reuses the thinking-band compositor recipe
-   above (masked window whose transform sweeps the label while the glyph copy
-   inside counter-translates — transform-only, no per-frame paint) and its
-   keyframes, but runs exactly once when the pill enters the ready phase.
+   (dom.css — masked window whose transform sweeps the label while the glyph
+   copy inside counter-translates — transform-only, no per-frame paint) and
+   its keyframes, but runs exactly once when the pill enters the ready phase.
    Same geometry contract as .thinking-text-band: band width 50% of the
    label; window sweep -100%→200% pairs with glyph counter-sweep 50%→-100%. */
 .update-pill-ready-sweep {
@@ -1695,6 +1691,20 @@ body {
   color: var(--workspace-shell-action-hover-foreground);
 }
 
+/* Modifier: flat at rest, rim appears on hover/open. */
+.workspace-shell-icon-button--hover-rim {
+  border-color: transparent;
+}
+.workspace-shell-icon-button--hover-rim:hover:not(:disabled),
+.workspace-shell-icon-button--hover-rim[data-state="open"] {
+  border-color: var(--workspace-shell-action-border);
+}
+
+/* Modifier: flat always (rest, hover, open) — only tint fill on hover. */
+.workspace-shell-icon-button--flat {
+  border-color: transparent;
+}
+
 /* Split control: primary action + chevron menu segment sharing one pill.
    The left segment drops its inner edge so the right segment's border is the
    single divider seam (no doubled line). */
@@ -1715,8 +1725,14 @@ body {
 }
 
 /* ---- Right panel tabs ---- */
+/*
+ * --tab-system-height mirrors the left workspace header height so the two
+ * panes line up: 46px (codex --height-toolbar, UX_SPEC §7) in both chrome
+ * modes, matching the h-[46px] header classes in
+ * apps/desktop/src/lib/domain/preferences/workspace-chrome.ts.
+ */
 .right-panel-tab-system {
-  --tab-system-height: 46px; /* codex --height-toolbar; aligns with the top bar. */
+  --tab-system-height: 46px;
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
   --tab-height: 28px; /* codex tab chrome (UX_SPEC §8) */

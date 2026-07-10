@@ -136,6 +136,18 @@ export function useTranscriptStickToBottom({
       return;
     }
 
+    // H2 hardening: when a programmatic marker is pending but the tolerance
+    // missed (scrollHeight changed between our write and this event, or a
+    // second snap overwrote the marker before the first event dispatched),
+    // treat the event as programmatic if the scroll moved downward. Unpinning
+    // here would be a false positive — the user never scrolled.
+    if (pending && pinnedRef.current && top >= pending.expectedTop - PROGRAMMATIC_MATCH_TOL_PX) {
+      cancelAnimationFrame(pending.frame);
+      programmaticRef.current = null;
+      onScrollSample({ programmatic: true });
+      return;
+    }
+
     const distance = resolveVirtualBottomDistance({
       scrollOffset: top,
       viewportSize: viewport.clientHeight,
@@ -152,7 +164,7 @@ export function useTranscriptStickToBottom({
       setPinned(false);
     }
     onScrollSample({ programmatic: false });
-  }, [onScrollSample, repinThresholdPx, setPinned]);
+  }, [onScrollSample, pinnedRef, repinThresholdPx, setPinned]);
 
   const startGlueLoop = useCallback(() => {
     if (typeof window === "undefined") {

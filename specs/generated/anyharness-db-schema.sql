@@ -4,6 +4,42 @@ CREATE TABLE _migrations (
             applied_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+-- table: activity_processes
+CREATE TABLE activity_processes (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    process_id TEXT NOT NULL,
+    command TEXT NOT NULL,
+    cwd TEXT,
+    status TEXT NOT NULL,
+    exit_code INTEGER,
+    pid INTEGER,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    feed_id TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, process_id)
+);
+
+-- table: activity_subagents
+CREATE TABLE activity_subagents (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    subagent_id TEXT NOT NULL,
+    agent_type TEXT,
+    description TEXT,
+    model TEXT,
+    background INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    summary TEXT,
+    tokens_used INTEGER,
+    tool_calls INTEGER,
+    duration_seconds INTEGER,
+    feed_id TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, subagent_id)
+);
+
 -- table: agent_model_registry_snapshots
 CREATE TABLE agent_model_registry_snapshots (
     id TEXT PRIMARY KEY,
@@ -54,6 +90,30 @@ CREATE TABLE cowork_threads (
     created_at TEXT NOT NULL
 , workspace_delegation_enabled INTEGER NOT NULL DEFAULT 1);
 
+-- table: feed_bindings
+CREATE TABLE feed_bindings (
+    feed_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    owner_kind TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    transport_kind TEXT NOT NULL,
+    transport_path TEXT,
+    transport_thread_id TEXT,
+    transport_url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- table: gateway_model_probe
+CREATE TABLE gateway_model_probe (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    harness_kind TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    models_json TEXT NOT NULL,
+    probed_at TEXT NOT NULL
+);
+
 -- table: goals
 CREATE TABLE goals (
     id TEXT PRIMARY KEY,
@@ -74,6 +134,25 @@ CREATE TABLE goals (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 , source_kind TEXT NOT NULL DEFAULT 'user', source_run_id TEXT, max_turns INTEGER, max_wall_secs INTEGER, failed_reason TEXT, guard_turns_used INTEGER NOT NULL DEFAULT 0, guard_started_at TEXT);
+
+-- table: loops
+CREATE TABLE loops (
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    loop_id TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    schedule_kind TEXT NOT NULL,
+    schedule_expr TEXT NOT NULL,
+    recurring INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL,
+    native INTEGER NOT NULL DEFAULT 1,
+    last_fired_at_ms INTEGER,
+    fire_count INTEGER NOT NULL DEFAULT 0,
+    native_state_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at_ms INTEGER NOT NULL, max_fires INTEGER, next_fire_at_ms INTEGER,
+    PRIMARY KEY (session_id, loop_id)
+);
 
 -- table: mobility_archive_installs
 CREATE TABLE mobility_archive_installs (
@@ -630,6 +709,14 @@ CREATE INDEX idx_cowork_threads_session_id ON cowork_threads(session_id);
 -- index: idx_cowork_threads_workspace_id
 CREATE INDEX idx_cowork_threads_workspace_id ON cowork_threads(workspace_id);
 
+-- index: idx_feed_bindings_owner
+CREATE UNIQUE INDEX idx_feed_bindings_owner
+    ON feed_bindings(session_id, owner_kind, owner_id);
+
+-- index: idx_gateway_model_probe_lookup
+CREATE INDEX idx_gateway_model_probe_lookup
+    ON gateway_model_probe(harness_kind, revision, probed_at);
+
 -- index: idx_goals_session_created
 CREATE INDEX idx_goals_session_created
     ON goals(session_id, created_at DESC);
@@ -638,6 +725,10 @@ CREATE INDEX idx_goals_session_created
 CREATE UNIQUE INDEX idx_goals_single_open_per_session
     ON goals(session_id)
     WHERE status IN ('active', 'paused', 'blocked');
+
+-- index: idx_loops_session_status
+CREATE INDEX idx_loops_session_status
+    ON loops(session_id, status);
 
 -- index: idx_plan_handoffs_plan
 CREATE INDEX idx_plan_handoffs_plan

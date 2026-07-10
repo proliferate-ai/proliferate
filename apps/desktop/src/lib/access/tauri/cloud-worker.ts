@@ -18,3 +18,11 @@ export async function ensureDesktopDispatchWorker(
     input,
   });
 }
+
+export interface StopDesktopDispatchWorkerResult {
+  stopped: boolean;
+}
+
+export async function stopDesktopDispatchWorker(): Promise<StopDesktopDispatchWorkerResult> {
+  return invoke<StopDesktopDispatchWorkerResult>("stop_desktop_dispatch_worker");
+}

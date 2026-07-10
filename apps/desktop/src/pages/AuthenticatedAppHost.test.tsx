@@ -10,6 +10,10 @@ vi.mock("@/hooks/organizations/lifecycle/use-organization-selection-lifecycle", 
   useOrganizationSelectionLifecycle: vi.fn(),
 }));
 
+vi.mock("@/pages/WorkflowsPage", () => ({
+  WorkflowsPage: () => <section data-testid="workflows" />,
+}));
+
 let mainMounts = 0;
 
 function TestMain({ workspaceVisible = true }: { workspaceVisible?: boolean }) {
@@ -23,6 +27,12 @@ function TestMain({ workspaceVisible = true }: { workspaceVisible?: boolean }) {
     <main data-testid="workspace" data-visible={workspaceVisible ? "true" : "false"}>
       <button type="button" onClick={() => navigate("/settings?section=general")}>
         Open settings
+      </button>
+      <button type="button" onClick={() => navigate("/workflows")}>
+        Open workflows
+      </button>
+      <button type="button" onClick={() => navigate("/")}>
+        Go home
       </button>
     </main>
   );
@@ -64,5 +74,25 @@ describe("AuthenticatedAppHost", () => {
     fireEvent.click(screen.getByText("Back"));
 
     expect(screen.getByTestId("workspace").dataset.visible).toBe("true");
+  });
+
+  it("keeps the workspace mounted while on Workflows and restores it without remounting", () => {
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <AuthenticatedAppHost MainComponent={TestMain} SettingsComponent={TestSettings} />
+      </MemoryRouter>,
+    );
+
+    expect(mainMounts).toBe(1);
+
+    fireEvent.click(screen.getByText("Open workflows"));
+
+    expect(screen.getByTestId("workflows")).toBeTruthy();
+    expect(screen.getByTestId("workspace").dataset.visible).toBe("false");
+
+    fireEvent.click(screen.getByText("Go home"));
+
+    expect(screen.getByTestId("workspace").dataset.visible).toBe("true");
+    expect(mainMounts).toBe(1);
   });
 });

@@ -54,6 +54,15 @@ pub mod fact_kinds {
     pub const GROK_AUTH_JSON_OAUTH: &str = "grok-auth-json-oauth";
 }
 
+/// Enrolled runtime-route kinds. A `Route` fact is NOT credential detection —
+/// it is emitted by the launch-facts collector from workspace-scoped
+/// `agent-auth/state.json`, never by [`collect_facts`] (which only scans the
+/// home dir + env).
+pub mod route_kinds {
+    /// The Proliferate LiteLLM gateway route.
+    pub const GATEWAY: &str = "gateway";
+}
+
 /// One observed credential fact. Presence only for secrets: `Env` carries no
 /// value, ever; `EnvFlag` values are readable because flag vars are
 /// registry-declared non-secrets.
@@ -65,6 +74,11 @@ pub enum CredentialFact {
     EnvFlag { var: String, value: String },
     /// A named local-discovery observation, e.g. `"claude-oauth-creds"`.
     Discovery { kind: String },
+    /// An enrolled runtime route (e.g. the gateway) resolved from
+    /// workspace-scoped `agent-auth/state.json` — NOT credential detection.
+    /// Emitted by the launch-facts collector in `anyharness-lib`, never by
+    /// [`collect_facts`]. See [`route_kinds`].
+    Route { kind: String },
 }
 
 /// Collect every credential fact observable for `home_dir` plus the

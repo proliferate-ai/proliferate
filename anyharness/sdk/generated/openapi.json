@@ -297,6 +297,88 @@
         }
       }
     },
+    "/v1/agents/{kind}/catalog/gateway-models": {
+      "get": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "get_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved gateway model plan (probe or seed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayModelsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agents/{kind}/catalog/refresh-gateway": {
+      "post": {
+        "tags": [
+          "catalogs"
+        ],
+        "operationId": "refresh_gateway_models",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "description": "Agent kind identifier",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gateway re-probed and recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefreshGatewayResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No gateway selection for this harness",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Gateway probe failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/agents/{kind}/install": {
       "post": {
         "tags": [
@@ -2295,6 +2377,273 @@
           },
           "404": {
             "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/loops": {
+      "get": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "list_session_loops",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session's active loops",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "set_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Loop armed (native cron set, or emulated loop scheduled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "clear_session_loops",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All loops cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionLoopsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/loops/{loop_id}": {
+      "put": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "edit_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loop_id",
+            "in": "path",
+            "description": "Loop ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionLoopRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Loop edited (emulated loops only)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionLoopResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or loop not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "loops"
+        ],
+        "operationId": "clear_session_loop",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "loop_id",
+            "in": "path",
+            "description": "Loop ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The loop was cleared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearSessionLoopsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session cannot take loop mutations",
             "content": {
               "application/json": {
                 "schema": {
@@ -4590,6 +4939,60 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/git/stage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "stage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch staged"
+          },
+          "400": {
+            "description": "Patch could not be applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/git/status": {
       "get": {
         "tags": [
@@ -4661,6 +5064,60 @@
         "responses": {
           "200": {
             "description": "Files unstaged"
+          },
+          "404": {
+            "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/workspaces/{workspace_id}/git/unstage-patch": {
+      "post": {
+        "tags": [
+          "git"
+        ],
+        "operationId": "unstage_patch",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnstagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Patch unstaged"
+          },
+          "400": {
+            "description": "Patch could not be removed from index",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
           },
           "404": {
             "description": "Workspace not found",
@@ -6125,6 +6582,168 @@
   },
   "components": {
     "schemas": {
+      "ActivityProcess": {
+        "type": "object",
+        "description": "A harness-owned or client-executed process the agent is running in the\nbackground (Claude background bash, Cursor detached terminals, …).\nRead-only roster element — never externally settable.",
+        "required": [
+          "id",
+          "command",
+          "status",
+          "startedAt"
+        ],
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "endedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeedRef"
+              }
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "pid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Cursor provides a real pid; Claude does not.",
+            "minimum": 0
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProcessStatus"
+          }
+        }
+      },
+      "ActivityProcessUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "process"
+        ],
+        "properties": {
+          "process": {
+            "$ref": "#/components/schemas/ActivityProcess"
+          }
+        }
+      },
+      "ActivitySubagent": {
+        "type": "object",
+        "description": "A harness-native subagent (Claude Task agent, Codex collab child thread,\nCursor `cursor/task`). Read-only roster element; the ⑂ chip routes to the\nexisting delegated-work surfaces.",
+        "required": [
+          "id",
+          "background",
+          "status"
+        ],
+        "properties": {
+          "agentType": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "background": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "feed": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/FeedRef"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "description": "Claude `task_id` / Codex child `threadId` / Cursor `agentId`."
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubagentStatus"
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityUsage"
+              }
+            ]
+          }
+        }
+      },
+      "ActivitySubagentUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "agent"
+        ],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/ActivitySubagent"
+          }
+        }
+      },
+      "ActivityUsage": {
+        "type": "object",
+        "properties": {
+          "durationSeconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "tokensUsed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "toolCalls": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "AdvanceReplaySessionResponse": {
         "type": "object",
         "required": [
@@ -6135,6 +6754,15 @@
             "type": "boolean"
           }
         }
+      },
+      "AgentCliAuthState": {
+        "type": "string",
+        "enum": [
+          "authenticated",
+          "expired",
+          "absent",
+          "unsupported"
+        ]
       },
       "AgentCredentialState": {
         "type": "string",
@@ -6174,14 +6802,62 @@
               "null"
             ]
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "displayName": {
             "type": "string"
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort"
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "id": {
             "type": "string"
           },
           "isDefault": {
             "type": "boolean"
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (joined from the bundled\ncatalog's `controls.mode.values`); absent when the model has no mode\ncontrol (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus"
+              }
+            ]
           }
         }
       },
@@ -6475,6 +7151,16 @@
         "properties": {
           "agentProcess": {
             "$ref": "#/components/schemas/ArtifactStatus"
+          },
+          "cliAuthState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentCliAuthState"
+              }
+            ]
           },
           "credentialState": {
             "$ref": "#/components/schemas/AgentCredentialState"
@@ -6791,6 +7477,20 @@
         "properties": {
           "cleared": {
             "type": "boolean"
+          }
+        }
+      },
+      "ClearSessionLoopsResponse": {
+        "type": "object",
+        "required": [
+          "cleared"
+        ],
+        "properties": {
+          "cleared": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many loops were cleared (0 when the target was already gone).",
+            "minimum": 0
           }
         }
       },
@@ -8597,6 +9297,26 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "network_connection"
+                ]
+              },
+              "provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
           }
         ]
       },
@@ -8657,6 +9377,29 @@
           },
           "requireCleanGitState": {
             "type": "boolean"
+          }
+        }
+      },
+      "FeedKind": {
+        "type": "string",
+        "enum": [
+          "terminal_bytes",
+          "transcript"
+        ]
+      },
+      "FeedRef": {
+        "type": "object",
+        "description": "An opaque handle to a roster element's live content stream. The UI never\nlearns the transport (`tail_file` / `acp_child_demux` / `http_sse`) — that\ndetail stays inside the runtime's `FeedBinding` table and is resolved\nlazily by the `FeedService` only while a panel watches it.",
+        "required": [
+          "feedId",
+          "kind"
+        ],
+        "properties": {
+          "feedId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FeedKind"
           }
         }
       },
@@ -8781,6 +9524,107 @@
         "enum": [
           "before_user_message"
         ]
+      },
+      "GatewayModelEntry": {
+        "type": "object",
+        "description": "One enriched gateway model row (spec §1). Catalog-known ids carry the joined\ndisplay metadata; probe-only ids (the proxy serves it but the bundled\ncatalog doesn't know it) emit just `{ id, provider? }`.",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog description; absent when the catalog omits one or for probe-only ids."
+          },
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Catalog display name; absent for probe-only ids."
+          },
+          "effort": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelEffort",
+                "description": "The thinking/effort control (`values` + observed `default`); absent when\nthe model has no effort control or is probe-only."
+              }
+            ]
+          },
+          "fastMode": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether the model carries a `fast_mode` control; absent for probe-only ids."
+          },
+          "id": {
+            "type": "string",
+            "description": "The gateway model id (always present — the render plane keys on this)."
+          },
+          "modes": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "The permission/agent modes the model supports (`controls.mode.values`);\nabsent when the model has no mode control or is probe-only (contract §5)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider id from the id-prefix matcher (`claude-*`→anthropic, …); absent\nwhen no family matches."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelCatalogStatus",
+                "description": "Catalog lifecycle status; absent for probe-only ids."
+              }
+            ]
+          }
+        }
+      },
+      "GatewayModelsResponse": {
+        "type": "object",
+        "description": "Resolved gateway model plan for the local surface.",
+        "required": [
+          "models",
+          "source"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GatewayModelEntry"
+            },
+            "description": "The resolved, provider-filtered models — each id enriched with the\nbundled catalog row (or bare `{ id, provider? }` for probe-only ids)."
+          },
+          "probedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When a probe supplied the list (RFC3339); absent for seed."
+          },
+          "source": {
+            "type": "string",
+            "description": "`\"seed\"` (no probe yet) or `\"probe\"` (a live probe supplied the list)."
+          }
+        }
       },
       "GetSessionLiveConfigResponse": {
         "type": "object",
@@ -10090,6 +10934,130 @@
           }
         }
       },
+      "Loop": {
+        "type": "object",
+        "description": "A recurring in-session prompt on a schedule: a strict mirror of native\nharness state where it exists (Claude session crons) and a\nruntime-emulated equivalent where it doesn't (Codex — `native: false`).\nUnlike [`super::Goal`], **multiple loops per session are allowed**, keyed\nby `loop_id` (LoopPort wire contract v1).",
+        "required": [
+          "loopId",
+          "prompt",
+          "schedule",
+          "recurring",
+          "status",
+          "native",
+          "fireCount",
+          "updatedAtMs"
+        ],
+        "properties": {
+          "fireCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastFiredAtMs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "loopId": {
+            "type": "string"
+          },
+          "native": {
+            "type": "boolean"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "recurring": {
+            "type": "boolean"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/LoopSchedule"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LoopStatus"
+          },
+          "updatedAtMs": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "LoopFiredPayload": {
+        "type": "object",
+        "required": [
+          "loop",
+          "firedAtMs"
+        ],
+        "properties": {
+          "firedAtMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "LoopRemovedPayload": {
+        "type": "object",
+        "required": [
+          "loopId"
+        ],
+        "properties": {
+          "loopId": {
+            "type": "string"
+          }
+        }
+      },
+      "LoopSchedule": {
+        "type": "object",
+        "required": [
+          "kind",
+          "expr"
+        ],
+        "properties": {
+          "expr": {
+            "type": "string",
+            "description": "`\"5m\"` sugar or a raw cron expression, per `kind`."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/LoopScheduleKind"
+          }
+        }
+      },
+      "LoopScheduleKind": {
+        "type": "string",
+        "enum": [
+          "interval",
+          "cron"
+        ]
+      },
+      "LoopStatus": {
+        "type": "string",
+        "description": "Normalized loop status across harnesses (LoopPort wire contract v1).",
+        "enum": [
+          "active",
+          "cleared"
+        ]
+      },
+      "LoopUpsertedPayload": {
+        "type": "object",
+        "required": [
+          "loop"
+        ],
+        "properties": {
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          }
+        }
+      },
       "MarkReviewRevisionReadyRequest": {
         "type": "object",
         "properties": {
@@ -11108,6 +12076,27 @@
           "hidden"
         ]
       },
+      "ModelEffort": {
+        "type": "object",
+        "description": "The thinking/effort control surfaced per model: the values the model\nsupports and the observed default (the runtime joins these from the\nbundled catalog's `controls.effort.{values, observedValue}`).",
+        "required": [
+          "values"
+        ],
+        "properties": {
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "NormalizedSessionControl": {
         "type": "object",
         "description": "A product-normalized live session control derived from raw ACP config options.\n\nThis is the product semantics layer used by clients to render consistent\ncontrols such as model, mode, reasoning, effort, and fast mode across\ndifferent harnesses.",
@@ -11827,6 +12816,16 @@
               "null"
             ]
           },
+          "requiredContexts": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "RFC 7807 extension member: the auth-context ids that would unlock a\ngated selection (the model's `availability.anyOf`). Only set on\n`SESSION_MODEL_GATED` (decisions ledger 16); absent on every other\nerror, so unrelated responses stay byte-identical."
+          },
           "status": {
             "type": "integer",
             "format": "int32",
@@ -11839,6 +12838,45 @@
             "type": "string"
           }
         }
+      },
+      "ProcessStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "exitCode": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "exited"
+                ]
+              }
+            }
+          }
+        ]
       },
       "PromptAttachmentSource": {
         "type": "string",
@@ -12185,6 +13223,40 @@
                 "type": "string",
                 "enum": [
                   "reviewFeedback"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A workflow step injected this prompt/command into the session (contract\n§5.2 / C10 / E9): the desktop renders the machine-driven bubble\n(\"Workflow · <label>\") from this stamp, never inference. Written at send\ntime; rides the live stream and the persisted event payload.",
+            "required": [
+              "runId",
+              "stepKey",
+              "kind",
+              "type"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "description": "The step-kind slug (`agent.prompt`, `agent.emit`, `shell.run`, …)."
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "runId": {
+                "type": "string"
+              },
+              "stepKey": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "workflow"
                 ]
               }
             }
@@ -12779,6 +13851,27 @@
           "skipped",
           "failed"
         ]
+      },
+      "RefreshGatewayResponse": {
+        "type": "object",
+        "description": "Result of a manual gateway refresh.",
+        "required": [
+          "models",
+          "probedAt"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The freshly probed model ids (unfiltered — exactly what the gateway\nreturned; the resolver applies provider filtering when building plans)."
+          },
+          "probedAt": {
+            "type": "string",
+            "description": "The probe timestamp (RFC3339)."
+          }
+        }
       },
       "RenameWorkspaceFileEntryRequest": {
         "type": "object",
@@ -14013,7 +15106,19 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/Goal"
+                "$ref": "#/components/schemas/Goal",
+                "description": "Deprecated in favor of `activity.goal` — kept for existing SDK\nconsumers; every write still moves this field too."
+              }
+            ]
+          },
+          "activity": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionActivity",
+                "description": "`SessionActivity` (turn/goal/loops/processes/agents) — the\nsession-activity-architecture aggregate. `None` when the runtime has\nnot yet assembled it for this read path."
               }
             ]
           },
@@ -14142,11 +15247,58 @@
           "fork": {
             "type": "boolean"
           },
+          "loopsNative": {
+            "type": "boolean",
+            "description": "Whether loops ride native harness state (Claude session crons) or are\nruntime-emulated (Codex `LoopSchedulerExtension`). Meaningless when\n`supports_loops` is `false`."
+          },
           "supportsGoals": {
+            "type": "boolean"
+          },
+          "supportsLoops": {
             "type": "boolean"
           },
           "targetedFork": {
             "type": "boolean"
+          }
+        }
+      },
+      "SessionActivity": {
+        "type": "object",
+        "description": "One normalized, strictly-typed, per-session aggregate: the single answer\nto \"what is this agent doing right now\" (session-activity-architecture,\nlocked 2026-07-02). Two element classes: mirrors with write paths\n(`goal`, `loops`) and read-only rosters (`processes`, `agents`), each\nroster element carrying an opaque [`FeedRef`] for its live content\nstream — the UI never learns the transport.",
+        "required": [
+          "turn"
+        ],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivitySubagent"
+            }
+          },
+          "goal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Goal"
+              }
+            ]
+          },
+          "loops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Loop"
+            }
+          },
+          "processes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityProcess"
+            }
+          },
+          "turn": {
+            "$ref": "#/components/schemas/TurnState"
           }
         }
       },
@@ -14579,6 +15731,111 @@
           {
             "allOf": [
               {
+                "$ref": "#/components/schemas/LoopUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopRemovedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_removed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LoopFiredPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "loop_fired"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivityProcessUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "process_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivitySubagentUpsertedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "subagent_upserted"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
                 "$ref": "#/components/schemas/PendingPromptAddedPayload"
               },
               {
@@ -14932,6 +16189,31 @@
           "updatedAt": {
             "type": "string",
             "description": "Timestamp when this snapshot was last updated."
+          }
+        }
+      },
+      "SessionLoopResponse": {
+        "type": "object",
+        "required": [
+          "loop"
+        ],
+        "properties": {
+          "loop": {
+            "$ref": "#/components/schemas/Loop"
+          }
+        }
+      },
+      "SessionLoopsResponse": {
+        "type": "object",
+        "required": [
+          "loops"
+        ],
+        "properties": {
+          "loops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Loop"
+            }
           }
         }
       },
@@ -15374,6 +16656,34 @@
           }
         }
       },
+      "SetSessionLoopRequest": {
+        "type": "object",
+        "description": "Arm-or-edit a loop through `PUT /v1/sessions/{id}/loops` (create) or\n`PUT /v1/sessions/{id}/loops/{loop_id}` (edit). On native harnesses (Claude\nsession crons) this drives `_anyharness/loop/set`; on emulation-eligible\nharnesses (Codex) it arms a runtime-owned loop (`native: false`) in the\n[`crate::v1`] loop scheduler.",
+        "required": [
+          "prompt",
+          "schedule"
+        ],
+        "properties": {
+          "maxFires": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Optional cap on total fires (emulated loops only). `None` = uncapped."
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "recurring": {
+            "type": "boolean",
+            "description": "Fire indefinitely (default) or once. Native crons are recurring."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/LoopSchedule"
+          }
+        }
+      },
       "SetupHint": {
         "type": "object",
         "required": [
@@ -15450,6 +16760,18 @@
           "succeeded",
           "failed"
         ]
+      },
+      "StagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to apply to the index."
+          }
+        }
       },
       "StagePathsRequest": {
         "type": "object",
@@ -15733,6 +17055,58 @@
             "format": "int64"
           }
         }
+      },
+      "SubagentStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "completed"
+                ]
+              },
+              "summary": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "failed"
+                ]
+              }
+            }
+          }
+        ]
       },
       "SubagentTurnCompletedPayload": {
         "type": "object",
@@ -16164,6 +17538,58 @@
       "TurnStartedEvent": {
         "type": "object"
       },
+      "TurnState": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "turnId",
+              "startedAt",
+              "status"
+            ],
+            "properties": {
+              "startedAt": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running"
+                ]
+              },
+              "turnId": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "status"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "idle"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "UnstagePatchRequest": {
+        "type": "object",
+        "required": [
+          "patch"
+        ],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "A valid unified diff patch (file headers + hunk) to reverse-apply from the index."
+          }
+        }
+      },
       "UnstagePathsRequest": {
         "type": "object",
         "required": [
@@ -16445,8 +17871,12 @@
             "type": "string"
           },
           "sessionIds": {
-            "type": "array",
-            "items": {
+            "type": "object",
+            "description": "Slot-keyed session map (B7): `slot -> session_id`.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
               "type": "string"
             }
           },

@@ -1,9 +1,13 @@
 """workflow entities: workflow, workflow_version, workflow_run
 
 Revision ID: e4f7a2b9c6d1
-Revises: c9b8a7d6e5f4
+Revises: a2b3c4d5e6f8
 Create Date: 2026-07-03 00:00:00.000000
 
+Gate C reconciliation: re-chained off the workflows/v1 fork branchpoint
+(c9b8a7d6e5f4) onto main's head (a2b3c4d5e6f8) so the merged tree has a single
+linear alembic head. c9b8a7d6e5f4 remains an ancestor of a2b3c4d5e6f8, so no
+migration is skipped.
 """
 
 from collections.abc import Sequence
@@ -15,7 +19,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e4f7a2b9c6d1"
-down_revision: str | Sequence[str] | None = "c9b8a7d6e5f4"
+down_revision: str | Sequence[str] | None = "a2b3c4d5e6f8"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

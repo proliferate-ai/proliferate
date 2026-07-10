@@ -90,7 +90,7 @@ export function SupportSurface({ onSubmit }: SupportSurfaceProps) {
                 <Label className="mb-0 flex min-w-0 cursor-pointer items-start gap-2 text-xs leading-4 text-muted-foreground">
                   <Checkbox
                     checked={publicContentConsent}
-                    onChange={(event) => setPublicContentConsent(event.currentTarget.checked)}
+                    onCheckedChange={(checked) => setPublicContentConsent(checked === true)}
                     className="mt-0.5"
                   />
                   <span>

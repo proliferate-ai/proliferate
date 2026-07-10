@@ -10,7 +10,9 @@ import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
 import { MacWindowControlsSafeArea } from "@/components/app/chrome/MacWindowControlsSafeArea"
+import { useConnectivityListeners } from "@/hooks/app/lifecycle/use-connectivity-listeners"
 import { useDebugSessionActivity } from "@/hooks/app/lifecycle/use-debug-session-activity"
+import { useDesktopWorkerEnrollment } from "@/hooks/cloud/lifecycle/use-desktop-worker-enrollment"
 import { useDevDesktopHandoff } from "@/hooks/app/lifecycle/use-dev-desktop-handoff"
 import { useOrganizationJoinAuthLaunch } from "@/hooks/organizations/lifecycle/use-organization-join-auth-launch"
 import { useExportRunningAgentCount } from "@/hooks/app/lifecycle/use-export-running-agent-count"
@@ -21,6 +23,7 @@ import { useAppCommandActions } from "@/hooks/app/workflows/use-app-command-acti
 import { useAuthBootstrap } from "@/hooks/auth/lifecycle/use-auth-bootstrap"
 import { useAgentAutoReconcile } from "@/hooks/agents/lifecycle/use-agent-auto-reconcile"
 import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-auth-adoption"
+import { useGatewayCatalogMirrorSync } from "@/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync"
 import { useLocalAuthStateSync } from "@/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
 import { useLocalWorkflowExecutor } from "@/hooks/workflows/lifecycle/use-local-workflow-executor"
@@ -49,6 +52,7 @@ import {
 import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstrap"
 import { AppErrorBoundary } from "@/components/app/AppErrorBoundary"
 import { RepoSetupModalHost } from "@/components/workspace/repo-setup/RepoSetupModalHost"
+import { SupportModalHost } from "@/components/support/SupportModalHost"
 import { AddRepoFlowHost } from "@/components/workspace/repo-setup/AddRepoFlowHost"
 import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
@@ -102,6 +106,14 @@ const WorkflowsPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/WorkflowsPlaygroundPage").then((m) => ({
         default: m.WorkflowsPlaygroundPage,
+      })),
+    )
+  : null
+
+const AgentsPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/AgentsPlaygroundPage").then((m) => ({
+        default: m.AgentsPlaygroundPage,
       })),
     )
   : null
@@ -199,8 +211,13 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_export_running_agent_count")
   useExportRunningAgentCount()
   recordBootDiagnosticOnce("app_runtime.render.after.use_export_running_agent_count")
+  useConnectivityListeners()
   useUpdateRestartWatcher()
   useDebugSessionActivity()
+  // Mounted here (not in AuthenticatedAppHost, which unmounts on sign-out) so
+  // the enrollment hook observes the authenticated -> anonymous transition and
+  // can tear the worker down.
+  useDesktopWorkerEnrollment()
   useDevDesktopHandoff()
   useOrganizationJoinAuthLaunch()
   recordBootDiagnosticOnce("app_runtime.render.before.use_shortcut_dispatcher")
@@ -221,6 +238,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_auth_state_sync")
   useLocalAuthStateSync()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_auth_state_sync")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_gateway_catalog_mirror_sync")
+  useGatewayCatalogMirrorSync()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_gateway_catalog_mirror_sync")
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
@@ -367,10 +387,21 @@ function AppRuntime() {
                 }
               />
             )}
+            {import.meta.env.DEV && AgentsPlaygroundPage && (
+              <Route
+                path="/playground/agents"
+                element={
+                  <Suspense fallback={null}>
+                    <AgentsPlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
             <Route path="*" element={<Navigate to="/" replace />} />
           </InstrumentedRoutes>
           <RepoSetupModalHost />
           <AddRepoFlowHost />
+          <SupportModalHost />
           {/* Legacy toast store container (non-update toasts) — kept until all
               toast call sites migrate to Sonner. */}
           <ToastContainer />

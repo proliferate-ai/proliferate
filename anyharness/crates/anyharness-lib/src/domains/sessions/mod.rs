@@ -1,4 +1,6 @@
+pub mod active_activity_roster;
 pub mod active_goals;
+pub mod active_loops;
 pub mod attachment_storage;
 pub mod delegation;
 pub mod deletion;

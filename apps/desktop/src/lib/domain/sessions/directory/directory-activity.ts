@@ -4,6 +4,7 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { resolveSessionErrorAttentionKey } from "@proliferate/product-domain/sessions/activity";
+import { transcriptEndsInFinalAssistantProse } from "@proliferate/product-domain/chats/transcript/transcript-trailing-status";
 import type {
   SessionDirectoryActivitySummary,
   SessionDirectoryEntry,
@@ -19,6 +20,7 @@ export function activityFromTranscript(
   return {
     isStreaming: transcript.isStreaming,
     pendingInteractions: transcript.pendingInteractions,
+    endsInFinalAssistantProse: transcriptEndsInFinalAssistantProse(transcript),
     transcriptTitle: transcript.sessionMeta.title ?? null,
     errorAttentionKey: resolveSessionErrorAttentionKey({
       sessionId: transcript.sessionMeta.sessionId,
@@ -43,6 +45,7 @@ export function activitySnapshotFromDirectoryEntry(
       transcript: {
         isStreaming: entry.activity.isStreaming,
         pendingInteractions: entry.activity.pendingInteractions,
+        endsInFinalAssistantProse: entry.activity.endsInFinalAssistantProse,
       },
     }
     : null;

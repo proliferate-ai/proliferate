@@ -14,6 +14,14 @@ export type GitBranchDiffFilesResponse = components["schemas"]["GitBranchDiffFil
 export type GitBranchRef = components["schemas"]["GitBranchRef"];
 export type StagePathsRequest = components["schemas"]["StagePathsRequest"];
 export type UnstagePathsRequest = components["schemas"]["UnstagePathsRequest"];
+
+export interface StagePatchRequest {
+  patch: string;
+}
+
+export interface UnstagePatchRequest {
+  patch: string;
+}
 export type GitRevertPatchEntry = components["schemas"]["GitRevertPatchEntry"];
 export type GitRevertPatchesRequest = components["schemas"]["GitRevertPatchesRequest"];
 export type GitRevertPatchesResponse = components["schemas"]["GitRevertPatchesResponse"];

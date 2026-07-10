@@ -136,6 +136,18 @@ export type BillingPlanInfo           = Schema<"CloudPlanInfo">;
 export type BillingUrlResponse        = Schema<"BillingUrlResponse">;
 export type OverageSettingsResponse   = Schema<"OverageSettingsResponse">;
 export type BillingOwnerSelection     = Schema<"BillingOwnerSelection">;
+export type UsageSummary              = Schema<"UsageSummary">;
+export type UsageTimeseries           = Schema<"UsageTimeseries">;
+export type UsageTimeseriesBucket     = Schema<"UsageTimeseriesBucket">;
+export type BudgetLimitWindowUsage    = Schema<"BudgetLimitWindowUsage">;
+export type LlmBalance                = Schema<"LlmBalance">;
+export type BudgetLimit               = Schema<"BudgetLimit">;
+export type BudgetLimitInput          = Schema<"BudgetLimitInput">;
+export type BudgetLimitsResponse      = Schema<"BudgetLimitsResponse">;
+export type OrgUserUsageRow           = Schema<"OrgUserUsageRow">;
+export type OrgUsageByUserResponse    = Schema<"OrgUsageByUserResponse">;
+export type OrgUserUsageTimeseriesResponse =
+  Schema<"OrgUserUsageTimeseriesResponse">;
 export type OrganizationUpdateRequest = Schema<"OrganizationUpdateRequest">;
 export type OrganizationInviteRequest = Schema<"OrganizationInviteRequest">;
 export type OrganizationMembershipUpdateRequest =
@@ -615,6 +627,8 @@ export type GenerateSessionTitleRequest = Schema<"GenerateSessionTitleRequest">;
 export type GenerateSessionTitleResponse = Schema<"GenerateSessionTitleResponse">;
 export type GenerateWorkspaceNameRequest = Schema<"GenerateWorkspaceNameRequest">;
 export type GenerateWorkspaceNameResponse = Schema<"GenerateWorkspaceNameResponse">;
+export type UserRead              = Schema<"UserRead">;
+export type ProfileUpdateRequest  = Schema<"ProfileUpdateRequest">;
 export type SupportMessageContext     = Schema<"SupportMessageContext">;
 export type SendSupportMessageRequest = Schema<"SupportMessageRequest">;
 export type SupportReportCompleteRequest =
@@ -651,11 +665,11 @@ export interface SupportReportUploadResponse {
   attachments?: SupportReportUploadTarget[];
 }
 export interface SupportReportUploadTargetsRequest {
-  diagnostics: {
+  diagnostics?: {
     contentType: string;
     sizeBytes: number;
     sha256: string;
-  };
+  } | null;
   attachments?: Array<{
     clientFileId: string;
     fileName: string;

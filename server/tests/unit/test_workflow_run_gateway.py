@@ -38,7 +38,9 @@ from proliferate.db.models.cloud.runtime_workers import (
 )
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workflows import WorkflowRun, WorkflowRunGatewayToken
+from proliferate.db.models.organizations import Organization
 from proliferate.db.store import cloud_workflows as store
+from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
@@ -95,6 +97,22 @@ async def _make_user(db: AsyncSession) -> User:
     db.add(user)
     await db.flush()
     return user
+
+
+async def _make_org(db: AsyncSession, owner: User) -> uuid.UUID:
+    """Seed a real Organization with ``owner`` as an active member; return its id.
+
+    Gate C: main hardened ``CloudIntegrationPolicy.organization_id`` / the
+    runtime-worker enrollment with real FKs to ``organization.id`` AND added
+    per-request org-membership re-validation in the gateway dependency, so a
+    fabricated org id (no row, no membership) no longer works — the worker's
+    owner must be an active member of the org it is scoped to.
+    """
+    records = await organization_store.ensure_default_organization_for_user(
+        db, user_id=owner.id, name=f"org-{uuid.uuid4().hex[:8]}", logo_domain=None
+    )
+    await db.flush()
+    return records[0].organization.id
 
 
 async def _seed_ready_account(db: AsyncSession, *, user_id: uuid.UUID, namespace: str) -> None:
@@ -860,7 +878,7 @@ async def test_org_disabled_provider_filtered_from_ready_accounts(
     assert definition is not None
     await _seed_ready_account_for_definition(db_session, user_id=user.id, definition=definition)
 
-    org_id = uuid.uuid4()
+    org_id = await _make_org(db_session, user)
 
     # Without an org overlay the account is visible.
     open_grant = runtime_workers_store.IntegrationGatewayGrant(
@@ -1165,7 +1183,7 @@ async def test_chat_default_all_when_no_policy_restriction(
     """default-all: an org that authored NO scope_json restriction gets every ready
     integration in the chat default set (today's unconditional behavior)."""
     user = await _make_user(db_session)
-    org_id = uuid.uuid4()
+    org_id = await _make_org(db_session, user)
     await sync_seed_definitions(db_session)
     await db_session.flush()
     for ns in ("context7", "exa"):
@@ -1192,7 +1210,7 @@ async def test_chat_default_subset_hides_excluded_and_denies_forced_call(
     session neither SEES it in list_providers nor can force a call (403), while a
     peer integration with no restriction stays reachable."""
     user = await _make_user(db_session)
-    org_id = uuid.uuid4()
+    org_id = await _make_org(db_session, user)
     await sync_seed_definitions(db_session)
     await db_session.flush()
     context7 = await definitions_store.get_seed_by_namespace(db_session, "context7")
@@ -1237,7 +1255,7 @@ async def test_chat_default_per_integration_tool_restriction(
     the default set but restricts it to tool ``a`` — ``b`` is scope-denied and hidden
     from tools/list."""
     user = await _make_user(db_session)
-    org_id = uuid.uuid4()
+    org_id = await _make_org(db_session, user)
     await sync_seed_definitions(db_session)
     await db_session.flush()
     context7 = await definitions_store.get_seed_by_namespace(db_session, "context7")

@@ -328,6 +328,10 @@ CLOUD_INTEGRATION_GATEWAY_MCP_PATH: Final = "/v1/cloud/integration-gateway/mcp"
 # cloud base URL exactly like the gateway MCP path so the runtime can reach it.
 CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE: Final = "/v1/cloud/workflows/runs/{run_id}/ping"
 
+# A ready tools/list cache is also considered stale once its fetched_at is
+# older than this, so provider-side tool changes surface within a day.
+CLOUD_INTEGRATION_TOOL_CACHE_TTL_SECONDS: Final = 86_400
+
 # ---------------------------------------------------------------------------
 # Cloud sandbox purpose (L26): a stamped enum set once at creation, never
 # inferred from caller context. ``workflow-run`` is stamped only when a sandbox

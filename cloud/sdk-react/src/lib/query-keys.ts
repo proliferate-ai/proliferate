@@ -162,6 +162,73 @@ export function cloudBillingKey(
   return [...cloudRootKey(), "billing", owner.ownerScope, owner.organizationId] as const;
 }
 
+export function usageRootKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...cloudRootKey(), "usage", owner.ownerScope, owner.organizationId] as const;
+}
+
+export function usageSummaryKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...usageRootKey(owner), "summary"] as const;
+}
+
+export interface UsageTimeseriesKeyOptions {
+  granularity?: string | null;
+  days?: number | null;
+  kind?: string | null;
+}
+
+export function usageTimeseriesKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+  options: UsageTimeseriesKeyOptions = {},
+) {
+  return [
+    ...usageRootKey(owner),
+    "timeseries",
+    options.granularity ?? "day",
+    options.days ?? 30,
+    options.kind ?? "all",
+  ] as const;
+}
+
+export function llmBalanceKey(
+  owner: CloudOwnerSelectionKey = personalCloudOwnerKey(),
+) {
+  return [...usageRootKey(owner), "llm-balance"] as const;
+}
+
+export function orgUsageByUserRootKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "usage", "by-user"] as const;
+}
+
+export function orgUsageByUserKey(organizationId: string | null, days: number | null = null) {
+  return [...orgUsageByUserRootKey(organizationId), days ?? 30] as const;
+}
+
+export function orgUserUsageTimeseriesKey(
+  organizationId: string | null,
+  userId: string | null,
+  options: UsageTimeseriesKeyOptions = {},
+) {
+  return [
+    ...organizationsRootKey(),
+    organizationId,
+    "usage",
+    "users",
+    userId,
+    "timeseries",
+    options.granularity ?? "day",
+    options.days ?? 30,
+    options.kind ?? "all",
+  ] as const;
+}
+
+export function orgLimitsKey(organizationId: string | null) {
+  return [...organizationsRootKey(), organizationId, "limits"] as const;
+}
+
 export function cloudRepoBranchesKey(gitOwner: string, gitRepoName: string) {
   return [...cloudRootKey(), "repos", gitOwner, gitRepoName, "branches"] as const;
 }

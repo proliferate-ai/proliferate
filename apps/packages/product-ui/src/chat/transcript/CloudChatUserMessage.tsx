@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { CopyMessageButton } from "./CopyMessageButton";
 import { userMessageStatusLabel } from "./CloudChatTranscriptPresentation";
@@ -16,15 +16,36 @@ export function CloudChatUserMessage({
   const hasContent = content.trim().length > 0;
   const visibleStatus = userMessageStatusLabel(status);
 
+  // `line-clamp-5` reports a 1-2px scrollHeight/clientHeight delta even when
+  // the text fits in 5 lines, due to sub-pixel line-height rounding. A small
+  // tolerance avoids treating that rounding noise as real overflow, while
+  // still catching genuine 6+-line messages (which overflow by a full line).
+  const OVERFLOW_TOLERANCE_PX = 2;
+
+  const measureOverflow = useCallback(() => {
+    const el = textRef.current;
+    if (!el) return;
+    setNeedsToggle(el.scrollHeight - el.clientHeight > OVERFLOW_TOLERANCE_PX);
+  }, []);
+
   useLayoutEffect(() => {
     if (!hasContent) {
       setNeedsToggle(false);
       return;
     }
+    measureOverflow();
+  }, [content, hasContent, measureOverflow]);
+
+  useLayoutEffect(() => {
+    if (!hasContent) return;
     const el = textRef.current;
-    if (!el) return;
-    setNeedsToggle(el.scrollHeight > el.clientHeight);
-  }, [content, hasContent]);
+    if (!el || typeof ResizeObserver === "undefined") return;
+    // Wrapping (and therefore overflow) changes with element width, e.g.
+    // when the sidebar or window is resized.
+    const observer = new ResizeObserver(() => measureOverflow());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasContent, measureOverflow]);
 
   return (
     <article className="group/msg flex justify-end" data-chat-user-message>
@@ -36,7 +57,7 @@ export function CloudChatUserMessage({
           >
             <div
               ref={textRef}
-              className={`break-words select-text text-chat leading-[var(--text-chat--line-height)]${
+              className={`break-words select-text text-[length:var(--text-message)] leading-[var(--text-message--line-height)]${
                 !expanded ? " line-clamp-5" : ""
               }`}
             >
@@ -59,7 +80,7 @@ export function CloudChatUserMessage({
           </div>
         ) : null}
         {visibleStatus ? (
-          <div className="inline-flex items-center gap-1 pr-1 text-xs text-muted-foreground">
+          <div className="inline-flex items-center gap-1 pr-1 text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
             {visibleStatus}
           </div>
         ) : null}

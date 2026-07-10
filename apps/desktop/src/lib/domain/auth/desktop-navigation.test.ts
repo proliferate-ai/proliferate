@@ -70,10 +70,54 @@ describe("desktopNavigationTarget", () => {
     );
   });
 
-  it("routes organization join links to the members settings section", () => {
+  it("routes organization join links to the account settings section (reachable by non-admins)", () => {
     expect(
       desktopNavigationTarget("proliferate://join/org-123"),
-    ).toBe("/settings?section=organization-members&joinOrganizationId=org-123");
+    ).toBe("/settings?section=account&joinOrganizationId=org-123");
+  });
+
+  it("forwards a valid https issuing-server origin as joinServerOrigin", () => {
+    expect(
+      desktopNavigationTarget(
+        "proliferate://join/org-123?origin=https%3A%2F%2Fproliferate.corp.example",
+      ),
+    ).toBe(
+      "/settings?section=account&joinOrganizationId=org-123&joinServerOrigin=https%3A%2F%2Fproliferate.corp.example",
+    );
+  });
+
+  it("allows an http origin only for loopback dev servers", () => {
+    expect(
+      desktopNavigationTarget("proliferate://join/org-123?origin=http%3A%2F%2F127.0.0.1%3A8000"),
+    ).toBe(
+      "/settings?section=account&joinOrganizationId=org-123&joinServerOrigin=http%3A%2F%2F127.0.0.1%3A8000",
+    );
+  });
+
+  it("drops a non-loopback http origin (downgrade-attack guard)", () => {
+    expect(
+      desktopNavigationTarget("proliferate://join/org-123?origin=http%3A%2F%2Fproliferate.corp.example"),
+    ).toBe("/settings?section=account&joinOrganizationId=org-123");
+  });
+
+  it("drops a malformed origin", () => {
+    expect(
+      desktopNavigationTarget("proliferate://join/org-123?origin=not-a-url"),
+    ).toBe("/settings?section=account&joinOrganizationId=org-123");
+  });
+
+  it("drops an origin carrying embedded credentials (userinfo phishing guard)", () => {
+    expect(
+      desktopNavigationTarget(
+        "proliferate://join/org-123?origin=https%3A%2F%2Fuser%3Apass%40proliferate.corp.example",
+      ),
+    ).toBe("/settings?section=account&joinOrganizationId=org-123");
+  });
+
+  it("leaves the join route unchanged when no origin is supplied", () => {
+    expect(
+      desktopNavigationTarget("proliferate://join/org-123"),
+    ).toBe("/settings?section=account&joinOrganizationId=org-123");
   });
 
   it("routes parked Slack bot settings links to general settings", () => {

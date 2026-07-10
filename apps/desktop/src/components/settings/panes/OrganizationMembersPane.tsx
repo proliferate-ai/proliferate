@@ -1,12 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { CurrentUserInvitationsSection } from "@/components/settings/panes/organization/CurrentUserInvitationsSection";
 import { OrganizationInvitationsSection } from "@/components/settings/panes/organization/OrganizationInvitationsSection";
 import { OrganizationMembersSection } from "@/components/settings/panes/organization/OrganizationMembersSection";
 import { SettingsEmptyState } from "@proliferate/product-ui/settings/SettingsEmptyState";
 import { SettingsSection } from "@proliferate/product-ui/settings/SettingsSection";
 import { SettingsPageHeader } from "@proliferate/product-ui/settings/SettingsPageHeader";
-import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useIsAdmin } from "@/hooks/access/cloud/organizations/use-is-admin";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-organization-invitations";
@@ -14,7 +12,6 @@ import { useOrganizationJoinLink } from "@/hooks/access/cloud/organizations/use-
 import { useOrganizationMembers } from "@/hooks/access/cloud/organizations/use-organization-members";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
-import { useOrganizationJoinInvitationFlow } from "@/hooks/organizations/workflows/use-organization-join-invitation-flow";
 import { TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION } from "@/config/settings";
 import {
   type OrganizationInvitationRecord,
@@ -35,7 +32,6 @@ export function OrganizationMembersPane() {
     activeOrganizationId,
     organizations,
     organizationsQuery,
-    setActiveOrganizationId,
   } = useActiveOrganization();
   const actions = useOrganizationActions(activeOrganizationId);
   const admin = useIsAdmin(activeOrganizationId);
@@ -44,37 +40,18 @@ export function OrganizationMembersPane() {
   const canManage = admin.isAdmin || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
   const canManageOwners = admin.isOwner || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION;
   const joinLinkQuery = useOrganizationJoinLink(activeOrganizationId, canManage);
-  const shouldLoadPendingInvitations = authStatus === "authenticated";
-  const pendingInvitationsQuery = useCurrentUserOrganizationInvitations(
-    shouldLoadPendingInvitations,
-  );
   const { copyText } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
-  const joinFlow = useOrganizationJoinInvitationFlow();
 
   const members = membersQuery.data?.members ?? EMPTY_MEMBERS;
   const invitations = invitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
-  const pendingInvitations = pendingInvitationsQuery.data?.invitations ?? EMPTY_INVITATIONS;
 
   async function handleInvite() {
     await actions.createInvitation({ email: inviteEmail, role: inviteRole });
     setInviteEmail("");
     setInviteRole("member");
-  }
-
-  async function handleAcceptCurrentInvitation(invitationId: string) {
-    joinFlow.setStatusMessage(null);
-    try {
-      const response = await actions.acceptCurrentInvitation(invitationId);
-      setActiveOrganizationId(response.organization.id);
-      joinFlow.clearJoinTarget();
-      joinFlow.setStatusMessage(`Joined ${response.organization.name}.`);
-      showToast(`Joined ${response.organization.name}.`, "info");
-    } catch {
-      joinFlow.setStatusMessage("Could not accept invitation.");
-    }
   }
 
   async function handleCopyJoinLink() {
@@ -100,14 +77,12 @@ export function OrganizationMembersPane() {
     });
   }
 
-  const shouldShowSignInState = authStatus !== "authenticated" && !joinFlow.unauthenticatedJoin;
+  const shouldShowSignInState = authStatus !== "authenticated";
   const shouldShowLoadingState = authStatus === "authenticated" && organizationsQuery.isLoading;
   const shouldShowErrorState = authStatus === "authenticated" && organizationsQuery.isError;
   const shouldShowEmptyState = authStatus === "authenticated"
     && organizationsQuery.isSuccess
-    && organizations.length === 0
-    && pendingInvitations.length === 0;
-  const shouldShowPendingInvitations = pendingInvitations.length > 0;
+    && organizations.length === 0;
 
   return (
     <section className="space-y-6">
@@ -115,14 +90,6 @@ export function OrganizationMembersPane() {
         title="Members"
         description="Invite teammates, copy the organization join link, and manage access."
       />
-
-      {joinFlow.statusMessage ? (
-        <OrganizationNotice>{joinFlow.statusMessage}</OrganizationNotice>
-      ) : null}
-
-      {joinFlow.unauthenticatedJoin ? (
-        <OrganizationNotice>Finish sign-in to accept this organization invitation.</OrganizationNotice>
-      ) : null}
 
       {shouldShowSignInState ? (
         <SettingsSection title="Members" description="Organization access is tied to your signed-in account.">
@@ -152,17 +119,6 @@ export function OrganizationMembersPane() {
             }
           />
         </SettingsSection>
-      ) : null}
-
-      {shouldShowPendingInvitations ? (
-        <CurrentUserInvitationsSection
-          invitations={pendingInvitations}
-          accepting={actions.acceptingCurrentInvitation}
-          focusedOrganizationId={joinFlow.joinOrganizationId}
-          onAccept={(invitationId) => {
-            void handleAcceptCurrentInvitation(invitationId);
-          }}
-        />
       ) : null}
 
       {shouldShowEmptyState ? (
@@ -210,13 +166,5 @@ export function OrganizationMembersPane() {
         </>
       ) : null}
     </section>
-  );
-}
-
-function OrganizationNotice({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-foreground/5 px-4 py-3 text-ui-sm text-muted-foreground">
-      {children}
-    </div>
   );
 }

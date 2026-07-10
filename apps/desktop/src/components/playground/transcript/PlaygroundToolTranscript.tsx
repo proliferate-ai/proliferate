@@ -20,12 +20,6 @@ import {
   PLAYGROUND_SUBAGENT_PARENT_SEND_TRANSCRIPT,
 } from "@/lib/domain/chat/__fixtures__/playground/subagent-parent-send-transcript-fixtures";
 import {
-  PLAYGROUND_SUBAGENT_ACTIVITY_CONCURRENT,
-  PLAYGROUND_SUBAGENT_ACTIVITY_DONE,
-  PLAYGROUND_SUBAGENT_ACTIVITY_FAILED,
-  PLAYGROUND_SUBAGENT_ACTIVITY_RUNNING,
-} from "@/lib/domain/chat/__fixtures__/playground/subagent-activity-transcript-fixtures";
-import {
   PLAYGROUND_SUBAGENT_TRANSCRIPT,
 } from "@/lib/domain/chat/__fixtures__/playground/subagent-tool-transcript-fixtures";
 import {
@@ -181,42 +175,6 @@ export function renderPlaygroundToolTranscript(
           activeSessionId="playground-subagent-creations"
           selectedWorkspaceId={selectedWorkspaceId}
           transcript={PLAYGROUND_SUBAGENT_CREATION_GROUP_TRANSCRIPT}
-          stickyBottomInsetPx={stickyBottomInsetPx}
-        />
-      );
-    case "subagent-activity-running":
-      return (
-        <MessageListTranscript
-          activeSessionId="playground-subagent-activity-running"
-          selectedWorkspaceId={selectedWorkspaceId}
-          transcript={PLAYGROUND_SUBAGENT_ACTIVITY_RUNNING}
-          stickyBottomInsetPx={stickyBottomInsetPx}
-        />
-      );
-    case "subagent-activity-done":
-      return (
-        <MessageListTranscript
-          activeSessionId="playground-subagent-activity-done"
-          selectedWorkspaceId={selectedWorkspaceId}
-          transcript={PLAYGROUND_SUBAGENT_ACTIVITY_DONE}
-          stickyBottomInsetPx={stickyBottomInsetPx}
-        />
-      );
-    case "subagent-activity-failed":
-      return (
-        <MessageListTranscript
-          activeSessionId="playground-subagent-activity-failed"
-          selectedWorkspaceId={selectedWorkspaceId}
-          transcript={PLAYGROUND_SUBAGENT_ACTIVITY_FAILED}
-          stickyBottomInsetPx={stickyBottomInsetPx}
-        />
-      );
-    case "subagent-activity-concurrent":
-      return (
-        <MessageListTranscript
-          activeSessionId="playground-subagent-activity-concurrent"
-          selectedWorkspaceId={selectedWorkspaceId}
-          transcript={PLAYGROUND_SUBAGENT_ACTIVITY_CONCURRENT}
           stickyBottomInsetPx={stickyBottomInsetPx}
         />
       );

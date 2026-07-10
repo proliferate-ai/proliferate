@@ -82,13 +82,17 @@ export function CloudChatSurface({
         </div>
       )}
 
-      <footer className="relative z-20 shrink-0 border-t border-border/40 px-6 py-4">
-        <CloudChatComposer composer={composer} />
-        {commandMessage ? (
-          <p className="mx-auto mt-2 w-full max-w-3xl text-xs text-muted-foreground">
-            {commandMessage}
-          </p>
-        ) : null}
+      <footer className="relative z-20 shrink-0 border-t border-border/40 py-4">
+        {/* Mirror the transcript column (mx-auto max-w-3xl px-6) so the composer
+            edges line up with the message text and both read as one column. */}
+        <div className="mx-auto w-full max-w-3xl px-6">
+          <CloudChatComposer composer={composer} />
+          {commandMessage ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {commandMessage}
+            </p>
+          ) : null}
+        </div>
       </footer>
     </div>
   );

@@ -127,6 +127,28 @@ jobs:
           --version-bump "${{ github.event.inputs.version_bump || 'patch' }}"
           --dry-run "${{ steps.meta.outputs.dry_run }}"
 
+      - name: Verify version tags are free
+        # Same ordering fix as the nightly train: catch a real version
+        # collision (e.g. a race with another release) before the
+        # version-bump commit is pushed to main, not after.
+        if: steps.meta.outputs.dry_run != 'true'
+        env:
+          ARTIFACT_TAGS: ${{ steps.artifacts.outputs.artifact_tags }}
+          PRODUCT_TAG: ${{ steps.artifacts.outputs.product_tag }}
+        run: |
+          set -euo pipefail
+          tags="$PRODUCT_TAG"
+          if [[ -n "$ARTIFACT_TAGS" ]]; then
+            tags="$tags,$ARTIFACT_TAGS"
+          fi
+          if [[ -z "${tags// }" ]]; then
+            exit 0
+          fi
+          node scripts/ci-cd/create-release-tags.mjs \
+            --target pending \
+            --tags "$tags" \
+            --check-only true
+
       - name: Commit version bumps
         id: commit
         env:
@@ -165,6 +187,9 @@ jobs:
           if [[ -n "$ARTIFACT_TAGS" ]]; then
             tags="$tags,$ARTIFACT_TAGS"
           fi
+          # RELEASE_ID here (hotfix-YYYY-MM-DD-<run number>) is already unique
+          # per run, so it does not need --movable-tags the way the nightly
+          # train's release-YYYY-MM-DD does.
           node scripts/ci-cd/create-release-tags.mjs \
             --target "${{ steps.commit.outputs.head_sha }}" \
             --tags "$tags" \

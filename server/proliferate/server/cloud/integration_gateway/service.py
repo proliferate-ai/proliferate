@@ -9,6 +9,7 @@ Cloud; AnyHarness only ever holds the gateway bearer token.
 from __future__ import annotations
 
 import json
+import time
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,8 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.workflows import FUNCTION_INVOCATION_PROVIDER_NAMESPACE
 from proliferate.db.store import function_invocations as invocations_store
 from proliferate.db.store.integrations import accounts as accounts_store
-from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.db.store.integrations import policies as policies_store
+from proliferate.db.store.integrations import tool_call_events as tool_call_events_store
+from proliferate.db.store.integrations.accounts import ReadyAccountRow
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
@@ -35,6 +37,24 @@ from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cach
 _PROTOCOL_VERSION = "2025-06-18"
 
 
+def _org_allows(grant: IntegrationGatewayGrant, row: ReadyAccountRow) -> bool:
+    """Whether the grant's org policy overlay leaves this definition enabled.
+
+    Org-scoped grants get the org overlay: an explicit policy row wins,
+    otherwise the definition's default. Org-less grants (``organization_id``
+    NULL) see seeds-with-defaults behavior — no overlay at all. That org-less
+    escape hatch is a documented v1 tradeoff (see
+    ``create_desktop_enrollment``): enrollment never forces an org, so the
+    overlay governs org-scoped workers rather than hard-blocking members who
+    enroll org-less.
+    """
+    if grant.organization_id is None:
+        return True
+    if row.org_policy_enabled is not None:
+        return row.org_policy_enabled
+    return row.definition.enabled_by_default
+
+
 async def ready_accounts_for_grant(
     db: AsyncSession,
     *,
@@ -42,23 +62,17 @@ async def ready_accounts_for_grant(
 ) -> list[GatewayProviderAccount]:
     """The owner's enabled, ready accounts whose definition is not archived.
 
-    Org-aware (regression fix): for an org-scoped grant, definitions the org has
-    disabled by policy are excluded — the same overlay ``get_ready_account_for_provider``
-    applies, so ``list_providers`` cannot surface an org-disabled provider.
+    For org-scoped grants, definitions disabled by the org policy overlay are
+    excluded.
     """
-    accounts = await accounts_store.list_ready_accounts_for_user(
+    rows = await accounts_store.list_ready_accounts_for_user(
         db, grant.owner_user_id, organization_id=grant.organization_id
     )
-    definitions = await definitions_store.get_definitions_by_ids(
-        db, {account.definition_id for account in accounts}
-    )
-    resolved: list[GatewayProviderAccount] = []
-    for account in accounts:
-        definition = definitions.get(account.definition_id)
-        if definition is None or definition.archived_at is not None:
-            continue
-        resolved.append(GatewayProviderAccount(account=account, definition=definition))
-    return resolved
+    return [
+        GatewayProviderAccount(account=row.account, definition=row.definition)
+        for row in rows
+        if _org_allows(grant, row)
+    ]
 
 
 async def build_chat_default_access_scope(
@@ -105,22 +119,22 @@ async def build_chat_default_access_scope(
     if not restrictions and not invocations:
         return None  # default-all: no integration restriction, no invocations to lock
 
-    accounts = await accounts_store.list_ready_accounts_for_user(
+    # `list_ready_accounts_for_user` already joins the (non-archived) definition
+    # and the org-policy overlay into each row (main's ReadyAccountRow), so the
+    # definition rides the row — no separate get_definitions_by_ids fetch.
+    rows = await accounts_store.list_ready_accounts_for_user(
         db, owner_user_id, organization_id=organization_id
-    )
-    definitions = await definitions_store.get_definitions_by_ids(
-        db, {account.definition_id for account in accounts}
     )
     scope_entries: list[dict[str, object]] = []
     seen: set[str] = set()
-    for account in accounts:
-        definition = definitions.get(account.definition_id)
-        if definition is None or definition.archived_at is not None:
+    for row in rows:
+        definition = row.definition
+        if definition.archived_at is not None:
             continue
         if definition.namespace in seen:
             continue
         seen.add(definition.namespace)
-        allowed = restrictions.get(account.definition_id)
+        allowed = restrictions.get(definition.id)
         if allowed is None:
             scope_entries.append({"provider": definition.namespace})
         elif len(allowed) == 0:
@@ -148,17 +162,22 @@ async def account_for_provider(
     grant: IntegrationGatewayGrant,
     provider: str,
 ) -> GatewayProviderAccount:
-    pair = await accounts_store.get_ready_account_for_provider(
+    row = await accounts_store.get_ready_account_for_provider(
         db, grant.owner_user_id, provider, organization_id=grant.organization_id
     )
-    if pair is None:
+    if row is None:
         raise CloudApiError(
             "integration_provider_not_found",
             f"No connected integration provider '{provider}'.",
             status_code=404,
         )
-    account, definition = pair
-    return GatewayProviderAccount(account=account, definition=definition)
+    if not _org_allows(grant, row):
+        raise CloudApiError(
+            "integration_provider_disabled",
+            f"Integration provider '{provider}' is disabled by your organization's policy.",
+            status_code=404,
+        )
+    return GatewayProviderAccount(account=row.account, definition=row.definition)
 
 
 async def list_providers(
@@ -276,19 +295,49 @@ async def call_provider_tool(
             name=tool,
             arguments=arguments,
         )
-    pair = await account_for_provider(db, grant=grant, provider=provider)
-    url, headers, query = await resolve_launch(db, pair.account, pair.definition)
-    result = await mcp_remote.call_tool(
-        url=url,
-        headers=headers,
-        tool_name=tool,
-        arguments=arguments,
-        query=query or None,
-    )
-    return {
-        "content": result.get("content", []),
-        "isError": bool(result.get("isError", False)),
-    }
+    # Audit the proxied MCP call on every path — provider-resolution or account
+    # failures, upstream transport failures, and a returned tool-level error
+    # all count as evidence the call happened. ``ok`` is only True when the
+    # upstream returned a non-error result.
+    started = time.perf_counter()
+    ok = False
+    error_code: str | None = None
+    try:
+        pair = await account_for_provider(db, grant=grant, provider=provider)
+        url, headers, query = await resolve_launch(db, pair.account, pair.definition)
+        result = await mcp_remote.call_tool(
+            url=url,
+            headers=headers,
+            tool_name=tool,
+            arguments=arguments,
+            query=query or None,
+        )
+        is_error = bool(result.get("isError", False))
+        ok = not is_error
+        if is_error:
+            error_code = "tool_error"
+        return {
+            "content": result.get("content", []),
+            "isError": is_error,
+        }
+    except CloudApiError as error:
+        error_code = error.code
+        raise
+    except McpRemoteError as error:
+        error_code = error.code or "mcp_error"
+        raise
+    finally:
+        await tool_call_events_store.record_tool_call_event(
+            db,
+            user_id=grant.owner_user_id,
+            organization_id=grant.organization_id,
+            runtime_worker_id=grant.runtime_worker_id,
+            integration_namespace=provider,
+            tool_name=tool,
+            ok=ok,
+            error_code=error_code,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
 
 
 def _initialize_result() -> dict[str, object]:

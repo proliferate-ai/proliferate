@@ -2,7 +2,15 @@ export const DIFF_AUTO_COLLAPSE_LINE_LIMIT = 1_000;
 export const DIFF_HARD_INLINE_LINE_LIMIT = 5_000;
 export const DIFF_HARD_INLINE_BYTE_LIMIT = 250_000;
 export const CHAT_VISIBLE_FILE_CHANGE_LIMIT = 3;
-export const GIT_DIFF_FETCH_CONCURRENCY_LIMIT = 2;
+export const GIT_DIFF_FETCH_CONCURRENCY_LIMIT = 5;
+/**
+ * Above this many diff lines, sidebar review cards opt their diff rows into
+ * content-visibility row virtualization (the [data-diff-row-virtualization]
+ * rule in design/src/css/desktop.css) so off-screen rows of one large file
+ * skip layout/paint. Small diffs stay un-contained: full paint is already
+ * cheap and per-row containment has its own overhead.
+ */
+export const DIFF_ROW_VIRTUALIZATION_LINE_THRESHOLD = 300;
 
 export type DiffDisplayPolicyKind =
   | "safe"

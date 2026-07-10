@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
+    AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
     AGENT_GATEWAY_BUDGET_STATUS_OK,
     LLM_CREDIT_SOURCE_TOPUP,
 )
@@ -53,6 +54,7 @@ from proliferate.server.cloud.agent_gateway.enrollment import (
     enrollment_key_metadata,
     enrollment_subject_label,
 )
+from proliferate.server.cloud.materialization import service as materialization_service
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +167,11 @@ async def reactivate_subject_if_credited(
         billing_subject_id=billing_subject_id,
     )
     for enrollment in enrollments:
+        # A budget-limit block (``limit_reached``) is an org-cap concern, not a
+        # credit one: credit arriving must never unblock a key its admin capped.
+        # Only the LLM budget enforcement pass clears ``limit_reached``.
+        if enrollment.budget_status == AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED:
+            continue
         try:
             await _reactivate_enrollment(db, enrollment, budget=budget)
         except LiteLLMIntegrationError as error:
@@ -178,6 +185,35 @@ async def reactivate_subject_if_credited(
             continue
         reactivated += 1
     return reactivated
+
+
+async def reactivate_enrollment_if_credited(
+    db: AsyncSession,
+    billing_subject_id: UUID,
+    enrollment: AgentGatewayEnrollmentRecord,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Reactivate a single enrollment when its subject has positive credit.
+
+    Per-enrollment counterpart of ``reactivate_subject_if_credited`` used by the
+    LLM budget-limit pass: when an org member drops back under their cap we
+    re-enable just their key (unblock/re-mint + rewrite budget + ``budget_status``
+    back to ``ok``) without touching the rest of the org's members. Returns
+    ``False`` (a no-op) when the subject has no remaining credit.
+    """
+    balance = await agent_gateway_store.get_remaining_credit_usd(
+        db,
+        billing_subject_id,
+        now=now,
+    )
+    if balance.remaining_usd <= _ZERO:
+        return False
+    subject = await get_billing_subject_by_id(db, billing_subject_id)
+    uncapped = subject is not None and subject.overage_enabled
+    budget = None if uncapped else float(balance.granted_usd)
+    await _reactivate_enrollment(db, enrollment, budget=budget)
+    return True
 
 
 async def _reactivate_enrollment(
@@ -243,6 +279,10 @@ async def _remint_virtual_key(
         virtual_key=minted.key,
         sync_fingerprint=enrollment.sync_fingerprint,
     )
+    if enrollment.user_id is not None:
+        await materialization_service.schedule_materialize_agent_auth(
+            db, user_id=enrollment.user_id
+        )
     return minted.token_id or None
 
 

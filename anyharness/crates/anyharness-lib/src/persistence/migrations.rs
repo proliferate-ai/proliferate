@@ -189,11 +189,24 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0050_drop_agent_auth_config",
         include_str!("sql/0050_drop_agent_auth_config.sql"),
     ),
-    ("0051_goals", include_str!("sql/0051_goals.sql")),
+    (
+        "0051_gateway_model_probe",
+        include_str!("sql/0051_gateway_model_probe.sql"),
+    ),
+    // Goals base table (main's 0052_goals is byte-identical to v1's former
+    // 0051_goals) followed immediately by v1's additive caps/provenance columns.
+    ("0052_goals", include_str!("sql/0052_goals.sql")),
     (
         "0052_goal_caps_provenance",
         include_str!("sql/0052_goal_caps_provenance.sql"),
     ),
+    ("0053_loops", include_str!("sql/0053_loops.sql")),
+    ("0054_activity", include_str!("sql/0054_activity.sql")),
+    (
+        "0055_loops_scheduler",
+        include_str!("sql/0055_loops_scheduler.sql"),
+    ),
+    // Workflows v2 tables (name-keyed; no collision with loops/activity).
     (
         "0053_workflow_runs",
         include_str!("sql/0053_workflow_runs.sql"),

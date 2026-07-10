@@ -43,6 +43,10 @@ export function useCloudSupportReportActions(): CloudSupportReportActions {
             attachmentCount: 0,
           },
           publicContentConsent: input.publicContentConsent,
+          kind: "bug",
+          creditConsent: false,
+          urgent: false,
+          notifyMe: false,
         },
         client,
       );

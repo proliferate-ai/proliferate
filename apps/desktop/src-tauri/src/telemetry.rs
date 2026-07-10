@@ -87,7 +87,7 @@ pub fn init() -> TelemetryGuards {
                 release: Some(
                     env_or_default(
                         "PROLIFERATE_DESKTOP_SENTRY_RELEASE",
-                        "proliferate-desktop-native@0.1.0",
+                        &format!("proliferate-desktop-native@{}", env!("CARGO_PKG_VERSION")),
                     )
                     .into(),
                 ),
@@ -131,6 +131,7 @@ pub fn init() -> TelemetryGuards {
     if telemetry.is_some() {
         sentry::configure_scope(|scope| {
             scope.set_tag("surface", "desktop_native");
+            scope.set_tag("runtime_env", "local");
             if let Some(mode_tag) = telemetry_mode_tag(telemetry_mode) {
                 scope.set_tag("telemetry_mode", mode_tag);
             }

@@ -60,14 +60,20 @@ import {
 import {
   materializeSessionCreation,
 } from "@/hooks/sessions/workflows/session-creation-materialization";
+import { useDismissSessionMutation } from "@anyharness/sdk-react";
+import {
+  performEmptySessionReplacementCleanup,
+} from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 
 export function useSessionCreationActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const { getWorkspaceSurface } = useWorkspaceSurfaceLookup();
   const { promptSession } = useSessionPromptWorkflow();
-  const { activateSession } = useSessionRuntimeActions();
+  const { activateSession, closeSessionSlotStream } = useSessionRuntimeActions();
   const { ensureCloudAgentCatalog } = useCloudAgentCatalogCache();
-  const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const { upsertWorkspaceSessionRecord, removeWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const dismissSessionMutation = useDismissSessionMutation();
   const showToast = useToastStore((state) => state.show);
 
   const createSessionWithResolvedConfig = useCallback(async function createWithResolvedConfig(
@@ -237,6 +243,18 @@ export function useSessionCreationActions() {
     };
     writeOwnedShellIntent(pendingSessionId);
     pruneInactiveSessionStreams(sessionStreamPruningDeps);
+
+    // --- Replace-in-place: clean up the old empty session immediately so the
+    // tab swap is instant (no ghost tab until materialization completes). ---
+    let didReplaceOldSession = false;
+    if (options.replacesSessionId) {
+      didReplaceOldSession = performEmptySessionReplacementCleanup(
+        options.replacesSessionId,
+        workspaceId,
+        { closeSessionSlotStream, removeWorkspaceSessionRecord, dismissSessionMutation },
+      );
+    }
+
     if (shouldEnqueueInitialPrompt) {
       await promptSession({
         sessionId: pendingSessionId,
@@ -317,10 +335,21 @@ export function useSessionCreationActions() {
       removeSessionRecordAndClearSelection(pendingSessionId);
       const rolledBackShellIntent = rollbackOwnedShellIntent();
       if (rolledBackShellIntent && activeSessionIdBeforeRemoval === currentOwnedSessionId) {
-        if (previousActiveSessionId) {
+        // If the old session was already deleted (replace-in-place), fall back
+        // to the workspace's remaining sessions rather than a deleted id.
+        const canRestorePrevious = previousActiveSessionId && !didReplaceOldSession;
+        if (canRestorePrevious) {
           activateSession(previousActiveSessionId);
         } else {
-          useSessionSelectionStore.getState().setActiveSessionId(null);
+          // Find the first remaining session in this workspace as fallback
+          const remainingIds = useSessionDirectoryStore.getState()
+            .sessionIdsByWorkspaceId[workspaceId] ?? [];
+          const fallbackSessionId = remainingIds.find((id) => id !== pendingSessionId) ?? null;
+          if (fallbackSessionId) {
+            activateSession(fallbackSessionId);
+          } else {
+            useSessionSelectionStore.getState().setActiveSessionId(null);
+          }
         }
       }
       if (options.launchIntentId) {
@@ -359,10 +388,13 @@ export function useSessionCreationActions() {
     }
   }, [
     activateSession,
+    closeSessionSlotStream,
+    dismissSessionMutation,
     ensureCloudAgentCatalog,
     getWorkspaceRuntimeBlockReason,
     getWorkspaceSurface,
     promptSession,
+    removeWorkspaceSessionRecord,
     showToast,
     upsertWorkspaceSessionRecord,
   ]);
@@ -381,6 +413,7 @@ export function useSessionCreationActions() {
       clientSessionId: options.clientSessionId,
       reuseInFlightEmptySession: options.reuseInFlightEmptySession,
       preserveProjectedSessionOnCreateFailure: options.preserveProjectedSessionOnCreateFailure,
+      replacesSessionId: options.replacesSessionId,
     });
   }, [createSessionWithResolvedConfig]);
 

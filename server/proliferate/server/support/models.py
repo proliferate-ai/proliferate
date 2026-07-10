@@ -112,6 +112,11 @@ class SupportReportCreateRequest(BaseModel):
         alias="expectedClientUploads",
     )
     public_content_consent: bool | None = Field(default=None, alias="publicContentConsent")
+    kind: Literal["bug", "feature"] = Field(default="bug")
+    credit_consent: bool = Field(default=False, alias="creditConsent")
+    credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
+    urgent: bool = Field(default=False, alias="urgent")
+    notify_me: bool = Field(default=False, alias="notifyMe")
 
 
 class SupportReportServerCorrelation(BaseModel):
@@ -163,6 +168,9 @@ class SupportReportUploadRequest(BaseModel):
     diagnostics: SupportReportDiagnosticsUpload | None = None
     attachments: list[SupportReportUploadFile] = Field(default_factory=list, max_length=20)
     public_content_consent: bool | None = Field(default=None, alias="publicContentConsent")
+    kind: Literal["bug", "feature"] = Field(default="bug")
+    credit_consent: bool = Field(default=False, alias="creditConsent")
+    credit_name: str | None = Field(default=None, alias="creditName", max_length=200)
 
 
 class SupportReportUploadTargetsRequest(BaseModel):
@@ -204,14 +212,6 @@ class SupportReportCompleteRequest(BaseModel):
 class SupportReportCompleteResponse(BaseModel):
     ok: bool = True
     report_id: str = Field(alias="reportId")
-
-
-class SupportReportTrackerResponse(BaseModel):
-    ok: bool = True
-    report_id: str = Field(alias="reportId")
-    tracker_status: str = Field(alias="trackerStatus")
-    github_issue_url: str | None = Field(default=None, alias="githubIssueUrl")
-    linear_issue_url: str | None = Field(default=None, alias="linearIssueUrl")
 
 
 def support_report_create_response(
@@ -268,14 +268,3 @@ def support_report_create_response(
 def support_report_correlation_record(report: SupportReportSnapshot) -> dict[str, object]:
     response = support_report_create_response(report).server_correlation
     return response.model_dump(by_alias=True, exclude_none=True)
-
-
-def support_report_tracker_response(
-    report: SupportReportSnapshot,
-) -> SupportReportTrackerResponse:
-    return SupportReportTrackerResponse(
-        reportId=report.id,
-        trackerStatus=report.tracker_status,
-        githubIssueUrl=report.github_issue_url,
-        linearIssueUrl=report.linear_issue_url,
-    )

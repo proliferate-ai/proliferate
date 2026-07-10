@@ -35,6 +35,7 @@ fn resolved_agent(kind: AgentKind) -> ResolvedAgent {
         status: ResolvedAgentStatus::Ready,
         credential_state: CredentialState::Ready,
         auth_slots: Vec::new(),
+        cli_auth_state: None,
         native: Some(ResolvedArtifact {
             role: ArtifactRole::NativeCli,
             installed: true,
