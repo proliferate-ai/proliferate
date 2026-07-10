@@ -15,6 +15,8 @@ worker allowlist narrowed *after* a run token was minted bites on the next call.
 
 from __future__ import annotations
 
+import dataclasses
+
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,7 @@ from proliferate.db.store import cloud_workflows as workflows_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.integration_gateway import service as gateway_service
 from proliferate.utils.time import utcnow
 
 
@@ -113,6 +116,18 @@ async def require_integration_gateway_grant(
             "Gateway token is invalid or revoked.",
             status_code=401,
         )
+    # §2 default access modes: a per-worker (chat/interactive) grant is subject to the
+    # org's CONFIGURABLE default-access policy — computed live from
+    # ``CloudIntegrationPolicy.scope_json`` so a chat session gets a default set of
+    # integrations, not unconditionally ALL. None = default-all (today's behavior).
+    # Workflows are untouched: they resolve as run-token grants above.
+    default_scope = await gateway_service.build_chat_default_access_scope(
+        db,
+        owner_user_id=grant.owner_user_id,
+        organization_id=grant.organization_id,
+    )
+    if default_scope is not None:
+        grant = dataclasses.replace(grant, default_scope=default_scope)
     return grant
 
 

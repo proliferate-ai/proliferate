@@ -290,6 +290,23 @@ WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE: Final = "active"
 WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED: Final = "expired"
 WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_REVOKED: Final = "revoked"
 
+# --- Function invocations (Part II mental-model §1; track 1b phase 2). ---------
+# User-authored HTTP functions exposed at the integration gateway under the
+# reserved ``functions`` provider namespace. The agent addresses one by its
+# stable ``name`` (also the grant-list key); dispatch is a raw-httpx path
+# (modeled on the poller's ``fetch_poll_page``), NOT the MCP outbound path.
+FUNCTION_INVOCATION_PROVIDER_NAMESPACE: Final = "functions"
+FUNCTION_INVOCATION_NAME_MAX_LENGTH: Final = 64
+FUNCTION_INVOCATION_SUPPORTED_METHODS: Final = frozenset(
+    {"get", "post", "patch", "put", "delete"}
+)
+# SSRF + resource safety posture (PROPOSED, standard). The gateway makes the
+# request itself, so it must not be steered at private/link-local/loopback ranges
+# or our own infra, must cap response size + time, and must never follow a
+# cross-host redirect.
+FUNCTION_INVOCATION_HTTP_TIMEOUT_SECONDS: Final = 20.0
+FUNCTION_INVOCATION_MAX_RESPONSE_BYTES: Final = 2 * 1024 * 1024
+
 # --- Free-plan cap (spec 6: 1 non-archived workflow per user). -----------------
 FREE_PLAN_MAX_WORKFLOWS_PER_USER: Final = 1
 

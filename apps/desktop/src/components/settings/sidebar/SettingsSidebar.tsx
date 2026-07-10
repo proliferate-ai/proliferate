@@ -15,8 +15,10 @@ import {
   RefreshCw,
   Scissors,
   Settings2,
+  ShieldCheck,
   SlidersHorizontal,
   Users,
+  Webhook,
 } from "lucide-react";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
@@ -94,9 +96,11 @@ const SETTINGS_NAV_ICONS = {
   billing: CreditCard,
   "check-for-updates": RefreshCw,
   environments: SlidersHorizontal,
+  functions: Webhook,
   general: Settings2,
   integrations: Blocks,
   organization: Building2,
+  "organization-gateway-defaults": ShieldCheck,
   "organization-integrations": Blocks,
   "organization-limits": Gauge,
   "organization-members": Users,

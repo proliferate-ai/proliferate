@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   createAdminIntegrationDefinition,
   listAdminIntegrationDefinitions,
+  setAdminIntegrationDefaultChatScope,
   setAdminIntegrationEnabled,
   type CreateAdminIntegrationDefinitionRequest,
 } from "@proliferate/cloud-sdk/client/integrations";
@@ -44,11 +45,21 @@ export function useAdminIntegrationDefinitionActions(organizationId: string | nu
     onSuccess: () => invalidateCloudIntegrations(),
   });
 
+  const setDefaultChatScopeMutation = useMutation({
+    mutationFn: ({ definitionId, included }: { definitionId: string; included: boolean }) => {
+      if (!organizationId) throw new Error("Organization is required.");
+      return setAdminIntegrationDefaultChatScope(organizationId, definitionId, included);
+    },
+    onSuccess: () => invalidateCloudIntegrations(),
+  });
+
   return {
     createDefinition: createDefinitionMutation.mutateAsync,
     creatingDefinition: createDefinitionMutation.isPending,
     setEnabled: setEnabledMutation.mutateAsync,
     settingEnabled: setEnabledMutation.isPending,
+    setDefaultChatScope: setDefaultChatScopeMutation.mutateAsync,
+    settingDefaultChatScope: setDefaultChatScopeMutation.isPending,
   };
 }
 

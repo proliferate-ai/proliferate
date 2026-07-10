@@ -13,9 +13,11 @@ export type SettingsNavIconId =
   | "billing"
   | "check-for-updates"
   | "environments"
+  | "functions"
   | "general"
   | "integrations"
   | "organization"
+  | "organization-gateway-defaults"
   | "organization-integrations"
   | "organization-limits"
   | "organization-members"
@@ -83,6 +85,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
           { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
           { kind: "section", id: "integrations", label: "Integrations", iconId: "integrations" },
+          { kind: "section", id: "functions", label: "Functions", iconId: "functions" },
           { kind: "section", id: "worktrees", label: "Pruning", iconId: "worktrees" },
         ],
       },
@@ -100,6 +103,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "billing", label: "Billing", iconId: "billing", adminOnly: true },
           { kind: "section", id: "organization-secrets", label: "Organization secrets", iconId: "organization-secrets", adminOnly: true },
           { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
+          { kind: "section", id: "organization-gateway-defaults", label: "Gateway defaults", iconId: "organization-gateway-defaults", adminOnly: true },
         ],
       },
       {

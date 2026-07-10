@@ -113,6 +113,10 @@ export function cloudIntegrationAdminDefinitionsKey(organizationId: string | nul
   return [...cloudIntegrationsRootKey(), "admin-definitions", organizationId] as const;
 }
 
+export function cloudFunctionInvocationsKey() {
+  return [...cloudIntegrationsRootKey(), "function-invocations"] as const;
+}
+
 export function organizationSsoConnectionsKey(organizationId: string | null) {
   return [...cloudRootKey(), "organizations", organizationId, "sso-connections"] as const;
 }

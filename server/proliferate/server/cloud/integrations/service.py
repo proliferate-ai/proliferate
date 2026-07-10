@@ -15,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.workflows import FUNCTION_INVOCATION_PROVIDER_NAMESPACE
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store.integrations.accounts import (
     IntegrationAccountRecord,
@@ -31,7 +32,10 @@ from proliferate.db.store.integrations.definitions import (
     list_seed_definitions,
 )
 from proliferate.db.store.integrations.policies import (
+    IntegrationPolicyRecord,
+    get_policy,
     list_policies_for_org,
+    upsert_default_chat_scope,
     upsert_policy,
 )
 from proliferate.db.store.integrations.tool_cache import delete_tool_cache
@@ -92,6 +96,7 @@ def _admin_definition_response(
     definition: IntegrationDefinitionRecord,
     *,
     policy_enabled: bool | None,
+    default_chat_included: bool = True,
 ) -> AdminIntegrationDefinitionResponse:
     effective_enabled = (
         policy_enabled if policy_enabled is not None else definition.enabled_by_default
@@ -106,7 +111,18 @@ def _admin_definition_response(
         enabled_by_default=definition.enabled_by_default,
         policy_enabled=policy_enabled,
         effective_enabled=effective_enabled,
+        default_chat_included=default_chat_included,
     )
+
+
+def _default_chat_included(policy: IntegrationPolicyRecord | None) -> bool:
+    """§2 coarse default-access read: no authored ``scope_json`` (row absent, or
+    present but NULL) means included-with-all-tools; an authored empty list means
+    explicitly excluded. A non-empty allowlist (per-tool restriction) also reads
+    as "included" here since there's no settings-UI state for that yet."""
+    if policy is None or policy.scope_json is None:
+        return True
+    return len(policy.scope_json) > 0
 
 
 async def _require_org_admin(
@@ -382,11 +398,16 @@ async def list_admin_integration_definitions(
     await _require_org_admin(db, user_id=actor_user_id, organization_id=organization_id)
     definitions = await list_definitions_visible_to_org(db, organization_id)
     policies = await list_policies_for_org(db, organization_id)
-    policy_by_definition = {policy.definition_id: policy.enabled for policy in policies}
+    policy_by_definition = {policy.definition_id: policy for policy in policies}
     return [
         _admin_definition_response(
             definition,
-            policy_enabled=policy_by_definition.get(definition.id),
+            policy_enabled=(
+                policy_by_definition[definition.id].enabled
+                if definition.id in policy_by_definition
+                else None
+            ),
+            default_chat_included=_default_chat_included(policy_by_definition.get(definition.id)),
         )
         for definition in definitions
     ]
@@ -412,6 +433,16 @@ async def create_admin_integration_definition(
             "invalid_payload",
             "Namespace must be 1-64 lowercase alphanumeric, '_' or '-' characters and "
             "start with a letter or digit.",
+            status_code=400,
+        )
+    # ``functions`` is reserved for the function-invocation virtual provider at the
+    # gateway (Part II §11). A custom integration registered under that namespace
+    # would collide with invocation dispatch, so block it here.
+    if namespace == FUNCTION_INVOCATION_PROVIDER_NAMESPACE:
+        raise CloudApiError(
+            "invalid_payload",
+            f"Namespace '{FUNCTION_INVOCATION_PROVIDER_NAMESPACE}' is reserved for "
+            "function invocations and cannot be used for a custom integration.",
             status_code=400,
         )
     try:
@@ -477,4 +508,41 @@ async def set_admin_integration_enabled(
         enabled=enabled,
         updated_by_user_id=actor_user_id,
     )
-    return _admin_definition_response(definition, policy_enabled=enabled)
+    policy = await get_policy(db, organization_id, definition.id)
+    return _admin_definition_response(
+        definition,
+        policy_enabled=enabled,
+        default_chat_included=_default_chat_included(policy),
+    )
+
+
+async def set_admin_integration_default_chat_scope(
+    db: AsyncSession,
+    *,
+    organization_id: UUID,
+    definition_id: UUID,
+    actor_user_id: UUID,
+    included: bool,
+) -> AdminIntegrationDefinitionResponse:
+    """§2 "default access modes" — author (``included=False``) or clear
+    (``included=True``) this definition's chat default-access exclusion."""
+    await _require_org_admin(db, user_id=actor_user_id, organization_id=organization_id)
+    definition = await get_definition(db, definition_id)
+    if (
+        definition is None
+        or definition.archived_at is not None
+        or (definition.source == "org_custom" and definition.organization_id != organization_id)
+    ):
+        raise CloudApiError("not_found", "Integration was not found.", status_code=404)
+    policy = await upsert_default_chat_scope(
+        db,
+        organization_id=organization_id,
+        definition_id=definition.id,
+        included=included,
+        updated_by_user_id=actor_user_id,
+    )
+    return _admin_definition_response(
+        definition,
+        policy_enabled=policy.enabled,
+        default_chat_included=included,
+    )

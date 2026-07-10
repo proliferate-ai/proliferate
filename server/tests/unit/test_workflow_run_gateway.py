@@ -915,3 +915,207 @@ async def test_delivered_accepts_run_token(
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "delivered"
+
+
+# --- Track 1b Phase 1: gateway CHAT default-access modes (§2) -------------------
+#
+# Tier-1 DENY-PATH floor. A per-worker (chat/interactive) grant is subject to the
+# org's configurable default-access policy, wired from
+# ``CloudIntegrationPolicy.scope_json``. Asserted AT THE GATEWAY (list_providers
+# absence + call_provider_tool 403), never on prose. Workflows (run-token grants)
+# are unaffected: they carry their own frozen run_scope.
+
+
+async def _seed_org_worker_token(
+    db: AsyncSession, *, owner_user_id: uuid.UUID, organization_id: uuid.UUID
+) -> str:
+    """A per-worker (chat) gateway token for an org-scoped worker; returns the bearer."""
+    sandbox = CloudSandbox(
+        owner_user_id=owner_user_id,
+        sandbox_type="e2b",
+        status="ready",
+        purpose="interactive",
+    )
+    db.add(sandbox)
+    await db.flush()
+    worker = CloudRuntimeWorker(
+        owner_user_id=owner_user_id,
+        organization_id=organization_id,
+        runtime_kind="cloud_sandbox",
+        cloud_sandbox_id=sandbox.id,
+        token_hash=uuid.uuid4().hex,
+        status="online",
+    )
+    db.add(worker)
+    await db.flush()
+    token = f"wt-{uuid.uuid4().hex}"
+    db.add(
+        CloudIntegrationGatewayToken(
+            runtime_worker_id=worker.id,
+            owner_user_id=owner_user_id,
+            token_hash=runtime_workers_store.hash_gateway_token(token),
+            status="active",
+            scope_json=None,
+        )
+    )
+    await db.flush()
+    return token
+
+
+async def _set_chat_default_scope(
+    db: AsyncSession,
+    *,
+    organization_id: uuid.UUID,
+    definition_id: uuid.UUID,
+    scope_json: list[str] | None,
+    updated_by: uuid.UUID,
+) -> None:
+    db.add(
+        CloudIntegrationPolicy(
+            organization_id=organization_id,
+            definition_id=definition_id,
+            enabled=True,
+            scope_json=scope_json,
+            updated_by_user_id=updated_by,
+        )
+    )
+    await db.flush()
+
+
+async def _chat_grant(db: AsyncSession, *, token: str) -> object:
+    request = _FakeRequest(headers={"authorization": f"Bearer {token}"})
+    return await gateway_deps.require_integration_gateway_grant(request, db)
+
+
+async def test_chat_default_all_when_no_policy_restriction(
+    db_session: AsyncSession,
+) -> None:
+    """default-all: an org that authored NO scope_json restriction gets every ready
+    integration in the chat default set (today's unconditional behavior)."""
+    user = await _make_user(db_session)
+    org_id = uuid.uuid4()
+    await sync_seed_definitions(db_session)
+    await db_session.flush()
+    for ns in ("context7", "exa"):
+        definition = await definitions_store.get_seed_by_namespace(db_session, ns)
+        assert definition is not None
+        await _seed_ready_account_for_definition(
+            db_session, user_id=user.id, definition=definition
+        )
+
+    token = await _seed_org_worker_token(
+        db_session, owner_user_id=user.id, organization_id=org_id
+    )
+    grant = await _chat_grant(db_session, token=token)
+    assert grant.default_scope is None  # unscoped -> default-all
+    providers = await gateway_service.list_providers(db_session, grant=grant)
+    names = {p["provider"] for p in providers["providers"]}
+    assert {"context7", "exa"} <= names
+
+
+async def test_chat_default_subset_hides_excluded_and_denies_forced_call(
+    db_session: AsyncSession,
+) -> None:
+    """default-subset: an org excludes one integration (scope_json=[]). The chat
+    session neither SEES it in list_providers nor can force a call (403), while a
+    peer integration with no restriction stays reachable."""
+    user = await _make_user(db_session)
+    org_id = uuid.uuid4()
+    await sync_seed_definitions(db_session)
+    await db_session.flush()
+    context7 = await definitions_store.get_seed_by_namespace(db_session, "context7")
+    exa = await definitions_store.get_seed_by_namespace(db_session, "exa")
+    assert context7 is not None and exa is not None
+    for definition in (context7, exa):
+        await _seed_ready_account_for_definition(
+            db_session, user_id=user.id, definition=definition
+        )
+
+    # Exclude exa from the chat default set (scope_json=[]); context7 unrestricted.
+    await _set_chat_default_scope(
+        db_session,
+        organization_id=org_id,
+        definition_id=exa.id,
+        scope_json=[],
+        updated_by=user.id,
+    )
+    token = await _seed_org_worker_token(
+        db_session, owner_user_id=user.id, organization_id=org_id
+    )
+    grant = await _chat_grant(db_session, token=token)
+
+    # ABSENCE: excluded provider is not in list_providers; the peer still is.
+    providers = await gateway_service.list_providers(db_session, grant=grant)
+    names = {p["provider"] for p in providers["providers"]}
+    assert "exa" not in names
+    assert "context7" in names
+
+    # 403: a forced call to the excluded provider is scope-denied (no upstream call).
+    with pytest.raises(CloudApiError) as excinfo:
+        await gateway_service.call_provider_tool(
+            db_session, grant=grant, provider="exa", tool="search", arguments={}
+        )
+    assert excinfo.value.code == "integration_gateway_scope_denied"
+
+
+async def test_chat_default_per_integration_tool_restriction(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Per-integration default access mode: scope_json=["a"] keeps the integration in
+    the default set but restricts it to tool ``a`` — ``b`` is scope-denied and hidden
+    from tools/list."""
+    user = await _make_user(db_session)
+    org_id = uuid.uuid4()
+    await sync_seed_definitions(db_session)
+    await db_session.flush()
+    context7 = await definitions_store.get_seed_by_namespace(db_session, "context7")
+    assert context7 is not None
+    await _seed_ready_account_for_definition(
+        db_session, user_id=user.id, definition=context7
+    )
+    await _set_chat_default_scope(
+        db_session,
+        organization_id=org_id,
+        definition_id=context7.id,
+        scope_json=["a"],
+        updated_by=user.id,
+    )
+    token = await _seed_org_worker_token(
+        db_session, owner_user_id=user.id, organization_id=org_id
+    )
+    grant = await _chat_grant(db_session, token=token)
+    assert grant.default_scope == [{"provider": "context7", "tools": ["a"]}]
+
+    async def _fake_tool_cache(db, *, account_record, definition_record):  # type: ignore[no-untyped-def]
+        return [{"name": "a"}, {"name": "b"}]
+
+    monkeypatch.setattr(gateway_service, "get_or_refresh_tool_cache", _fake_tool_cache)
+    listed = await gateway_service.list_tools_for_provider(
+        db_session, grant=grant, provider="context7"
+    )
+    assert listed["tools"] == [{"name": "a"}]
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await gateway_service.call_provider_tool(
+            db_session, grant=grant, provider="context7", tool="b", arguments={}
+        )
+    assert excinfo.value.code == "integration_gateway_scope_denied"
+
+
+async def test_chat_default_policy_does_not_narrow_workflow_run_grant(
+    db_session: AsyncSession,
+) -> None:
+    """Workflows unchanged (E3): a run-token grant carries its own frozen run_scope;
+    the org's chat default-access policy never applies (effective_run_scope == the
+    run's scope, and default_scope stays None)."""
+    user = await _make_user(db_session)
+    await _seed_worker_with_scope(
+        db_session, owner_user_id=user.id, scope_json=["context7", "exa"]
+    )
+    run_id, plaintext = await _seed_run_with_token(
+        db_session, owner=user, integrations=["context7"]
+    )
+    grant = await _chat_grant(db_session, token=plaintext)
+    assert grant.run_id == run_id
+    assert grant.default_scope is None
+    assert grant.effective_run_scope == [{"provider": "context7"}]

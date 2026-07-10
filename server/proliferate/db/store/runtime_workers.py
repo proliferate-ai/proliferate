@@ -119,6 +119,21 @@ class IntegrationGatewayGrant:
     # L25 layer 2: the run's frozen function grant (``[{provider, tools}]``). None on
     # a per-worker grant (no per-run function restriction).
     run_scope: list[dict[str, object]] | None = None
+    # §2 "default access modes" layer 2 for CHAT/interactive (per-worker) grants: the
+    # CONFIGURABLE default run-scope computed from the org's
+    # ``CloudIntegrationPolicy.scope_json``. None = unscoped (default-all — today's
+    # unconditional behavior). Never set on a per-run (workflow) grant: those carry
+    # their own frozen ``run_scope`` (E3 explicit opt-in), so the chat default policy
+    # never narrows a workflow.
+    default_scope: list[dict[str, object]] | None = None
+
+    @property
+    def effective_run_scope(self) -> list[dict[str, object]] | None:
+        """The layer-2 scope the gateway enforces: a workflow run token's frozen
+        ``run_scope`` when present, otherwise the chat/interactive default-access
+        scope. Mutually exclusive by construction (a per-run grant leaves
+        ``default_scope`` None; a per-worker grant leaves ``run_scope`` None)."""
+        return self.run_scope if self.run_scope is not None else self.default_scope
 
 
 def _enrollment_value(row: CloudRuntimeWorkerEnrollment) -> RuntimeWorkerEnrollmentValue:

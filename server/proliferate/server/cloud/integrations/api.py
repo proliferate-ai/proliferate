@@ -30,6 +30,7 @@ from proliferate.server.cloud.integrations.models import (
     IntegrationHealthItem,
     IntegrationHealthResponse,
     IntegrationOAuthFlowStatusResponse,
+    SetIntegrationDefaultChatScopeRequest,
     SetIntegrationEnabledRequest,
 )
 from proliferate.server.cloud.integrations.oauth import OAuthFlowStatus
@@ -46,6 +47,7 @@ from proliferate.server.cloud.integrations.service import (
     list_admin_integration_definitions,
     list_integration_catalog,
     remove_integration_account,
+    set_admin_integration_default_chat_scope,
     set_admin_integration_enabled,
 )
 
@@ -250,4 +252,24 @@ async def set_admin_integration_enabled_endpoint(
         definition_id=definition_id,
         actor_user_id=user.id,
         enabled=body.enabled,
+    )
+
+
+@admin_router.patch(
+    "/organizations/{organization_id}/definitions/{definition_id}/default-chat-scope",
+    response_model=AdminIntegrationDefinitionResponse,
+)
+async def set_admin_integration_default_chat_scope_endpoint(
+    organization_id: UUID,
+    definition_id: UUID,
+    body: SetIntegrationDefaultChatScopeRequest,
+    user: User = Depends(current_product_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> AdminIntegrationDefinitionResponse:
+    return await set_admin_integration_default_chat_scope(
+        db,
+        organization_id=organization_id,
+        definition_id=definition_id,
+        actor_user_id=user.id,
+        included=body.included,
     )

@@ -9,6 +9,8 @@ import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
 // BUDGETS PARKED: pane implementation is preserved but not rendered while disabled.
 // import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
+import { FunctionInvocationsPane } from "@/components/settings/panes/FunctionInvocationsPane";
+import { OrganizationGatewayDefaultsPane } from "@/components/settings/panes/OrganizationGatewayDefaultsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
 import { OrganizationPane } from "@/components/settings/panes/OrganizationPane";
@@ -127,6 +129,21 @@ export function renderSettingsSection(
 
     return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
+  if (activeSection === "functions") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <FunctionInvocationsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
   if (activeSection === "billing") {
     return <BillingPane />;
   }
@@ -146,6 +163,21 @@ export function renderSettingsSection(
 
     if (cloudActive) {
       return <OrganizationIntegrationsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
+  if (activeSection === "organization-gateway-defaults") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <OrganizationGatewayDefaultsPane />;
     }
 
     if (cloudSignInChecking) {

@@ -2076,6 +2076,93 @@ export interface paths {
         patch: operations["set_admin_integration_enabled_endpoint_v1_cloud_integrations_admin_organizations__organization_id__definitions__definition_id__enabled_patch"];
         trace?: never;
     };
+    "/v1/cloud/integrations/admin/organizations/{organization_id}/definitions/{definition_id}/default-chat-scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Admin Integration Default Chat Scope Endpoint */
+        patch: operations["set_admin_integration_default_chat_scope_endpoint_v1_cloud_integrations_admin_organizations__organization_id__definitions__definition_id__default_chat_scope_patch"];
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Function Invocations Endpoint */
+        get: operations["list_function_invocations_endpoint_v1_cloud_integrations_functions_get"];
+        put?: never;
+        /** Create Function Invocation Endpoint */
+        post: operations["create_function_invocation_endpoint_v1_cloud_integrations_functions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Archive Function Invocation Endpoint */
+        delete: operations["archive_function_invocation_endpoint_v1_cloud_integrations_functions__name__delete"];
+        options?: never;
+        head?: never;
+        /** Update Function Invocation Endpoint */
+        patch: operations["update_function_invocation_endpoint_v1_cloud_integrations_functions__name__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions/{name}/headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Function Invocation Headers Endpoint */
+        post: operations["rotate_function_invocation_headers_endpoint_v1_cloud_integrations_functions__name__headers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions/{name}/chat-scope-enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Function Invocation Chat Scope Enabled Endpoint */
+        patch: operations["set_function_invocation_chat_scope_enabled_endpoint_v1_cloud_integrations_functions__name__chat_scope_enabled_patch"];
+        trace?: never;
+    };
     "/v1/cloud/webhooks/e2b": {
         parameters: {
             query?: never;
@@ -2715,6 +2802,11 @@ export interface components {
             policyEnabled?: boolean | null;
             /** Effectiveenabled */
             effectiveEnabled: boolean;
+            /**
+             * Defaultchatincluded
+             * @default true
+             */
+            defaultChatIncluded: boolean;
         };
         /** AgentApiKeyCreateRequest */
         AgentApiKeyCreateRequest: {
@@ -3986,6 +4078,27 @@ export interface components {
             /** Source */
             source?: ("desktop" | "web" | "mobile") | null;
         };
+        /** CreateFunctionInvocationRequest */
+        CreateFunctionInvocationRequest: {
+            /** Name */
+            name: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Endpointurl */
+            endpointUrl: string;
+            /** Method */
+            method: string;
+            /** Argsschema */
+            argsSchema?: {
+                [key: string]: unknown;
+            };
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+        };
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
@@ -4037,6 +4150,47 @@ export interface components {
              * @default true
              */
             received: boolean;
+        };
+        /** FunctionInvocationListResponse */
+        FunctionInvocationListResponse: {
+            /** Items */
+            items: components["schemas"]["FunctionInvocationResponse"][];
+        };
+        /** FunctionInvocationResponse */
+        FunctionInvocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Endpointurl */
+            endpointUrl: string;
+            /** Method */
+            method: string;
+            /** Argsschema */
+            argsSchema: {
+                [key: string]: unknown;
+            };
+            /** Chatscopeenabled */
+            chatScopeEnabled: boolean;
+            /** Hasheaders */
+            hasHeaders: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
         };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
@@ -4985,6 +5139,16 @@ export interface components {
             /** Basebranch */
             baseBranch: string;
         };
+        /**
+         * RotateFunctionInvocationHeadersRequest
+         * @description ``headers=None`` (or ``{}``) clears the stored ciphertext.
+         */
+        RotateFunctionInvocationHeadersRequest: {
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+        };
         /** RunStatusRequest */
         RunStatusRequest: {
             /**
@@ -5032,6 +5196,16 @@ export interface components {
              * @default
              */
             runCommand: string;
+        };
+        /** SetFunctionInvocationChatScopeEnabledRequest */
+        SetFunctionInvocationChatScopeEnabledRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** SetIntegrationDefaultChatScopeRequest */
+        SetIntegrationDefaultChatScopeRequest: {
+            /** Included */
+            included: boolean;
         };
         /** SetIntegrationEnabledRequest */
         SetIntegrationEnabledRequest: {
@@ -5364,6 +5538,26 @@ export interface components {
             /** Displayname */
             displayName?: string | null;
         };
+        /**
+         * UpdateFunctionInvocationRequest
+         * @description Every field is optional; only supplied fields are changed. ``name`` and
+         *     headers are not editable here — name is immutable post-create (it's the
+         *     gateway tool address), headers go through the dedicated rotate endpoint.
+         */
+        UpdateFunctionInvocationRequest: {
+            /** Displayname */
+            displayName?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Endpointurl */
+            endpointUrl?: string | null;
+            /** Method */
+            method?: string | null;
+            /** Argsschema */
+            argsSchema?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** UserRead */
         UserRead: {
             /**
@@ -5486,9 +5680,9 @@ export interface components {
             /** Id */
             id: string;
             /** Owneruserid */
-            ownerUserId: string;
+            ownerUserId: string | null;
             /** Createdbyuserid */
-            createdByUserId: string;
+            createdByUserId: string | null;
             /** Name */
             name: string;
             /** Description */
@@ -5501,6 +5695,13 @@ export interface components {
             createdAt: string;
             /** Updatedat */
             updatedAt: string;
+            /**
+             * Isseed
+             * @default false
+             */
+            isSeed: boolean;
+            /** Seedslug */
+            seedSlug?: string | null;
         };
         /** WorkflowRunDetailResponse */
         WorkflowRunDetailResponse: {
@@ -5728,7 +5929,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Createdbyuserid */
-            createdByUserId: string;
+            createdByUserId: string | null;
             /** Createdat */
             createdAt: string;
         };
@@ -10411,6 +10612,229 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminIntegrationDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_admin_integration_default_chat_scope_endpoint_v1_cloud_integrations_admin_organizations__organization_id__definitions__definition_id__default_chat_scope_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetIntegrationDefaultChatScopeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminIntegrationDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_function_invocations_endpoint_v1_cloud_integrations_functions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationListResponse"];
+                };
+            };
+        };
+    };
+    create_function_invocation_endpoint_v1_cloud_integrations_functions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFunctionInvocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_function_invocation_endpoint_v1_cloud_integrations_functions__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_function_invocation_endpoint_v1_cloud_integrations_functions__name__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFunctionInvocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_function_invocation_headers_endpoint_v1_cloud_integrations_functions__name__headers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateFunctionInvocationHeadersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_function_invocation_chat_scope_enabled_endpoint_v1_cloud_integrations_functions__name__chat_scope_enabled_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetFunctionInvocationChatScopeEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
                 };
             };
             /** @description Validation Error */

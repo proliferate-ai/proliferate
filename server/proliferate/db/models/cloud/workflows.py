@@ -465,6 +465,83 @@ class WorkflowStepAction(Base):
     )
 
 
+class FunctionInvocationDefinition(Base):
+    """A user-authored HTTP function the agent can invoke through the gateway.
+
+    Part II mental-model §1: v1 = a pure HTTP request our server makes on the
+    agent's behalf, with server-side safety guarantees (SSRF guard, size/timeout
+    caps, no cross-host redirects). Exposed at the integration gateway under the
+    reserved ``functions`` provider namespace; the agent addresses one by its
+    stable ``name`` (which is also how the run/chat grant list names it).
+
+    Person-scoped for now (``owner_user_id``), consistent with workflows being
+    user-scoped in v1; ``organization_id`` is carried nullable so the org-wide
+    move (workflows + invocations together) needs no migration.
+
+    ``headers_ciphertext`` is a Fernet-encrypted JSON blob (house crypto helpers)
+    carrying request headers that may hold API keys — WRITE-ONLY from the UI
+    (set/rotate, never read back), the same D4 posture as poll-trigger auth.
+
+    ``chat_scope_enabled`` is the §2 "default access modes" knob for invocations:
+    a new invocation is WORKFLOW-ONLY by default (``false``) and is only added to
+    the interactive/chat default-access set once explicitly enabled. Workflow
+    runs grant invocations explicitly (E3), independent of this flag.
+    """
+
+    __tablename__ = "function_invocation_definition"
+    __table_args__ = (
+        CheckConstraint(
+            "method IN ('get', 'post', 'patch', 'put', 'delete')",
+            name="ck_function_invocation_definition_method",
+        ),
+        # ``name`` is the gateway tool address — unique per owner, among live rows.
+        Index(
+            "uq_function_invocation_definition_owner_name",
+            "owner_user_id",
+            "name",
+            unique=True,
+            postgresql_where=text("archived_at IS NULL"),
+        ),
+        Index(
+            "ix_function_invocation_definition_owner_active",
+            "owner_user_id",
+            postgresql_where=text("archived_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"),
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Stable slug — the grant list + the agent's tool call both address by it.
+    name: Mapped[str] = mapped_column(String(64))
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    endpoint_url: Mapped[str] = mapped_column(Text)
+    method: Mapped[str] = mapped_column(String(8))
+    # Fernet-encrypted JSON blob of request headers; write-only (never read back).
+    headers_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # JSON Schema the agent's call arguments are validated against at the gateway
+    # (jsonschema), then merged into the request body/query.
+    args_schema_json: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    # §2 default access modes: WORKFLOW-ONLY until explicitly enabled for chat.
+    chat_scope_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
 class WorkflowRunGatewayToken(Base):
     """The per-run integration-gateway credential (PR E / OPEN-3(a), L16).
 
