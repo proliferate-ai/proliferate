@@ -55,6 +55,10 @@ from proliferate.db.store.agent_gateway import (
 )
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError
+from proliferate.server.cloud.agent_gateway.budget import (
+    AGENT_GATEWAY_CREDITS_EXHAUSTED_CODE,
+    is_gateway_budget_available,
+)
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.event_logging import log_cloud_event
 
@@ -396,6 +400,16 @@ async def mirror_catalog(
 
 
 async def _probe_gateway_models(db: AsyncSession, *, user_id: UUID) -> str:
+    # Budget gate (second wall after the LiteLLM key disable): an exhausted
+    # subject gets a clean enumerated 402 instead of exercising the gateway.
+    # Mirrors the state renderer, which withholds the virtual key for the
+    # same condition.
+    if not await is_gateway_budget_available(db, user_id):
+        raise CloudApiError(
+            AGENT_GATEWAY_CREDITS_EXHAUSTED_CODE,
+            "Your LLM credits are exhausted; top up to keep using the gateway.",
+            status_code=402,
+        )
     enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
     virtual_key: str | None = None
     if enrollment is not None:
