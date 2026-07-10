@@ -48,7 +48,11 @@ export interface GatewayGrant {
   workerId: string;
   /** The desktop install id the grant was enrolled under (used to revoke it). */
   desktopInstallId: string;
-  /** Bearer the runtime presents to the gateway MCP endpoint (from the enroll response). */
+  /**
+   * The full Authorization header value the runtime presents to the gateway MCP
+   * endpoint, exactly as the enroll response returns it (already includes the
+   * "Bearer " scheme — this is what the worker writes to the dotfile verbatim).
+   */
   authorization: string;
   /** The gateway MCP URL the runtime should POST to (server-relative, loopback-safe). */
   mcpUrl: string;
@@ -130,7 +134,8 @@ export async function gatewayJsonRpc(
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${grant.authorization}`,
+      // grant.authorization already includes the "Bearer " scheme.
+      authorization: grant.authorization,
     },
     body: JSON.stringify(message),
   });
