@@ -247,6 +247,11 @@ jobs:
     needs: [create-release]
     if: (github.event_name == 'push' || inputs.publish) && !inputs.dry_run
     runs-on: ubuntu-latest
+    permissions:
+      # OIDC role assumption for the downloads bucket, matching the desktop
+      # release's publish-updater job.
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v6
         with:
