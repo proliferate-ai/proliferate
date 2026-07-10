@@ -923,9 +923,7 @@ async def list_retryable_actions(
     return tuple(_action_record(row) for row in rows)
 
 
-async def list_actions_for_run(
-    db: AsyncSession, *, run_id: UUID
-) -> tuple[StepActionRecord, ...]:
+async def list_actions_for_run(db: AsyncSession, *, run_id: UUID) -> tuple[StepActionRecord, ...]:
     rows = (
         (
             await db.execute(
@@ -1026,8 +1024,7 @@ async def refreeze_run_gateway_token_scope(
             await db.execute(
                 select(WorkflowRunGatewayToken).where(
                     WorkflowRunGatewayToken.workflow_run_id == workflow_run_id,
-                    WorkflowRunGatewayToken.status
-                    == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
+                    WorkflowRunGatewayToken.status == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
                 )
             )
         )
@@ -1051,8 +1048,7 @@ async def expire_run_gateway_tokens_for_run(db: AsyncSession, *, workflow_run_id
             await db.execute(
                 select(WorkflowRunGatewayToken).where(
                     WorkflowRunGatewayToken.workflow_run_id == workflow_run_id,
-                    WorkflowRunGatewayToken.status
-                    == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
+                    WorkflowRunGatewayToken.status == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
                 )
             )
         )
@@ -1076,13 +1072,10 @@ async def list_in_flight_triggered_cloud_runs(
     ``delivered_before`` excludes runs delivered after the given timestamp (skip
     runs just delivered this tick -- they need time to execute).
     """
-    stmt = (
-        select(WorkflowRun)
-        .where(
-            WorkflowRun.status.in_(_IN_FLIGHT_STATUSES),
-            WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
-            WorkflowRun.trigger_id.is_not(None),
-        )
+    stmt = select(WorkflowRun).where(
+        WorkflowRun.status.in_(_IN_FLIGHT_STATUSES),
+        WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
+        WorkflowRun.trigger_id.is_not(None),
     )
     if delivered_before is not None:
         stmt = stmt.where(WorkflowRun.delivered_at < delivered_before)

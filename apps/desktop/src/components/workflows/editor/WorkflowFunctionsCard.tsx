@@ -75,9 +75,11 @@ export function WorkflowFunctionsCard({ integrations, providers, onChange }: Wor
           {providers.map((provider) => {
             const on = granted.has(provider.namespace);
             return (
-              <button
+              <Button
                 key={provider.namespace}
                 type="button"
+                variant="unstyled"
+                size="unstyled"
                 onClick={() => toggle(provider.namespace)}
                 aria-pressed={on}
                 className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
@@ -93,7 +95,7 @@ export function WorkflowFunctionsCard({ integrations, providers, onChange }: Wor
                     not connected
                   </Badge>
                 ) : null}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -153,9 +155,11 @@ export function WorkflowAgentIntegrationsRow({
         {workflowIntegrations.map((namespace) => {
           const on = selected.has(namespace);
           return (
-            <button
+            <Button
               key={namespace}
               type="button"
+              variant="unstyled"
+              size="unstyled"
               onClick={() => toggle(namespace)}
               aria-pressed={on}
               className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
@@ -166,7 +170,7 @@ export function WorkflowAgentIntegrationsRow({
             >
               {on ? <Check className="size-3.5" aria-hidden /> : null}
               <span>{displayNames.get(namespace) ?? namespace}</span>
-            </button>
+            </Button>
           );
         })}
       </div>

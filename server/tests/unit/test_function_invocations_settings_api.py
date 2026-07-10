@@ -91,7 +91,7 @@ async def test_create_duplicate_name_conflicts(db_session: AsyncSession) -> None
 
 @pytest.mark.parametrize(
     "name",
-    ["Bad-Name", "1starts_with_digit", "" , "has space", "way-too-long-" * 10],
+    ["Bad-Name", "1starts_with_digit", "", "has space", "way-too-long-" * 10],
 )
 async def test_create_rejects_invalid_name(db_session: AsyncSession, name: str) -> None:
     user = await _make_user(db_session)

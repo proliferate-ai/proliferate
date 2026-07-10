@@ -75,9 +75,7 @@ def _action_kind_for(step: dict[str, object], output: object) -> str | None:
     return None
 
 
-async def _organization_id_for_run(
-    db: AsyncSession, *, run: WorkflowRunRecord
-) -> UUID | None:
+async def _organization_id_for_run(db: AsyncSession, *, run: WorkflowRunRecord) -> UUID | None:
     """The run owner's current organization — the org whose integration policy
     governs this run's actions. In v1 the executor equals the workflow owner, so
     the owner's current membership is the run's org context. Returns None when
@@ -159,18 +157,20 @@ async def _perform_slack_notify(
     # Pass the run's org context so org integration policy is honored: a Slack
     # account the owner holds personally is still blocked if their org disabled
     # the Slack integration.
-    account_pair = await accounts_store.get_ready_account_for_provider(
+    row = await accounts_store.get_ready_account_for_provider(
         db, run.executor_user_id, "slack", organization_id=organization_id
     )
-    if account_pair is None:
+    if row is None or not accounts_store.org_policy_allows(row, organization_id=organization_id):
         await _mark_action_failed(db, action_id, error_message="No ready Slack account")
         return
 
-    account, _definition = account_pair
+    account = row.account
     try:
         bundle = decrypt_json(account.credential_ciphertext)
     except Exception:
-        await _mark_action_failed(db, action_id, error_message="Failed to decrypt Slack credentials")
+        await _mark_action_failed(
+            db, action_id, error_message="Failed to decrypt Slack credentials"
+        )
         return
 
     bot_token = bundle.get("bot_token") or bundle.get("access_token")
@@ -191,7 +191,9 @@ async def _perform_slack_notify(
         return
 
     await _mark_action_done(
-        db, action_id, result_json={"channel_id": result.channel_id, "message_ts": result.message_ts}
+        db,
+        action_id,
+        result_json={"channel_id": result.channel_id, "message_ts": result.message_ts},
     )
 
 
@@ -208,9 +210,7 @@ async def _mark_action_done(
     await db.flush()
 
 
-async def _mark_action_failed(
-    db: AsyncSession, action_id: UUID, *, error_message: str
-) -> None:
+async def _mark_action_failed(db: AsyncSession, action_id: UUID, *, error_message: str) -> None:
     action = await db.get(WorkflowStepAction, action_id)
     if action is None:
         return

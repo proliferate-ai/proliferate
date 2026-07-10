@@ -114,9 +114,7 @@ def test_fields_ref_parses_and_rewrites_to_injected_emit_index() -> None:
     # notify message with agent_fields); the resolver rewrites it to an indexed ref
     # against the injected notify-fields emit's flat position.
     assert parse_reference("fields.summary") == FieldsReference(name="summary")
-    resolved = resolve_string(
-        "note: {{fields.summary}}", inputs={}, emit_index={}, fields_index=4
-    )
+    resolved = resolve_string("note: {{fields.summary}}", inputs={}, emit_index={}, fields_index=4)
     assert resolved == "note: {{steps[4].output.summary}}"
 
 

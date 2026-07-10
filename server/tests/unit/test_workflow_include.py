@@ -22,10 +22,8 @@ from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_workflows as store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import service
-from proliferate.server.cloud.workflows.domain.composition import (
-    WorkflowCompositionError,
-    validate_includes,
-)
+from proliferate.server.cloud.workflows.composition import validate_includes
+from proliferate.server.cloud.workflows.domain.composition import WorkflowCompositionError
 from proliferate.server.cloud.workflows.domain.definition import parse_definition
 
 pytestmark = pytest.mark.asyncio
@@ -107,9 +105,7 @@ async def _store_workflow(
 
 
 async def _run_steps(db: AsyncSession, user: User, workflow_id, inputs: dict) -> list[dict]:
-    run = await service.start_run(
-        db, user, workflow_id, inputs=inputs, target_mode="local"
-    )
+    run = await service.start_run(db, user, workflow_id, inputs=inputs, target_mode="local")
     return run.resolved_plan_json["steps"]
 
 
@@ -247,9 +243,7 @@ async def test_parent_emit_ref_after_include_still_resolves(db_session: AsyncSes
     parent = await _store_workflow(
         db_session,
         user,
-        _definition(
-            [_emit("out", "produce"), _include(child.id), _prompt("tail {{out.val}}")]
-        ),
+        _definition([_emit("out", "produce"), _include(child.id), _prompt("tail {{out.val}}")]),
         name="parent",
     )
     steps = await _run_steps(db_session, user, parent.id, {})
@@ -300,14 +294,10 @@ async def test_nested_include_double_prefix(db_session: AsyncSession) -> None:
 
 async def test_multi_agent_child_rejected_at_save(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
-    child = await _store_workflow(
-        db_session, user, _multi_agent_definition(), name="child"
-    )
+    child = await _store_workflow(db_session, user, _multi_agent_definition(), name="child")
     agents = [_agent([_include(child.id)])]
     with pytest.raises(WorkflowCompositionError) as exc:
-        await validate_includes(
-            db_session, owner_user_id=user.id, workflow_id=None, agents=agents
-        )
+        await validate_includes(db_session, owner_user_id=user.id, workflow_id=None, agents=agents)
     assert exc.value.code == "include_multi_agent"
 
 
@@ -371,9 +361,7 @@ async def test_direct_cycle_rejected_naming_path(db_session: AsyncSession) -> No
     user = await _make_user(db_session)
     b = await _store_workflow(db_session, user, _definition([_prompt("b")]), name="Bee")
     # A includes B.
-    a = await _store_workflow(
-        db_session, user, _definition([_include(b.id)]), name="Ay"
-    )
+    a = await _store_workflow(db_session, user, _definition([_include(b.id)]), name="Ay")
     # Now saving B to include A closes the cycle A -> B -> A.
     b_agents = [_agent([_include(a.id)])]
     with pytest.raises(WorkflowCompositionError) as exc:
@@ -414,9 +402,7 @@ async def test_missing_required_input_rejected_at_save(db_session: AsyncSession)
     )
     agents = [_agent([_include(child.id)])]
     with pytest.raises(WorkflowCompositionError) as exc:
-        await validate_includes(
-            db_session, owner_user_id=user.id, workflow_id=None, agents=agents
-        )
+        await validate_includes(db_session, owner_user_id=user.id, workflow_id=None, agents=agents)
     assert exc.value.code == "include_args_mismatch"
 
 
@@ -425,9 +411,7 @@ async def test_undeclared_input_key_rejected_at_save(db_session: AsyncSession) -
     child = await _store_workflow(db_session, user, _definition([_prompt("hi")]), name="child")
     agents = [_agent([_include(child.id, args={"nope": "x"})])]
     with pytest.raises(WorkflowCompositionError) as exc:
-        await validate_includes(
-            db_session, owner_user_id=user.id, workflow_id=None, agents=agents
-        )
+        await validate_includes(db_session, owner_user_id=user.id, workflow_id=None, agents=agents)
     assert exc.value.code == "include_args_mismatch"
 
 

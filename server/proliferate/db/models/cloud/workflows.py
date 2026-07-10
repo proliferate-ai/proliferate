@@ -182,8 +182,7 @@ class WorkflowRun(Base):
             "ix_workflow_run_local_claim_expiry",
             "claim_expires_at",
             postgresql_where=text(
-                "target_mode = 'local' AND status = 'claimed' "
-                "AND claim_expires_at IS NOT NULL"
+                "target_mode = 'local' AND status = 'claimed' AND claim_expires_at IS NOT NULL"
             ),
         ),
     )
@@ -471,7 +470,9 @@ class WorkflowStepAction(Base):
     __tablename__ = "workflow_step_action"
     __table_args__ = (
         UniqueConstraint(
-            "run_id", "step_key", "action_kind",
+            "run_id",
+            "step_key",
+            "action_kind",
             name="uq_workflow_step_action_claim",
         ),
         CheckConstraint(

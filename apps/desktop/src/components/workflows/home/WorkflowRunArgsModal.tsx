@@ -319,13 +319,15 @@ export function WorkflowRunArgsModal({
           <div className="flex flex-col gap-1.5 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui-sm text-destructive">
             <p>{error}</p>
             {onOpenIntegrationsSettings ? (
-              <button
+              <Button
                 type="button"
+                variant="unstyled"
+                size="unstyled"
                 onClick={onOpenIntegrationsSettings}
                 className="self-start font-medium underline-offset-2 hover:underline"
               >
                 Go to Settings → Integrations
-              </button>
+              </Button>
             ) : null}
           </div>
         ) : null}

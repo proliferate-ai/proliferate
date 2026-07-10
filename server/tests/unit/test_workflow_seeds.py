@@ -12,6 +12,7 @@ from proliferate.server.cloud.workflows.seeds import (
     sync_seed_workflow_definitions,
 )
 
+
 def test_every_seed_validates_against_the_real_parser() -> None:
     assert len(SEED_WORKFLOW_DEFINITIONS) >= 3
     slugs = {seed.slug for seed in SEED_WORKFLOW_DEFINITIONS}

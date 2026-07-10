@@ -174,9 +174,7 @@ def _parse_inputs(raw: object) -> tuple[list[dict[str, object]], list[ArgSpec]]:
     if not isinstance(raw, list):
         raise _err("invalid_definition", "'inputs' must be a list.")
     if len(raw) > WORKFLOW_MAX_ARGS:
-        raise _err(
-            "too_many_args", f"A workflow may declare at most {WORKFLOW_MAX_ARGS} inputs."
-        )
+        raise _err("too_many_args", f"A workflow may declare at most {WORKFLOW_MAX_ARGS} inputs.")
     canonical: list[dict[str, object]] = []
     specs: list[ArgSpec] = []
     seen: set[str] = set()
@@ -200,9 +198,7 @@ def _parse_inputs(raw: object) -> tuple[list[dict[str, object]], list[ArgSpec]]:
             )
         required = inp.get("required", False)
         if not isinstance(required, bool):
-            raise _err(
-                "invalid_definition", f"Input '{name}' field 'required' must be a boolean."
-            )
+            raise _err("invalid_definition", f"Input '{name}' field 'required' must be a boolean.")
         enum_values: tuple[str, ...] = ()
         canonical_input: dict[str, object] = {
             "name": name,
@@ -663,9 +659,7 @@ def _parse_agent_node(
     if slot in seen_slots:
         raise _err("duplicate_slot", f"Duplicate agent slot '{slot}'.")
     seen_slots.add(slot)
-    harness = _require_str(
-        node, "harness", field=field, max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH
-    )
+    harness = _require_str(node, "harness", field=field, max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH)
     model = _require_str(node, "model", field=field, max_length=WORKFLOW_SHORT_TEXT_MAX_LENGTH)
     raw_steps = node.get("steps")
     if not isinstance(raw_steps, list) or (require_steps and not raw_steps):

@@ -35,12 +35,12 @@ export function WorkflowCard({
   return (
     <div className="group flex flex-col gap-3 rounded-[12px] border border-border bg-background p-4 transition-colors hover:border-foreground/20">
       <div className="flex items-start justify-between gap-2">
-        <button type="button" onClick={onOpen} className="min-w-0 text-left">
+        <Button type="button" variant="unstyled" size="unstyled" onClick={onOpen} className="min-w-0 text-left">
           <h3 className="truncate text-ui font-medium text-foreground">{view.name}</h3>
           {view.description ? (
             <p className="mt-0.5 line-clamp-2 text-ui-sm text-muted-foreground">{view.description}</p>
           ) : null}
-        </button>
+        </Button>
         {onOverflow ? (
           <Button variant="ghost" size="icon-sm" onClick={onOverflow} aria-label="Workflow options">
             <MoreHorizontal className="size-4" />
@@ -48,12 +48,12 @@ export function WorkflowCard({
         ) : null}
       </div>
 
-      <button type="button" onClick={onOpen} className="flex items-center gap-2 text-left">
+      <Button type="button" variant="unstyled" size="unstyled" onClick={onOpen} className="flex items-center gap-2 text-left">
         <WorkflowStepGlyphStrip glyphs={view.glyphs} />
         <span className="text-xs text-faint">
           {view.stepCount} {view.stepCount === 1 ? "step" : "steps"}
         </span>
-      </button>
+      </Button>
 
       <div className="flex flex-wrap items-center gap-1.5">
         {view.triggers.map((trigger) => (

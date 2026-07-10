@@ -141,18 +141,20 @@ async def fetch_poll_page(
     params: dict[str, str | int] = {"limit": limit}
     if cursor:
         params["cursor"] = cursor
-    async with httpx.AsyncClient(
-        timeout=WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS, follow_redirects=False
-    ) as client:
-        async with client.stream("GET", url, params=params, headers=headers) as response:
-            response.raise_for_status()
-            body = bytearray()
-            async for chunk in response.aiter_bytes():
-                body.extend(chunk)
-                if len(body) > WORKFLOW_POLL_MAX_RESPONSE_BYTES:
-                    raise PollResponseTooLargeError(
-                        f"Poll response exceeded the {WORKFLOW_POLL_MAX_RESPONSE_BYTES}-byte cap."
-                    )
+    async with (
+        httpx.AsyncClient(
+            timeout=WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS, follow_redirects=False
+        ) as client,
+        client.stream("GET", url, params=params, headers=headers) as response,
+    ):
+        response.raise_for_status()
+        body = bytearray()
+        async for chunk in response.aiter_bytes():
+            body.extend(chunk)
+            if len(body) > WORKFLOW_POLL_MAX_RESPONSE_BYTES:
+                raise PollResponseTooLargeError(
+                    f"Poll response exceeded the {WORKFLOW_POLL_MAX_RESPONSE_BYTES}-byte cap."
+                )
     return PollPage.model_validate_json(bytes(body))
 
 
@@ -179,9 +181,7 @@ async def _poll_one_trigger(
     session_factory: SchedulerSessionFactory, *, trigger_id: UUID, now: datetime
 ) -> int:
     async with session_factory() as db, db.begin():
-        trigger = await trigger_store.claim_due_poll_trigger(
-            db, trigger_id=trigger_id, now=now
-        )
+        trigger = await trigger_store.claim_due_poll_trigger(db, trigger_id=trigger_id, now=now)
         if trigger is None:
             return 0  # taken by another beat, disabled, or no longer due
 

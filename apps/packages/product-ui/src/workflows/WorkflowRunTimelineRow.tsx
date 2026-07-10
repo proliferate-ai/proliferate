@@ -5,6 +5,7 @@ import {
   type WorkflowStepSessionLink,
 } from "@proliferate/product-domain/workflows/run-status";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowUpRight, ExternalLink, RefreshCw } from "@proliferate/ui/icons";
 import { WorkflowStepRunDot } from "./WorkflowStepRunDot";
 
@@ -152,14 +153,16 @@ export function WorkflowRunTimelineRow({
         ) : null}
 
         {view.sessionLink && onOpenSession ? (
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={() => onOpenSession(view.sessionLink!)}
             className="mt-1 inline-flex items-center gap-1 text-xs text-faint transition-colors hover:text-info"
           >
             Open session
             <ArrowUpRight className="size-3" aria-hidden />
-          </button>
+          </Button>
         ) : null}
         {approvalControls ? <div className="mt-2">{approvalControls}</div> : null}
       </div>

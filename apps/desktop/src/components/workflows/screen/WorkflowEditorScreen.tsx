@@ -652,13 +652,15 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
             onOpenChange={(open) => setAddOpenAddress(open ? address : null)}
             className={`w-48 ${POPOVER_SURFACE_CLASS}`}
             trigger={(
-              <button
+              <Button
                 type="button"
+                variant="unstyled"
+                size="unstyled"
                 aria-label="Add step"
                 className="flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm outline-none transition-colors hover:border-border-heavy hover:text-foreground data-[state=open]:border-border-heavy data-[state=open]:text-foreground"
               >
                 <Plus className="size-4" />
-              </button>
+              </Button>
             )}
           >
             {(close) => (
@@ -685,14 +687,16 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
       <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-3 pt-10">
           <div className="flex min-w-0 items-center gap-3">
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               onClick={() => navigate("/workflows")}
               className="inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-3.5" />
               Workflows
-            </button>
+            </Button>
             <span aria-hidden className="shrink-0 text-faint">/</span>
             <span className="truncate text-sm font-medium text-foreground">
               {draft.name || "Untitled workflow"}
@@ -705,13 +709,15 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 side="bottom"
                 className={`w-80 ${POPOVER_SURFACE_CLASS}`}
                 trigger={(
-                  <button
+                  <Button
                     type="button"
+                    variant="unstyled"
+                    size="unstyled"
                     className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/15"
                   >
                     <CircleAlert className="size-3.5" />
                     {issues.length} {issues.length === 1 ? "issue" : "issues"}
-                  </button>
+                  </Button>
                 )}
               >
                 {() => (

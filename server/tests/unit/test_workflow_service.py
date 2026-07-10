@@ -46,7 +46,12 @@ def _definition() -> dict:
         "version": 1,
         "inputs": [
             {"name": "issue", "type": "text", "required": True},
-            {"name": "env", "type": "choice", "choices": ["prod", "staging"], "default": "staging"},
+            {
+                "name": "env",
+                "type": "choice",
+                "choices": ["prod", "staging"],
+                "default": "staging",
+            },
         ],
         "integrations": ["slack"],
         "agents": [
@@ -57,7 +62,11 @@ def _definition() -> dict:
                 "steps": [
                     {"kind": "agent.prompt", "prompt": "Fix {{inputs.issue}} on {{inputs.env}}"},
                     {"kind": "agent.emit", "name": "check", "prompt": "run tests"},
-                    {"kind": "notify", "slack_channel_id": "C1", "message": "done {{check.result}}"},
+                    {
+                        "kind": "notify",
+                        "slack_channel_id": "C1",
+                        "message": "done {{check.result}}",
+                    },
                 ],
             }
         ],
@@ -133,7 +142,10 @@ async def test_update_creates_new_version_and_preserves_old(db_session: AsyncSes
     # v1 is immutable: its stored definition is unchanged.
     original = next(v for v in versions if v.version_n == 1)
     assert original.id == v1.id
-    assert original.definition_json["agents"][0]["steps"][0]["prompt"] == "Fix {{inputs.issue}} on {{inputs.env}}"
+    assert (
+        original.definition_json["agents"][0]["steps"][0]["prompt"]
+        == "Fix {{inputs.issue}} on {{inputs.env}}"
+    )
 
 
 async def test_start_run_resolves_plan_and_records_pending_delivery(
@@ -398,7 +410,7 @@ async def test_start_run_rejects_parallel_on_local_target(db_session: AsyncSessi
     assert exc.value.code == "parallel_local_unsupported"
 
 
-async def _make_ready_cloud_workspace(db: AsyncSession, user: User) -> "CloudWorkspace":
+async def _make_ready_cloud_workspace(db: AsyncSession, user: User) -> CloudWorkspace:
     repo_config = RepoConfig(
         user_id=user.id,
         git_provider="github",

@@ -125,7 +125,11 @@ async def test_args_failing_schema_rejected_before_outbound(
 
     with pytest.raises(CloudApiError) as exc:
         await gateway_service.call_provider_tool(
-            db_session, grant=grant, provider=_FN, tool="my_fn", arguments={}  # missing "x"
+            db_session,
+            grant=grant,
+            provider=_FN,
+            tool="my_fn",
+            arguments={},  # missing "x"
         )
     assert exc.value.code == "function_invocation_args_invalid"
     assert tripped["called"] is False  # rejected at the gateway, zero outbound traffic
@@ -209,9 +213,7 @@ async def test_invocation_granted_to_run_visible_and_dispatches(
         "http://100.64.1.2/x",  # RFC 6598 CGNAT / Tailscale (not is_private)
     ],
 )
-async def test_ssrf_guard_blocks_private_endpoint(
-    db_session: AsyncSession, endpoint: str
-) -> None:
+async def test_ssrf_guard_blocks_private_endpoint(db_session: AsyncSession, endpoint: str) -> None:
     user = await _make_user(db_session)
     await _seed_invocation(db_session, owner=user, name="my_fn", endpoint_url=endpoint)
     grant = _run_grant(user, functions_tools=["my_fn"])
@@ -321,7 +323,11 @@ async def test_oversized_response_aborts_midstream(db_session: AsyncSession) -> 
 
     user = await _make_user(db_session)
     record = await _seed_invocation(
-        db_session, owner=user, name="my_fn", endpoint_url="http://data.example.com/big", method="get"
+        db_session,
+        owner=user,
+        name="my_fn",
+        endpoint_url="http://data.example.com/big",
+        method="get",
     )
 
     with pytest.raises(CloudApiError) as exc:

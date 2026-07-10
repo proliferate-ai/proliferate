@@ -25,7 +25,7 @@ import {
 } from "@proliferate/product-domain/workflows/run-launch";
 import type { WorkflowTemplate } from "@proliferate/product-domain/workflows/templates";
 import { deriveWorkflowInputsFromPollSample } from "@proliferate/product-domain/workflows/poll-setup";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { useWorkflowRunPillStore } from "@/stores/workflows/workflow-run-pill-store";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
@@ -52,7 +52,7 @@ import {
   WorkflowPollInspectModal,
   type WorkflowPollInspectSubmit,
 } from "../home/WorkflowPollInspectModal";
-import type { PollInspectResponse } from "@/lib/access/cloud/workflows";
+import type { PollInspectResponse } from "@/hooks/access/cloud/workflows/types";
 
 type HomeTab = "workflows" | "runs";
 

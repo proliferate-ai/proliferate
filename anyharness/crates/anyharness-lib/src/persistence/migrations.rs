@@ -385,6 +385,10 @@ fn migration_aliases(name: &str) -> &'static [&'static str] {
         // 0033_workspace_creator_context. Local dev profiles may have applied
         // that old name already; do not rerun the same schema changes as 0034.
         "0034_review_agent_loops" => &["0033_review_agent_loops"],
+        // The goals base table was 0051_goals on workflows/v1 before main took
+        // 0052_goals (byte-identical SQL). Dev profiles that ran the v1 branch
+        // already applied the old name; do not re-run CREATE TABLE goals.
+        "0052_goals" => &["0051_goals"],
         _ => &[],
     }
 }

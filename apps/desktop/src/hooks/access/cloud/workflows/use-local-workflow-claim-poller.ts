@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
-import { getAnyHarnessClient } from "@anyharness/sdk-react";
 import type { WorkflowRunResponse } from "@/lib/access/cloud/workflows";
-import { createLocalWorkflowRun } from "@/lib/access/anyharness/workflow-runs";
+import { buildLocalWorkflowExecutorDeps } from "@/lib/access/anyharness/workflow-runs";
 import { useLocalWorkflowRunClaims } from "@/hooks/access/cloud/workflows/use-local-workflow-run-claims";
 import { buildLocalAutomationRepoCandidates } from "@/lib/domain/automations/local-executor/plan";
 import {
@@ -228,20 +227,10 @@ async function processClaim(args: {
 
 /** Build the runtime deps the executor needs — worktree ops via the AnyHarness
  * SDK (workspace ops, NOT sessions) and plan delivery via the runtime's own
- * `POST /v1/workflow-runs` wire (the same wire a manual local run uses). */
+ * `POST /v1/workflow-runs` wire (the same wire a manual local run uses). Kept
+ * behind the AnyHarness access boundary in `lib/access/anyharness/workflow-runs`. */
 function buildExecutorDeps(runtimeUrl: string): WorkflowExecutorDeps {
-  const client = getAnyHarnessClient({ runtimeUrl });
-  return {
-    createWorktree: (input) => client.workspaces.createWorktree(input),
-    getSetupStatus: (workspaceId) => client.workspaces.getSetupStatus(workspaceId),
-    startSetup: (workspaceId, setupInput) =>
-      client.workspaces.startSetup(workspaceId, setupInput),
-    deliverPlan: (payload) =>
-      createLocalWorkflowRun(
-        { runtimeUrl },
-        { plan: payload.plan, workspaceId: payload.workspaceId },
-      ),
-  };
+  return buildLocalWorkflowExecutorDeps(runtimeUrl);
 }
 
 async function resolveTriggerRepoFullName(args: {

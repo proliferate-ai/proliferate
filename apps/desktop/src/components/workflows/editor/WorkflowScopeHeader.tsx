@@ -108,8 +108,10 @@ export function WorkflowScopeHeader({
 
   return (
     <div className={twMerge("flex items-center gap-2", strong ? "py-2.5" : "py-1.5")}>
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         onClick={onSelect}
         className={twMerge(
           "-ml-1.5 flex min-w-0 items-center gap-2 rounded-lg px-1.5 py-1 text-left outline-none transition-colors hover:bg-list-hover",
@@ -142,7 +144,7 @@ export function WorkflowScopeHeader({
         >
           · {CAPTION[variant]}
         </span>
-      </button>
+      </Button>
       <span
         aria-hidden
         className={twMerge(

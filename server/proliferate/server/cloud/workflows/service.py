@@ -17,8 +17,6 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
-
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.config import settings
 from proliferate.constants.workflows import (
@@ -56,10 +54,14 @@ from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
 from proliferate.db.store.cloud_workflows import (
+    StepActionRecord,
     WorkflowRecord,
     WorkflowRunRecord,
     WorkflowVersionRecord,
 )
+from proliferate.db.store.integrations import accounts as accounts_store
+from proliferate.integrations.slack import client as slack_client
+from proliferate.integrations.slack.client import SlackChannelSummary
 from proliferate.server.automations.domain.schedule import (
     AutomationScheduleError,
     ParsedAutomationSchedule,
@@ -67,11 +69,11 @@ from proliferate.server.automations.domain.schedule import (
 )
 from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows.domain.composition import (
-    WorkflowCompositionError,
+from proliferate.server.cloud.workflows.composition import (
     resolve_included_agents,
     validate_includes,
 )
+from proliferate.server.cloud.workflows.domain.composition import WorkflowCompositionError
 from proliferate.server.cloud.workflows.domain.definition import (
     WorkflowDefinitionError,
     has_parallel_groups,
@@ -117,8 +119,10 @@ from proliferate.server.cloud.workflows.models import (
     WorkflowTriggerUpdateRequest,
     WorkflowUpdateRequest,
 )
-from proliferate.utils.crypto import decrypt_text, encrypt_text
+from proliferate.utils.crypto import decrypt_json, decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
+
+logger = logging.getLogger(__name__)
 
 _TRIGGER_LOCAL_UNSUPPORTED_MESSAGE = (
     "Scheduled local runs are coming; run this workflow manually, or schedule it "
@@ -804,9 +808,7 @@ async def start_run(
             # (ii) Not already held by a live run: the run row is the durable lock
             # (C13/E8). Silently re-owning a session another live run holds would
             # transfer ownership and leak the lockout — reject up front.
-            holding_run_id = await store.live_run_holding_session(
-                db, session_id=bound_session_id
-            )
+            holding_run_id = await store.live_run_holding_session(db, session_id=bound_session_id)
             if holding_run_id is not None:
                 raise CloudApiError(
                     "session_binding_held",
@@ -1030,6 +1032,49 @@ async def list_runs(
 
 async def get_run(db: AsyncSession, user: ActorIdentity, run_id: UUID) -> WorkflowRunRecord:
     return await _visible_run(db, user=user, run_id=run_id)
+
+
+async def list_run_step_actions(db: AsyncSession, run_id: UUID) -> list[StepActionRecord]:
+    """A run's step actions (notify/emit side effects), keyed step-order.
+
+    Callers resolve ownership via ``get_run``/``_visible_run`` first; this does
+    not re-check visibility since a run id that survived that lookup is already
+    owner-scoped.
+    """
+
+    return list(await store.list_actions_for_run(db, run_id=run_id))
+
+
+# --- Slack channel picker (workflow notify step target) ------------------------
+
+
+@dataclass(frozen=True)
+class SlackChannelsResult:
+    channels: list[SlackChannelSummary]
+    connected: bool
+
+
+async def list_slack_channels(db: AsyncSession, user: ActorIdentity) -> SlackChannelsResult:
+    """Channels for the owner's connected Slack workspace, for the notify-step
+    channel picker. ``connected=False`` covers both "never connected" and a
+    credential that no longer decrypts; either way there is nothing to list."""
+
+    row = await accounts_store.get_ready_account_for_provider(db, user.id, "slack")
+    if row is None:
+        return SlackChannelsResult(channels=[], connected=False)
+    account = row.account
+    try:
+        bundle = decrypt_json(account.credential_ciphertext)
+    except Exception:
+        return SlackChannelsResult(channels=[], connected=False)
+    bot_token = bundle.get("bot_token") or bundle.get("access_token")
+    if not bot_token:
+        return SlackChannelsResult(channels=[], connected=False)
+    try:
+        channels = await slack_client.list_channels(bot_token=bot_token)
+    except Exception:
+        return SlackChannelsResult(channels=[], connected=True)
+    return SlackChannelsResult(channels=channels, connected=True)
 
 
 # --- triggers (spec 3.5) -------------------------------------------------------
@@ -1476,9 +1521,7 @@ async def create_trigger(
     _validate_concurrency(body.concurrency_policy)
     _validate_missed_run_policy(body.missed_run_policy)
     _validate_trigger_target_mode(body.target_mode, kind=body.kind)
-    await _assert_parallel_target_supported(
-        db, workflow=workflow, target_mode=body.target_mode
-    )
+    await _assert_parallel_target_supported(db, workflow=workflow, target_mode=body.target_mode)
     # D16: the repo pin is the authored "where". For a CLOUD target the server
     # derives + owns the cloud workspace it maps to. For a LOCAL target (2a) the
     # repo pin names the desktop's local worktree instead — no cloud workspace is
@@ -1619,9 +1662,8 @@ async def update_trigger(
 
     # D16: re-pinning the repo re-derives a fresh server-owned workspace; leaving
     # it alone keeps the existing derived workspace.
-    repo_changed = (
-        body.repo_full_name is not None
-        and body.repo_full_name.strip() != (existing.repo_full_name or "")
+    repo_changed = body.repo_full_name is not None and body.repo_full_name.strip() != (
+        existing.repo_full_name or ""
     )
     repo_full_name = body.repo_full_name if repo_changed else existing.repo_full_name
     # Local targets never carry a cloud workspace (2a): re-pinning the repo only
@@ -1709,9 +1751,7 @@ async def _update_poll_trigger(
     target_workspace_id: UUID | None,
 ) -> WorkflowTriggerRecord:
     if body.schedule is not None:
-        raise CloudApiError(
-            "invalid_schedule", "A poll trigger has no schedule.", status_code=400
-        )
+        raise CloudApiError("invalid_schedule", "A poll trigger has no schedule.", status_code=400)
 
     # Poll config: a supplied ``poll`` block fully replaces the endpoint config
     # (auth value stays write-only — omitting it keeps the stored secret). Absent,

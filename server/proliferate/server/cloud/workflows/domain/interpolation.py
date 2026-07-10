@@ -45,9 +45,7 @@ _INPUT_REF_RE = re.compile(r"^inputs\.(?P<name>[A-Za-z_][A-Za-z0-9_]*)$")
 # injected notify-fields emit at flatten time.
 _FIELDS_REF_RE = re.compile(r"^fields\.(?P<name>[A-Za-z_][A-Za-z0-9_]*)$")
 # {{<emit_name>.<field>}} — a two-segment ref whose first segment is not reserved.
-_EMIT_REF_RE = re.compile(
-    r"^(?P<emit>[A-Za-z_][A-Za-z0-9_]*)\.(?P<field>[A-Za-z_][A-Za-z0-9_]*)$"
-)
+_EMIT_REF_RE = re.compile(r"^(?P<emit>[A-Za-z_][A-Za-z0-9_]*)\.(?P<field>[A-Za-z_][A-Za-z0-9_]*)$")
 # The runtime's indexed form — the *output* of the rewrite, kept parseable so a
 # rewritten string still validates and re-emits verbatim.
 _STEP_REF_RE = re.compile(r"^steps\[(?P<index>\d+)\]\.output\.(?P<name>[A-Za-z_][A-Za-z0-9_]*)$")
@@ -222,9 +220,7 @@ def _coerce_number(name: str, value: object) -> float | int:
                 return int(value)
             return float(value)
         except ValueError as exc:
-            raise ArgumentError(
-                "invalid_argument", f"Input '{name}' must be a number."
-            ) from exc
+            raise ArgumentError("invalid_argument", f"Input '{name}' must be a number.") from exc
     raise ArgumentError("invalid_argument", f"Input '{name}' must be a number.")
 
 

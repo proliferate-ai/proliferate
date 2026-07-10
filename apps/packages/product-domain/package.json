@@ -99,6 +99,10 @@
       "types": "./dist/workflows/poll-setup.d.ts",
       "import": "./dist/workflows/poll-setup.js"
     },
+    "./workflows/spine-editing": {
+      "types": "./dist/workflows/spine-editing.d.ts",
+      "import": "./dist/workflows/spine-editing.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

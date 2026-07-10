@@ -1,6 +1,7 @@
 import type { WorkflowRunRowView } from "@proliferate/product-domain/workflows/model";
 import { WorkflowStatusPill } from "@proliferate/product-ui/workflows/WorkflowStatusPill";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
+import { Button } from "@proliferate/ui/primitives/Button";
 
 export interface WorkflowRunsTableProps {
   rows: readonly WorkflowRunRowView[];
@@ -40,9 +41,11 @@ export function WorkflowRunsTable({ rows, loading = false, onRunSelect }: Workfl
           <span>Started</span>
         </div>
         {rows.map((row) => (
-          <button
+          <Button
             key={row.id}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             onClick={() => onRunSelect(row.id)}
             className="grid w-full grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_1fr] items-center gap-2 border-b border-border/60 px-3 py-2.5 text-left text-ui-sm last:border-b-0 hover:bg-foreground/[0.03]"
           >
@@ -57,7 +60,7 @@ export function WorkflowRunsTable({ rows, loading = false, onRunSelect }: Workfl
             </span>
             <span className="tabular-nums text-muted-foreground">{row.durationLabel ?? "—"}</span>
             <span className="truncate text-muted-foreground">{formatStarted(row.startedLabel)}</span>
-          </button>
+          </Button>
         ))}
       </div>
     </div>

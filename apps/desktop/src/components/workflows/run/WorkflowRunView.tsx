@@ -98,14 +98,16 @@ export function WorkflowRunView({
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-3">
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           onClick={onBack}
           className="inline-flex w-fit items-center gap-1.5 text-ui-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-3.5" />
           Workflows
-        </button>
+        </Button>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-lg font-semibold text-foreground">{workflowName ?? "Run"}</h1>
           <WorkflowStatusPill

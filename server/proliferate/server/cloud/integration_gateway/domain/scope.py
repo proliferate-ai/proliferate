@@ -95,9 +95,7 @@ def authorize_tool_call(
         return ScopeDecision(
             allowed=False,
             reason=SCOPE_DENY_PROVIDER_OUT_OF_WORKER,
-            detail=(
-                f"Provider '{provider}' is not in this worker's integration allowlist."
-            ),
+            detail=(f"Provider '{provider}' is not in this worker's integration allowlist."),
         )
     if run_scope is not None:
         entry = _run_scope_entry(run_scope, provider)

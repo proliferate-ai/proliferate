@@ -1,6 +1,8 @@
 import { useRef, type ReactNode } from "react";
 import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/interpolation";
 import { twMerge } from "@proliferate/ui/utils/tw-merge";
+import { Button } from "@proliferate/ui/primitives/Button";
+import { Textarea } from "@proliferate/ui/primitives/Textarea";
 import {
   POPOVER_SURFACE_CLASS,
   PopoverButton,
@@ -69,8 +71,9 @@ export function TemplateVarTextarea({
             {gutter}
           </div>
         ) : null}
-        <textarea
+        <Textarea
           ref={ref}
+          variant="ghost"
           value={value}
           rows={rows}
           aria-label={ariaLabel}
@@ -91,27 +94,31 @@ export function TemplateVarTextarea({
             side="top"
             className={`w-64 ${POPOVER_SURFACE_CLASS}`}
             trigger={(
-              <button
+              <Button
                 type="button"
+                variant="unstyled"
+                size="unstyled"
                 className="rounded-md px-1.5 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
                 title="Insert variable"
               >
                 {"{{ }}"}
-              </button>
+              </Button>
             )}
           >
             {(close) => (
               <div className="p-1">
                 {suggestions.map((suggestion) => (
-                  <button
+                  <Button
                     key={suggestion.token}
                     type="button"
+                    variant="unstyled"
+                    size="unstyled"
                     onClick={() => insert(suggestion.token, close)}
                     className="flex w-full flex-col items-start rounded-lg px-2 py-1 text-left hover:bg-list-hover"
                   >
                     <span className="font-mono text-xs text-foreground">{suggestion.label}</span>
                     <span className="text-xs text-faint">{suggestion.detail}</span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}

@@ -292,12 +292,18 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_path(file_name: &str) -> PathBuf {
+        // Nanos alone can collide across parallel tests (coarse clock granularity),
+        // letting one test's remove_dir_all delete another's live dir; a process-wide
+        // counter breaks the tie.
+        static NEXT_TEMP_DIR_ID: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(0);
         let unique = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time should be valid")
             .as_nanos();
+        let seq = NEXT_TEMP_DIR_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         std::env::temp_dir()
-            .join(format!("proliferate-app-config-{unique}"))
+            .join(format!("proliferate-app-config-{unique}-{seq}"))
             .join(file_name)
     }
 

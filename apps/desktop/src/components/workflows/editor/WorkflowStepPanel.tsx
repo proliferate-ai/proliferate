@@ -438,13 +438,15 @@ function BranchEditor({
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <FieldLabel>Cases</FieldLabel>
-          <button
+          <Button
             type="button"
+            variant="unstyled"
+            size="unstyled"
             className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             onClick={addCase}
           >
             Add case
-          </button>
+          </Button>
         </div>
         {Object.entries(step.cases).map(([value, target]) => (
           <div key={value} className="flex items-center gap-2">

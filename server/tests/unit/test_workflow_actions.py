@@ -19,6 +19,7 @@ from proliferate.constants.organizations import (
 from proliferate.db.models.auth import User
 from proliferate.db.models.cloud.workflows import WorkflowStepAction
 from proliferate.db.store.cloud_workflows import WorkflowRunRecord
+from proliferate.db.store.integrations.accounts import ReadyAccountRow
 from proliferate.server.cloud.workflows.domain.definition import (
     WorkflowDefinitionError,
     parse_definition,
@@ -272,13 +273,14 @@ async def test_perform_slack_notify_success(db_session: AsyncSession) -> None:
         patch(
             "proliferate.server.cloud.workflows.actions.accounts_store.get_ready_account_for_provider",
             new_callable=AsyncMock,
-            return_value=(
-                type(
+            return_value=ReadyAccountRow(
+                account=type(
                     "FakeAccount",
                     (),
                     {"credential_ciphertext": "encrypted"},
                 )(),
-                type("FakeDef", (), {})(),
+                definition=type("FakeDef", (), {})(),
+                org_policy_enabled=None,
             ),
         ),
         patch(
@@ -301,11 +303,18 @@ async def test_perform_slack_notify_success(db_session: AsyncSession) -> None:
         thread_ts=None,
     )
 
-    action = (await db_session.get(WorkflowStepAction, (await db_session.execute(
-        __import__("sqlalchemy").select(WorkflowStepAction).where(
-            WorkflowStepAction.run_id == run_id
+    action = await db_session.get(
+        WorkflowStepAction,
+        (
+            await db_session.execute(
+                __import__("sqlalchemy")
+                .select(WorkflowStepAction)
+                .where(WorkflowStepAction.run_id == run_id)
+            )
         )
-    )).scalar_one().id))
+        .scalar_one()
+        .id,
+    )
     assert action.status == "done"
     assert action.result_json == {"channel_id": "C123", "message_ts": "1234.5678"}
 
@@ -345,9 +354,7 @@ async def test_perform_failure_records_failed(db_session: AsyncSession) -> None:
         args_json={},
         target_mode="local",
         resolved_plan_json={
-            "steps": [
-                {"kind": "notify", "message": "x", "slack_channel_id": "C1", "key": "0.-.0"}
-            ]
+            "steps": [{"kind": "notify", "message": "x", "slack_channel_id": "C1", "key": "0.-.0"}]
         },
         status="completed",
         step_outputs_json={"0.-.0": {"channel": "slack", "message": "x"}},
@@ -361,9 +368,7 @@ async def test_perform_failure_records_failed(db_session: AsyncSession) -> None:
         run_id=run_id,
         executor_user_id=user.id,
         resolved_plan_json={
-            "steps": [
-                {"kind": "notify", "message": "x", "slack_channel_id": "C1", "key": "0.-.0"}
-            ]
+            "steps": [{"kind": "notify", "message": "x", "slack_channel_id": "C1", "key": "0.-.0"}]
         },
         step_outputs_json={"0.-.0": {"channel": "slack", "message": "x"}},
     )
@@ -575,9 +580,7 @@ async def _make_sweep_run(db_session: AsyncSession, *, name: str) -> uuid.UUID:
         args_json={},
         target_mode="local",
         resolved_plan_json={
-            "steps": [
-                {"kind": "notify", "message": "s", "slack_channel_id": "C1", "key": "0.-.0"}
-            ]
+            "steps": [{"kind": "notify", "message": "s", "slack_channel_id": "C1", "key": "0.-.0"}]
         },
         status="completed",
         step_outputs_json={"0.-.0": {"channel": "slack", "message": "s"}},
@@ -648,9 +651,10 @@ async def test_sweeper_retries_transient_failed_below_cap(
         patch(
             "proliferate.server.cloud.workflows.actions.accounts_store.get_ready_account_for_provider",
             new_callable=AsyncMock,
-            return_value=(
-                type("FakeAccount", (), {"credential_ciphertext": "encrypted"})(),
-                type("FakeDef", (), {})(),
+            return_value=ReadyAccountRow(
+                account=type("FakeAccount", (), {"credential_ciphertext": "encrypted"})(),
+                definition=type("FakeDef", (), {})(),
+                org_policy_enabled=None,
             ),
         ),
         patch(
@@ -758,7 +762,7 @@ async def test_slack_channels_endpoint_not_connected(client) -> None:  # type: i
     # Direct unit test of the logic
     async with session_factory() as db:
         with patch(
-            "proliferate.server.cloud.workflows.api.accounts_store.get_ready_account_for_provider",
+            "proliferate.server.cloud.workflows.service.accounts_store.get_ready_account_for_provider",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -793,16 +797,18 @@ async def test_slack_channels_endpoint_connected(client) -> None:  # type: ignor
     async with session_factory() as db:
         with (
             patch(
-                "proliferate.server.cloud.workflows.api.accounts_store.get_ready_account_for_provider",
+                "proliferate.server.cloud.workflows.service.accounts_store.get_ready_account_for_provider",
                 new_callable=AsyncMock,
-                return_value=(fake_account, fake_def),
+                return_value=ReadyAccountRow(
+                    account=fake_account, definition=fake_def, org_policy_enabled=None
+                ),
             ),
             patch(
-                "proliferate.server.cloud.workflows.api.decrypt_json",
+                "proliferate.server.cloud.workflows.service.decrypt_json",
                 return_value={"bot_token": "xoxb-test"},
             ),
             patch(
-                "proliferate.server.cloud.workflows.api.slack_client.list_channels",
+                "proliferate.server.cloud.workflows.service.slack_client.list_channels",
                 new_callable=AsyncMock,
                 return_value=fake_channels,
             ),

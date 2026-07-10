@@ -1,3 +1,4 @@
+import { Button } from "@proliferate/ui/primitives/Button";
 import { flattenWorkflowSteps, type WorkflowDefinition } from "@proliferate/product-domain/workflows/definition";
 import {
   deriveStepRunViews,
@@ -73,12 +74,22 @@ const SCENARIOS: RunScenario[] = [
 function ApprovalControls() {
   return (
     <div className="flex gap-2">
-      <button type="button" className="rounded-md border border-success/40 px-2.5 py-1 text-xs text-success">
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        className="rounded-md border border-success/40 px-2.5 py-1 text-xs text-success"
+      >
         Approve
-      </button>
-      <button type="button" className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
+      </Button>
+      <Button
+        type="button"
+        variant="unstyled"
+        size="unstyled"
+        className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground"
+      >
         Deny
-      </button>
+      </Button>
     </div>
   );
 }

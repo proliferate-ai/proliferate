@@ -518,9 +518,7 @@ def _poll_due_clause(now: datetime) -> ColumnElement[bool]:
     )
 
 
-async def list_due_poll_trigger_ids(
-    db: AsyncSession, *, now: datetime, limit: int
-) -> list[UUID]:
+async def list_due_poll_trigger_ids(db: AsyncSession, *, now: datetime, limit: int) -> list[UUID]:
     """Enabled poll triggers whose next poll is due.
 
     Due = never polled (``last_poll_at IS NULL``) or ``last_poll_at + interval``

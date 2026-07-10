@@ -10,18 +10,19 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.constants.organizations import (
     ORGANIZATION_MEMBERSHIP_STATUS_ACTIVE,
     ORGANIZATION_ROLE_OWNER,
 )
-from proliferate.constants.workflows import WORKFLOW_TRIGGER_KIND_POLL, WORKFLOW_TRIGGER_KIND_SCHEDULE
+from proliferate.constants.workflows import (
+    WORKFLOW_TRIGGER_KIND_POLL,
+    WORKFLOW_TRIGGER_KIND_SCHEDULE,
+)
 from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.models.cloud.workflows import Workflow, WorkflowTrigger, WorkflowVersion
@@ -30,7 +31,7 @@ from proliferate.server.cloud.workflows import poller as poller_module
 from proliferate.server.cloud.workflows import scheduler as scheduler_module
 from proliferate.server.cloud.workflows.poller import _poll_one_trigger, run_workflow_poller_tick
 from proliferate.server.cloud.workflows.scheduler import _fire_one_trigger
-from proliferate.server.cloud.workflows.domain.poll_contract import PollItem, PollPage
+from proliferate.server.cloud.workflows.domain.poll_contract import PollPage
 from proliferate.server.automations.domain.schedule import latest_due_occurrence
 from proliferate.utils.time import utcnow
 
@@ -119,9 +120,7 @@ async def _make_schedule_trigger(db: AsyncSession, wf: Workflow, user: User) -> 
         schedule_timezone="UTC",
         # A real recent occurrence (the missed-window scan keys off the cursor,
         # which is always a genuine RRULE slot in production).
-        next_run_at=latest_due_occurrence(
-            rrule_text="FREQ=HOURLY", timezone="UTC", now=utcnow()
-        ),
+        next_run_at=latest_due_occurrence(rrule_text="FREQ=HOURLY", timezone="UTC", now=utcnow()),
         args_json={},
         created_by_user_id=user.id,
         created_at=utcnow(),
@@ -240,9 +239,7 @@ async def test_poll_beat_failure_does_not_block_schedule_delivery(test_engine) -
 
     # The schedule tick must complete normally even though polling would fail —
     # because the schedule tick doesn't touch the poller anymore.
-    with patch.object(
-        poller_module, "fetch_poll_page", new=AsyncMock(side_effect=_hangs_forever)
-    ):
+    with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=_hangs_forever)):
         result = await scheduler_module.run_workflow_scheduler_tick(session_factory=factory)
         assert result.created_runs == 0
         assert result.delivered_runs == 0

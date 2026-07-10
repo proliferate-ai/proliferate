@@ -26,7 +26,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE
 from proliferate.constants.workflows import WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS
-from proliferate.server.cloud.workflows.domain.definition import iter_agent_nodes
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
@@ -37,6 +36,7 @@ from proliferate.server.cloud.runtime_workers.service import (
     integration_gateway_config,
     worker_cloud_base_url,
 )
+from proliferate.server.cloud.workflows.domain.definition import iter_agent_nodes
 from proliferate.utils.time import utcnow
 
 _TOKEN_BYTES = 48
@@ -146,10 +146,12 @@ async def assert_declared_providers_ready(
         return
     organization_id = await _organization_id_for_owner(db, owner_user_id=owner_user_id)
     for provider in namespaces:
-        account_pair = await accounts_store.get_ready_account_for_provider(
+        row = await accounts_store.get_ready_account_for_provider(
             db, owner_user_id, provider, organization_id=organization_id
         )
-        if account_pair is None:
+        if row is None or not accounts_store.org_policy_allows(
+            row, organization_id=organization_id
+        ):
             raise CloudApiError(
                 "workflow_function_provider_not_ready",
                 f"This workflow grants the '{provider}' integration, but you have no "

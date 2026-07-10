@@ -221,9 +221,7 @@ def workflow_payload(record: WorkflowRecord) -> WorkflowResponse:
     return WorkflowResponse(
         id=str(record.id),
         owner_user_id=str(record.owner_user_id) if record.owner_user_id else None,
-        created_by_user_id=(
-            str(record.created_by_user_id) if record.created_by_user_id else None
-        ),
+        created_by_user_id=(str(record.created_by_user_id) if record.created_by_user_id else None),
         name=record.name,
         description=record.description,
         current_version_id=str(record.current_version_id) if record.current_version_id else None,
@@ -241,9 +239,7 @@ def version_payload(record: WorkflowVersionRecord) -> WorkflowVersionResponse:
         workflow_id=str(record.workflow_id),
         version_n=record.version_n,
         definition=record.definition_json,
-        created_by_user_id=(
-            str(record.created_by_user_id) if record.created_by_user_id else None
-        ),
+        created_by_user_id=(str(record.created_by_user_id) if record.created_by_user_id else None),
         created_at=record.created_at.isoformat(),
     )
 
@@ -290,9 +286,7 @@ def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
         delivered_at=_iso(record.delivered_at),
         started_at=_iso(record.started_at),
         finished_at=_iso(record.finished_at),
-        stopped_by_user_id=(
-            str(record.stopped_by_user_id) if record.stopped_by_user_id else None
-        ),
+        stopped_by_user_id=(str(record.stopped_by_user_id) if record.stopped_by_user_id else None),
         executor_id=record.executor_id,
         claim_id=str(record.claim_id) if record.claim_id else None,
         claimed_at=_iso(record.claimed_at),

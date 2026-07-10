@@ -78,9 +78,7 @@ def _guard_endpoint_or_raise(url: str) -> str:
         raise InvocationSafetyError(str(exc)) from None
 
 
-def validate_args_or_raise(
-    arguments: dict[str, object], args_schema: dict[str, object]
-) -> None:
+def validate_args_or_raise(arguments: dict[str, object], args_schema: dict[str, object]) -> None:
     """Validate the agent's call arguments against the invocation's JSON Schema.
 
     A schema failure is rejected AT THE GATEWAY — no outbound request is made.
@@ -133,12 +131,8 @@ async def call_invocation(
     # to exactly this address, never a re-resolution).
     pinned_ip = _guard_endpoint_or_raise(invocation.endpoint_url)
 
-    headers = await invocations_store.decrypt_headers(
-        db, owner_user_id=owner_user_id, name=name
-    )
-    return await _dispatch(
-        invocation, arguments=arguments, headers=headers, pinned_ip=pinned_ip
-    )
+    headers = await invocations_store.decrypt_headers(db, owner_user_id=owner_user_id, name=name)
+    return await _dispatch(invocation, arguments=arguments, headers=headers, pinned_ip=pinned_ip)
 
 
 def _too_large_error() -> CloudApiError:

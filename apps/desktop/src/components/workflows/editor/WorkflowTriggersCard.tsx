@@ -10,8 +10,8 @@ import type {
   WorkflowTriggerCreateRequest,
   WorkflowTriggerItemResponse,
   WorkflowTriggerResponse,
-} from "@/lib/access/cloud/workflows";
-import { ProliferateClientError } from "@/lib/access/cloud/client";
+} from "@/hooks/access/cloud/workflows/types";
+import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import {
   useWorkflowTriggers,
   useWorkflowTriggerMutations,
@@ -482,8 +482,10 @@ function AddTriggerButton({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="unstyled"
+      size="unstyled"
       disabled={disabled}
       title={disabled ? disabledTitle : undefined}
       onClick={onClick}
@@ -494,7 +496,7 @@ function AddTriggerButton({
     >
       <Plus className="size-3.5" aria-hidden />
       {label}
-    </button>
+    </Button>
   );
 }
 
@@ -520,8 +522,10 @@ function TriggerChip({
     ? `${repoLabel}${trigger.poll?.lastPollError ? ` · last error: ${trigger.poll.lastPollError}` : ""}`
     : `${repoLabel}${trigger.lastSkipReason ? ` · last skipped: ${trigger.lastSkipReason}` : ""}`;
   return (
-    <button
+    <Button
       type="button"
+      variant="unstyled"
+      size="unstyled"
       onClick={onClick}
       title={title}
       className={twMerge(
@@ -547,7 +551,7 @@ function TriggerChip({
       ) : (
         <span className="text-xs text-faint">{trigger.enabled ? (nextRun ? `· ${nextRun}` : "") : "· off"}</span>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -572,14 +576,16 @@ function PollTriggerStatusRow({
             · {poll.lastPollAt ? `last polled ${formatAutomationTimestamp(poll.lastPollAt)}` : "not polled yet"}
           </span>
         </div>
-        <button
+        <Button
           type="button"
+          variant="unstyled"
+          size="unstyled"
           onClick={() => setExpanded((value) => !value)}
           className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-list-hover hover:text-foreground"
         >
           {expanded ? <ChevronDown className="size-3.5" aria-hidden /> : <ChevronRight className="size-3.5" aria-hidden />}
           Items
-        </button>
+        </Button>
       </div>
 
       {poll.lastPollError ? (
@@ -636,14 +642,16 @@ function TriggerItemsList({
             {item.errorMessage ? <p className="text-destructive">{item.errorMessage}</p> : null}
           </div>
           {item.status === "spawned" && item.runId && onOpenRun ? (
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               onClick={() => onOpenRun(item.runId!)}
               className="flex shrink-0 items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
             >
               Open run
               <ArrowUpRight className="size-3" aria-hidden />
-            </button>
+            </Button>
           ) : null}
         </div>
       ))}
@@ -794,10 +802,10 @@ export function TriggerForm({
         </div>
         <div className="flex min-w-0 flex-col gap-1.5">
           <Label>Status</Label>
-          <label className="flex h-9 items-center gap-2 text-sm text-foreground">
+          <Label className="mb-0 flex h-9 items-center gap-2 text-sm text-foreground">
             <Switch checked={draft.enabled} onChange={(enabled) => onPatch({ enabled })} />
             {draft.enabled ? "Enabled" : "Disabled"}
-          </label>
+          </Label>
         </div>
       </div>
 

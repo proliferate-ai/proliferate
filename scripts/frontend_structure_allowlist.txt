@@ -17,7 +17,7 @@
 # check_max_lines.py's own caps, so listing them there would register as stale
 # max-lines entries.
 
-apps/desktop/src/App.tsx 418 top-level desktop app shell/router pending route-tree extraction
+apps/desktop/src/App.tsx 443 top-level desktop app shell/router pending route-tree extraction
 apps/desktop/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
 apps/desktop/src/components/workspace/git/GitPanel.tsx 429 git panel pending staged/unstaged section split
 apps/desktop/src/components/workspace/git/GitReviewFileRow.tsx 404 git review file row pending action-cluster split
@@ -25,3 +25,11 @@ apps/desktop/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 410 worksp
 apps/desktop/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 424 session creation actions pending action-group split
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 940 transcript row model pending row-kind module split
+apps/desktop/src/components/workflows/editor/WorkflowStepPanel.tsx 559 workflows v1 launch surface; split pass queued post-launch
+apps/desktop/src/components/workflows/editor/WorkflowTriggersCard.tsx 1057 workflows v1 launch surface; split pass queued post-launch
+apps/desktop/src/components/workflows/home/WorkflowRunArgsModal.tsx 448 workflows v1 launch surface; split pass queued post-launch
+apps/desktop/src/components/workflows/screen/WorkflowEditorScreen.tsx 1038 workflows v1 launch surface; split pass queued post-launch
+apps/desktop/src/components/workflows/screen/WorkflowsHomeScreen.tsx 491 workflows v1 launch surface; split pass queued post-launch
+apps/packages/product-domain/src/workflows/definition.ts 877 workflows v1 launch surface; split pass queued post-launch
+apps/packages/product-domain/src/workflows/run-status.ts 792 workflows v1 launch surface; split pass queued post-launch
+apps/packages/product-domain/src/workflows/validation.ts 593 workflows v1 launch surface; split pass queued post-launch

@@ -186,9 +186,7 @@ async def update_function_invocation(
             else UNSET
         ),
         description=(
-            (description.strip() if description else None)
-            if description is not UNSET
-            else UNSET
+            (description.strip() if description else None) if description is not UNSET else UNSET
         ),
         endpoint_url=_validate_endpoint_url_or_raise(endpoint_url) if endpoint_url else None,
         method=_validate_method_or_raise(method) if method else None,
@@ -229,9 +227,7 @@ async def set_function_invocation_chat_scope_enabled(
     return _response(record)
 
 
-async def archive_function_invocation(
-    db: AsyncSession, *, owner_user_id: UUID, name: str
-) -> None:
+async def archive_function_invocation(db: AsyncSession, *, owner_user_id: UUID, name: str) -> None:
     archived = await invocations_store.archive(db, owner_user_id=owner_user_id, name=name)
     if not archived:
         raise CloudApiError(

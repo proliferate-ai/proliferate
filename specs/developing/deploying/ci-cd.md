@@ -199,7 +199,13 @@ deploy-base resolution.
 ### Nightly Release Train
 
 The nightly train coordinates the public Proliferate product version, artifact
-versions, artifact releases, and staging deploys from `main`.
+versions, artifact releases, and staging deploys from `main`. The train is
+**staging-only by default**: production lanes and the desktop stable updater
+feed run only when a manual dispatch sets `promote_production=true`, and the
+scheduled nightly run (which has no inputs) can never set it. The normal
+production path remains `Promote Production` from a staging-tested SHA.
+`scripts/ci-cd/release-train-config.test.mjs` pins this gating; changing the
+train's production posture means changing that test in the same PR.
 
 ```text
 Workflow: Nightly Release Train
@@ -207,6 +213,7 @@ ref: <blank or main SHA/ref>
 only_surfaces: <blank, comma-separated surfaces, or all>
 version_bump: patch
 dry_run: false
+promote_production: false
 ```
 
 Train behavior:

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   flattenWorkflowSteps,
   type WorkflowDefinition,
@@ -159,13 +160,15 @@ function ScopeDemoRail() {
         );
       })}
       <div className="flex justify-start pl-[6px]">
-        <button
+        <Button
           type="button"
           aria-label="Add step"
+          variant="unstyled"
+          size="unstyled"
           className="flex size-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm"
         >
           +
-        </button>
+        </Button>
       </div>
     </div>
   );

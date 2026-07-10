@@ -292,6 +292,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/github-app/connected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Connected Page Endpoint */
+        get: operations["github_app_connected_page_endpoint_auth_github_app_connected_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/integrations/github/callback": {
         parameters: {
             query?: never;
@@ -7720,10 +7737,10 @@ export interface operations {
     };
     github_app_installation_callback_endpoint_auth_github_app_installation_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -7751,12 +7768,32 @@ export interface operations {
             };
         };
     };
+    github_app_connected_page_endpoint_auth_github_app_connected_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
     github_app_setup_callback_endpoint_integrations_github_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;

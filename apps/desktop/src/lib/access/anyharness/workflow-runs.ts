@@ -8,6 +8,8 @@
  * call.
  */
 
+import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
+
 /** Local (or SSH-tunnelled) runtime connection. Local runs carry no auth token. */
 export interface LocalRuntimeConnection {
   runtimeUrl: string;
@@ -125,4 +127,27 @@ export async function resolveLocalWorkflowApproval(
     throw await parseError(response, approve ? "approve the step" : "deny the step");
   }
   return (await response.json()) as LocalWorkflowRunView;
+}
+
+/**
+ * The local workflow executor's runtime deps (`WorkflowExecutorDeps` in
+ * `lib/workflows/local-workflow-executor.ts`), wired to the local runtime's
+ * AnyHarness client. Kept behind the AnyHarness access boundary — the claim
+ * poller hook passes a `runtimeUrl` and gets back typed callbacks, never the
+ * raw client.
+ */
+export function buildLocalWorkflowExecutorDeps(runtimeUrl: string) {
+  const connection: AnyHarnessClientConnection = { runtimeUrl };
+  const client = getAnyHarnessClient(connection);
+  return {
+    createWorktree: (input: Parameters<typeof client.workspaces.createWorktree>[0]) =>
+      client.workspaces.createWorktree(input),
+    getSetupStatus: (workspaceId: string) => client.workspaces.getSetupStatus(workspaceId),
+    startSetup: (
+      workspaceId: string,
+      setupInput: Parameters<typeof client.workspaces.startSetup>[1],
+    ) => client.workspaces.startSetup(workspaceId, setupInput),
+    deliverPlan: (payload: { plan: unknown; workspaceId: string }) =>
+      createLocalWorkflowRun({ runtimeUrl }, { plan: payload.plan, workspaceId: payload.workspaceId }),
+  };
 }

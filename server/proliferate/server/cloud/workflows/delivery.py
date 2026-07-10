@@ -19,13 +19,12 @@ failure leaves the run *pending_delivery* (non-terminal) with a
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
-logger = logging.getLogger(__name__)
 
 from proliferate.auth.authorization import ActorIdentity
 from proliferate.config import settings
@@ -49,6 +48,7 @@ from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.cloud_workflows import WorkflowRunRecord
 from proliferate.integrations.anyharness.errors import CloudRuntimeReconnectError
 from proliferate.integrations.anyharness.workflow_runs import (
+    cancel_workflow_run,
     deliver_workflow_run,
     read_workflow_run,
 )
@@ -57,18 +57,19 @@ from proliferate.server.cloud.gateway.service import ensure_cloud_sandbox_gatewa
 from proliferate.server.cloud.integration_gateway.domain.scope import (
     intersect_namespaces_with_worker,
 )
-from proliferate.server.cloud.workflows.gateway_grants import (
-    granted_namespaces,
-    resolve_run_scope,
-)
-from proliferate.integrations.anyharness.workflow_runs import cancel_workflow_run
 from proliferate.server.cloud.workflows.domain.run_status import (
     RunTransitionError,
     check_transition,
     is_terminal,
 )
+from proliferate.server.cloud.workflows.gateway_grants import (
+    granted_namespaces,
+    resolve_run_scope,
+)
 from proliferate.server.cloud.workflows.service import _visible_run, mark_run_delivered
 from proliferate.utils.time import utcnow
+
+logger = logging.getLogger(__name__)
 
 _ERROR_MESSAGE_MAX_CHARS = 480
 
@@ -431,12 +432,29 @@ async def refresh_cloud_run(
     return await _sync_run_from_view(db, run.id, _parse_sandbox_run_view(payload))
 
 
+async def observe_run_ping(db: AsyncSession, *, run_id: UUID, actor: ActorIdentity) -> None:
+    """Completion ping (L16 / §3.7): nudge an observed-state refresh for the pinged
+    run. The caller (``access.authorize_run_ping``) already proved the per-run
+    gateway token matches ``run_id``; this only decides whether there is anything
+    to refresh.
+
+    Local-lane runs are observed by the desktop relay, which owns local
+    observation, so this no-ops for them. A failed refresh never changes engine
+    state — the ping is a nudge, not a transition; the scheduler phase-3 sweep
+    remains the backstop.
+    """
+
+    run = await store.get_run(db, run_id)
+    if run is None or run.target_mode != WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        return
+    with contextlib.suppress(CloudApiError):
+        await refresh_cloud_run(db, actor, run)
+
+
 # --- take-over / cancel (D15) --------------------------------------------------
 
 
-async def cancel_run(
-    db: AsyncSession, user: ActorIdentity, run_id: UUID
-) -> WorkflowRunRecord:
+async def cancel_run(db: AsyncSession, user: ActorIdentity, run_id: UUID) -> WorkflowRunRecord:
     """Take over / cancel a run (D15). The single human override: flip the desired
     status to ``cancelled``, stamp ``stopped_by_user_id`` + ``finished_at``, run
     the shared terminal side effects (expire the per-run gateway token, apply step

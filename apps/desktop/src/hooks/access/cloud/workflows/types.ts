@@ -5,6 +5,7 @@
  */
 
 export type {
+  PollInspectResponse,
   SlackChannelResponse,
   SlackChannelsResponse,
   StartRunRequest,
@@ -16,8 +17,10 @@ export type {
   WorkflowRunDetailResponse,
   WorkflowRunListResponse,
   WorkflowRunResponse,
+  WorkflowTriggerCreateRequest,
   WorkflowTriggerItemListResponse,
   WorkflowTriggerItemResponse,
+  WorkflowTriggerResponse,
   WorkflowUpdateRequest,
   WorkflowVersionResponse,
 } from "@/lib/access/cloud/workflows";

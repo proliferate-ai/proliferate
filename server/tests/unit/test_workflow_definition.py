@@ -588,10 +588,18 @@ def test_nested_parallel_group_rejected() -> None:
     definition = _parallel_definition()
     definition["agents"][1]["parallel"][0] = {
         "parallel": [
-            {"slot": "x", "harness": "claude", "model": "s", "steps": [
-                {"kind": "shell.run", "command": "true"}]},
-            {"slot": "y", "harness": "claude", "model": "s", "steps": [
-                {"kind": "shell.run", "command": "true"}]},
+            {
+                "slot": "x",
+                "harness": "claude",
+                "model": "s",
+                "steps": [{"kind": "shell.run", "command": "true"}],
+            },
+            {
+                "slot": "y",
+                "harness": "claude",
+                "model": "s",
+                "steps": [{"kind": "shell.run", "command": "true"}],
+            },
         ]
     }
     with pytest.raises(WorkflowDefinitionError) as exc:

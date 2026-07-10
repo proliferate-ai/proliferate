@@ -51,7 +51,9 @@ async def _make_org_with_owner(db: AsyncSession, owner: User) -> uuid.UUID:
 
 async def _make_definition(db: AsyncSession, organization_id: uuid.UUID, namespace: str):
     config = IntegrationConfig(
-        transport="http", url=StaticUrl("https://mcp.example.com"), display_url="https://mcp.example.com"
+        transport="http",
+        url=StaticUrl("https://mcp.example.com"),
+        display_url="https://mcp.example.com",
     )
     return await create_org_custom_definition(
         db,

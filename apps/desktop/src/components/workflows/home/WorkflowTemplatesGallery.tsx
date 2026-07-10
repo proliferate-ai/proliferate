@@ -44,9 +44,11 @@ export function WorkflowTemplatesGallery({
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {WORKFLOW_TEMPLATES.map((template) => (
-          <button
+          <Button
             key={template.id}
             type="button"
+            variant="unstyled"
+            size="unstyled"
             disabled={busy}
             onClick={() => onUseTemplate(template)}
             className="flex flex-col gap-2 rounded-[12px] border border-border bg-background p-4 text-left transition-colors hover:border-foreground/25 disabled:opacity-60"
@@ -57,7 +59,7 @@ export function WorkflowTemplatesGallery({
             </div>
             <span className="text-ui-sm text-muted-foreground">{template.tagline}</span>
             <span className="mt-1 text-xs text-faint">{template.description}</span>
-          </button>
+          </Button>
         ))}
       </div>
     </div>

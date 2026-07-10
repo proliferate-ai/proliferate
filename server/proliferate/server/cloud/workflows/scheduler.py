@@ -64,8 +64,8 @@ from proliferate.server.automations.domain.schedule import (
 )
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import service
-from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.server.cloud.workflows.actions import sweep_pending_actions
+from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -228,7 +228,8 @@ async def _fire_one_trigger(
             fire_overflow: list[datetime] = []
             if len(fire_slots) > WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS:
                 logger.warning(
-                    "workflow schedule catch-up truncated trigger_id=%s fire_due=%s fired_now=%s deferred=%s",
+                    "workflow schedule catch-up truncated "
+                    "trigger_id=%s fire_due=%s fired_now=%s deferred=%s",
                     trigger_id,
                     len(fire_slots),
                     WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS,

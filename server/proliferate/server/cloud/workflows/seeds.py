@@ -131,7 +131,9 @@ _FIX_AND_PR_DEFINITION: dict[str, object] = {
                     "label": "Implement the fix",
                     "prompt": "Implement the following change: {{inputs.task}}",
                     "goal": {
-                        "objective": "Implement {{inputs.task}} and leave the tree ready for review.",
+                        "objective": (
+                            "Implement {{inputs.task}} and leave the tree ready for review."
+                        ),
                         "max_turns": 40,
                         "max_wall_secs": 1800,
                         "on_blocked": "fail",

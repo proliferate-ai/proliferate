@@ -101,9 +101,7 @@ def _validate(value: object, schema: dict[str, object], *, path: str) -> str | N
         if check is not None and not check(value):
             return f"{where} must be of type '{declared_type}'."
     elif isinstance(declared_type, list):
-        if not any(
-            (_JSON_TYPE_CHECKS.get(t) or (lambda _v: False))(value) for t in declared_type
-        ):
+        if not any((_JSON_TYPE_CHECKS.get(t) or (lambda _v: False))(value) for t in declared_type):
             return f"{where} must be one of types {declared_type}."
 
     enum = schema.get("enum")
@@ -171,9 +169,7 @@ def validate_item_data(data: object, schema_json: dict[str, object] | None) -> s
     return _validate(data, schema_json, path="data")
 
 
-def diff_item_against_schema(
-    data: object, schema_json: dict[str, object] | None
-) -> list[str]:
+def diff_item_against_schema(data: object, schema_json: dict[str, object] | None) -> list[str]:
     """Every way a sample item's ``data`` fails the derived item schema, field by
     field (mental-model §5 setup flow 2: "render exactly how their response doesn't
     track — field-by-field diff").
@@ -301,11 +297,20 @@ def _non_scalar_skip_reason(value: object) -> str:
     magically still available."""
 
     if isinstance(value, list):
-        return "Array fields can't become a workflow input (inputs are text, number, boolean, or choice)."
+        return (
+            "Array fields can't become a workflow input "
+            "(inputs are text, number, boolean, or choice)."
+        )
     if isinstance(value, dict):
-        return "Object fields can't become a workflow input (inputs are text, number, boolean, or choice)."
+        return (
+            "Object fields can't become a workflow input "
+            "(inputs are text, number, boolean, or choice)."
+        )
     # ``None`` (JSON null): the type can't be inferred from a null sample.
-    return "This field was null in the sample, so its input type can't be inferred; add it by hand if the feed sends a value."
+    return (
+        "This field was null in the sample, so its input type can't be inferred; "
+        "add it by hand if the feed sends a value."
+    )
 
 
 def derive_inputs_from_sample(sample_data: object) -> list[dict[str, object]]:

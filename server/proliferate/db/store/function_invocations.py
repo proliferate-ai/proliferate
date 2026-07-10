@@ -99,9 +99,7 @@ async def _row_by_name(
     )
 
 
-async def decrypt_headers(
-    db: AsyncSession, *, owner_user_id: UUID, name: str
-) -> dict[str, str]:
+async def decrypt_headers(db: AsyncSession, *, owner_user_id: UUID, name: str) -> dict[str, str]:
     """Decrypt an invocation's headers blob for dispatch. Only the dispatch path
     calls this; it never surfaces on a read/list response."""
     from proliferate.utils.crypto import decrypt_json

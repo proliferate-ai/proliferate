@@ -7,28 +7,28 @@ a workflow lookup with id ``"runs"``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.auth.dependencies import current_product_user, optional_current_active_user
+from proliferate.auth.dependencies import current_product_user
 from proliferate.constants.workflows import (
     WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.db.store import cloud_workflows as store
-from proliferate.db.store import runtime_workers as runtime_workers_store
-from proliferate.db.store.integrations import accounts as accounts_store
-from proliferate.integrations.slack import client as slack_client
-from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.workflows.access import (
+    RunTokenActor,
+    authorize_run_ping,
+    authorize_run_report,
+)
 from proliferate.server.cloud.workflows.delivery import (
     cancel_run,
     deliver_cloud_run,
+    observe_run_ping,
     refresh_cloud_run,
 )
 from proliferate.server.cloud.workflows.local_executor import (
@@ -78,7 +78,9 @@ from proliferate.server.cloud.workflows.service import (
     get_trigger,
     get_workflow_detail,
     inspect_poll_endpoint,
+    list_run_step_actions,
     list_runs,
+    list_slack_channels,
     list_trigger_items,
     list_triggers,
     list_workflows,
@@ -88,63 +90,8 @@ from proliferate.server.cloud.workflows.service import (
     update_trigger,
     update_workflow,
 )
-from proliferate.utils.crypto import decrypt_json
-from proliferate.utils.time import utcnow
 
 router = APIRouter(prefix="/workflows", tags=["cloud-workflows"])
-
-
-@dataclass(frozen=True)
-class _RunTokenActor:
-    """Minimal actor for a runtime-authenticated run report (D18 / L16). The per-run
-    gateway token proves the run, so the owner id is all downstream owner-scoped
-    checks need — the executor is always the workflow owner in v1."""
-
-    id: UUID
-
-
-def _bearer_token(request: Request) -> str:
-    header = request.headers.get("authorization", "")
-    scheme, _, raw = header.partition(" ")
-    if scheme.lower() != "bearer":
-        return ""
-    return raw.strip()
-
-
-async def _authorize_run_report(
-    db: AsyncSession, *, run_id: UUID, request: Request, user: User | None
-) -> _RunTokenActor | User:
-    """D18 (E7): accept EITHER the per-run gateway token (anyharness reporting on
-    its own behalf) OR a user session (the desktop local-lane relay) as the
-    credential for ``/status`` and ``/delivered``.
-
-    A valid run token that belongs to a *different* run is a spoofing attempt →
-    403 (mirrors ``/ping``). A bearer that is not a run token falls through to
-    user-session auth (e.g. a JWT-authed desktop). No credential at all → 401.
-    """
-
-    token = _bearer_token(request)
-    if token:
-        grant = await store.get_active_run_gateway_token_by_hash(
-            db,
-            token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
-            now=utcnow(),
-        )
-        if grant is not None:
-            if grant.workflow_run_id != run_id:
-                raise CloudApiError(
-                    "workflow_run_token_mismatch",
-                    "This run token does not belong to the reported run.",
-                    status_code=403,
-                )
-            return _RunTokenActor(id=grant.owner_user_id)
-    if user is not None:
-        return user
-    raise CloudApiError(
-        "workflow_run_report_unauthorized",
-        "A user session or the per-run gateway token is required.",
-        status_code=401,
-    )
 
 
 @router.get("", response_model=WorkflowListResponse)
@@ -184,7 +131,7 @@ async def get_run_endpoint(
     user: User = Depends(current_product_user),
 ) -> WorkflowRunDetailResponse:
     run = await get_run(db, user, run_id)
-    actions = await store.list_actions_for_run(db, run_id=run.id)
+    actions = await list_run_step_actions(db, run.id)
     return WorkflowRunDetailResponse(
         run=run_payload(run),
         step_actions=[
@@ -204,12 +151,10 @@ async def get_run_endpoint(
 @router.post("/runs/{run_id}/delivered", response_model=WorkflowRunResponse)
 async def mark_run_delivered_endpoint(
     run_id: UUID,
-    request: Request,
     db: AsyncSession = Depends(get_async_session),
-    user: User | None = Depends(optional_current_active_user),
-) -> WorkflowRunResponse:
     # D18: run token (anyharness) OR user session (desktop local-lane relay).
-    actor = await _authorize_run_report(db, run_id=run_id, request=request, user=user)
+    actor: RunTokenActor | User = Depends(authorize_run_report),
+) -> WorkflowRunResponse:
     return run_payload(await mark_run_delivered(db, actor, run_id))
 
 
@@ -217,12 +162,10 @@ async def mark_run_delivered_endpoint(
 async def report_run_status_endpoint(
     run_id: UUID,
     body: RunStatusRequest,
-    request: Request,
     db: AsyncSession = Depends(get_async_session),
-    user: User | None = Depends(optional_current_active_user),
-) -> WorkflowRunResponse:
     # D18 (E7): run token (anyharness self-report) OR user session (local relay).
-    actor = await _authorize_run_report(db, run_id=run_id, request=request, user=user)
+    actor: RunTokenActor | User = Depends(authorize_run_report),
+) -> WorkflowRunResponse:
     # The claim-ownership guard (2a) applies only to the owner-authed relay path; the
     # runtime's token-authed self-report is guarded by claim-time token rotation.
     return run_payload(
@@ -231,7 +174,7 @@ async def report_run_status_endpoint(
             actor,
             run_id,
             body,
-            authed_via_run_token=isinstance(actor, _RunTokenActor),
+            authed_via_run_token=isinstance(actor, RunTokenActor),
         )
     )
 
@@ -281,58 +224,21 @@ async def refresh_run_endpoint(
 @router.post("/runs/{run_id}/ping", status_code=202)
 async def run_ping_endpoint(
     run_id: UUID,
-    request: Request,
     db: AsyncSession = Depends(get_async_session),
-) -> Response:
-    """Completion ping (L16 / §3.7). NO user-session auth — the per-run gateway
-    token IS the auth. The runtime fires this after each step transition; the
-    handler validates the token, requires token↔run_id match (so run A's token
-    can't ping run B), and wakes the existing refresh path for cloud-lane runs.
+    # NO user-session auth — the per-run gateway token IS the auth (validated +
+    # matched to run_id by the dependency).
+    actor: RunTokenActor = Depends(authorize_run_ping),
+) -> None:
+    """Completion ping (L16 / §3.7). The runtime fires this after each step
+    transition; ``authorize_run_ping`` validates the token and its run_id match,
+    then this wakes the existing refresh path for cloud-lane runs.
 
     The body carries nothing: it is a stateless nudge. Duplicate/stale/late pings
     are safe by construction — refresh is reconcile-shaped and run-status
     transitions are monotonic — so no state is added here.
     """
 
-    header = request.headers.get("authorization", "")
-    scheme, _, raw = header.partition(" ")
-    token = raw.strip()
-    if scheme.lower() != "bearer" or not token:
-        raise CloudApiError(
-            "workflow_ping_unauthorized",
-            "Missing or malformed run ping token.",
-            status_code=401,
-        )
-    grant = await store.get_active_run_gateway_token_by_hash(
-        db,
-        token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
-        now=utcnow(),
-    )
-    if grant is None:
-        # Unknown, expired (terminal run), or revoked token.
-        raise CloudApiError(
-            "workflow_ping_unauthorized",
-            "Run ping token is invalid, expired, or revoked.",
-            status_code=401,
-        )
-    if grant.workflow_run_id != run_id:
-        raise CloudApiError(
-            "workflow_ping_run_mismatch",
-            "This token does not belong to the pinged run.",
-            status_code=403,
-        )
-
-    run = await store.get_run(db, run_id)
-    # Local-lane runs are observed by the desktop relay, which owns local
-    # observation; the ping is accepted (202) and no-ops the refresh here.
-    if run is not None and run.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
-        try:
-            await refresh_cloud_run(db, _RunTokenActor(id=grant.owner_user_id), run)
-        except CloudApiError:
-            # A failed refresh never changes engine state — the ping is a nudge,
-            # not a transition; the scheduler phase-3 sweep remains the backstop.
-            pass
-    return Response(status_code=202)
+    await observe_run_ping(db, run_id=run_id, actor=actor)
 
 
 # --- desktop executor claim plane (track 2a) -----------------------------------
@@ -374,24 +280,10 @@ async def list_slack_channels_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> SlackChannelsResponse:
-    account_pair = await accounts_store.get_ready_account_for_provider(db, user.id, "slack")
-    if account_pair is None:
-        return SlackChannelsResponse(channels=[], connected=False)
-    account, _definition = account_pair
-    try:
-        bundle = decrypt_json(account.credential_ciphertext)
-    except Exception:
-        return SlackChannelsResponse(channels=[], connected=False)
-    bot_token = bundle.get("bot_token") or bundle.get("access_token")
-    if not bot_token:
-        return SlackChannelsResponse(channels=[], connected=False)
-    try:
-        channels = await slack_client.list_channels(bot_token=bot_token)
-    except Exception:
-        return SlackChannelsResponse(channels=[], connected=True)
+    result = await list_slack_channels(db, user)
     return SlackChannelsResponse(
-        channels=[SlackChannelResponse(id=c.id, name=c.name) for c in channels],
-        connected=True,
+        channels=[SlackChannelResponse(id=c.id, name=c.name) for c in result.channels],
+        connected=result.connected,
     )
 
 

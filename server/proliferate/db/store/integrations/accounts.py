@@ -121,6 +121,21 @@ class ReadyAccountRow:
     org_policy_enabled: bool | None
 
 
+def org_policy_allows(row: ReadyAccountRow, *, organization_id: UUID | None) -> bool:
+    """Whether the org policy overlay leaves this row's definition enabled.
+
+    Org-less lookups have no overlay (always allowed); an explicit policy row
+    wins; otherwise the definition's default applies. Callers that pass an
+    ``organization_id`` to the ready-account lookups MUST apply this verdict —
+    the query returns the overlay, it does not filter on it.
+    """
+    if organization_id is None:
+        return True
+    if row.org_policy_enabled is not None:
+        return row.org_policy_enabled
+    return row.definition.enabled_by_default
+
+
 def _ready_accounts_stmt(user_id: UUID, organization_id: UUID | None) -> Select:
     """Ready accounts + non-archived definitions, LEFT JOINed to the org policy.
 

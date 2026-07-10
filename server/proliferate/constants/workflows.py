@@ -454,9 +454,7 @@ WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_REVOKED: Final = "revoked"
 # (modeled on the poller's ``fetch_poll_page``), NOT the MCP outbound path.
 FUNCTION_INVOCATION_PROVIDER_NAMESPACE: Final = "functions"
 FUNCTION_INVOCATION_NAME_MAX_LENGTH: Final = 64
-FUNCTION_INVOCATION_SUPPORTED_METHODS: Final = frozenset(
-    {"get", "post", "patch", "put", "delete"}
-)
+FUNCTION_INVOCATION_SUPPORTED_METHODS: Final = frozenset({"get", "post", "patch", "put", "delete"})
 # SSRF + resource safety posture (PROPOSED, standard). The gateway makes the
 # request itself, so it must not be steered at private/link-local/loopback ranges
 # or our own infra, must cap response size + time, and must never follow a

@@ -140,9 +140,7 @@ async def build_chat_default_access_scope(
         elif len(allowed) == 0:
             continue  # excluded from the chat default set
         else:
-            scope_entries.append(
-                {"provider": definition.namespace, "tools": list(allowed)}
-            )
+            scope_entries.append({"provider": definition.namespace, "tools": list(allowed)})
     # The reserved ``functions`` provider is added to the chat default set only if
     # ≥1 invocation is chat-enabled, restricted to exactly those names; a non-enabled
     # invocation is therefore absent from the scope and denied at the gateway.

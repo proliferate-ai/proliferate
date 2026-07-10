@@ -1,6 +1,7 @@
 import { workflowRunStatusDetail } from "@proliferate/product-domain/workflows/run-status";
 import { workflowTriggerLabel } from "@proliferate/product-domain/workflows/model";
 import { WorkflowStatusPill } from "@proliferate/product-ui/workflows/WorkflowStatusPill";
+import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft } from "@proliferate/ui/icons";
 import { formatAutomationTimestamp } from "@/lib/domain/automations/schedule/schedule";
 import type { WorkflowRunResponse } from "@/hooks/access/cloud/workflows/types";
@@ -21,14 +22,16 @@ export interface WorkflowMissedRunSummaryProps {
 export function WorkflowMissedRunSummary({ run, workflowName, onBack }: WorkflowMissedRunSummaryProps) {
   return (
     <div className="flex flex-col gap-3">
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         onClick={onBack}
         className="inline-flex w-fit items-center gap-1.5 text-ui-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" />
         Workflows
-      </button>
+      </Button>
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-lg font-semibold text-foreground">{workflowName ?? "Run"}</h1>
         <WorkflowStatusPill label="Missed" tone="muted" title={workflowRunStatusDetail("missed")} />

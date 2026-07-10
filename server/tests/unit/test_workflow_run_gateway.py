@@ -38,7 +38,6 @@ from proliferate.db.models.cloud.runtime_workers import (
 )
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.db.models.cloud.workflows import WorkflowRun, WorkflowRunGatewayToken
-from proliferate.db.models.organizations import Organization
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
@@ -61,9 +60,7 @@ _ACTIVE = WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE
 _EXPIRED = WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED
 
 
-def _definition(
-    *, integrations: list[str] | None = None, steps: list[dict] | None = None
-) -> dict:
+def _definition(*, integrations: list[str] | None = None, steps: list[dict] | None = None) -> dict:
     """A minimal v2 definition: one agent node in slot ``main`` (E3 namespaces)."""
     return {
         "version": 1,
@@ -161,12 +158,16 @@ async def test_mint_for_every_run_empty_integrations_empty_scope(db_session: Asy
     assert gateway["authorization"].startswith("Bearer ")
     assert gateway["ping_url"].endswith(f"/v1/cloud/workflows/runs/{run.id}/ping")
     tokens = (
-        await db_session.execute(
-            store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run.id
+        (
+            await db_session.execute(
+                store.select(WorkflowRunGatewayToken).where(
+                    WorkflowRunGatewayToken.workflow_run_id == run.id
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(tokens) == 1
     # An empty grant is still stamped per slot (§2.6).
     assert tokens[0].scope_json == _scope_json([])
@@ -294,10 +295,14 @@ async def test_l22_fail_fast_provider_without_ready_account(db_session: AsyncSes
     assert excinfo.value.code == "workflow_function_provider_not_ready"
     # No dangling run and no token — failure is before the run row is created.
     runs = (
-        await db_session.execute(
-            store.select(WorkflowRun).where(WorkflowRun.workflow_id == wf.id)
+        (
+            await db_session.execute(
+                store.select(WorkflowRun).where(WorkflowRun.workflow_id == wf.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert runs == []
 
 
@@ -534,9 +539,7 @@ async def test_terminal_report_expires_token(db_session: AsyncSession) -> None:
     )
     assert await _active_token_status(db_session, run.id) == _ACTIVE
     # pending_delivery -> cancelled is a legal terminal transition.
-    await service.report_run_status(
-        db_session, user, run.id, RunStatusRequest(status="cancelled")
-    )
+    await service.report_run_status(db_session, user, run.id, RunStatusRequest(status="cancelled"))
     assert await _active_token_status(db_session, run.id) == _EXPIRED
 
 
@@ -570,7 +573,7 @@ def _recording_refresh(monkeypatch: pytest.MonkeyPatch) -> list:
         return run
 
     monkeypatch.setattr(
-        "proliferate.server.cloud.workflows.api.refresh_cloud_run", _fake_refresh
+        "proliferate.server.cloud.workflows.delivery.refresh_cloud_run", _fake_refresh
     )
     return calls
 
@@ -1008,9 +1011,7 @@ class _StubRequest:
         self.headers = {} if authorization is None else {"authorization": authorization}
 
 
-async def test_status_accepts_run_token(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_status_accepts_run_token(client: AsyncClient, db_session: AsyncSession) -> None:
     """The runtime self-reports /status with its per-run gateway token (no session)."""
     user = await _make_user(db_session)
     run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
@@ -1062,37 +1063,35 @@ async def test_status_no_credential_unauthorized(
 async def test_authorize_run_report_accepts_user_session(db_session: AsyncSession) -> None:
     """The desktop local-lane relay reports on a user session (no bearer) — the
     resolver returns the user unchanged."""
-    from proliferate.server.cloud.workflows.api import _authorize_run_report
+    from proliferate.server.cloud.workflows.access import authorize_run_report
 
     user = await _make_user(db_session)
     run_id, _ = await _seed_run_with_token(db_session, owner=user, integrations=[])
 
-    actor = await _authorize_run_report(
-        db_session, run_id=run_id, request=_StubRequest(), user=user
+    actor = await authorize_run_report(
+        run_id=run_id, request=_StubRequest(), db=db_session, user=user
     )
     assert actor is user
 
 
 async def test_authorize_run_report_prefers_run_token(db_session: AsyncSession) -> None:
     """A valid run token authenticates as the runtime even when no user is present."""
-    from proliferate.server.cloud.workflows.api import _RunTokenActor, _authorize_run_report
+    from proliferate.server.cloud.workflows.access import RunTokenActor, authorize_run_report
 
     user = await _make_user(db_session)
     run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
 
-    actor = await _authorize_run_report(
-        db_session,
+    actor = await authorize_run_report(
         run_id=run_id,
         request=_StubRequest(f"Bearer {plaintext}"),
+        db=db_session,
         user=None,
     )
-    assert isinstance(actor, _RunTokenActor)
+    assert isinstance(actor, RunTokenActor)
     assert actor.id == user.id
 
 
-async def test_delivered_accepts_run_token(
-    client: AsyncClient, db_session: AsyncSession
-) -> None:
+async def test_delivered_accepts_run_token(client: AsyncClient, db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     run_id, plaintext = await _seed_run_with_token(
         db_session, owner=user, integrations=[], status="pending_delivery"
@@ -1193,9 +1192,7 @@ async def test_chat_default_all_when_no_policy_restriction(
             db_session, user_id=user.id, definition=definition
         )
 
-    token = await _seed_org_worker_token(
-        db_session, owner_user_id=user.id, organization_id=org_id
-    )
+    token = await _seed_org_worker_token(db_session, owner_user_id=user.id, organization_id=org_id)
     grant = await _chat_grant(db_session, token=token)
     assert grant.default_scope is None  # unscoped -> default-all
     providers = await gateway_service.list_providers(db_session, grant=grant)
@@ -1229,9 +1226,7 @@ async def test_chat_default_subset_hides_excluded_and_denies_forced_call(
         scope_json=[],
         updated_by=user.id,
     )
-    token = await _seed_org_worker_token(
-        db_session, owner_user_id=user.id, organization_id=org_id
-    )
+    token = await _seed_org_worker_token(db_session, owner_user_id=user.id, organization_id=org_id)
     grant = await _chat_grant(db_session, token=token)
 
     # ABSENCE: excluded provider is not in list_providers; the peer still is.
@@ -1260,9 +1255,7 @@ async def test_chat_default_per_integration_tool_restriction(
     await db_session.flush()
     context7 = await definitions_store.get_seed_by_namespace(db_session, "context7")
     assert context7 is not None
-    await _seed_ready_account_for_definition(
-        db_session, user_id=user.id, definition=context7
-    )
+    await _seed_ready_account_for_definition(db_session, user_id=user.id, definition=context7)
     await _set_chat_default_scope(
         db_session,
         organization_id=org_id,
@@ -1270,9 +1263,7 @@ async def test_chat_default_per_integration_tool_restriction(
         scope_json=["a"],
         updated_by=user.id,
     )
-    token = await _seed_org_worker_token(
-        db_session, owner_user_id=user.id, organization_id=org_id
-    )
+    token = await _seed_org_worker_token(db_session, owner_user_id=user.id, organization_id=org_id)
     grant = await _chat_grant(db_session, token=token)
     assert grant.default_scope == [{"provider": "context7", "tools": ["a"]}]
 

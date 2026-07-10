@@ -21,7 +21,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.constants.workflows import (
-    WORKFLOW_LOCAL_CLAIM_TTL_SECONDS,
     WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL,
     WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST,
     WORKFLOW_MISSED_RUN_POLICY_SKIP_ALL,
@@ -382,9 +381,7 @@ async def test_delete_trigger(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
     await _make_ready_cloud_workspace(db_session, user)
-    trigger = await service.create_trigger(
-        db_session, user, workflow.id, _create_body()
-    )
+    trigger = await service.create_trigger(db_session, user, workflow.id, _create_body())
     await service.delete_trigger(db_session, user, workflow.id, trigger.id)
     assert await trigger_store.get_trigger(db_session, trigger.id) is None
 
@@ -394,9 +391,7 @@ async def test_trigger_visibility_isolation(db_session: AsyncSession) -> None:
     other = await _make_user(db_session)
     workflow = await _make_workflow(db_session, owner)
     await _make_ready_cloud_workspace(db_session, owner)
-    trigger = await service.create_trigger(
-        db_session, owner, workflow.id, _create_body()
-    )
+    trigger = await service.create_trigger(db_session, owner, workflow.id, _create_body())
     with pytest.raises(CloudApiError) as exc:
         await service.get_trigger(db_session, other, workflow.id, trigger.id)
     assert exc.value.code == "workflow_not_found"
@@ -667,7 +662,9 @@ async def test_tick_over_budget_lands_budget_blocked_zero_dispatch(
     runs = await _runs_for_trigger(session_factory, trigger_id)
     # No longer pending (it went terminal), so re-read the full ledger.
     async with session_factory() as db:
-        all_runs = await store.list_runs(db, executor_user_id=(await _owner(session_factory, workflow_id)))
+        all_runs = await store.list_runs(
+            db, executor_user_id=(await _owner(session_factory, workflow_id))
+        )
     blocked = [r for r in all_runs if r.trigger_id == trigger_id]
     assert len(blocked) == 1
     assert blocked[0].status == WORKFLOW_RUN_STATUS_FAILED
@@ -720,11 +717,13 @@ async def test_missed_run_latest_fires_newest_records_older_missed(
     ONLY the newest missed occurrence; every OLDER slot is recorded as a terminal
     ``missed`` history row (no silent gaps). The next tick does not double-fire."""
     trigger_id, workflow_id = await _seed_trigger(
-        session_factory, concurrency="skip", missed_run_policy=WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST
+        session_factory,
+        concurrency="skip",
+        missed_run_policy=WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST,
     )
     await _push_cursor_back(session_factory, trigger_id, hours=5.5)  # ~5 hourly slots
     _patch_gateway(monkeypatch)
-    seen = _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
+    _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
 
     first = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
     assert first.created_runs == 1  # exactly the newest slot fires
@@ -870,7 +869,7 @@ async def test_concurrency_skip_holds_backlog_then_replays_on_next_tick(
     assert before is not None
     cursor_before = before.next_run_at
     _patch_gateway(monkeypatch)
-    seen = _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
+    _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
     owner = await _owner(session_factory, workflow_id)
 
     # Tick 1: skip guard trips — nothing fires, cursor held stationary (backlog kept).
@@ -994,7 +993,11 @@ async def test_non_dedup_integrity_error_propagates(
     # String fallback (no constraint_name attribute exposed) still recognises the index.
     assert (
         scheduler._is_slot_dedup_conflict(
-            IntegrityError('duplicate key ... unique constraint "uq_workflow_run_trigger_slot"', {}, Exception())
+            IntegrityError(
+                'duplicate key ... unique constraint "uq_workflow_run_trigger_slot"',
+                {},
+                Exception(),
+            )
         )
         is True
     )
@@ -1233,12 +1236,16 @@ async def test_local_terminal_report_expires_gateway_token_like_cloud(
     async def _token_statuses() -> list[str]:
         async with session_factory() as db:
             rows = (
-                await db.execute(
-                    select(WorkflowRunGatewayToken.status).where(
-                        WorkflowRunGatewayToken.workflow_run_id == run_id
+                (
+                    await db.execute(
+                        select(WorkflowRunGatewayToken.status).where(
+                            WorkflowRunGatewayToken.workflow_run_id == run_id
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         return list(rows)
 
     before = await _token_statuses()
@@ -1249,11 +1256,17 @@ async def test_local_terminal_report_expires_gateway_token_like_cloud(
     actor = SimpleNamespace(id=owner)
     async with session_factory() as db, db.begin():
         await service.report_run_status(
-            db, actor, run_id, RunStatusRequest(status="running", claimId=claim_id)  # type: ignore[arg-type,call-arg]
+            db,
+            actor,
+            run_id,
+            RunStatusRequest(status="running", claimId=claim_id),  # type: ignore[arg-type,call-arg]
         )
     async with session_factory() as db, db.begin():
         await service.report_run_status(
-            db, actor, run_id, RunStatusRequest(status="completed", claimId=claim_id)  # type: ignore[arg-type,call-arg]
+            db,
+            actor,
+            run_id,
+            RunStatusRequest(status="completed", claimId=claim_id),  # type: ignore[arg-type,call-arg]
         )
 
     after = await _token_statuses()
@@ -1309,7 +1322,10 @@ async def test_local_reclaim_rejects_stale_claim_report_and_leaves_run_untouched
     with pytest.raises(CloudApiError) as exc:
         async with session_factory() as db, db.begin():
             await service.report_run_status(
-                db, actor, run_id, RunStatusRequest(status="running", claimId=stale_claim)  # type: ignore[arg-type,call-arg]
+                db,
+                actor,
+                run_id,
+                RunStatusRequest(status="running", claimId=stale_claim),  # type: ignore[arg-type,call-arg]
             )
     assert exc.value.code == "workflow_run_stale_claim"
     assert exc.value.status_code == 409
@@ -1323,7 +1339,10 @@ async def test_local_reclaim_rejects_stale_claim_report_and_leaves_run_untouched
     # B's relay (current claim_id) drives the run normally.
     async with session_factory() as db, db.begin():
         ok = await service.report_run_status(
-            db, actor, run_id, RunStatusRequest(status="running", claimId=new_claim)  # type: ignore[arg-type,call-arg]
+            db,
+            actor,
+            run_id,
+            RunStatusRequest(status="running", claimId=new_claim),  # type: ignore[arg-type,call-arg]
         )
     assert ok.status == WORKFLOW_RUN_STATUS_RUNNING
 
@@ -1340,7 +1359,10 @@ async def test_local_claimed_run_report_without_claim_id_rejected(
     with pytest.raises(CloudApiError) as exc:
         async with session_factory() as db, db.begin():
             await service.report_run_status(
-                db, actor, run_id, RunStatusRequest(status="running")  # type: ignore[arg-type]
+                db,
+                actor,
+                run_id,
+                RunStatusRequest(status="running"),  # type: ignore[arg-type]
             )
     assert exc.value.code == "workflow_run_claim_required"
     assert exc.value.status_code == 409
@@ -1408,7 +1430,10 @@ async def test_cloud_run_report_needs_no_claim_id(db_session: AsyncSession) -> N
         status="delivered",
     )
     updated = await service.report_run_status(
-        db_session, user, run.id, RunStatusRequest(status="running")  # type: ignore[arg-type]
+        db_session,
+        user,
+        run.id,
+        RunStatusRequest(status="running"),  # type: ignore[arg-type]
     )
     assert updated.status == WORKFLOW_RUN_STATUS_RUNNING
     assert updated.claim_id is None

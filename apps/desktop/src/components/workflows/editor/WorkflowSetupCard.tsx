@@ -127,8 +127,10 @@ export function WorkflowSetupCard({ inputs, agents: _agents, onInputsChange }: W
 
   return (
     <div className="rounded-xl border border-border bg-background shadow-sm">
-      <button
+      <Button
         type="button"
+        variant="unstyled"
+        size="unstyled"
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center justify-between gap-2 rounded-xl px-4 py-3 text-left transition-colors hover:bg-list-hover"
       >
@@ -137,7 +139,7 @@ export function WorkflowSetupCard({ inputs, agents: _agents, onInputsChange }: W
           {summary ? <span className="truncate text-xs text-muted-foreground">{summary}</span> : null}
         </span>
         {expanded ? <ChevronDown className="size-4 shrink-0 text-faint" /> : <ChevronRight className="size-4 shrink-0 text-faint" />}
-      </button>
+      </Button>
 
       {expanded ? (
         <div className="flex flex-col gap-4 border-t border-border/60 px-4 py-4">
@@ -167,14 +169,16 @@ export function WorkflowSetupCard({ inputs, agents: _agents, onInputsChange }: W
               </div>
             ) : null}
 
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="unstyled"
               onClick={() => onInputsChange([...inputs, { name: "", type: "text", required: false }])}
               className="flex items-center gap-1.5 self-start rounded-md px-1.5 py-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               <Plus className="size-3.5" />
               Add input
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

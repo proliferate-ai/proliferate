@@ -91,7 +91,9 @@ async def _make_user(db: AsyncSession) -> User:
     return user
 
 
-async def _make_workflow(db: AsyncSession, user: User, *, definition: dict | None = None) -> Workflow:
+async def _make_workflow(
+    db: AsyncSession, user: User, *, definition: dict | None = None
+) -> Workflow:
     wf = Workflow(
         owner_user_id=user.id,
         created_by_user_id=user.id,
@@ -162,7 +164,12 @@ def _page(items: list[dict], *, cursor: str = "c1", has_more: bool = False) -> P
 
 
 def _item(item_id: str, **data: object) -> dict:
-    return {"id": item_id, "kind": "test.item", "occurred_at": "2026-07-07T00:00:00Z", "data": data}
+    return {
+        "id": item_id,
+        "kind": "test.item",
+        "occurred_at": "2026-07-07T00:00:00Z",
+        "data": data,
+    }
 
 
 # --- overlay_item_inputs + derive_item_schema (pure, D17) -----------------------
@@ -205,7 +212,9 @@ def test_derive_item_schema_projects_inputs() -> None:
             default=None,
             enum_values=("low", "high"),
         ),
-        ArgSpec("flag", "boolean", required=False, has_default=False, default=None, enum_values=()),
+        ArgSpec(
+            "flag", "boolean", required=False, has_default=False, default=None, enum_values=()
+        ),
     ]
     schema = derive_item_schema(specs)
     assert schema == {
@@ -255,9 +264,7 @@ def _mock_client_factory(transport: httpx.MockTransport):  # type: ignore[no-unt
 
 async def _run_poller_with_page(session_factory, trigger_id, page: PollPage, *, now=None) -> int:
     now = now or utcnow()
-    with patch.object(
-        poller_module, "fetch_poll_page", new=AsyncMock(return_value=page)
-    ):
+    with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=page)):
         return await _poll_one_trigger(session_factory, trigger_id=trigger_id, now=now)
 
 
@@ -273,19 +280,29 @@ async def test_poll_spawns_runs_and_persists_cursor(test_engine) -> None:  # typ
         trigger_id = trigger.id
         await db.commit()
 
-    page = _page([_item("it_0", n=0, title="zero"), _item("it_1", n=1, title="one")], cursor="cur1")
+    page = _page(
+        [_item("it_0", n=0, title="zero"), _item("it_1", n=1, title="one")], cursor="cur1"
+    )
     spawned = await _run_poller_with_page(factory, trigger_id, page)
     assert spawned == 2
 
     async with factory() as db:
         items = (
-            await db.execute(select(WorkflowTriggerItem).where(WorkflowTriggerItem.trigger_id == trigger_id))
-        ).scalars().all()
+            (
+                await db.execute(
+                    select(WorkflowTriggerItem).where(WorkflowTriggerItem.trigger_id == trigger_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
         assert {i.item_id: i.status for i in items} == {"it_0": "spawned", "it_1": "spawned"}
         assert all(i.run_id is not None for i in items)
         runs = (
-            await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id))
-        ).scalars().all()
+            (await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id)))
+            .scalars()
+            .all()
+        )
         assert len(runs) == 2
         assert all(r.trigger_kind == WORKFLOW_TRIGGER_KIND_POLL for r in runs)
         refreshed = await db.get(WorkflowTrigger, trigger_id)
@@ -320,8 +337,10 @@ async def test_seen_set_dedups_replayed_item(test_engine) -> None:  # type: igno
 
     async with factory() as db:
         runs = (
-            await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id))
-        ).scalars().all()
+            (await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id)))
+            .scalars()
+            .all()
+        )
         assert len(runs) == 2  # dup_1 spawned exactly once despite the replay
 
 
@@ -330,7 +349,10 @@ async def test_seen_set_dedups_replayed_item(test_engine) -> None:  # type: igno
 
 async def test_invalid_item_recorded_not_spawned(test_engine) -> None:  # type: ignore[no-untyped-def]
     factory = _factory(test_engine)
-    schema = {"required": ["n", "title"], "properties": {"n": {"type": "number"}, "title": {"type": "string"}}}
+    schema = {
+        "required": ["n", "title"],
+        "properties": {"n": {"type": "number"}, "title": {"type": "string"}},
+    }
     async with factory() as db:
         user = await _make_user(db)
         wf = await _make_workflow(db, user)
@@ -347,16 +369,22 @@ async def test_invalid_item_recorded_not_spawned(test_engine) -> None:  # type: 
         items = {
             i.item_id: i
             for i in (
-                await db.execute(select(WorkflowTriggerItem).where(WorkflowTriggerItem.trigger_id == trigger_id))
-            ).scalars().all()
+                await db.execute(
+                    select(WorkflowTriggerItem).where(WorkflowTriggerItem.trigger_id == trigger_id)
+                )
+            )
+            .scalars()
+            .all()
         }
         assert items["it_ok"].status == "spawned"
         assert items["it_bad"].status == "invalid"
         assert items["it_bad"].error_message
         assert items["it_bad"].run_id is None
         runs = (
-            await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id))
-        ).scalars().all()
+            (await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id)))
+            .scalars()
+            .all()
+        )
         assert len(runs) == 1
 
 
@@ -402,7 +430,9 @@ async def test_start_run_failure_records_error_and_advances_cursor(test_engine) 
         patch.object(
             poller_module.service,
             "start_run",
-            new=AsyncMock(side_effect=CloudApiError("target_workspace_not_ready", "nope", status_code=409)),
+            new=AsyncMock(
+                side_effect=CloudApiError("target_workspace_not_ready", "nope", status_code=409)
+            ),
         ),
     ):
         spawned = await _poll_one_trigger(factory, trigger_id=trigger_id, now=now)
@@ -415,8 +445,10 @@ async def test_start_run_failure_records_error_and_advances_cursor(test_engine) 
         assert item.run_id is None
         # No run row survived (savepoint rolled back just the run insert).
         runs = (
-            await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id))
-        ).scalars().all()
+            (await db.execute(select(WorkflowRun).where(WorkflowRun.trigger_id == trigger_id)))
+            .scalars()
+            .all()
+        )
         assert runs == []
         # Cursor still advanced past this poll.
         refreshed = await db.get(WorkflowTrigger, trigger_id)
@@ -437,7 +469,8 @@ async def test_http_error_sets_last_poll_error_keeps_enabled(test_engine) -> Non
         await db.commit()
 
     error = httpx.HTTPStatusError(
-        "500", request=httpx.Request("GET", "http://x/poll"),
+        "500",
+        request=httpx.Request("GET", "http://x/poll"),
         response=httpx.Response(500, request=httpx.Request("GET", "http://x/poll")),
     )
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=error)):
@@ -453,8 +486,14 @@ async def test_http_error_sets_last_poll_error_keeps_enabled(test_engine) -> Non
         assert refreshed.last_poll_at is not None
         # No items or runs recorded from a failed poll.
         items = (
-            await db.execute(select(WorkflowTriggerItem).where(WorkflowTriggerItem.trigger_id == trigger_id))
-        ).scalars().all()
+            (
+                await db.execute(
+                    select(WorkflowTriggerItem).where(WorkflowTriggerItem.trigger_id == trigger_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
         assert items == []
 
 
@@ -468,11 +507,15 @@ async def test_due_claim_respects_interval(test_engine) -> None:  # type: ignore
         user = await _make_user(db)
         wf = await _make_workflow(db, user)
         # Just polled 10s ago, interval 60s -> not due.
-        not_due = await _make_poll_trigger(db, wf, user, interval_secs=60, last_poll_at=now - timedelta(seconds=10))
+        not_due = await _make_poll_trigger(
+            db, wf, user, interval_secs=60, last_poll_at=now - timedelta(seconds=10)
+        )
         # Never polled -> due.
         never = await _make_poll_trigger(db, wf, user, interval_secs=60, last_poll_at=None)
         # Polled 120s ago, interval 60s -> due.
-        overdue = await _make_poll_trigger(db, wf, user, interval_secs=60, last_poll_at=now - timedelta(seconds=120))
+        overdue = await _make_poll_trigger(
+            db, wf, user, interval_secs=60, last_poll_at=now - timedelta(seconds=120)
+        )
         not_due_id, never_id, overdue_id = not_due.id, never.id, overdue.id
         await db.commit()
 
@@ -546,7 +589,6 @@ def _poll_body(**overrides):  # type: ignore[no-untyped-def]
 
 
 async def test_poll_trigger_rejects_local_target(test_engine) -> None:  # type: ignore[no-untyped-def]
-    
 
     factory = _factory(test_engine)
     async with factory() as db:
@@ -606,9 +648,7 @@ async def test_poll_trigger_signature_mismatch_rejected(test_engine) -> None:  #
         # item omits required "n" and gives "title" the wrong type -> mismatch.
         bad_page = _page([_item("probe_bad", title=42)])
         with (
-            patch.object(
-                poller_module, "fetch_poll_page", new=AsyncMock(return_value=bad_page)
-            ),
+            patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=bad_page)),
             pytest.raises(CloudApiError) as exc,
         ):
             await _service_create(db, actor, wf.id, _poll_body())
@@ -654,9 +694,7 @@ async def test_poll_trigger_created_when_signature_matches(test_engine) -> None:
         actor = _Actor(user.id)
 
         good_page = _page([_item("probe_ok", n=1, title="ok")])
-        with patch.object(
-            poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
-        ):
+        with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
             record = await _service_create(db, actor, wf.id, _poll_body())
     assert record.kind == WORKFLOW_TRIGGER_KIND_POLL
     # The workspace is derived from the repo pin (reuses the repo's warm workspace).
@@ -828,8 +866,10 @@ async def test_signature_mismatch_surfaces_all_fields(test_engine) -> None:  # t
     # DENY-PATH (b, cont.): the trigger was NOT persisted.
     async with factory() as db:
         rows = (
-            await db.execute(select(WorkflowTrigger).where(WorkflowTrigger.workflow_id == wf.id))
-        ).scalars().all()
+            (await db.execute(select(WorkflowTrigger).where(WorkflowTrigger.workflow_id == wf.id)))
+            .scalars()
+            .all()
+        )
         assert rows == []
 
 
@@ -871,8 +911,10 @@ async def test_bad_init_response_hard_fails_and_saves_nothing(test_engine, failu
 
     async with factory() as db:
         rows = (
-            await db.execute(select(WorkflowTrigger).where(WorkflowTrigger.workflow_id == wf.id))
-        ).scalars().all()
+            (await db.execute(select(WorkflowTrigger).where(WorkflowTrigger.workflow_id == wf.id)))
+            .scalars()
+            .all()
+        )
         assert rows == []
 
 
@@ -1052,9 +1094,7 @@ async def test_inspect_poll_endpoint_no_items_derives_nothing() -> None:  # type
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
     from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
 
-    with patch.object(
-        poller_module, "fetch_poll_page", new=AsyncMock(return_value=_page([]))
-    ):
+    with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=_page([]))):
         result = await inspect_poll_endpoint(
             TriggerPollRequest.model_validate(
                 {"url": "https://issues.example/feed", "intervalSecs": 60}
@@ -1083,9 +1123,7 @@ async def test_update_reprobes_when_inputs_change(test_engine) -> None:  # type:
         actor = _Actor(user.id)
 
         good_page = _page([_item("probe_ok", n=1, title="ok")])
-        with patch.object(
-            poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
-        ):
+        with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
             trigger = await _service_create(db, actor, wf.id, _poll_body())
 
         # The workflow's inputs change: publish a new version adding a required
@@ -1142,9 +1180,7 @@ async def test_update_skips_reprobe_when_inputs_unchanged(test_engine) -> None: 
         actor = _Actor(user.id)
 
         good_page = _page([_item("probe_ok", n=1, title="ok")])
-        with patch.object(
-            poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
-        ):
+        with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
             trigger = await _service_create(db, actor, wf.id, _poll_body())
 
         fetch_mock = AsyncMock(return_value=good_page)
@@ -1169,9 +1205,11 @@ async def test_fetch_poll_page_caps_response_size() -> None:
         fetch_poll_page,
     )
 
-    oversize = b'{"items": [], "cursor": "c", "has_more": false, "pad": "' + (
-        b"x" * (WORKFLOW_POLL_MAX_RESPONSE_BYTES + 16)
-    ) + b'"}'
+    oversize = (
+        b'{"items": [], "cursor": "c", "has_more": false, "pad": "'
+        + (b"x" * (WORKFLOW_POLL_MAX_RESPONSE_BYTES + 16))
+        + b'"}'
+    )
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, content=oversize)
@@ -1260,9 +1298,7 @@ async def test_disable_poll_trigger_skips_reprobe_when_endpoint_down(test_engine
         actor = _Actor(user.id)
 
         good_page = _page([_item("probe_ok", n=1, title="ok")])
-        with patch.object(
-            poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)
-        ):
+        with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
             trigger = await _service_create(db, actor, wf.id, _poll_body())
 
         # The workflow's inputs change (adds a required "extra") so the derived item
