@@ -16,7 +16,7 @@
 
 <p>
   <strong>The open-source AI IDE for coding agents.</strong><br />
-  Run Claude Code, Codex, Cursor, OpenCode, and Grok side by side—locally or in cloud workspaces, each with its own isolated environment.
+  Run Claude Code, Codex, Cursor, OpenCode, and Grok side by side locally—or use Claude Code, Codex, OpenCode, and Grok in private cloud workspaces.
 </p>
 
 <h3>
@@ -40,13 +40,13 @@
 <table>
   <tr>
     <td width="50%" valign="top">
-      <h3>Native agents, one workspace</h3>
-      Keep each harness's authentication, models, tools, permissions, and transcript behavior. Proliferate adds the shared workspace around them.
+      <h3>Supported agents, one workspace</h3>
+      Use each harness's available authentication, models, modes, and tools. Proliferate adds a common workspace and orchestration layer around them.
       <br /><br />
       <a href="https://proliferate.com/docs/product/agents">Supported agents →</a>
     </td>
     <td width="50%" valign="top">
-      <img width="100%" alt="Choose an agent, model, mode, and permissions in Proliferate" src="https://proliferate.com/docs-assets/home-cowork-composer.png" />
+      <img width="100%" alt="Choose an agent, model, and mode in Proliferate" src="https://proliferate.com/docs-assets/home-cowork-composer.png" />
     </td>
   </tr>
   <tr>
@@ -63,7 +63,7 @@
   <tr>
     <td width="50%" valign="top">
       <h3>Review before you merge</h3>
-      Inspect plans, transcripts, terminals, files, tests, and diffs in one place. Ask one agent to review another before you merge.
+      Inspect plans, transcripts, terminals, files, and diffs in one place. Run plan or code review agents before you merge.
     </td>
     <td width="50%" valign="top">
       <img width="100%" alt="Run a multi-agent code review in Proliferate" src="https://proliferate.com/docs-assets/review-code-review.png" />
@@ -72,7 +72,7 @@
   <tr>
     <td width="50%" valign="top">
       <h3>Reusable workflows <sup>beta</sup></h3>
-      Turn a useful routine into a workflow your team can inspect, reuse, and run across supported agents. Choose a model per step to balance capability and cost.
+      Turn a useful routine into a workflow you can inspect, reuse, and run locally or in a private cloud workspace. Compose agent stages with different supported harnesses and models to balance capability and cost.
       <br /><br />
       <a href="https://proliferate.com/docs/product/workflows">Workflows →</a>
     </td>
@@ -99,10 +99,10 @@ provider-hosted runtimes today.
 ### Also in the box
 
 - Agent delegation and subagents for focused implementation, investigation, and review
-- MCP servers, skills, and integrations shared across supported agents
+- MCP servers, skills, and integrations available to compatible agent sessions
 - Built-in terminals, file browsing, git diffs, plan review, and code review
 - Desktop and web access to private cloud workspaces
-- Model choice per task, including lower-cost and open models exposed through supported harnesses
+- Model choice per task, including lower-cost and open-weight models exposed through supported harnesses
 
 ## Supported Agents
 
@@ -114,9 +114,11 @@ provider-hosted runtimes today.
   <kbd>Grok</kbd>
 </p>
 
-Each agent runs through its native harness. Use the subscriptions you already
-pay for, provider API keys, a compatible model gateway, or open models exposed
-through supported harnesses. Availability varies by agent and target.
+Each supported agent runs through its own harness integration. All five are
+available locally; managed cloud currently supports Claude Code, Codex,
+OpenCode, and Grok. Use existing subscriptions where supported, provider API
+keys, a compatible model gateway, or open-weight models exposed through
+supported harnesses. Availability varies by authentication method and target.
 
 [Agent and authentication guide →](https://proliferate.com/docs/product/agents)
 
