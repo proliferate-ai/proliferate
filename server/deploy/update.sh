@@ -37,15 +37,29 @@ export PROLIFERATE_ENV_FILE="$RUNTIME_ENV_FILE"
 COMPOSE_ARGS=(--env-file "$RUNTIME_ENV_FILE" -f "$COMPOSE_FILE")
 
 # Update every service enabled through the deployment contract, including
-# optional-profile services (agent-gateway litellm + litellm-db) when the
-# capability flag is on. Same one mechanism bootstrap.sh uses.
+# optional-profile services (agent-gateway litellm + litellm-db, cloud-workspaces
+# redis) when the capability flag is on. Same one mechanism bootstrap.sh uses.
 PROFILE_ARGS=()
 while IFS= read -r _profile_token; do
   [[ -n "$_profile_token" ]] && PROFILE_ARGS+=("$_profile_token")
 done < <(proliferate_profile_args "$RUNTIME_ENV_FILE")
 
+PROFILE_SERVICES=()
+while IFS= read -r _profile_service; do
+  [[ -n "$_profile_service" ]] && PROFILE_SERVICES+=("$_profile_service")
+done < <(proliferate_profile_services "$RUNTIME_ENV_FILE")
+
 docker compose "${COMPOSE_ARGS[@]}" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} pull
 docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
-docker compose "${COMPOSE_ARGS[@]}" ${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"} up -d
+docker compose "${COMPOSE_ARGS[@]}" up -d db api caddy
+# --wait, scoped explicitly to the profiled services: an enabled optional
+# service (litellm, redis) must be healthy before this script hands back
+# control, not merely "started". Deliberately NOT a bare `up -d --wait`
+# across the whole compose file — that would also try to reconcile the
+# one-shot `migrate` job above, which always exits after running and would
+# make --wait report a false failure.
+if ((${#PROFILE_SERVICES[@]})); then
+  docker compose "${COMPOSE_ARGS[@]}" "${PROFILE_ARGS[@]}" up -d --wait --wait-timeout "${PROLIFERATE_PROFILE_WAIT_TIMEOUT_SECONDS:-300}" "${PROFILE_SERVICES[@]}"
+fi
 
 "$SCRIPT_DIR/wait-for-health.sh"

@@ -121,12 +121,110 @@ if proliferate_is_truthy "$(get AGENT_GATEWAY_ENABLED)"; then
   if [[ -z "$GATEWAY_PUBLIC" ]]; then
     warn "AGENT_GATEWAY_ENABLED=true but AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL is empty. Sandboxes cannot reach the gateway until you set the public URL and expose it (see the model-gateway add-on docs)."
   fi
+  if [[ -z "$(get ANTHROPIC_API_KEY)" && -z "$(get OPENAI_API_KEY)" && -z "$(get XAI_API_KEY)" ]]; then
+    err "AGENT_GATEWAY_ENABLED=true but none of ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY is set. LiteLLM has no provider credentials to serve models with; set at least one."
+  fi
   if [[ "$ERRORS" -eq 0 ]]; then
     ok "Agent gateway config is internally consistent (profile: agent-gateway)."
   fi
 fi
 
-# --- 4. Runtime binaries for cloud workspaces --------------------------------
+# --- 4. Redis for cloud materialization ---------------------------------------
+#
+# Cloud materialization takes a per-sandbox Redis lock (REDBEAT_REDIS_URL).
+# The bundled `redis` service comes up automatically under the cloud-workspaces
+# profile whenever the E2B pair (section 2) is complete, so this is a sanity
+# check on an operator override rather than a "missing service" case.
+
+if [[ -n "$E2B_API_KEY" && -n "$E2B_TEMPLATE_NAME" ]]; then
+  REDIS_URL="$(get REDBEAT_REDIS_URL)"
+  if [[ -z "$REDIS_URL" ]]; then
+    warn "Cloud workspaces are configured (E2B_API_KEY + E2B_TEMPLATE_NAME) but REDBEAT_REDIS_URL is empty. Cloud materialization cannot acquire its lock without a Redis URL (it will fail requests with cloud_materialization_busy, not crash the instance); leave it at the bundled default (redis://redis:6379/0) or point it at a reachable Redis."
+  elif [[ "$REDIS_URL" != *"redis://redis:"* && "$REDIS_URL" != *"@redis:"* ]]; then
+    warn "REDBEAT_REDIS_URL ('$REDIS_URL') does not point at the bundled 'redis' service. The cloud-workspaces profile still starts the bundled redis container; confirm your override is reachable, or remove it to use the bundled one."
+  else
+    ok "Redis is configured for cloud materialization (profile: cloud-workspaces)."
+  fi
+fi
+
+# --- 5. Deployment SSO (OIDC) completeness ------------------------------------
+#
+# A usable OIDC connection needs a client id, an issuer/discovery/static
+# endpoint source, and a client secret (unless the token-endpoint auth method
+# is "none", e.g. a public client). Mirrors
+# auth.sso.deployment_config.deployment_sso_configuration_error() so preflight
+# catches the same incompleteness before an operator discovers it at sign-in.
+
+if proliferate_is_truthy "$(get SSO_ENABLED)"; then
+  SSO_CLIENT_ID="$(get SSO_OIDC_CLIENT_ID)"
+  SSO_CLIENT_SECRET="$(get SSO_OIDC_CLIENT_SECRET)"
+  SSO_AUTH_METHOD="$(get SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD)"
+  SSO_ISSUER="$(get SSO_OIDC_ISSUER_URL)"
+  SSO_DISCOVERY="$(get SSO_OIDC_DISCOVERY_URL)"
+  SSO_AUTHZ_EP="$(get SSO_OIDC_AUTHORIZATION_ENDPOINT)"
+  SSO_TOKEN_EP="$(get SSO_OIDC_TOKEN_ENDPOINT)"
+  SSO_JWKS_EP="$(get SSO_OIDC_JWKS_URI)"
+  SSO_JIT="$(get SSO_JIT_POLICY)"
+  ADMIN_EMAILS_VAL="$(get ADMIN_EMAILS)"
+
+  if [[ -z "$SSO_CLIENT_ID" ]]; then
+    err "SSO_ENABLED=true but SSO_OIDC_CLIENT_ID is empty."
+  fi
+  if [[ -z "$SSO_CLIENT_SECRET" && "$SSO_AUTH_METHOD" != "none" ]]; then
+    err "SSO_ENABLED=true but SSO_OIDC_CLIENT_SECRET is empty (required unless SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD=none)."
+  fi
+  if [[ -z "$SSO_ISSUER" && -z "$SSO_DISCOVERY" \
+        && ! ( -n "$SSO_AUTHZ_EP" && -n "$SSO_TOKEN_EP" && -n "$SSO_JWKS_EP" ) ]]; then
+    err "SSO_ENABLED=true but no endpoint source is set. Set SSO_OIDC_ISSUER_URL or SSO_OIDC_DISCOVERY_URL, or all of SSO_OIDC_AUTHORIZATION_ENDPOINT/SSO_OIDC_TOKEN_ENDPOINT/SSO_OIDC_JWKS_URI."
+  fi
+  # First-user lockout: a disabled JIT policy rejects every unknown user, so
+  # with no ADMIN_EMAILS floor and (by definition, at first boot) no
+  # pre-provisioned user, nobody can complete a first SSO login.
+  if [[ "${SSO_JIT:-disabled}" == "disabled" && -z "$ADMIN_EMAILS_VAL" ]]; then
+    warn "SSO_ENABLED=true with SSO_JIT_POLICY=disabled (the default) and ADMIN_EMAILS empty. No SSO sign-in can create the first user; either set ADMIN_EMAILS so an admin can sign in with password first, or set SSO_JIT_POLICY=create_member."
+  fi
+  if [[ "$ERRORS" -eq 0 ]]; then
+    ok "SSO OIDC config is complete."
+  fi
+fi
+
+# --- 6. GitHub sign-in (OAuth) partial config ---------------------------------
+
+GITHUB_OAUTH_ID="$(get GITHUB_OAUTH_CLIENT_ID)"
+GITHUB_OAUTH_SECRET="$(get GITHUB_OAUTH_CLIENT_SECRET)"
+if [[ -n "$GITHUB_OAUTH_ID" && -z "$GITHUB_OAUTH_SECRET" ]]; then
+  warn "GITHUB_OAUTH_CLIENT_ID is set but GITHUB_OAUTH_CLIENT_SECRET is empty. GitHub sign-in stays unavailable until both are set."
+elif [[ -z "$GITHUB_OAUTH_ID" && -n "$GITHUB_OAUTH_SECRET" ]]; then
+  warn "GITHUB_OAUTH_CLIENT_SECRET is set but GITHUB_OAUTH_CLIENT_ID is empty. GitHub sign-in stays unavailable until both are set."
+elif [[ -n "$GITHUB_OAUTH_ID" && -n "$GITHUB_OAUTH_SECRET" ]]; then
+  ok "GitHub OAuth sign-in config is a complete pair."
+fi
+
+# --- 7. GitHub App (cloud repo access) partial config -------------------------
+#
+# Distinct credential set from GitHub OAuth sign-in above. Not required for
+# the base install or for cloud workspaces themselves (E2B is what gates
+# workspace creation); flagged here only so a half-entered App config does not
+# silently fail to authorize repos later.
+
+GITHUB_APP_ID_VAL="$(get GITHUB_APP_ID)"
+if [[ -n "$GITHUB_APP_ID_VAL" ]]; then
+  GITHUB_APP_CLIENT_ID_VAL="$(get GITHUB_APP_CLIENT_ID)"
+  GITHUB_APP_CLIENT_SECRET_VAL="$(get GITHUB_APP_CLIENT_SECRET)"
+  GITHUB_APP_WEBHOOK_SECRET_VAL="$(get GITHUB_APP_WEBHOOK_SECRET)"
+  GITHUB_APP_KEY_INLINE="$(get GITHUB_APP_PRIVATE_KEY)"
+  GITHUB_APP_KEY_PATH="$(get GITHUB_APP_PRIVATE_KEY_PATH)"
+  if [[ -z "$GITHUB_APP_CLIENT_ID_VAL" || -z "$GITHUB_APP_CLIENT_SECRET_VAL" || -z "$GITHUB_APP_WEBHOOK_SECRET_VAL" ]]; then
+    warn "GITHUB_APP_ID is set but one of GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET / GITHUB_APP_WEBHOOK_SECRET is empty. Set all of them together to use the GitHub App."
+  fi
+  if [[ -z "$GITHUB_APP_KEY_INLINE" && -z "$GITHUB_APP_KEY_PATH" ]]; then
+    warn "GITHUB_APP_ID is set but neither GITHUB_APP_PRIVATE_KEY nor GITHUB_APP_PRIVATE_KEY_PATH is set. The App needs its private key to authenticate."
+  elif [[ -n "$GITHUB_APP_KEY_INLINE" && -n "$GITHUB_APP_KEY_PATH" ]]; then
+    warn "Both GITHUB_APP_PRIVATE_KEY and GITHUB_APP_PRIVATE_KEY_PATH are set; only one form is needed (inline takes precedence)."
+  fi
+fi
+
+# --- 8. Runtime binaries for cloud workspaces --------------------------------
 #
 # install-runtime.sh fails when a CLOUD_*_SOURCE_BINARY_PATH points at a missing
 # file and no RUNTIME_BINARY_URL is set to fetch it. Surface that here rather
@@ -140,7 +238,7 @@ for var in CLOUD_RUNTIME_SOURCE_BINARY_PATH CLOUD_WORKER_SOURCE_BINARY_PATH CLOU
   fi
 done
 
-# --- 5. Unknown / likely-typo keys -------------------------------------------
+# --- 9. Unknown / likely-typo keys -------------------------------------------
 #
 # Compare the operator's env keys against the shipped example schema plus the
 # small set of generated/managed keys the scripts add. An unknown key is
@@ -152,31 +250,26 @@ trap 'rm -f "$known_keys_file"' EXIT
   if [[ -f "$EXAMPLE_ENV_FILE" ]]; then
     grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$EXAMPLE_ENV_FILE" | sed 's/=$//'
   fi
-  # Keys the deploy scripts / AWS stack manage that are not in the example.
+  # Keys the deploy scripts / AWS stack manage, or advanced overrides
+  # documented in env-secrets-matrix.md, that are not in the shipped example.
   cat <<'MANAGED'
 DATABASE_URL
 API_BASE_URL
 PROLIFERATE_USE_SSLIP_FALLBACK
-E2B_TEMPLATE_NAME
-GITHUB_APP_ID
-GITHUB_APP_SLUG
-GITHUB_APP_CLIENT_ID
-GITHUB_APP_CLIENT_SECRET
-GITHUB_APP_WEBHOOK_SECRET
-GITHUB_APP_PRIVATE_KEY
-GITHUB_APP_PRIVATE_KEY_PATH
-RESEND_API_KEY
-RESEND_FROM_EMAIL
-SSO_ENABLED
-SSO_OIDC_ISSUER_URL
-SSO_OIDC_CLIENT_ID
-SSO_OIDC_CLIENT_SECRET
-SSO_JIT_POLICY
-SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS
 LITELLM_POSTGRES_DB
 LITELLM_POSTGRES_USER
 PROLIFERATE_LITELLM_IMAGE
 PROLIFERATE_LITELLM_IMAGE_TAG
+SSO_OIDC_AUTHORIZATION_ENDPOINT
+SSO_OIDC_TOKEN_ENDPOINT
+SSO_OIDC_JWKS_URI
+SSO_OIDC_USERINFO_ENDPOINT
+SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
+SSO_OIDC_CALLBACK_BASE_URL
+SSO_PROTOCOL
+SSO_DISPLAY_NAME
+SSO_LOGIN_POLICY
+SSO_OIDC_SCOPES
 MANAGED
 } | sort -u >"$known_keys_file"
 
@@ -187,7 +280,7 @@ while IFS= read -r key; do
   fi
 done < <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" | sed 's/=$//' | sort -u)
 
-# --- 6. Duplicate keys -------------------------------------------------------
+# --- 10. Duplicate keys -------------------------------------------------------
 
 dupes="$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE" | sed 's/=$//' | sort | uniq -d || true)"
 if [[ -n "$dupes" ]]; then
