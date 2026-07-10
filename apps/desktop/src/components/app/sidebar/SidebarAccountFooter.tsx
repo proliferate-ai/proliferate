@@ -32,7 +32,6 @@ import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
 import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
-import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
@@ -49,6 +48,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
+import { SidebarAppVersionRow } from "./SidebarAppVersionRow";
 import { ConsumptionCard } from "./SidebarConsumptionCard";
 
 const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
@@ -359,7 +359,7 @@ export function SidebarAccountFooter() {
                 />
               </div>
 
-              <AppVersionRow
+              <SidebarAppVersionRow
                 connectedServerName={
                   capabilities.isSelfManaged ? capabilities.serverDisplayName : null
                 }
@@ -389,35 +389,6 @@ export function SidebarAccountFooter() {
         target={switchTarget}
         onClose={() => setSwitchTarget(null)}
       />
-    </div>
-  );
-}
-
-/**
- * Popover footer: `Proliferate v{x}`, plus a persistent "Connected to {server}"
- * line when the desktop is pointed at a self-managed server. This is the one
- * always-present place a user can tell which server they are on (the app is
- * otherwise identical across Cloud and self-hosted). Hosted product shows only
- * the version, exactly as before.
- */
-function AppVersionRow({
-  connectedServerName,
-}: {
-  connectedServerName?: string | null;
-}) {
-  const { data: appVersion } = useAppVersion();
-
-  return (
-    <div className="mt-1 border-t border-border px-2.5 pb-1 pt-2">
-      <div className="truncate text-ui-sm text-faint">{`Proliferate v${appVersion ?? "…"}`}</div>
-      {connectedServerName ? (
-        <div
-          className="truncate text-ui-sm text-faint"
-          title={connectedServerName}
-        >
-          {`Connected to ${connectedServerName}`}
-        </div>
-      ) : null}
     </div>
   );
 }
