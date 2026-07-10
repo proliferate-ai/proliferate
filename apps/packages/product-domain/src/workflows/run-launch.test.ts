@@ -4,15 +4,20 @@ import {
   annotateIntegrationReadiness,
   buildStartRunBody,
   deriveLastUsedTarget,
+  isBindableSessionCandidate,
   isExistingSessionChoice,
   latestRunMsByWorkflow,
   orderRecommendedWorkflows,
+  readinessChipLabel,
   recallTarget,
   rememberTarget,
+  resolveChatOriginTarget,
+  withCurrentSessionCandidate,
   type LastUsedTargetMemory,
   type RecommendedWorkflowInput,
   type WorkflowRunRecency,
   type WorkflowRunTargetRecord,
+  type WorkflowSessionCandidateInput,
 } from "./run-launch";
 
 describe("buildStartRunBody (R2/R3 launch payload)", () => {
@@ -173,5 +178,91 @@ describe("annotateIntegrationReadiness", () => {
       ready: true,
       missing: [],
     });
+  });
+});
+
+describe("readinessChipLabel (strip readiness chip presentation)", () => {
+  it("is null when ready, and a quiet label when not", () => {
+    expect(readinessChipLabel({ ready: true, missing: [] })).toBeNull();
+    expect(readinessChipLabel({ ready: false, missing: ["slack"] })).toBe("Needs setup");
+  });
+});
+
+describe("resolveChatOriginTarget (composer door target derivation)", () => {
+  it("the chat's own workspace wins over a remembered last-used target", () => {
+    const chatOrigin = { targetMode: "local" as const, workspaceId: "ws_chat" };
+    const lastUsed = { targetMode: "personal_cloud" as const, workspaceId: "ws_cloud_old" };
+    expect(resolveChatOriginTarget(chatOrigin, lastUsed)).toEqual(chatOrigin);
+  });
+
+  it("falls back to last-used when there is no chat origin (workflows-tab/new-chat doors)", () => {
+    const lastUsed = { targetMode: "personal_cloud" as const, workspaceId: "ws_cloud_old" };
+    expect(resolveChatOriginTarget(null, lastUsed)).toEqual(lastUsed);
+  });
+
+  it("is null when neither is available (first run ever, no chat origin)", () => {
+    expect(resolveChatOriginTarget(null, null)).toBeNull();
+  });
+});
+
+describe("withCurrentSessionCandidate (current-session-candidate inclusion)", () => {
+  const others: WorkflowSessionCandidateInput[] = [
+    { id: "sess_other", title: "Fix flaky test", harness: "claude", workspaceId: "ws_1" },
+  ];
+
+  it("prepends the current session ahead of other candidates", () => {
+    const merged = withCurrentSessionCandidate(others, {
+      sessionId: "sess_current",
+      title: "This session",
+      harness: "claude",
+      workspaceId: "ws_1",
+    });
+    expect(merged.map((c) => c.id)).toEqual(["sess_current", "sess_other"]);
+  });
+
+  it("de-dupes when the current session is already present, keeping it first", () => {
+    const withDuplicate: WorkflowSessionCandidateInput[] = [
+      { id: "sess_current", title: "Stale title", harness: "claude", workspaceId: "ws_1" },
+      ...others,
+    ];
+    const merged = withCurrentSessionCandidate(withDuplicate, {
+      sessionId: "sess_current",
+      title: "This session",
+      harness: "claude",
+      workspaceId: "ws_1",
+    });
+    expect(merged).toHaveLength(2);
+    expect(merged[0]).toEqual({
+      id: "sess_current",
+      title: "This session",
+      harness: "claude",
+      workspaceId: "ws_1",
+    });
+  });
+
+  it("returns candidates unchanged when there is no chat origin", () => {
+    expect(withCurrentSessionCandidate(others, null)).toEqual(others);
+  });
+});
+
+describe("isBindableSessionCandidate (candidate filtering rule, B8/L29)", () => {
+  const slot = { harness: "claude", workspaceKey: "ws_1" };
+
+  it("accepts a same-harness candidate on the target workspace", () => {
+    expect(isBindableSessionCandidate({ harness: "claude", workspaceId: "ws_1" }, slot)).toBe(true);
+  });
+
+  it("rejects a harness mismatch", () => {
+    expect(isBindableSessionCandidate({ harness: "codex", workspaceId: "ws_1" }, slot)).toBe(false);
+  });
+
+  it("rejects a session on a different workspace", () => {
+    expect(isBindableSessionCandidate({ harness: "claude", workspaceId: "ws_2" }, slot)).toBe(false);
+  });
+
+  it("rejects everything when the slot has no resolved target workspace", () => {
+    expect(
+      isBindableSessionCandidate({ harness: "claude", workspaceId: "ws_1" }, { harness: "claude", workspaceKey: null }),
+    ).toBe(false);
   });
 });

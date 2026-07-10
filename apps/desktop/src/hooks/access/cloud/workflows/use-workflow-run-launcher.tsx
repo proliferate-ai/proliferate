@@ -4,13 +4,17 @@ import type { WorkflowDefinition } from "@proliferate/product-domain/workflows/d
 import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
 import {
   deriveLastUsedTarget,
+  resolveChatOriginTarget,
+  withCurrentSessionCandidate,
   type WorkflowRunTargetRecord,
+  type WorkflowSessionCandidateInput,
 } from "@proliferate/product-domain/workflows/run-launch";
 import { ProliferateClientError } from "@/lib/access/cloud/client";
 import { useWorkflowRuns } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useLaunchWorkflowRun } from "@/hooks/access/cloud/workflows/use-launch-workflow-run";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useWorkflowRunPillStore } from "@/stores/workflows/workflow-run-pill-store";
 import type { WorkflowResponse } from "@/hooks/access/cloud/workflows/types";
 import {
@@ -22,14 +26,34 @@ import {
 // Mirrors gateway_grants.py's L22 fail-fast code (see WorkflowsHomeScreen).
 const FUNCTION_PROVIDER_NOT_READY_CODE = "workflow_function_provider_not_ready";
 
+/** The composer door's context (spec run-from-chat R1 door 1, gaps ①/②):
+ * the chat the "run a workflow" affordance was opened from. `workspaceId` is
+ * in the same id space as `localWorkspaceOptions`/`cloudWorkspaceOptions`
+ * (raw local id, or raw cloud id for `personal_cloud`). */
+export interface WorkflowChatOrigin {
+  sessionId: string;
+  title: string | null;
+  harness: string;
+  targetMode: WorkflowTargetMode;
+  workspaceId: string;
+}
+
 interface LauncherState {
   workflow: WorkflowResponse;
   definition: WorkflowDefinition;
+  chatOrigin: WorkflowChatOrigin | null;
 }
 
 export interface WorkflowRunLauncher {
-  /** Open the launch modal for a workflow (any of the R1 doors). */
-  open: (workflow: WorkflowResponse, definition: WorkflowDefinition) => void;
+  /** Open the launch modal for a workflow (any of the R1 doors). `chatOrigin`
+   * is set only by the composer's lightning-bolt door — it pins the target
+   * to the chat's own workspace (no picker) and offers the current session
+   * as a bind candidate. */
+  open: (
+    workflow: WorkflowResponse,
+    definition: WorkflowDefinition,
+    chatOrigin?: WorkflowChatOrigin,
+  ) => void;
   /** The modal element — render it once wherever the launcher is used. */
   modal: ReactNode;
   isPending: boolean;
@@ -84,10 +108,34 @@ export function useWorkflowRunLauncher(): WorkflowRunLauncher {
     [runs],
   );
 
-  const open = (workflow: WorkflowResponse, definition: WorkflowDefinition) => {
+  // Gap② — bind-existing candidates: the sessions read the app already has
+  // (the client session directory — same source `useSupportReportSnapshot`
+  // and the workspace tab strip use for "live sessions on this workspace").
+  // Not-held filtering is out of scope here: no client-side read of a
+  // session's held-by-run status exists yet (server enforces it at submit,
+  // B8/L29); an actually-held pick surfaces as a launch error instead.
+  const directoryEntries = useSessionDirectoryStore((storeState) => storeState.entriesById);
+  const liveSessionCandidates = useMemo<WorkflowSessionCandidateInput[]>(
+    () =>
+      Object.values(directoryEntries)
+        .filter((entry) => entry.status !== "closed")
+        .map((entry) => ({
+          id: entry.sessionId,
+          title: entry.title ?? "Untitled session",
+          harness: entry.agentKind,
+          workspaceId: entry.workspaceId,
+        })),
+    [directoryEntries],
+  );
+
+  const open = (
+    workflow: WorkflowResponse,
+    definition: WorkflowDefinition,
+    chatOrigin?: WorkflowChatOrigin,
+  ) => {
     setError(null);
     setErrorCode(null);
-    setState({ workflow, definition });
+    setState({ workflow, definition, chatOrigin: chatOrigin ?? null });
   };
 
   const runNow = (workflow: WorkflowResponse, submit: WorkflowRunSubmit) => {
@@ -118,6 +166,33 @@ export function useWorkflowRunLauncher(): WorkflowRunLauncher {
   const modal = state
     ? (() => {
         const lastUsed = deriveLastUsedTarget(runTargetRecords, state.workflow.id);
+        const chatOrigin = state.chatOrigin;
+        // Gap① — chat-origin target always wins over R6 last-used (spec:
+        // "chat origin: implicit ... no picker row rendered").
+        const resolvedTarget = resolveChatOriginTarget(
+          chatOrigin ? { targetMode: chatOrigin.targetMode, workspaceId: chatOrigin.workspaceId } : null,
+          lastUsed,
+        );
+        const chatOriginLabel = chatOrigin
+          ? (chatOrigin.targetMode === "local"
+              ? localWorkspaceOptions.find((option) => option.id === chatOrigin.workspaceId)?.label
+              : cloudWorkspaceOptions.find((option) => option.id === chatOrigin.workspaceId)?.label)
+            ?? "this workspace"
+          : null;
+        // Gap② — the current session goes first among same-harness bind
+        // candidates (spec: "current session appears as a binding candidate
+        // for the matching agent slot").
+        const sessionCandidates = withCurrentSessionCandidate(
+          liveSessionCandidates,
+          chatOrigin
+            ? {
+                sessionId: chatOrigin.sessionId,
+                title: chatOrigin.title ?? "This session",
+                harness: chatOrigin.harness,
+                workspaceId: chatOrigin.workspaceId,
+              }
+            : null,
+        );
         return (
           <WorkflowRunArgsModal
             open
@@ -128,15 +203,17 @@ export function useWorkflowRunLauncher(): WorkflowRunLauncher {
               harness: agent.harness,
               model: agent.model,
             }))}
+            sessionCandidates={sessionCandidates}
             localWorkspaces={localWorkspaceOptions}
             cloudWorkspaces={cloudWorkspaceOptions}
-            defaultTargetMode={lastUsed?.targetMode ?? null}
+            defaultTargetMode={resolvedTarget?.targetMode ?? null}
             defaultLocalWorkspaceId={
-              lastUsed?.targetMode === "local" ? lastUsed.workspaceId : null
+              resolvedTarget?.targetMode === "local" ? resolvedTarget.workspaceId : null
             }
             defaultCloudWorkspaceId={
-              lastUsed?.targetMode === "personal_cloud" ? lastUsed.workspaceId : null
+              resolvedTarget?.targetMode === "personal_cloud" ? resolvedTarget.workspaceId : null
             }
+            chatOriginLabel={chatOriginLabel}
             hasIntegrations={state.definition.integrations.length > 0}
             busy={launchMutation.isPending}
             error={error}

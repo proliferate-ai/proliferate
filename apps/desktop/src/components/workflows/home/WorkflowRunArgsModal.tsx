@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
 import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
 import {
   FRESH_SESSION_CHOICE,
+  isBindableSessionCandidate,
   isExistingSessionChoice,
   type SlotSessionBinding,
 } from "@proliferate/product-domain/workflows/run-launch";
+import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
@@ -37,6 +39,11 @@ export interface WorkflowRunSessionCandidate {
   id: string;
   title: string;
   harness: string;
+  /** The workspace the session lives on (same id space as the modal's own
+   * `localWorkspaceId`/cloud-synthetic ids) — a candidate is only offered
+   * for the slot's *currently selected* run target (B8/L29: "session
+   * belongs to the target workspace"). */
+  workspaceId?: string | null;
   /** e.g. "3m ago" — shown when the session is free. */
   lastActiveLabel?: string;
   /** Non-null → held by another run; not selectable. */
@@ -71,6 +78,12 @@ export interface WorkflowRunArgsModalProps {
    * cloud workspace when they still exist. */
   defaultTargetMode?: TargetMode | null;
   defaultCloudWorkspaceId?: string | null;
+  /** Chat-origin launches (R1 door 1): the target is implicit — the
+   * workspace the composer lives in — so no picker row is rendered (spec
+   * run-from-chat). Non-null shows a quiet read-only line instead, using
+   * this as the workspace label. `defaultTargetMode`/`defaultLocalWorkspaceId`/
+   * `defaultCloudWorkspaceId` still carry the actual target values. */
+  chatOriginLabel?: string | null;
   /** Whether this workflow declares a non-empty `integrations` grant (spec 5.3,
    * E3): drives the local-target warning below — cloud-only in v1, never a
    * block. */
@@ -158,6 +171,7 @@ export function WorkflowRunArgsModal({
   defaultLocalWorkspaceId,
   defaultTargetMode,
   defaultCloudWorkspaceId,
+  chatOriginLabel = null,
   hasIntegrations = false,
   busy = false,
   error = null,
@@ -174,23 +188,6 @@ export function WorkflowRunArgsModal({
   }, [args]);
 
   const cloudAvailable = cloudWorkspaces.length > 0;
-
-  // Same-harness, run-agnostic candidate list per slot (spec run-from-chat).
-  const candidatesBySlot = useMemo(() => {
-    const map = new Map<string, WorkflowRunSessionCandidate[]>();
-    for (const slot of slots ?? []) {
-      map.set(
-        slot.slot,
-        (sessionCandidates ?? []).filter((candidate) => candidate.harness === slot.harness),
-      );
-    }
-    return map;
-  }, [slots, sessionCandidates]);
-
-  const bindableSlots = useMemo(
-    () => (slots ?? []).filter((slot) => (candidatesBySlot.get(slot.slot)?.length ?? 0) > 0),
-    [slots, candidatesBySlot],
-  );
 
   const [values, setValues] = useState<Record<string, ArgValue>>(initial);
   const [bindings, setBindings] = useState<Record<string, string>>({});
@@ -211,6 +208,55 @@ export function WorkflowRunArgsModal({
         ? defaultCloudWorkspaceId
         : cloudWorkspaces[0]?.id) ?? "",
   );
+
+  // The run's resolved target, in the same id space session candidates use
+  // (gap② — `workspaceId` on a candidate is the raw local id, or the cloud
+  // synthetic id; see WorkflowSessionCandidateInput/useWorkflowRunLauncher).
+  const activeWorkspaceKey =
+    targetMode === "local"
+      ? localWorkspaceId || null
+      : cloudWorkspaceId
+        ? cloudWorkspaceSyntheticId(cloudWorkspaceId)
+        : null;
+
+  // Same-harness, same-workspace bind candidates per slot (spec run-from-chat;
+  // B8/L29 eligibility mirrored client-side via isBindableSessionCandidate).
+  const candidatesBySlot = useMemo(() => {
+    const map = new Map<string, WorkflowRunSessionCandidate[]>();
+    for (const slot of slots ?? []) {
+      map.set(
+        slot.slot,
+        (sessionCandidates ?? []).filter((candidate) =>
+          isBindableSessionCandidate(candidate, { harness: slot.harness, workspaceKey: activeWorkspaceKey }),
+        ),
+      );
+    }
+    return map;
+  }, [slots, sessionCandidates, activeWorkspaceKey]);
+
+  const bindableSlots = useMemo(
+    () => (slots ?? []).filter((slot) => (candidatesBySlot.get(slot.slot)?.length ?? 0) > 0),
+    [slots, candidatesBySlot],
+  );
+
+  // A binding made against one target workspace doesn't carry over when the
+  // run location/workspace changes — drop any selection whose candidate fell
+  // out of the (now different) eligible list rather than submit a stale id.
+  useEffect(() => {
+    setBindings((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      for (const [slot, sessionId] of Object.entries(prev)) {
+        const stillEligible = candidatesBySlot.get(slot)?.some((candidate) => candidate.id === sessionId);
+        if (stillEligible) {
+          next[slot] = sessionId;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [candidatesBySlot]);
 
   const setValue = (name: string, value: ArgValue) => {
     setValues((prev) => ({ ...prev, [name]: value }));
@@ -343,46 +389,57 @@ export function WorkflowRunArgsModal({
           </div>
         ) : null}
 
-        <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
-          <Label>Run location</Label>
-          <WorkflowSelect
-            ariaLabel="Run location"
-            value={targetMode}
-            options={[
-              { value: "local", label: "On this Mac" },
-              ...(cloudAvailable ? [{ value: "personal_cloud", label: "Cloud" }] : []),
-            ]}
-            onChange={(value) => setTargetMode(value as TargetMode)}
-          />
-        </div>
-
-        {hasIntegrations && targetMode === "local" ? (
-          <p className="flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
-            <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            This workflow grants integrations, which require a cloud run. Running it on this
-            Mac will fail with an explicit error at the step that needs them.
+        {chatOriginLabel !== null ? (
+          // Chat origin (R1 door 1): the target is implicit — the workspace
+          // the composer lives in — so no picker row is rendered (spec
+          // run-from-chat). Read-only line only.
+          <p className="border-t border-border/60 pt-3 text-ui-sm text-faint">
+            Runs in <span className="text-foreground">{chatOriginLabel}</span> · this chat
           </p>
-        ) : null}
+        ) : (
+          <>
+            <div className="flex flex-col gap-1.5 border-t border-border/60 pt-3">
+              <Label>Run location</Label>
+              <WorkflowSelect
+                ariaLabel="Run location"
+                value={targetMode}
+                options={[
+                  { value: "local", label: "On this Mac" },
+                  ...(cloudAvailable ? [{ value: "personal_cloud", label: "Cloud" }] : []),
+                ]}
+                onChange={(value) => setTargetMode(value as TargetMode)}
+              />
+            </div>
 
-        <div className="flex flex-col gap-1.5">
-          <Label>Workspace</Label>
-          {targetOptions.length > 0 ? (
-            <WorkflowSelect
-              ariaLabel="Workspace"
-              value={targetMode === "local" ? localWorkspaceId : cloudWorkspaceId}
-              options={targetOptions.map((option) => ({ value: option.id, label: option.label }))}
-              onChange={(value) =>
-                targetMode === "local" ? setLocalWorkspaceId(value) : setCloudWorkspaceId(value)
-              }
-            />
-          ) : (
-            <p className="text-ui-sm text-faint">
-              {targetMode === "local"
-                ? "No local workspaces yet — open one first."
-                : "No cloud workspaces yet."}
-            </p>
-          )}
-        </div>
+            {hasIntegrations && targetMode === "local" ? (
+              <p className="flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-1.5 text-xs text-warning">
+                <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                This workflow grants integrations, which require a cloud run. Running it on this
+                Mac will fail with an explicit error at the step that needs them.
+              </p>
+            ) : null}
+
+            <div className="flex flex-col gap-1.5">
+              <Label>Workspace</Label>
+              {targetOptions.length > 0 ? (
+                <WorkflowSelect
+                  ariaLabel="Workspace"
+                  value={targetMode === "local" ? localWorkspaceId : cloudWorkspaceId}
+                  options={targetOptions.map((option) => ({ value: option.id, label: option.label }))}
+                  onChange={(value) =>
+                    targetMode === "local" ? setLocalWorkspaceId(value) : setCloudWorkspaceId(value)
+                  }
+                />
+              ) : (
+                <p className="text-ui-sm text-faint">
+                  {targetMode === "local"
+                    ? "No local workspaces yet — open one first."
+                    : "No cloud workspaces yet."}
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </ModalShell>
   );

@@ -5,15 +5,20 @@ import {
 } from "@proliferate/product-domain/workflows/definition";
 import { workflowStepStrip } from "@proliferate/product-domain/workflows/presentation";
 import {
+  annotateIntegrationReadiness,
   orderRecommendedWorkflows,
+  readinessChipLabel,
   type RecommendedWorkflowView,
 } from "@proliferate/product-domain/workflows/run-launch";
 import { WorkflowStepGlyphStrip } from "@proliferate/product-ui/workflows/WorkflowStepGlyphStrip";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Play } from "@proliferate/ui/icons";
 import { useWorkflows, useWorkflowRuns, useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowRunLauncher } from "@/hooks/access/cloud/workflows/use-workflow-run-launcher";
+import { useCloudIntegrations } from "@/hooks/cloud/facade/use-cloud-integrations";
+import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import type { WorkflowResponse } from "@/hooks/access/cloud/workflows/types";
 
 const DEFAULT_STRIP_LIMIT = 4;
@@ -33,9 +38,24 @@ export function WorkflowRecommendedStrip({ limit = DEFAULT_STRIP_LIMIT }: Workfl
   const workflowsQuery = useWorkflows();
   const runsQuery = useWorkflowRuns(null);
   const launcher = useWorkflowRunLauncher();
+  const { activeOrganizationId } = useActiveOrganization();
+  const { integrations: cloudIntegrations } = useCloudIntegrations(activeOrganizationId);
 
   const workflows = workflowsQuery.data?.workflows ?? [];
   const runs = runsQuery.data?.runs ?? [];
+
+  // Readiness chip (spec 5.3 honesty rule): a namespace only counts as
+  // connected when there's a ready account behind it — same bar as the
+  // editor's "Connect X" gating (WorkflowEditorScreen).
+  const connectedProviders = useMemo(
+    () =>
+      new Set(
+        cloudIntegrations
+          .filter((integration) => integration.accountId !== null && integration.health === "ready")
+          .map((integration) => integration.namespace),
+      ),
+    [cloudIntegrations],
+  );
 
   const byId = useMemo(() => {
     const map = new Map<string, WorkflowResponse>();
@@ -76,6 +96,7 @@ export function WorkflowRecommendedStrip({ limit = DEFAULT_STRIP_LIMIT }: Workfl
             <WorkflowRecommendedCard
               key={view.id}
               workflow={workflow}
+              connectedProviders={connectedProviders}
               onRun={launcher.open}
             />
           );
@@ -90,9 +111,11 @@ export function WorkflowRecommendedStrip({ limit = DEFAULT_STRIP_LIMIT }: Workfl
  * strip + provider icons, and opens the launch modal on Run. */
 function WorkflowRecommendedCard({
   workflow,
+  connectedProviders,
   onRun,
 }: {
   workflow: WorkflowResponse;
+  connectedProviders: ReadonlySet<string>;
   onRun: (workflow: WorkflowResponse, definition: WorkflowDefinition) => void;
 }) {
   const detail = useWorkflowDetail(workflow.id);
@@ -110,12 +133,25 @@ function WorkflowRecommendedCard({
 
   const glyphs = useMemo(() => (definition ? workflowStepStrip(definition) : []), [definition]);
 
+  const readinessLabel = useMemo(() => {
+    if (!definition) {
+      return null;
+    }
+    const readiness = annotateIntegrationReadiness(definition.integrations, connectedProviders);
+    return readinessChipLabel(readiness);
+  }, [definition, connectedProviders]);
+
   return (
     <div className="flex flex-col rounded-xl border border-border bg-background p-3.5 transition-colors hover:border-border-heavy">
       <div className="flex items-center gap-1.5">
         {providers.map((provider) => (
           <ProviderIcon key={provider} kind={provider} className="size-3.5 text-muted-foreground" />
         ))}
+        {readinessLabel ? (
+          <Badge tone="warning" className="ml-auto gap-1 text-[11px]">
+            {readinessLabel}
+          </Badge>
+        ) : null}
       </div>
       <h4 className="mt-2 truncate text-ui-sm font-medium text-foreground">{workflow.name}</h4>
       {workflow.description ? (

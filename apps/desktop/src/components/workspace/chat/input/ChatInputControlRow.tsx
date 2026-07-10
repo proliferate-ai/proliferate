@@ -2,6 +2,7 @@ import type { ComponentProps } from "react";
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerAddActionPopover } from "./ComposerAddActionPopover";
 import { ComposerModelConfigSelector } from "./ComposerModelConfigSelector";
+import { ComposerWorkflowRunButton } from "./ComposerWorkflowRunButton";
 import type { ModelSelector } from "./ModelSelector";
 import type { SessionConfigControls } from "./SessionConfigControls";
 import { ComposerIntegrationReauthChip } from "./ComposerIntegrationReauthChip";
@@ -118,6 +119,13 @@ export function ChatInputControlRow({
               controls={controlGroups.modelConfigControls}
             />
           </div>
+          {!isEditingQueuedPrompt && (
+            <ComposerWorkflowRunButton
+              activeSessionId={activeSessionId}
+              harness={agentKind}
+              workspaceUiKey={workspaceUiKey}
+            />
+          )}
         </>
       )}
       action={(

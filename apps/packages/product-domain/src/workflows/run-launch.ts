@@ -14,6 +14,12 @@
  *   tail, with per-workflow integration-readiness annotation (honesty rule).
  * - R6 last-used target: a per-workflow memory record round-trip plus a
  *   `deriveLastUsedTarget` read over run history for the no-memory fallback.
+ * - Composer door (R1's third entry point): `resolveChatOriginTarget` (the
+ *   chat's own workspace wins over last-used) + `withCurrentSessionCandidate`
+ *   (the current session is offered first, same-harness) +
+ *   `isBindableSessionCandidate` (B8/L29 eligibility: harness match AND same
+ *   target workspace — mirrors the server's StartRun validation client-side
+ *   so the picker never offers a session the server would reject).
  */
 
 import type { WorkflowTargetMode } from "./model";
@@ -268,4 +274,106 @@ export function orderRecommendedWorkflows(
 
   const ordered = decorated.map((entry) => entry.view);
   return options.limit !== undefined ? ordered.slice(0, options.limit) : ordered;
+}
+
+/**
+ * Presentation mapping for the strip's readiness chip (discovery mock's quiet
+ * "Needs setup" badge, tone = status only, no left-border/edge treatment).
+ * `null` when the workflow is ready — the chip only appears on cards with a
+ * missing integration (honesty rule).
+ */
+export function readinessChipLabel(readiness: IntegrationReadiness): string | null {
+  return readiness.ready ? null : "Needs setup";
+}
+
+// --- Composer door: chat-origin target + current-session candidate ------------
+
+/** One bindable session, in the same shape a picker row renders (id/title/
+ * harness) plus the workspace it lives on — the key `isBindableSessionCandidate`
+ * matches against the run's target (B8/L29: "session belongs to the target
+ * workspace"). */
+export interface WorkflowSessionCandidateInput {
+  id: string;
+  title: string;
+  harness: string;
+  /** The workspace the session lives on, in whatever id space the caller's
+   * session list uses — matched against the slot's resolved target verbatim
+   * (no normalization here; callers keep both sides in one id space). */
+  workspaceId?: string | null;
+  lastActiveLabel?: string;
+  heldByLabel?: string | null;
+}
+
+/** The chat composer's own session (spec: "the current session appears as a
+ * binding candidate for the matching agent slot"). */
+export interface ChatOriginSession {
+  sessionId: string;
+  title: string;
+  harness: string;
+  workspaceId: string | null;
+}
+
+/**
+ * Chat-origin launches list the current session first among same-harness
+ * bind candidates (R1 door 3). Pure merge so the composer door and any other
+ * caller agree on ordering/dedup without forking the candidate list — a
+ * `current` session already present in `candidates` is replaced (its slot
+ * moves to the front) rather than duplicated.
+ */
+export function withCurrentSessionCandidate(
+  candidates: readonly WorkflowSessionCandidateInput[],
+  current: ChatOriginSession | null,
+): WorkflowSessionCandidateInput[] {
+  if (!current) {
+    return [...candidates];
+  }
+  const currentCandidate: WorkflowSessionCandidateInput = {
+    id: current.sessionId,
+    title: current.title,
+    harness: current.harness,
+    workspaceId: current.workspaceId,
+  };
+  const rest = candidates.filter((candidate) => candidate.id !== current.sessionId);
+  return [currentCandidate, ...rest];
+}
+
+/**
+ * Chat-origin target always wins over the remembered last-used target: per
+ * spec, "chat origin: implicit — the workspace the composer lives in; no
+ * picker row rendered." `chatOrigin` is only non-null when the launch door
+ * is the in-composer lightning bolt (R1 door 1); every other door passes
+ * `null` and falls through to R6 last-used.
+ */
+export function resolveChatOriginTarget(
+  chatOrigin: LastUsedTarget | null,
+  lastUsed: LastUsedTarget | null,
+): LastUsedTarget | null {
+  return chatOrigin ?? lastUsed;
+}
+
+/** A slot's resolved bind target: the harness it requires plus the run's
+ * target workspace, in the same id space as candidates' `workspaceId`. */
+export interface BindableSlotContext {
+  harness: string;
+  workspaceKey: string | null;
+}
+
+/**
+ * Bind-existing eligibility (gap②, B8/L29 CONTRACT: "session belongs to the
+ * target workspace, harness matches the slot, session not already held").
+ * Mirrors the harness + workspace half of that rule client-side so the
+ * picker never offers a session StartRun would reject; held-state is
+ * enforced server-side only (no client read for it exists yet).
+ */
+export function isBindableSessionCandidate(
+  candidate: Pick<WorkflowSessionCandidateInput, "harness" | "workspaceId">,
+  slot: BindableSlotContext,
+): boolean {
+  if (candidate.harness !== slot.harness) {
+    return false;
+  }
+  if (slot.workspaceKey === null) {
+    return false;
+  }
+  return (candidate.workspaceId ?? null) === slot.workspaceKey;
 }
