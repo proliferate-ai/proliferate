@@ -29,8 +29,11 @@ vi.mock("@/hooks/workspaces/derived/use-selected-logical-workspace", () => ({
   }),
 }));
 
-vi.mock("@/lib/infra/proliferate-web", () => ({
-  getProliferateWebBaseUrl: () => "https://web.proliferate.com",
+vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+  useWebAppTarget: () => ({
+    available: true,
+    baseUrl: "https://web.proliferate.com",
+  }),
 }));
 
 vi.mock("@/stores/toast/toast-store", () => ({

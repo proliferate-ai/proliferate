@@ -29,6 +29,8 @@ import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { OrganizationAvatar } from "@/components/organizations/OrganizationAvatar";
 import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
+import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
+import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
 import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
@@ -38,7 +40,6 @@ import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {
   OrganizationInvitationRecord,
@@ -72,6 +73,8 @@ export function SidebarAccountFooter() {
     disabledReason: supportDisabledReason,
   } = useOpenSupportReportWindow({ source: "sidebar" });
   const showToast = useToastStore((state) => state.show);
+  const capabilities = useAppCapabilities();
+  const webApp = useWebAppTarget();
   const { data: billingPlan } = useCloudBilling();
   const { data: usageSummary } = useUsageSummary(undefined, authStatus === "authenticated");
   const {
@@ -94,7 +97,8 @@ export function SidebarAccountFooter() {
   const displayName = user?.display_name?.trim() || user?.email || "Account";
   const initials = displayName.trim().slice(0, 2).toUpperCase() || "PR";
   const organizationName = activeOrganization?.name ?? null;
-  const planLabel = billingPlan
+  // Vendor plan/credits only mean something where the server offers billing.
+  const planLabel = capabilities.billingEnabled && billingPlan
     ? (billingPlan.isPaidCloud ? "Pro" : "Free")
     : null;
 
@@ -120,7 +124,7 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
-      {usageSummary ? (
+      {capabilities.usageMeteringEnabled && usageSummary ? (
         <ConsumptionCard
           usageSummary={usageSummary}
           onTopUp={() => {
@@ -296,16 +300,18 @@ export function SidebarAccountFooter() {
                     close();
                   }}
                 />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Go to web"
-                  icon={<Globe className="size-4" />}
-                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
-                  onClick={() => {
-                    openExternalUrl(getProliferateWebBaseUrl());
-                    close();
-                  }}
-                />
+                {webApp.available && webApp.baseUrl ? (
+                  <PopoverMenuItem
+                    variant="sidebar"
+                    label="Go to web"
+                    icon={<Globe className="size-4" />}
+                    trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
+                    onClick={() => {
+                      openExternalUrl(webApp.baseUrl!);
+                      close();
+                    }}
+                  />
+                ) : null}
                 <PopoverMenuItem
                   variant="sidebar"
                   label="Send feedback"
@@ -353,7 +359,11 @@ export function SidebarAccountFooter() {
                 />
               </div>
 
-              <AppVersionRow />
+              <AppVersionRow
+                connectedServerName={
+                  capabilities.isSelfManaged ? capabilities.serverDisplayName : null
+                }
+              />
             </div>
           )}
         </PopoverButton>
@@ -384,15 +394,30 @@ export function SidebarAccountFooter() {
 }
 
 /**
- * Popover footer line: `Proliferate v{x}` only. Harness versions (and their
- * tooltip) were dropped by owner decision 2026-07-01.
+ * Popover footer: `Proliferate v{x}`, plus a persistent "Connected to {server}"
+ * line when the desktop is pointed at a self-managed server. This is the one
+ * always-present place a user can tell which server they are on (the app is
+ * otherwise identical across Cloud and self-hosted). Hosted product shows only
+ * the version, exactly as before.
  */
-function AppVersionRow() {
+function AppVersionRow({
+  connectedServerName,
+}: {
+  connectedServerName?: string | null;
+}) {
   const { data: appVersion } = useAppVersion();
 
   return (
     <div className="mt-1 border-t border-border px-2.5 pb-1 pt-2">
       <div className="truncate text-ui-sm text-faint">{`Proliferate v${appVersion ?? "…"}`}</div>
+      {connectedServerName ? (
+        <div
+          className="truncate text-ui-sm text-faint"
+          title={connectedServerName}
+        >
+          {`Connected to ${connectedServerName}`}
+        </div>
+      ) : null}
     </div>
   );
 }

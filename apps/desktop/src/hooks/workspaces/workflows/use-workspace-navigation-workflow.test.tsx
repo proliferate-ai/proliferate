@@ -75,6 +75,13 @@ vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
   }),
 }));
 
+vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+  useWebAppTarget: () => ({
+    available: true,
+    baseUrl: "https://web.proliferate.com",
+  }),
+}));
+
 vi.mock("@/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof toastMocks.show }) => unknown) =>
     selector({ show: toastMocks.show }),

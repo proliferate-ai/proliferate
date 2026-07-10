@@ -162,6 +162,13 @@ vi.mock("@/lib/infra/measurement/latency-flow", () => ({
   startLatencyFlow: vi.fn(() => "latency-flow-1"),
 }));
 
+vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+  useWebAppTarget: () => ({
+    available: true,
+    baseUrl: "https://web.proliferate.com",
+  }),
+}));
+
 function wrapper({ children }: { children: ReactNode }) {
   return <MemoryRouter initialEntries={["/"]}>{children}</MemoryRouter>;
 }

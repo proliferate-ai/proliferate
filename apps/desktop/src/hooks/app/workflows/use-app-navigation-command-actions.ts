@@ -2,8 +2,8 @@ import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
@@ -24,6 +24,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
   const { openExternal } = useTauriShellActions();
+  const webApp = useWebAppTarget();
   const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
 
   const openSettings = useCallback(() => {
@@ -39,12 +40,17 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const goWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
+  const webAppBaseUrl = webApp.baseUrl;
   const openWebApp = useCallback(() => {
+    if (!webAppBaseUrl) {
+      showToast("The web app is not available for this server.");
+      return;
+    }
     showToast("Opening web app...", "info");
-    void openExternal(getProliferateWebBaseUrl()).catch(() => {
+    void openExternal(webAppBaseUrl).catch(() => {
       showToast("Failed to open the web app.");
     });
-  }, [openExternal, showToast]);
+  }, [openExternal, showToast, webAppBaseUrl]);
   const {
     openBug: openSupport,
     disabledReason: supportDisabledReason,
@@ -69,7 +75,9 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     },
     openWebApp: {
       execute: openWebApp,
-      disabledReason: null,
+      disabledReason: webApp.available
+        ? null
+        : "The web app is not available for this server.",
     },
     openSupport: {
       execute: openSupport,
@@ -82,6 +90,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     openSupport,
     supportDisabledReason,
     openWebApp,
+    webApp.available,
     showKeyboardShortcuts,
   ]);
 }

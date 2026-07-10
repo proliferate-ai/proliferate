@@ -49,6 +49,11 @@ export const CONNECT_SERVER_LABELS = {
   cancel: "Cancel",
   trustDescription: (host: string) => `You're connecting to ${host}.`,
   serverVersionLabel: (version: string) => `Server version ${version}`,
+  // Shown when this desktop is older than the server's minimum supported
+  // version. Not a hard block — the server advertises the floor and the user
+  // is warned to update the desktop app.
+  minVersionWarning: (minVersion: string) =>
+    `This server needs desktop ${minVersion} or newer. Update the app if you hit problems.`,
   connect: "Connect",
   connecting: "Connecting…",
   useDifferentAddress: "Use a different address",

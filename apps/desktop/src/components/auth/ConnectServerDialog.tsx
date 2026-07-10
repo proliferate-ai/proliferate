@@ -31,6 +31,7 @@ export function ConnectServerDialog({ controller, context }: ConnectServerDialog
     close,
     submitUrl,
     confirmConnect,
+    versionWarning,
   } = controller;
 
   const open = step !== "closed";
@@ -118,6 +119,9 @@ export function ConnectServerDialog({ controller, context }: ConnectServerDialog
               {CONNECT_SERVER_LABELS.serverVersionLabel(pendingMeta.serverVersion)}
             </p>
           )}
+          {versionWarning ? (
+            <p className="text-xs text-warning">{versionWarning}</p>
+          ) : null}
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       )}

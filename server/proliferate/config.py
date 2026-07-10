@@ -236,6 +236,32 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     resend_from_email: str = "hello@proliferate.dev"
     frontend_base_url: str = ""
+
+    # Self-managed instance identity + operator support routing. Surfaced on the
+    # public /meta capability contract so the desktop renders a self-hosted
+    # server as itself (name/logo) and points users at the operator's own
+    # support destination instead of the vendor's. All optional: an empty value
+    # means "use the safe default" — for identity the desktop falls back to the
+    # connected server origin, and for support it offers no vendor address.
+    instance_name: str = Field(
+        default="",
+        validation_alias=AliasChoices("INSTANCE_NAME", "PROLIFERATE_INSTANCE_NAME"),
+    )
+    instance_logo_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("INSTANCE_LOGO_URL", "PROLIFERATE_INSTANCE_LOGO_URL"),
+    )
+    instance_support_email: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "INSTANCE_SUPPORT_EMAIL", "PROLIFERATE_INSTANCE_SUPPORT_EMAIL"
+        ),
+    )
+    instance_support_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("INSTANCE_SUPPORT_URL", "PROLIFERATE_INSTANCE_SUPPORT_URL"),
+    )
+
     anonymous_telemetry_endpoint: str = Field(
         default="https://app.proliferate.com/api/v1/telemetry/anonymous",
         validation_alias=AliasChoices(

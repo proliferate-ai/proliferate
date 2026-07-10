@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { webWorkspaceDeepLink } from "@proliferate/cloud-sdk";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceSelection } from "@/hooks/workspaces/workflows/selection/use-workspace-selection";
 import { useLogicalWorkspaces } from "@/hooks/workspaces/derived/use-logical-workspaces";
 import { logicalWorkspaceMatchesId } from "@/lib/domain/workspaces/cloud/logical-workspace-lookup";
@@ -9,7 +10,6 @@ import {
   failLatencyFlow,
   startLatencyFlow,
 } from "@/lib/infra/measurement/latency-flow";
-import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { resetWorkspaceEditorState } from "@/stores/editor/workspace-editor-state";
 import { markWorkspaceViewed } from "@/stores/preferences/workspace-ui-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
@@ -29,6 +29,7 @@ export function useWorkspaceNavigationWorkflow() {
   const { selectWorkspace } = useWorkspaceSelection();
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const { openExternal } = useTauriShellActions();
+  const webApp = useWebAppTarget();
   const showToast = useToastStore((state) => state.show);
 
   const navigateToWorkspaceShell = useCallback(() => {
@@ -56,10 +57,13 @@ export function useWorkspaceNavigationWorkflow() {
       logicalWorkspaceMatchesId(workspace, workspaceId) &&
       workspace.cloudWorkspace?.visibility === "shared_unclaimed"
     )?.cloudWorkspace;
-    if (unclaimedCloudWorkspace) {
+    // Unclaimed shared-cloud workspaces are claimed from the web app. Only hand
+    // off to web when this deployment actually has one; otherwise fall through
+    // to normal in-desktop selection rather than opening a dead vendor link.
+    if (unclaimedCloudWorkspace && webApp.available && webApp.baseUrl) {
       const url = webWorkspaceDeepLink(
         unclaimedCloudWorkspace.id,
-        getProliferateWebBaseUrl(),
+        webApp.baseUrl,
       );
       void openExternal(url).catch(() => {
         showToast("Failed to open the web workspace.");
@@ -88,6 +92,8 @@ export function useWorkspaceNavigationWorkflow() {
     selectedLogicalWorkspaceId,
     selectWorkspace,
     showToast,
+    webApp.available,
+    webApp.baseUrl,
   ]);
 
   return {
