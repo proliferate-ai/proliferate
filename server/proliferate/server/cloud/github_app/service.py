@@ -89,11 +89,22 @@ def _callback_url(path: str) -> str:
     return f"{base}{route_path}"
 
 
+# Server-rendered success page path. Mounted on the callback router at
+# `{api_prefix}/auth/github-app/connected`; always served by the API itself, so
+# it is a valid return target even on an API-only self-hosted deployment that
+# has no web application.
+GITHUB_APP_CONNECTED_PAGE_PATH = "/auth/github-app/connected"
+
+
 def _default_return_after_callback(section: Literal["account", "organization"]) -> str:
-    base = settings.frontend_base_url.strip() or settings.api_base_url.strip() or "/"
-    if base == "/":
-        return "/"
-    return base.rstrip("/") + f"/settings/{section}"
+    frontend = settings.frontend_base_url.strip()
+    if frontend:
+        return frontend.rstrip("/") + f"/settings/{section}"
+    # No web frontend configured (API-only self-host): a `/settings/...` route on
+    # the API host does not exist and would 404. Return the server-rendered
+    # connected page, which is always served by this deployment.
+    del section
+    return _callback_url(GITHUB_APP_CONNECTED_PAGE_PATH)
 
 
 def _validate_return_to(return_to: str | None) -> str | None:
@@ -419,6 +430,37 @@ async def complete_github_app_installation_callback(
             repo_environment_id=repo_environment.id,
         )
     return return_to or _default_return_after_callback("organization")
+
+
+async def complete_github_app_installation_redirect(
+    db: AsyncSession,
+    *,
+    installation_id: str | None,
+    setup_action: str | None,
+    state: str | None,
+) -> str:
+    """Complete an install/setup callback that may arrive without signed state.
+
+    GitHub calls the App's Setup URL after install AND after later
+    repository-selection changes; those GitHub-initiated redirects carry no
+    `state`. A stateful callback (from the in-product install-start flow) binds
+    the installation to the actor's organization as before. A stateless callback
+    cannot be attributed to an org securely, so it performs only a best-effort,
+    authoritative installation-cache refresh (the same read the webhook path
+    does) and returns a self-host-safe landing. This refreshes the server's
+    effective repository scope after a selection change instead of returning
+    422, and never performs a cross-tenant organization bind.
+    """
+    if state is not None and state.strip():
+        return await complete_github_app_installation_callback(
+            db,
+            installation_id=installation_id,
+            setup_action=setup_action,
+            state=state,
+        )
+    del installation_id, setup_action
+    await refresh_github_app_installation_cache(db)
+    return _default_return_after_callback("organization")
 
 
 async def _verify_actor_controls_installation(

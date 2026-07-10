@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
@@ -19,7 +19,7 @@ from proliferate.server.cloud.github_app.models import (
     GitHubRepoAuthorityResponse,
 )
 from proliferate.server.cloud.github_app.service import (
-    complete_github_app_installation_callback,
+    complete_github_app_installation_redirect,
     complete_github_app_user_authorization_callback,
     create_github_app_installation_url,
     create_github_app_user_authorization_url,
@@ -36,6 +36,7 @@ from proliferate.server.cloud.repos.service import (
     DEFAULT_REPO_AFFILIATION,
     DEFAULT_REPO_VISIBILITY,
 )
+from proliferate.utils.redirect_callback_pages import make_redirect_callback_response
 
 router = APIRouter(prefix="/github-app", tags=["github-app"])
 organization_router = APIRouter(
@@ -173,11 +174,11 @@ async def github_app_user_authorization_callback_endpoint(
 async def github_app_installation_callback_endpoint(
     installation_id: str | None = Query(default=None),
     setup_action: str | None = Query(default=None),
-    state: str = Query(...),
+    state: str | None = Query(default=None),
     db: AsyncSession = Depends(get_async_session),
 ) -> RedirectResponse:
     try:
-        redirect_url = await complete_github_app_installation_callback(
+        redirect_url = await complete_github_app_installation_redirect(
             db,
             installation_id=installation_id,
             setup_action=setup_action,
@@ -192,11 +193,14 @@ async def github_app_installation_callback_endpoint(
 async def github_app_setup_callback_endpoint(
     installation_id: str | None = Query(default=None),
     setup_action: str | None = Query(default=None),
-    state: str = Query(...),
+    # GitHub calls the App's Setup URL after install AND after later
+    # repository-selection changes; those GitHub-initiated redirects carry no
+    # signed `state`. Accept a missing state and refresh scope instead of 422.
+    state: str | None = Query(default=None),
     db: AsyncSession = Depends(get_async_session),
 ) -> RedirectResponse:
     try:
-        redirect_url = await complete_github_app_installation_callback(
+        redirect_url = await complete_github_app_installation_redirect(
             db,
             installation_id=installation_id,
             setup_action=setup_action,
@@ -205,3 +209,20 @@ async def github_app_setup_callback_endpoint(
     except CloudApiError as error:
         raise_cloud_error(error)
     return RedirectResponse(redirect_url, status_code=302)
+
+
+@callback_router.get("/connected", response_class=HTMLResponse)
+async def github_app_connected_page_endpoint() -> HTMLResponse:
+    # Self-host-safe landing for GitHub App callbacks when no web app exists to
+    # return to. Served by the API itself, so it never 404s on an API-only
+    # deployment. Desktop/web deployments redirect to their own settings pages
+    # instead (see `_default_return_after_callback`).
+    return make_redirect_callback_response(
+        title="GitHub App connected",
+        status_label="Connected",
+        message=(
+            "The Proliferate GitHub App is connected. You can close this tab and "
+            "return to Proliferate."
+        ),
+        tone="success",
+    )
