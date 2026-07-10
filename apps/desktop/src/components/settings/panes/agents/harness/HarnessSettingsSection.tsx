@@ -109,8 +109,14 @@ function HarnessSettingRow({
   setting: CatalogSetting;
 }) {
   const { cloudActive } = useCloudAvailabilityState();
-  const stateQuery = useAgentAuthState(surface, cloudActive);
-  const selectionsQuery = useAuthSelections(surface, cloudActive);
+  // The "local" surface is a local CLI flag persisted through the desktop's
+  // own backend — it must not require cloud sign-in. Only the "cloud" surface
+  // depends on cloud compute being active. Mirrors HarnessAuthSection's
+  // surface === "local" handling.
+  const isLocalSurface = surface === "local";
+  const queriesEnabled = isLocalSurface || cloudActive;
+  const stateQuery = useAgentAuthState(surface, queriesEnabled);
+  const selectionsQuery = useAuthSelections(surface, queriesEnabled);
   const putSelections = usePutAuthSelections();
 
   // Read persisted value from the auth state response.
@@ -153,7 +159,7 @@ function HarnessSettingRow({
         checked={currentValue}
         onChange={handleToggle}
         aria-label={setting.label}
-        disabled={!cloudActive}
+        disabled={!isLocalSurface && !cloudActive}
       />
     </SettingsRow>
   );
