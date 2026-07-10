@@ -179,6 +179,32 @@ export function workflowRunStatusDetail(
   return null;
 }
 
+/** The RUN-level mono dot for list rows (design-of-record list page): shape and
+ * motion carry state, never color. Waiting states are hollow, live states
+ * pulse, terminal success fills, failure renders the ✕ glyph. */
+export function runDotKind(status: WorkflowRunStatus): WorkflowStepDotKind {
+  switch (status) {
+    case "pending_delivery":
+    case "claimable":
+    case "claimed":
+    case "delivered":
+      return "pending";
+    case "running":
+      return "running";
+    case "waiting_approval":
+      return "attention";
+    case "completed":
+      return "success";
+    case "failed":
+      return "failed";
+    case "cancelled":
+    case "missed":
+      return "skipped";
+    case "unknown":
+      return "attention";
+  }
+}
+
 export function isWorkflowRunStatus(value: unknown): value is WorkflowRunStatus {
   return (
     typeof value === "string" && (WORKFLOW_RUN_STATUSES as readonly string[]).includes(value)
