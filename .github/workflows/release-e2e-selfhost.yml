@@ -1,0 +1,133 @@
+name: Release E2E — Self-hosting (T3-SH / T4-SH)
+
+# The self-hosting battery from the tier-3 release runner
+# (specs/developing/testing/self-hosting.md). Two lanes:
+#
+#   artifact-chain (T4-SH-2): the 2026-07-09 incident gate. Pure HTTP + git
+#     against the published desktop release — no box, no credentials — so it can
+#     and SHOULD go red when the artifact chain is broken (server advanced past
+#     the shipped desktop artifact). Exposed via workflow_call so the release
+#     pipeline can run it as a gate, per the spec ("must run in the release gate,
+#     not nightly-only"); also runs nightly for continuous coverage.
+#
+#   provisioning (T3-SH-1 cold boot, T4-SH-1 update motion): stand up a throwaway
+#     EC2 self-hosted control plane (production compose bundle, sslip.io + real
+#     TLS) and tear it down. Costs real infra, so it is gated behind the
+#     RELEASE_E2E_SELFHOST_PROVISION opt-in and AWS credentials; without either
+#     the runner reports those scenarios blocked (never red — the blocked/
+#     expected-fail convention in tests/release/src/cli/run.ts). continue-on-error
+#     like the rest of tier 3: it never gates a merge. T3-SH-2 (native desktop)
+#     reports blocked until its driver exists; T3-SH-3 (gateway add-on) reports
+#     blocked until standing-box + gateway secrets are provisioned.
+
+on:
+  workflow_dispatch:
+    inputs:
+      provision:
+        description: Provision throwaway EC2 boxes for T3-SH-1 / T4-SH-1 (costs a few cents).
+        default: "false"
+        required: false
+        type: choice
+        options: ["false", "true"]
+  workflow_call:
+    inputs:
+      release_desktop_version:
+        description: Desktop version the release ships (defaults to the repo VERSION).
+        required: false
+        type: string
+  schedule:
+    # Nightly, after the release train + the main tier-3 runner.
+    - cron: "30 11 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-e2e-selfhost
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  artifact-chain:
+    name: T4-SH-2 desktop artifact chain (release gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # fetch-depth 0 + tags: T4-SH-2 verifies the desktop-v<version> tag exists
+      # and shares lineage with the release SHA.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - name: Run T4-SH-2
+        env:
+          RELEASE_E2E_RELEASE_DESKTOP_VERSION: ${{ inputs.release_desktop_version }}
+        run: make release-e2e LANE=local DESKTOP=web AGENTS=all SCENARIOS=T4-SH-2
+
+  provisioning:
+    name: T3-SH-1 / T4-SH-1 / T3-SH-2 / T3-SH-3 (provisional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Never gates a merge (README CI mapping — tier 3 is not a merge gate).
+    continue-on-error: true
+    steps:
+      - name: Preflight — provisioning opt-in + AWS credentials
+        id: preflight
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          # 'true' on manual dispatch; nightly leaves it off so scheduled runs
+          # never spend on infra unattended.
+          PROVISION_INPUT: ${{ github.event.inputs.provision }}
+        run: |
+          provision=0
+          if [ "$PROVISION_INPUT" = "true" ] && [ -n "$AWS_ACCESS_KEY_ID" ]; then
+            provision=1
+          elif [ "$PROVISION_INPUT" = "true" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "::notice title=Self-host provisioning skipped::provision=true but no AWS credentials are configured. T3-SH-1 / T4-SH-1 will report blocked (never red)."
+          else
+            echo "::notice title=Self-host provisioning off::Set the provision input to true (with AWS creds) to run T3-SH-1 / T4-SH-1 for real. Reporting blocked for this run."
+          fi
+          echo "provision=$provision" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - name: Configure AWS credentials
+        if: steps.preflight.outputs.provision == '1'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Run the self-hosting scenarios
+        env:
+          # '1' only when provisioning is authorized; otherwise the box scenarios
+          # report blocked (env-resolution.ts + the scenarios' own opt-in check).
+          RELEASE_E2E_SELFHOST_PROVISION: ${{ steps.preflight.outputs.provision == '1' && '1' || '' }}
+          # Standing-box + gateway secrets for T3-SH-3 (blocked when absent).
+          RELEASE_E2E_SELFHOST_URL: ${{ secrets.RELEASE_E2E_SELFHOST_URL }}
+          RELEASE_E2E_SELFHOST_SSH: ${{ secrets.RELEASE_E2E_SELFHOST_SSH }}
+          RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+        run: make release-e2e LANE=local DESKTOP=web AGENTS=all SCENARIOS=T3-SH-1,T3-SH-2,T3-SH-3,T4-SH-1
+
+      - name: Upload failure reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-selfhost-reports
+          path: tests/release/.output/
+          retention-days: 7
+          if-no-files-found: ignore
