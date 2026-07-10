@@ -519,8 +519,14 @@ main() {
 
   # Fail before starting if the resolved config is dangerous (e.g. E2B_API_KEY
   # without E2B_TEMPLATE_NAME, which would crash-loop the api container).
-  log "Validating configuration"
-  "$DEPLOY_DIR/preflight.sh" "$DEPLOY_DIR/.env.static" || die "preflight failed; not starting. Fix $DEPLOY_DIR/.env.static and rerun."
+  # Older release bundles predate preflight.sh; skip validation there rather
+  # than blocking a valid install (the server still validates at startup).
+  if [[ -x "$DEPLOY_DIR/preflight.sh" ]]; then
+    log "Validating configuration"
+    "$DEPLOY_DIR/preflight.sh" "$DEPLOY_DIR/.env.static" || die "preflight failed; not starting. Fix $DEPLOY_DIR/.env.static and rerun."
+  else
+    info "This release bundle predates preflight.sh; skipping installer-side config validation."
+  fi
 
   if [[ "$NO_START" -eq 1 ]]; then
     log "Configured only (--no-start). Start with: sudo $DEPLOY_DIR/bootstrap.sh"
