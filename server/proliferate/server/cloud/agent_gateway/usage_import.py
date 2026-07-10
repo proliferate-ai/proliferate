@@ -44,6 +44,7 @@ from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMSpendLogEntry
 from proliferate.server.billing.budget_limits import window_bounds
+from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
 from proliferate.server.cloud.agent_gateway.topups import (
     reactivate_enrollment_if_credited,
     topups_enabled,
@@ -454,24 +455,7 @@ async def _apply_llm_limit_reached(
     )
 
 
-async def is_gateway_budget_available(db: AsyncSession, user_id: UUID) -> bool:
-    """Whether a user may launch a gateway-route session (later launch-gating).
-
-    True when the gateway is disabled (LiteLLM budgets are the only guardrail),
-    or the user has no credit grant (default-budget subjects are never blocked
-    on the ledger), or their remaining LLM credit is above zero. False only when
-    a granted subject has spent its credit — the exhaustion signal PR 4's
-    capabilities endpoint will consume.
-    """
-    if not settings.agent_gateway_enabled:
-        return True
-    enrollment = await agent_gateway_store.get_enrollment_for_user(db, user_id=user_id)
-    if enrollment is None:
-        return True
-    balance = await agent_gateway_store.get_remaining_credit_usd(
-        db,
-        enrollment.billing_subject_id,
-    )
-    if balance.granted_usd <= _ZERO:
-        return True
-    return balance.remaining_usd > _ZERO
+# Re-exported for existing importers; the predicate lives in the leaf
+# ``budget`` module so the agent-auth state renderer can consume it without
+# creating an import cycle through topups -> materialization.
+__all__ = ["UsageImportResult", "is_gateway_budget_available", "run_usage_import"]

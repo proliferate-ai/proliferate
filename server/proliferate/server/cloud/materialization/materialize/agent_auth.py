@@ -80,6 +80,7 @@ from proliferate.constants.agent_gateway import (
 from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import cloud_sandboxes as cloud_sandboxes_store
 from proliferate.db.store.agent_gateway import AgentAuthSelectionRecord
+from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
 from proliferate.server.cloud.materialization import operation, paths, sandbox_io
 
 logger = logging.getLogger("proliferate.cloud.materialization")
@@ -272,12 +273,26 @@ async def _load_state_inputs(
         if enrollment is not None:
             enrollment_sync_status = enrollment.sync_status
             if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
-                gateway_virtual_key = (
-                    await agent_gateway_store.get_enrollment_virtual_key_decrypted(
-                        db,
-                        enrollment_id=enrollment.id,
+                # Second enforcement wall for LLM-credit exhaustion (the first
+                # is the importer disabling the LiteLLM virtual key): an
+                # exhausted subject stops being handed the key at all, so a
+                # lagging or failed key-disable cannot leak gateway access.
+                # The gateway source then renders unsatisfiable and is dropped;
+                # the runtime fails closed at launch.
+                if await is_gateway_budget_available(db, user_id):
+                    gateway_virtual_key = (
+                        await agent_gateway_store.get_enrollment_virtual_key_decrypted(
+                            db,
+                            enrollment_id=enrollment.id,
+                        )
                     )
-                )
+                else:
+                    logger.warning(
+                        "Withholding gateway virtual key: LLM credit exhausted "
+                        "(user=%s, surface=%s)",
+                        user_id,
+                        surface,
+                    )
 
     harness_settings = await agent_gateway_store.list_harness_settings_for_surface(
         db,
