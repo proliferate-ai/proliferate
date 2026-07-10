@@ -59,6 +59,32 @@ function runtimeBase(connection: LocalRuntimeConnection): string {
   return connection.runtimeUrl.replace(/\/+$/, "");
 }
 
+/**
+ * Normalize a raw runtime workflow-run payload into {@link LocalWorkflowRunView}.
+ *
+ * The anyharness runtime serializes `sessionIds` as a MAP keyed by agent slot
+ * (`{ "<slot>": "<session-id>" }`), but the desktop relay forwards this field to
+ * the server as `anyharnessSessionIds`, whose contract is `list[str]`. Passing the
+ * map straight through makes the server reject every report for a run whose
+ * session actually started (422 `list_type` on `anyharnessSessionIds`), so the run
+ * is stranded `claimed` and never reaches a terminal status. Flatten the map's
+ * values to a list here — the single access-boundary seam both `create` and `get`
+ * go through — so downstream relay code sees the `string[]` its type promises.
+ */
+function normalizeRunView(raw: unknown): LocalWorkflowRunView {
+  const view = raw as LocalWorkflowRunView & { sessionIds?: unknown };
+  const rawSessionIds = view.sessionIds;
+  let sessionIds: string[] | undefined;
+  if (Array.isArray(rawSessionIds)) {
+    sessionIds = rawSessionIds.filter((id): id is string => typeof id === "string");
+  } else if (rawSessionIds && typeof rawSessionIds === "object") {
+    sessionIds = Object.values(rawSessionIds as Record<string, unknown>).filter(
+      (id): id is string => typeof id === "string",
+    );
+  }
+  return { ...view, sessionIds };
+}
+
 async function parseError(response: Response, action: string): Promise<Error> {
   let detail = "";
   try {
@@ -92,7 +118,7 @@ export async function createLocalWorkflowRun(
   if (!response.ok) {
     throw await parseError(response, "deliver the workflow run");
   }
-  return (await response.json()) as LocalWorkflowRunView;
+  return normalizeRunView(await response.json());
 }
 
 export async function getLocalWorkflowRun(
@@ -107,7 +133,7 @@ export async function getLocalWorkflowRun(
   if (!response.ok) {
     throw await parseError(response, "read the workflow run");
   }
-  return (await response.json()) as LocalWorkflowRunView;
+  return normalizeRunView(await response.json());
 }
 
 export async function resolveLocalWorkflowApproval(
@@ -126,7 +152,7 @@ export async function resolveLocalWorkflowApproval(
   if (!response.ok) {
     throw await parseError(response, approve ? "approve the step" : "deny the step");
   }
-  return (await response.json()) as LocalWorkflowRunView;
+  return normalizeRunView(await response.json());
 }
 
 /**

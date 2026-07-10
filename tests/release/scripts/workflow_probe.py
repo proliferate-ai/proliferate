@@ -13,6 +13,15 @@ Requires ``DATABASE_URL`` (the local profile DB, RELEASE_E2E_LOCAL_DATABASE_URL)
 
 Usage:
   uv run python workflow_probe.py run-gateway-scope <run-id>
+  uv run python workflow_probe.py backdate-schedule-cursor <trigger-id> [hours]
+
+``backdate-schedule-cursor`` is the T3-WF-7 (desktop lane) time-shift seam: v1
+schedules only accept hourly/daily RRULEs (no minutely), so a live test cannot
+wait a real hour for the scheduler beat to fire. It shifts a schedule trigger's
+``next_run_at`` cursor ``hours`` (default 2) into the past so the very next beat
+tick enumerates a due occurrence and fires a run — the honest analog of tier-2's
+Stripe test-clock / invitation-expiry backdate (real state, just time-shifted;
+there is no product API to fast-forward the scheduler).
 
 Prints one JSON object to stdout.
 """
@@ -23,14 +32,19 @@ import argparse
 import asyncio
 import json
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "server"))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import select, update  # noqa: E402
 
 from proliferate.db.engine import async_session_factory  # noqa: E402
-from proliferate.db.models.cloud.workflows import WorkflowRunGatewayToken  # noqa: E402
+from proliferate.db.models.cloud.workflows import (  # noqa: E402
+    WorkflowRunGatewayToken,
+    WorkflowTrigger,
+)
+from proliferate.utils.time import utcnow  # noqa: E402
 
 
 def _granted_namespaces(scope_json: object) -> list[str]:
@@ -70,10 +84,33 @@ async def run_gateway_scope(run_id: str) -> dict:
         }
 
 
+async def backdate_schedule_cursor(trigger_id: str, hours: float) -> dict:
+    async with async_session_factory() as db:
+        target = utcnow() - timedelta(hours=hours)
+        async with db.begin():
+            result = await db.execute(
+                update(WorkflowTrigger)
+                .where(WorkflowTrigger.id == trigger_id)
+                .values(next_run_at=target)
+            )
+        return {
+            "triggerId": trigger_id,
+            "updated": result.rowcount,
+            "nextRunAt": target.isoformat(),
+        }
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["run-gateway-scope"])
-    parser.add_argument("run_id")
+    sub = parser.add_subparsers(dest="command", required=True)
+    p_scope = sub.add_parser("run-gateway-scope")
+    p_scope.add_argument("run_id")
+    p_backdate = sub.add_parser("backdate-schedule-cursor")
+    p_backdate.add_argument("trigger_id")
+    p_backdate.add_argument("hours", nargs="?", default="2", type=float)
     args = parser.parse_args()
-    out = asyncio.run(run_gateway_scope(args.run_id))
+    if args.command == "run-gateway-scope":
+        out = asyncio.run(run_gateway_scope(args.run_id))
+    else:
+        out = asyncio.run(backdate_schedule_cursor(args.trigger_id, args.hours))
     print(json.dumps(out))
