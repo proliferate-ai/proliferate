@@ -44,6 +44,10 @@ export class ApiClient {
     return this.request<TResponse>("PUT", path, body);
   }
 
+  async patch<TResponse>(path: string, body: unknown): Promise<TResponse> {
+    return this.request<TResponse>("PATCH", path, body);
+  }
+
   async get<TResponse>(path: string): Promise<TResponse> {
     return this.request<TResponse>("GET", path);
   }

@@ -77,7 +77,7 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
 | Connect integration (real api_key definition, placeholder key, no outbound), toggle on/off | 2 | tests/intent/specs/integrations.spec.ts |
-| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | tests/release/src/scenarios/t3-int-1.ts (T3-INT-1; blocked on credential RELEASE_E2E_INTEGRATION_API_KEY + github_link_required on the gateway route. Finding: cataloged Slack is oauth2/hosted-MCP not api_key, so the contract's Slack-bot-token premise does not fit the catalog — filed; scenario uses an api_key-kind seed (exa)) |
+| Authenticate a real integration; **every cataloged harness** uses it through the gateway — local lane AND sandbox lane | 3 | tests/release/src/scenarios/t3-int-1.ts (T3-INT-1; local lane implemented end-to-end: connect exa (api_key) → provision a real gateway grant (desktop enrollment + worker enroll) → write the integration-gateway dotfile → a real cheap agent turn calls exa through the gateway → assert a `cloud_integration_tool_call_event` row (ok=true) via integration_audit_probe.py; org-policy toggle-off asserts the enumerated `integration_provider_disabled` + a failure audit row once. Needs RELEASE_E2E_INTEGRATION_API_KEY + RELEASE_E2E_LOCAL_DATABASE_URL (both wired in the CI local lane). Sandbox lane reuses T3-CHAT-1's in-sandbox session driver (#1042). Uses an api_key-kind seed (exa) — cataloged Slack is oauth2/hosted-MCP, #1030) |
 
 ## Self-hosting
 

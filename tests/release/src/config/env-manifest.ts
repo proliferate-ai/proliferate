@@ -339,7 +339,10 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_LOCAL_DATABASE_URL",
     description:
-      "Postgres URL for the LOCAL lane's profile DB. Only needed by T3-PROV-1's fallback seam " +
+      "Postgres URL for the LOCAL lane's profile DB. Read by the read-only DB seams that assert " +
+      "against tables with no HTTP surface: T3-BILL-1/2's meter ledger (billing_probe.py), T3-INT-1's " +
+      "gateway audit rows (integration_audit_probe.py, cloud_integration_tool_call_event), and " +
+      "T3-PROV-1's fallback seam " +
       "(tests/release/scripts/prov1_fallback.py), which calls the real GitHub-App-callback service " +
       "functions in-process against this DB, bypassing the real GitHub OAuth redirect (infeasible " +
       "on a dedicated feature profile — its callback URL is pinned to the main profile's port, per " +
@@ -347,7 +350,8 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "current_product_user gate. Staging has no equivalent — that fallback is local-lane-only.",
     whereItLives:
       "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate_dev_<profile>, per " +
-      "specs/developing/local/feature-worktree-auth.md. Never required outside T3-PROV-1.",
+      "specs/developing/local/feature-worktree-auth.md. Required by the billing, integration-audit, " +
+      "and provisioning DB seams (all local-lane only).",
     secret: false,
     lanes: ["local"],
   },
