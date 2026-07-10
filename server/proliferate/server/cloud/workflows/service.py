@@ -27,6 +27,8 @@ from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_TARGET_MODES,
     SUPPORTED_WORKFLOW_TRIGGER_KINDS,
     SUPPORTED_WORKFLOW_TRIGGER_TYPES,
+    WORKFLOW_ISOLATION_DEFAULT,
+    WORKFLOW_ISOLATION_WORKTREE,
     WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
     WORKFLOW_RUN_OBSERVABLE_STATUSES,
     WORKFLOW_RUN_STATUS_DELIVERED,
@@ -394,6 +396,33 @@ def _default_session_binding(trigger_kind: str) -> str:
     return WORKFLOW_SESSION_BINDING_HEADLESS
 
 
+def _resolve_run_isolation(
+    *, target_mode: str, session_bindings: dict[str, str] | None
+) -> str:
+    """Wave 2b (§9 RULED default): cloud runs get a fresh per-run worktree
+    unless the run binds into an existing session.
+
+    Presence of ``session_bindings`` (the 1a bind-existing path) is the ONLY
+    exception in v1 — you can't bind into a session that lives in the shared
+    checkout and simultaneously isolate away from it, so a bound run keeps
+    workspace isolation. No other knob exists yet: if the definition/trigger
+    later grows an explicit isolation field, that's a new call site, not a
+    change here.
+
+    Local (desktop) target_mode is left at the legacy default (workspace):
+    local delivery doesn't run through the cloud sandbox worktree mint (wave
+    2a — the desktop executor — is a separate, not-yet-built track), so
+    forcing worktree isolation there would be inventing behavior for an
+    unspecced path.
+    """
+
+    if session_bindings:
+        return WORKFLOW_ISOLATION_DEFAULT
+    if target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        return WORKFLOW_ISOLATION_WORKTREE
+    return WORKFLOW_ISOLATION_DEFAULT
+
+
 def _resolve_plan(
     *,
     run_id: UUID,
@@ -404,6 +433,7 @@ def _resolve_plan(
     coerced_inputs: dict[str, object],
     session_bindings: dict[str, str],
     agents: list[dict[str, object]],
+    isolation: str = WORKFLOW_ISOLATION_DEFAULT,
 ) -> dict[str, object]:
     """The single resolution pass (data-contract §4): flatten the agents spine
     into one ordered step list, stamp each step with its structured key + slot +
@@ -466,6 +496,11 @@ def _resolve_plan(
         "version_n": version.version_n,
         "trigger_kind": trigger_kind,
         "target_mode": target_mode,
+        # Wave 2b: plan-level run isolation. Emitted explicitly so the plan is
+        # self-describing; the runtime treats an absent field as "workspace"
+        # (back-compat). The source that pins "worktree" (plan setup / trigger)
+        # is phase 2 — for now every run resolves to the default.
+        "isolation": isolation,
         "sessions": sessions,
         "inputs": coerced_inputs,
         "steps": steps,
@@ -637,6 +672,9 @@ async def start_run(
                     )
 
     run_id = uuid4()
+    isolation = _resolve_run_isolation(
+        target_mode=target_mode, session_bindings=session_bindings
+    )
     resolved_plan = _resolve_plan(
         run_id=run_id,
         workflow_id=workflow_id,
@@ -646,6 +684,7 @@ async def start_run(
         coerced_inputs=coerced_inputs,
         session_bindings=session_bindings or {},
         agents=resolved_agents,
+        isolation=isolation,
     )
     run = await store.create_run(
         db,

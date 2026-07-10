@@ -158,6 +158,11 @@ async def test_start_run_resolves_plan_and_records_pending_delivery(
     # Step-output references stay late-bound for the runtime.
     assert plan["steps"][2]["message"] == "done {{steps[1].output.result}}"
     assert plan["sessions"]["main"]["harness"] == "claude"
+    # Wave 2b: the resolved plan carries run isolation; default is "workspace"
+    # (run in the pinned checkout as-is). This is the cross-language contract the
+    # runtime parses into `plan.rs::Isolation` — an absent field there means the
+    # same "workspace", so producer + consumer agree.
+    assert plan["isolation"] == "workspace"
 
 
 async def test_start_run_rejects_missing_required_arg(db_session: AsyncSession) -> None:

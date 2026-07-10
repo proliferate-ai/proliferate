@@ -243,10 +243,11 @@ impl WorkflowRunManager {
                 deps.clone(),
                 run_id.clone(),
                 run.workspace_id.clone(),
+                plan.isolation,
                 plan.sessions.clone(),
                 plan.gateway.clone(),
             );
-            executor.hydrate_from_run(&run);
+            executor.hydrate_from_run(&run).await;
             let progress =
                 drive_run(&deps.workflow_service, &executor, &run_id, &cancel).await;
             manager.forget(&run_id);

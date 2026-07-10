@@ -28,11 +28,15 @@ use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
 use crate::domains::workflows::model::WorkflowRunRecord;
 use crate::domains::workflows::plan::{
-    AgentConfigStep, AgentEmitStep, AgentPromptStep, BranchStep, BranchTarget, GoalSpec, OnBlocked,
-    PlanGateway, PlanStep, RequiredInvocation, ScmOpenPrStep, SessionSpec, ShellRunStep, StepKind,
+    AgentConfigStep, AgentEmitStep, AgentPromptStep, BranchStep, BranchTarget, GoalSpec, Isolation,
+    OnBlocked, PlanGateway, PlanStep, RequiredInvocation, ScmOpenPrStep, SessionSpec, ShellRunStep,
+    StepKind,
 };
 use crate::domains::workflows::service::WorkflowService;
+use crate::domains::workspaces::creator_context::WorkspaceCreatorContext;
+use crate::domains::workspaces::model::WorkspaceKind;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
+use crate::domains::workspaces::worktree_names::WorktreeNameConflictPolicy;
 use crate::live::sessions::LiveSessionManager;
 use crate::origin::OriginContext;
 
@@ -108,7 +112,27 @@ impl InjectionMeta {
 pub struct WorkflowStepExecutorImpl {
     deps: Arc<WorkflowExecDeps>,
     run_id: String,
+    /// The run's PINNED workspace (data-contract §3 target). Under
+    /// [`Isolation::Workspace`] the run executes here directly; under
+    /// [`Isolation::Worktree`] this is the checkout the per-run worktree is
+    /// minted from.
     workspace_id: String,
+    /// Run isolation posture (wave 2b): plan-level, resolved once into the
+    /// memoized `effective_workspace` below.
+    isolation: Isolation,
+    /// The effective workspace every session/shell/emit of this run resolves to.
+    /// Memoized: under `Workspace` isolation it is `workspace_id`; under
+    /// `Worktree` isolation it is the id of the per-run git worktree, minted
+    /// lazily on first use (and once only, so all the run's slots share it — B7
+    /// / one worktree per RUN in v1). `None` until first resolution; recovered
+    /// on crash-resume from a persisted session's workspace — or, when the run
+    /// persisted no session yet (a shell/PR-only prefix), by ADOPTING the run's
+    /// own worktree record — in [`Self::hydrate_from_run`].
+    ///
+    /// A [`tokio::sync::Mutex`] (not `std`): the memo is held across the
+    /// `spawn_blocking` mint await, so it must be an async-aware lock (holding a
+    /// `std` guard across `.await` would block the runtime worker).
+    effective_workspace: tokio::sync::Mutex<Option<String>>,
     /// Per-slot session provisioning, straight from the resolved plan.
     sessions: BTreeMap<String, SessionSpec>,
     /// slot -> the live session opened for it.
@@ -128,6 +152,7 @@ impl WorkflowStepExecutorImpl {
         deps: Arc<WorkflowExecDeps>,
         run_id: String,
         workspace_id: String,
+        isolation: Isolation,
         sessions: BTreeMap<String, SessionSpec>,
         gateway: Option<PlanGateway>,
     ) -> Self {
@@ -139,6 +164,8 @@ impl WorkflowStepExecutorImpl {
             deps,
             run_id,
             workspace_id,
+            isolation,
+            effective_workspace: tokio::sync::Mutex::new(None),
             sessions,
             current: Mutex::new(HashMap::new()),
             models: Mutex::new(models),
@@ -151,30 +178,83 @@ impl WorkflowStepExecutorImpl {
     /// and the model folded from that slot's `agent.config` steps in the plan
     /// prefix up to the cursor. Derives everything from the persisted plan +
     /// cursor, so no extra state is stored on resume.
-    pub fn hydrate_from_run(&self, run: &WorkflowRunRecord) {
+    pub async fn hydrate_from_run(&self, run: &WorkflowRunRecord) {
         self.recompute_models(run);
-        let mut current = self.current.lock().unwrap();
-        for (slot, session_id) in run.sessions() {
-            if let Ok(Some(session)) = self.deps.session_service.get_session(session_id) {
-                // Re-arm the always-bypass safety net for the resumed session
-                // (the registry is in-memory, so a restart would otherwise drop
-                // it).
-                self.deps.workflow_owned_sessions.mark(session_id, &self.run_id);
-                // Re-register the per-run gateway server too, so a relaunch of
-                // the resumed session (crash-resume) re-injects it (same
-                // in-memory registry, dropped on restart).
-                if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
-                    self.deps.workflow_gateway_sessions.set(session_id, server);
+        // The workspace of the FIRST recovered slot session (worktree isolation):
+        // a persisted session already lives in the run's minted worktree, so its
+        // workspace IS the effective workspace.
+        let mut recovered_session_ws: Option<String> = None;
+        {
+            let mut current = self.current.lock().unwrap();
+            for (slot, session_id) in run.sessions() {
+                if let Ok(Some(session)) = self.deps.session_service.get_session(session_id) {
+                    if self.isolation == Isolation::Worktree && recovered_session_ws.is_none() {
+                        recovered_session_ws = Some(session.workspace_id.clone());
+                    }
+                    // Re-arm the always-bypass safety net for the resumed session
+                    // (the registry is in-memory, so a restart would otherwise drop
+                    // it).
+                    self.deps.workflow_owned_sessions.mark(session_id, &self.run_id);
+                    // Re-register the per-run gateway server too, so a relaunch of
+                    // the resumed session (crash-resume) re-injects it (same
+                    // in-memory registry, dropped on restart).
+                    if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
+                        self.deps.workflow_gateway_sessions.set(session_id, server);
+                    }
+                    current.insert(
+                        slot.clone(),
+                        CurrentSession {
+                            session_id: session_id.clone(),
+                            harness: session.agent_kind,
+                        },
+                    );
                 }
-                current.insert(
-                    slot.clone(),
-                    CurrentSession {
-                        session_id: session_id.clone(),
-                        harness: session.agent_kind,
-                    },
-                );
+            }
+            // Drop the std guard before any await below (never hold it across .await).
+        }
+
+        // Wave 2b crash-recovery (finding 1, belt-and-suspenders): recover the
+        // run's effective worktree so post-resume sessions/shells resolve to the
+        // SAME worktree instead of re-minting. A persisted session's workspace
+        // wins; otherwise — the session-less crash hole, where a shell.run /
+        // scm.open_pr prefix minted the worktree but persisted NO session to
+        // recover from — ADOPT the run's own worktree record if one exists (keyed
+        // by the run's deterministic path + branch, so resume adopts even before
+        // the first step executes). Run-scoped only; never a general adopt.
+        if self.isolation == Isolation::Worktree {
+            let expected_branch = run_worktree_branch_name(&self.run_id);
+            let recovered = recover_resume_worktree(recovered_session_ws, &expected_branch, || async {
+                self.lookup_run_worktree_for_resume()
+            })
+            .await;
+            if let Ok(Some(ws)) = recovered {
+                let mut eff = self.effective_workspace.lock().await;
+                if eff.is_none() {
+                    *eff = Some(ws);
+                }
             }
         }
+    }
+
+    /// Blocking lookup of the run's own worktree record for crash-resume
+    /// adoption: load the pinned checkout, derive this run's deterministic
+    /// worktree path, and return the active worktree workspace record there (id +
+    /// its checked-out branch) if one exists. Returns `None` (never an error that
+    /// would fail resume) when there's simply nothing to adopt; the run-scoped
+    /// branch gate is applied by [`adoptable_run_worktree`] in the caller.
+    fn lookup_run_worktree_for_resume(&self) -> Result<Option<AdoptedWorktree>, StepOutcome> {
+        let pinned = self
+            .deps
+            .workspace_runtime
+            .get_workspace(&self.workspace_id)
+            .map_err(|error| failed_msg("worktree_resume_lookup_failed", error.to_string()))?;
+        let Some(pinned) = pinned else {
+            return Ok(None);
+        };
+        let Some(target_path) = run_worktree_target_path(&pinned.path, &self.run_id) else {
+            return Ok(None);
+        };
+        Ok(lookup_run_worktree_record(&self.deps.workspace_runtime, &target_path)?)
     }
 
     /// Recompute per-slot models by folding each slot's `agent.config` steps in
@@ -206,6 +286,53 @@ impl WorkflowStepExecutorImpl {
             .get(slot)
             .map(|spec| spec.harness.clone())
             .ok_or_else(|| failed_msg("plan_malformed", format!("no session spec for slot {slot}")))
+    }
+
+    /// The workspace every session / shell / emit of this run resolves to
+    /// (wave 2b). Memoized and computed once:
+    ///
+    /// - [`Isolation::Workspace`]: the pinned `workspace_id`, unchanged.
+    /// - [`Isolation::Worktree`]: mint a fresh per-run git worktree inside the
+    ///   pinned checkout (once — all the run's slots share it) and return its
+    ///   workspace id.
+    ///
+    /// A mint failure returns a structured `Failed` outcome; because every
+    /// session-creating / workspace-using path calls this FIRST, a failed mint
+    /// fails the run BEFORE any session is created in the shared checkout
+    /// (deny-path: no silent fallback to the pinned workspace, which would
+    /// defeat isolation). Holds the memo lock across the (async, `spawn_blocking`)
+    /// mint so two slots can never race into two worktrees.
+    async fn effective_workspace_id(&self) -> Result<String, StepOutcome> {
+        resolve_effective_workspace(
+            self.isolation,
+            &self.workspace_id,
+            &self.effective_workspace,
+            || self.mint_run_worktree(),
+        )
+        .await
+    }
+
+    /// Mint (or ADOPT) the run's git worktree and return its workspace id.
+    ///
+    /// The blocking git (`std::process::Command`) + synchronous DB work runs on a
+    /// `spawn_blocking` pool thread, never on the async executor worker (matching
+    /// every other `create_worktree` consumer in this crate); the memo lock is an
+    /// async [`tokio::sync::Mutex`] held across this await, so no `std` guard is
+    /// pinned across `.await`.
+    async fn mint_run_worktree(&self) -> Result<String, StepOutcome> {
+        let workspace_runtime = self.deps.workspace_runtime.clone();
+        let pinned_workspace_id = self.workspace_id.clone();
+        let run_id = self.run_id.clone();
+        tokio::task::spawn_blocking(move || {
+            mint_or_adopt_run_worktree_blocking(&workspace_runtime, &pinned_workspace_id, &run_id)
+        })
+        .await
+        .map_err(|error| {
+            failed_msg(
+                "worktree_mint_failed",
+                format!("worktree mint task failed: {error}"),
+            )
+        })?
     }
 
     /// Ensure the (single, lifetime) session for `slot` exists, opening it lazily
@@ -293,6 +420,11 @@ impl WorkflowStepExecutorImpl {
             // permission prompt. `None` (harness with no native bypass mode) is
             // covered by the auto-approve safety net.
             let mode = bypass_mode_for_kind(&harness);
+            // Wave 2b: resolve the run's effective workspace BEFORE creating the
+            // session. Under worktree isolation this mints the per-run worktree
+            // (once); a mint failure returns here, so the session is NEVER
+            // created in the shared pinned checkout.
+            let session_workspace_id = self.effective_workspace_id().await?;
             // Split create/start (as reviews/subagents do) so the per-run gateway
             // server and workflow ownership can be registered BEFORE launch — the
             // launch extension reads both from their in-memory registries, and MCP
@@ -302,7 +434,7 @@ impl WorkflowStepExecutorImpl {
                 .deps
                 .session_runtime
                 .create_durable_session(
-                    &self.workspace_id,
+                    &session_workspace_id,
                     &harness,
                     model.as_deref(),
                     mode,
@@ -505,7 +637,7 @@ impl WorkflowStepExecutorImpl {
                         }
                     }
                     Some(verify) => {
-                        let (workspace_path, env) = match self.workspace_ctx() {
+                        let (workspace_path, env) = match self.workspace_ctx().await {
                             Ok(ctx) => ctx,
                             Err(outcome) => return outcome,
                         };
@@ -600,11 +732,15 @@ impl WorkflowStepExecutorImpl {
         let _ = self.deps.goal_runtime.clear_goal(session_id).await;
     }
 
-    fn workspace_ctx(&self) -> Result<(PathBuf, Vec<(String, String)>), StepOutcome> {
+    async fn workspace_ctx(&self) -> Result<(PathBuf, Vec<(String, String)>), StepOutcome> {
+        // Wave 2b: shells / emit-file drops / verify run in the run's effective
+        // workspace — the per-run worktree under worktree isolation (minting it
+        // if a shell is the run's first step), else the pinned workspace.
+        let workspace_id = self.effective_workspace_id().await?;
         let workspace = self
             .deps
             .workspace_runtime
-            .get_workspace(&self.workspace_id)
+            .get_workspace(&workspace_id)
             .map_err(|error| failed_msg("workspace_error", error.to_string()))?
             .ok_or_else(|| failed("workspace_missing"))?;
         let env = self
@@ -616,7 +752,7 @@ impl WorkflowStepExecutorImpl {
     }
 
     async fn run_shell(&self, step: &ShellRunStep) -> StepOutcome {
-        let (workspace_path, env) = match self.workspace_ctx() {
+        let (workspace_path, env) = match self.workspace_ctx().await {
             Ok(ctx) => ctx,
             Err(outcome) => return outcome,
         };
@@ -624,7 +760,7 @@ impl WorkflowStepExecutorImpl {
     }
 
     async fn run_scm(&self, step: &ScmOpenPrStep) -> StepOutcome {
-        let (workspace_path, env) = match self.workspace_ctx() {
+        let (workspace_path, env) = match self.workspace_ctx().await {
             Ok(ctx) => ctx,
             Err(outcome) => return outcome,
         };
@@ -683,7 +819,7 @@ impl WorkflowStepExecutorImpl {
             Ok(id) => id,
             Err(outcome) => return outcome,
         };
-        let (workspace_path, _env) = match self.workspace_ctx() {
+        let (workspace_path, _env) = match self.workspace_ctx().await {
             Ok(ctx) => ctx,
             Err(outcome) => return outcome,
         };
@@ -1101,6 +1237,250 @@ fn gate_exhausted_outcome(
         )),
         output: Some(json!({ "session_id": session_id })),
     }
+}
+
+// --- run worktree isolation helpers (wave 2b) ---
+
+/// A worktree workspace record considered for run-scoped adoption: its id plus
+/// the branch it is checked out on.
+type AdoptedWorktree = (String, Option<String>);
+
+/// The memoized effective-workspace resolution, decoupled from live deps so the
+/// dispatch + memoization + mint-error propagation can be driven directly by
+/// tests. Under `Workspace` isolation the pinned `workspace_id` is returned and
+/// `mint` is NEVER called; under `Worktree` isolation `mint` is called AT MOST
+/// once (the result is memoized), so every slot/shell of the run shares one
+/// worktree and a mint failure propagates before any session is created.
+///
+/// The memo is a [`tokio::sync::Mutex`] held across the (async, `spawn_blocking`)
+/// mint await: an async-aware lock is required so we never pin a `std` guard
+/// across `.await` (which would block the runtime worker). Only one actor drives
+/// a run, so holding the memo across the await is both correct and the simplest
+/// way to keep "mint once, no session in the shared checkout" intact.
+async fn resolve_effective_workspace<F, Fut>(
+    isolation: Isolation,
+    workspace_id: &str,
+    memo: &tokio::sync::Mutex<Option<String>>,
+    mint: F,
+) -> Result<String, StepOutcome>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<String, StepOutcome>>,
+{
+    let mut guard = memo.lock().await;
+    if let Some(id) = guard.as_ref() {
+        return Ok(id.clone());
+    }
+    let resolved = match isolation {
+        Isolation::Workspace => workspace_id.to_string(),
+        Isolation::Worktree => mint().await?,
+    };
+    *guard = Some(resolved.clone());
+    Ok(resolved)
+}
+
+/// The run-scoped adoption gate (wave 2b crash-recovery hardening, finding 1): a
+/// worktree record `found` at the run's DETERMINISTIC path is adopted ONLY when
+/// it is the run's OWN worktree — its branch is exactly `expected_branch`
+/// (`workflow-run/<run_id>`). A record at that path on any OTHER branch is a
+/// foreign squatter and must NOT be adopted (the caller falls through to an
+/// honest mint, which then conflicts on the occupied path). This is never a
+/// general conflict-tolerant adopt — only the run's own run-scoped identifiers.
+fn adoptable_run_worktree(found: Option<AdoptedWorktree>, expected_branch: &str) -> Option<String> {
+    match found {
+        Some((id, Some(branch))) if branch == expected_branch => Some(id),
+        _ => None,
+    }
+}
+
+/// Mint OR adopt the run's git worktree, returning its workspace id. Runs the
+/// blocking git (`std::process::Command`) + synchronous DB work; the caller
+/// wraps it in `spawn_blocking`.
+///
+/// Adoption (finding 1): a prior executor may have already minted this run's
+/// worktree AND its workspace record before crashing — e.g. a `shell.run` /
+/// `scm.open_pr` prefix that persisted NO session to recover from. Re-minting
+/// would hit the deterministic branch/path under the `Fail` conflict policy and
+/// strand the completed work, failing the run terminally on every retry. So if a
+/// workspace RECORD already exists at this run's OWN deterministic path+branch,
+/// adopt it (return its id). Run-scoped only. A git worktree on disk with NO
+/// record (half-created) is NOT adopted: we fall through to the mint, which
+/// fails honestly on the occupied path — never adopt untracked state.
+fn mint_or_adopt_run_worktree_blocking(
+    workspace_runtime: &WorkspaceRuntime,
+    pinned_workspace_id: &str,
+    run_id: &str,
+) -> Result<String, StepOutcome> {
+    let pinned = workspace_runtime
+        .get_workspace(pinned_workspace_id)
+        .map_err(|error| {
+            failed_msg(
+                "worktree_mint_failed",
+                format!("could not load pinned workspace: {error}"),
+            )
+        })?
+        .ok_or_else(|| {
+            failed_msg(
+                "worktree_mint_failed",
+                format!("pinned workspace {pinned_workspace_id} not found"),
+            )
+        })?;
+    let target_path = run_worktree_target_path(&pinned.path, run_id).ok_or_else(|| {
+        failed_msg(
+            "worktree_mint_failed",
+            format!("could not derive a worktree path from {}", pinned.path),
+        )
+    })?;
+    let branch_name = run_worktree_branch_name(run_id);
+
+    // Crash-recovery adoption: return the run's own already-minted worktree if a
+    // record for it exists (run-scoped by path + branch).
+    if let Some(id) = lookup_run_worktree_record(workspace_runtime, &target_path)?
+        .and_then(|found| adoptable_run_worktree(Some(found), &branch_name))
+    {
+        tracing::info!(
+            run_id = %run_id,
+            worktree_workspace_id = %id,
+            branch = %branch_name,
+            "workflow run adopted its existing per-run worktree (isolation=worktree, crash-recovery)"
+        );
+        return Ok(id);
+    }
+
+    // Base the worktree on the pinned checkout's CURRENT HEAD (exact commit),
+    // so isolation is faithful even when the pinned workspace is itself a
+    // branch/worktree. Falls back to the source repo's HEAD when the SHA
+    // can't be read (base_branch=None → git's default HEAD).
+    let base_ref = run_worktree_base_ref(&pinned.path);
+    // Finding 3: tag the worktree with the run as its creator (there is no
+    // free-form origin/label on `OriginContext`, but `WorkspaceCreatorContext`
+    // carries `automationRunId` + `label`), so a future retention reaper can
+    // distinguish and prune orphaned workflow-run worktrees. The deterministic
+    // `wf-run-*` path / `workflow-run/*` branch prefixes are the other key such a
+    // reaper can match on. Automatic pruning is a follow-up (no retention rule
+    // invented here).
+    let creator_context = WorkspaceCreatorContext::Automation {
+        automation_id: None,
+        automation_run_id: Some(run_id.to_string()),
+        label: Some("workflow-run".to_string()),
+    };
+    let result = workspace_runtime
+        .create_worktree_with_surface(
+            &pinned.repo_root_id,
+            &target_path,
+            &branch_name,
+            base_ref.as_deref(),
+            None,
+            "standard",
+            WorktreeNameConflictPolicy::Fail,
+            OriginContext::api_local_runtime(),
+            Some(creator_context),
+        )
+        .map_err(|error| {
+            failed_msg(
+                "worktree_mint_failed",
+                format!("git worktree add failed: {error}"),
+            )
+        })?;
+    tracing::info!(
+        run_id = %run_id,
+        pinned_workspace_id = %pinned_workspace_id,
+        worktree_workspace_id = %result.workspace.id,
+        worktree_path = %result.workspace.path,
+        branch = %branch_name,
+        "workflow run minted a per-run worktree (isolation=worktree)"
+    );
+    Ok(result.workspace.id)
+}
+
+/// Look up the active worktree workspace record at the run's deterministic
+/// `target_path` (id + its checked-out branch), for run-scoped adoption. The
+/// stored record path is the CANONICALIZED worktree path, so we canonicalize our
+/// deterministic target the same way when it exists on disk (a fresh run's path
+/// won't exist → raw path → no match → the caller mints). The run-scoped branch
+/// gate is applied by [`adoptable_run_worktree`] in the caller.
+fn lookup_run_worktree_record(
+    workspace_runtime: &WorkspaceRuntime,
+    target_path: &str,
+) -> Result<Option<AdoptedWorktree>, StepOutcome> {
+    let lookup_path = std::fs::canonicalize(target_path)
+        .map(|path| path.to_string_lossy().to_string())
+        .unwrap_or_else(|_| target_path.to_string());
+    let found = workspace_runtime
+        .find_active_workspace_by_path_and_kind(&lookup_path, WorkspaceKind::Worktree)
+        .map_err(|error| {
+            failed_msg(
+                "worktree_mint_failed",
+                format!("worktree adoption lookup failed: {error}"),
+            )
+        })?
+        .map(|record| (record.id, record.current_branch));
+    Ok(found)
+}
+
+/// Crash-resume recovery of the run's effective worktree (finding 1, belt-and-
+/// suspenders in `hydrate_from_run`), decoupled from live deps so it can be
+/// driven directly by tests. A persisted session already living in the worktree
+/// wins (`session_recovered`, its workspace IS the effective one); otherwise —
+/// the session-less crash hole — ADOPT the run's own worktree record if one
+/// exists (run-scoped by `expected_branch`). `None` when there's nothing to adopt
+/// yet (the first step will mint).
+async fn recover_resume_worktree<L, LFut>(
+    session_recovered: Option<String>,
+    expected_branch: &str,
+    lookup: L,
+) -> Result<Option<String>, StepOutcome>
+where
+    L: FnOnce() -> LFut,
+    LFut: std::future::Future<Output = Result<Option<AdoptedWorktree>, StepOutcome>>,
+{
+    if let Some(workspace_id) = session_recovered {
+        return Ok(Some(workspace_id));
+    }
+    Ok(adoptable_run_worktree(lookup().await?, expected_branch))
+}
+
+/// Sanitize a run id into a path/branch-safe token (alphanumerics, `-`, `_`
+/// kept; everything else → `-`). Run ids are already uuid/`run-…`-shaped, so
+/// this is a belt-and-braces guard, not a real transform.
+fn sanitize_run_token(run_id: &str) -> String {
+    run_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect()
+}
+
+/// The run-scoped branch name for a per-run worktree: `workflow-run/<run_id>`.
+/// Run-scoped so two runs on the same pinned workspace get distinct branches
+/// (no collision).
+fn run_worktree_branch_name(run_id: &str) -> String {
+    format!("workflow-run/{}", sanitize_run_token(run_id))
+}
+
+/// The run-scoped worktree checkout path: a sibling of the pinned checkout named
+/// `wf-run-<run_id>`. Run-scoped so two runs get distinct paths. `None` when the
+/// pinned path has no parent (a filesystem root — never a real checkout).
+fn run_worktree_target_path(pinned_path: &str, run_id: &str) -> Option<String> {
+    Path::new(pinned_path)
+        .parent()
+        .map(|parent| {
+            parent
+                .join(format!("wf-run-{}", sanitize_run_token(run_id)))
+                .to_string_lossy()
+                .to_string()
+        })
+}
+
+/// The pinned checkout's current HEAD commit SHA, used as the exact base for the
+/// per-run worktree ("off the checkout's current HEAD"). `None` when it can't be
+/// read, in which case the caller lets git default to the source repo's HEAD.
+fn run_worktree_base_ref(pinned_path: &str) -> Option<String> {
+    crate::adapters::git::operations::worktrees::stdout_result(
+        Path::new(pinned_path),
+        &["rev-parse", "HEAD"],
+    )
+    .ok()
+    .filter(|sha| !sha.is_empty())
 }
 
 // --- agent.emit file-drop helpers (§7.3 + §7.4) ---
@@ -1882,5 +2262,237 @@ mod tests {
             StepOutcome::Failed { code, .. } => assert_eq!(code, "session_closed"),
             other => panic!("expected Failed(session_closed), got {other:?}"),
         }
+    }
+
+    // --- wave 2b: run worktree isolation (deny-path floor) ---
+
+    #[tokio::test]
+    async fn workspace_isolation_returns_pinned_and_never_mints() {
+        // Under the default (legacy) isolation, the run resolves to its pinned
+        // workspace and the worktree mint is never invoked. (Async now: the mint
+        // runs on `spawn_blocking` behind an async-aware memo lock.)
+        let memo = tokio::sync::Mutex::new(None);
+        let minted = std::sync::atomic::AtomicU32::new(0);
+        let resolved = resolve_effective_workspace(Isolation::Workspace, "ws-pinned", &memo, || {
+            minted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            async { Ok("ws-worktree".to_string()) }
+        })
+        .await
+        .expect("workspace isolation resolves");
+        assert_eq!(resolved, "ws-pinned");
+        assert_eq!(minted.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn worktree_isolation_mints_once_and_every_slot_shares_it() {
+        // DENY-PATH (d) + one-worktree-per-run: the mint runs exactly once; every
+        // subsequent resolution (a second slot, a shell step) returns the SAME
+        // worktree workspace id without re-minting.
+        let memo = tokio::sync::Mutex::new(None);
+        let mints = std::sync::atomic::AtomicU32::new(0);
+        let first = resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || {
+            let n = mints.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            async move { Ok(format!("ws-worktree-{n}")) }
+        })
+        .await
+        .expect("mint");
+        let second = resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || {
+            mints.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            async { Ok("ws-worktree-SECOND".to_string()) }
+        })
+        .await
+        .expect("memoized");
+        assert_eq!(first, "ws-worktree-0");
+        assert_eq!(second, first, "all slots must share the one minted worktree");
+        assert_eq!(
+            mints.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "the worktree must be minted once per run, never per slot"
+        );
+    }
+
+    #[tokio::test]
+    async fn worktree_mint_failure_propagates_and_leaves_no_effective_workspace() {
+        // DENY-PATH (b): a failed mint surfaces the structured error and does NOT
+        // memoize a fallback — because callers resolve the workspace BEFORE
+        // creating a session, this fails the run with no session in the shared
+        // checkout. A later resolution retries the mint (memo still empty).
+        let memo = tokio::sync::Mutex::new(None);
+        let outcome = resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || async {
+            Err(failed_msg("worktree_mint_failed", "git worktree add failed: dirty"))
+        })
+        .await
+        .expect_err("mint failure must propagate");
+        assert_eq!(outcome_code(&outcome), "worktree_mint_failed");
+        assert!(
+            memo.lock().await.is_none(),
+            "a failed mint must not silently fall back to the pinned checkout"
+        );
+    }
+
+    // --- wave 2b hardening: crash-recovery adoption + spawn_blocking (findings 1 & 2) ---
+
+    #[test]
+    fn adoptable_run_worktree_adopts_only_the_runs_own_branch() {
+        let expected = run_worktree_branch_name("run-x");
+        // Adoption: a record at the run's path on the run's OWN branch is adopted.
+        assert_eq!(
+            adoptable_run_worktree(Some(("ws-wt".to_string(), Some(expected.clone()))), &expected),
+            Some("ws-wt".to_string()),
+        );
+        // Run-scoped only: a record squatting the path on a DIFFERENT branch is
+        // NOT adopted (caller falls through to an honest mint conflict).
+        assert_eq!(
+            adoptable_run_worktree(
+                Some(("ws-foreign".to_string(), Some("feature/other".to_string()))),
+                &expected,
+            ),
+            None,
+        );
+        // A record with no recorded branch is not adoptable (can't prove it's ours).
+        assert_eq!(
+            adoptable_run_worktree(Some(("ws-detached".to_string(), None)), &expected),
+            None,
+        );
+        // Half-created (git worktree on disk but NO record) → lookup finds nothing
+        // → not adoptable → caller mints and fails honestly.
+        assert_eq!(adoptable_run_worktree(None, &expected), None);
+    }
+
+    #[tokio::test]
+    async fn resolve_adopts_existing_worktree_without_a_second_mint() {
+        // Finding 1: when the run's own worktree record already exists (a prior
+        // executor minted it before crashing), the "mint" closure adopts it and
+        // resolve memoizes that id — a subsequent resolution never mints again.
+        let expected = run_worktree_branch_name("run-x");
+        let memo = tokio::sync::Mutex::new(None);
+        let mint_calls = std::sync::atomic::AtomicU32::new(0);
+        let adopt_or_mint = || {
+            mint_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let expected = expected.clone();
+            async move {
+                // Stub lookup: the run's own record already exists.
+                let found = Some(("ws-adopted".to_string(), Some(expected.clone())));
+                adoptable_run_worktree(found, &expected)
+                    .ok_or_else(|| failed_msg("worktree_mint_failed", "would have minted"))
+            }
+        };
+        let first = resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, adopt_or_mint)
+            .await
+            .expect("adopts the existing worktree");
+        assert_eq!(first, "ws-adopted");
+        // Second resolution is served from the memo, never re-adopting/minting.
+        let second =
+            resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || async {
+                panic!("must not mint/adopt again once memoized")
+            })
+            .await
+            .expect("memoized");
+        assert_eq!(second, "ws-adopted");
+        assert_eq!(mint_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(memo.lock().await.as_deref(), Some("ws-adopted"));
+    }
+
+    #[tokio::test]
+    async fn half_created_worktree_fails_honestly_rather_than_adopting() {
+        // Finding 1: a git worktree exists on disk but has NO workspace record
+        // (half-created before a crash). The adoption lookup returns None, so we do
+        // NOT adopt untracked state; the mint runs and conflicts on the occupied
+        // path — a structured failure, not a silent adopt.
+        let expected = run_worktree_branch_name("run-x");
+        let memo = tokio::sync::Mutex::new(None);
+        let outcome = resolve_effective_workspace(Isolation::Worktree, "ws-pinned", &memo, || {
+            let expected = expected.clone();
+            async move {
+                // Stub lookup: no record (half-created).
+                match adoptable_run_worktree(None, &expected) {
+                    Some(id) => Ok(id),
+                    None => Err(failed_msg(
+                        "worktree_mint_failed",
+                        "worktree target path already exists",
+                    )),
+                }
+            }
+        })
+        .await
+        .expect_err("half-created worktree must fail honestly");
+        assert_eq!(outcome_code(&outcome), "worktree_mint_failed");
+        assert!(memo.lock().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn resume_adopts_existing_worktree_when_no_session_persisted_yet() {
+        // Finding 1 (belt-and-suspenders): a fresh executor resuming a run that
+        // persisted NO session (a shell/PR-only prefix) still recovers the run's
+        // worktree by ADOPTING its record — so resume resolves to the worktree
+        // without minting even before the first step runs.
+        let expected = run_worktree_branch_name("run-x");
+        let recovered = recover_resume_worktree(None, &expected, || {
+            let expected = expected.clone();
+            async move { Ok(Some(("ws-adopted".to_string(), Some(expected.clone())))) }
+        })
+        .await
+        .expect("resume lookup ok");
+        assert_eq!(recovered, Some("ws-adopted".to_string()));
+    }
+
+    #[tokio::test]
+    async fn resume_prefers_a_recovered_session_and_skips_the_lookup() {
+        // A persisted session already lives in the worktree: its workspace wins and
+        // the (belt-and-suspenders) adoption lookup is never consulted.
+        let recovered = recover_resume_worktree(
+            Some("ws-from-session".to_string()),
+            "workflow-run/run-x",
+            || async { panic!("must not look up when a session was recovered") },
+        )
+        .await
+        .expect("session recovery wins");
+        assert_eq!(recovered, Some("ws-from-session".to_string()));
+    }
+
+    #[tokio::test]
+    async fn resume_adopts_nothing_when_no_record_and_no_session() {
+        // Nothing to recover yet (no session, no record): the first step will mint.
+        let expected = run_worktree_branch_name("run-x");
+        let recovered = recover_resume_worktree(None, &expected, || async { Ok(None) })
+            .await
+            .expect("resume lookup ok");
+        assert_eq!(recovered, None);
+    }
+
+    #[test]
+    fn run_worktree_addressing_is_run_scoped_and_deterministic() {
+        // DENY-PATH (c): two runs on the SAME pinned workspace get distinct
+        // worktree branches AND paths (no collision); the same run always
+        // addresses the same worktree (deterministic → resume/reuse is safe).
+        let pinned = "/sandbox/repo";
+        let a_branch = run_worktree_branch_name("run-aaa");
+        let b_branch = run_worktree_branch_name("run-bbb");
+        assert_ne!(a_branch, b_branch);
+        assert_eq!(a_branch, run_worktree_branch_name("run-aaa"));
+
+        let a_path = run_worktree_target_path(pinned, "run-aaa").expect("path a");
+        let b_path = run_worktree_target_path(pinned, "run-bbb").expect("path b");
+        assert_ne!(a_path, b_path);
+        assert_eq!(a_path, run_worktree_target_path(pinned, "run-aaa").unwrap());
+        // The worktree lands as a sibling of the pinned checkout.
+        assert_eq!(a_path, "/sandbox/wf-run-run-aaa");
+    }
+
+    #[test]
+    fn run_worktree_target_path_needs_a_parent() {
+        // A filesystem root has no parent → no derivable worktree path (mint
+        // then fails with worktree_mint_failed rather than corrupting `/`).
+        assert!(run_worktree_target_path("/", "run-x").is_none());
+    }
+
+    #[test]
+    fn run_worktree_base_ref_is_none_outside_a_repo() {
+        // rev-parse fails outside a git repo → None, letting git default to the
+        // source repo's HEAD rather than passing a bogus base.
+        let dir = std::env::temp_dir().join(format!("wf-norepo-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(run_worktree_base_ref(&dir.to_string_lossy()).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

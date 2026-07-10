@@ -231,6 +231,23 @@ WORKFLOW_MAX_AGENTS: Final = 20
 # name (emit names share the ref namespace).
 WORKFLOW_RESERVED_REF_SEGMENTS: Final = frozenset({"inputs", "steps", "fields"})
 
+# --- run isolation (wave 2b; data-contract §4 plan-level, mental-model §9/§11).
+# Whether the run's sessions execute directly in the pinned workspace's checkout
+# (``workspace``, the legacy behavior — also what an ABSENT field means, so old
+# stored plans stay valid) or in a fresh git worktree the runtime mints per run
+# inside that checkout (``worktree``). Plan-level in v1 (one worktree per RUN,
+# shared by every slot); L30 parallel lanes inherit this field and later split it
+# per lane. The runtime consumer is anyharness ``plan.rs::Isolation``.
+WORKFLOW_ISOLATION_WORKSPACE: Final = "workspace"
+WORKFLOW_ISOLATION_WORKTREE: Final = "worktree"
+SUPPORTED_WORKFLOW_ISOLATIONS: Final = frozenset(
+    {WORKFLOW_ISOLATION_WORKSPACE, WORKFLOW_ISOLATION_WORKTREE}
+)
+# The default when nothing pins isolation: run in the pinned checkout as-is. The
+# field is emitted explicitly so the resolved plan is self-describing, but the
+# Rust parser also treats an absent field as this value (back-compat).
+WORKFLOW_ISOLATION_DEFAULT: Final = WORKFLOW_ISOLATION_WORKSPACE
+
 # --- session_binding: defaulted per-slot in the resolved plan by trigger kind
 # (manual/chat=fresh, schedule/poll=headless); no longer an authored field. -----
 WORKFLOW_SESSION_BINDING_FRESH: Final = "fresh"

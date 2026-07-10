@@ -488,3 +488,78 @@ async def test_start_run_cloud_stamps_sandbox_workspace_id(db_session: AsyncSess
     )
     assert run.status == "pending_delivery"
     assert run.anyharness_workspace_id == "sandbox-ws-9"
+
+
+# --- StartRun run isolation (wave 2b, §9 RULED default) ------------------------
+
+
+async def test_start_run_cloud_without_bindings_defaults_to_worktree_isolation(
+    db_session: AsyncSession,
+) -> None:
+    # §9's RULED default: a cloud run with no session bindings gets a fresh
+    # per-run worktree. The field round-trips through the DB (JSONB) exactly
+    # like any other resolved-plan key.
+    user = await _make_user(db_session)
+    workflow = await _make_workflow(db_session, user)
+    workspace = await _make_ready_cloud_workspace(
+        db_session, user, anyharness_workspace_id="sandbox-ws-iso"
+    )
+    run = await service.start_run(
+        db_session,
+        user,
+        workflow.id,
+        inputs={},
+        target_mode="personal_cloud",
+        target_workspace_id=workspace.id,
+    )
+    assert run.resolved_plan_json["isolation"] == "worktree"
+
+
+async def test_start_run_cloud_with_session_binding_keeps_workspace_isolation(
+    db_session: AsyncSession,
+) -> None:
+    # The 1a bind-existing path is the ONLY exception in v1: you can't bind into
+    # a session that lives in the shared checkout and simultaneously isolate
+    # away from it, so a bound run keeps workspace isolation even though the
+    # target_mode is cloud.
+    user = await _make_user(db_session)
+    workflow = await _make_workflow(db_session, user)
+    workspace = await _make_ready_cloud_workspace(
+        db_session, user, anyharness_workspace_id="sandbox-ws-iso-bound"
+    )
+    run = await service.start_run(
+        db_session,
+        user,
+        workflow.id,
+        inputs={},
+        target_mode="personal_cloud",
+        target_workspace_id=workspace.id,
+        session_bindings={"main": "sess-not-live"},
+    )
+    assert run.resolved_plan_json["isolation"] == "workspace"
+
+
+async def test_deliver_cloud_run_accepts_stored_plan_without_isolation_field(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Back-compat deny-path (c): a run whose stored plan predates the `isolation`
+    # field (never written by any resolver version) still validates + delivers.
+    # The server never requires the field to be present — only the Rust parser's
+    # `serde(default)` gives it meaning; the server just passes the dict through.
+    user = await _make_user(db_session)
+    run = await _make_cloud_run(db_session, user)
+    assert "isolation" not in run.resolved_plan_json
+    _patch_gateway(monkeypatch)
+    seen = _patch_client(
+        monkeypatch,
+        lambda request: httpx.Response(202, json={"runId": str(run.id), "status": "running"}),
+    )
+
+    delivered = await delivery.deliver_cloud_run(db_session, user, run)
+
+    assert delivered.status == "delivered"
+    assert len(seen) == 1
+    import json
+
+    body = json.loads(seen[0].content)
+    assert "isolation" not in body["plan"]

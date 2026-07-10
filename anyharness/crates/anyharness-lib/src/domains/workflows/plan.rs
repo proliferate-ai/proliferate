@@ -41,6 +41,18 @@ pub struct ResolvedPlan {
     pub trigger_kind: Option<String>,
     #[serde(default)]
     pub target_mode: Option<String>,
+    /// Run isolation (wave 2b): whether the run's sessions execute directly in
+    /// the pinned workspace's checkout (`workspace`, the legacy behavior) or in a
+    /// fresh git worktree minted per run inside that checkout (`worktree`).
+    ///
+    /// `serde(default)` → an ABSENT field parses as [`Isolation::Workspace`], so
+    /// every plan produced before this field existed keeps its old behavior
+    /// (back-compat deny-path). The field is plan-level in v1: one worktree per
+    /// RUN, shared by all the run's slots. L30 (parallel lanes) inherits this
+    /// field and will later split isolation per lane; the enum leaves room for
+    /// that without re-keying the contract.
+    #[serde(default)]
+    pub isolation: Isolation,
     /// Per-slot session provisioning, keyed by the step's `slot`.
     #[serde(default)]
     pub sessions: BTreeMap<String, SessionSpec>,
@@ -81,6 +93,22 @@ pub struct PlanGateway {
     /// its emptiness (L22 local-lane fail-fast); it never inspects tools.
     #[serde(default)]
     pub integrations: Vec<String>,
+}
+
+/// Run isolation posture (wave 2b, mental-model §9/§11). `snake_case` on the
+/// wire to match the resolved-plan JSON the server produces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Isolation {
+    /// Run the sessions directly in the pinned workspace's checkout, as-is. The
+    /// default, and what an absent `isolation` field means (old plans stay
+    /// valid).
+    #[default]
+    Workspace,
+    /// Mint one fresh git worktree per run inside the pinned checkout and run
+    /// every session in it (fresh-per-run mint, §9). Per-lane splitting is
+    /// L30's; v1 is per-run.
+    Worktree,
 }
 
 impl ResolvedPlan {
@@ -362,6 +390,7 @@ mod tests {
             "version_n": 2,
             "trigger_kind": "manual",
             "target_mode": "local",
+            "isolation": "worktree",
             "sessions": {
                 "triage": { "harness": "claude", "model": "sonnet", "session_binding": "fresh" },
                 "fix": { "harness": "codex", "model": "opus", "session_binding": "headless",
@@ -408,6 +437,7 @@ mod tests {
         assert_eq!(plan.run_id, "run-1");
         assert_eq!(plan.plan_version, Some(1));
         assert_eq!(plan.version_n, Some(2));
+        assert_eq!(plan.isolation, Isolation::Worktree);
         assert_eq!(plan.step_count(), 7);
 
         // sessions map, keyed by slot.
@@ -526,6 +556,62 @@ mod tests {
     fn rejects_invalid_json() {
         let error = parse("{not json").expect_err("invalid json must reject");
         assert!(matches!(error, PlanError::InvalidJson(_)));
+    }
+
+    // --- run isolation (wave 2b) ---
+
+    #[test]
+    fn absent_isolation_field_parses_as_workspace() {
+        // DENY-PATH (a): a plan produced before `isolation` existed MUST parse,
+        // and MUST mean the old behavior (run in the pinned checkout as-is).
+        let plan = parse(
+            r#"{
+                "run_id": "run-legacy",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
+            }"#,
+        )
+        .expect("legacy plan without isolation must parse");
+        assert_eq!(plan.isolation, Isolation::Workspace);
+    }
+
+    #[test]
+    fn explicit_isolation_values_round_trip() {
+        let workspace = parse(
+            r#"{
+                "run_id": "run-ws",
+                "isolation": "workspace",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
+            }"#,
+        )
+        .expect("explicit workspace isolation must parse");
+        assert_eq!(workspace.isolation, Isolation::Workspace);
+
+        let worktree = parse(
+            r#"{
+                "run_id": "run-wt",
+                "isolation": "worktree",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
+            }"#,
+        )
+        .expect("explicit worktree isolation must parse");
+        assert_eq!(worktree.isolation, Isolation::Worktree);
+    }
+
+    #[test]
+    fn rejects_unknown_isolation_value() {
+        let error = parse(
+            r#"{
+                "run_id": "run-bad-iso",
+                "isolation": "sandbox",
+                "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
+                "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
+            }"#,
+        )
+        .expect_err("unknown isolation value must reject");
+        assert!(matches!(error, PlanError::Malformed(_)));
     }
 
     // --- per-run gateway block (PR E, E3 namespace-level scope) ---
