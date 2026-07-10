@@ -98,7 +98,7 @@ pub fn initialize_response(
             "capabilities": { "tools": {} },
             "serverInfo": {
                 "name": definition.server_info_name,
-                "version": env!("CARGO_PKG_VERSION"),
+                "version": env!("PROLIFERATE_STAMPED_VERSION"),
             },
             "instructions": definition.instructions,
         }),
