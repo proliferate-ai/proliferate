@@ -36,6 +36,8 @@ export interface OwnerSelection {
 export interface BillingOverview {
   plan: string;
   billingMode: string;
+  /** Whether the deployment has Pro (subscription) billing enabled (PRO_BILLING_ENABLED). */
+  proBillingEnabled?: boolean;
   remainingHours: number;
   includedHours: number;
   usedHours: number;
@@ -140,9 +142,20 @@ export class BillingHttpClient {
   }
 }
 
-/** True when a Stripe checkout URL is a TEST-mode session (never mutate a live one). */
+/**
+ * True when a Stripe URL was minted by a TEST-mode account. Covers both shapes
+ * staging's billing routes return: a `cs_test_` Checkout Session (an
+ * unsubscribed owner) and a `billing.stripe.com/p/session/test_…` customer
+ * portal (an already-subscribed owner — `cloud-checkout` redirects there). The
+ * test-mode swap is the whole point of this scenario, so recognise both.
+ */
 export function isStripeTestModeUrl(url: string): boolean {
-  return url.includes("cs_test_") || url.includes("/test/");
+  return url.includes("cs_test_") || url.includes("/test/") || url.includes("/session/test_");
+}
+
+/** True when a Stripe URL was minted by a LIVE-mode account (the pre-swap state finding #4 recorded). */
+export function isStripeLiveModeUrl(url: string): boolean {
+  return url.includes("cs_live_") || url.includes("/live/") || url.includes("/session/live_");
 }
 
 /** Resolves the durable org for the authenticated user: the env override, else the one owned org. */
