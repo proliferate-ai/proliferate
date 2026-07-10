@@ -6,7 +6,6 @@ import { RightPanelHeaderActions } from "@/components/workspace/shell/right-pane
 import { RightPanelHeaderEntryList } from "@/components/workspace/shell/right-panel/RightPanelHeaderEntryList";
 import { RightPanelNewTabMenu } from "@/components/workspace/shell/right-panel/RightPanelNewTabMenu";
 import { useRightPanelHeaderDrag } from "@/hooks/workspaces/ui/use-right-panel-header-drag";
-import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import {
   type RightPanelHeaderEntryKey,
 } from "@/lib/domain/workspaces/shell/right-panel-model";
@@ -66,7 +65,6 @@ export function RightPanelHeaderTabs({
     onReorderHeaderEntry,
   });
   const shortcutRevealVisible = useShortcutRevealVisible();
-  const transparentChromeEnabled = useTransparentChromeEnabled();
 
   useEffect(() => {
     if (newTabMenuRequestToken > 0) {
@@ -75,10 +73,7 @@ export function RightPanelHeaderTabs({
   }, [newTabMenuRequestToken]);
 
   return (
-    <div
-      className="right-panel-tab-system ui-tab-system editor-panel-tab-root editor-panel-tab-root--simple-tabs"
-      data-chrome={transparentChromeEnabled ? "glass" : "solid"}
-    >
+    <div className="right-panel-tab-system ui-tab-system editor-panel-tab-root editor-panel-tab-root--simple-tabs">
       <div className="ui-tab-system-bar">
         <div className="editor-panel-tab-bar-tab-cluster">
           <output

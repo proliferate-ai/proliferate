@@ -2,16 +2,14 @@
 // card is a step lighter, which rendered the header as a visibly lighter haze
 // band against the opaque chat surface on every theme.
 //
-// h-16 (64px) must stay in sync with the right panel's tab-system height:
-// .right-panel-tab-system[data-chrome="glass"] in
-// apps/packages/design/src/css/desktop.css sets --tab-system-height: 64px to
-// match, so the two headers stay aligned in glass chrome mode.
+// Both chrome modes use 46px (codex --height-toolbar, UX_SPEC §7) so the
+// header always lines up with the right panel's --tab-system-height in
+// apps/packages/design/src/css/desktop.css — the main header aligns down to
+// the right pane, not the other way around (owner ruling 2026-07-10).
 const WORKSPACE_GLASS_HEADER_BASE_CLASS =
-  "flex h-16 shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60";
+  "flex h-[46px] shrink-0 items-center bg-background/70 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60";
 const WORKSPACE_GLASS_HEADER_CLASS =
   `${WORKSPACE_GLASS_HEADER_BASE_CLASS} border-b border-foreground/10`;
-// 46px = codex --height-toolbar (UX_SPEC §7). Must stay in sync with the
-// right panel's default --tab-system-height in desktop.css.
 const WORKSPACE_SOLID_HEADER_BASE_CLASS =
   "flex h-[46px] shrink-0 items-center bg-background";
 const WORKSPACE_SOLID_HEADER_CLASS =
