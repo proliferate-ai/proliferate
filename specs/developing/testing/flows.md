@@ -46,8 +46,8 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Cloud workspace create: request path + UI state up to the provisioning seam | 2 | — |
 | Add-Repo flow entry: local/cloud branches render + desktop-web fallback limits (no native picker outside Tauri) | 2 | tests/intent/specs/workspace-entry.spec.ts |
 | New user cold path: GitHub App authorization triggers first-ever sandbox provisioned from zero, within time budget | 3 | tests/release/src/scenarios/t3-prov-1.ts (T3-PROV-1; REAL trigger — seeds the App-auth callback's outcome via github_app_seed.py, real user token + real installation token, then runs the real post-callback body → real E2B sandbox; asserts positive AND negative trigger contract; fallback seam when seed creds absent) |
-| Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; blocked on current_product_user — no fallback seam for this one, it's specifically the front-door path) |
-| Cloud workspace pause/resume/connect on real E2B | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; blocked, see above) |
+| Existing user warm path: reopen, pause (inaccessible), resume, state intact | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; #1041 — real and green end-to-end on --lane local against a real E2B sandbox: front-door reconnect via the anyharness gateway proxy, direct-E2B pause/resume with ground truth verified, filesystem state proven intact across the cycle; RELEASE_E2E_E2B_API_KEY-gated, expected-fail without it; blocked, not red, when the durable org's cloud-sandbox credits are exhausted) |
+| Cloud workspace pause/resume/connect on real E2B | 3 | tests/release/src/scenarios/t3-prov-2.ts (T3-PROV-2; same scenario) |
 | Local ↔ cloud workspace migration | 3 | — |
 | Add repo from cloud | 2 | — |
 | Repo settings applied: default branch, action scripts, environment scripts/env vars take effect — locally AND in sandbox | 3 | tests/release/src/scenarios/t3-repo-1.ts (T3-REPO-1; #1043 authorization blocker resolved — seeds the durable user's real App auth; remaining expected-fail is environmental: t3local's App (proliferate-dev/pablonyx) isn't installed on the fixture org proliferate-e2e → github_app_installation_required) |
@@ -68,9 +68,9 @@ Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
 | Secrets CRUD in UI: org, personal, file secrets | 2 | — |
-| Org secret set → materializes in a new cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (T3-SEC-MAT-1; blocked on current_product_user — no local-lane variant exists in the contract) |
-| Personal secret set → materializes in a new cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario, blocked) |
-| File secret set → lands at the right path in the sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario, blocked) |
+| Org secret set → materializes into the owner's personal cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (T3-SEC-MAT-1; #1042 — real and green on --lane local: personal + org env-var secrets PUT, materialization polled to ready, then E2B-direct in-sandbox verification of global.env content and manifest sha256s, plus the update-propagation cycle; RELEASE_E2E_E2B_API_KEY-gated, expected-fail without it; blocked, not red, when the durable org's cloud-sandbox credits are exhausted) |
+| Personal secret set → materializes into the owner's personal cloud sandbox | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario) |
+| Workspace file secret set → lands at the right path in a fresh cloud workspace | 3 | tests/release/src/scenarios/t3-sec-mat-1.ts (same scenario; this half needs a seeded GitHub App user authorization for the durable identity — real on --lane local when the seed is available, expected-fail citing #1043's environmental gap otherwise; never attempted on --lane staging) |
 
 ## Integrations
 

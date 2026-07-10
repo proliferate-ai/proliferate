@@ -39,8 +39,10 @@ import { LocalRuntimeClient, findErrorEvent, findLastAssistantReply, findTurnEnd
  * `single_org_mode` is true — verified 2026-07-09: the durable user gets HTTP
  * 200 from `GET /v1/cloud/cloud-sandbox` despite productReady=false). What
  * remains is a test-implementation gap: driving a full agent chat session
- * inside a real E2B sandbox through the `/v1/cloud/cloud-sandbox/anyharness/*`
- * proxy is not yet written (and needs a running sandbox + a publicly reachable
+ * inside a real E2B sandbox through the `/v1/gateway/cloud-sandbox/anyharness/*`
+ * proxy (server/proliferate/server/cloud/gateway/api.py -- NOT
+ * `/v1/cloud/cloud-sandbox/anyharness/*`, see ../fixtures/cloud-sandbox.ts)
+ * is not yet written (and needs a running sandbox + a publicly reachable
  * server URL for callbacks). Tracked TODO, not a product gate.
  */
 export const t3Chat1: ScenarioDefinition = {
@@ -73,7 +75,7 @@ export const t3Chat1: ScenarioDefinition = {
       throw new ScenarioExpectedFailError(
         "T3-CHAT-1/sandbox: the current_product_user gate is lifted in single-org mode (verified " +
           "2026-07-09), but driving a full agent chat session inside a real E2B sandbox through the " +
-          "/v1/cloud/cloud-sandbox/anyharness/* proxy is not yet implemented — it needs a running " +
+          "/v1/gateway/cloud-sandbox/anyharness/* proxy is not yet implemented — it needs a running " +
           "durable sandbox and a publicly reachable RELEASE_E2E_SERVER_URL. Tracked test TODO (#1042).",
       );
     }
