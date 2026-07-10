@@ -7,26 +7,23 @@
   </picture>
 </p>
 
-<h3>The Open Agent Workspace</h3>
-
 <p>
   <a href="https://github.com/proliferate-ai/proliferate"><img alt="GitHub stars" src="https://img.shields.io/github/stars/proliferate-ai/proliferate?style=flat&amp;logo=github&amp;label=stars" /></a>
-  <a href="https://proliferate.com/changelog"><img alt="Latest release" src="https://img.shields.io/badge/release-changelog-0969DA?style=flat" /></a>
   <a href="./LICENSE"><img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat" /></a>
-  <a href="https://proliferate.com/docs"><img alt="Docs" src="https://img.shields.io/badge/docs-view-0969DA?style=flat" /></a>
   <a href="https://discord.gg/7b5afMTqW"><img alt="Discord" src="https://img.shields.io/badge/discord-join-5865F2?style=flat&amp;logo=discord&amp;logoColor=white" /></a>
+  <img alt="Platform: macOS" src="https://img.shields.io/badge/platform-macOS-black?style=flat&amp;logo=apple" />
 </p>
 
-<br />
+<p>
+  <strong>The open-source AI IDE for coding agents.</strong><br />
+  Run Claude Code, Codex, Cursor, OpenCode, and Grok side by side—locally or in cloud workspaces, each with its own isolated environment.
+</p>
 
-An open-source AI IDE for Claude Code, Codex, Cursor, OpenCode, Grok, and open models.<br />
-Run agents in parallel, locally or in cloud sandboxes. Review their work in one place and automate the routines worth repeating.
-
-<br />
+<h3>
+  <a href="https://proliferate.com/api/download"><u>Download Proliferate for macOS</u></a>
+</h3>
 
 <p>
-  <a href="https://proliferate.com/api/download"><strong>Download for macOS</strong></a>
-  &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/docs/product/quickstart">Quickstart</a>
   &nbsp;&bull;&nbsp;
   <a href="https://proliferate.com/docs">Documentation</a>
@@ -38,206 +35,118 @@ Run agents in parallel, locally or in cloud sandboxes. Review their work in one 
 
 </div>
 
-<br />
-
-Proliferate is the workspace around your coding agents, not another coding
-agent. Each harness keeps its native tools, authentication, models, and
-configuration. Proliferate adds isolated workspaces, unified review, agent
-collaboration, and reusable workflows.
-
-## One Workspace for Every Agent
-
-Each agent runs through its native harness, so its authentication, tools,
-models, permissions, and transcript behavior stay intact. Proliferate adds the
-shared workspace, execution, and review layer around it.
+## Features
 
 <table>
   <tr>
-    <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/claude.svg" width="40" height="40" alt="Claude" /><br />
-      <strong>Claude Code</strong>
+    <td width="50%" valign="top">
+      <h3>Native agents, one workspace</h3>
+      Keep each harness's authentication, models, tools, permissions, and transcript behavior. Proliferate adds the shared workspace around them.
+      <br /><br />
+      <a href="https://proliferate.com/docs/product/agents">Supported agents →</a>
     </td>
-    <td align="center" width="120">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="./apps/desktop/public/provider-icons/codex-dark.svg" />
-        <img src="./apps/desktop/public/provider-icons/codex.svg" width="40" height="40" alt="Codex" />
-      </picture><br />
-      <strong>Codex</strong>
+    <td width="50%" valign="top">
+      <img width="100%" alt="Choose an agent, model, mode, and permissions in Proliferate" src="https://proliferate.com/docs-assets/home-cowork-composer.png" />
     </td>
-    <td align="center" width="120">
-      <img src="./apps/desktop/public/provider-icons/opencode.png" width="40" height="40" alt="OpenCode" /><br />
-      <strong>OpenCode</strong>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Parallel, local or cloud</h3>
+      Give each task an isolated checkout or worktree. Keep fast work on your Mac or run long-lived work in a private cloud workspace.
+      <br /><br />
+      <a href="https://proliferate.com/docs/product/workspaces">Workspaces →</a>
     </td>
-    <td align="center" width="120">
-      <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="./specs/developing/assets/readme/cursor-dark.svg" />
-        <img src="./apps/desktop/public/provider-icons/cursor.svg" width="40" height="40" alt="Cursor" />
-      </picture><br />
-      <strong>Cursor</strong>
+    <td width="50%" valign="top">
+      <img width="100%" alt="Create a local checkout, worktree, or cloud workspace" src="https://proliferate.com/docs-assets/first-workspace-targets.png" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Review before you merge</h3>
+      Inspect plans, transcripts, terminals, files, tests, and diffs in one place. Ask one agent to review another before you merge.
+    </td>
+    <td width="50%" valign="top">
+      <img width="100%" alt="Run a multi-agent code review in Proliferate" src="https://proliferate.com/docs-assets/review-code-review.png" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Reusable workflows <sup>beta</sup></h3>
+      Turn a useful routine into a workflow your team can inspect, reuse, and run across supported agents. Choose a model per step to balance capability and cost.
+      <br /><br />
+      <a href="https://proliferate.com/docs/product/workflows">Workflows →</a>
+    </td>
+    <td width="50%" valign="top">
+      <img width="100%" alt="Create a reusable agent workflow in Proliferate" src="https://proliferate.com/docs-assets/automation-creation.png" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Own your agent workspace</h3>
+      Proliferate is AGPL-3.0. Bring existing subscriptions, provider keys, or a model gateway, and self-host the control plane when you need to operate it yourself.
+      <br /><br />
+      <a href="https://proliferate.com/docs/deployment">Self-hosting →</a>
+    </td>
+    <td width="50%" valign="top">
+      <img width="100%" alt="Configure a Proliferate workspace environment" src="https://proliferate.com/docs-assets/first-workspace-configuration.png" />
     </td>
   </tr>
 </table>
 
-Use the subscriptions you already pay for, bring provider API keys, connect
-your own model gateway, or run open models through OpenCode. Grok and other
-supported harnesses use the same native adapter layer.
+Self-hosting the control plane is in beta. Managed cloud workspaces still use
+provider-hosted runtimes today.
 
-[See supported agents and authentication](https://proliferate.com/docs/product/agents).
+### Also in the box
 
-## Work in Parallel, Local or Cloud
+- Agent delegation and subagents for focused implementation, investigation, and review
+- MCP servers, skills, and integrations shared across supported agents
+- Built-in terminals, file browsing, git diffs, plan review, and code review
+- Desktop and web access to private cloud workspaces
+- Model choice per task, including lower-cost and open models exposed through supported harnesses
 
-- **Isolated workspaces.** Give every task its own local checkout, worktree, or
-  cloud sandbox so agents do not compete over branches and files.
-- **Parallel work.** Run several agents at once, compare approaches, and keep
-  each branch reviewable.
-- **Agents working together.** Delegate focused tasks to subagents or have one
-  agent review another agent's plan or diff.
-- **Shared tools.** Configure MCP servers, skills, and integrations once and
-  make them available to the agents that need them.
-- **Reviewable output.** Inspect transcripts, terminals, files, tests, and git
-  diffs before you merge.
+## Supported Agents
 
-| Target | Best for | Availability |
-| --- | --- | --- |
-| Local checkout | Fast feedback in an existing working directory | Available |
-| Local worktree | Parallel tasks with isolated branches and files | Available |
-| Proliferate Cloud | Long-running work in isolated cloud sandboxes | Beta |
-| Self-hosted control plane | Teams that need to operate the application layer themselves | Beta |
+<p>
+  <kbd><img src="./apps/desktop/public/provider-icons/claude.svg" width="18" height="18" alt="" />&nbsp; Claude Code</kbd>
+  <kbd><img src="./apps/desktop/public/provider-icons/codex.svg" width="18" height="18" alt="" />&nbsp; Codex</kbd>
+  <kbd><img src="./apps/desktop/public/provider-icons/cursor.svg" width="18" height="18" alt="" />&nbsp; Cursor</kbd>
+  <kbd><img src="./apps/desktop/public/provider-icons/opencode.png" width="18" height="18" alt="" />&nbsp; OpenCode</kbd>
+  <kbd>Grok</kbd>
+</p>
 
-Cloud workspaces keep running after you close your laptop. Local work keeps the
-fast feedback loop and credentials on your machine. Both use the same workspace
-and review model.
+Each agent runs through its native harness. Use the subscriptions you already
+pay for, provider API keys, a compatible model gateway, or open models exposed
+through supported harnesses. Availability varies by agent and target.
 
-[Learn about workspaces](https://proliferate.com/docs/product/workspaces).
+[Agent and authentication guide →](https://proliferate.com/docs/product/agents)
 
-## Turn Repeat Work into Workflows
+## Install
 
-Workflows are a **beta feature** inside the same agent workspace. Use them when
-a useful sequence should not have to be reconstructed from chats every time. A
-release workflow might look like this:
-
-```text
-GitHub issue
-  -> Claude Code plans the change
-  -> Codex implements it and runs the tests
-  -> OpenCode + an open model reviews the result
-  -> Proliferate opens a pull request for you to review
-```
-
-Workflows can combine agent prompts with typed outputs, scripts, model
-switches, branches, pull requests, notifications, and reusable sub-workflows.
-Run them manually, on a schedule, or from a polling feed, then inspect the
-sessions, outputs, cost, and status of each run.
-
-Use a frontier model for the hard step and a cheaper or self-hosted model for
-routine review and triage. Shared team workflows and organization cloud
-execution are also in beta.
-
-[Read the workflow guide](https://proliferate.com/docs/product/workflows).
-
-## Own Your Agent Workspace
-
-Your agent workspace accumulates model choices, tools, repository context,
-environments, transcripts, review history, and workflows. That layer should
-not become a dependency on one model vendor's application.
-
-Proliferate is licensed under **AGPL-3.0**. You can inspect it, extend it, and
-self-host the control plane. The official self-hosted deployment is currently
-in beta and uses Docker Compose or the provided AWS stack. Cloud workspace
-runtimes are still provider-hosted today; self-hosting the control plane does
-not yet mean self-hosting the sandbox substrate.
-
-[Self-host Proliferate](https://proliferate.com/docs/deployment).
-
-## Getting Started
-
-### Download the App
-
-Download Proliferate for macOS from
+Download the macOS app from
 [proliferate.com](https://proliferate.com/api/download), then follow the
-[quickstart](https://proliferate.com/docs/product/quickstart) to connect a
-repository and run your first agent.
+[quickstart](https://proliferate.com/docs/product/quickstart).
 
-### Run From Source
+To run the desktop app from source, install Rust stable, Node.js 22+, and pnpm:
 
-Requirements:
-
-- Rust stable
-- Node.js 22+
-- pnpm
-
-Run the desktop app with the bundled local AnyHarness runtime:
-
-```bash
+~~~bash
 make install
 make dev-local
-```
+~~~
 
-<details>
-<summary>Run the local full stack</summary>
+To operate your own control plane, follow the
+[self-hosting guide](https://proliferate.com/docs/deployment).
 
-Additional requirements:
-
-- Python 3.12+
-- `uv`
-- Docker, for the local control plane database
-
-Use a named development profile:
-
-```bash
-make server-install
-make setup PROFILE=main
-make build
-make run PROFILE=main
-```
-
-See [dev profiles](./specs/developing/local/dev-profiles.md) for profile state,
-ports, generated Tauri configuration, and app labels.
-
-</details>
-
-<details id="self-hosting">
-<summary>Self-host Proliferate (beta)</summary>
-
-Every `server-v*` release publishes a standalone deployment bundle. The
-canonical deployment contains Caddy, Postgres, migrations, and the Proliferate
-API.
-
-- **Docker Compose:** [deployment guide](./specs/developing/deploying/self-hosted-deploy.md)
-- **AWS:** [one-click stack](./specs/developing/deploying/self-hosted-aws.md)
-- **Configuration:** [`server/deploy/.env.production.example`](./server/deploy/.env.production.example)
-
-Point the desktop app at your control plane with `apiBaseUrl` in
-`~/.proliferate/config.json`. Expect rough edges while self-hosting is in beta.
-Please [open an issue](https://github.com/proliferate-ai/proliferate/issues/new/choose)
-or ask in [Discord](https://discord.gg/7b5afMTqW) if you hit one.
-
-</details>
-
-## How It Works
-
-- **Desktop and web apps** provide the workspace, workflow, transcript,
-  terminal, file, and review surfaces.
-- **AnyHarness** is the Rust runtime underneath Proliferate. It exposes HTTP
-  and SSE APIs for workspaces, sessions, transcripts, tools, and agent-specific
-  harness adapters.
-- **The control plane** manages organizations, repositories, cloud workspaces,
-  automations, shared configuration, and billing.
-- **Isolated runtimes** execute agent work locally or in cloud sandboxes.
-
-Start with the [architecture overview](./specs/codebase/README.md) if you want
-to explore the codebase.
-
-## Community
+## Community & Support
 
 - Join [Discord](https://discord.gg/7b5afMTqW)
 - Read the [documentation](https://proliferate.com/docs)
 - Follow the [changelog](https://proliferate.com/changelog)
 - Report vulnerabilities through [SECURITY.md](./SECURITY.md)
 
-## Contributing
+## Developing
 
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) and the
+[architecture overview](./specs/codebase/README.md).
 
 ## License
 
