@@ -6,14 +6,25 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from proliferate.config import Settings
 from proliferate.integrations import desktop_downloads as downloads_module
 from proliferate.server import meta as meta_module
 from proliferate.server import version as version_module
 from proliferate.server.health import router as health_router
+from proliferate.server.meta import build_server_capabilities
 from proliferate.server.meta import router as meta_router
 
 # server/tests/unit/test_meta_endpoint.py -> repo root is four parents up.
 REPO_VERSION = (Path(__file__).resolve().parents[3] / "VERSION").read_text().strip()
+
+# The version pins reported by /meta, separate from the capabilities block.
+_VERSION_FIELDS = (
+    "serverVersion",
+    "desktopVersion",
+    "runtimeVersion",
+    "workerVersion",
+    "minDesktopVersion",
+)
 
 _PIN_ENV_VARS = (
     "SERVER_VERSION",
@@ -47,14 +58,17 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
 
     body = _client().get("/meta").json()
 
-    assert body == {
+    assert {field: body[field] for field in _VERSION_FIELDS} == {
         "serverVersion": "0.3.0",
         "desktopVersion": "0.3.2",
         "runtimeVersion": "0.3.1",
         "workerVersion": "0.3.4",
         "minDesktopVersion": "0.3.0",
-        "workflowsEnabled": True,
     }
+    # D-003: local_dev derives workflows-on.
+    assert body["workflowsEnabled"] is True
+    # The capability contract rides alongside the version pins.
+    assert isinstance(body["capabilities"], dict)
 
 
 def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -62,19 +76,11 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
 
     body = _client().get("/meta").json()
 
-    assert set(body) == {
-        "serverVersion",
-        "desktopVersion",
-        "runtimeVersion",
-        "workerVersion",
-        "minDesktopVersion",
-        "workflowsEnabled",
-    }
-    for name, value in body.items():
-        if name == "workflowsEnabled":
-            assert isinstance(value, bool)
-        else:
-            assert isinstance(value, str) and value
+    assert set(body) == set(_VERSION_FIELDS) | {"workflowsEnabled", "capabilities"}
+    for field in _VERSION_FIELDS:
+        assert isinstance(body[field], str) and body[field]
+    assert isinstance(body["workflowsEnabled"], bool)
+    assert isinstance(body["capabilities"], dict)
 
 
 # T1-SH-3 (specs/developing/testing/self-hosting.md): the /meta wire contract.
@@ -92,6 +98,7 @@ _META_GOLDEN_FIELDS = [
     "workerVersion",
     "minDesktopVersion",
     "workflowsEnabled",
+    "capabilities",
 ]
 
 
@@ -117,6 +124,180 @@ def test_meta_pins_fall_back_to_server_version(monkeypatch) -> None:  # type: ig
     assert body["runtimeVersion"] == "1.2.3"
     assert body["workerVersion"] == "1.2.3"
     assert body["minDesktopVersion"] == "1.2.3"
+
+
+# --- Capability contract (server/proliferate/server/meta.py) ------------------
+#
+# The capabilities block is the source of truth the desktop renders from. These
+# tests exercise the pure builder against a Settings instance so the behavior is
+# deterministic regardless of ambient env. Every capability-relevant field is
+# reset to a known base and then overridden per test, so ambient env / .env
+# values cannot leak into the assertions.
+
+_CAPABILITY_FIELDS = {
+    "deployment": ("mode", "displayName", "logoUrl"),
+    "billing": None,
+    "usageMetering": None,
+    "cloudWorkspaces": None,
+    "agentGateway": None,
+    "webApp": ("available", "baseUrl"),
+    "support": ("kind", "email", "url"),
+    "pricing": ("available", "url"),
+}
+
+
+def _cfg(**overrides):  # type: ignore[no-untyped-def]
+    cfg = Settings()
+    # Reset every capability-relevant field to a known base, then apply
+    # overrides, so ambient env (including ambient DEBUG=true, which the test
+    # suite runs under) cannot leak into the assertion.
+    base = {
+        "telemetry_mode": "self_managed",
+        "cloud_billing_mode": "off",
+        "agent_gateway_enabled": False,
+        "debug": False,
+        "e2b_api_key": "",
+        "e2b_template_name": "",
+        "frontend_base_url": "",
+        "instance_name": "",
+        "instance_logo_url": "",
+        "instance_support_email": "",
+        "instance_support_url": "",
+    }
+    base.update(overrides)
+    for key, value in base.items():
+        setattr(cfg, key, value)
+    return cfg
+
+
+def test_capabilities_shape_and_version() -> None:
+    caps = build_server_capabilities(_cfg())
+
+    assert caps.contractVersion == 1
+    dumped = caps.model_dump()
+    assert set(dumped) == {
+        "contractVersion",
+        "deployment",
+        "billing",
+        "usageMetering",
+        "cloudWorkspaces",
+        "agentGateway",
+        "webApp",
+        "support",
+        "pricing",
+    }
+    for field, subfields in _CAPABILITY_FIELDS.items():
+        if subfields is not None:
+            assert set(dumped[field]) == set(subfields)
+
+
+def test_capabilities_hosted_product() -> None:
+    caps = build_server_capabilities(
+        _cfg(
+            telemetry_mode="hosted_product",
+            cloud_billing_mode="enforce",
+            agent_gateway_enabled=True,
+            e2b_api_key="e2b-key",
+            e2b_template_name="proliferate-runtime-cloud",
+            frontend_base_url="https://web.proliferate.com",
+        )
+    )
+
+    assert caps.deployment.mode == "hosted_product"
+    assert caps.deployment.displayName == "Proliferate"
+    assert caps.billing is True
+    assert caps.usageMetering is True
+    assert caps.cloudWorkspaces is True
+    assert caps.agentGateway is True
+    assert caps.webApp.available is True
+    assert caps.webApp.baseUrl == "https://web.proliferate.com"
+    assert caps.support.kind == "vendor"
+    assert caps.support.email == "support@proliferate.com"
+    assert caps.pricing.available is True
+    assert caps.pricing.url == "https://proliferate.com/pricing"
+
+
+def test_capabilities_self_managed_base_is_all_off() -> None:
+    caps = build_server_capabilities(_cfg(telemetry_mode="self_managed"))
+
+    assert caps.deployment.mode == "self_managed"
+    # No instance name configured -> empty, so the desktop uses the origin.
+    assert caps.deployment.displayName == ""
+    assert caps.deployment.logoUrl is None
+    assert caps.billing is False
+    assert caps.usageMetering is False
+    assert caps.cloudWorkspaces is False
+    assert caps.agentGateway is False
+    assert caps.webApp.available is False
+    assert caps.webApp.baseUrl is None
+    assert caps.support.kind == "none"
+    assert caps.support.email is None
+    assert caps.pricing.available is False
+    assert caps.pricing.url is None
+
+
+def test_capabilities_self_managed_with_addons() -> None:
+    caps = build_server_capabilities(
+        _cfg(
+            telemetry_mode="self_managed",
+            cloud_billing_mode="observe",
+            agent_gateway_enabled=True,
+            e2b_api_key="e2b-key",
+            e2b_template_name="company-runtime",
+            instance_name="Acme Internal",
+            instance_logo_url="https://acme.example.com/logo.svg",
+            instance_support_email="it-help@acme.example.com",
+        )
+    )
+
+    assert caps.deployment.mode == "self_managed"
+    assert caps.deployment.displayName == "Acme Internal"
+    assert caps.deployment.logoUrl == "https://acme.example.com/logo.svg"
+    # Billing off but observe metering on: metering true, billing (mode != off) true.
+    assert caps.billing is True
+    assert caps.usageMetering is True
+    assert caps.cloudWorkspaces is True
+    assert caps.agentGateway is True
+    # Web app is never self-hosted, even with add-ons configured.
+    assert caps.webApp.available is False
+    assert caps.support.kind == "operator"
+    assert caps.support.email == "it-help@acme.example.com"
+    assert caps.support.url is None
+    # No vendor pricing on a self-managed deployment.
+    assert caps.pricing.available is False
+
+
+def test_capabilities_cloud_workspaces_requires_both_e2b_fields() -> None:
+    # Outside debug mode, cloudWorkspaces shares Settings.cloud_provisioning_configured,
+    # which requires both an API key and a template name.
+    only_key = build_server_capabilities(_cfg(e2b_api_key="e2b-key"))
+    only_template = build_server_capabilities(_cfg(e2b_template_name="company-runtime"))
+
+    assert only_key.cloudWorkspaces is False
+    assert only_template.cloudWorkspaces is False
+
+
+def test_capabilities_cloud_workspaces_matches_provisioning_predicate_in_debug() -> None:
+    # Same predicate as actual provisioning (Settings.cloud_provisioning_configured):
+    # in debug mode a blank template name is fine as long as an API key is set, so
+    # the advertised capability never diverges from what the server will provision.
+    key_only_debug = _cfg(debug=True, e2b_api_key="e2b-key")
+    no_key_debug = _cfg(debug=True, e2b_template_name="company-runtime")
+
+    assert build_server_capabilities(key_only_debug).cloudWorkspaces is True
+    assert key_only_debug.cloud_provisioning_configured is True
+    assert build_server_capabilities(no_key_debug).cloudWorkspaces is False
+    assert no_key_debug.cloud_provisioning_configured is False
+
+
+def test_capabilities_local_dev_is_self_managed_posture() -> None:
+    caps = build_server_capabilities(_cfg(telemetry_mode="local_dev"))
+
+    assert caps.deployment.mode == "local_dev"
+    assert caps.billing is False
+    assert caps.webApp.available is False
+    assert caps.support.kind == "none"
+    assert caps.pricing.available is False
 
 
 def _stub_manifest_probe(monkeypatch, exists: bool) -> list[str]:  # type: ignore[no-untyped-def]

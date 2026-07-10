@@ -133,6 +133,18 @@ args="$(proliferate_profile_args "$env_on" | tr '\n' ' ')"
 [[ "$args" == "--profile agent-gateway " ]] && ok "profile args formatted for gateway" || no "profile args wrong: '$args'"
 [[ -z "$(proliferate_profile_args "$env_off")" ]] && ok "profile args empty when off" || no "profile args should be empty when off"
 
+env_e2b_partial="$SCRATCH/e2b-partial.env"
+printf 'E2B_API_KEY=k\nE2B_TEMPLATE_NAME=\n' >"$env_e2b_partial"
+[[ -z "$(proliferate_enabled_profiles "$env_e2b_partial")" ]] && ok "E2B key without template -> no cloud-workspaces profile" || no "half-configured E2B should not enable the profile"
+
+env_e2b_complete="$SCRATCH/e2b-complete.env"
+printf 'E2B_API_KEY=k\nE2B_TEMPLATE_NAME=t/x:production\n' >"$env_e2b_complete"
+[[ "$(proliferate_enabled_profiles "$env_e2b_complete")" == "cloud-workspaces" ]] && ok "complete E2B pair -> cloud-workspaces profile" || no "complete E2B pair -> expected cloud-workspaces"
+
+env_both="$SCRATCH/both.env"
+printf 'AGENT_GATEWAY_ENABLED=true\nE2B_API_KEY=k\nE2B_TEMPLATE_NAME=t/x:production\n' >"$env_both"
+[[ "$(proliferate_enabled_profiles "$env_both")" == "agent-gateway cloud-workspaces" ]] && ok "gateway + cloud both on -> both profiles" || no "expected both profiles: got '$(proliferate_enabled_profiles "$env_both")'"
+
 mv="$(printf '0.3.2\n0.3.18\n0.10.0\n2.0.0\n0.3.9\n' | proliferate_max_version)"
 [[ "$mv" == "2.0.0" ]] && ok "max_version picks 2.0.0" || no "max_version wrong: $mv"
 mv2="$(printf '0.3.2\n0.3.18\n0.3.9\n' | proliferate_max_version)"
@@ -165,6 +177,45 @@ printf 'SITE_ADDRESS=api.example.com\nTYPOKEY_XYZ=1\n' >"$t"
 pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
 echo "$pfout" | grep -q "Unknown config key 'TYPOKEY_XYZ'" && ok "unknown key warns" || no "unknown key should warn"
 pf "$t" && ok "unknown key is a warning, not a block" || no "unknown key should not block"
+
+# -- gateway: enabled but no provider key -> BLOCK (litellm would have no
+# models to serve). Master key pair + PG password + public URL all present so
+# only the missing-provider-key case is under test.
+printf 'SITE_ADDRESS=api.example.com\nAGENT_GATEWAY_ENABLED=true\nLITELLM_MASTER_KEY=a\nAGENT_GATEWAY_LITELLM_MASTER_KEY=a\nLITELLM_POSTGRES_PASSWORD=p\nAGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://api.example.com/llm\n' >"$t"
+pf "$t" && no "gateway with no provider key should BLOCK" || ok "gateway with no provider key blocks"
+
+# -- gateway: fully consistent config (matching keys + a provider key) -> pass.
+printf 'SITE_ADDRESS=api.example.com\nAGENT_GATEWAY_ENABLED=true\nLITELLM_MASTER_KEY=a\nAGENT_GATEWAY_LITELLM_MASTER_KEY=a\nLITELLM_POSTGRES_PASSWORD=p\nAGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://api.example.com/llm\nANTHROPIC_API_KEY=sk-ant-x\n' >"$t"
+pf "$t" && ok "fully consistent gateway config passes" || no "fully consistent gateway config should pass"
+
+# -- cloud workspaces: complete E2B pair with no REDBEAT_REDIS_URL -> warns,
+# does not block (materialization degrades to a 503, it does not crash-loop).
+printf 'SITE_ADDRESS=api.example.com\nE2B_API_KEY=k\nE2B_TEMPLATE_NAME=t/x:production\nREDBEAT_REDIS_URL=\n' >"$t"
+pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
+echo "$pfout" | grep -q "REDBEAT_REDIS_URL is empty" && ok "cloud workspaces with empty REDBEAT_REDIS_URL warns" || no "expected a REDBEAT_REDIS_URL warning"
+pf "$t" && ok "empty REDBEAT_REDIS_URL does not block" || no "empty REDBEAT_REDIS_URL should not block"
+
+# -- SSO: enabled but missing client secret and no endpoint source -> BLOCK.
+printf 'SITE_ADDRESS=api.example.com\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\n' >"$t"
+pf "$t" && no "incomplete SSO config should BLOCK" || ok "incomplete SSO config blocks"
+
+# -- SSO: complete public-client config (token endpoint auth method "none"
+# needs no client secret) with an admin floor set -> pass, no lockout warning.
+printf 'SITE_ADDRESS=api.example.com\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\nSSO_OIDC_ISSUER_URL=https://idp.example.com\nSSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD=none\nADMIN_EMAILS=admin@example.com\n' >"$t"
+pf "$t" && ok "complete public-client SSO config passes" || no "complete public-client SSO config should pass"
+
+# -- SSO: complete config, default JIT policy, no ADMIN_EMAILS floor -> warns
+# about a first-user lockout but does not block.
+printf 'SITE_ADDRESS=api.example.com\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\nSSO_OIDC_CLIENT_SECRET=shh\nSSO_OIDC_ISSUER_URL=https://idp.example.com\n' >"$t"
+pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
+echo "$pfout" | grep -q "No SSO sign-in can create the first user" && ok "SSO first-user-lockout warns" || no "expected a first-user-lockout warning"
+pf "$t" && ok "SSO first-user-lockout warning does not block" || no "SSO first-user-lockout warning should not block"
+
+# -- GitHub OAuth: one of client id / secret set -> warns, does not block.
+printf 'SITE_ADDRESS=api.example.com\nGITHUB_OAUTH_CLIENT_ID=abc\n' >"$t"
+pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
+echo "$pfout" | grep -q "GitHub sign-in stays unavailable" && ok "GitHub OAuth partial config warns" || no "expected a GitHub OAuth partial-config warning"
+pf "$t" && ok "GitHub OAuth partial config does not block" || no "GitHub OAuth partial config should not block"
 
 # ---------------------------------------------------------------------------
 group "4. Installer: release selection + fetch + verify"
@@ -300,6 +351,42 @@ if [[ "${PROLIFERATE_TEST_AWS:-0}" == "1" ]] && command -v aws >/dev/null 2>&1; 
 else
   printf '  skip  aws validate-template (set PROLIFERATE_TEST_AWS=1 with creds to run)\n'
 fi
+
+# ---------------------------------------------------------------------------
+group "10. Compose + Caddy shape (agent-gateway / cloud-workspaces add-ons)"
+# ---------------------------------------------------------------------------
+COMPOSE_FILE="$DEPLOY_DIR/docker-compose.production.yml"
+CADDYFILE="$DEPLOY_DIR/Caddyfile"
+
+grep -q '^  redis:' "$COMPOSE_FILE" && ok "compose defines a redis service" || no "compose missing a redis service"
+grep -A3 '^  redis:' "$COMPOSE_FILE" | grep -q 'profiles: \["cloud-workspaces"\]' \
+  && ok "redis is behind the cloud-workspaces profile" || no "redis should be profiles: [\"cloud-workspaces\"]"
+grep -A10 '^  redis:' "$COMPOSE_FILE" | grep -q 'redis-cli' \
+  && ok "redis has a healthcheck" || no "redis missing a healthcheck"
+
+grep -q '^  litellm:' "$COMPOSE_FILE" && ok "compose defines a litellm service" || no "compose missing a litellm service"
+grep -A5 '^  litellm:' "$COMPOSE_FILE" | grep -q 'profiles: \["agent-gateway"\]' \
+  && ok "litellm is behind the agent-gateway profile" || no "litellm should be profiles: [\"agent-gateway\"]"
+grep -A20 '^  litellm:' "$COMPOSE_FILE" | grep -q 'health/liveliness' \
+  && ok "litellm has a healthcheck" || no "litellm missing a healthcheck"
+
+grep -q 'GITHUB_APP_PRIVATE_KEY_HOST_PATH' "$COMPOSE_FILE" \
+  && ok "api mounts the GitHub App secrets directory" || no "api missing the GitHub App secrets mount"
+
+# The /llm handle_path must come before the default handle so Caddy's
+# first-match-wins evaluation routes /llm/* to litellm instead of the api.
+llm_line="$(grep -n 'handle_path /llm' "$CADDYFILE" | head -1 | cut -d: -f1)"
+default_line="$(grep -n 'handle {' "$CADDYFILE" | head -1 | cut -d: -f1)"
+[[ -n "$llm_line" ]] && ok "Caddyfile has a /llm route" || no "Caddyfile missing the /llm route"
+[[ -n "$default_line" ]] && ok "Caddyfile has a default handle route" || no "Caddyfile missing the default handle route"
+if [[ -n "$llm_line" && -n "$default_line" ]]; then
+  [[ "$llm_line" -lt "$default_line" ]] && ok "/llm route precedes the default route" || no "/llm route must precede the default route (first match wins)"
+fi
+grep -q 'reverse_proxy litellm:4000' "$CADDYFILE" && ok "/llm proxies to litellm:4000" || no "/llm route does not proxy to litellm:4000"
+grep -q 'reverse_proxy api:8000' "$CADDYFILE" && ok "default route still proxies to api:8000" || no "default route does not proxy to api:8000"
+
+# common.sh profile mechanism agrees with the compose file's profile names.
+grep -q '"cloud-workspaces"' "$DEPLOY_DIR/common.sh" && ok "common.sh knows the cloud-workspaces profile name" || no "common.sh missing the cloud-workspaces profile name"
 
 # ---------------------------------------------------------------------------
 printf '\n== Summary ==\n  %d passed, %d failed\n' "$PASS" "$FAIL"

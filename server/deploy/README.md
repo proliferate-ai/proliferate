@@ -35,8 +35,8 @@ flags (`--version`, `--eval`, `--no-start`, `--dry-run`, `--yes`).
 | File | Purpose |
 | --- | --- |
 | `install.sh` | Guided installer + one-line entrypoint (self-contained). |
-| `docker-compose.production.yml` | The stack: `caddy`, `db`, `migrate`, `api`, and the profiled `litellm`/`litellm-db`. |
-| `Caddyfile` | Public HTTPS via Caddy (Let's Encrypt). |
+| `docker-compose.production.yml` | The stack: `caddy`, `db`, `migrate`, `api`, and the profiled `litellm`/`litellm-db` (agent-gateway) and `redis` (cloud-workspaces). |
+| `Caddyfile` | Public HTTPS via Caddy (Let's Encrypt), plus the `/llm` route to the agent gateway when enabled. |
 | `.env.production.example` | Copy to `.env.static` and fill in; the installer does this for you. |
 | `bootstrap.sh` | First-run: generate secrets, migrate, boot, wait for health, print the claim token. |
 | `update.sh` | Pull + migrate + restart, including any enabled optional profile. |
@@ -67,10 +67,27 @@ overrides that survive infra rewrites). Secrets are generated into
 
 - **Cloud workspaces:** set `E2B_API_KEY` **and** `E2B_TEMPLATE_NAME` together
   (setting only the key refuses to boot). Requires the Linux runtime bundle.
+  `bootstrap.sh`/`update.sh` bring up the bundled `redis` service (the cloud
+  materialization lock) automatically via the `cloud-workspaces` profile.
+  Cloud repo access additionally needs a GitHub App (`GITHUB_APP_*`, separate
+  from GitHub OAuth sign-in below) — see `.env.production.example`.
 - **Agent LLM gateway:** set `AGENT_GATEWAY_ENABLED=true` and the paired
   `LITELLM_MASTER_KEY`/`AGENT_GATEWAY_LITELLM_MASTER_KEY` +
-  `LITELLM_POSTGRES_PASSWORD`. `bootstrap.sh`/`update.sh` then manage the
-  `agent-gateway` profile automatically.
+  `LITELLM_POSTGRES_PASSWORD` + `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL`
+  (`https://<host>/llm`) + at least one provider key. `bootstrap.sh`/`update.sh`
+  then manage the `agent-gateway` profile automatically and wait for `litellm`
+  to report healthy before finishing.
+- **GitHub sign-in / SSO / invitation email:** `GITHUB_OAUTH_CLIENT_ID`+`_SECRET`,
+  `SSO_ENABLED`+`SSO_OIDC_*`, and `RESEND_API_KEY`+`RESEND_FROM_EMAIL` are all
+  optional and independent of each other — see `.env.production.example` for
+  the full set and `preflight.sh`/`doctor.sh` for the completeness checks each
+  one gets.
+- **Instance branding:** `INSTANCE_NAME`, `INSTANCE_LOGO_URL`,
+  `INSTANCE_SUPPORT_EMAIL`, `INSTANCE_SUPPORT_URL` — shown in the connected
+  Desktop app; all optional.
+
+Run `./preflight.sh` any time to check for a half-configured add-on before it
+takes down a healthy instance, and `./doctor.sh` to see live status.
 
 Point the official desktop app at the control plane by writing
 `~/.proliferate/config.json`: `{ "apiBaseUrl": "https://api.company.com" }`.

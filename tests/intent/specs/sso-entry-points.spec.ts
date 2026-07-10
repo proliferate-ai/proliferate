@@ -20,7 +20,13 @@
 //   - positive: a slug (and an org id, the `/join` path's input) that resolves
 //     to an ENABLED connection returns exactly the ids the start flow needs
 //     (`organizationId`, `connectionId`, `protocol`, `displayName`) — this is
-//     the entry point's whole job.
+//     the entry point's whole job;
+//   - truthfulness (self-hosting-relevant, specs/developing/testing/self-
+//     hosting.md): a connection whose `status` is 'enabled' but whose OIDC
+//     config drifted incomplete afterwards (an admin edit, not something the
+//     enable endpoint itself can produce) must still report `enabled:false`
+//     with the specific reason — never a false positive that would render a
+//     sign-in button that can only fail at the provider.
 //
 // Surface coverage note (honest tier boundary): the tier-2 stack serves the
 // **desktop web build** (`apps/desktop`, see stack/boot.ts), so the desktop
@@ -42,6 +48,7 @@ import {
   getOwnOrganization,
   passwordLogin,
   seedEnabledOrgSsoConnection,
+  seedIncompleteEnabledOrgSsoConnection,
   webBaseUrl,
 } from "../stack/seed.ts";
 
@@ -140,6 +147,46 @@ test.describe("T2-AUTH-5: org SSO entry points — discover seam", () => {
     // signal that makes `/join` fall back to the Desktop handoff.
     const disabled = await discover({ organizationId });
     expect(disabled.body.enabled).toBe(false);
+  });
+
+  test("truthfulness: a connection marked enabled but missing required OIDC config still reports enabled=false, with the specific reason (not a false positive)", async () => {
+    // enable_organization_sso_connection (server/proliferate/server/
+    // organizations/sso/service.py) re-tests the live OIDC endpoints before
+    // ever flipping status to 'enabled', so the product's own admin API can
+    // never produce this row. It happens anyway: update_organization_sso_
+    // connection lets an admin clear oidc_client_id afterwards with no
+    // re-validation and no automatic revert to disabled. If discover trusted
+    // status alone, the desktop would render a working-looking "Sign in with
+    // SSO" button that could only fail at the provider — this is exactly the
+    // regression discover's oidc_configuration_error gate exists to prevent.
+    const connectionId = await seedIncompleteEnabledOrgSsoConnection(organizationId);
+    try {
+      // Query by organization id (the /join path's shape), not slug: the slug
+      // wrapper collapses every non-enabled outcome to the same generic
+      // "not_available" answer (see the enumeration-safety tests above), which
+      // would hide the distinct reason this test exists to pin.
+      const { status, body } = await discover({ organizationId });
+      expect(status).toBe(200);
+      expect(body.enabled).toBe(false);
+      expect(body.reason).toBe("oidc_client_id_missing");
+      // Unlike the "no SSO at all" answers, this connection is real — discover
+      // is allowed to say so (organizationId/connectionId are not secrets and
+      // the caller already knows this org exists); it just must never claim
+      // the connection is usable.
+      expect(body.connectionId).toBe(connectionId);
+      expect(body.protocol).toBe("oidc");
+
+      // The slug path (the desktop cold-login affordance's actual input) must
+      // collapse this to the same non-enumerating answer as "no SSO at all" —
+      // it is unavailable either way, and the two must be indistinguishable
+      // from a caller cycling slugs.
+      const bySlug = await discover({ slug: organizationSlug });
+      expect(bySlug.body.enabled).toBe(false);
+      expect(bySlug.body.reason).toBe("not_available");
+      expect(bySlug.body.connectionId).toBeNull();
+    } finally {
+      await deleteOrgSsoConnections(organizationId);
+    }
   });
 });
 

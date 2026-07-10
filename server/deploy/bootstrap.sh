@@ -63,14 +63,27 @@ while IFS= read -r _profile_token; do
   [[ -n "$_profile_token" ]] && PROFILE_ARGS+=("$_profile_token")
 done < <(proliferate_profile_args "$RUNTIME_ENV_FILE")
 
+PROFILE_SERVICES=()
+while IFS= read -r _profile_service; do
+  [[ -n "$_profile_service" ]] && PROFILE_SERVICES+=("$_profile_service")
+done < <(proliferate_profile_services "$RUNTIME_ENV_FILE")
+
 docker compose "${COMPOSE_ARGS[@]}" up -d db
 docker compose "${COMPOSE_ARGS[@]}" run --rm migrate
 docker compose "${COMPOSE_ARGS[@]}" up -d api caddy
 
 # Bring up any enabled optional-profile services (agent-gateway litellm +
-# litellm-db). No-op for a base install with no optional capabilities enabled.
-if ((${#PROFILE_ARGS[@]})); then
-  docker compose "${COMPOSE_ARGS[@]}" "${PROFILE_ARGS[@]}" up -d
+# litellm-db, cloud-workspaces redis) and WAIT for their healthchecks before
+# continuing. No-op for a base install with no optional capabilities enabled.
+# --wait matters here specifically for litellm: the API mints per-user
+# gateway virtual keys against it lazily at signup, so litellm must already
+# be healthy by the time wait-for-health.sh below hands the operator the
+# claim URL, not merely "started". Explicitly scoped to PROFILE_SERVICES (not
+# a bare `up -d --wait` across the whole compose file): otherwise it would
+# also try to reconcile the one-shot `migrate` job, which always exits after
+# running and would make --wait report a false failure.
+if ((${#PROFILE_SERVICES[@]})); then
+  docker compose "${COMPOSE_ARGS[@]}" "${PROFILE_ARGS[@]}" up -d --wait --wait-timeout "${PROLIFERATE_PROFILE_WAIT_TIMEOUT_SECONDS:-300}" "${PROFILE_SERVICES[@]}"
 fi
 
 # Waits for /health, then prints the first-run setup token and claim URL when

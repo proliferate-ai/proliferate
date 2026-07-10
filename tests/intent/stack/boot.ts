@@ -45,6 +45,17 @@ export interface BootOptions {
    * billing enabled, `CLOUD_BILLING_MODE` (default `enforce`), and the Stripe
    * test keys/prices. Used only by the billing suite. */
   stripe?: StripeBillingEnv;
+  /** Skip the desktop web (Vite) build/serve and the AnyHarness runtime.
+   * For specs that only need the real server process (e.g. hitting `/meta`
+   * or a JSON API directly) — no browser, no runtime call, so there is
+   * nothing for either to serve. Cuts boot time and lets a spec run a
+   * second, differently-configured server cheaply on its own profile. */
+  skipFrontend?: boolean;
+  /** Extra/overriding server env vars, applied last (after every other
+   * default in this function, including the Stripe block) so a caller can
+   * flip any posture — telemetry mode, billing mode, E2B config, debug —
+   * for a dedicated ephemeral boot without duplicating this whole function. */
+  extraServerEnv?: NodeJS.ProcessEnv;
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +65,11 @@ export interface BootedStack {
   profile: string;
   apiBaseUrl: string;
   webBaseUrl: string;
+  /** The local AnyHarness runtime's base URL for this profile — reachable
+   * only when the runtime was actually started (not `skipFrontend`, not
+   * `TIER2_INTENT_SKIP_RUNTIME=1`). Callers that need it must probe
+   * reachability themselves and skip gracefully if it is down. */
+  anyharnessBaseUrl: string;
   databaseUrl: string;
   setupTokenFile: string;
   invocationStubBaseUrl: string;
@@ -280,6 +296,10 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   const databaseUrl = databaseUrlFor(instance.databaseName);
   const apiBaseUrl = `http://127.0.0.1:${instance.ports.api}`;
   const webBaseUrl = `http://127.0.0.1:${instance.ports.desktopWeb}`;
+  // Published even when the runtime is skipped (TIER2_INTENT_SKIP_RUNTIME=1 in
+  // CI, or `skipFrontend`) so a spec can probe reachability itself and skip
+  // gracefully rather than the boot deciding for it.
+  const anyharnessBaseUrl = `http://127.0.0.1:${instance.ports.anyharness}`;
   const setupTokenFile = `/tmp/proliferate-${profile}-setup-token`;
   // Fresh setup token file per boot: a stale token from a prior claimed run
   // would otherwise sit there confusing the next claim attempt.
@@ -321,6 +341,24 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     // this settings seam exists for exactly this local/test case (see
     // server/tests/unit/auth/test_sso.py's own http://127.0.0.1 coverage).
     PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS: "true",
+    // Self-hosting posture, pinned explicitly so every self-hosting spec
+    // asserting "add-ons off"/local-dev gets a deterministic answer
+    // regardless of a developer's ambient .env/.env.local (pydantic-settings
+    // reads those from `server/`'s cwd) — mirrors the GITHUB_OAUTH_* blanking
+    // above. Deliberately does NOT touch E2B_API_KEY: the Stripe/billing
+    // block below has a documented "ambient key wins" contract for it
+    // (`if (!serverEnv.E2B_API_KEY) { ...placeholder... }`); specs that need
+    // a deterministic E2B posture (on OR off) set it via `extraServerEnv` on
+    // their own dedicated boot instead. A caller's `extraServerEnv` (applied
+    // last, below) overrides any of these for a differently-configured
+    // ephemeral boot.
+    TELEMETRY_MODE: "local_dev",
+    CLOUD_BILLING_MODE: "off",
+    AGENT_GATEWAY_ENABLED: "false",
+    INSTANCE_NAME: "",
+    INSTANCE_LOGO_URL: "",
+    INSTANCE_SUPPORT_EMAIL: "",
+    INSTANCE_SUPPORT_URL: "",
   };
   if (options.stripe) {
     // Billing suite: wire real Stripe test-mode + turn enforcement on. The
@@ -352,6 +390,9 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     serverEnv.STRIPE_CHECKOUT_CANCEL_URL = `${webBaseUrl}/settings?section=billing&checkout=cancel`;
     serverEnv.STRIPE_CUSTOMER_PORTAL_RETURN_URL = `${webBaseUrl}/settings?section=billing`;
   }
+  if (options.extraServerEnv) {
+    Object.assign(serverEnv, options.extraServerEnv);
+  }
   spawnTracked(
     children,
     path.join(REPO_ROOT, "server", ".venv", "bin", "uvicorn"),
@@ -359,56 +400,62 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     { cwd: path.join(REPO_ROOT, "server"), env: serverEnv, name: "server" },
   );
 
-  // ── AnyHarness runtime ──
-  // Settings/auth/org/invitation surfaces (this suite's scope) don't read
-  // through the runtime, but booting it keeps the app shell from showing a
-  // persistent "runtime unavailable" state that could shadow assertions.
-  // TIER2_INTENT_SKIP_RUNTIME=1 (CI) skips it entirely: building the Rust
-  // binary from scratch is far too slow for a per-PR job, and no current
-  // scenario needs it.
-  if (process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
-    log("skipping AnyHarness runtime (TIER2_INTENT_SKIP_RUNTIME=1)");
-  } else try {
-    const runtimeBin = resolveAnyharnessRuntimeBin();
+  if (options.skipFrontend) {
+    log("skipFrontend: no AnyHarness runtime, no desktop web — server-only boot");
+  } else {
+    // ── AnyHarness runtime ──
+    // Settings/auth/org/invitation surfaces (this suite's scope) don't read
+    // through the runtime, but booting it keeps the app shell from showing a
+    // persistent "runtime unavailable" state that could shadow assertions.
+    // TIER2_INTENT_SKIP_RUNTIME=1 (CI) skips it entirely: building the Rust
+    // binary from scratch is far too slow for a per-PR job, and no current
+    // scenario needs it.
+    if (process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
+      log("skipping AnyHarness runtime (TIER2_INTENT_SKIP_RUNTIME=1)");
+    } else try {
+      const runtimeBin = resolveAnyharnessRuntimeBin();
+      spawnTracked(
+        children,
+        runtimeBin,
+        ["serve", "--port", String(instance.ports.anyharness), "--runtime-home", instance.anyharnessRuntimeHome],
+        {
+          env: { ...process.env, RUST_LOG: "info", ANYHARNESS_DEV_CORS: "1" },
+          name: "anyharness",
+        },
+      );
+    } catch (error) {
+      log(`warning: could not start AnyHarness runtime (${String(error)}); continuing without it`);
+    }
+
+    // ── Desktop web (Vite dev server, web-port mode) ──
+    ensureFrontendBuilt();
+    const desktopEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      PROLIFERATE_WEB_PORT: String(instance.ports.desktopWeb),
+      PROLIFERATE_WEB_HMR_PORT: String(instance.ports.hmr),
+      VITE_PROLIFERATE_API_BASE_URL: apiBaseUrl,
+      VITE_PROLIFERATE_ENVIRONMENT: "development",
+      VITE_PROLIFERATE_TELEMETRY_DISABLED: "true",
+      // Vite dev builds default to auth-not-required (anonymous app shell).
+      // These scenarios assert the real login/logout lifecycle, so force the
+      // auth gate on and make sure no leaked dev bypass sneaks in.
+      VITE_REQUIRE_AUTH: "true",
+    };
+    delete desktopEnv.VITE_DEV_DISABLE_AUTH;
     spawnTracked(
       children,
-      runtimeBin,
-      ["serve", "--port", String(instance.ports.anyharness), "--runtime-home", instance.anyharnessRuntimeHome],
-      {
-        env: { ...process.env, RUST_LOG: "info", ANYHARNESS_DEV_CORS: "1" },
-        name: "anyharness",
-      },
+      "pnpm",
+      ["exec", "vite", "--host", "127.0.0.1", "--port", String(instance.ports.desktopWeb), "--strictPort"],
+      { cwd: path.join(REPO_ROOT, "apps", "desktop"), env: desktopEnv, name: "desktop-web" },
     );
-  } catch (error) {
-    log(`warning: could not start AnyHarness runtime (${String(error)}); continuing without it`);
   }
 
-  // ── Desktop web (Vite dev server, web-port mode) ──
-  ensureFrontendBuilt();
-  const desktopEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    PROLIFERATE_WEB_PORT: String(instance.ports.desktopWeb),
-    PROLIFERATE_WEB_HMR_PORT: String(instance.ports.hmr),
-    VITE_PROLIFERATE_API_BASE_URL: apiBaseUrl,
-    VITE_PROLIFERATE_ENVIRONMENT: "development",
-    VITE_PROLIFERATE_TELEMETRY_DISABLED: "true",
-    // Vite dev builds default to auth-not-required (anonymous app shell).
-    // These scenarios assert the real login/logout lifecycle, so force the
-    // auth gate on and make sure no leaked dev bypass sneaks in.
-    VITE_REQUIRE_AUTH: "true",
-  };
-  delete desktopEnv.VITE_DEV_DISABLE_AUTH;
-  spawnTracked(
-    children,
-    "pnpm",
-    ["exec", "vite", "--host", "127.0.0.1", "--port", String(instance.ports.desktopWeb), "--strictPort"],
-    { cwd: path.join(REPO_ROOT, "apps", "desktop"), env: desktopEnv, name: "desktop-web" },
-  );
-
-  log("waiting for server + desktop web to become ready...");
+  log("waiting for server to become ready...");
   await waitForHttpOk(`${apiBaseUrl}/health`);
-  await waitForHttpOk(webBaseUrl);
-  log(`ready: api=${apiBaseUrl} web=${webBaseUrl}`);
+  if (!options.skipFrontend) {
+    await waitForHttpOk(webBaseUrl);
+  }
+  log(`ready: api=${apiBaseUrl}${options.skipFrontend ? "" : ` web=${webBaseUrl}`}`);
 
   let torndown = false;
   const teardown = async () => {
@@ -432,6 +479,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     profile,
     apiBaseUrl,
     webBaseUrl,
+    anyharnessBaseUrl,
     databaseUrl,
     setupTokenFile,
     invocationStubBaseUrl: invocationStub.baseUrl,

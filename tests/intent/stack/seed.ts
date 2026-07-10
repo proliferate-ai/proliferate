@@ -33,6 +33,17 @@ export function webBaseUrl(): string {
   return value;
 }
 
+/** The local AnyHarness runtime's base URL, published even when the runtime
+ * itself is not running (TIER2_INTENT_SKIP_RUNTIME=1 in CI) — callers must
+ * probe reachability and skip gracefully, per gateway-eligibility.spec.ts. */
+export function anyharnessBaseUrl(): string {
+  const value = process.env.TIER2_INTENT_ANYHARNESS_BASE_URL;
+  if (!value) {
+    throw new Error("TIER2_INTENT_ANYHARNESS_BASE_URL is not set — did globalSetup run?");
+  }
+  return value;
+}
+
 // Exported so sibling seed-*.ts files (e.g. seed-integrations.ts) share one
 // source of truth for this instead of re-deriving it.
 export function databaseUrl(): string {
@@ -686,6 +697,45 @@ export async function seedEnabledOrgSsoConnection(
        VALUES (
          gen_random_uuid(), 'organization', $1, 'oidc', 'enabled', $2,
          'seed-client-id', 'https://idp.seed.example', 'none',
+         now(), now()
+       )
+       RETURNING id`,
+      [organizationId, displayName],
+    );
+    return result.rows[0].id;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Seed an org-scope OIDC connection marked `status='enabled'` but missing its
+ * `oidc_client_id` — the drift case `enable_organization_sso_connection`
+ * itself cannot produce (it re-tests the live OIDC endpoints before flipping
+ * status), but that a later admin edit CAN: nothing in `update_organization_
+ * sso_connection` re-validates or revokes `enabled` when a required field is
+ * cleared. Discover's `oidc_configuration_error` gate (server/proliferate/
+ * auth/sso/service.py's `_discover_for_context`) exists precisely to catch
+ * this — an "enabled" row that would only fail at the provider must still
+ * report `enabled=false`, not a false positive. Only reachable via direct
+ * seed: the product's own admin API always tests before enabling.
+ */
+export async function seedIncompleteEnabledOrgSsoConnection(
+  organizationId: string,
+  displayName = "Acme Okta (incomplete)",
+): Promise<string> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    const result = await client.query<{ id: string }>(
+      `INSERT INTO sso_connection (
+         id, scope, organization_id, protocol, status, display_name,
+         oidc_issuer_url, oidc_token_endpoint_auth_method,
+         created_at, updated_at
+       )
+       VALUES (
+         gen_random_uuid(), 'organization', $1, 'oidc', 'enabled', $2,
+         'https://idp.seed.example', 'none',
          now(), now()
        )
        RETURNING id`,

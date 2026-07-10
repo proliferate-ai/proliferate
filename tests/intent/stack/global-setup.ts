@@ -13,6 +13,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   const stack = await bootStack();
   process.env.TIER2_INTENT_API_BASE_URL = stack.apiBaseUrl;
   process.env.TIER2_INTENT_WEB_BASE_URL = stack.webBaseUrl;
+  process.env.TIER2_INTENT_ANYHARNESS_BASE_URL = stack.anyharnessBaseUrl;
   process.env.TIER2_INTENT_DATABASE_URL = stack.databaseUrl;
   process.env.TIER2_INTENT_SETUP_TOKEN_FILE = stack.setupTokenFile;
   process.env.TIER2_INTENT_INVOCATION_STUB_BASE_URL = stack.invocationStubBaseUrl;

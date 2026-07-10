@@ -100,7 +100,13 @@ proliferate_latest_server_version() {
 # `docker compose` call so pull/up/down stay consistent. Add a capability here
 # and it is covered everywhere at once.
 #
-# agent-gateway: the bundled LiteLLM proxy (services litellm + litellm-db).
+# agent-gateway:    the bundled LiteLLM proxy (services litellm + litellm-db).
+# cloud-workspaces: the durable Redis used for the cloud-materialization lock
+#                    (service redis). Mirrors the E2B_API_KEY +
+#                    E2B_TEMPLATE_NAME "complete pair" gate preflight.sh
+#                    already enforces, so Redis comes up automatically exactly
+#                    when cloud workspaces are actually usable — never as an
+#                    ad-hoc container an operator has to remember to add.
 
 # proliferate_enabled_profiles <runtime_env_file>: print the space-separated
 # compose profile names enabled by the resolved config.
@@ -110,6 +116,11 @@ proliferate_enabled_profiles() {
 
   if proliferate_is_truthy "$(proliferate_read_env "$env_file" AGENT_GATEWAY_ENABLED)"; then
     profiles+=("agent-gateway")
+  fi
+
+  if [[ -n "$(proliferate_read_env "$env_file" E2B_API_KEY)" && \
+        -n "$(proliferate_read_env "$env_file" E2B_TEMPLATE_NAME)" ]]; then
+    profiles+=("cloud-workspaces")
   fi
 
   if ((${#profiles[@]})); then
@@ -134,5 +145,27 @@ proliferate_profile_args() {
   profiles="$(proliferate_enabled_profiles "$env_file")"
   for name in $profiles; do
     printf -- '--profile\n%s\n' "$name"
+  done
+}
+
+# proliferate_profile_services <runtime_env_file>: print newline-separated
+# compose SERVICE names (not profile names) for every enabled profile. Callers
+# pass this list explicitly to `docker compose ... up -d --wait <services>` so
+# the reconciliation touches ONLY the profiled services. Without an explicit
+# service list, `up` reconciles every service the active --profile flags make
+# visible, including base services like `migrate` — a restart:"no" one-shot
+# job that always exits after running, which `--wait` would then report as a
+# failure. Scoping to just the profiled services avoids that entirely.
+proliferate_profile_services() {
+  local env_file="$1"
+  local profiles
+  local name
+
+  profiles="$(proliferate_enabled_profiles "$env_file")"
+  for name in $profiles; do
+    case "$name" in
+      agent-gateway) printf 'litellm-db\nlitellm\n' ;;
+      cloud-workspaces) printf 'redis\n' ;;
+    esac
   done
 }
