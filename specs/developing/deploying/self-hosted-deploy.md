@@ -48,9 +48,13 @@ The canonical self-hosted deploy files live under:
 
 ```text
 server/deploy/
+  install.sh                    # guided installer (fetch release -> verify -> configure -> bootstrap)
   docker-compose.production.yml
   Caddyfile
   .env.production.example
+  common.sh                     # shared helpers (release resolution, env read, compose profiles)
+  preflight.sh                  # config validation before replacing a running stack
+  doctor.sh                     # redacting diagnostics
   bootstrap.sh
   ensure-secrets.sh
   install-runtime.sh
@@ -107,6 +111,40 @@ virtual keys and `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL`.
 
 ## First-Time Setup
 
+### Guided installer (recommended)
+
+`install.sh` does the whole base install: it detects OS/arch, checks
+Docker/Compose/disk/ports, resolves the newest `server-v*` release (never
+GitHub's generic `latest`, which is usually a bundle-less desktop/runtime/
+product tag), downloads the deploy bundle and its checksum from that release,
+verifies the checksum before extracting, installs to `/opt/proliferate`,
+generates or preserves `.env.static`, runs `preflight.sh`, and boots the stack
+to the claim page. Rerunning is safe: it refreshes the bundle scripts without
+overwriting `.env.static`, generated secrets, or data.
+
+```bash
+# Inspect first, then install with a real domain (point DNS at the host first):
+curl -fsSLO https://raw.githubusercontent.com/proliferate-ai/proliferate/main/server/deploy/install.sh
+less install.sh
+sudo bash install.sh --domain api.company.com
+
+# Or, convenience pipe:
+curl -fsSL https://raw.githubusercontent.com/proliferate-ai/proliferate/main/server/deploy/install.sh \
+  | sudo bash -s -- --domain api.company.com
+
+# Evaluation, no domain (sslip.io host from the public IP, real Let's Encrypt TLS):
+sudo bash install.sh --eval
+```
+
+Pin a specific release with `--version X.Y.Z`; see `install.sh --help` for all
+flags (`--eval`, `--telemetry-mode`, `--no-start`, `--dry-run`, `--yes`).
+
+After install, manage the instance from `/opt/proliferate/server/deploy`:
+`update.sh` (pull + migrate + restart), `doctor.sh` (redacting diagnostics),
+and `preflight.sh` (config validation).
+
+### Manual setup
+
 1. Provision a Linux host with Docker and Docker Compose v2.
 2. Point DNS for `api.company.com` at that host.
 3. Fetch the deploy bundle for the release you want to run and create your
@@ -135,8 +173,9 @@ bundle-only download. Working from a monorepo checkout instead?
    - `GITHUB_OAUTH_CLIENT_SECRET`
    - `E2B_API_KEY`
    - `E2B_TEMPLATE_NAME`
-   - optional agent gateway (also requires starting the profiled services:
-     `docker compose --profile agent-gateway up -d`):
+   - optional agent gateway (when `AGENT_GATEWAY_ENABLED=true`, `bootstrap.sh`
+     and `update.sh` start and update the profiled `litellm`/`litellm-db`
+     services automatically; no separate `--profile` command is needed):
      - `AGENT_GATEWAY_ENABLED=true`
      - `AGENT_GATEWAY_LITELLM_BASE_URL=http://litellm:4000`
      - `AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://llm.company.com`
@@ -215,11 +254,14 @@ docker compose -f docker-compose.production.yml run --rm migrate
 docker compose -f docker-compose.production.yml up -d
 ```
 
-When `AGENT_GATEWAY_ENABLED=true`, `bootstrap.sh` and `update.sh` still start
-only the base API stack: the bundled `litellm`/`litellm-db` services sit
-behind the compose `agent-gateway` profile and must be started explicitly
-with `docker compose --env-file .env.runtime -f docker-compose.production.yml
---profile agent-gateway up -d`.
+Optional services are managed through one mechanism: a capability flag in the
+resolved env selects a compose profile, and `bootstrap.sh`/`update.sh` compute
+the same `--profile` args for every `pull`/`up` call. When
+`AGENT_GATEWAY_ENABLED=true`, both scripts automatically pull, start, and
+update the profiled `litellm`/`litellm-db` services (compose profile
+`agent-gateway`); operators no longer run a separate
+`docker compose --profile agent-gateway up -d`. Exposing the gateway publicly
+still needs a Caddy route to `litellm:4000`; see the model-gateway add-on docs.
 
 Recommended image strategy:
 

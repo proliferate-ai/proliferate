@@ -25,19 +25,22 @@ into provider-hosted cloud sandboxes rather than executed on the EC2 host.
 
 ## What The Stack Does
 
-CloudFormation writes these files onto the EC2 host:
+On boot, and on every `cfn-hup` update, the stack downloads the published
+`proliferate-deploy.tar.gz` bundle for `server-v<ReleaseVersion>`, verifies it
+against `self-hosted-assets.SHA256SUMS`, and extracts it into
+`/opt/proliferate/server/deploy`. The host therefore runs the exact same
+`server/deploy/**` scripts (installer, `preflight.sh`, `doctor.sh`,
+profile-aware `bootstrap.sh`/`update.sh`) as a manual install — one deployment
+layer, not an embedded copy that can drift.
 
-- `/opt/proliferate/server/deploy/docker-compose.production.yml`
-- `/opt/proliferate/server/deploy/Caddyfile`
-- `/opt/proliferate/server/deploy/bootstrap.sh`
-- `/opt/proliferate/server/deploy/ensure-secrets.sh`
-- `/opt/proliferate/server/deploy/install-runtime.sh`
-- `/opt/proliferate/server/deploy/registry-login.sh`
-- `/opt/proliferate/server/deploy/update.sh`
-- `/opt/proliferate/server/deploy/wait-for-health.sh`
-- `/opt/proliferate/server/deploy/.env.static`
+CloudFormation itself only writes host-specific config:
 
-It also installs `cfn-hup` so stack updates rerun the deploy flow in place.
+- `/opt/proliferate/server/deploy/.env.static` (from the stack parameters)
+- `cfn-hup` configuration so stack updates rerun the deploy flow in place
+
+Operator overrides go in `/opt/proliferate/server/deploy/.env.local`, which
+`ensure-secrets.sh` merges into `.env.runtime` and which survives the
+CloudFormation `.env.static` rewrite on updates.
 The generated `.env.static` sets
 `PROLIFERATE_PUBLIC_HEALTHCHECK_URL=https://<site-address>/health` so the stack
 only reports success after both the local API and the advertised public HTTPS
@@ -110,6 +113,19 @@ The GitHub OAuth app must use the stack hostname:
 
 ## Install Flow
 
+The fastest path is the launch action, which resolves a `server-v*` release,
+downloads and checksum-verifies the published template, validates it, and runs
+`aws cloudformation deploy`:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/proliferate-ai/proliferate/main/server/infra/self-hosted-aws/launch-stack.sh
+bash launch-stack.sh --eval                 # evaluation, sslip.io host
+bash launch-stack.sh --site-address api.company.com
+```
+
+It prints the `BaseUrl`, `SetupClaimUrl`, and `ReadSetupTokenCommand` outputs on
+success. Or launch the CloudFormation stack manually:
+
 1. Launch the CloudFormation stack with the template from
    [template.yaml](../../../server/infra/self-hosted-aws/template.yaml).
 2. Wait for the stack to complete.
@@ -132,12 +148,12 @@ LITELLM_MASTER_KEY=<openssl rand -hex 32>
 LITELLM_POSTGRES_PASSWORD=<openssl rand -hex 32>
 ```
 
-Then run `/opt/proliferate/server/deploy/update.sh` and start the profiled
-services: `docker compose --env-file .env.runtime -f
-docker-compose.production.yml --profile agent-gateway up -d`. The update
-script merges `.env.static` with `.env.local` and preserves the override
-across later stack updates. The gateway is the bundled LiteLLM service
-(compose profile `agent-gateway`).
+Then run `/opt/proliferate/server/deploy/update.sh`. Because
+`AGENT_GATEWAY_ENABLED=true` is now in `.env.local`, `update.sh` automatically
+pulls, starts, and updates the profiled `litellm`/`litellm-db` services (compose
+profile `agent-gateway`) — no separate `--profile` command is needed. The
+update script merges `.env.static` with `.env.local` and preserves the override
+across later stack updates. The gateway is the bundled LiteLLM service.
 
 ## Update Flow
 
