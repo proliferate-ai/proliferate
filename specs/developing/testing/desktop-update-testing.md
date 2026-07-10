@@ -114,3 +114,59 @@ The mock app reports package version `0.1.0`, so a feed serving `>0.1.0` yields
   production manifest generator.
 - The materialized `updater-test.conf.json` is gitignored; only the `.template`
   is committed. Never commit a real endpoint override.
+
+## Running the T4 scenario
+
+The steps above are wired into one scenario, **T4-DESKTOP-1**, under the
+release-e2e runner (`tests/release/`). It builds both apps, stages the feed, and
+drives the real updater headlessly — no GUI clicking.
+
+**Pieces:**
+
+| Piece | Path | What it does |
+| --- | --- | --- |
+| Scenario | `tests/release/src/scenarios/t4-desktop-1.ts` | Registered T4-DESKTOP-1. Gates on platform / CI / opt-in and shells out to the orchestrator. |
+| Orchestrator | `tests/release/upgrade/run-t4-desktop.mjs` | Builds N-1 + N (cached), stages the feed, copies the N-1 bundle, runs the driver, asserts N-1 → N. |
+| Headless driver | `tests/release/upgrade/updater-driver/` | A **workspace-detached** cargo crate. Drives the real `tauri_plugin_updater` `check()` + `download_and_install()` against a real N-1 `.app`. |
+
+**Why a headless Rust driver, not GUI automation.** The update UX is user-gated
+inside a release webview (Settings → "Desktop updates" → check → download →
+restart). Automating a webview headlessly is brittle; the readme's other option
+— "call the wrappers in `apps/desktop/src/lib/access/tauri/updater.ts`
+directly" — is what the driver does at the Rust layer the JS wrappers call
+through. `UpdaterBuilder::executable_path` points the install at a copy of the
+N-1 bundle (not the driver binary), so the real macOS `.app` swap happens on
+that copy. The driver's mock app reports running version `0.1.0` (a
+`tauri::test` limitation, not the real N-1 semver); this does not affect what is
+asserted — the manifest fetch, the semver "update available" decision, the
+**minisign signature verification of the real N artifact against the
+N-1-trusted pubkey**, and the real bundle swap. The N-1 → N evidence is read
+from the installed bundle's `Info.plist` `CFBundleShortVersionString` (exactly
+what `getVersion()` returns after a relaunch), before and after.
+
+**Run it (local, Apple-silicon Mac):**
+
+```
+# via the runner (recommended)
+RELEASE_E2E_DESKTOP_T4=1 make release-e2e LANE=local SCENARIOS=T4-DESKTOP-1
+
+# or the orchestrator directly (same work, more knobs)
+node tests/release/upgrade/run-t4-desktop.mjs --from 0.3.17 --to 0.3.18
+```
+
+- **Local-macOS-aarch64-only, opt-in.** Without `RELEASE_E2E_DESKTOP_T4=1`, on a
+  non-macOS-aarch64 host, or in CI (GitHub Actions), the scenario reports
+  `blocked` cleanly — it never goes red on the release gate. That is correct:
+  the gate does not provision two macOS `tauri build`s and a bundle swap.
+- **Builds are cached.** The orchestrator caches the built N-1 `.app`, the N
+  `.app.tar.gz` + `.sig`, the signing keypair, and the driver's cargo target
+  dir under `tests/release/.output/t4-desktop/` (override with `T4_WORK_DIR`).
+  Re-runs skip the ~10-min builds; pass `--force` or `T4_FORCE_REBUILD=1` to
+  rebuild.
+- **Sidecar stubs.** The orchestrator stages tiny placeholder executables for
+  the three `externalBin` sidecars so `tauri build` succeeds without the
+  ~10-min real anyharness runtime build (the updater test does not run the
+  agent runtime).
+- **Version mutation is restored.** The orchestrator edits
+  `tauri.conf.json`'s `version` for each build and restores it (even on
+  failure) — don't commit a changed version from a T4 run.
