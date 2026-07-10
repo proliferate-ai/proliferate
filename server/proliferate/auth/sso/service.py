@@ -21,8 +21,10 @@ from proliferate.auth.identity.service import (
 from proliferate.auth.identity.web_beta import ensure_web_beta_email_allowed
 from proliferate.auth.sso.deployment_config import deployment_sso_connection
 from proliferate.auth.sso.policy import (
+    OIDC_CONFIG_ERROR_MESSAGES,
     email_domain,
     normalize_domains,
+    oidc_configuration_error,
 )
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
@@ -156,6 +158,22 @@ async def _discover_for_context(
             display_name=connection.display_name,
             reason=connection.status.value,
         )
+    # Advertise only USABLE configurations: a connection marked enabled but
+    # missing required OIDC config (client id/secret/endpoints) would render a
+    # sign-in button that can only fail at the provider. Reuse the exact
+    # start-time completeness check so discovery and start never disagree.
+    if connection.protocol == SsoProtocol.OIDC:
+        config_error = oidc_configuration_error(connection)
+        if config_error is not None:
+            return SsoDiscovery(
+                enabled=False,
+                scope=connection.scope,
+                connection_id=connection.id,
+                organization_id=connection.organization_id,
+                protocol=connection.protocol,
+                display_name=connection.display_name,
+                reason=config_error,
+            )
     return SsoDiscovery(
         enabled=True,
         scope=connection.scope,
@@ -432,24 +450,9 @@ def _require_oidc_configured(
     *,
     require_secret: bool = True,
 ) -> None:
-    if not connection.oidc_client_id:
-        raise HTTPException(status_code=400, detail="OIDC client ID is required.")
-    if (
-        require_secret
-        and not connection.oidc_client_secret
-        and (connection.oidc_token_endpoint_auth_method != "none")
-    ):
-        raise HTTPException(status_code=400, detail="OIDC client secret is required.")
-    has_static_endpoints = (
-        connection.oidc_issuer_url
-        and connection.oidc_authorization_endpoint
-        and connection.oidc_token_endpoint
-        and connection.oidc_jwks_uri
-    )
-    if not has_static_endpoints and not (
-        connection.oidc_issuer_url or connection.oidc_discovery_url
-    ):
-        raise HTTPException(status_code=400, detail="OIDC issuer or discovery URL is required.")
+    error = oidc_configuration_error(connection, require_secret=require_secret)
+    if error is not None:
+        raise HTTPException(status_code=400, detail=OIDC_CONFIG_ERROR_MESSAGES[error])
 
 
 def _email_hint_allowed_for_discovery(email: str, allowed_domains: tuple[str, ...]) -> bool:

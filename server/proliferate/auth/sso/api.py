@@ -160,6 +160,11 @@ _SSO_CALLBACK_ERROR_CODES = {
     "SSO callback state mismatch.": "sso_state_mismatch",
     "SSO connection is no longer available.": "sso_connection_unavailable",
     "SSO connection is not enabled.": "sso_connection_disabled",
+    # Just-in-time provisioning is off (the default `SSO_JIT_POLICY=disabled`),
+    # so a first-time SSO user with no pre-provisioned account is rejected. A
+    # specific code lets the auth-error screen tell the user to ask their admin
+    # to enable JIT or invite them, instead of a dead-end "callback failed".
+    "SSO user provisioning is disabled.": "sso_jit_disabled",
     "SSO did not return an email address.": "sso_email_missing",
     "SSO email address is not verified.": "sso_email_unverified",
     "SSO organization is missing.": "sso_organization_missing",
