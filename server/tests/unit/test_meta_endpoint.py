@@ -53,6 +53,7 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
         "runtimeVersion": "0.3.1",
         "workerVersion": "0.3.4",
         "minDesktopVersion": "0.3.0",
+        "workflowsEnabled": True,
     }
 
 
@@ -67,9 +68,13 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
         "runtimeVersion",
         "workerVersion",
         "minDesktopVersion",
+        "workflowsEnabled",
     }
-    for value in body.values():
-        assert isinstance(value, str) and value
+    for name, value in body.items():
+        if name == "workflowsEnabled":
+            assert isinstance(value, bool)
+        else:
+            assert isinstance(value, str) and value
 
 
 # T1-SH-3 (specs/developing/testing/self-hosting.md): the /meta wire contract.
@@ -86,6 +91,7 @@ _META_GOLDEN_FIELDS = [
     "runtimeVersion",
     "workerVersion",
     "minDesktopVersion",
+    "workflowsEnabled",
 ]
 
 

@@ -59,18 +59,18 @@ anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs 1074 workflow pla
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 1036 workflow service pending decomposition, workflows v1 launch debt
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1076 workflow service test coverage pending split, workflows v1 launch debt
 anyharness/crates/anyharness-lib/src/live/workflows/executor.rs 2943 workflow run executor pending decomposition, workflows v1 launch debt
-server/proliferate/db/models/cloud/workflows.py 636 workflow/run/trigger ORM models pending split, workflows v1 launch debt
-server/proliferate/db/store/cloud_workflows.py 1091 workflow/run/gateway-token store queries pending split, workflows v1 launch debt
-server/proliferate/server/cloud/workflows/api.py 462 workflow HTTP routes (runs/triggers/executor claim plane/poll setup) pending split, workflows v1 launch debt
-server/proliferate/server/cloud/workflows/domain/definition.py 1127 v2 workflow definition parser/validator pending split, workflows v1 launch debt
-server/proliferate/server/cloud/workflows/models.py 559 workflow request/response Pydantic models pending split, workflows v1 launch debt
-server/proliferate/server/cloud/workflows/service.py 1860 workflow CRUD/StartRun/trigger orchestration pending split, workflows v1 launch debt
-server/tests/unit/test_workflow_actions.py 818 step-action (notify/emit) regression coverage pending split, workflows v1 launch debt
-server/tests/unit/test_workflow_definition.py 710 v2 definition parser regression coverage pending split, workflows v1 launch debt
-server/tests/unit/test_workflow_poll.py 1361 poll-trigger regression coverage pending split, workflows v1 launch debt
-server/tests/unit/test_workflow_run_gateway.py 1311 per-run gateway token regression coverage pending split, workflows v1 launch debt
-server/tests/unit/test_workflow_service.py 684 workflow service regression coverage pending split, workflows v1 launch debt
-server/tests/unit/test_workflow_triggers.py 1440 trigger CRUD/schedule/poll regression coverage pending split, workflows v1 launch debt
+server/proliferate/db/models/cloud/workflows.py 637 workflow/run/trigger ORM models pending split, workflows v1 launch debt
+server/proliferate/db/store/cloud_workflows.py 1084 workflow/run/gateway-token store queries pending split, workflows v1 launch debt
+server/proliferate/server/cloud/workflows/api.py 467 workflow HTTP routes (runs/triggers/executor claim plane/poll setup) pending split, workflows v1 launch debt
+server/proliferate/server/cloud/workflows/domain/definition.py 1121 v2 workflow definition parser/validator pending split, workflows v1 launch debt
+server/proliferate/server/cloud/workflows/models.py 553 workflow request/response Pydantic models pending split, workflows v1 launch debt
+server/proliferate/server/cloud/workflows/service.py 1853 workflow CRUD/StartRun/trigger orchestration pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_actions.py 819 step-action (notify/emit) regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_definition.py 718 v2 definition parser regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_poll.py 1397 poll-trigger regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_run_gateway.py 1302 per-run gateway token regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_service.py 793 workflow service regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_triggers.py 1465 trigger CRUD/schedule/poll regression coverage pending split, workflows v1 launch debt
 apps/desktop/src/components/workflows/editor/WorkflowStepPanel.tsx 559 workflows v1 launch surface; split pass queued post-launch
 apps/desktop/src/components/workflows/editor/WorkflowTriggersCard.tsx 1057 workflows v1 launch surface; split pass queued post-launch
 apps/desktop/src/components/workflows/screen/WorkflowEditorScreen.tsx 1038 workflows v1 launch surface; split pass queued post-launch

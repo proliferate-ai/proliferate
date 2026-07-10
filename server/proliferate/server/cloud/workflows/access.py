@@ -20,12 +20,29 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import optional_current_active_user
+from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.time import utcnow
+
+
+def require_workflows_enabled() -> None:
+    """D-003 launch flag: the whole workflows surface 404s while disabled.
+
+    404 (not 403) so a dark production deployment doesn't advertise the
+    surface's existence; the desktop hides its entry points from the same
+    flag via ``/meta`` ``workflowsEnabled``. Guards both the workflows router
+    and the function-invocations router (invocations exist for workflows).
+    """
+    if not settings.workflows_enabled:
+        raise CloudApiError(
+            "workflows_disabled",
+            "Workflows are not enabled on this deployment.",
+            status_code=404,
+        )
 
 
 @dataclass(frozen=True)

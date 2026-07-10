@@ -29,16 +29,99 @@ interface SampleInitItem {
   status: "ready";
 }
 
+// ── Poll-feed contract (spec 4.2/4.3) ──
+// A conforming poll endpoint the workflows poller GETs. It serves a poll PAGE
+// (`{items, cursor, has_more}`) at `/poll-feed`, and the reserved `/poll-feed/
+// init` sample the workflow-from-poll (flow 1) + signature-probe (flow 2) paths
+// read. Distinct from the invocation `/init` above (a different contract). These
+// routes are handled BEFORE the invocation x-api-key gate: a poll trigger carries
+// its own configured auth header (optional), not the invocation key.
+//
+// The feed replays the SAME three items on every poll so the seen-set dedup
+// (workflow_trigger_item PK) is exercised: two valid items + one schema-invalid
+// item (`count` typed wrong). The cursor is fixed, so it advances exactly once
+// (NULL -> "cursor-1") and stays put on replay. `pollFeedFail` (toggled over HTTP
+// via `/__poll-feed`) makes the feed 503 without killing the shared stub — the
+// "point the trigger at a dead endpoint" case for last_poll_error, kept isolated
+// from sibling specs that share this one stub.
+const POLL_FEED_CURSOR = "cursor-1";
+
+function pollFeedInitPage(): object {
+  return {
+    items: [
+      {
+        id: "poll-init-sample",
+        kind: "issue",
+        occurred_at: "2026-07-09T00:00:00Z",
+        // Two scalar fields (derive to inputs) + one non-scalar (labels array,
+        // reported as a skipped field by flow 1's derive).
+        data: { issue_id: "sample-issue", count: 0, labels: ["bug"] },
+      },
+    ],
+    cursor: POLL_FEED_CURSOR,
+    has_more: false,
+  };
+}
+
+function pollFeedPage(): object {
+  return {
+    items: [
+      { id: "issue-1", kind: "issue", data: { issue_id: "issue-1", count: 1 } },
+      { id: "issue-2", kind: "issue", data: { issue_id: "issue-2", count: 2 } },
+      // Schema-invalid: `count` must be a number per the derived item schema.
+      { id: "issue-bad", kind: "issue", data: { issue_id: "issue-3", count: "twelve" } },
+    ],
+    cursor: POLL_FEED_CURSOR,
+    has_more: false,
+  };
+}
+
 export async function startInvocationStub(options: InvocationStubOptions = {}): Promise<InvocationStubServer> {
   const apiKey = options.apiKey ?? DEFAULT_INVOCATION_STUB_API_KEY;
   const requests: RecordedInvocationRequest[] = [];
   let nextId = 1;
+  let pollFeedFail = false;
 
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
       if (url.pathname === "/__requests") {
         await handleRequestsControl(request, response, requests);
+        return;
+      }
+
+      // Poll-feed control: GET reports the fail flag; POST/DELETE toggle it.
+      if (url.pathname === "/__poll-feed") {
+        if (request.method === "GET") {
+          sendJson(response, 200, { failing: pollFeedFail });
+        } else if (request.method === "POST") {
+          pollFeedFail = true;
+          sendJson(response, 200, { failing: true });
+        } else if (request.method === "DELETE") {
+          pollFeedFail = false;
+          sendJson(response, 200, { failing: false });
+        } else {
+          sendJson(response, 405, { error: "method_not_allowed" });
+        }
+        return;
+      }
+
+      // Poll-feed routes (no invocation api-key gate — a poll trigger carries its
+      // own configured auth header). Reserved `/poll-feed/init` first.
+      if (request.method === "GET" && url.pathname === "/poll-feed/init") {
+        if (pollFeedFail) {
+          sendJson(response, 503, { error: "poll_feed_down" });
+          return;
+        }
+        sendJson(response, 200, pollFeedInitPage());
+        return;
+      }
+      if (request.method === "GET" && url.pathname === "/poll-feed") {
+        if (pollFeedFail) {
+          sendJson(response, 503, { error: "poll_feed_down" });
+          return;
+        }
+        sendJson(response, 200, pollFeedPage());
         return;
       }
 

@@ -694,3 +694,100 @@ async def test_visibility_isolates_owners(db_session: AsyncSession) -> None:
     with pytest.raises(CloudApiError) as exc:
         await service.get_workflow_detail(db_session, other, workflow.id)
     assert exc.value.code == "workflow_not_found"
+
+
+# --- the reserved `functions` namespace grant (track 1b end-to-end wiring) ------
+
+
+def _functions_definition() -> dict:
+    definition = _definition()
+    definition["integrations"] = ["functions"]
+    # notify would drag slack readiness into the assertions; keep the fixture
+    # focused on the functions grant.
+    definition["agents"][0]["steps"] = [
+        {"kind": "agent.prompt", "prompt": "Call the invocation for {{inputs.issue}}"},
+        {"kind": "agent.emit", "name": "check", "prompt": "report the result"},
+    ]
+    return definition
+
+
+async def test_functions_namespace_grantable_with_live_invocation(
+    db_session: AsyncSession,
+) -> None:
+    """A workflow may grant the reserved `functions` virtual provider when the
+    owner has ≥1 live invocation — save-time visibility AND the L22 StartRun
+    readiness gate both accept it (no integration account exists for it)."""
+    from proliferate.db.store import function_invocations as invocations_store
+
+    user = await _make_user(db_session)
+    await invocations_store.create(
+        db_session,
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        name="lookup_ticket",
+        endpoint_url="https://functions.test/lookup",
+        method="post",
+        args_schema_json={"type": "object", "properties": {"id": {"type": "string"}}},
+    )
+    workflow, _ = await service.create_workflow(
+        db_session, user, WorkflowCreateRequest(name="fn-flow", definition=_functions_definition())
+    )
+    run = await service.start_run(
+        db_session,
+        user,
+        workflow.id,
+        inputs={"issue": "X"},
+        target_mode="local",
+    )
+    gateway = (run.resolved_plan_json or {}).get("gateway") or {}
+    assert gateway.get("integrations") == ["functions"]
+
+
+async def test_functions_namespace_rejected_without_invocations(
+    db_session: AsyncSession,
+) -> None:
+    """Deny-path floor: with zero live invocations the grant is refused at
+    save time (unknown provider), so a stale definition can't mint a
+    functions-scoped token that reaches nothing."""
+    user = await _make_user(db_session)
+    with pytest.raises(CloudApiError) as exc:
+        await service.create_workflow(
+            db_session,
+            user,
+            WorkflowCreateRequest(name="fn-flow", definition=_functions_definition()),
+        )
+    assert exc.value.code == "workflow_function_provider_unknown"
+
+
+async def test_functions_readiness_gate_at_start_run(db_session: AsyncSession) -> None:
+    """L22 at StartRun: the owner archives their last invocation after saving
+    the workflow — the run is refused with the enumerated not-ready code, never
+    silently narrowed."""
+    from proliferate.db.store import function_invocations as invocations_store
+
+    user = await _make_user(db_session)
+    await invocations_store.create(
+        db_session,
+        owner_user_id=user.id,
+        organization_id=None,
+        created_by_user_id=user.id,
+        name="lookup_ticket",
+        endpoint_url="https://functions.test/lookup",
+        method="post",
+        args_schema_json={"type": "object"},
+    )
+    workflow, _ = await service.create_workflow(
+        db_session, user, WorkflowCreateRequest(name="fn-flow", definition=_functions_definition())
+    )
+    assert await invocations_store.archive(db_session, owner_user_id=user.id, name="lookup_ticket")
+    with pytest.raises(CloudApiError) as exc:
+        await service.start_run(
+            db_session,
+            user,
+            workflow.id,
+            inputs={"issue": "X"},
+            target_mode="local",
+        )
+    assert exc.value.code == "workflow_function_provider_not_ready"
+    assert exc.value.status_code == 409

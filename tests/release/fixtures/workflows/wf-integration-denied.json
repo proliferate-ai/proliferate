@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "name": "T3-WF-3 integration denied",
+  "description": "The workflow grants NO integrations, yet the agent is told to use a connected provider (exa). list_providers must not show it, a forced call gets a scope 403, and zero upstream calls happen. Version-pinned tier-3 fixture (specs/developing/testing/scenarios.md#T3-WF-3). The provider the scenario connects (default exa) is deliberately absent from this definition's `integrations`.",
+  "inputs": [
+    { "name": "query", "type": "text", "required": true }
+  ],
+  "integrations": [],
+  "agents": [
+    {
+      "slot": "prober",
+      "harness": "claude",
+      "model": "haiku",
+      "steps": [
+        {
+          "kind": "agent.prompt",
+          "label": "Attempt the ungranted provider",
+          "prompt": "List your available integration providers through the proliferate_integrations MCP. Then attempt a web search for {{inputs.query}} using the exa provider. exa is NOT granted to this run, so expect a scope denial — do not retry more than once."
+        },
+        {
+          "kind": "agent.emit",
+          "label": "Emit the probe result",
+          "name": "probe_result",
+          "prompt": "Report whether exa appeared in your provider list and whether the search call was allowed or denied, including any error code you saw.",
+          "output_schema": {
+            "type": "object",
+            "properties": {
+              "exa_listed": { "type": "boolean" },
+              "call_allowed": { "type": "boolean" },
+              "error": { "type": "string" }
+            },
+            "required": ["exa_listed", "call_allowed"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "name": "T3-WF-2 invoke denied",
+  "description": "Same shape as wf-invoke-allowed but WITHOUT the `functions` grant. The agent is told to call the invocation, cannot (gateway scope denial), and must emit a failure report — the run still completes. Version-pinned tier-3 fixture (specs/developing/testing/scenarios.md#T3-WF-2, denied half). No required_invocation gate: the tool can never satisfy, so the prompt instructs a best-effort attempt + failure emit instead of looping.",
+  "inputs": [
+    { "name": "payload", "type": "text", "required": true }
+  ],
+  "integrations": [],
+  "agents": [
+    {
+      "slot": "caller",
+      "harness": "claude",
+      "model": "haiku",
+      "steps": [
+        {
+          "kind": "agent.prompt",
+          "label": "Attempt the (ungranted) invocation",
+          "prompt": "Try to call the capture_event function invocation with { \"payload\": \"{{inputs.payload}}\" }. It is not granted to this run, so the call will be denied — do not retry more than once."
+        },
+        {
+          "kind": "agent.emit",
+          "label": "Emit the failure report",
+          "name": "result",
+          "prompt": "Report that the capture_event call was denied and why, based on the error you saw.",
+          "output_schema": {
+            "type": "object",
+            "properties": {
+              "delivered": { "type": "boolean" },
+              "failure_reason": { "type": "string" }
+            },
+            "required": ["delivered", "failure_reason"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  ]
+}

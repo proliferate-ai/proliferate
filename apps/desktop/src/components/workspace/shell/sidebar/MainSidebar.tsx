@@ -31,6 +31,7 @@ import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
 import { useSidebarShortcutTargets } from "@/hooks/workspaces/derived/use-sidebar-shortcut-targets";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 import { useWorkspaceUiStore } from "@/stores/preferences/workspace-ui-store";
 import { useWorkspaceDisplayNameActions } from "@/hooks/workspaces/workflows/use-workspace-display-name-actions";
 import { useWorkspaceSidebarActions } from "@/hooks/workspaces/workflows/use-workspace-sidebar-actions";
@@ -101,6 +102,7 @@ export const MainSidebar = memo(function MainSidebar() {
   } = useCloudWorkspaceActions();
 
   const isOnWorkflows = location.pathname.startsWith(APP_ROUTES.workflows);
+  const workflowsEnabled = useWorkflowsEnabled();
   const isOnWorkspaces = location.pathname === APP_ROUTES.workspaces;
   const isOnHome = location.pathname === APP_ROUTES.home;
   const archiveWorkspace = useWorkspaceUiStore((s) => s.archiveWorkspace);
@@ -274,6 +276,7 @@ export const MainSidebar = memo(function MainSidebar() {
             homeActive={isOnHome && !selectedWorkspaceId && !pendingWorkspaceEntry}
             workspacesActive={isOnWorkspaces}
             workflowsActive={isOnWorkflows}
+            workflowsEnabled={workflowsEnabled}
             supportActive={false}
             onGoHome={actions.handleGoHome}
             onGoWorkspaces={actions.handleGoWorkspaces}

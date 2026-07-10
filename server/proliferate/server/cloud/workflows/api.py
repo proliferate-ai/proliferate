@@ -24,6 +24,7 @@ from proliferate.server.cloud.workflows.access import (
     RunTokenActor,
     authorize_run_ping,
     authorize_run_report,
+    require_workflows_enabled,
 )
 from proliferate.server.cloud.workflows.delivery import (
     cancel_run,
@@ -91,7 +92,11 @@ from proliferate.server.cloud.workflows.service import (
     update_workflow,
 )
 
-router = APIRouter(prefix="/workflows", tags=["cloud-workflows"])
+router = APIRouter(
+    prefix="/workflows",
+    tags=["cloud-workflows"],
+    dependencies=[Depends(require_workflows_enabled)],
+)
 
 
 @router.get("", response_model=WorkflowListResponse)

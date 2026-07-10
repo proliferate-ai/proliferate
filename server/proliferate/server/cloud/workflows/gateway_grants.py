@@ -25,8 +25,12 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.cloud import CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE
-from proliferate.constants.workflows import WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS
+from proliferate.constants.workflows import (
+    FUNCTION_INVOCATION_PROVIDER_NAMESPACE,
+    WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS,
+)
 from proliferate.db.store import cloud_workflows as store
+from proliferate.db.store import function_invocations as invocations_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.integrations import accounts as accounts_store
@@ -126,7 +130,13 @@ async def visible_provider_namespaces(db: AsyncSession, *, owner_user_id: UUID) 
         definitions = await definitions_store.list_definitions_visible_to_org(db, org_id)
     else:
         definitions = await definitions_store.list_seed_definitions(db)
-    return {definition.namespace for definition in definitions}
+    namespaces = {definition.namespace for definition in definitions}
+    # The reserved ``functions`` virtual provider (track 1b): it has no
+    # integration-definition row by design (the reservation check forbids one),
+    # so it is grantable exactly when the owner has ≥1 live invocation.
+    if await invocations_store.list_for_owner(db, owner_user_id):
+        namespaces.add(FUNCTION_INVOCATION_PROVIDER_NAMESPACE)
+    return namespaces
 
 
 async def assert_declared_providers_ready(
@@ -146,6 +156,17 @@ async def assert_declared_providers_ready(
         return
     organization_id = await _organization_id_for_owner(db, owner_user_id=owner_user_id)
     for provider in namespaces:
+        if provider == FUNCTION_INVOCATION_PROVIDER_NAMESPACE:
+            # The virtual ``functions`` provider has no integration account;
+            # "ready" means the owner has ≥1 live invocation definition.
+            if not await invocations_store.list_for_owner(db, owner_user_id):
+                raise CloudApiError(
+                    "workflow_function_provider_not_ready",
+                    "This workflow grants function invocations, but you have no "
+                    "function invocations defined. Create one before running.",
+                    status_code=409,
+                )
+            continue
         row = await accounts_store.get_ready_account_for_provider(
             db, owner_user_id, provider, organization_id=organization_id
         )

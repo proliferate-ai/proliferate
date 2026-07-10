@@ -6,12 +6,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost";
 
+vi.mock("@/hooks/access/cloud/use-server-features", () => ({
+  useServerFeatures: () => ({ data: { workflowsEnabled: true } }),
+  useWorkflowsEnabled: () => true,
+}));
+
 vi.mock("@/hooks/organizations/lifecycle/use-organization-selection-lifecycle", () => ({
   useOrganizationSelectionLifecycle: vi.fn(),
 }));
 
-vi.mock("@/pages/WorkflowsPage", () => ({
-  WorkflowsPage: () => <section data-testid="workflows" />,
+vi.mock("@/pages/WorkflowsHomePage", () => ({
+  WorkflowsHomePage: () => <section data-testid="workflows" />,
 }));
 
 let mainMounts = 0;

@@ -795,6 +795,20 @@ Note:
 - `@anyharness/sdk-react` is a workspace package, but this workflow does not
   currently publish it.
 
+How a new AnyHarness binary reaches running installs (three distinct paths):
+
+- **Existing cloud sandboxes** converge in place: the sandbox worker watches
+  the server-advertised `desiredVersions.anyharness` pin, downloads the pinned
+  runtime through the server redirect, and stops/swaps/relaunches it
+  (`specs/tbd/anyharness-self-update-v1.md`). A new runtime no longer requires
+  replacing a persistent sandbox.
+- **Fresh cloud sandboxes** get the binary baked into the E2B template, so a
+  release that changes the runtime still builds/promotes the template for new
+  provisions.
+- **Desktop** remains app-bundle-only by design: the runtime sidecar ships
+  inside the desktop app and updates only via the desktop updater (the sandbox
+  worker's in-place gate stays off for desktop).
+
 ### Cloud Template Release
 
 Source of truth:

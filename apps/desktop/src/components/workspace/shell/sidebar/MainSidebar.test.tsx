@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MainSidebar } from "@/components/workspace/shell/sidebar/MainSidebar";
 import { useSupportModalStore } from "@/stores/support/support-modal-store";
 
+vi.mock("@/hooks/access/cloud/use-server-features", () => ({
+  useServerFeatures: () => ({ data: { workflowsEnabled: true } }),
+  useWorkflowsEnabled: () => true,
+}));
+
 vi.mock("@/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));

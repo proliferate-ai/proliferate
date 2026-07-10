@@ -101,14 +101,25 @@ Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md
 | Operator update motion: `./update.sh` migrates + restarts, `/meta` reports N, data intact | 4 | tests/release/src/scenarios/upgrade/t4-sh-1.ts (T4-SH-1; boots a box at N-1, claims, runs ./update.sh to N, asserts migrations + health + /meta == N + the pre-update admin still logs in. Gated behind RELEASE_E2E_SELFHOST_PROVISION) |
 | Desktop artifact chain valid per release (server redirect follows, CDN manifest fresh, every platform artifact HEAD 200, tag contains the SHA) | 4 | tests/release/src/scenarios/upgrade/t4-sh-2.ts (T4-SH-2; the 2026-07-09 incident test — pure HTTP + git, no box, so it runs in the release gate via .github/workflows/release-e2e-selfhost.yml, self-hosting.md §5) |
 
-## Workflows — PARKED (surface being reworked; tests land with the rework PRs)
+## Workflows
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Create/edit/trigger workflow via UI → run created, plan resolved, delivery attempted (up to the sandbox seam) | 2 | parked |
-| Workflow run reaches terminal state with a real agent | 3 | parked |
-| Poll trigger against stub feed: replay-safe, invalid items surfaced | 2 | parked |
-| Workflow services live: schedule + poll triggers, emit, chaining, Slack delivery | 3 | parked |
+| Create/edit workflow (editor live ref-validation gates Save) → definition/version round-trip → manual LOCAL StartRun: run created, args interpolated into the resolved plan, delivery seam (`pending_delivery` → owner-relay `/delivered`) | 2 | tests/intent/specs/workflows.spec.ts (T2-WF-1; stops at the seam — no runtime/sandbox; cloud-lane server delivery is tier-3) |
+| StartRun session-binding validation + all-mutations lockout (`session_binding_held` 409) + take-over/cancel releases the hold (`stopped_by_user_id`) | 2 | tests/intent/specs/workflows.spec.ts (T2-WF-5; LOCAL target — `session_binding_wrong_workspace` + harness-mismatch are tier-3 runtime seams, named not-covered) |
+| Function-invocation CRUD: args_schema validation, headers write-only (never echoed), reserved `functions` namespace collision rejected | 2 | tests/intent/specs/workflows-invocations.spec.ts (T2-WF-3) |
+| Org/chat default-access: new invocations workflow-only until chat-enabled; per-integration default-chat-scope authoring round-trips | 2 | tests/intent/specs/workflows-invocations.spec.ts (T2-WF-4; the composed gateway run-scope is tier-3) |
+| Poll trigger against stub feed: one item row per unique id (spawned), invalid item surfaced, cursor advances once, replay-safe, dead endpoint → `last_poll_error` + trigger stays enabled | 2 | tests/intent/specs/workflows-triggers.spec.ts (T2-WF-2; driven by the real poller tick in a server-venv process — the honest single-tick seam) |
+| Both /init setup flows: workflow-from-poll derive (flow 1) + poll-trigger-from-workflow field-diff (flow 2); trigger save's first network call + fragment/userinfo URL rejects | 2 | tests/intent/specs/workflows-triggers.spec.ts (T2-WF-6) |
+| Schedule + poll trigger CRUD incl. `missedRunPolicy` (run_latest/skip_all/replay_all, default + PATCH); poll `enabled:false` never reprobes a down endpoint (1d fix) | 2 | tests/intent/specs/workflows-triggers.spec.ts (T2-WF-7) |
+| Workflow run reaches terminal state with a real agent: strict emit schema + corrective retry + required-invocation gate | 3 | tests/release/src/scenarios/workflows/t3-wf-1.ts (T3-WF-1 wf-emit-gate; server-side halves real, agent half blocked/expected-fail until the sandbox session driver lands — #1042) |
+| Function invocations live: allowed call captured + args validated; denied → gateway 403 audit, zero outbound | 3 | tests/release/src/scenarios/workflows/t3-wf-2.ts (T3-WF-2 wf-invoke-allowed/denied) |
+| Integration scoping: connected-but-ungranted provider absent from listing, forced call scope-403, zero upstream | 3 | tests/release/src/scenarios/workflows/t3-wf-3.ts (T3-WF-3 wf-integration-denied) |
+| Parallel lanes: independent per-lane rows, lane-qualified keys, join waits for both | 3 | tests/release/src/scenarios/workflows/t3-wf-4.ts (T3-WF-4 wf-parallel-review) |
+| Polls end-to-end: /init inference, item→input delivery, cursor exactly-once, replay-safe | 3 | tests/release/src/scenarios/workflows/t3-wf-5.ts (T3-WF-5 wf-poll-feed) |
+| Automations (cloud): 1-minute schedule fires within budget, FIFO queue drains, missed-run run_latest | 3 | tests/release/src/scenarios/workflows/t3-wf-6.ts (T3-WF-6 wf-schedule-cloud) |
+| Automations (desktop): local claim → execute → relay → terminal | 3 | tests/release/src/scenarios/workflows/t3-wf-7.ts (T3-WF-7 wf-schedule-desktop; LOCAL macOS/dev-profile lane, not a CI gate until a headless desktop lane exists) |
+| Slack notify delivery live (real workspace message from a run's notify step) | 3 | — (tier-1 test_workflow_actions owns the ledger logic; live Slack delivery e2e is an open gap, RELEASE_E2E_SLACK_WEBHOOK_URL reserved) |
 
 ## Billing
 

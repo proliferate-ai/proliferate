@@ -29,6 +29,18 @@
   description: "Telemetry runtime mode: local_dev, self_managed, or hosted_product"
   tags: [local-dev, self-hosted, production]
 
+- name: WORKFLOWS_ENABLED
+  secret: false
+  default: ""
+  description: >-
+    D-003 workflows launch flag (alias PROLIFERATE_WORKFLOWS_ENABLED). Unset,
+    the posture derives from telemetry mode: hosted_product holds the surface
+    dark, every other posture gets workflows on. Staging sets "true"; hosted
+    production flips "true" at launch. The workflows + function-invocations
+    APIs 404 while dark and the desktop hides its entry points via /meta
+    workflowsEnabled.
+  tags: [self-hosted, production]
+
 - name: API_BASE_URL
   secret: false
   default: ""

@@ -18,6 +18,7 @@ from fastapi import APIRouter, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from proliferate.config import settings
 from proliferate.integrations.desktop_downloads import (
     downloads_base_url as _downloads_base_url,
 )
@@ -41,6 +42,11 @@ class MetaResponse(BaseModel):
     runtimeVersion: str
     workerVersion: str
     minDesktopVersion: str
+    # D-003 workflows launch flag: the desktop hides its workflows entry
+    # points (sidebar, routes, composer door) when the server holds the
+    # surface dark. Appended after the golden five so existing readers of
+    # the wire order stay valid.
+    workflowsEnabled: bool
 
 
 @router.get("/meta", response_model=MetaResponse)
@@ -51,6 +57,7 @@ async def meta() -> MetaResponse:
         runtimeVersion=runtime_version(),
         workerVersion=worker_version(),
         minDesktopVersion=min_desktop_version(),
+        workflowsEnabled=settings.workflows_enabled,
     )
 
 

@@ -32,8 +32,14 @@ from proliferate.server.cloud.integrations.function_invocations.service import (
     set_function_invocation_chat_scope_enabled,
     update_function_invocation,
 )
+from proliferate.server.cloud.workflows.access import require_workflows_enabled
 
-router = APIRouter(prefix="/integrations/functions", tags=["function-invocations"])
+router = APIRouter(
+    prefix="/integrations/functions",
+    tags=["function-invocations"],
+    # D-003: invocations exist for workflows; the surface holds with it.
+    dependencies=[Depends(require_workflows_enabled)],
+)
 
 
 @router.get("", response_model=FunctionInvocationListResponse)

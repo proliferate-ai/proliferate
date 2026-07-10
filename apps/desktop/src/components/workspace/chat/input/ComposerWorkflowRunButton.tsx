@@ -10,6 +10,7 @@ import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerContro
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { Zap } from "@proliferate/ui/icons";
 import { useWorkflows, useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 import {
   useWorkflowRunLauncher,
   type WorkflowChatOrigin,
@@ -44,8 +45,9 @@ export function ComposerWorkflowRunButton({
   harness,
   workspaceUiKey,
 }: ComposerWorkflowRunButtonProps) {
+  const workflowsEnabled = useWorkflowsEnabled();
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const workflowsQuery = useWorkflows();
+  const workflowsQuery = useWorkflows(false, workflowsEnabled);
   const launcher = useWorkflowRunLauncher();
   const sessionTitle = useSessionDirectoryStore((state) =>
     activeSessionId ? state.entriesById[activeSessionId]?.title ?? null : null,
@@ -56,7 +58,7 @@ export function ComposerWorkflowRunButton({
     [workflowsQuery.data],
   );
 
-  if (!workspaceUiKey || workflows.length === 0) {
+  if (!workflowsEnabled || !workspaceUiKey || workflows.length === 0) {
     return null;
   }
 

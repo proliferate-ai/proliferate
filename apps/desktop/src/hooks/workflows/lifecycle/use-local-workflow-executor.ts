@@ -1,6 +1,7 @@
 import { useCloudAvailabilityState } from "@/hooks/cloud/derived/use-cloud-availability-state";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useLocalWorkflowClaimPoller } from "@/hooks/access/cloud/workflows/use-local-workflow-claim-poller";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 
 // Mounts the desktop workflow claim poller when cloud + the local runtime are
 // ready — the same gate the automations executor uses (D-001: the two pollers
@@ -9,8 +10,10 @@ export function useLocalWorkflowExecutor(): void {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const connectionState = useHarnessConnectionStore((state) => state.connectionState);
   const { cloudActive } = useCloudAvailabilityState();
+  const workflowsEnabled = useWorkflowsEnabled();
   const enabled =
-    cloudActive
+    workflowsEnabled
+    && cloudActive
     && connectionState === "healthy"
     && runtimeUrl.trim().length > 0;
 

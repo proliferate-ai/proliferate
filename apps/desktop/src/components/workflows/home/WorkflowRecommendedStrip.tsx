@@ -17,6 +17,7 @@ import { Badge } from "@proliferate/ui/primitives/Badge";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Play } from "@proliferate/ui/icons";
 import { useWorkflows, useWorkflowRuns, useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 import { useWorkflowRunLauncher } from "@/hooks/access/cloud/workflows/use-workflow-run-launcher";
 import { useCloudIntegrations } from "@/hooks/cloud/facade/use-cloud-integrations";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
@@ -36,7 +37,8 @@ interface WorkflowRecommendedStripProps {
  * launcher. Renders nothing until the org has at least one workflow.
  */
 export function WorkflowRecommendedStrip({ limit = DEFAULT_STRIP_LIMIT }: WorkflowRecommendedStripProps) {
-  const workflowsQuery = useWorkflows();
+  const workflowsEnabled = useWorkflowsEnabled();
+  const workflowsQuery = useWorkflows(false, workflowsEnabled);
   const runsQuery = useWorkflowRuns(null);
   const launcher = useWorkflowRunLauncher();
   const { activeOrganizationId } = useActiveOrganization();
@@ -44,6 +46,8 @@ export function WorkflowRecommendedStrip({ limit = DEFAULT_STRIP_LIMIT }: Workfl
 
   const workflows = workflowsQuery.data?.workflows ?? [];
   const runs = runsQuery.data?.runs ?? [];
+  // D-003 launch flag read after the hooks (hook order), before any render.
+  const stripHidden = !workflowsEnabled;
 
   // Readiness chip (spec 5.3 honesty rule): a namespace only counts as
   // connected when there's a ready account behind it — same bar as the
@@ -80,7 +84,7 @@ export function WorkflowRecommendedStrip({ limit = DEFAULT_STRIP_LIMIT }: Workfl
     [workflows, runs, limit],
   );
 
-  if (workflows.length === 0) {
+  if (stripHidden || workflows.length === 0) {
     return null;
   }
 

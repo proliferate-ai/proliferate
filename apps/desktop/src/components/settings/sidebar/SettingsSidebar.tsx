@@ -1,4 +1,5 @@
 import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 import {
   Blocks,
   Brain,
@@ -35,6 +36,7 @@ import {
   getHarnessKindForSettingsSection,
   getSettingsScopeNav,
   isSettingsAdminOnlySection,
+  isSettingsWorkflowsOnlySection,
   isSettingsHarnessSection,
   type SettingsNavIconId,
   type SettingsNavItem,
@@ -203,17 +205,23 @@ export function SettingsSidebar({
   const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const { agentsByKind } = useAgentCatalog();
+  const workflowsEnabled = useWorkflowsEnabled();
   const visibleNavGroups = useMemo(() =>
     getSettingsScopeNav(activeScope).groups.map((group) => ({
       ...group,
       items: group.items.filter((item) =>
         item.kind !== "section"
-        || !isSettingsAdminOnlySection(item.id)
-        || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
-        || adminAccess?.isAdmin === true
+        || (
+          (!isSettingsWorkflowsOnlySection(item.id) || workflowsEnabled)
+          && (
+            !isSettingsAdminOnlySection(item.id)
+            || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+            || adminAccess?.isAdmin === true
+          )
+        )
       ),
     })).filter((group) => group.items.length > 0),
-  [activeScope, adminAccess?.isAdmin]);
+  [activeScope, adminAccess?.isAdmin, workflowsEnabled]);
   const visibleShortcutSections = useMemo(() => {
     const visibleSections = new Set(
       visibleNavGroups.flatMap((group) =>

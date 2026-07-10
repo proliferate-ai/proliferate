@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useWorkflowRunPillStore } from "@/stores/workflows/workflow-run-pill-store";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowUpRight, Play, X } from "@proliferate/ui/icons";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 
 /**
  * App-wide host for the post-launch run pills (spec run-from-chat R2). Sits
@@ -11,10 +12,11 @@ import { ArrowUpRight, Play, X } from "@proliferate/ui/icons";
  */
 export function WorkflowRunPillHost() {
   const navigate = useNavigate();
+  const workflowsEnabled = useWorkflowsEnabled();
   const pills = useWorkflowRunPillStore((state) => state.pills);
   const dismiss = useWorkflowRunPillStore((state) => state.dismiss);
 
-  if (pills.length === 0) {
+  if (!workflowsEnabled || pills.length === 0) {
     return null;
   }
 
