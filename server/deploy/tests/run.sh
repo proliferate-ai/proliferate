@@ -268,7 +268,7 @@ rm -rf "$BUNDLE_ROOT/proliferate-deploy/smoke" "$BUNDLE_ROOT/proliferate-deploy/
 printf '0.3.18\n' >"$BUNDLE_ROOT/proliferate-deploy/VERSION"
 tar czf "$SCRATCH/proliferate-deploy.tar.gz" -C "$BUNDLE_ROOT" proliferate-deploy
 members="$(tar tzf "$SCRATCH/proliferate-deploy.tar.gz")"
-for want in proliferate-deploy/bootstrap.sh proliferate-deploy/update.sh proliferate-deploy/common.sh proliferate-deploy/preflight.sh proliferate-deploy/doctor.sh proliferate-deploy/install.sh proliferate-deploy/docker-compose.production.yml proliferate-deploy/Caddyfile proliferate-deploy/.env.production.example proliferate-deploy/VERSION; do
+for want in proliferate-deploy/bootstrap.sh proliferate-deploy/update.sh proliferate-deploy/common.sh proliferate-deploy/preflight.sh proliferate-deploy/doctor.sh proliferate-deploy/install.sh proliferate-deploy/docker-compose.production.yml proliferate-deploy/Caddyfile proliferate-deploy/.env.production.example proliferate-deploy/README.md proliferate-deploy/VERSION; do
   echo "$members" | grep -qx "$want" && ok "bundle contains $(basename "$want")" || no "bundle missing $want"
 done
 echo "$members" | grep -q 'proliferate-deploy/smoke/' && no "bundle should NOT contain smoke/" || ok "bundle excludes smoke/"
