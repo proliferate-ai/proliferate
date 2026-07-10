@@ -669,9 +669,23 @@ export async function seedEnabledOrgSsoConnection(
   const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
   await client.connect();
   try {
+    // Seed a structurally COMPLETE OIDC config: discovery now advertises only
+    // usable connections (server oidc_configuration_error gate), so an enabled
+    // row with null client id/issuer would correctly report enabled=false and
+    // the entry-point discovery this fixture backs would see nothing. A public
+    // client (token_endpoint_auth_method='none') needs no secret, so client id +
+    // issuer is enough to be "startable" without a real IdP or a ciphertext.
     const result = await client.query<{ id: string }>(
-      `INSERT INTO sso_connection (id, scope, organization_id, protocol, status, display_name, created_at, updated_at)
-       VALUES (gen_random_uuid(), 'organization', $1, 'oidc', 'enabled', $2, now(), now())
+      `INSERT INTO sso_connection (
+         id, scope, organization_id, protocol, status, display_name,
+         oidc_client_id, oidc_issuer_url, oidc_token_endpoint_auth_method,
+         created_at, updated_at
+       )
+       VALUES (
+         gen_random_uuid(), 'organization', $1, 'oidc', 'enabled', $2,
+         'seed-client-id', 'https://idp.seed.example', 'none',
+         now(), now()
+       )
        RETURNING id`,
       [organizationId, displayName],
     );

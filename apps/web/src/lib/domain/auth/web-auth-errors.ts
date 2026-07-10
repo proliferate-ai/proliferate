@@ -109,6 +109,15 @@ const SSO_ERROR_PRESENTATIONS = new Map<
     },
   ],
   [
+    "sso_jit_disabled",
+    {
+      title: "Account not provisioned",
+      description:
+        "This SSO connection does not create new accounts automatically. Ask an admin to enable just-in-time provisioning (SSO_JIT_POLICY=create_member) or invite you first.",
+      statusLabel: "SSO access denied",
+    },
+  ],
+  [
     "sso_user_already_in_team",
     {
       title: "Already in another organization",
