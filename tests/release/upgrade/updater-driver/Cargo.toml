@@ -1,0 +1,35 @@
+# Headless driver for the tier-4 desktop auto-update scenario (T4-DESKTOP-1).
+#
+# This is deliberately DETACHED from the repo's cargo workspace (the empty
+# [workspace] table below) so the merge gate's `cargo test --workspace` never
+# compiles it — it is a heavy tauri-test harness that is built on demand only
+# by the T4 orchestrator on a local macOS run, never in CI.
+#
+# It exercises the REAL `tauri_plugin_updater` Rust API (the same code the
+# desktop JS wrappers in apps/desktop/src/lib/access/tauri/updater.ts call
+# through): fetch the served manifest, semver-compare, verify the N artifact's
+# minisign signature against the pubkey the N-1 build trusts, and swap the
+# on-disk N-1 `.app` bundle in place. Pointing the updater's `executable_path`
+# at a copy of the N-1 bundle (via the public UpdaterBuilder::executable_path)
+# makes the install target that copy rather than this binary.
+[package]
+name = "t4-updater-driver"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "t4-updater-driver"
+path = "src/main.rs"
+
+[dependencies]
+# Pinned to the versions the desktop app resolves (apps/desktop/src-tauri +
+# repo Cargo.lock, 2026-07) so the driver exercises the same updater code the
+# shipped app links. default-features=false + "test" gives us MockRuntime
+# without pulling wry/webkit — no window is created.
+tauri = { version = "=2.11.2", default-features = false, features = ["test"] }
+tauri-plugin-updater = "=2.10.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+serde_json = "1"

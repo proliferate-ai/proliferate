@@ -647,6 +647,40 @@ trees the redirects resolve to — now closed by
 `scripts/ci-cd/publish-runtime-cdn.sh` + the `release-runtime.yml` `publish-cdn`
 job.
 
+### T4-DESKTOP-1: desktop app auto-update, N-1 → N
+The Tauri-updater mechanism from the tier-4 registry (a broken updater strands
+every existing desktop user). Build a test-flavor N-1 `.app` pointed at a local
+update feed, build an N `.app` signed with the **same** key, stage
+N + `latest.json` behind `tests/release/scripts/serve-updater-feed.mjs`, then
+drive the real `tauri_plugin_updater` (`check()` + `download_and_install()` —
+the code the JS wrappers in `apps/desktop/src/lib/access/tauri/updater.ts` call
+through) against a pristine copy of the N-1 bundle. Assert:
+- `check()` reports an available update whose version == N;
+- `download_and_install()` verifies the N artifact's minisign signature against
+  the pubkey the N-1 build trusts (signature is checked at download, not
+  check() time) and swaps the on-disk `.app` in place;
+- the installed bundle's `CFBundleShortVersionString` went N-1 → N — exactly
+  what `getVersion()` returns after a relaunch, so this is the faithful
+  "the relaunched app is version N" assertion.
+
+The GUI is deliberately not clicked: the update UX is user-gated inside a
+release webview (Settings → "Desktop updates" → check → download → restart),
+and webview automation is far more brittle headlessly than invoking the same
+updater API directly. The headless Rust driver
+(`tests/release/upgrade/updater-driver`) is the "call the wrappers directly"
+path — it exercises the parts that actually break (manifest fetch, semver
+compare, signature verification, real macOS bundle swap). Its mock app reports
+running version 0.1.0 (a `tauri::test` limitation, not the real N-1 semver);
+irrelevant to what is asserted, since the on-disk bundle version is read from
+the real N-1 build's Info.plist.
+
+**Local-macOS-aarch64-only**, gated behind `RELEASE_E2E_DESKTOP_T4=1` (two full
+`tauri build`s, ~10+ min cold; bundles are cached across runs). In CI / on any
+non-macOS-aarch64 host / without the opt-in it reports `blocked` cleanly, never
+red. Orchestrator + local invocation:
+`specs/developing/testing/desktop-update-testing.md` ("Running the T4
+scenario").
+
 ---
 
 ## Open rulings collected
