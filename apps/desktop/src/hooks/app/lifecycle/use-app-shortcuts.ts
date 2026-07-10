@@ -37,6 +37,11 @@ export function useAppShortcuts(actions: AppCommandActions): void {
   });
 
   useShortcutHandler("app.go-automations", () => {
+    // D-003: inert while the server holds workflows dark (matches the hidden
+    // palette entry + sidebar item).
+    if (actions.goWorkflows.hidden) {
+      return;
+    }
     actions.goWorkflows.execute("shortcut");
   });
 

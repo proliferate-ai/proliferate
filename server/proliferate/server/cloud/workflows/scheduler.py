@@ -38,6 +38,7 @@ from uuid import UUID
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.workflows import (
     WORKFLOW_CONCURRENCY_SKIP,
     WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL,
@@ -475,6 +476,12 @@ async def run_workflow_scheduler_tick(
     batch_size: int = WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE,
     max_deliveries: int = WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK,
 ) -> WorkflowSchedulerTickResult:
+    # D-003: the launch flag gates the background plane too. Triggers created
+    # while the surface was enabled must not keep firing runs (provisioning
+    # sandboxes, consuming budget) on a deployment whose workflows API is dark
+    # and whose /cancel would 404.
+    if not settings.workflows_enabled:
+        return WorkflowSchedulerTickResult(created_runs=0, delivered_runs=0)
     now = utcnow()
     created = await _fire_due_triggers(session_factory, now=now, batch_size=batch_size)
 

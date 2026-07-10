@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from proliferate.constants.workflows import FUNCTION_INVOCATION_PROVIDER_NAMESPACE
+
 # Enumerated deny reasons (agent-readable, never a 500 — surfaced through the
 # gateway's existing MCP error-result envelope).
 SCOPE_DENY_PROVIDER_OUT_OF_WORKER = "provider_out_of_worker_scope"
@@ -176,11 +178,18 @@ def intersect_namespaces_with_worker(
 
     ``worker_scope`` NULL = unscoped passthrough (namespaces unchanged, distinct
     from an empty allowlist which drops every namespace). Order preserved.
+
+    The reserved ``functions`` virtual provider always survives: worker
+    allowlists enumerate integration-definition namespaces (an org-admin
+    surface), and the per-user functions provider will never appear in one, so
+    intersecting it away would silently strip every workflow's invocation grant
+    the day worker scoping ships. Its own gate is the run scope + the owner's
+    live invocations, not the worker layer.
     """
 
     if worker_scope is None:
         return list(namespaces)
-    allowed = set(worker_scope)
+    allowed = set(worker_scope) | {FUNCTION_INVOCATION_PROVIDER_NAMESPACE}
     return [ns for ns in namespaces if ns in allowed]
 
 

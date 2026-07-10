@@ -104,6 +104,7 @@ from proliferate.server.cloud.workflows.domain.run_status import (
     is_terminal,
 )
 from proliferate.server.cloud.workflows.gateway_grants import (
+    _organization_id_for_owner,
     assert_declared_providers_ready,
     granted_namespaces,
     mint_run_gateway_token,
@@ -1057,10 +1058,17 @@ class SlackChannelsResult:
 async def list_slack_channels(db: AsyncSession, user: ActorIdentity) -> SlackChannelsResult:
     """Channels for the owner's connected Slack workspace, for the notify-step
     channel picker. ``connected=False`` covers both "never connected" and a
-    credential that no longer decrypts; either way there is nothing to list."""
+    credential that no longer decrypts; either way there is nothing to list.
 
-    row = await accounts_store.get_ready_account_for_provider(db, user.id, "slack")
-    if row is None:
+    Org-aware: an org-disabled Slack integration reads as not-connected here so
+    the editor never offers channels the runtime send (``actions.py``) would
+    then refuse."""
+
+    organization_id = await _organization_id_for_owner(db, owner_user_id=user.id)
+    row = await accounts_store.get_ready_account_for_provider(
+        db, user.id, "slack", organization_id=organization_id
+    )
+    if row is None or not accounts_store.org_policy_allows(row, organization_id=organization_id):
         return SlackChannelsResult(channels=[], connected=False)
     account = row.account
     try:

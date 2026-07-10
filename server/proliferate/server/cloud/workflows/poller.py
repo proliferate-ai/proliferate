@@ -30,6 +30,7 @@ from uuid import UUID
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.workflows import (
     WORKFLOW_POLL_DEFAULT_LIMIT,
     WORKFLOW_POLL_ERROR_MAX_LENGTH,
@@ -349,6 +350,10 @@ async def run_workflow_poller_tick(
 ) -> int:
     from proliferate.utils.time import utcnow
 
+    # D-003: the launch flag gates the background poll plane too (see the
+    # scheduler tick's matching guard).
+    if not settings.workflows_enabled:
+        return 0
     now = utcnow()
     return await run_poll_pass(session_factory, now=now, batch_size=batch_size)
 
