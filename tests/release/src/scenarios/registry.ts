@@ -20,6 +20,8 @@ import { t4Sh2 } from "./upgrade/t4-sh-2.js";
 import { t3Sh1 } from "./selfhost/t3-sh-1.js";
 import { t3Sh2 } from "./selfhost/t3-sh-2.js";
 import { t3Sh3 } from "./selfhost/t3-sh-3.js";
+import { t3Sh4 } from "./selfhost/t3-sh-4.js";
+import { t3Sh5 } from "./selfhost/t3-sh-5.js";
 
 /**
  * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave),
@@ -45,6 +47,8 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Sh1,
   t3Sh2,
   t3Sh3,
+  t3Sh4,
+  t3Sh5,
   t4Cloud1,
   t4Desktop1,
   t4Sh1,

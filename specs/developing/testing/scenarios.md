@@ -405,6 +405,54 @@ GitHub availability advertised ⇒ the "Continue with GitHub" button replaces th
 password form (asserted at the availability boundary — a real GitHub-configured
 server driving the browser UI is tier-3, self-hosting.md §4, matching T2-AUTH-4).
 
+### T2-SH-5: `/meta` capability contract, integration layer
+`server/tests/unit/test_meta_endpoint.py` pins the pure
+`build_server_capabilities(Settings)` function exhaustively; this proves the
+same contract through a REAL running process (real env → pydantic Settings →
+the live `/meta` route → JSON), on two dedicated ephemeral server-only boots
+(no desktop-web, no AnyHarness runtime — `/meta` needs neither): self-managed
+with every add-on off (billing/usageMetering/cloudWorkspaces/agentGateway all
+false, `support.kind` reflecting whatever operator support fields are set,
+`deployment.displayName` empty absent `INSTANCE_NAME`), and hosted mode with
+every add-on on (all true, `support.kind=vendor`, vendor pricing available).
+`tests/intent/specs/capability-contract.spec.ts`.
+
+### T2-SH-6: cloud-workspace provisioning stays safe when E2B is half-configured
+`server/tests/unit/test_cloud_provisioning_config.py` pins the pure
+`Settings.cloud_provisioning_config_error` / `require_cloud_provisioning_
+configured()` contract; this proves the REAL deployed process, booted with
+`E2B_API_KEY` set and `E2B_TEMPLATE_NAME` empty in non-debug mode (the exact
+posture that used to crash-loop the whole control plane at startup), (a)
+actually comes up healthy — auth and every base surface stay reachable — and
+(b) answers a real `POST /v1/cloud/workspaces` with the specific, actionable
+503 (`e2b_template_not_configured`, naming the missing var, never echoing the
+key) rather than a crash or a generic 500, before any repo/GitHub lookup runs.
+Ephemeral server-only boot, `DEBUG=false` (the shared `t2intent` stack always
+boots `DEBUG=true`, under which this posture is not reachable — debug mode
+intentionally waives the template requirement).
+`tests/intent/specs/cloud-provisioning-gating.spec.ts`.
+
+### T2-SH-7: SSO discover truthfulness (extends T2-AUTH-5) + gateway model eligibility
+Two self-hosting-relevant additions to the existing entry-point-seam spec and
+a new runtime-dependent spec, respectively:
+- `tests/intent/specs/sso-entry-points.spec.ts` gained a negative case: a
+  connection whose `status` is `'enabled'` but whose OIDC config drifted
+  incomplete afterward (an admin edit `enable_organization_sso_connection`
+  itself cannot produce, since it re-tests live endpoints before flipping
+  status) must still report `enabled:false` with the specific
+  `oidc_configuration_error` reason — never a false positive. Seeded via a new
+  `seedIncompleteEnabledOrgSsoConnection` helper (`tests/intent/stack/seed.ts`).
+- `tests/intent/specs/gateway-eligibility.spec.ts` (new): after pushing a
+  gateway-only agent-auth state (no native credential), session creation
+  REJECTS a bare native model selector (`"default"`) and ACCEPTS a real
+  gateway-catalog id — the runtime-level half of `catalog::service_tests::
+  gateway_context_gates_native_ids_and_offers_only_gateway_models`, proven
+  against the real AnyHarness HTTP API with no LLM call ever made. Needs the
+  local runtime, which the CURRENT CI profile skips
+  (`TIER2_INTENT_SKIP_RUNTIME=1`) — self-skips (not fails) when unreachable,
+  matching `workspace-entry.spec.ts`'s documented precedent for the identical
+  constraint; runs for real locally.
+
 ---
 
 ## Tier 3 — first wave (release-critical)
