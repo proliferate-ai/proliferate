@@ -42,6 +42,7 @@ async def run_materialization_script(
     if result_exit := getattr(result, "exit_code", getattr(result, "exitCode", 0)):
         stderr = result_stderr(result) or result_stdout(result)
         raise CloudMaterializationCommandError(
-            f"{label} failed with exit code {result_exit}: {stderr.strip()[:1000]}"
+            f"{label} failed with exit code {result_exit}: {stderr.strip()[:1000]}",
+            exit_code=result_exit,
         )
     return result_stdout(result)

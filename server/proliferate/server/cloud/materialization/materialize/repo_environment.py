@@ -15,7 +15,39 @@ from proliferate.server.cloud.cloud_sandboxes import service as cloud_sandboxes_
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import manifests, operation, paths, sandbox_io
 from proliferate.server.cloud.materialization.materialize import github_credentials, secret_set
+from proliferate.server.cloud.materialization.sandbox_io.target import (
+    CloudMaterializationCommandError,
+)
 from proliferate.utils.time import utcnow
+
+# Exit codes emitted by the git-checkout script below. Kept in sync with the
+# literal `exit N` statements in `_materialize_git_checkout`. These map to
+# structured, actionable checkout conflicts so callers can return a specific 409
+# instead of an opaque 500 when a shared repo checkout cannot be safely reset.
+_CHECKOUT_EXIT_NOT_A_GIT_REPO = 42
+_CHECKOUT_EXIT_DIRTY = 43
+_CHECKOUT_EXIT_LOCAL_COMMITS = 44
+
+_CHECKOUT_EXIT_REASONS: dict[int, str] = {
+    _CHECKOUT_EXIT_NOT_A_GIT_REPO: "not_a_git_repo",
+    _CHECKOUT_EXIT_DIRTY: "dirty_checkout",
+    _CHECKOUT_EXIT_LOCAL_COMMITS: "local_commits",
+}
+
+
+class CloudRepoCheckoutError(RuntimeError):
+    """The shared cloud repo checkout could not be safely reset.
+
+    ``reason`` is one of ``not_a_git_repo``, ``dirty_checkout``, or
+    ``local_commits`` and is safe to surface to product callers. These are
+    genuine conflicts (a prior checkout holds user work or is not a clean git
+    repository), distinct from transient runtime failures.
+    """
+
+    def __init__(self, reason: str, *, repo_path: str) -> None:
+        super().__init__(f"cloud repo checkout {reason}: {repo_path}")
+        self.reason = reason
+        self.repo_path = repo_path
 
 
 async def materialize_repo_environment(
@@ -135,19 +167,29 @@ async def materialize_repo_environment_in_context(
         raise
 
 
-async def _materialize_git_checkout(
-    target: sandbox_io.SandboxIOTarget,
+# Directory Proliferate materializes generated files into (workspace secret env
+# + manifests) inside the checkout. Registered as locally ignored so retries do
+# not treat generated files as a dirty checkout.
+PROLIFERATE_CHECKOUT_IGNORE_ENTRY = "/.proliferate/"
+
+
+def _build_repo_checkout_script(
     *,
-    operation_id: UUID,
-    repo_environment: RepoEnvironmentValue,
+    git_owner: str,
+    git_repo_name: str,
     repo_path: str,
+    requested_branch: str,
 ) -> str:
-    requested_branch = repo_environment.default_branch or ""
-    script = "\n".join(
+    """Build the sandbox git-checkout script.
+
+    Extracted as a pure builder so the generated-file exclusion and dirty-check
+    guard can be verified without a live sandbox.
+    """
+    return "\n".join(
         [
             "set -eu",
-            f"owner={shlex.quote(repo_environment.git_owner)}",
-            f"repo={shlex.quote(repo_environment.git_repo_name)}",
+            f"owner={shlex.quote(git_owner)}",
+            f"repo={shlex.quote(git_repo_name)}",
             f"repo_path={shlex.quote(repo_path)}",
             f"default_branch={shlex.quote(requested_branch)}",
             'remote_url="https://github.com/${owner}/${repo}.git"',
@@ -165,6 +207,20 @@ async def _materialize_git_checkout(
             'if [ ! -d "$repo_path/.git" ]; then',
             '  git clone "$remote_url" "$repo_path"',
             "  fresh_clone=1",
+            "fi",
+            # Register .proliferate/ as locally ignored so a retry after a
+            # transient failure does not mistake Proliferate-generated files for
+            # user work and refuse to reset a "dirty" checkout. Genuine user
+            # changes (tracked edits, other untracked files) still trip the
+            # guard below.
+            'if [ -d "$repo_path/.git" ]; then',
+            '  mkdir -p "$repo_path/.git/info"',
+            '  exclude_file="$repo_path/.git/info/exclude"',
+            f"  if ! grep -qxF '{PROLIFERATE_CHECKOUT_IGNORE_ENTRY}' "
+            '"$exclude_file" 2>/dev/null; then',
+            f"    printf '%s\\n' '{PROLIFERATE_CHECKOUT_IGNORE_ENTRY}' >> "
+            '"$exclude_file"',
+            "  fi",
             "fi",
             'git -C "$repo_path" fetch --prune origin',
             'if [ "$fresh_clone" != "1" ]; then',
@@ -203,8 +259,23 @@ async def _materialize_git_checkout(
             'printf "%s" "$default_branch"',
         ]
     )
-    return (
-        await sandbox_io.run_materialization_script(
+
+
+async def _materialize_git_checkout(
+    target: sandbox_io.SandboxIOTarget,
+    *,
+    operation_id: UUID,
+    repo_environment: RepoEnvironmentValue,
+    repo_path: str,
+) -> str:
+    script = _build_repo_checkout_script(
+        git_owner=repo_environment.git_owner,
+        git_repo_name=repo_environment.git_repo_name,
+        repo_path=repo_path,
+        requested_branch=repo_environment.default_branch or "",
+    )
+    try:
+        output = await sandbox_io.run_materialization_script(
             target,
             operation_id=operation_id,
             label="materialization_repo_checkout",
@@ -212,4 +283,9 @@ async def _materialize_git_checkout(
             timeout_seconds=600,
             log_output_on_success=True,
         )
-    ).strip()
+    except CloudMaterializationCommandError as exc:
+        reason = _CHECKOUT_EXIT_REASONS.get(exc.exit_code) if exc.exit_code else None
+        if reason is not None:
+            raise CloudRepoCheckoutError(reason, repo_path=repo_path) from exc
+        raise
+    return output.strip()
