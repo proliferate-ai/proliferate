@@ -222,3 +222,56 @@ jobs:
           files: |
             artifacts/anyharness-*
             artifacts/SHA256SUMS
+
+  publish-cdn:
+    name: Publish runtime + worker CDN trees
+    needs: [create-release]
+    if: (github.event_name == 'push' || inputs.publish) && !inputs.dry_run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_sha || github.ref }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          # Same role/bucket the desktop release uses for the desktop/ tree; the
+          # runtime/ and worker/ trees live in the same downloads bucket.
+          role-to-assume: ${{ vars.AWS_DESKTOP_RELEASE_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Resolve release version
+        env:
+          INPUT_VERSION: ${{ inputs.version || '' }}
+        run: |
+          version="$INPUT_VERSION"
+          if [[ "${GITHUB_REF_NAME:-}" == runtime-v* ]]; then
+            version="${GITHUB_REF_NAME#runtime-v}"
+          fi
+          : "${version:?Missing runtime release version.}"
+          echo "RUNTIME_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Publish bare binaries to the downloads CDN
+        # Nothing published the worker/ or runtime/ bare-binary trees before this
+        # step: release-runtime.yml only attached them to the GitHub Release, but
+        # the sandbox self-update path (server runtime/worker redirects) reads the
+        # CDN, not GitHub. Publish both trees, version-pinned and as the unpinned
+        # stable "latest" the redirect falls back to.
+        run: |
+          bash scripts/ci-cd/publish-runtime-cdn.sh \
+            --artifacts-dir artifacts \
+            --version "$RUNTIME_RELEASE_VERSION" \
+            --bucket "${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}" \
+            --publish-latest
+
+      - name: Invalidate CloudFront cache for the stable latest pointers
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.DESKTOP_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/runtime/stable/*" "/worker/stable/*"
