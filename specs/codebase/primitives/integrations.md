@@ -46,12 +46,13 @@ holds the Proliferate gateway bearer token.
   (transport, URL spec, header/query templates with `{secret.X}` and
   `{settings.X}` placeholders, secret/settings field schemas).
 - **Seed registry**: `SEED_DEFINITIONS` in
-  `server/proliferate/server/cloud/integrations/seeds.py`, 14 providers
+  `server/proliferate/server/cloud/integrations/seeds.py`, 13 providers
   (context7, exa, tavily, posthog, sentry, axiom, linear, slack, supabase,
-  notion, cloudflare_docs, gitlab, render, neon), ported from the deleted
+  notion, gitlab, render, neon), ported from the deleted
   `BASE_CONNECTOR_CATALOG`. `sync_seed_definitions` reconciles them into the
-  DB at every server boot, from the lifespan in
-  `server/proliferate/main.py:230`.
+  DB at every server boot (from the lifespan in
+  `server/proliferate/main.py:230`), archiving removed seeds and unarchiving
+  re-added ones.
 - **Policy** (`cloud_integration_policy`): per-org enable/disable of a
   definition. Absent policy row means the definition's
   `enabled_by_default` applies.
