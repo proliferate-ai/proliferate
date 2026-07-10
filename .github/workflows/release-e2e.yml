@@ -184,6 +184,10 @@ jobs:
           RELEASE_E2E_LOCAL_DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
           REDIS_URL: redis://127.0.0.1:6379/0
           PROLIFERATE_API_PORT: "8086"
+          # The server's own base URL — worker enrollment mints the integration
+          # gateway URL from it (runtime_workers/service.py worker_cloud_base_url);
+          # without it, /worker/enroll 500s cloud_worker_misconfigured (T3-INT-1).
+          API_BASE_URL: http://127.0.0.1:8086
           ANYHARNESS_PORT: "8542"
           ANYHARNESS_RUNTIME_HOME: ${{ github.workspace }}/.ci-runtime-home
           RELEASE_E2E_SERVER_URL: http://127.0.0.1:8086
