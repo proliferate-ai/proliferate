@@ -1769,10 +1769,9 @@ export interface paths {
         put?: never;
         /**
          * Run Ping Endpoint
-         * @description Completion ping (L16 / §3.7). NO user-session auth — the per-run gateway
-         *     token IS the auth. The runtime fires this after each step transition; the
-         *     handler validates the token, requires token↔run_id match (so run A's token
-         *     can't ping run B), and wakes the existing refresh path for cloud-lane runs.
+         * @description Completion ping (L16 / §3.7). The runtime fires this after each step
+         *     transition; ``authorize_run_ping`` validates the token and its run_id match,
+         *     then this wakes the existing refresh path for cloud-lane runs.
          *
          *     The body carries nothing: it is a stateless nudge. Duplicate/stale/late pings
          *     are safe by construction — refresh is reconcile-shaped and run-status
@@ -5013,6 +5012,8 @@ export interface components {
             workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
+            /** Workflowsenabled */
+            workflowsEnabled: boolean;
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
