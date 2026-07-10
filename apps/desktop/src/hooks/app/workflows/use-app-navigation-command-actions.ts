@@ -2,12 +2,13 @@ import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
+import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useWorkspaceNavigationWorkflow } from "@/hooks/workspaces/workflows/use-workspace-navigation-workflow";
-import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-action";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
-import type { AppCommandActions } from "./app-command-action-types";
+import type { AppCommandAction, AppCommandActions } from "./app-command-action-types";
 
 export type AppNavigationCommandActions = Pick<
   AppCommandActions,
@@ -24,6 +25,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const navigate = useNavigate();
   const showToast = useToastStore((state) => state.show);
   const { openExternal } = useTauriShellActions();
+  const webApp = useWebAppTarget();
   const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
 
   const openSettings = useCallback(() => {
@@ -39,16 +41,51 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const goWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
+  const webAppBaseUrl = webApp.baseUrl;
   const openWebApp = useCallback(() => {
+    if (!webAppBaseUrl) {
+      showToast("The web app is not available for this server.");
+      return;
+    }
     showToast("Opening web app...", "info");
-    void openExternal(getProliferateWebBaseUrl()).catch(() => {
+    void openExternal(webAppBaseUrl).catch(() => {
       showToast("Failed to open the web app.");
     });
-  }, [openExternal, showToast]);
+  }, [openExternal, showToast, webAppBaseUrl]);
   const {
     openBug: openSupport,
     disabledReason: supportDisabledReason,
   } = useOpenSupportReportWindow({ source: "sidebar" });
+  const supportMenuAction = useSupportMenuAction();
+  const openExternalSupportUrl = useCallback((url: string) => {
+    void openExternal(url).catch(() => {
+      showToast("Failed to open the link.");
+    });
+  }, [openExternal, showToast]);
+
+  // Mirrors the sidebar's support routing (`SidebarHelpSection`): vendor
+  // keeps the auth-gated feedback modal, operator routes straight to the
+  // configured destination, and none hides the action entirely rather than
+  // offering it disabled.
+  const openSupportAction = useMemo<AppCommandAction>(() => {
+    if (supportMenuAction.kind === "operator") {
+      return {
+        execute: () => openExternalSupportUrl(supportMenuAction.url),
+        disabledReason: null,
+      };
+    }
+    if (supportMenuAction.kind === "none") {
+      return {
+        execute: () => {},
+        disabledReason: null,
+        hidden: true,
+      };
+    }
+    return {
+      execute: openSupport,
+      disabledReason: supportDisabledReason,
+    };
+  }, [openExternalSupportUrl, openSupport, supportDisabledReason, supportMenuAction]);
 
   return useMemo<AppNavigationCommandActions>(() => ({
     openSettings: {
@@ -69,19 +106,18 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     },
     openWebApp: {
       execute: openWebApp,
-      disabledReason: null,
+      disabledReason: webApp.available
+        ? null
+        : "The web app is not available for this server.",
     },
-    openSupport: {
-      execute: openSupport,
-      disabledReason: supportDisabledReason,
-    },
+    openSupport: openSupportAction,
   }), [
     goHome,
     goWorkflows,
     openSettings,
-    openSupport,
-    supportDisabledReason,
+    openSupportAction,
     openWebApp,
+    webApp.available,
     showKeyboardShortcuts,
   ]);
 }

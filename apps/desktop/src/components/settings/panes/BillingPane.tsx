@@ -20,7 +20,7 @@ export function BillingPane() {
     organizationsQuery,
   } = useActiveOrganization();
   const admin = useIsAdmin(activeOrganizationId);
-  const { billingEnabled } = useAppCapabilities();
+  const { billingEnabled, pricing } = useAppCapabilities();
   const { cloudActive } = useCloudAvailabilityState();
   const { openExternal } = useTauriShellActions();
   const [searchParams] = useSearchParams();
@@ -40,7 +40,7 @@ export function BillingPane() {
       organizationLoading={organizationsQuery.isLoading || (activeOrganization ? admin.isLoading : false)}
       checkoutReturnState={checkoutReturnStateFromParams(searchParams)}
       onOpenUrl={openExternal}
-      onOpenPricingPage={() => openExternal(PROLIFERATE_PRICING_URL)}
+      onOpenPricingPage={() => openExternal(pricing.url ?? PROLIFERATE_PRICING_URL)}
       onOpenOrganizationSettings={() => {
         navigate(buildSettingsHref({ section: "organization" }));
       }}

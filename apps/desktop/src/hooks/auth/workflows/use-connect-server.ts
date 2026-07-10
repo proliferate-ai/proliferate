@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
+import { CONNECT_SERVER_LABELS } from "@/copy/auth/auth-copy";
 import {
   fetchServerMeta,
   isTauriRuntimeAvailable,
 } from "@/lib/access/tauri/connect-server";
 import { setDesktopAppConfig } from "@/lib/access/tauri/config";
-import { relaunch } from "@/lib/access/tauri/updater";
+import { getAppVersion, relaunch } from "@/lib/access/tauri/updater";
+import { isDesktopVersionSupported } from "@/lib/domain/capabilities/version-compat";
 import {
   getRuntimeDesktopAppConfig,
   isOfficialHostedApiBaseUrl,
@@ -32,6 +34,12 @@ export interface UseConnectServerResult {
   error: string | null;
   pendingMeta: ServerMeta | null;
   pendingHost: string | null;
+  /**
+   * A warning when this desktop is older than the candidate server's minimum
+   * supported version, or null. Computed once during the `/meta` check so the
+   * dialog stays presentational (no render-time version query).
+   */
+  versionWarning: string | null;
   open: () => void;
   /**
    * Open the flow already pointed at a supplied server URL — runs the same
@@ -61,6 +69,7 @@ export function useConnectServer(): UseConnectServerResult {
   const [pendingMeta, setPendingMeta] = useState<ServerMeta | null>(null);
   const [pendingHost, setPendingHost] = useState<string | null>(null);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [versionWarning, setVersionWarning] = useState<string | null>(null);
 
   const currentConfig = getRuntimeDesktopAppConfig();
   const connectedServerHost = useMemo(() => {
@@ -81,6 +90,7 @@ export function useConnectServer(): UseConnectServerResult {
     setPendingMeta(null);
     setPendingHost(null);
     setPendingUrl(null);
+    setVersionWarning(null);
     setStep("entry");
   }, [available]);
 
@@ -110,6 +120,18 @@ export function useConnectServer(): UseConnectServerResult {
     setPendingUrl(normalized.url);
     setPendingHost(normalized.host);
     setPendingMeta(result.meta);
+    // Compute the desktop<->server version-compat warning imperatively here so
+    // the dialog stays presentational. Fail open: any error leaves no warning.
+    let warning: string | null = null;
+    try {
+      const appVersion = await getAppVersion();
+      if (!isDesktopVersionSupported(appVersion, result.meta.minDesktopVersion)) {
+        warning = CONNECT_SERVER_LABELS.minVersionWarning(result.meta.minDesktopVersion);
+      }
+    } catch {
+      warning = null;
+    }
+    setVersionWarning(warning);
     setStep("trust-confirm");
   }, [available]);
 
@@ -124,6 +146,7 @@ export function useConnectServer(): UseConnectServerResult {
     setPendingMeta(null);
     setPendingHost(null);
     setPendingUrl(null);
+    setVersionWarning(null);
     // Falls into "entry" on any validation/reachability failure, so the user
     // can retype the address rather than being stranded on a blank dialog.
     await runCheck(serverUrl);
@@ -164,6 +187,7 @@ export function useConnectServer(): UseConnectServerResult {
     error,
     pendingMeta,
     pendingHost,
+    versionWarning,
     open,
     openForUrl,
     close,

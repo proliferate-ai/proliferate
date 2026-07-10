@@ -75,6 +75,17 @@ vi.mock("@/hooks/access/tauri/use-shell-actions", () => ({
   }),
 }));
 
+const webAppMocks = vi.hoisted(() => ({
+  webApp: { available: true, baseUrl: "https://web.proliferate.com" } as {
+    available: boolean;
+    baseUrl: string | null;
+  },
+}));
+
+vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
+  useWebAppTarget: () => webAppMocks.webApp,
+}));
+
 vi.mock("@/stores/toast/toast-store", () => ({
   useToastStore: (selector: (state: { show: typeof toastMocks.show }) => unknown) =>
     selector({ show: toastMocks.show }),
@@ -102,6 +113,7 @@ beforeEach(() => {
   logicalWorkspaceMocks.logicalWorkspaces = [];
   selectionMocks.selectWorkspace.mockResolvedValue(undefined);
   shellMocks.openExternal.mockResolvedValue(undefined);
+  webAppMocks.webApp = { available: true, baseUrl: "https://web.proliferate.com" };
 });
 
 describe("useWorkspaceNavigationWorkflow", () => {
@@ -176,5 +188,28 @@ describe("useWorkspaceNavigationWorkflow", () => {
     );
     expect(selectionMocks.selectWorkspace).not.toHaveBeenCalled();
     expect(routerMocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it("falls through to normal in-desktop selection when this deployment has no web app", () => {
+    webAppMocks.webApp = { available: false, baseUrl: null };
+    logicalWorkspaceMocks.logicalWorkspaces = [{
+      id: "logical-unclaimed",
+      localWorkspace: null,
+      mobilityWorkspace: null,
+      cloudWorkspace: {
+        id: "cloud-unclaimed-1",
+        visibility: "shared_unclaimed",
+      },
+    }];
+    const { result } = renderHook(() => useWorkspaceNavigationWorkflow());
+
+    act(() => result.current.selectWorkspaceFromSurface("logical-unclaimed", "sidebar"));
+
+    // No dead vendor-web link when the deployment has no web app: normal
+    // desktop workspace selection runs instead.
+    expect(shellMocks.openExternal).not.toHaveBeenCalled();
+    expect(selectionMocks.selectWorkspace).toHaveBeenCalledWith("logical-unclaimed", {
+      latencyFlowId: "flow-1",
+    });
   });
 });

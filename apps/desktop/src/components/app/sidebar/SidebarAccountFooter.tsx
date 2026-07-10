@@ -1,23 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  BookMarked,
-  BookOpen,
-  CreditCard,
-  Globe,
-  Keyboard,
-  Lightbulb,
-  LogOut,
-  MessageSquare,
-  Settings,
-} from "lucide-react";
-import {
-  ArrowUpRight,
-  Check,
-  ChevronUpDown,
-  Discord,
-  Mail,
-} from "@proliferate/ui/icons";
+import { CreditCard, LogOut, Settings } from "lucide-react";
+import { Check, ChevronUpDown, Mail } from "@proliferate/ui/icons";
 import { useUsageSummary } from "@proliferate/cloud-sdk-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
@@ -27,18 +11,18 @@ import {
 } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { OrganizationAvatar } from "@/components/organizations/OrganizationAvatar";
-import { PROLIFERATE_DOCS_URL } from "@/config/capabilities";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
+import { useAppCapabilities } from "@/hooks/capabilities/derived/use-app-capabilities";
+import { useWebAppTarget } from "@/hooks/capabilities/derived/use-web-app-target";
 import { useAppSidebarSignOutAction } from "@/hooks/app/workflows/use-app-sidebar-sign-out-action";
-import { useAppVersion } from "@/hooks/access/tauri/app/use-app-version";
 import { useCloudBilling } from "@/hooks/cloud/facade/use-cloud-billing";
 import { useCurrentUserOrganizationInvitations } from "@/hooks/access/cloud/organizations/use-current-user-organization-invitations";
 import { useOrganizationActions } from "@/hooks/access/cloud/organizations/use-organization-actions";
 import { useJoinedOrganizationActivation } from "@/hooks/organizations/workflows/use-joined-organization-activation";
 import { useActiveOrganization } from "@/hooks/organizations/facade/use-active-organization";
 import { useOpenSupportReportWindow } from "@/hooks/support/workflows/use-open-support-report-window";
+import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-action";
 import { useTauriShellActions } from "@/hooks/access/tauri/use-shell-actions";
-import { getProliferateWebBaseUrl } from "@/lib/infra/proliferate-web";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
 import type {
   OrganizationInvitationRecord,
@@ -48,10 +32,9 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import { OrganizationSwitchDialog } from "./OrganizationSwitchDialog";
+import { SidebarAppVersionRow } from "./SidebarAppVersionRow";
+import { SidebarHelpSection } from "./SidebarHelpSection";
 import { ConsumptionCard } from "./SidebarConsumptionCard";
-
-const PROLIFERATE_CHANGELOG_URL = "https://proliferate.com/changelog";
-const PROLIFERATE_DISCORD_URL = "https://discord.gg/7b5afMTqW";
 
 /**
  * The single sidebar bottom-left account block, shared verbatim by the main
@@ -71,7 +54,10 @@ export function SidebarAccountFooter() {
     openFeature: openPrompt,
     disabledReason: supportDisabledReason,
   } = useOpenSupportReportWindow({ source: "sidebar" });
+  const supportAction = useSupportMenuAction();
   const showToast = useToastStore((state) => state.show);
+  const capabilities = useAppCapabilities();
+  const webApp = useWebAppTarget();
   const { data: billingPlan } = useCloudBilling();
   const { data: usageSummary } = useUsageSummary(undefined, authStatus === "authenticated");
   const {
@@ -94,7 +80,8 @@ export function SidebarAccountFooter() {
   const displayName = user?.display_name?.trim() || user?.email || "Account";
   const initials = displayName.trim().slice(0, 2).toUpperCase() || "PR";
   const organizationName = activeOrganization?.name ?? null;
-  const planLabel = billingPlan
+  // Vendor plan/credits only mean something where the server offers billing.
+  const planLabel = capabilities.billingEnabled && billingPlan
     ? (billingPlan.isPaidCloud ? "Pro" : "Free")
     : null;
 
@@ -120,7 +107,7 @@ export function SidebarAccountFooter() {
 
   return (
     <div className="shrink-0">
-      {usageSummary ? (
+      {capabilities.usageMeteringEnabled && usageSummary ? (
         <ConsumptionCard
           usageSummary={usageSummary}
           onTopUp={() => {
@@ -255,81 +242,16 @@ export function SidebarAccountFooter() {
                 </div>
               ) : null}
 
-              <div className="border-t border-border-light py-1">
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Keyboard shortcuts"
-                  icon={<Keyboard className="size-4" />}
-                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.showKeyboardShortcuts)}</span>}
-                  onClick={() => {
-                    close();
-                    openShortcutsDialog(true);
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Docs"
-                  icon={<BookOpen className="size-4" />}
-                  trailing={<ArrowUpRight className="size-3" />}
-                  onClick={() => {
-                    openExternalUrl(PROLIFERATE_DOCS_URL);
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Changelog"
-                  icon={<BookMarked className="size-4" />}
-                  trailing={<ArrowUpRight className="size-3" />}
-                  onClick={() => {
-                    openExternalUrl(PROLIFERATE_CHANGELOG_URL);
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Discord"
-                  icon={<Discord className="size-4" />}
-                  trailing={<ArrowUpRight className="size-3" />}
-                  onClick={() => {
-                    openExternalUrl(PROLIFERATE_DISCORD_URL);
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Go to web"
-                  icon={<Globe className="size-4" />}
-                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openWebApp)}</span>}
-                  onClick={() => {
-                    openExternalUrl(getProliferateWebBaseUrl());
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Send feedback"
-                  icon={<MessageSquare className="size-4" />}
-                  trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSupport)}</span>}
-                  disabled={Boolean(supportDisabledReason)}
-                  title={supportDisabledReason ?? undefined}
-                  onClick={() => {
-                    openSupport();
-                    close();
-                  }}
-                />
-                <PopoverMenuItem
-                  variant="sidebar"
-                  label="Submit a prompt"
-                  icon={<Lightbulb className="size-4" />}
-                  disabled={Boolean(supportDisabledReason)}
-                  title={supportDisabledReason ?? undefined}
-                  onClick={() => {
-                    openPrompt();
-                    close();
-                  }}
-                />
-              </div>
+              <SidebarHelpSection
+                webApp={webApp}
+                supportAction={supportAction}
+                supportDisabledReason={supportDisabledReason}
+                openSupport={openSupport}
+                openPrompt={openPrompt}
+                openExternalUrl={openExternalUrl}
+                onShowKeyboardShortcuts={() => openShortcutsDialog(true)}
+                onClose={close}
+              />
 
               <div className="border-t border-border-light py-1">
                 <PopoverMenuItem
@@ -353,7 +275,11 @@ export function SidebarAccountFooter() {
                 />
               </div>
 
-              <AppVersionRow />
+              <SidebarAppVersionRow
+                connectedServerName={
+                  capabilities.isSelfManaged ? capabilities.serverDisplayName : null
+                }
+              />
             </div>
           )}
         </PopoverButton>
@@ -379,20 +305,6 @@ export function SidebarAccountFooter() {
         target={switchTarget}
         onClose={() => setSwitchTarget(null)}
       />
-    </div>
-  );
-}
-
-/**
- * Popover footer line: `Proliferate v{x}` only. Harness versions (and their
- * tooltip) were dropped by owner decision 2026-07-01.
- */
-function AppVersionRow() {
-  const { data: appVersion } = useAppVersion();
-
-  return (
-    <div className="mt-1 border-t border-border px-2.5 pb-1 pt-2">
-      <div className="truncate text-ui-sm text-faint">{`Proliferate v${appVersion ?? "…"}`}</div>
     </div>
   );
 }
