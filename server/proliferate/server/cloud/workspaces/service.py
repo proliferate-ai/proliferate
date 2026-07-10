@@ -48,9 +48,22 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceRuntimeSummary,
     WorkspaceSummary,
 )
+from proliferate.utils.time import utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 _WORKTREE_SEGMENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
+
+# A workspace with no AnyHarness workspace id is "materializing". If it stays
+# that way past this budget (comfortably beyond the 600s repo-clone timeout),
+# provisioning died between the workspace row insert and the AnyHarness worktree
+# write — a stalled row. Report it as a terminal error (with an actionable
+# detail) instead of leaving the client spinning forever with no recovery path.
+MATERIALIZATION_STALL_SECONDS = 900
+_STALLED_STATUS_DETAIL = "Materialization did not complete in time."
+_STALLED_LAST_ERROR = (
+    "The cloud workspace did not finish provisioning within the expected time. "
+    "Delete it and create a new one to try again."
+)
 
 # Actionable copy for a `CloudRepoCheckoutError`, keyed by its reason. Names the
 # blocker without leaking sandbox paths or secrets.
@@ -546,6 +559,7 @@ async def _workspace_payload(
     )
     payload_type = WorkspaceDetail if detail else WorkspaceSummary
     status = _workspace_status(workspace)
+    stalled = _materialization_is_stalled(workspace)
     runtime_status = _runtime_status(sandbox)
     return payload_type(
         id=str(workspace.id),
@@ -561,6 +575,8 @@ async def _workspace_payload(
         ),
         status=status,
         workspace_status=status,
+        status_detail=_STALLED_STATUS_DETAIL if stalled else None,
+        last_error=_STALLED_LAST_ERROR if stalled else None,
         product_lifecycle="archived" if workspace.archived_at is not None else "active",
         runtime=WorkspaceRuntimeSummary(
             environment_id=str(repo_environment.id),
@@ -575,12 +591,29 @@ async def _workspace_payload(
     )
 
 
+def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:
+    """True when a workspace has been materializing past the stall budget.
+
+    A stalled row is one whose AnyHarness worktree never got written (the row
+    insert and the worktree write are not atomic), so it can never become
+    ``ready`` on its own.
+    """
+    if workspace.anyharness_workspace_id or workspace.archived_at is not None:
+        return False
+    created_at = workspace.created_at
+    if created_at is None:
+        return False
+    return (utcnow() - created_at).total_seconds() > MATERIALIZATION_STALL_SECONDS
+
+
 def _workspace_status(workspace: CloudWorkspaceValue) -> CloudWorkspaceStatus:
     if workspace.archived_at is not None:
         return "archived"
-    if not workspace.anyharness_workspace_id:
-        return "materializing"
-    return "ready"
+    if workspace.anyharness_workspace_id:
+        return "ready"
+    if _materialization_is_stalled(workspace):
+        return "error"
+    return "materializing"
 
 
 def _runtime_status(sandbox: CloudSandboxValue | None) -> CloudRuntimeStatus:

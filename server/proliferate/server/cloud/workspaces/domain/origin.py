@@ -15,9 +15,7 @@ from __future__ import annotations
 # AnyHarness OriginEntrypoint values (snake_case), from
 # anyharness-contract/src/v1/origin.rs. Kept as a constant so the mapping below
 # is validated against the real runtime vocabulary rather than free strings.
-ANYHARNESS_ORIGIN_ENTRYPOINTS = frozenset(
-    {"desktop", "cloud", "local_runtime", "cowork"}
-)
+ANYHARNESS_ORIGIN_ENTRYPOINTS = frozenset({"desktop", "cloud", "local_runtime", "cowork"})
 
 # Only ``desktop`` has a direct AnyHarness peer. Every other product source that
 # creates a managed cloud workspace is provenance-equivalent to ``cloud`` — the

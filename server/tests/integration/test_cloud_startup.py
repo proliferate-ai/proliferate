@@ -123,8 +123,7 @@ async def test_app_startup_does_not_crash_when_production_e2b_template_is_unset(
                 pass
 
         assert any(
-            "E2B_TEMPLATE_NAME" in record.message
-            and record.levelname == "WARNING"
+            "E2B_TEMPLATE_NAME" in record.message and record.levelname == "WARNING"
             for record in caplog.records
         )
     finally:

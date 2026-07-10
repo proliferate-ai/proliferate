@@ -218,8 +218,7 @@ def _build_repo_checkout_script(
             '  exclude_file="$repo_path/.git/info/exclude"',
             f"  if ! grep -qxF '{PROLIFERATE_CHECKOUT_IGNORE_ENTRY}' "
             '"$exclude_file" 2>/dev/null; then',
-            f"    printf '%s\\n' '{PROLIFERATE_CHECKOUT_IGNORE_ENTRY}' >> "
-            '"$exclude_file"',
+            f"    printf '%s\\n' '{PROLIFERATE_CHECKOUT_IGNORE_ENTRY}' >> \"$exclude_file\"",
             "  fi",
             "fi",
             'git -C "$repo_path" fetch --prune origin',
