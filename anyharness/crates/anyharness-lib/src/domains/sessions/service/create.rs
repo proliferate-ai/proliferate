@@ -9,7 +9,7 @@ use crate::domains::agents::auth::context::classify;
 use crate::domains::agents::auth::launch_facts::collect_launch_env_facts;
 use crate::domains::agents::catalog::service::{ActiveCatalog, SelectionUnsupported};
 use crate::domains::agents::model::{AgentDescriptor, ResolvedAgentStatus};
-use crate::domains::agents::readiness::service::resolve_agent_with_env;
+use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::sessions::model::{SessionMcpBindingPolicy, SessionRecord};
 use crate::domains::workspaces::env::read_materialized_launch_env;
@@ -81,7 +81,10 @@ impl SessionService {
             read_materialized_launch_env(&self.runtime_home, Path::new(&workspace.path))
                 .map_err(CreateSessionError::Internal)?;
         let agent_resolution_started = Instant::now();
-        let resolved = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
+        // Launch-time readiness: folds in the enrolled agent-auth route so a
+        // gateway/api_key route makes the agent ready exactly as the launcher
+        // will inject it (issue #1106) — no workspace-env credential workaround.
+        let resolved = resolve_launch_agent(&descriptor, &self.runtime_home, &readiness_env);
         if resolved.status != ResolvedAgentStatus::Ready {
             tracing::warn!(
                 workspace_id = %workspace_id,

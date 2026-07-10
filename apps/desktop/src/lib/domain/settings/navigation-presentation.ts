@@ -241,3 +241,14 @@ const SETTINGS_ADMIN_ONLY_SECTIONS = new Set<SettingsSection>(
 export function isSettingsAdminOnlySection(section: SettingsSection): boolean {
   return SETTINGS_ADMIN_ONLY_SECTIONS.has(section);
 }
+
+/**
+ * A scope is admin-only when every section registered under it is
+ * admin-gated (e.g. "org" today — every SETTINGS_SCOPES["org"] entry sets
+ * adminOnly: true). Derived from the same per-section metadata that gates
+ * the sidebar rows, so the scope tab and its contents can never disagree.
+ */
+export function isSettingsAdminOnlyScope(scope: SettingsScope): boolean {
+  const sections = scopeSectionItems(getSettingsScopeNav(scope));
+  return sections.length > 0 && sections.every((item) => item.adminOnly === true);
+}

@@ -1,5 +1,6 @@
 """Proliferate API — FastAPI application factory."""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -102,17 +103,21 @@ def _validate_cloud_billing_configuration() -> None:
 
 
 def _validate_e2b_template_configuration() -> None:
-    if settings.debug:
-        return
-    if not settings.e2b_api_key:
-        return
-    if settings.e2b_template_name.strip():
-        return
-    raise RuntimeError(
-        "E2B_API_KEY set requires E2B_TEMPLATE_NAME in "
-        "non-debug environments so cloud provisioning uses the published runtime "
-        "template instead of the base E2B image."
-    )
+    # A previously-healthy base instance must not be replaced by a crash-looping
+    # API just because E2B is half-configured (a common self-host mistake: set
+    # E2B_API_KEY, forget E2B_TEMPLATE_NAME). Partial cloud configuration
+    # disables the optional cloud-workspace capability and logs a loud warning;
+    # cloud-provisioning *requests* then fail with a specific, actionable error
+    # (see `settings.cloud_provisioning_config_error` consumers) instead of
+    # taking down auth and every other control-plane surface at boot.
+    config_error = settings.cloud_provisioning_config_error
+    if config_error is not None:
+        logging.getLogger("proliferate.startup").warning(
+            "Cloud workspace provisioning is DISABLED: %s Base control-plane "
+            "features remain available; cloud-workspace requests will return an "
+            "actionable configuration error until this is resolved.",
+            config_error,
+        )
 
 
 # Fragments that mark a request-body field as secret-bearing. FastAPI's default

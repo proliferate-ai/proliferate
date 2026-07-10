@@ -21,6 +21,7 @@ import {
   SETTINGS_SCOPE_ORDER,
   getFirstSectionForScope,
   getSettingsScopeForSection,
+  isSettingsAdminOnlyScope,
   isSettingsAdminOnlySection,
   isSettingsHarnessSection,
 } from "@/lib/domain/settings/navigation-presentation";
@@ -73,18 +74,23 @@ export function SettingsScreen({
   });
   const activeSectionIsAdminOnly = isSettingsAdminOnlySection(activeSection);
   const adminAccessLoading = organizationsQuery.isLoading || admin.isLoading;
+  const isAdminConfirmed = admin.isAdmin === true;
+  // Single gating source: until admin status resolves to true, treat the
+  // user as non-admin so admin-only panes/tabs never flash during the
+  // useIsAdmin loading window.
+  const showAdminSettings = TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION || isAdminConfirmed;
   const shouldRedirectAdminSection =
     activeSectionIsAdminOnly
     && !TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
     && !adminAccessLoading
-    && admin.isAdmin !== true;
+    && !isAdminConfirmed;
   const effectiveActiveSection =
-    activeSectionIsAdminOnly
-    && !TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
-    && !adminAccessLoading
-    && admin.isAdmin !== true
+    activeSectionIsAdminOnly && !showAdminSettings
       ? SETTINGS_DEFAULT_SECTION
       : activeSection;
+  const visibleScopeOrder = SETTINGS_SCOPE_ORDER.filter(
+    (scope) => !isSettingsAdminOnlyScope(scope) || showAdminSettings,
+  );
   const redirectedAdminSectionRef = useRef<SettingsSection | null>(null);
 
   useEffect(() => {
@@ -126,7 +132,7 @@ export function SettingsScreen({
         </div>
         <div className="flex h-[46px] items-center gap-4 px-4">
           <SettingsScopeTabs
-            items={SETTINGS_SCOPE_ORDER.map((scope) => ({
+            items={visibleScopeOrder.map((scope) => ({
               id: scope,
               label: SETTINGS_SCOPE_LABELS[scope],
             }))}

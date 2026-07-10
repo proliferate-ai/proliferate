@@ -31,8 +31,13 @@ from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.github_app.repo_authority import require_github_cloud_repo_authority
 from proliferate.server.cloud.materialization import paths as materialization_paths
 from proliferate.server.cloud.materialization import service as materialization_service
+from proliferate.server.cloud.materialization.locks import CloudMaterializationLockTimeout
+from proliferate.server.cloud.materialization.materialize.repo_environment import (
+    CloudRepoCheckoutError,
+)
 from proliferate.server.cloud.repos.domain.github_credentials import CloudRepoGitHubCredentials
 from proliferate.server.cloud.repos.service import get_repo_branches_for_credentials
+from proliferate.server.cloud.workspaces.domain.origin import resolve_workspace_origin_entrypoint
 from proliferate.server.cloud.workspaces.models import (
     CloudRuntimeStatus,
     CloudWorkspaceRuntimeStatusResponse,
@@ -43,9 +48,40 @@ from proliferate.server.cloud.workspaces.models import (
     WorkspaceRuntimeSummary,
     WorkspaceSummary,
 )
+from proliferate.utils.time import utcnow
 
 MAX_CLOUD_WORKSPACE_DISPLAY_NAME_CHARS = 160
 _WORKTREE_SEGMENT_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
+
+# A workspace with no AnyHarness workspace id is "materializing". If it stays
+# that way past this budget (comfortably beyond the 600s repo-clone timeout),
+# provisioning died between the workspace row insert and the AnyHarness worktree
+# write — a stalled row. Report it as a terminal error (with an actionable
+# detail) instead of leaving the client spinning forever with no recovery path.
+MATERIALIZATION_STALL_SECONDS = 900
+_STALLED_STATUS_DETAIL = "Materialization did not complete in time."
+_STALLED_LAST_ERROR = (
+    "The cloud workspace did not finish provisioning within the expected time. "
+    "Delete it and create a new one to try again."
+)
+
+# Actionable copy for a `CloudRepoCheckoutError`, keyed by its reason. Names the
+# blocker without leaking sandbox paths or secrets.
+_CHECKOUT_CONFLICT_MESSAGES = {
+    "dirty_checkout": (
+        "The cloud checkout for this repository has uncommitted changes and cannot be "
+        "reset for a new workspace. Commit, push, or discard those changes in the cloud "
+        "sandbox, then try again."
+    ),
+    "local_commits": (
+        "The cloud checkout for this repository has local commits that are not on the "
+        "base branch. Push or discard them in the cloud sandbox, then try again."
+    ),
+    "not_a_git_repo": (
+        "The cloud checkout path for this repository exists but is not a git repository. "
+        "Remove it in the cloud sandbox, then try again."
+    ),
+}
 
 
 class _UserWithId(Protocol):
@@ -84,6 +120,7 @@ async def create_cloud_workspace_for_user(
     user: _UserWithId,
     body: CreateCloudWorkspaceRequest,
 ) -> WorkspaceDetail:
+    cloud_sandboxes_service.require_cloud_provisioning_configured()
     git_owner = body.git_owner.strip()
     git_repo_name = body.git_repo_name.strip()
     branch_name = body.branch_name.strip()
@@ -195,6 +232,29 @@ async def create_cloud_workspace_for_user(
             "cloud_sandbox_reconnect_failed",
             "The cloud sandbox runtime could not be reached. Please retry in a moment.",
             status_code=502,
+        ) from exc
+    except CloudRepoCheckoutError as exc:
+        # The shared cloud checkout for this repo cannot be safely reset for a
+        # new workspace — a prior checkout holds user work or is not a clean git
+        # repository. This is the case a second same-repo workspace hits; return
+        # a specific, actionable 409 conflict instead of an opaque 500.
+        raise CloudApiError(
+            "cloud_repo_checkout_conflict",
+            _CHECKOUT_CONFLICT_MESSAGES.get(
+                exc.reason,
+                "The cloud checkout for this repository could not be prepared. "
+                "Resolve outstanding changes in the cloud sandbox and retry.",
+            ),
+            status_code=409,
+        ) from exc
+    except CloudMaterializationLockTimeout as exc:
+        # Another materialization for this sandbox is holding the lock (or the
+        # lock backend is unavailable). Surface a retryable 503 rather than a
+        # raw 500 so the client can back off and retry.
+        raise CloudApiError(
+            "cloud_materialization_busy",
+            "The cloud sandbox is busy preparing another workspace. Please retry in a moment.",
+            status_code=503,
         ) from exc
 
     workspace = await _create_workspace_row_with_branch_retry(
@@ -385,7 +445,10 @@ async def _create_anyharness_worktree(
             new_branch_name=branch_name,
             base_branch=base_branch,
             setup_script=setup_script or None,
-            origin={"kind": "human", "entrypoint": source},
+            origin={
+                "kind": "human",
+                "entrypoint": resolve_workspace_origin_entrypoint(source),
+            },
         )
     except CloudRuntimeReconnectError as exc:
         raise CloudApiError(
@@ -496,6 +559,7 @@ async def _workspace_payload(
     )
     payload_type = WorkspaceDetail if detail else WorkspaceSummary
     status = _workspace_status(workspace)
+    stalled = _materialization_is_stalled(workspace)
     runtime_status = _runtime_status(sandbox)
     return payload_type(
         id=str(workspace.id),
@@ -511,6 +575,8 @@ async def _workspace_payload(
         ),
         status=status,
         workspace_status=status,
+        status_detail=_STALLED_STATUS_DETAIL if stalled else None,
+        last_error=_STALLED_LAST_ERROR if stalled else None,
         product_lifecycle="archived" if workspace.archived_at is not None else "active",
         runtime=WorkspaceRuntimeSummary(
             environment_id=str(repo_environment.id),
@@ -525,12 +591,29 @@ async def _workspace_payload(
     )
 
 
+def _materialization_is_stalled(workspace: CloudWorkspaceValue) -> bool:
+    """True when a workspace has been materializing past the stall budget.
+
+    A stalled row is one whose AnyHarness worktree never got written (the row
+    insert and the worktree write are not atomic), so it can never become
+    ``ready`` on its own.
+    """
+    if workspace.anyharness_workspace_id or workspace.archived_at is not None:
+        return False
+    created_at = workspace.created_at
+    if created_at is None:
+        return False
+    return (utcnow() - created_at).total_seconds() > MATERIALIZATION_STALL_SECONDS
+
+
 def _workspace_status(workspace: CloudWorkspaceValue) -> CloudWorkspaceStatus:
     if workspace.archived_at is not None:
         return "archived"
-    if not workspace.anyharness_workspace_id:
-        return "materializing"
-    return "ready"
+    if workspace.anyharness_workspace_id:
+        return "ready"
+    if _materialization_is_stalled(workspace):
+        return "error"
+    return "materializing"
 
 
 def _runtime_status(sandbox: CloudSandboxValue | None) -> CloudRuntimeStatus:

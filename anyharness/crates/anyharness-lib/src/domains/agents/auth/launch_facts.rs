@@ -357,4 +357,66 @@ mod tests {
             .any(|fact| matches!(fact, CredentialFact::Route { .. })));
         let _ = std::fs::remove_dir_all(&home);
     }
+
+    /// The classification-coherence guarantee behind the `model=default` fix.
+    /// Facts are constructed directly (not via `collect_launch_env_facts`, which
+    /// folds ambient process env) so the assertion is deterministic:
+    ///
+    /// - A CLEAN gateway route (the fixed path — no gateway credential copied
+    ///   into the workspace env) classifies `gateway` ONLY, so the model menu is
+    ///   gateway-eligible and native-only ids like `default` stay gated.
+    /// - The abandoned readiness workaround copied the gateway
+    ///   `ANTHROPIC_AUTH_TOKEN` into the workspace env; that token ALSO matches
+    ///   the native `anthropic-api` signal, unioning both contexts and unlocking
+    ///   native-only models on a gateway launch (→ LiteLLM 400). Pinned so the
+    ///   incoherence stays diagnosed and a regression back to it is caught.
+    #[test]
+    fn gateway_route_classifies_gateway_context_only_with_clean_env() {
+        use crate::domains::agents::auth::context::classify;
+        use crate::domains::agents::catalog::bundled::bundled_agent_catalog_document;
+        use crate::domains::agents::model::AgentKind;
+        use crate::domains::agents::registry::built_in_registry;
+        use anyharness_credential_discovery::route_kinds;
+
+        let catalog = bundled_agent_catalog_document();
+        let contexts = catalog
+            .agents
+            .iter()
+            .find(|agent| agent.kind == "claude")
+            .map(|agent| agent.auth_contexts.as_slice())
+            .expect("claude auth contexts in bundled catalog");
+        let descriptor = built_in_registry()
+            .into_iter()
+            .find(|descriptor| descriptor.kind == AgentKind::Claude)
+            .expect("claude descriptor");
+
+        let gateway_fact = CredentialFact::Route {
+            kind: route_kinds::GATEWAY.to_string(),
+        };
+
+        let clean = classify(&descriptor, contexts, std::slice::from_ref(&gateway_fact));
+        assert_eq!(
+            clean.ids(),
+            &["gateway".to_string()],
+            "a clean gateway route must classify gateway-only; got {:?}",
+            clean.ids()
+        );
+
+        let workaround = classify(
+            &descriptor,
+            contexts,
+            &[
+                CredentialFact::Env {
+                    var: "ANTHROPIC_AUTH_TOKEN".to_string(),
+                },
+                gateway_fact,
+            ],
+        );
+        assert!(
+            workaround.is_active("anthropic-api") && workaround.is_active("gateway"),
+            "the workspace-env workaround unions native+gateway (the bug the \
+             readiness fix removes); got {:?}",
+            workaround.ids()
+        );
+    }
 }

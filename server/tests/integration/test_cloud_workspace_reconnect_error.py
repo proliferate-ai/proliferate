@@ -93,3 +93,107 @@ async def test_create_workspace_reconnect_failure_maps_to_502(
 
     assert excinfo.value.status_code == 502
     assert excinfo.value.code == "cloud_sandbox_reconnect_failed"
+
+
+def _patch_create_path_up_to_materialize(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    user_id: uuid.UUID,
+    materialize: Any,
+) -> None:
+    repo_environment = SimpleNamespace(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        git_owner="acme",
+        git_repo_name="widgets",
+        default_branch="main",
+        setup_script="",
+    )
+
+    async def _get_repo_environment(*_a: Any, **_k: Any) -> Any:
+        return repo_environment
+
+    async def _authority(*_a: Any, **_k: Any) -> Any:
+        return SimpleNamespace(access_token="gho_test")
+
+    async def _branches(*_a: Any, **_k: Any) -> Any:
+        return SimpleNamespace(branches=["main"], default_branch="main")
+
+    async def _active_branches(*_a: Any, **_k: Any) -> list[str]:
+        return []
+
+    monkeypatch.setattr(
+        workspaces_service.repositories_store,
+        "get_cloud_repo_environment",
+        _get_repo_environment,
+    )
+    monkeypatch.setattr(workspaces_service, "require_github_cloud_repo_authority", _authority)
+    monkeypatch.setattr(workspaces_service, "get_repo_branches_for_credentials", _branches)
+    monkeypatch.setattr(
+        workspaces_service.cloud_workspace_store,
+        "list_active_workspace_branches_for_repo_environment",
+        _active_branches,
+    )
+    monkeypatch.setattr(
+        workspaces_service.materialization_service,
+        "materialize_repo_environment",
+        materialize,
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_workspace_dirty_checkout_maps_to_409_conflict(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid.uuid4()
+
+    async def _materialize_raises(*_a: Any, **_k: Any) -> None:
+        raise workspaces_service.CloudRepoCheckoutError(
+            "dirty_checkout",
+            repo_path="/home/user/workspace/repos/acme/widgets",
+        )
+
+    _patch_create_path_up_to_materialize(
+        monkeypatch, user_id=user_id, materialize=_materialize_raises
+    )
+    body = CreateCloudWorkspaceRequest(
+        gitOwner="acme", gitRepoName="widgets", branchName="feature-x", baseBranch="main"
+    )
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await workspaces_service.create_cloud_workspace_for_user(
+            db_session, SimpleNamespace(id=user_id), body
+        )
+
+    assert excinfo.value.status_code == 409
+    assert excinfo.value.code == "cloud_repo_checkout_conflict"
+    # Names the blocker; never leaks the sandbox path.
+    assert "uncommitted changes" in excinfo.value.message
+    assert "/home/user" not in excinfo.value.message
+
+
+@pytest.mark.asyncio
+async def test_create_workspace_lock_timeout_maps_to_503(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id = uuid.uuid4()
+
+    async def _materialize_raises(*_a: Any, **_k: Any) -> None:
+        raise workspaces_service.CloudMaterializationLockTimeout("locked")
+
+    _patch_create_path_up_to_materialize(
+        monkeypatch, user_id=user_id, materialize=_materialize_raises
+    )
+    body = CreateCloudWorkspaceRequest(
+        gitOwner="acme", gitRepoName="widgets", branchName="feature-x", baseBranch="main"
+    )
+
+    with pytest.raises(CloudApiError) as excinfo:
+        await workspaces_service.create_cloud_workspace_for_user(
+            db_session, SimpleNamespace(id=user_id), body
+        )
+
+    assert excinfo.value.status_code == 503
+    assert excinfo.value.code == "cloud_materialization_busy"

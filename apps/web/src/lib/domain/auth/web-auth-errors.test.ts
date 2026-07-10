@@ -49,4 +49,15 @@ describe("web auth errors", () => {
     expect(presentation.statusLabel).toBe("SSO access denied");
     expect(presentation.description).toContain("existing organization members");
   });
+
+  it("presents JIT-disabled rejections with an actionable admin fix", () => {
+    // A first-time SSO user under the default SSO_JIT_POLICY=disabled reaches
+    // this screen (code sso_jit_disabled) instead of a generic dead-end.
+    const presentation = webAuthErrorPresentation("sso_jit_disabled");
+
+    expect(presentation.title).toBe("Account not provisioned");
+    expect(presentation.statusLabel).toBe("SSO access denied");
+    expect(presentation.description).toContain("just-in-time provisioning");
+    expect(presentation.primaryAction.kind).toBe("try_again");
+  });
 });

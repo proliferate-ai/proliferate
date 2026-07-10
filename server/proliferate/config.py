@@ -373,6 +373,40 @@ class Settings(BaseSettings):
     proliferate_target_artifact_base_url: str = ""
 
     @property
+    def cloud_provisioning_configured(self) -> bool:
+        """True when E2B is fully configured to provision cloud sandboxes.
+
+        Requires BOTH an API key and a template name. In debug/dev the template
+        name may be blank (a built-in default is used), so any API key suffices.
+        """
+        if not self.e2b_api_key.strip():
+            return False
+        if self.debug:
+            return True
+        return bool(self.e2b_template_name.strip())
+
+    @property
+    def cloud_provisioning_config_error(self) -> str | None:
+        """Actionable reason cloud provisioning is unavailable, or None if ready.
+
+        Names the missing requirement without echoing any secret value. Used
+        both to log a startup warning and to fail cloud-provisioning requests
+        with a specific error instead of crash-looping the API or booting the
+        wrong E2B template.
+        """
+        if self.debug:
+            return None
+        if not self.e2b_api_key.strip():
+            return None  # cloud provisioning intentionally disabled
+        if not self.e2b_template_name.strip():
+            return (
+                "E2B_API_KEY is set but E2B_TEMPLATE_NAME is empty. Set "
+                "E2B_TEMPLATE_NAME to the published runtime template for this "
+                "deployment to enable cloud workspaces."
+            )
+        return None
+
+    @property
     def single_org_mode(self) -> bool:
         if self.single_org_mode_override is not None:
             return self.single_org_mode_override

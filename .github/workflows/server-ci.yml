@@ -301,10 +301,19 @@ jobs:
             proliferate-supervisor
           cp server/infra/self-hosted-aws/template.yaml \
             artifacts/proliferate-self-hosted-aws-template.yaml
+          # Standalone entrypoints operators fetch before they have the bundle:
+          # the guided installer and the AWS launch action. Published (and
+          # checksummed) so they can be pinned to a release and verified.
+          cp server/deploy/install.sh artifacts/proliferate-selfhost-install.sh
+          cp server/infra/self-hosted-aws/launch-stack.sh \
+            artifacts/proliferate-selfhost-aws-launch.sh
           bundle_root="$(mktemp -d)"
           mkdir -p "$bundle_root/proliferate-deploy"
           cp -R server/deploy/. "$bundle_root/proliferate-deploy/"
+          # smoke/ and tests/ are CI-only; the operator bundle ships just the
+          # scripts, compose, and config the running stack needs.
           rm -rf "$bundle_root/proliferate-deploy/smoke"
+          rm -rf "$bundle_root/proliferate-deploy/tests"
           printf '%s\n' "$VERSION" > "$bundle_root/proliferate-deploy/VERSION"
           tar czf artifacts/proliferate-deploy.tar.gz \
             --owner=0 --group=0 --numeric-owner \
@@ -316,6 +325,8 @@ jobs:
               anyharness-x86_64-unknown-linux-musl.tar.gz \
               anyharness-aarch64-unknown-linux-musl.tar.gz \
               proliferate-self-hosted-aws-template.yaml \
+              proliferate-selfhost-install.sh \
+              proliferate-selfhost-aws-launch.sh \
               proliferate-deploy.tar.gz \
               > self-hosted-assets.SHA256SUMS
           )
@@ -352,5 +363,7 @@ jobs:
             artifacts/anyharness-x86_64-unknown-linux-musl.tar.gz
             artifacts/anyharness-aarch64-unknown-linux-musl.tar.gz
             artifacts/proliferate-self-hosted-aws-template.yaml
+            artifacts/proliferate-selfhost-install.sh
+            artifacts/proliferate-selfhost-aws-launch.sh
             artifacts/proliferate-deploy.tar.gz
             artifacts/self-hosted-assets.SHA256SUMS

@@ -13,6 +13,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.config import settings
 from proliferate.constants.cloud import CLOUD_SANDBOX_PURPOSE_INTERACTIVE
 from proliferate.db.store import billing_subjects
 from proliferate.db.store import cloud_sandboxes as sandbox_store
@@ -27,6 +28,24 @@ from proliferate.utils.crypto import decrypt_text
 
 class _UserWithId(Protocol):
     id: UUID
+
+
+def require_cloud_provisioning_configured() -> None:
+    """Fail cloud-provisioning requests with an actionable error when E2B is
+    half-configured (API key set, template missing).
+
+    This is the request-time peer of the boot-time warning in ``main.py``: the
+    control plane stays up for base features, but explicit cloud-provisioning
+    intents return a specific 503 naming the missing requirement rather than
+    booting the wrong E2B template or surfacing an opaque runtime failure.
+    """
+    config_error = settings.cloud_provisioning_config_error
+    if config_error is not None:
+        raise CloudApiError(
+            "e2b_template_not_configured",
+            config_error,
+            status_code=503,
+        )
 
 
 async def get_cloud_sandbox_detail(
@@ -50,6 +69,7 @@ async def ensure_cloud_sandbox_ready(
     # GitHub-App trigger path calls ensure_personal_cloud_sandbox_exists directly
     # and is intentionally left ungated so a brand-new user's initial row still
     # gets created.
+    require_cloud_provisioning_configured()
     await assert_cloud_sandbox_resume_allowed_for_owner(db, owner_user_id=user.id)
     return await ensure_personal_cloud_sandbox_exists(db, user_id=user.id, purpose=purpose)
 

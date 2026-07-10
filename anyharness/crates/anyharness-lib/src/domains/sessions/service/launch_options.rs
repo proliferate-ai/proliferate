@@ -17,7 +17,7 @@ use crate::domains::agents::readiness::launch_options::{
     ResolvedLaunchAgentOption, ResolvedLaunchModelOption, ResolvedModelEffort,
     ResolvedWorkspaceLaunchOptions,
 };
-use crate::domains::agents::readiness::service::resolve_agent_with_env;
+use crate::domains::agents::readiness::service::resolve_launch_agent;
 use crate::domains::agents::registry;
 use crate::domains::workspaces::env::read_materialized_launch_env;
 
@@ -74,7 +74,10 @@ impl SessionService {
             // Same env composition as create_session.
             let readiness_env = workspace_env.clone();
 
-            let resolved = resolve_agent_with_env(&descriptor, &self.runtime_home, &readiness_env);
+            // Launch-time readiness: the menu must agree with create_session,
+            // so it uses the same route-aware readiness (issue #1106) — a
+            // gateway/api_key-routed agent is launchable and stays in the menu.
+            let resolved = resolve_launch_agent(&descriptor, &self.runtime_home, &readiness_env);
             if resolved.status != ResolvedAgentStatus::Ready {
                 continue;
             }

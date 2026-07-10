@@ -20,6 +20,8 @@ def test_create_sandbox_prefers_timeout_ms(monkeypatch) -> None:
 
     monkeypatch.setattr(e2b_runtime, "_load_sdk", lambda: FakeSandbox)
     monkeypatch.setattr(e2b_runtime.settings, "e2b_api_key", "e2b_test_key")
+    # Empty template only falls back to the built-in default in debug/dev.
+    monkeypatch.setattr(e2b_runtime.settings, "debug", True)
     monkeypatch.setattr(e2b_runtime.settings, "e2b_template_name", "")
 
     provider = e2b_runtime.E2BSandboxProvider()
@@ -58,6 +60,8 @@ def test_create_sandbox_falls_back_to_timeout_ms(monkeypatch) -> None:
 
     monkeypatch.setattr(e2b_runtime, "_load_sdk", lambda: LegacySandbox)
     monkeypatch.setattr(e2b_runtime.settings, "e2b_api_key", "e2b_test_key")
+    # Empty template only falls back to the built-in default in debug/dev.
+    monkeypatch.setattr(e2b_runtime.settings, "debug", True)
     monkeypatch.setattr(e2b_runtime.settings, "e2b_template_name", "")
 
     provider = e2b_runtime.E2BSandboxProvider()

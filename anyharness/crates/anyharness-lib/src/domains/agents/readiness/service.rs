@@ -113,445 +113,83 @@ pub fn resolve_agent_with_env(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::domains::agents::auth::credentials::detect_credentials_with_env;
-    use crate::domains::agents::registry::built_in_registry;
-    use crate::integrations::agent_cli::executable::make_executable;
-
-    fn make_temp_dir(prefix: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!("{prefix}-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&path).expect("create temp dir");
-        path
-    }
-
-    struct PathEnvGuard {
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl PathEnvGuard {
-        fn set(path: &Path) -> Self {
-            let original = std::env::var_os("PATH");
-            let paths = vec![path.to_path_buf()];
-            let joined = std::env::join_paths(paths).expect("join PATH");
-            std::env::set_var("PATH", joined);
-            Self { original }
+/// Launch-time readiness: [`resolve_agent_with_env`] PLUS the enrolled
+/// agent-auth route state, so an enrolled gateway/api_key route makes the agent
+/// credential-ready EXACTLY as the launcher will inject it at spawn.
+///
+/// This is the fix for issue #1106: the native readiness path only sees the
+/// materialized workspace env, never `agent-auth/state.json`, so a gateway-route
+/// session (whose credentials live in state.json and are injected only at
+/// launch by `route_auth::resolve_launch_route_auth`) was reported
+/// `LoginRequired`/`CredentialsRequired` and the session-create gate rejected
+/// it — even though the launch path had valid credentials. Operators worked
+/// around it by copying gateway credentials into a workspace env file, which in
+/// turn corrupted auth-context classification (the raw `ANTHROPIC_AUTH_TOKEN`
+/// activated the native `anthropic-api` context alongside `gateway`), unlocking
+/// native-only models like `default` on what was really a gateway launch and
+/// 400ing at LiteLLM.
+///
+/// Readiness and launch now consult ONE credential state. A route ONLY clears
+/// the credential/login gaps — the credential is exactly what the route injects
+/// at spawn. It never touches `InstallRequired` (a missing ACP agent process OR
+/// native binary) or `Unsupported` (runtime incompatibility): a route cannot
+/// conjure a binary, and the launcher still needs one (the ACP adapter shells
+/// out to the vendor CLI — e.g. Claude launches via `CLAUDE_CODE_EXECUTABLE`),
+/// so readiness must not report a binary-less agent as launchable (see
+/// [`route_credentials_upgrade_status`]).
+///
+/// The launch paths (`create_session`, `ensure_live_session`/`start_live_session`,
+/// and `resolved_workspace_launch_options`) use this. Native-readiness surfaces
+/// (`GET /v1/agents`, login, reconcile, probe) keep using
+/// [`resolve_agent`]/[`resolve_agent_with_env`]: they answer "is the vendor CLI
+/// installed and logged in", which is a different question from "can the runtime
+/// launch this agent through the enrolled route".
+pub fn resolve_launch_agent(
+    descriptor: &AgentDescriptor,
+    runtime_home: &Path,
+    workspace_env: &BTreeMap<String, String>,
+) -> ResolvedAgent {
+    let mut resolved = resolve_agent_with_env(descriptor, runtime_home, workspace_env);
+    let already_ready = matches!(
+        resolved.credential_state,
+        CredentialState::Ready | CredentialState::ReadyViaLocalAuth
+    );
+    if !already_ready
+        && crate::domains::agents::route_auth::launch_route_provides_credentials(
+            runtime_home,
+            descriptor.kind.as_str(),
+        )
+    {
+        let upgraded = route_credentials_upgrade_status(resolved.status);
+        if upgraded == ResolvedAgentStatus::Ready {
+            // The route supplies credentials the launcher injects at spawn.
+            // `ReadyViaLocalAuth` is the closest existing state: ready via a
+            // non-env, runtime-materialized credential rather than a workspace
+            // env var.
+            resolved.credential_state = CredentialState::ReadyViaLocalAuth;
         }
+        resolved.status = upgraded;
     }
+    resolved
+}
 
-    impl Drop for PathEnvGuard {
-        fn drop(&mut self) {
-            if let Some(original) = &self.original {
-                std::env::set_var("PATH", original);
-            } else {
-                std::env::remove_var("PATH");
-            }
+/// Given a native-readiness verdict for an agent whose enrolled route supplies
+/// launch credentials, decide the launch-time status. A route ONLY clears the
+/// credential gaps (`CredentialsRequired`, `LoginRequired`) — the credential is
+/// what it injects. It NEVER clears `InstallRequired` (a missing ACP agent
+/// process OR native binary — the adapter still shells out to the vendor CLI) or
+/// `Unsupported` (runtime incompatibility): a route cannot conjure a binary, so
+/// readiness must not mask a binary-less agent as launchable. `Ready`/`Error`
+/// pass through unchanged.
+fn route_credentials_upgrade_status(status: ResolvedAgentStatus) -> ResolvedAgentStatus {
+    match status {
+        ResolvedAgentStatus::CredentialsRequired | ResolvedAgentStatus::LoginRequired => {
+            ResolvedAgentStatus::Ready
         }
-    }
-
-    struct EnvVarGuard {
-        name: &'static str,
-        original: Option<std::ffi::OsString>,
-    }
-
-    impl EnvVarGuard {
-        fn set(name: &'static str, value: &Path) -> Self {
-            let original = std::env::var_os(name);
-            std::env::set_var(name, value);
-            Self { name, original }
-        }
-
-        fn set_str(name: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(name);
-            std::env::set_var(name, value);
-            Self { name, original }
-        }
-    }
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            if let Some(original) = &self.original {
-                std::env::set_var(self.name, original);
-            } else {
-                std::env::remove_var(self.name);
-            }
-        }
-    }
-
-    #[test]
-    fn parses_node_versions() {
-        assert_eq!(
-            parse_node_version("v20.9.0"),
-            Some(NodeVersion {
-                major: 20,
-                minor: 9,
-                patch: 0,
-            })
-        );
-        assert_eq!(
-            parse_node_version("20.10.1"),
-            Some(NodeVersion {
-                major: 20,
-                minor: 10,
-                patch: 1,
-            })
-        );
-        assert_eq!(parse_node_version("garbage"), None);
-    }
-
-    #[test]
-    fn managed_launcher_candidates_include_managed_npm_binary() {
-        let managed_dir = PathBuf::from("/tmp/claude");
-        let candidates = managed_launcher_candidates(
-            &managed_dir,
-            &AgentKind::Claude,
-            Some(Path::new("node_modules/.bin/claude-agent-acp")),
-        );
-
-        assert_eq!(
-            candidates,
-            vec![
-                PathBuf::from("/tmp/claude/claude-launcher"),
-                PathBuf::from("/tmp/claude/node_modules/.bin/claude-agent-acp"),
-            ]
-        );
-    }
-
-    #[test]
-    fn managed_npm_package_ref_mismatch_requires_reinstall() {
-        let registry = built_in_registry();
-        let claude = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Claude)
-            .expect("missing Claude descriptor");
-        let runtime_home = make_temp_dir("anyharness-claude-stale-managed-npm-test");
-        let managed_dir = artifact_root(
-            &runtime_home,
-            &AgentKind::Claude,
-            &ArtifactRole::AgentProcess,
-        );
-        let launcher_path = managed_dir.join("claude-launcher");
-        std::fs::create_dir_all(launcher_path.parent().expect("launcher parent"))
-            .expect("create launcher dir");
-        std::fs::write(&launcher_path, "#!/bin/sh\nexit 0\n").expect("write launcher");
-        make_executable(&launcher_path).expect("make launcher executable");
-        std::fs::write(
-            managed_dir.join("package.json"),
-            r#"{"dependencies":{"@agentclientprotocol/claude-agent-acp":"github:proliferate-ai/claude-agent-acp#old-ref"}}"#,
-        )
-        .expect("write package metadata");
-
-        let resolved = resolve_agent(&claude, &runtime_home);
-
-        assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
-        assert!(!resolved.agent_process.installed);
-        assert!(resolved
-            .agent_process
-            .message
-            .as_deref()
-            .is_some_and(|message| message.contains("out of date")));
-
-        let _ = std::fs::remove_dir_all(runtime_home);
-    }
-
-    #[test]
-    fn managed_registry_binary_for_names_finds_registry_binary() {
-        let runtime_home = make_temp_dir("anyharness-registry-binary-test");
-        let binary_path = artifact_root(
-            &runtime_home,
-            &AgentKind::Cursor,
-            &ArtifactRole::AgentProcess,
-        )
-        .join("registry_binary")
-        .join("cursor-agent");
-        std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
-            .expect("create registry binary dir");
-        std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
-        make_executable(&binary_path).expect("make binary executable");
-
-        assert_eq!(
-            managed_registry_binary_for_names(&runtime_home, &AgentKind::Cursor, &["cursor-agent"]),
-            Some(binary_path)
-        );
-
-        let _ = std::fs::remove_dir_all(runtime_home);
-    }
-
-    #[test]
-    fn managed_registry_npm_binary_for_names_finds_npm_bin() {
-        let runtime_home = make_temp_dir("anyharness-registry-npm-binary-test");
-        let binary_path =
-            artifact_root(&runtime_home, &AgentKind::Grok, &ArtifactRole::AgentProcess)
-                .join("registry_npm")
-                .join("node_modules")
-                .join(".bin")
-                .join("grok");
-        std::fs::create_dir_all(binary_path.parent().expect("binary parent"))
-            .expect("create registry npm bin dir");
-        std::fs::write(&binary_path, "#!/bin/sh\nexit 0\n").expect("write binary");
-        make_executable(&binary_path).expect("make binary executable");
-
-        assert_eq!(
-            managed_registry_npm_binary_for_names(&runtime_home, &AgentKind::Grok, &["grok"]),
-            Some(binary_path)
-        );
-
-        let _ = std::fs::remove_dir_all(runtime_home);
-    }
-
-    #[test]
-    fn registry_backed_binary_hint_launcher_requires_backing_binary() {
-        let registry = built_in_registry();
-        let cursor = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Cursor)
-            .expect("missing Cursor descriptor");
-        let runtime_home = make_temp_dir("anyharness-cursor-stale-launcher-test");
-        let missing_binary = format!("missing-cursor-agent-{}", uuid::Uuid::new_v4());
-        let launcher_path = artifact_root(
-            &runtime_home,
-            &AgentKind::Cursor,
-            &ArtifactRole::AgentProcess,
-        )
-        .join("cursor-launcher");
-        std::fs::create_dir_all(launcher_path.parent().expect("launcher parent"))
-            .expect("create launcher dir");
-        std::fs::write(
-            &launcher_path,
-            format!("#!/bin/sh\nset -e\nexec \"{missing_binary}\" acp \"$@\"\n"),
-        )
-        .expect("write launcher");
-        make_executable(&launcher_path).expect("make launcher executable");
-        let unrelated_registry_binary = artifact_root(
-            &runtime_home,
-            &AgentKind::Cursor,
-            &ArtifactRole::AgentProcess,
-        )
-        .join("registry_binary")
-        .join("node");
-        std::fs::create_dir_all(unrelated_registry_binary.parent().expect("binary parent"))
-            .expect("create registry binary dir");
-        std::fs::write(&unrelated_registry_binary, "#!/bin/sh\nexit 0\n")
-            .expect("write unrelated registry binary");
-        make_executable(&unrelated_registry_binary).expect("make unrelated binary executable");
-
-        let mut cursor = cursor;
-        cursor.agent_process.install = AgentProcessInstallSpec::RegistryBacked {
-            registry_id: "cursor".into(),
-            fallback: AgentProcessFallback::BinaryHint {
-                candidate_binaries: vec![missing_binary.clone()],
-                args: vec!["acp".into()],
-            },
-        };
-
-        let resolved = resolve_agent(&cursor, &runtime_home);
-
-        assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
-        assert!(!resolved.agent_process.installed);
-        assert!(resolved
-            .agent_process
-            .message
-            .as_deref()
-            .is_some_and(|message| message.contains(&missing_binary)));
-
-        let _ = std::fs::remove_dir_all(runtime_home);
-    }
-
-    #[test]
-    fn registry_backed_binary_hint_does_not_resolve_superset_wrapper_as_agent_process() {
-        let registry = built_in_registry();
-        let cursor = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Cursor)
-            .expect("missing Cursor descriptor");
-        let runtime_home = make_temp_dir("anyharness-cursor-wrapper-fallback-test");
-        let path_dir = make_temp_dir("anyharness-cursor-wrapper-path-test");
-        let wrapper_path = path_dir.join("cursor-agent");
-        std::fs::write(
-            &wrapper_path,
-            "#!/bin/sh\n# Superset agent-wrapper v3\nexec cursor-agent \"$@\"\n",
-        )
-        .expect("write wrapper");
-        make_executable(&wrapper_path).expect("make wrapper executable");
-        let _path_guard = PathEnvGuard::set(&path_dir);
-        let mut env = BTreeMap::new();
-        env.insert("CURSOR_API_KEY".to_string(), "test-token".to_string());
-
-        let resolved = resolve_agent_with_env(&cursor, &runtime_home, &env);
-
-        assert_eq!(resolved.status, ResolvedAgentStatus::InstallRequired);
-        assert!(!resolved.agent_process.installed);
-        assert_eq!(resolved.agent_process.path, None);
-
-        let _ = std::fs::remove_dir_all(runtime_home);
-        let _ = std::fs::remove_dir_all(path_dir);
-    }
-
-    #[test]
-    fn claude_compatibility_check_applies_to_direct_managed_npm_installs() {
-        let registry = built_in_registry();
-        let claude = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Claude)
-            .expect("missing Claude descriptor");
-
-        assert!(managed_npm_executable_relpath(&claude.agent_process.install).is_some());
-    }
-
-    #[test]
-    fn override_program_validation_requires_existing_executable() {
-        assert!(!is_override_program_valid(Path::new(
-            "/definitely/missing/agent-binary"
-        )));
-        assert!(is_override_program_valid(Path::new("sh")));
-    }
-
-    #[test]
-    fn override_launch_prepends_catalog_default_args() {
-        let registry = built_in_registry();
-        let codex = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Codex)
-            .expect("missing Codex descriptor");
-        let runtime_home = make_temp_dir("anyharness-codex-override-default-args-test");
-        let bin = runtime_home.join("codex-acp");
-        std::fs::write(&bin, "#!/bin/sh\nexit 0\n").expect("write override binary");
-        make_executable(&bin).expect("make override binary executable");
-
-        let _program_guard = EnvVarGuard::set("ANYHARNESS_CODEX_AGENT_PROGRAM", &bin);
-        let _args_guard =
-            EnvVarGuard::set_str("ANYHARNESS_CODEX_AGENT_ARGS_JSON", r#"["--extra-dev-arg"]"#);
-
-        let resolved = resolve_agent(&codex, &runtime_home);
-        let spawn = resolved.spawn.expect("override spawn spec");
-
-        assert!(spawn
-            .args
-            .windows(2)
-            .any(|pair| pair == ["-c", "features.plugins=false"]));
-        assert_eq!(
-            spawn.args.last().map(String::as_str),
-            Some("--extra-dev-arg")
-        );
-
-        let _ = std::fs::remove_dir_all(runtime_home);
-    }
-
-    #[test]
-    fn claude_node_compatibility_only_applies_when_launch_surface_uses_node() {
-        let registry = built_in_registry();
-        let claude = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Claude)
-            .expect("missing Claude descriptor");
-
-        assert!(claude_launch_requires_node(&claude, None));
-        assert!(claude_launch_requires_node(
-            &claude,
-            Some(&SpawnSpec {
-                program: PathBuf::from("/usr/bin/node"),
-                args: vec![],
-                env: std::collections::HashMap::new(),
-                cwd: None,
-            })
-        ));
-        assert!(!claude_launch_requires_node(
-            &claude,
-            Some(&SpawnSpec {
-                program: PathBuf::from("/tmp/claude-agent-acp"),
-                args: vec![],
-                env: std::collections::HashMap::new(),
-                cwd: None,
-            })
-        ));
-    }
-
-    #[test]
-    fn bundled_claude_descriptor_accepts_gateway_auth_token_env() {
-        let registry = built_in_registry();
-        let claude = registry
-            .into_iter()
-            .find(|descriptor| descriptor.kind == AgentKind::Claude)
-            .expect("missing Claude descriptor");
-        let mut env = BTreeMap::new();
-        env.insert("ANTHROPIC_AUTH_TOKEN".to_string(), "token".to_string());
-
-        assert_eq!(
-            detect_credentials_with_env(&claude.auth, Path::new("/tmp/empty-home"), &env),
-            CredentialState::Ready
-        );
-    }
-
-    #[test]
-    fn env_ready_agents_do_not_require_native_cli_for_readiness() {
-        let native = Some(not_found_artifact(
-            ArtifactRole::NativeCli,
-            Some("missing native".into()),
-        ));
-        let agent_process = found_artifact(
-            ArtifactRole::AgentProcess,
-            PathBuf::from("/tmp/codex-acp"),
-            "override",
-        );
-        let auth = AuthSpec::test_single_required_slot(
-            vec!["OPENAI_API_KEY".into()],
-            Some(LoginSpec {
-                label: "Log in".into(),
-                command: CommandSpec {
-                    program: "codex".into(),
-                    args: vec!["login".into()],
-                },
-                reuses_user_state: true,
-                message: None,
-            }),
-            CredentialDiscoveryKind::Codex,
-        );
-
-        let status = compute_readiness(
-            &native,
-            &agent_process,
-            &CredentialState::Ready,
-            &auth,
-            None,
-        );
-
-        assert_eq!(status, ResolvedAgentStatus::Ready);
-    }
-
-    #[test]
-    fn missing_native_cli_blocks_login_required_agents_without_credentials() {
-        let native = Some(not_found_artifact(
-            ArtifactRole::NativeCli,
-            Some("missing native".into()),
-        ));
-        let agent_process = found_artifact(
-            ArtifactRole::AgentProcess,
-            PathBuf::from("/tmp/claude-agent-acp"),
-            "override",
-        );
-        let auth = AuthSpec::test_single_required_slot(
-            vec!["ANTHROPIC_API_KEY".into()],
-            Some(LoginSpec {
-                label: "Log in".into(),
-                command: CommandSpec {
-                    program: "claude".into(),
-                    args: vec!["/login".into()],
-                },
-                reuses_user_state: true,
-                message: None,
-            }),
-            CredentialDiscoveryKind::Claude,
-        );
-
-        let status = compute_readiness(
-            &native,
-            &agent_process,
-            &CredentialState::LoginRequired,
-            &auth,
-            None,
-        );
-
-        assert_eq!(status, ResolvedAgentStatus::InstallRequired);
+        other => other,
     }
 }
+
+#[cfg(test)]
+#[path = "service_tests.rs"]
+mod tests;
