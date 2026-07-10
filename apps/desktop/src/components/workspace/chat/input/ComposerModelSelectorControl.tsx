@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
@@ -11,6 +11,7 @@ import type {
 } from "@/lib/domain/chat/models/model-selector-types";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
+import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
 import { ArrowUpRight, Check, Plus, Settings } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
@@ -110,11 +111,41 @@ function ComposerModelPickerPopover({
 }) {
   const currentKind = currentModel?.kind ?? null;
   const orderedGroups = orderModelGroupsActiveFirst(groups, currentKind);
+  const [search, setSearch] = useState("");
+
+  const filteredGroups = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) {
+      return orderedGroups;
+    }
+
+    return orderedGroups
+      .map((group) => {
+        const groupMatches = group.providerDisplayName.toLowerCase().includes(query)
+          || group.kind.toLowerCase().includes(query);
+        if (groupMatches) {
+          return group;
+        }
+
+        const models = group.models.filter((model) => model.displayName.toLowerCase().includes(query));
+        return models.length > 0 ? { ...group, models } : null;
+      })
+      .filter((group): group is ModelSelectorGroup => group !== null);
+  }, [orderedGroups, search]);
 
   return (
     <ComposerPopoverSurface className="flex w-72 flex-col p-0">
+      <div className="shrink-0 border-b border-border">
+        <PopoverSearchField
+          value={search}
+          onChange={setSearch}
+          placeholder="Search models"
+          autoFocus
+        />
+      </div>
+
       <div className="max-h-80 min-h-0 overflow-y-auto [scrollbar-gutter:stable] p-1">
-        {orderedGroups.map((group, index) => (
+        {filteredGroups.map((group, index) => (
           <ModelPickerGroup
             key={group.kind}
             group={group}
@@ -127,6 +158,12 @@ function ComposerModelPickerPopover({
         {orderedGroups.length === 0 && (
           <p className="px-3 py-4 text-center text-ui text-muted-foreground">
             {CHAT_MODEL_SELECTOR_LABELS.noProviders}
+          </p>
+        )}
+
+        {orderedGroups.length > 0 && filteredGroups.length === 0 && (
+          <p className="px-3 py-4 text-center text-ui text-muted-foreground">
+            No models match "{search}"
           </p>
         )}
       </div>
