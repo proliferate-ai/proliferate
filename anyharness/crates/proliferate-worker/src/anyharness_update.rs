@@ -30,7 +30,6 @@
 //!   newer pin supersedes it. Every failure keeps a runnable runtime serving.
 
 use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -270,7 +269,12 @@ fn stage_binary(bytes: &[u8], binary_path: &Path) -> Result<PathBuf, WorkerError
     let mut file = std::fs::File::create(&staged).map_err(stage_err)?;
     file.write_all(bytes).map_err(stage_err)?;
     file.sync_all().map_err(stage_err)?;
-    std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755)).map_err(stage_err)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))
+            .map_err(stage_err)?;
+    }
     Ok(staged)
 }
 
@@ -541,8 +545,12 @@ mod tests {
         // Stage the new bytes and confirm the staged file is executable.
         let staged = stage_binary(b"NEW", &binary).expect("stage");
         assert!(staged.exists());
-        let mode = std::fs::metadata(&staged).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, 0o755);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&staged).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o755);
+        }
 
         // Swap keeps a `.prev` copy of the old binary at a known path.
         let prev = swap_with_rollback(&staged, &binary).expect("swap");
