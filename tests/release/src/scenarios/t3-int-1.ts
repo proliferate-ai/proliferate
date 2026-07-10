@@ -126,14 +126,18 @@ interface PerHarnessResult {
 class ModelGatedError extends Error {}
 
 function isSessionModelGated(error: unknown): boolean {
-  if (!(error instanceof ApiRequestError)) {
-    return false;
-  }
-  const body = error.body as { code?: unknown; detail?: unknown } | null;
-  return (
+  // Duck-typed: the local runtime throws LocalRuntimeError (not ApiRequestError),
+  // but both carry a parsed `.body`. Also match the flattened message as a
+  // fallback for either error class.
+  const body = (error as { body?: { code?: unknown; detail?: unknown } } | null)?.body ?? null;
+  if (
     (typeof body?.code === "string" && body.code === "SESSION_MODEL_GATED") ||
     (typeof body?.detail === "string" && /SESSION_MODEL_GATED|gated behind auth contexts/i.test(body.detail))
-  );
+  ) {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return /SESSION_MODEL_GATED|gated behind auth contexts/i.test(message);
 }
 
 async function runLocalLane(
