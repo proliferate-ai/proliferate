@@ -2,7 +2,10 @@
  * Thin client for the local AnyHarness runtime's own HTTP API
  * (`anyharness/crates/anyharness-lib/src/api/router.rs`) — the same API a
  * cloud sandbox exposes, just reached directly on `127.0.0.1` instead of
- * through the Python server's `/v1/cloud/cloud-sandbox/anyharness/*` proxy.
+ * through the Python server's `/v1/gateway/cloud-sandbox/anyharness/*` proxy
+ * (server/proliferate/server/cloud/gateway/api.py; verified for real
+ * 2026-07-09 -- `/v1/cloud/cloud-sandbox/anyharness/*` 404s, see
+ * `../fixtures/cloud-sandbox.ts`).
  *
  * Local-lane scenarios use this instead of the Python server for anything
  * workspace/session/agent-shaped: per the survey behind this runner (see
