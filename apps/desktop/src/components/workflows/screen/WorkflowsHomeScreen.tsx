@@ -233,7 +233,11 @@ export function WorkflowsHomeScreen() {
     [runs, nameById],
   );
 
-  const canCreate = workflowCreateAllowed(workflows.length, freePlanWorkflowLimit());
+  // Seeds (starter templates) are org-agnostic and don't count against the
+  // owner's free-plan slot — the server counts only owned rows, so the client
+  // must match or "New" is wrongly disabled when only seeds are present.
+  const ownedWorkflowCount = workflows.filter((workflow) => !workflow.isSeed).length;
+  const canCreate = workflowCreateAllowed(ownedWorkflowCount, freePlanWorkflowLimit());
 
   // R6: run rows already store the target they ran in — derive the last-used
   // workspace per workflow to pre-fill the modal (no new stored shape).

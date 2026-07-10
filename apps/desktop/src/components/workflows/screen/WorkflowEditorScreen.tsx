@@ -151,7 +151,12 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
   const workflowsQuery = useWorkflows();
   const { activeOrganizationId } = useActiveOrganization();
   const { integrations: cloudIntegrations } = useCloudIntegrations(activeOrganizationId);
-  const { updateMutation } = useWorkflowMutations();
+  const { updateMutation, createMutation } = useWorkflowMutations();
+
+  // Seeds (track 1f starter templates) are shared, org-agnostic rows: viewable
+  // and runnable, but never editable in place. The editor opens read-only and
+  // offers "Duplicate" — a real owned copy the user can then customize.
+  const isSeed = detailQuery.data?.workflow.isSeed ?? false;
 
   const [draft, setDraft] = useState<Draft | null>(null);
   // Selection is addressed by (spineIndex, lane, stepIndex) — agents are
@@ -518,8 +523,23 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
     );
   };
 
+  const duplicateSeed = () => {
+    createMutation.mutate(
+      {
+        name: `${draft.name} (copy)`,
+        description: draft.description || undefined,
+        definition: serializeWorkflowDefinition(definition),
+      },
+      {
+        onSuccess: (detail) => {
+          navigate(`/workflows/${detail.workflow.id}/edit`);
+        },
+      },
+    );
+  };
+
   const nameInvalid = draft.name.trim() === "";
-  const canSave = !nameInvalid && issues.length === 0 && !updateMutation.isPending;
+  const canSave = !isSeed && !nameInvalid && issues.length === 0 && !updateMutation.isPending;
 
   // Resolve raw harness/model ids to their catalog display labels for the
   // scope-boundary headers. Falls back to the raw id when not in the catalog.
@@ -703,7 +723,20 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {issues.length > 0 ? (
+            {isSeed ? (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  Starter template · read-only
+                </span>
+                <Button
+                  size="sm"
+                  onClick={duplicateSeed}
+                  loading={createMutation.isPending}
+                >
+                  Duplicate to edit
+                </Button>
+              </>
+            ) : issues.length > 0 ? (
               <PopoverButton
                 align="end"
                 side="bottom"
@@ -739,9 +772,11 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
             ) : saved ? (
               <span className="text-xs font-medium text-success">Saved</span>
             ) : null}
-            <Button size="sm" onClick={handleSave} loading={updateMutation.isPending} disabled={!canSave}>
-              Save
-            </Button>
+            {isSeed ? null : (
+              <Button size="sm" onClick={handleSave} loading={updateMutation.isPending} disabled={!canSave}>
+                Save
+              </Button>
+            )}
           </div>
         </header>
 

@@ -125,6 +125,54 @@ async def test_free_plan_cap_enforced_and_archive_frees_slot(db_session: AsyncSe
     assert versions[0].version_n == 1
 
 
+async def test_seed_workflow_is_visible_runnable_but_not_editable(
+    db_session: AsyncSession,
+) -> None:
+    """Track 1f seeds (owner_user_id NULL) are shared read-only starters: any
+    user can open + run one, but never edit it, and it never counts against a
+    user's free-plan slot."""
+
+    from proliferate.server.cloud.workflows.seeds import sync_seed_workflow_definitions
+
+    user = await _make_user(db_session)
+    await sync_seed_workflow_definitions(db_session)
+    seed = await store.get_seed_workflow_by_slug(db_session, seed_slug="notify-on-finish")
+    assert seed is not None and seed.owner_user_id is None and seed.is_seed
+
+    # Visible: a user who does not own the seed can still fetch its detail.
+    workflow, versions = await service.get_workflow_detail(db_session, user, seed.id)
+    assert workflow.id == seed.id
+    assert versions
+
+    # Read-only: update / archive / trigger create are rejected with 403.
+    with pytest.raises(CloudApiError) as upd:
+        await service.update_workflow(
+            db_session, user, seed.id, WorkflowUpdateRequest(definition=_definition())
+        )
+    assert upd.value.code == "workflow_seed_read_only"
+    assert upd.value.status_code == 403
+
+    with pytest.raises(CloudApiError) as arch:
+        await service.archive_workflow(db_session, user, seed.id)
+    assert arch.value.code == "workflow_seed_read_only"
+
+    # Does not consume the free-plan slot: the user can still create their own.
+    _, created = await _create_workflow(db_session, user, name="mine")
+    assert created[0].version_n == 1
+
+    # Runnable: the run is owned by the runner (seed has no owner), so its
+    # executor_user_id resolves to the launching user.
+    run = await service.start_run(
+        db_session,
+        user,
+        seed.id,
+        inputs={"command": "pytest", "slack_channel_id": "C1"},
+        target_mode="local",
+        trigger_kind=WORKFLOW_TRIGGER_MANUAL,
+    )
+    assert run.executor_user_id == user.id
+
+
 async def test_update_creates_new_version_and_preserves_old(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow, versions_v1 = await _create_workflow(db_session, user)

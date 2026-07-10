@@ -208,13 +208,26 @@ async def _validate_workflow_functions(
 
 
 async def visible_workflow(
-    db: AsyncSession, *, user: ActorIdentity, workflow_id: UUID
+    db: AsyncSession, *, user: ActorIdentity, workflow_id: UUID, mutable: bool = False
 ) -> WorkflowRecord:
-    """Fetch a workflow the actor owns, or raise a 404 (owner-scoped visibility)."""
+    """Fetch a workflow the actor may see, or raise 404 (owner-scoped visibility).
+
+    Seeds (track 1f: ``is_seed=True``, ``owner_user_id IS NULL``) are org-agnostic
+    read-only starter workflows visible to every user — readable and directly
+    runnable (the run resolves its effective owner to the runner), but never
+    mutable. ``mutable=True`` call sites (update/archive/trigger writes) reject a
+    seed with 403 rather than letting a shared row be edited.
+    """
 
     workflow = await store.get_workflow(db, workflow_id)
-    if workflow is None or workflow.owner_user_id != user.id:
+    if workflow is None or (workflow.owner_user_id != user.id and not workflow.is_seed):
         raise CloudApiError("workflow_not_found", "Workflow not found.", status_code=404)
+    if mutable and workflow.is_seed:
+        raise CloudApiError(
+            "workflow_seed_read_only",
+            "Starter templates can't be edited. Duplicate it to customize.",
+            status_code=403,
+        )
     return workflow
 
 
@@ -343,7 +356,7 @@ async def update_workflow(
     workflow_id: UUID,
     body: WorkflowUpdateRequest,
 ) -> tuple[WorkflowRecord, list[WorkflowVersionRecord]]:
-    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id, mutable=True)
     if workflow.archived_at is not None:
         raise CloudApiError(
             "workflow_archived", "Cannot update an archived workflow.", status_code=409
@@ -390,7 +403,7 @@ async def get_workflow_detail(
 async def archive_workflow(
     db: AsyncSession, user: ActorIdentity, workflow_id: UUID
 ) -> WorkflowRecord:
-    await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    await _visible_workflow(db, user=user, workflow_id=workflow_id, mutable=True)
     archived = await store.archive_workflow(db, workflow_id)
     if archived is None:
         raise CloudApiError("workflow_not_found", "Workflow not found.", status_code=404)
@@ -707,6 +720,11 @@ async def start_run(
             "workflow_archived", "Cannot run an archived workflow.", status_code=409
         )
 
+    # A seed (track 1f) has no owner — the runner is its effective owner for this
+    # run: the run row, gateway token, provider-readiness check, and include
+    # resolution are all scoped to the user launching it.
+    effective_owner = workflow.owner_user_id or user.id
+
     # Cloud runs must name an owned, materialized workspace up front — resolve its
     # sandbox workspace id before creating the run so a bad target never records a
     # dangling pending_delivery row.
@@ -752,7 +770,7 @@ async def start_run(
     try:
         resolved_agents = await resolve_included_agents(
             db,
-            owner_user_id=workflow.owner_user_id,
+            owner_user_id=effective_owner,
             agents=list(version.definition_json.get("agents", [])),
         )
     except WorkflowCompositionError as exc:
@@ -789,7 +807,7 @@ async def start_run(
     run_scope = resolve_run_scope(version.definition_json)
     await assert_declared_providers_ready(
         db,
-        owner_user_id=workflow.owner_user_id,
+        owner_user_id=effective_owner,
         namespaces=granted_namespaces(run_scope),
     )
 
@@ -868,7 +886,7 @@ async def start_run(
         workflow_id=workflow_id,
         workflow_version_id=version.id,
         trigger_kind=trigger_kind,
-        executor_user_id=workflow.owner_user_id,
+        executor_user_id=effective_owner,
         args_json=coerced_inputs,
         target_mode=target_mode,
         resolved_plan_json=resolved_plan,
@@ -885,7 +903,7 @@ async def start_run(
     # the runtime errors explicitly if it can't honor it, §5.3). The token FKs the
     # run row, so it is minted after create_run, then folded into the plan.
     _token, gateway_block = await mint_run_gateway_token(
-        db, run_id=run_id, owner_user_id=workflow.owner_user_id, scope=run_scope
+        db, run_id=run_id, owner_user_id=effective_owner, scope=run_scope
     )
     resolved_plan["gateway"] = gateway_block
     updated = await store.update_run(db, run_id=run_id, resolved_plan_json=resolved_plan)
@@ -1505,9 +1523,14 @@ async def inspect_poll_endpoint(poll: TriggerPollRequest) -> PollInspectResult:
 
 
 async def _visible_trigger(
-    db: AsyncSession, *, user: ActorIdentity, workflow_id: UUID, trigger_id: UUID
+    db: AsyncSession,
+    *,
+    user: ActorIdentity,
+    workflow_id: UUID,
+    trigger_id: UUID,
+    mutable: bool = False,
 ) -> WorkflowTriggerRecord:
-    await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    await _visible_workflow(db, user=user, workflow_id=workflow_id, mutable=mutable)
     trigger = await trigger_store.get_trigger(db, trigger_id)
     if trigger is None or trigger.workflow_id != workflow_id:
         raise CloudApiError("trigger_not_found", "Trigger not found.", status_code=404)
@@ -1520,7 +1543,7 @@ async def create_trigger(
     workflow_id: UUID,
     body: WorkflowTriggerCreateRequest,
 ) -> WorkflowTriggerRecord:
-    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id, mutable=True)
     if workflow.archived_at is not None:
         raise CloudApiError(
             "workflow_archived", "Cannot schedule an archived workflow.", status_code=409
@@ -1645,7 +1668,7 @@ async def update_trigger(
     trigger_id: UUID,
     body: WorkflowTriggerUpdateRequest,
 ) -> WorkflowTriggerRecord:
-    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id)
+    workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id, mutable=True)
     existing = await _visible_trigger(
         db, user=user, workflow_id=workflow_id, trigger_id=trigger_id
     )
@@ -1838,7 +1861,9 @@ async def _update_poll_trigger(
 async def delete_trigger(
     db: AsyncSession, user: ActorIdentity, workflow_id: UUID, trigger_id: UUID
 ) -> None:
-    await _visible_trigger(db, user=user, workflow_id=workflow_id, trigger_id=trigger_id)
+    await _visible_trigger(
+        db, user=user, workflow_id=workflow_id, trigger_id=trigger_id, mutable=True
+    )
     await trigger_store.delete_trigger(db, trigger_id)
 
 
