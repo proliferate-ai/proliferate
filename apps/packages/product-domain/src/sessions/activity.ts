@@ -4,6 +4,7 @@ export type {
 } from "./activity-types";
 export {
   isSessionEffectivelyStreaming,
+  isSessionSettlingAfterFinalProse,
   isSessionSlotBusy,
   pendingInteractionsForActivity,
   resolveSessionErrorAttentionKey,

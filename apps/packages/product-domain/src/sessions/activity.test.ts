@@ -448,6 +448,94 @@ describe("session activity", () => {
     })).toBe("needs_input");
   });
 
+  it("presents a settling session as idle once final prose has rendered", () => {
+    // executionSummary.phase lags the final tokens by seconds; when the live
+    // transcript already ends in completed assistant prose the sidebar must
+    // not keep reading "iterating".
+    const slot = {
+      status: "running" as const,
+      executionSummary: executionSummary("running"),
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+        endsInFinalAssistantProse: true,
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("idle");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("idle");
+    expect(resolveSessionViewState(slot)).toBe("idle");
+  });
+
+  it("keeps iterating during running phases without a final prose tail", () => {
+    const slot = {
+      status: "running" as const,
+      executionSummary: executionSummary("running"),
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+        endsInFinalAssistantProse: false,
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("running");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("iterating");
+  });
+
+  it("keeps phase authoritative for settling evidence without a live stream", () => {
+    // Without an open stream nothing would flip the session back if the
+    // agent genuinely continues, so the transcript evidence is ignored.
+    const slot = {
+      status: "running" as const,
+      executionSummary: executionSummary("running"),
+      streamConnectionState: "ended" as const,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+        endsInFinalAssistantProse: true,
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("running");
+    expect(resolveSessionSidebarActivityState(slot)).toBe("iterating");
+  });
+
+  it("keeps waiting states above settling evidence", () => {
+    const slot = {
+      status: "running" as const,
+      executionSummary: {
+        ...executionSummary("running"),
+        pendingInteractions: [{ requestId: "req-1" }],
+      },
+      streamConnectionState: "open" as const,
+      transcript: {
+        isStreaming: true,
+        pendingInteractions: [],
+        endsInFinalAssistantProse: true,
+      },
+    };
+
+    expect(resolveSessionSidebarActivityState(slot)).toBe("waiting_input");
+  });
+
+  it("does not treat starting sessions as settling", () => {
+    const slot = {
+      status: "starting" as const,
+      executionSummary: null,
+      streamConnectionState: "open" as const,
+      hasPromptActivity: true,
+      transcript: {
+        isStreaming: false,
+        pendingInteractions: [],
+        endsInFinalAssistantProse: true,
+      },
+    };
+
+    expect(resolveSessionExecutionPhase(slot)).toBe("starting");
+  });
+
   it("presents never-prompted starting sessions as idle", () => {
     const slot = {
       status: "starting" as const,

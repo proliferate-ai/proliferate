@@ -4,6 +4,7 @@ import {
   lastTopLevelItemIsAssistantProseWithText,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
+  transcriptEndsInFinalAssistantProse,
 } from "./transcript-trailing-status";
 
 describe("transcript trailing status", () => {
@@ -94,6 +95,57 @@ describe("transcript trailing status", () => {
     ]);
 
     expect(latestTransientStatusText(turn, transcript)).toBe("Waiting for browser auth");
+  });
+});
+
+describe("transcriptEndsInFinalAssistantProse", () => {
+  it("is true when the in-progress latest turn ends in completed prose", () => {
+    const { transcript } = transcriptWithTurn([
+      assistantItem("assistant", false),
+    ]);
+
+    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(true);
+  });
+
+  it("is false while the prose tail is still streaming", () => {
+    const { transcript } = transcriptWithTurn([
+      assistantItem("assistant", true),
+    ]);
+
+    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
+  });
+
+  it("is false once the turn has completed", () => {
+    const { transcript, turn } = transcriptWithTurn([
+      assistantItem("assistant", false),
+    ]);
+    turn.completedAt = "2026-04-13T12:00:03.000Z";
+
+    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
+  });
+
+  it("is false when a tool call is the tail", () => {
+    const { transcript } = transcriptWithTurn([
+      assistantItem("assistant", false),
+      toolItem("tool"),
+    ]);
+
+    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
+  });
+
+  it("skips transient thoughts and nested items when finding the tail", () => {
+    const { transcript } = transcriptWithTurn([
+      assistantItem("assistant", false),
+      transientThoughtItem("status", "Checking the next action"),
+    ]);
+
+    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(true);
+  });
+
+  it("is false for an empty transcript", () => {
+    const transcript = createTranscriptState("session-1");
+
+    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
   });
 });
 
