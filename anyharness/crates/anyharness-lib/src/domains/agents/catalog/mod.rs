@@ -10,4 +10,6 @@ pub mod validation;
 pub mod validation_pairing;
 
 #[cfg(test)]
+mod gateway_eligibility_tests;
+#[cfg(test)]
 mod service_tests;

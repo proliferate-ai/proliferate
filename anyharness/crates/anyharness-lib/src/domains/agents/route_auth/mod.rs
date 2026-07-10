@@ -151,3 +151,53 @@ fn resolve_launch_route_auth_for_server(
     }
     Ok(rendered)
 }
+
+/// Does the enrolled agent-auth state provide launch credentials for
+/// `harness_kind` right now? True iff [`resolve_launch_route_auth`] would inject
+/// a non-native route (a resolved [`AgentRuntimeAuthProfile::Sources`]: any
+/// gateway or `api_key` source), applying the SAME server-origin guard the
+/// launcher applies.
+///
+/// This is the single source readiness consults so it judges the EXACT
+/// credential state the launcher will inject at spawn (issue #1106): a
+/// gateway/api_key route makes the agent credential-ready without the operator
+/// copying gateway credentials into a workspace env file. A malformed, absent,
+/// origin-mismatched, or native state → `false` (native readiness governs).
+pub fn launch_route_provides_credentials(runtime_home: &Path, harness_kind: &str) -> bool {
+    launch_route_provides_credentials_for_server(
+        runtime_home,
+        harness_kind,
+        current_server_origin().as_deref(),
+    )
+}
+
+/// Core of [`launch_route_provides_credentials`], parameterized on the current
+/// server origin so the server-switch guard is unit-testable without mutating
+/// process-global env state. Deliberately mirrors
+/// [`resolve_launch_route_auth_for_server`]'s state load + origin filter +
+/// [`resolve_profile`] so readiness and launch never disagree on whether a
+/// route is in effect. A malformed/unresolvable state is treated as "no route"
+/// (native readiness governs) rather than an error — readiness must never fail
+/// closed on a state file the launcher itself tolerates.
+fn launch_route_provides_credentials_for_server(
+    runtime_home: &Path,
+    harness_kind: &str,
+    current_server_origin: Option<&str>,
+) -> bool {
+    let state = match load_state_file(runtime_home) {
+        Ok(state) => state,
+        Err(error) => {
+            tracing::debug!(
+                harness_kind,
+                %error,
+                "agent-auth state unreadable for readiness; native readiness governs"
+            );
+            return false;
+        }
+    };
+    let state = state.filter(|state| state.matches_server_origin(current_server_origin));
+    matches!(
+        resolve_profile(state.as_ref(), harness_kind),
+        Ok(AgentRuntimeAuthProfile::Sources(_))
+    )
+}

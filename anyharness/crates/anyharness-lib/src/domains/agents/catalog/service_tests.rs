@@ -170,7 +170,14 @@ fn visible_models_are_the_default_visible_subset_of_available() {
     assert!(available.contains(&"claude-opus-4-8"));
     assert_eq!(
         model_ids(catalog.visible_models("claude", &contexts(&["anthropic-oauth"]))),
-        vec!["default", "sonnet", "haiku", "opus", "claude-fable-5", "claude-opus-4-8"]
+        vec![
+            "default",
+            "sonnet",
+            "haiku",
+            "opus",
+            "claude-fable-5",
+            "claude-opus-4-8"
+        ]
     );
 }
 
