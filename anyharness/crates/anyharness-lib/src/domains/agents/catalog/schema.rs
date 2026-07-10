@@ -25,6 +25,9 @@ pub struct AgentCatalogDocument {
     #[serde(default)]
     pub probed_against: Option<AgentCatalogProbedAgainst>,
     pub generated_at: String,
+    /// The shipped default agent kind when the user has no stored preference.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_agent_kind: Option<String>,
     #[serde(default)]
     pub agents: Vec<AgentCatalogAgent>,
 }

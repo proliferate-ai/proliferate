@@ -36,6 +36,14 @@ function validateCatalog(catalog) {
   }
 
   const seenKinds = new Set();
+
+  // defaultAgentKind is optional; when present it must name a declared agent.
+  if (catalog.defaultAgentKind !== undefined) {
+    if (typeof catalog.defaultAgentKind !== "string" || !catalog.defaultAgentKind.trim()) {
+      fail("defaultAgentKind must be a non-empty string when present");
+    }
+  }
+
   for (const agent of catalog.agents) {
     const kind = agent.kind;
     if (!VALID_AGENT_KINDS.has(kind)) fail(`agent kind '${kind}' is not supported`);
@@ -122,6 +130,13 @@ function validateCatalog(catalog) {
 
     validateGatewayPolicy(kind, agent.session?.gatewayPolicy, gatewayRowIds);
     validateAgentSettings(kind, agent.settings);
+  }
+
+  // Cross-reference: defaultAgentKind must name a declared agent.
+  if (typeof catalog.defaultAgentKind === "string" && catalog.defaultAgentKind.trim()) {
+    if (!seenKinds.has(catalog.defaultAgentKind)) {
+      fail(`defaultAgentKind '${catalog.defaultAgentKind}' is not a declared agent`);
+    }
   }
 }
 

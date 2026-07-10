@@ -36,7 +36,14 @@ pub fn validate_agent_catalog_document(catalog: &AgentCatalogDocument) -> anyhow
     for agent in &catalog.agents {
         validate_agent(agent, &mut seen_agents)?;
     }
-    Ok(())
+
+    // defaultAgentKind, when present, must name a declared agent.
+    match &catalog.default_agent_kind {
+        Some(kind) if !kind.trim().is_empty() && !seen_agents.contains(kind) => {
+            anyhow::bail!("agent catalog defaultAgentKind '{kind}' is not a declared agent")
+        }
+        _ => Ok(()),
+    }
 }
 
 fn validate_agent(

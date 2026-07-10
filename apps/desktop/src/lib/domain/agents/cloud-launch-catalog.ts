@@ -56,6 +56,7 @@ export function projectCloudAgentCatalogToDesktopLaunchCatalog(
     schemaVersion: catalog.schemaVersion,
     catalogVersion: catalog.catalogVersion,
     generatedAt: catalog.generatedAt,
+    defaultAgentKind: catalog.defaultAgentKind ?? null,
     workspaceId: options.workspaceId ?? null,
     agents: catalog.agents
       .map(projectCloudAgent)

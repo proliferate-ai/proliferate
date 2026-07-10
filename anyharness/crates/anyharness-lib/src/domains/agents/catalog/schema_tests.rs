@@ -12,6 +12,7 @@ fn draft_catalog_parses_with_expected_shape() {
     let catalog = parse_draft();
 
     assert_eq!(catalog.schema_version, 2);
+    assert_eq!(catalog.default_agent_kind.as_deref(), Some("claude"));
     assert_eq!(catalog.catalog_version, draft_catalog_version().as_str());
     let probed_against = catalog.probed_against.as_ref().expect("probedAgainst");
     assert_eq!(

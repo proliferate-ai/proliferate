@@ -21,7 +21,6 @@ export const SETTINGS_CONTENT_SECTIONS = [
   "agent-opencode",
   "agent-grok",
   "agent-api-keys",
-  "agent-defaults",
   // SLACK BOT PARKED: keep the id nearby for revival, but do not register it.
   // "slack-bot",
 ] as const;
@@ -57,7 +56,6 @@ export const SETTINGS_SHORTCUT_SECTION_ORDER = [
   "agent-opencode",
   "agent-grok",
   "agent-api-keys",
-  "agent-defaults",
   // SLACK BOT PARKED: omit from Cmd-number settings shortcuts while disabled.
   // "slack-bot",
 ] as const satisfies readonly SettingsSection[];

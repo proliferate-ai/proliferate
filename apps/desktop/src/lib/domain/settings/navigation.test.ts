@@ -49,12 +49,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("redirects legacy defaults and advanced sections to agent defaults", () => {
+  it("redirects legacy defaults, advanced, and agent-defaults sections to the Claude harness page", () => {
     expect(resolveSettingsSelection({
       rawSection: "defaults",
       repositories: [],
     })).toEqual({
-      activeSection: "agent-defaults",
+      activeSection: "agent-claude",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -64,7 +64,17 @@ describe("settings navigation", () => {
       rawSection: "advanced",
       repositories: [],
     })).toEqual({
-      activeSection: "agent-defaults",
+      activeSection: "agent-claude",
+      activeRepoSourceRoot: null,
+      focus: {},
+      joinOrganizationId: null,
+    });
+
+    expect(resolveSettingsSelection({
+      rawSection: "agent-defaults",
+      repositories: [],
+    })).toEqual({
+      activeSection: "agent-claude",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,

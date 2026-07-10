@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CHAT_MODEL_SELECTOR_LABELS } from "@/copy/chat/chat-copy";
 import { buildSettingsHref } from "@/lib/domain/settings/navigation";
+import { getSettingsSectionForHarnessKind } from "@/lib/domain/settings/navigation-presentation";
 import { splitProviderDisplayName } from "@/lib/domain/chat/models/model-display-name-parts";
 import { orderModelGroupsActiveFirst } from "@/lib/domain/chat/models/order-model-groups";
 import type {
@@ -37,14 +38,17 @@ export function ComposerModelSelectorControl({
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
 
-  // UX_SPEC S5: adding a harness routes to Settings -> Agents.
+  // UX_SPEC S5: adding a harness routes to Settings -> per-harness agent pages.
   const handleAddProvider = useCallback(() => {
-    navigate(buildSettingsHref({ section: "agent-defaults" }));
+    navigate(buildSettingsHref({ section: "agent-claude" }));
   }, [navigate]);
 
   const handleSettings = useCallback(() => {
-    navigate(buildSettingsHref({ section: "agent-defaults" }));
-  }, [navigate]);
+    const section = currentModel
+      ? getSettingsSectionForHarnessKind(currentModel.kind)
+      : null;
+    navigate(buildSettingsHref({ section: section ?? "agent-claude" }));
+  }, [navigate, currentModel]);
 
   if (!selectorEnabled) {
     return (
