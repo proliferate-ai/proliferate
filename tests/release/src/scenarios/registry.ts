@@ -13,10 +13,16 @@ import { t3Bill2 } from "./t3-bill-2.js";
 import { t3Bill4 } from "./t3-bill-4.js";
 import { t4Cloud1 } from "./upgrade/t4-cloud-1.js";
 import { t4Desktop1 } from "./upgrade/t4-desktop-1.js";
+import { t4Sh1 } from "./upgrade/t4-sh-1.js";
+import { t4Sh2 } from "./upgrade/t4-sh-2.js";
+import { t3Sh1 } from "./selfhost/t3-sh-1.js";
+import { t3Sh2 } from "./selfhost/t3-sh-2.js";
+import { t3Sh3 } from "./selfhost/t3-sh-3.js";
 
 /**
- * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave)
- * plus the tier-4 upgrade-path scenarios under `upgrade/`. T3-FIXTURE is
+ * The tier-3 first wave (specs/developing/testing/scenarios.md#tier-3--first-wave),
+ * the self-hosting battery under `selfhost/` (specs/developing/testing/self-hosting.md),
+ * and the tier-4 upgrade-path scenarios under `upgrade/`. T3-FIXTURE is
  * infrastructure (src/fixtures/identity.ts), not a registered scenario.
  */
 export const SCENARIOS: readonly ScenarioDefinition[] = [
@@ -32,8 +38,13 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Bill1,
   t3Bill2,
   t3Bill4,
+  t3Sh1,
+  t3Sh2,
+  t3Sh3,
   t4Cloud1,
   t4Desktop1,
+  t4Sh1,
+  t4Sh2,
 ];
 
 export function allScenarioIds(): string[] {

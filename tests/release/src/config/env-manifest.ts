@@ -273,6 +273,68 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["sandbox"],
   },
   {
+    name: "RELEASE_E2E_SELFHOST_PROVISION",
+    description:
+      "Opt-in switch (set to `1`) authorizing the self-hosting scenarios (T3-SH-1 cold boot, " +
+      "T4-SH-1 operator update) to provision a throwaway EC2 box via tests/release/scripts/" +
+      "selfhost-box.sh — the production compose bundle on stock Ubuntu with a sslip.io hostname + " +
+      "real Caddy TLS — and terminate it in a finally. Absent -> those scenarios report blocked " +
+      "rather than spending money on infra. Needs ambient AWS credentials able to run-instances and " +
+      "create a dedicated (clearly tagged, throwaway) security group + key pair in the default VPC; " +
+      "never touches proliferate-prod*. Costs a few cents per run (a t3.small for ~5 min).",
+    whereItLives:
+      "Operator sets it explicitly for an on-demand/nightly self-hosting run with AWS creds present. " +
+      "CI: a workflow input / repo variable gating the provisioning job.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_URL",
+    description:
+      "Base URL of a STANDING, already-claimed self-hosted box (the alpha box) for scenarios that run " +
+      "against a live instance without provisioning one: T3-SH-3 (gateway add-on) and the server-" +
+      "redirect assertion of T4-SH-2 (artifact chain). e.g. https://<ip>.sslip.io. Read-only/additive " +
+      "use — never re-claims or destroys it.",
+    whereItLives: "The standing self-hosting test box's public URL (team infra notes).",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_SSH",
+    description:
+      "SSH destination for the standing self-hosted box (RELEASE_E2E_SELFHOST_URL), e.g. " +
+      "ubuntu@<ip>. Needed by T3-SH-3, which must edit the box's .env and bring up the LiteLLM " +
+      "gateway with `docker compose --profile agent-gateway up -d` (a compose profile cannot be " +
+      "toggled over HTTP). The box's security group must already allow SSH from the runner.",
+    whereItLives: "Team infra notes, alongside RELEASE_E2E_SELFHOST_URL.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_SSH_KEY",
+    description:
+      "Filesystem path to the private key that authenticates RELEASE_E2E_SELFHOST_SSH. The path (not " +
+      "the key material) is the env value; the key file itself is the secret and is never printed.",
+    whereItLives: "The standing box's key pair .pem, stored out of band; path passed to the runner.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_RELEASE_DESKTOP_VERSION",
+    description:
+      "The desktop version the release under test ships, used by T4-SH-2 (artifact chain) as the " +
+      "ground-truth version the CDN manifest, versioned manifest, artifacts, and desktop-v<version> " +
+      "tag must all agree on. Defaults to the repo VERSION file (the version of the checked-out ref, " +
+      "which IS the release under test in the release gate). Override to check a specific release.",
+    whereItLives: "The release pipeline sets it to the release being cut; otherwise the repo VERSION file.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_DESKTOP_CDN_BASE_URL",
+    description:
+      "Base URL of the desktop downloads CDN the Tauri updater feed lives on (the ground truth the " +
+      "server redirect points at). Optional override; defaults to https://downloads.proliferate.com. " +
+      "Used only by T4-SH-2.",
+    whereItLives: "The desktop-downloads CloudFront distribution (scripts/ci-cd/publish-desktop-cdn).",
+    secret: false,
+  },
+  {
     name: "RELEASE_E2E_LOCAL_DATABASE_URL",
     description:
       "Postgres URL for the LOCAL lane's profile DB. Only needed by T3-PROV-1's fallback seam " +
