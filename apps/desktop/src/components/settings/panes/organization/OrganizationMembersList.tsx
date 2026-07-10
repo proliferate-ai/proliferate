@@ -17,7 +17,7 @@ import {
   type OrganizationMemberRecord,
   type OrganizationRole,
 } from "@/lib/domain/organizations/organization-records";
-import type { MemberListRow } from "@/lib/domain/organizations/member-list-rows";
+import { invitationDeliveryHint, type MemberListRow } from "@/lib/domain/organizations/member-list-rows";
 import { useToastStore } from "@/stores/toast/toast-store";
 
 const PEOPLE_GRID_CLASS =
@@ -183,6 +183,7 @@ function InvitationRow({
 }) {
   const { copyText } = useTauriShellActions();
   const showToast = useToastStore((state) => state.show);
+  const deliveryHint = invitationDeliveryHint(invitation.deliveryStatus);
 
   async function handleCopyInviteLink() {
     const url = buildProliferateApiUrl(
@@ -209,6 +210,11 @@ function InvitationRow({
           <div className="truncate text-ui-sm text-muted-foreground" title={row.email}>
             {row.email}
           </div>
+          {deliveryHint && (
+            <div className="truncate text-ui-sm text-muted-foreground/80" title={deliveryHint}>
+              {deliveryHint}
+            </div>
+          )}
         </div>
       </div>
       <MemberMeta value={row.dateLabel} />

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from proliferate.auth.sso.policy import normalize_domains
+from proliferate.auth.sso.policy import normalize_domains, oidc_configuration_error
 from proliferate.auth.sso.types import (
     DEFAULT_OIDC_SCOPES,
     DEPLOYMENT_SSO_CONNECTION_KEY,
@@ -50,6 +50,22 @@ def deployment_sso_connection() -> SsoConnectionSnapshot | None:
             settings.sso_oidc_token_endpoint_auth_method.strip() or "client_secret_basic"
         ),
     )
+
+
+def deployment_sso_configuration_error() -> str | None:
+    """Config-validation predicate for a self-hosted operator / doctor check.
+
+    Returns a stable reason code when deployment SSO is turned ON
+    (``SSO_ENABLED=true``) but the OIDC configuration is incomplete — the state
+    in which the sign-in surface would advertise SSO that can only fail at the
+    provider. Returns ``None`` when SSO is off or fully configured. Deployment
+    owns the doctor wiring; this is the predicate it consumes."""
+    connection = deployment_sso_connection()
+    if connection is None:
+        return None
+    if connection.protocol != SsoProtocol.OIDC:
+        return None
+    return oidc_configuration_error(connection)
 
 
 def _none_if_blank(value: str) -> str | None:
