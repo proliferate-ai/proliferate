@@ -71,7 +71,7 @@
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <h3>Reusable workflows <sup>beta</sup></h3>
+      <h3>Reusable workflows</h3>
       Turn a useful routine into a workflow you can inspect, reuse, and run locally or in a private cloud workspace. Compose agent stages with different supported harnesses and models to balance capability and cost.
       <br /><br />
       <a href="https://proliferate.com/docs/product/workflows">Workflows →</a>
