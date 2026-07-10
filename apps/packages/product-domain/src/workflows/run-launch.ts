@@ -41,9 +41,12 @@ export interface SlotSessionBinding {
 export interface BuildStartRunInput {
   inputs: Record<string, WorkflowLaunchArgValue>;
   targetMode: WorkflowTargetMode;
-  /** Cloud workspace id — only carried on the wire for `personal_cloud`
-   * (local runs resolve their workspace client-side, spec 3.2). */
+  /** Cloud workspace id — the delivery destination for `personal_cloud`. */
   cloudWorkspaceId?: string | null;
+  /** Local runtime workspace id — the desktop delivers the plan itself, but the
+   * wire target still requires exactly one of workspaceId/triggerId (B9 XOR);
+   * for a local run this is the desktop workspace, not server-validated. */
+  localWorkspaceId?: string | null;
   /** Per-slot bindings. Slots absent, or bound to `"new"`/null, run fresh. */
   sessionBindings?: readonly SlotSessionBinding[];
   /** Pin a specific published version; omitted = latest. */
@@ -68,6 +71,8 @@ export function buildStartRunBody(input: BuildStartRunInput): StartRunWireBody {
   const target: { workspaceId?: string } = {};
   if (input.targetMode === "personal_cloud" && input.cloudWorkspaceId) {
     target.workspaceId = input.cloudWorkspaceId;
+  } else if (input.targetMode === "local" && input.localWorkspaceId) {
+    target.workspaceId = input.localWorkspaceId;
   }
 
   const bindings: Record<string, string> = {};

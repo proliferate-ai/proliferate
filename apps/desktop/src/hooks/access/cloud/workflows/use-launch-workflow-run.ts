@@ -49,10 +49,14 @@ export function useLaunchWorkflowRun() {
 
   return useMutation<WorkflowRunResponse, Error, LaunchWorkflowRunInput>({
     mutationFn: async (input) => {
+      if (input.targetMode === "local" && !input.localWorkspaceId) {
+        throw new Error("Choose a workspace to run this workflow in.");
+      }
       const body: StartRunRequest = buildStartRunBody({
         inputs: input.args,
         targetMode: input.targetMode,
         cloudWorkspaceId: input.cloudWorkspaceId,
+        localWorkspaceId: input.localWorkspaceId,
         sessionBindings: input.sessionBindings,
       });
       const run = await startWorkflowRun(input.workflowId, body);

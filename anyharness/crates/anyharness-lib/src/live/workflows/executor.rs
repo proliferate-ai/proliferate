@@ -23,7 +23,9 @@ use crate::domains::goals::runtime::{GoalOpError, GoalRuntime};
 use crate::domains::sessions::live_config::ACP_MODEL_COMPAT_CONFIG_ID;
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
 use crate::domains::sessions::prompt::provenance::PromptProvenance;
-use crate::domains::sessions::runtime::{SendPromptOutcome, SessionRuntime};
+use crate::domains::sessions::runtime::{
+    CreateAndStartSessionError, SendPromptOutcome, SessionRuntime,
+};
 use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
 use crate::domains::workflows::model::WorkflowRunRecord;
@@ -535,22 +537,59 @@ impl WorkflowStepExecutorImpl {
             // launch extension reads both from their in-memory registries, and MCP
             // servers are only assembled from the extension seam (never from the
             // durable session bindings).
-            let record = self
-                .deps
-                .session_runtime
-                .create_durable_session(
-                    &session_workspace_id,
-                    &harness,
-                    model.as_deref(),
-                    mode,
-                    None,
-                    Vec::new(),
-                    None,
-                    SessionMcpBindingPolicy::InheritWorkspace,
-                    false,
-                    OriginContext::system_local_runtime(),
-                )
-                .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?;
+            let record = match self.deps.session_runtime.create_durable_session(
+                &session_workspace_id,
+                &harness,
+                model.as_deref(),
+                mode,
+                None,
+                Vec::new(),
+                None,
+                SessionMcpBindingPolicy::InheritWorkspace,
+                false,
+                OriginContext::system_local_runtime(),
+            ) {
+                Ok(record) => record,
+                // A definition's pinned model is authored without knowing the
+                // runner's auth contexts (a seed pinning `haiku` cannot run in a
+                // bedrock-only env, where that id is gated). An unattended run
+                // must not die on an unlock prompt no human will see — fall back
+                // to the catalog default for the ACTIVE contexts, loudly.
+                Err(CreateAndStartSessionError::ModelGated {
+                    model_id,
+                    required_contexts,
+                    ..
+                }) => {
+                    tracing::warn!(
+                        run_id = %self.run_id,
+                        slot,
+                        model_id = %model_id,
+                        ?required_contexts,
+                        "workflow slot model gated under active auth contexts; \
+                         falling back to the context default model"
+                    );
+                    self.deps
+                        .session_runtime
+                        .create_durable_session(
+                            &session_workspace_id,
+                            &harness,
+                            None,
+                            mode,
+                            None,
+                            Vec::new(),
+                            None,
+                            SessionMcpBindingPolicy::InheritWorkspace,
+                            false,
+                            OriginContext::system_local_runtime(),
+                        )
+                        .map_err(|error| {
+                            failed_msg("session_start_failed", format!("{error:?}"))
+                        })?
+                }
+                Err(error) => {
+                    return Err(failed_msg("session_start_failed", format!("{error:?}")))
+                }
+            };
             // Register the session as workflow-owned so the inbound permission
             // advisor auto-approves for it. Done before launch/first turn.
             self.deps.workflow_owned_sessions.mark(&record.id, &self.run_id);
