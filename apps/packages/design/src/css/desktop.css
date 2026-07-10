@@ -1725,8 +1725,15 @@ body {
 }
 
 /* ---- Right panel tabs ---- */
+/*
+ * --tab-system-height mirrors the left workspace header height so the two
+ * panes line up. Solid chrome = 46px (codex --height-toolbar, UX_SPEC §7),
+ * matching WORKSPACE_SOLID_HEADER_BASE_CLASS's h-[46px]. Glass chrome bumps
+ * to 64px to match WORKSPACE_GLASS_HEADER_BASE_CLASS's h-16 (see
+ * apps/desktop/src/lib/domain/preferences/workspace-chrome.ts).
+ */
 .right-panel-tab-system {
-  --tab-system-height: 46px; /* codex --height-toolbar; aligns with the top bar. */
+  --tab-system-height: 46px;
   --tab-max-width: 156px;
   --tab-shell-max-width: 160px;
   --tab-height: 28px; /* codex tab chrome (UX_SPEC §8) */
@@ -1777,6 +1784,10 @@ body {
   color: var(--right-panel-tab-text-secondary);
   font-size: var(--right-panel-tab-font-size);
   line-height: var(--right-panel-tab-line-height);
+}
+
+.right-panel-tab-system[data-chrome="glass"] {
+  --tab-system-height: 64px; /* h-16; matches WORKSPACE_GLASS_HEADER_BASE_CLASS */
 }
 
 :root[data-mode="light"] .right-panel-tab-system {
