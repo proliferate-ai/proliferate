@@ -179,6 +179,9 @@ jobs:
           CLOUD_SECRET_KEY: release-e2e-ci-cloud-secret
           SETUP_TOKEN_FILE: /tmp/proliferate-ci-setup-token
           DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
+          # Same URL the DB-seam probes (billing_probe.py, integration_audit_probe.py)
+          # read the local profile ledger/audit tables from.
+          RELEASE_E2E_LOCAL_DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
           REDIS_URL: redis://127.0.0.1:6379/0
           PROLIFERATE_API_PORT: "8086"
           ANYHARNESS_PORT: "8542"

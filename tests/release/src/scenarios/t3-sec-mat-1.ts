@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 
 import type { ScenarioDefinition, ScenarioRunContext } from "./types.js";
-import { ScenarioExpectedFailError } from "./types.js";
+import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
 import { withProductGate } from "../fixtures/product-gate.js";
 import { ApiClient } from "../fixtures/http.js";
 import { assertDurableIdentityAvailableForLane, loginDurableUserForLane } from "../fixtures/lane-identity.js";
@@ -45,13 +45,16 @@ import {
  * believes the write succeeded).
  *
  * The workspace-file-secret + fresh-cloud-workspace half additionally needs
- * a GitHub App user authorization for the durable identity, which is the
- * SAME pre-existing, already-tracked environmental gap T3-REPO-1 hits (see
- * `t3-repo-1.ts` and issue #1043) — real on `--lane local` when the seed
- * (`RELEASE_E2E_LOCAL_DATABASE_URL` + a seed token) is available, and an
- * honestly-diagnosed `ScenarioExpectedFailError` otherwise (always on
- * `--lane staging`: the seed writes directly to a local Postgres, which has
- * no bearing on a staging session, so it is never attempted there).
+ * a GitHub App user authorization for the durable identity — the SAME
+ * out-of-band, externally-tracked blocker T3-REPO-1 hits (#1043). It runs for
+ * real on `--lane local` once the seed (`RELEASE_E2E_LOCAL_DATABASE_URL` + a
+ * bootstrap seed token) is available; otherwise it reports `blocked` on #1043.
+ * On `--lane staging` it is always blocked: the durable user
+ * (proliferate-e2e-bot) has never completed the staging App's user
+ * authorization, and the only seam to seed it (github_app_seed.py run in-VPC
+ * against the staging DB) needs a one-time interactive bootstrap by that GitHub
+ * identity (tests/release/scripts/github_app_user_authorization_bootstrap.py) —
+ * a step the runner cannot perform.
  */
 export const t3SecMat1: ScenarioDefinition = {
   id: "T3-SEC-MAT-1",
@@ -248,13 +251,14 @@ async function runWorkspaceFileSecretHalf(
   const durableEmail = process.env.RELEASE_E2E_DURABLE_USER_EMAIL;
 
   if (ctx.targetLane !== "local" || !githubAppSeedAvailable(process.env) || !durableEmail) {
-    throw new ScenarioExpectedFailError(
-      "T3-SEC-MAT-1: workspace file secret + fresh cloud workspace needs a seeded GitHub App user " +
-        "authorization for the durable identity (server/proliferate/server/cloud/repositories -- the same " +
-        "authority chain T3-REPO-1 depends on). The seed (tests/release/scripts/github_app_seed.py) writes " +
-        "directly to a local Postgres via RELEASE_E2E_LOCAL_DATABASE_URL, so it is only ever meaningful on " +
-        "--lane local, and even there needs RELEASE_E2E_DURABLE_USER_EMAIL + a seed refresh token/state " +
-        "file. Same pre-existing environmental gap tracked at #1043 -- not a new bug.",
+    throw new ScenarioBlockedError(
+      "T3-SEC-MAT-1: blocked on #1043 — the workspace file secret + fresh cloud workspace needs the durable " +
+        "identity's GitHub App user authorization (the same authority chain T3-REPO-1 depends on). On --lane " +
+        "staging the durable user (proliferate-e2e-bot) has never completed the staging App's user authorization; " +
+        "the seam to seed it is github_app_seed.py run in-VPC against the staging DB, bootstrapped once by an " +
+        "interactive App authorization (tests/release/scripts/github_app_user_authorization_bootstrap.py). On " +
+        "--lane local it needs RELEASE_E2E_LOCAL_DATABASE_URL + RELEASE_E2E_DURABLE_USER_EMAIL + a bootstrap seed " +
+        "token. Out-of-band step, not a scenario gap.",
     );
   }
 
@@ -269,11 +273,11 @@ async function runWorkspaceFileSecretHalf(
     // for a seed credential, not a fully-sourced profile shell, so a
     // same-class environmental failure surfaces here rather than in that
     // check -- downgrade it the same way, rather than a hard scenario red.
-    throw new ScenarioExpectedFailError(
-      `T3-SEC-MAT-1: the GitHub App seed script failed to run in this shell (likely missing the local ` +
-        `profile's ambient env beyond RELEASE_E2E_LOCAL_DATABASE_URL -- run from a shell with the t3local ` +
+    throw new ScenarioBlockedError(
+      `T3-SEC-MAT-1: blocked on #1043 — the GitHub App seed script failed to run in this shell (likely missing the ` +
+        `local profile's ambient env beyond RELEASE_E2E_LOCAL_DATABASE_URL -- run from a shell with the t3local ` +
         `profile's launch.env sourced): ${error instanceof Error ? error.message.split("\n")[0] : String(error)}. ` +
-        "Same pre-existing environmental gap tracked at #1043 -- not a new bug.",
+        "Out-of-band environmental step, not a scenario gap.",
     );
   }
   assert.equal(seed.seeded?.status, "ready", "T3-SEC-MAT-1: durable user's GitHub App authorization must be seeded");
@@ -295,9 +299,9 @@ async function runWorkspaceFileSecretHalf(
       isGithubAppRefreshFailedError(error) ||
       isGithubRepoAccessRequiredError(error)
     ) {
-      throw new ScenarioExpectedFailError(
-        `T3-SEC-MAT-1: repo-environment PUT for ${owner}/${repo} hit the same environmental GitHub App gap ` +
-          `T3-REPO-1 tracks (#1043): ${error instanceof Error ? error.message : String(error)}`,
+      throw new ScenarioBlockedError(
+        `T3-SEC-MAT-1: blocked on #1043 — repo-environment PUT for ${owner}/${repo} hit the same GitHub App ` +
+          `authority gap T3-REPO-1 tracks: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
     throw error;

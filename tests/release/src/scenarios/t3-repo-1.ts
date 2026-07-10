@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import type { ScenarioDefinition } from "./types.js";
-import { ScenarioExpectedFailError } from "./types.js";
+import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
 import { ApiClient } from "../fixtures/http.js";
 import { loginDurableUser } from "../fixtures/identity.js";
 import { DEFAULT_GITHUB_TEST_REPO } from "../config/env-manifest.js";
@@ -25,26 +25,30 @@ import {
  * GitHub App authority chain (`require_github_cloud_repo_authority`) gates it
  * on a real App user authorization + a real installation covering the repo.
  *
- * #1043 update (2026-07-09): the originally-pinned blocker was that the
- * password-only durable identity "has no seedable path to a GitHub App
- * installation." That is now resolved: github_app_seed.py plants a real
- * user-to-server authorization for the durable user (a real App token,
- * refreshed — no browser), so `ensure_fresh_github_app_authorization` passes
- * and the PUT gets past `github_app_authorization_required`. The expected-fail
- * pin for that code is therefore lifted.
+ * #1043: the write path (`PUT .../environment`) needs the durable identity's
+ * real GitHub App user authorization + a real installation covering the fixture
+ * repo. github_app_seed.py plants a real user-to-server authorization WITHOUT a
+ * browser by refreshing a bootstrap token — but the bootstrap token has to be
+ * obtained once, interactively, by the GitHub identity the durable user maps to
+ * (proliferate-e2e-bot) authorizing the target profile's App. That one step is
+ * not something the runner can perform (no GitHub browser creds; a consequential
+ * external-identity action), so wherever the authority chain is unsatisfied the
+ * scenario reports `blocked` on #1043 — an out-of-band, externally-tracked
+ * blocker — rather than expected-fail (a diagnosed permanent gap) or red.
  *
- * Remaining t3local blocker (environmental, NOT the product, NOT #1043's stated
- * cause): the profile's configured GitHub App is `proliferate-dev` (id
- * 2486507), installed only on `pablonyx` — it is NOT installed on the fixture
- * org `proliferate-e2e`, so once authorization passes the authority chain now
- * 409s `github_app_installation_required` for proliferate-e2e/e2e-fixture. The
- * fixture doc's `proliferate-cloud-pablo` app + installation 145311006 is
- * configured nowhere on t3local. This is reported to Pablo (App-credential
- * availability) and is a fixture/infra provisioning gap, not a code bug — so it
- * is an expected-fail with an accurate environmental diagnosis, and NO product
- * issue is filed. When the fixture app is provisioned on the runner profile (or
- * the target repo is one the configured installation covers) this scenario runs
- * green with no code change.
+ *  - `--lane staging`: the staging durable user (proliferate-e2e-bot) has never
+ *    completed the App user authorization for the staging App
+ *    (proliferate-cloud-staging, id 4260213). The seam to seed it is
+ *    github_app_seed.py run IN-VPC against the staging DB, bootstrapped once by
+ *    that interactive authorization. Handoff:
+ *    tests/release/scripts/github_app_user_authorization_bootstrap.py.
+ *  - `--lane local`: the t3local profile's configured App (proliferate-dev, id
+ *    2486507) is installed only on `pablonyx`, not the fixture org
+ *    `proliferate-e2e`, and/or the seeded user lacks repo access — the same
+ *    provisioning gap, tracked under #1043.
+ *
+ * When the bootstrap + install are provisioned this scenario runs green with no
+ * code change.
  */
 export const t3Repo1: ScenarioDefinition = {
   id: "T3-REPO-1",
@@ -82,10 +86,12 @@ async function runReal(serverUrl: string): Promise<void> {
     const seed = await runGithubAppSeed<SeedResult>(durableEmail, { command: "seed" });
     assert.equal(seed.seeded?.status, "ready", "T3-REPO-1: durable user's GitHub App authorization must be seeded ready");
   } else {
-    throw new ScenarioExpectedFailError(
-      "T3-REPO-1: GitHub App seed credentials are unavailable (RELEASE_E2E_LOCAL_DATABASE_URL + a seed refresh " +
-        "token / state file) — cannot plant the durable user's App authorization, so the repo-environment PUT " +
-        "would 409 github_app_authorization_required (#1043). Provision the seed to run this for real.",
+    throw new ScenarioBlockedError(
+      "T3-REPO-1: blocked on #1043 — GitHub App seed credentials are unavailable (RELEASE_E2E_LOCAL_DATABASE_URL + " +
+        "a bootstrap seed refresh token / state file), so the durable user's App authorization cannot be planted " +
+        "and the repo-environment PUT would 409 github_app_authorization_required. The bootstrap token needs a " +
+        "one-time interactive App authorization by the durable user's GitHub identity " +
+        "(tests/release/scripts/github_app_user_authorization_bootstrap.py) — an out-of-band step, not a scenario gap.",
     );
   }
 
@@ -116,13 +122,12 @@ async function runReal(serverUrl: string): Promise<void> {
       );
     }
     if (isGithubAppInstallationRequiredError(error) || isGithubAppRepoNotCoveredError(error)) {
-      throw new ScenarioExpectedFailError(
-        `T3-REPO-1: authorization now passes (seed works), but the repo-environment PUT 409s on the installation ` +
-          `gate for ${owner}/${repo}. t3local's configured GitHub App (proliferate-dev, id 2486507) is installed ` +
-          `only on pablonyx, NOT on the fixture org ${owner}; the fixture doc's proliferate-cloud-pablo app + ` +
-          `installation 145311006 is configured nowhere on this profile. Environmental/fixture gap, not a product ` +
-          `bug — provision the fixture app on the runner profile (or point RELEASE_E2E_GITHUB_TEST_REPO at a repo ` +
-          `the configured installation covers) to run this green. See #1043.`,
+      throw new ScenarioBlockedError(
+        `T3-REPO-1: blocked on #1043 — authorization passes (seed works), but the repo-environment PUT 409s on the ` +
+          `installation gate for ${owner}/${repo}. The configured GitHub App is not installed on the fixture org ` +
+          `${owner} with coverage of the repo (on t3local the App is proliferate-dev, id 2486507, installed only on ` +
+          `pablonyx). Provisioning the App install on the fixture org is an out-of-band step — provision it (or point ` +
+          `RELEASE_E2E_GITHUB_TEST_REPO at a repo the configured installation covers) to run this green.`,
       );
     }
     if (isGithubAppRefreshFailedError(error)) {
@@ -135,12 +140,11 @@ async function runReal(serverUrl: string): Promise<void> {
       );
     }
     if (isGithubRepoAccessRequiredError(error)) {
-      throw new ScenarioExpectedFailError(
-        `T3-REPO-1: authorization AND installation now pass (2026-07-09: installation 145413813 exists on ` +
-          `${owner}), but the authority chain 409s github_repo_access_required — the seeded GitHub user (pablonyx, ` +
-          `the App user-to-server identity github_app_seed.py plants) is not a collaborator with access to ` +
-          `${owner}/${repo}. Environmental/fixture gap, not a product bug — grant the seeded user access to the ` +
-          `fixture repo (or seed an identity that has it), then this runs green with no code change.`,
+      throw new ScenarioBlockedError(
+        `T3-REPO-1: blocked on #1043 — authorization AND installation pass, but the authority chain 409s ` +
+          `github_repo_access_required: the seeded GitHub user (the App user-to-server identity github_app_seed.py ` +
+          `plants) is not a collaborator with access to ${owner}/${repo}. Grant the seeded identity access to the ` +
+          `fixture repo (or bootstrap an identity that already has it), then this runs green with no code change.`,
       );
     }
     throw error;
