@@ -10,6 +10,7 @@ import { t3Repo1 } from "./t3-repo-1.js";
 import { t3Int1 } from "./t3-int-1.js";
 import { t3Bill1 } from "./t3-bill-1.js";
 import { t3Bill2 } from "./t3-bill-2.js";
+import { t3Bill4 } from "./t3-bill-4.js";
 import { t4Cloud1 } from "./upgrade/t4-cloud-1.js";
 import { t4Desktop1 } from "./upgrade/t4-desktop-1.js";
 
@@ -30,6 +31,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
   t3Int1,
   t3Bill1,
   t3Bill2,
+  t3Bill4,
   t4Cloud1,
   t4Desktop1,
 ];
