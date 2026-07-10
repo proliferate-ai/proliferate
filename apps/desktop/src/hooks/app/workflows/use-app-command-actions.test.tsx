@@ -173,6 +173,14 @@ vi.mock("@/hooks/capabilities/derived/use-web-app-target", () => ({
   useWebAppTarget: () => webAppMocks.webApp,
 }));
 
+// Support-kind routing itself is covered by
+// use-app-navigation-command-actions.test.tsx; here we only need it not to
+// pull in `useAppCapabilities`'s react-query calls (no QueryClientProvider
+// in this suite's wrapper).
+vi.mock("@/hooks/support/derived/use-support-menu-action", () => ({
+  useSupportMenuAction: () => ({ kind: "vendor" as const }),
+}));
+
 function wrapper({ children }: { children: ReactNode }) {
   return <MemoryRouter initialEntries={["/"]}>{children}</MemoryRouter>;
 }

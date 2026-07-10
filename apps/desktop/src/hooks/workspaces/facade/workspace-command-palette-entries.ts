@@ -50,7 +50,7 @@ export function buildWorkspaceCommandPaletteEntries(args: {
   workspaceRemoteAccessActions: WorkspaceRemoteAccessActionState;
   workspaceWebActions: WorkspaceWebActionState;
 }): CommandPaletteEntry[] {
-  return [
+  const entries: CommandPaletteEntry[] = [
     {
       id: "workspace.focus-chat",
       value: commandPaletteCommandValue("workspace.focus-chat"),
@@ -312,4 +312,10 @@ export function buildWorkspaceCommandPaletteEntries(args: {
       execute: () => args.appActions.newCloudWorkspace.execute("palette"),
     },
   ];
+
+  // Mirrors the sidebar hiding its support action under `support.kind ===
+  // "none"`: don't just disable the palette entry, don't register it at all.
+  return args.appActions.openSupport.hidden
+    ? entries.filter((entry) => entry.id !== "app.open-support")
+    : entries;
 }
