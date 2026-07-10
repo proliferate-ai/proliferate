@@ -4577,6 +4577,22 @@ export interface components {
             /** Path */
             path: string;
         };
+        /**
+         * DeploymentIdentity
+         * @description How this control plane identifies itself.
+         *
+         *     ``mode`` mirrors the desktop telemetry runtime modes. ``displayName`` is the
+         *     operator's instance name; empty means "use the connected origin" so the
+         *     desktop never mislabels a self-managed server as the vendor product.
+         */
+        DeploymentIdentity: {
+            /** Mode */
+            mode: string;
+            /** Displayname */
+            displayName: string;
+            /** Logourl */
+            logoUrl: string | null;
+        };
         /** DesktopWorkerEnrollmentRequest */
         DesktopWorkerEnrollmentRequest: {
             /** Desktopinstallid */
@@ -5014,6 +5030,7 @@ export interface components {
             minDesktopVersion: string;
             /** Workflowsenabled */
             workflowsEnabled: boolean;
+            capabilities: components["schemas"]["ServerCapabilities"];
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -5657,6 +5674,16 @@ export interface components {
             reason: string;
         };
         /**
+         * PricingCapability
+         * @description Whether a vendor pricing page is meaningful for this deployment.
+         */
+        PricingCapability: {
+            /** Available */
+            available: boolean;
+            /** Url */
+            url: string | null;
+        };
+        /**
          * ProfileUpdateRequest
          * @description Editable fields on the authenticated user's own profile.
          *
@@ -5844,6 +5871,30 @@ export interface components {
              * @default
              */
             runCommand: string;
+        };
+        /**
+         * ServerCapabilities
+         * @description Versioned, conservative declaration of what this deployment offers.
+         *
+         *     Defaults are disabled: a capability is true only when the operator
+         *     configured the underlying feature. The desktop treats an absent contract
+         *     (older servers) as all-off + self-managed.
+         */
+        ServerCapabilities: {
+            /** Contractversion */
+            contractVersion: number;
+            deployment: components["schemas"]["DeploymentIdentity"];
+            /** Billing */
+            billing: boolean;
+            /** Usagemetering */
+            usageMetering: boolean;
+            /** Cloudworkspaces */
+            cloudWorkspaces: boolean;
+            /** Agentgateway */
+            agentGateway: boolean;
+            webApp: components["schemas"]["WebAppCapability"];
+            support: components["schemas"]["SupportCapability"];
+            pricing: components["schemas"]["PricingCapability"];
         };
         /** SetFunctionInvocationChatScopeEnabledRequest */
         SetFunctionInvocationChatScopeEnabledRequest: {
@@ -6037,6 +6088,22 @@ export interface components {
             eventType: string;
             /** Livemode */
             livemode?: boolean | null;
+        };
+        /**
+         * SupportCapability
+         * @description Where a user of this deployment should go for support.
+         *
+         *     ``vendor`` is the hosted product's own support; ``operator`` is a
+         *     self-managed operator's configured destination; ``none`` means the desktop
+         *     offers no support-email affordance for this server.
+         */
+        SupportCapability: {
+            /** Kind */
+            kind: string;
+            /** Email */
+            email: string | null;
+            /** Url */
+            url: string | null;
         };
         /** SupportMessageContext */
         SupportMessageContext: {
@@ -6607,6 +6674,19 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * WebAppCapability
+         * @description Whether a hosted web app exists for this deployment, and where it lives.
+         *
+         *     Self-managed deployments have no hosted web app (users connect the signed
+         *     desktop app), so ``available`` is false and the desktop hides web handoffs.
+         */
+        WebAppCapability: {
+            /** Available */
+            available: boolean;
+            /** Baseurl */
+            baseUrl: string | null;
         };
         /**
          * WorkerDesiredVersions
