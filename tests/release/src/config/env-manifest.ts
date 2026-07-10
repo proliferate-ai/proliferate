@@ -301,9 +301,11 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     name: "RELEASE_E2E_SELFHOST_SSH",
     description:
       "SSH destination for the standing self-hosted box (RELEASE_E2E_SELFHOST_URL), e.g. " +
-      "ubuntu@<ip>. Needed by T3-SH-3, which must edit the box's .env and bring up the LiteLLM " +
-      "gateway with `docker compose --profile agent-gateway up -d` (a compose profile cannot be " +
-      "toggled over HTTP). The box's security group must already allow SSH from the runner.",
+      "ubuntu@<ip>. Optional for T3-SH-3: when set, it adds read-only on-box assertions that the " +
+      "`--profile agent-gateway` LiteLLM service is running + healthy, the api reports " +
+      "AGENT_GATEWAY_ENABLED=true, and LiteLLM serves the target model (a compose profile's state " +
+      "cannot be inspected over HTTP). Never mutates the box — the standing gateway add-on is " +
+      "read-plus-additive. The box's security group must already allow SSH from the runner.",
     whereItLives: "Team infra notes, alongside RELEASE_E2E_SELFHOST_URL.",
     secret: false,
   },
