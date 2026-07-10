@@ -26,6 +26,11 @@ export type SessionStreamConnectionState =
 
 export interface SessionDirectoryActivitySummary {
   isStreaming: boolean;
+  /**
+   * Latest in-progress turn already ends in completed assistant prose — the
+   * settling window where sidebar/session status must not read "iterating".
+   */
+  endsInFinalAssistantProse: boolean;
   pendingInteractions: PendingInteraction[];
   transcriptTitle: string | null;
   errorAttentionKey: string | null;
@@ -98,6 +103,7 @@ export const DEFAULT_SESSION_ACTION_CAPABILITIES: SessionActionCapabilities = {
 
 export const EMPTY_DIRECTORY_ACTIVITY: SessionDirectoryActivitySummary = {
   isStreaming: false,
+  endsInFinalAssistantProse: false,
   pendingInteractions: [],
   transcriptTitle: null,
   errorAttentionKey: null,
@@ -214,6 +220,7 @@ export function activitySummaryEqual(
   b: SessionDirectoryActivitySummary,
 ): boolean {
   return a.isStreaming === b.isStreaming
+    && a.endsInFinalAssistantProse === b.endsInFinalAssistantProse
     && a.pendingInteractions === b.pendingInteractions
     && a.transcriptTitle === b.transcriptTitle
     && a.errorAttentionKey === b.errorAttentionKey;
