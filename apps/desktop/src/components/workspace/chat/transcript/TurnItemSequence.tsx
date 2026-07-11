@@ -3,7 +3,6 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
-import { ClipboardList } from "@proliferate/ui/icons";
 import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
@@ -13,6 +12,7 @@ import {
 import {
   blockBelongsToCompletedHistory,
 } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
+import { formatWorkedForDuration } from "@proliferate/product-domain/chats/transcript/transcript-work-duration";
 import type { TurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
@@ -20,11 +20,8 @@ import {
 } from "./ScopedTranscriptBlocks";
 import { TranscriptTreeNode } from "./TranscriptTreeNode";
 import {
-  buildCollapsedSummaryIcons,
   formatCollapsedSummary,
 } from "./TranscriptToolGroupUtils";
-import { MessageBoundary } from "./MessageBoundary";
-import { Fragment } from "react";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -76,11 +73,9 @@ export function TurnItemSequence({
           return (
             <ToolCallSummary
               key={`${turn.turnId}-completed-history`}
-              icon={<ClipboardList />}
-              label="Work history"
+              label={formatWorkedForDuration(turn.startedAt, turn.completedAt) ?? "Worked"}
               summary={formatCollapsedSummary(presentation.completedHistorySummary)}
-              typeIcons={buildCollapsedSummaryIcons(presentation.completedHistorySummary)}
-              showFinalSeparator={tailAssistantProseRootId !== null}
+              showWorkDivider={tailAssistantProseRootId !== null}
               renderChildren={() => (
                 <div className="space-y-1">
                   {presentation.displayBlocks
@@ -112,32 +107,26 @@ export function TurnItemSequence({
           );
         }
 
-        const showMessageBoundary =
-          block.kind === "item"
-          && presentation.messageBoundaryItemIds.has(block.itemId);
-
         return (
-          <Fragment key={getTurnDisplayBlockKey(block)}>
-            {showMessageBoundary && <MessageBoundary />}
-            <TurnDisplayBlockNode
-              block={block}
-              transcript={transcript}
-              autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
-              renderItem={(itemId) => (
-                <FragmentWithArtifacts
-                  itemId={itemId}
-                  transcript={transcript}
-                  childrenByParentId={presentation.childrenByParentId}
-                  artifactToolCalls={
-                    itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
-                  }
-                  workspaceId={workspaceId}
-                  onOpenArtifact={onOpenArtifact}
-                  onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-                />
-              )}
-            />
-          </Fragment>
+          <TurnDisplayBlockNode
+            key={getTurnDisplayBlockKey(block)}
+            block={block}
+            transcript={transcript}
+            autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+            renderItem={(itemId) => (
+              <FragmentWithArtifacts
+                itemId={itemId}
+                transcript={transcript}
+                childrenByParentId={presentation.childrenByParentId}
+                artifactToolCalls={
+                  itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
+                }
+                workspaceId={workspaceId}
+                onOpenArtifact={onOpenArtifact}
+                onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+              />
+            )}
+          />
         );
       })}
       {showCompletedArtifactFallback && tailAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (

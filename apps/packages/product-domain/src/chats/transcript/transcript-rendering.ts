@@ -125,6 +125,7 @@ export function findTrailingLiveExplorationBlock(
   }
 
   return shouldForceExpandActionBlock(block.itemIds, transcript, false)
+    && blockContainsActiveToolWork(block, transcript)
     ? block
     : null;
 }

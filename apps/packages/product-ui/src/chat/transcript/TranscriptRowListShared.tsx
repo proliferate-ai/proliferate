@@ -45,6 +45,7 @@ export interface TranscriptRowListBaseProps {
   isLoadingOlderHistory: boolean;
   olderHistoryCursor: number | null;
   bottomInsetPx: number;
+  nonDisplacingBottomInsetPx?: number;
   selectedWorkspaceId: string | null;
   activeSessionId: string;
   isSessionBusy: boolean;
@@ -54,6 +55,18 @@ export interface TranscriptRowListBaseProps {
   renderRow: (row: TranscriptVirtualRow, rowIndex: number) => ReactNode;
   columnClassName?: string;
   gutterClassName?: string;
+}
+
+export function resolveTranscriptBottomInsets(
+  bottomInsetPx: number,
+  nonDisplacingBottomInsetPx: number,
+): { structural: number; nonDisplacing: number } {
+  const total = Math.max(0, bottomInsetPx);
+  const nonDisplacing = Math.min(total, Math.max(0, nonDisplacingBottomInsetPx));
+  return {
+    structural: total - nonDisplacing,
+    nonDisplacing,
+  };
 }
 
 // Preserves the user's read position across a content-height change above the

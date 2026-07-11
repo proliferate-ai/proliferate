@@ -38,6 +38,7 @@ export interface ChatTranscriptViewModel {
   olderHistoryCursor: number | null;
   onLoadOlderHistory: () => void;
   bottomInsetPx: number;
+  nonDisplacingBottomInsetPx: number;
   columnClassName: string | undefined;
   gutterClassName: string | undefined;
   visibleOptimisticPrompt: PendingPromptEntry | null;
@@ -76,6 +77,10 @@ export function useChatTranscriptViewModel({
   const olderHistoryCursor = history?.olderHistoryCursor ?? null;
   const onLoadOlderHistory = history?.onLoadOlderHistory ?? noop;
   const bottomInsetPx = layout?.bottomInsetPx ?? 40;
+  const nonDisplacingBottomInsetPx = Math.min(
+    bottomInsetPx,
+    Math.max(0, layout?.nonDisplacingBottomInsetPx ?? 0),
+  );
   const columnClassName = layout?.columnClassName;
   const gutterClassName = layout?.gutterClassName;
   const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1] ?? null;
@@ -151,6 +156,7 @@ export function useChatTranscriptViewModel({
     olderHistoryCursor,
     onLoadOlderHistory,
     bottomInsetPx,
+    nonDisplacingBottomInsetPx,
     columnClassName,
     gutterClassName,
     visibleOptimisticPrompt,

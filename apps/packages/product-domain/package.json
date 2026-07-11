@@ -107,6 +107,10 @@
       "types": "./dist/chats/transcript/transcript-action-time.d.ts",
       "import": "./dist/chats/transcript/transcript-action-time.js"
     },
+    "./chats/transcript/transcript-work-duration": {
+      "types": "./dist/chats/transcript/transcript-work-duration.d.ts",
+      "import": "./dist/chats/transcript/transcript-work-duration.js"
+    },
     "./chats/transcript/chat-transcript-state": {
       "types": "./dist/chats/transcript/chat-transcript-state.d.ts",
       "import": "./dist/chats/transcript/chat-transcript-state.js"

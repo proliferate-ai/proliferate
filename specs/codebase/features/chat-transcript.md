@@ -180,6 +180,19 @@ row). Blocks must not carry external vertical padding of their own
 not vary with streaming state: a turn completing is a zero-delta layout change
 for everything already rendered.
 
+Completed tool/reasoning history uses one left-aligned disclosure labelled
+`Worked for {duration}`. Its expanded ledger remains underneath that row, and a
+single full-width `border-border` hairline separates the work block from the
+final answer. Do not render centered labels with rules on both sides, a
+separate `Final message` separator, or hairlines between assistant prose
+items.
+
+While work is live, the collapsed activity header represents exactly one
+current action and its matching icon (`Reading file.ts`, `Running command`,
+`Searching files`, and so on). It must never turn completed ledger history into
+a cumulative live status such as `Running 4 commands`; prior work stays
+available only inside the disclosure.
+
 ### Stick-to-bottom engine
 
 Bottom pinning is owned by one shared engine,
@@ -211,6 +224,26 @@ holds the anchored content with the measured `scrollHeight` delta in a
 stability-gated loop; the non-virtualized list relies on native browser scroll
 anchoring (`overflow-anchor`, left at its default) for the small seam.
 
+Cards mounted above the composer (permission/question panels, slash-command
+trays, queued messages, goals, and similar dock slots) are overlays, not a
+reason to reposition existing transcript pixels. Their measured height is the
+`nonDisplacingBottomInsetPx` portion of the full bottom inset: it is rendered as
+extra scroll range so the user can manually bring the transcript end above the
+obstruction, but changes to that portion alone must not trigger a pinned snap
+or a content `ResizeObserver`/visibility-glue snap. Normal auto-follow targets
+the soft bottom before this range. Once the user deliberately reaches the hard
+bottom, auto-follow preserves the consumed range; if another card stacks, only
+its newly added height remains manual-only. Composer-surface height remains
+structural and continues to re-stick promptly when the input itself grows.
+
+A send intent with `placement: "queue"` is represented by the composer's
+outbound queue and must not also produce a transcript row. A queued send that
+fails before dispatch remains eligible for transcript error presentation. A
+`pending_prompts_reordered` event is a complete queue replacement, including
+the same immutable runtime-owned sequence identities in their committed array
+order; consumers must not treat it as an incremental move event. Sequence
+numbers never change during reorder and are never reused for a later entry.
+
 ### Streaming Handoff
 
 When an assistant turn transitions from streaming state to its first line of
@@ -236,12 +269,15 @@ Additional dependencies:
 - Prompt submit should clear the chat input before awaiting prompt delivery;
   otherwise the same message can appear in the composer and transcript at the
   same time.
-- `lastTopLevelItemIsStreamingAssistantProse` controls whether the trailing
+- `latestStreamingAssistantProseRevision` controls whether the trailing
   status renders. Only prose that is *actively streaming* suppresses the
   indicator: while text streams, the growing prose is the placeholder. The
-  moment the prose completes with the turn still in progress (thinking,
-  preparing a tool call), the trailing indicator must return immediately —
-  a completed-looking transcript with silent background work is the worst UX.
+  moment prose completes with the turn still in progress (thinking or
+  preparing a tool call), the trailing indicator becomes eligible again. If
+  active prose receives no delta for 500ms, the indicator returns during that
+  quiet gap; the next `(itemId, lastUpdatedSeq)` revision hides it
+  synchronously and re-arms the quiet timer. A completed-looking transcript
+  with silent background work is never acceptable.
   Both indicator variants render inside the same fixed-height (`h-6`) slot as
   the reserved copy-button row so the swap is a zero-delta layout change.
 - The `h-6` copy-button slot in `AssistantMessage` is gated on content, not on

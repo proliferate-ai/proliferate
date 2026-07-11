@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/chats/transcript/transcript-virtualization-config";
 import {
@@ -15,6 +9,7 @@ import {
   logHistoryPrefetchDecisionOnce,
   TRANSCRIPT_TOP_PADDING_PX,
   TranscriptScrollToBottomButton,
+  resolveTranscriptBottomInsets,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
@@ -52,6 +47,7 @@ export function VirtualizedTranscriptRowList({
   isLoadingOlderHistory,
   olderHistoryCursor,
   bottomInsetPx,
+  nonDisplacingBottomInsetPx = 0,
   selectedWorkspaceId,
   activeSessionId,
   isSessionBusy,
@@ -72,6 +68,10 @@ export function VirtualizedTranscriptRowList({
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const lastBlankReportSignatureRef = useRef<string | null>(null);
   const {
+    structural: structuralBottomInsetPx,
+    nonDisplacing: effectiveNonDisplacingBottomInsetPx,
+  } = resolveTranscriptBottomInsets(bottomInsetPx, nonDisplacingBottomInsetPx);
+  const {
     isPinnedToBottom,
     pinnedRef,
     onViewportScroll,
@@ -80,7 +80,11 @@ export function VirtualizedTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+  } = useTranscriptStickToBottom({
+    scrollRef,
+    onScrollSample,
+    autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+  });
   const renderableRows = useMemo(
     () => buildRenderableRows(rows, isLoadingOlderHistory),
     [isLoadingOlderHistory, rows],
@@ -88,7 +92,7 @@ export function VirtualizedTranscriptRowList({
   const estimatedInitialBottomOffset =
     TRANSCRIPT_TOP_PADDING_PX
     + estimateRenderableRowsHeight(renderableRows)
-    + bottomInsetPx;
+    + structuralBottomInsetPx;
 
   const virtualizer = useVirtualizer({
     count: renderableRows.length,
@@ -97,7 +101,7 @@ export function VirtualizedTranscriptRowList({
     estimateSize: (index) => estimateRenderableRowHeight(renderableRows[index]),
     overscan: VIRTUALIZER_OVERSCAN,
     paddingStart: TRANSCRIPT_TOP_PADDING_PX,
-    paddingEnd: bottomInsetPx,
+    paddingEnd: structuralBottomInsetPx,
     initialOffset: () => estimatedInitialBottomOffset,
     useAnimationFrameWithResizeObserver: true,
   });
@@ -292,7 +296,6 @@ export function VirtualizedTranscriptRowList({
     }
     scrollToBottom();
   }, [
-    bottomInsetPx,
     isSessionBusy,
     pendingPromptText,
     pinnedRef,
@@ -371,6 +374,7 @@ export function VirtualizedTranscriptRowList({
     <div className="relative h-full">
       <VirtualTranscriptViewport
         bottomSpacerHeight={bottomSpacerHeight}
+        nonDisplacingBottomInsetPx={effectiveNonDisplacingBottomInsetPx}
         columnClassName={columnClassName}
         contentRef={contentRef}
         gutterClassName={gutterClassName}

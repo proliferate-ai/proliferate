@@ -9,6 +9,7 @@ import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
 import {
   TRAILING_STATUS_MIN_HEIGHT,
   TurnAssistantActionRow,
+  TurnLiveTailSlot,
   TurnGoalMetMarker,
   TurnShell,
   resolveTurnTrailingStatus,
@@ -250,9 +251,7 @@ export function TranscriptTurnRow({
           metMarker={metMarker}
         />
         {showFixedTailSlot ? (
-          <div className="flex h-6 items-center" data-turn-tail-slot>
-            {trailingStatus}
-          </div>
+          <TurnLiveTailSlot>{trailingStatus}</TurnLiveTailSlot>
         ) : trailingStatus ? (
           <div className={trailingStatusClassName}>{trailingStatus}</div>
         ) : null}

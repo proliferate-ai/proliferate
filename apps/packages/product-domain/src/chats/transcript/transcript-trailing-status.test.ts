@@ -1,19 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { createTranscriptState, type TranscriptState, type TurnRecord } from "@anyharness/sdk";
 import {
-  lastTopLevelItemIsAssistantProseWithText,
+  latestStreamingAssistantProseRevision,
   latestTransientStatusText,
   shouldAllowTurnTrailingStatus,
-  transcriptEndsInFinalAssistantProse,
 } from "./transcript-trailing-status";
 
 describe("transcript trailing status", () => {
-  it("suppresses trailing status whenever assistant prose with text is the tail", () => {
+  it("suppresses trailing status while assistant prose is actively streaming", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", true),
     ]);
 
-    expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
+    expect(latestStreamingAssistantProseRevision(turn, transcript)).toBe("assistant:1");
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
@@ -22,30 +21,27 @@ describe("transcript trailing status", () => {
 
     transcript.itemsById.assistant = assistantItem("assistant", false);
 
-    // OWNER RULE: prose finished and still the tail — the rendered message
-    // must be the last thing in the turn. No "Thinking…" lingering under an
-    // already-finished answer while turn_ended trails the final tokens.
-    expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
+    expect(latestStreamingAssistantProseRevision(turn, transcript)).toBeNull();
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
       isLatestTurnInProgress: true,
-    })).toBe(false);
+    })).toBe(true);
   });
 
-  it("suppresses transient thought status while completed prose is the tail", () => {
+  it("allows transient status after completed commentary prose", () => {
     const { transcript, turn } = transcriptWithTurn([
       assistantItem("assistant", false),
       transientThoughtItem("status", "Checking the next action"),
     ]);
 
-    expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(true);
+    expect(latestStreamingAssistantProseRevision(turn, transcript)).toBeNull();
     expect(latestTransientStatusText(turn, transcript)).toBe("Checking the next action");
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
       isLatestTurnInProgress: true,
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it("allows trailing status after transient thought when no prose is visible", () => {
@@ -53,7 +49,7 @@ describe("transcript trailing status", () => {
       transientThoughtItem("status", "Checking the next action"),
     ]);
 
-    expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(false);
+    expect(latestStreamingAssistantProseRevision(turn, transcript)).toBeNull();
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
@@ -79,7 +75,7 @@ describe("transcript trailing status", () => {
       assistantItem("child", true, "tool"),
     ]);
 
-    expect(lastTopLevelItemIsAssistantProseWithText(turn, transcript)).toBe(false);
+    expect(latestStreamingAssistantProseRevision(turn, transcript)).toBeNull();
     expect(shouldAllowTurnTrailingStatus({
       turn,
       transcript,
@@ -96,56 +92,14 @@ describe("transcript trailing status", () => {
 
     expect(latestTransientStatusText(turn, transcript)).toBe("Waiting for browser auth");
   });
-});
 
-describe("transcriptEndsInFinalAssistantProse", () => {
-  it("is true when the in-progress latest turn ends in completed prose", () => {
-    const { transcript } = transcriptWithTurn([
-      assistantItem("assistant", false),
-    ]);
-
-    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(true);
-  });
-
-  it("is false while the prose tail is still streaming", () => {
-    const { transcript } = transcriptWithTurn([
-      assistantItem("assistant", true),
-    ]);
-
-    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
-  });
-
-  it("is false once the turn has completed", () => {
+  it("does not revive a transient status that precedes completed prose", () => {
     const { transcript, turn } = transcriptWithTurn([
+      transientThoughtItem("status", "Reading files"),
       assistantItem("assistant", false),
     ]);
-    turn.completedAt = "2026-04-13T12:00:03.000Z";
 
-    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
-  });
-
-  it("is false when a tool call is the tail", () => {
-    const { transcript } = transcriptWithTurn([
-      assistantItem("assistant", false),
-      toolItem("tool"),
-    ]);
-
-    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
-  });
-
-  it("skips transient thoughts and nested items when finding the tail", () => {
-    const { transcript } = transcriptWithTurn([
-      assistantItem("assistant", false),
-      transientThoughtItem("status", "Checking the next action"),
-    ]);
-
-    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(true);
-  });
-
-  it("is false for an empty transcript", () => {
-    const transcript = createTranscriptState("session-1");
-
-    expect(transcriptEndsInFinalAssistantProse(transcript)).toBe(false);
+    expect(latestTransientStatusText(turn, transcript)).toBeNull();
   });
 });
 

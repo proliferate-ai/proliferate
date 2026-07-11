@@ -29,6 +29,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 
 interface SessionTranscriptPaneProps {
   bottomInsetPx: number;
+  nonDisplacingBottomInsetPx: number;
 }
 
 const OLDER_SESSION_HISTORY_EVENT_BUDGET = 1_500;
@@ -36,7 +37,10 @@ const OLDER_SESSION_HISTORY_TURN_LIMIT = 20;
 const OLDER_SESSION_HISTORY_TIMEOUT_MS = 60_000;
 const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
 
-export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPaneProps) {
+export function SessionTranscriptPane({
+  bottomInsetPx,
+  nonDisplacingBottomInsetPx,
+}: SessionTranscriptPaneProps) {
   useDebugRenderCount("session-transcript-pane");
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const handoff = usePlanHandoffDialogState();
@@ -279,6 +283,7 @@ export function SessionTranscriptPane({ bottomInsetPx }: SessionTranscriptPanePr
         isLoadingOlderHistory={isLoadingOlderHistory}
         olderHistoryCursor={oldestLoadedEventSeq}
         bottomInsetPx={bottomInsetPx}
+        nonDisplacingBottomInsetPx={nonDisplacingBottomInsetPx}
         onLoadOlderHistory={loadOlderHistory}
         onHandOffPlanToNewSession={handoff.open}
         onOpenSession={openTranscriptSession}

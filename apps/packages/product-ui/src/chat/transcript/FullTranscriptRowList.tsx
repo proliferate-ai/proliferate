@@ -16,6 +16,7 @@ import {
   DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
   TranscriptHistoryLoadingRow,
   TranscriptScrollToBottomButton,
+  resolveTranscriptBottomInsets,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
@@ -41,6 +42,7 @@ export function FullTranscriptRowList({
   isLoadingOlderHistory,
   olderHistoryCursor,
   bottomInsetPx,
+  nonDisplacingBottomInsetPx = 0,
   selectedWorkspaceId,
   activeSessionId,
   isSessionBusy,
@@ -56,6 +58,10 @@ export function FullTranscriptRowList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
+  const {
+    structural: structuralBottomInsetPx,
+    nonDisplacing: effectiveNonDisplacingBottomInsetPx,
+  } = resolveTranscriptBottomInsets(bottomInsetPx, nonDisplacingBottomInsetPx);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const {
@@ -67,7 +73,11 @@ export function FullTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+  } = useTranscriptStickToBottom({
+    scrollRef,
+    onScrollSample,
+    autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+  });
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,
@@ -197,7 +207,7 @@ export function FullTranscriptRowList({
     }
     scrollToBottom();
   }, [
-    bottomInsetPx,
+    structuralBottomInsetPx,
     isSessionBusy,
     pendingPromptText,
     pinnedRef,
@@ -234,34 +244,39 @@ export function FullTranscriptRowList({
         onViewportScroll={handleViewportScroll}
       >
         <div
-          ref={contentRef}
           className={`${gutterClassName} min-h-full`}
           data-transcript-virtualization-mode="full"
           data-transcript-virtualization-setting={virtualizationMode}
           data-transcript-virtualization-fallback={fallbackReason ?? undefined}
         >
-          <div
-            ref={selectionRootRef}
-            data-chat-transcript-root="true"
-            tabIndex={-1}
-            className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
-          >
-            {TRANSCRIPT_TOP_PADDING_PX > 0 && (
-              <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
-            )}
-            {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
-            {rows.map((row, rowIndex) => (
-              <MemoizedFullTranscriptRow
-                key={row.key}
-                row={row}
-                rowIndex={rowIndex}
-                renderRow={renderRow}
-              />
-            ))}
-            {bottomInsetPx > 0 && (
-              <div aria-hidden="true" style={{ height: bottomInsetPx }} />
-            )}
+          <div ref={contentRef}>
+            <div
+              ref={selectionRootRef}
+              data-chat-transcript-root="true"
+              tabIndex={-1}
+              className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
+            >
+              {TRANSCRIPT_TOP_PADDING_PX > 0 && (
+                <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
+              )}
+              {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
+              {rows.map((row, rowIndex) => (
+                <MemoizedFullTranscriptRow
+                  key={row.key}
+                  row={row}
+                  rowIndex={rowIndex}
+                  renderRow={renderRow}
+                />
+              ))}
+            </div>
           </div>
+          {bottomInsetPx > 0 && (
+            <div
+              aria-hidden="true"
+              data-transcript-bottom-inset
+              style={{ height: bottomInsetPx }}
+            />
+          )}
         </div>
       </AutoHideScrollArea>
       <TranscriptScrollToBottomButton

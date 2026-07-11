@@ -94,6 +94,7 @@ export function useChatDockInset() {
     lowerBackdropTopPx: computeChatDockLowerBackdropTopPx(metrics),
     scrollBottomInsetPx: computeChatSurfaceBottomInsetPx(metrics),
     stickyBottomInsetPx: computeChatStableBottomInsetPx(metrics),
+    stickyNonDisplacingBottomInsetPx: metrics.composerSurfaceOffsetTopPx,
     dockSafeAreaPx: computeChatStableBottomInsetPx(metrics),
   };
 }

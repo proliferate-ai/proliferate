@@ -6,7 +6,6 @@ import type {
 } from "@anyharness/sdk";
 import {
   buildTurnPresentation,
-  computeMessageBoundaryItemIds,
   summarizeCompletedHistory,
   type TurnDisplayBlock,
   type TurnPresentation,
@@ -888,33 +887,19 @@ function partitionBlocksBySeqBoundaries(
         transcript,
         presentation.childrenByParentId,
       );
-      const scopedBoundaryIds = computeMessageBoundaryItemIds({
-        displayBlocks: info.blocks,
-        transcript,
-        completedHistoryRootIds: new Set(scopedHistoryRootIds),
-        hasCompletedHistorySummary: scopedSummary !== null,
-      });
       renderPresentation = {
         ...presentation,
         displayBlocks: info.blocks,
         completedHistoryRootIds: scopedHistoryRootIds,
         completedHistorySummary: scopedSummary,
-        messageBoundaryItemIds: scopedBoundaryIds,
       };
     } else {
-      // Non-final slices: no history collapse, recompute boundaries plainly.
-      const scopedBoundaryIds = computeMessageBoundaryItemIds({
-        displayBlocks: info.blocks,
-        transcript,
-        completedHistoryRootIds: new Set<string>(),
-        hasCompletedHistorySummary: false,
-      });
+      // Non-final slices do not collapse completed work history.
       renderPresentation = {
         ...presentation,
         displayBlocks: info.blocks,
         completedHistoryRootIds: [],
         completedHistorySummary: null,
-        messageBoundaryItemIds: scopedBoundaryIds,
       };
     }
 

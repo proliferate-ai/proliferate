@@ -403,6 +403,19 @@ export function MoreHorizontal({ className, ...props }: IconProps) {
   );
 }
 
+export function GripVertical({ className, ...props }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <circle cx="9" cy="5" r="1.25" />
+      <circle cx="15" cy="5" r="1.25" />
+      <circle cx="9" cy="12" r="1.25" />
+      <circle cx="15" cy="12" r="1.25" />
+      <circle cx="9" cy="19" r="1.25" />
+      <circle cx="15" cy="19" r="1.25" />
+    </svg>
+  );
+}
+
 export function SendIcon({ className, ...props }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>

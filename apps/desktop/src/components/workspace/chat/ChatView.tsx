@@ -47,11 +47,13 @@ function ChatContent({
   mode,
   scrollBottomInsetPx,
   stickyBottomInsetPx,
+  stickyNonDisplacingBottomInsetPx,
 }: {
   dockSafeAreaPx: number;
   mode: ChatSurfaceState;
   scrollBottomInsetPx: number;
   stickyBottomInsetPx: number;
+  stickyNonDisplacingBottomInsetPx: number;
 }): JSX.Element | null {
   switch (mode.kind) {
     case "no-workspace":
@@ -66,7 +68,12 @@ function ChatContent({
         </ChatPreMessageCanvas>
       );
     case "session-hydrating":
-      return <SessionTranscriptPane bottomInsetPx={stickyBottomInsetPx} />;
+      return (
+        <SessionTranscriptPane
+          bottomInsetPx={stickyBottomInsetPx}
+          nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
+        />
+      );
     case "session-switching":
       return <TranscriptSwitchingPlaceholder />;
     case "session-empty":
@@ -76,7 +83,12 @@ function ChatContent({
         </ChatPreMessageCanvas>
       );
     case "session-transcript":
-      return <SessionTranscriptPane bottomInsetPx={stickyBottomInsetPx} />;
+      return (
+        <SessionTranscriptPane
+          bottomInsetPx={stickyBottomInsetPx}
+          nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
+        />
+      );
   }
 }
 
@@ -147,6 +159,7 @@ export const ChatView = memo(function ChatView({
     lowerBackdropTopPx,
     scrollBottomInsetPx,
     stickyBottomInsetPx,
+    stickyNonDisplacingBottomInsetPx,
   } = useChatDockInset();
 
   useCloudWorkspacePolling();
@@ -217,6 +230,7 @@ export const ChatView = memo(function ChatView({
             mode={mode}
             scrollBottomInsetPx={scrollBottomInsetPx}
             stickyBottomInsetPx={stickyBottomInsetPx}
+            stickyNonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
           />
         </div>
       </DebugProfiler>
