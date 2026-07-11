@@ -118,22 +118,30 @@ jobs:
     name: T3-SH-1 / T4-SH-1 / T3-SH-2 / T3-SH-3 (provisional)
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # The configured deployment role is scoped to the staging environment.
+    # OIDC keeps long-lived AWS access keys out of repository secrets.
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
     steps:
-      - name: Preflight — provisioning opt-in + AWS credentials
+      - name: Preflight — provisioning opt-in + AWS role
         id: preflight
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           # 'true' on manual dispatch; nightly leaves it off so scheduled runs
           # never spend on infra unattended.
           PROVISION_INPUT: ${{ github.event.inputs.provision }}
         run: |
           provision=0
-          if [ "$PROVISION_INPUT" = "true" ] && [ -n "$AWS_ACCESS_KEY_ID" ]; then
+          if [ "$PROVISION_INPUT" = "true" ] && [ -n "$AWS_DEPLOY_ROLE_ARN" ]; then
             provision=1
-          elif [ "$PROVISION_INPUT" = "true" ] && [ -z "$AWS_ACCESS_KEY_ID" ]; then
-            echo "::notice title=Self-host provisioning skipped::provision=true but no AWS credentials are configured. T3-SH-1 / T4-SH-1 will report blocked (never red)."
+          elif [ "$PROVISION_INPUT" = "true" ] && [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
+            echo "::notice title=Self-host provisioning skipped::provision=true but vars.AWS_DEPLOY_ROLE_ARN is not configured in the staging environment. T3-SH-1 / T4-SH-1 will report blocked (never red)."
           else
-            echo "::notice title=Self-host provisioning off::Set the provision input to true (with AWS creds) to run T3-SH-1 / T4-SH-1 for real. Reporting blocked for this run."
+            echo "::notice title=Self-host provisioning off::Set the provision input to true to run T3-SH-1 / T4-SH-1 for real through the staging deployment role. Reporting blocked for this run."
           fi
           echo "provision=$provision" >> "$GITHUB_OUTPUT"
 
@@ -148,11 +156,11 @@ jobs:
           version: 10
       - name: Configure AWS credentials
         if: steps.preflight.outputs.provision == '1'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: release-e2e-selfhost-${{ github.run_id }}
       - name: Run the self-hosting scenarios
         env:
           # '1' only when provisioning is authorized; otherwise the box scenarios

@@ -58,6 +58,35 @@ test("missing gateway credential never green-skips the whole local suite", () =>
   assert.doesNotMatch(missingKeyBranch, /enabled=false/);
 });
 
+test("release E2E maps non-secret fixture ids from configured GitHub variables", () => {
+  for (const jobId of ["release-e2e-local", "release-e2e-staging"]) {
+    const block = jobBlock(release, jobId);
+    assert.match(
+      block,
+      /RELEASE_E2E_DURABLE_ORG_ID: \$\{\{ secrets\.RELEASE_E2E_DURABLE_ORG_ID \|\| vars\.RELEASE_E2E_DURABLE_ORG_ID \}\}/,
+    );
+    assert.match(
+      block,
+      /RELEASE_E2E_E2B_TEAM_ID: \$\{\{ secrets\.RELEASE_E2E_E2B_TEAM_ID \|\| vars\.RELEASE_E2E_E2B_TEAM_ID \|\| vars\.E2B_TEAM_ID \}\}/,
+    );
+  }
+});
+
+test("release E2E exports the fixture GitHub token in both live lanes", () => {
+  for (const jobId of ["release-e2e-local", "release-e2e-staging"]) {
+    assert.match(
+      jobBlock(release, jobId),
+      /RELEASE_E2E_GITHUB_TEST_TOKEN: \$\{\{ secrets\.RELEASE_E2E_GITHUB_TEST_TOKEN \}\}/,
+    );
+  }
+});
+
+test("local release stack maps the Stripe test secret to the server setting", () => {
+  const block = jobBlock(release, "release-e2e-local");
+  assert.match(block, /STRIPE_SECRET_KEY: \$\{\{ secrets\.STRIPE_TEST_SECRET_KEY \}\}/);
+  assert.doesNotMatch(block, /^\s+STRIPE_TEST_SECRET_KEY:/m);
+});
+
 test("self-host Tier 3/4 jobs preserve genuine runner failures", () => {
   for (const jobId of ["artifact-chain", "provisioning"]) {
     assert.doesNotMatch(jobBlock(selfHost, jobId), /\n    continue-on-error:/);
@@ -68,6 +97,19 @@ test("self-host cleanup/evidence remains unconditional", () => {
   const block = jobBlock(selfHost, "provisioning");
   assert.match(block, /name: Upload failure reports[\s\S]*?if: always\(\)/);
   assert.match(block, /path: tests\/release\/\.output\/[\s\S]*?include-hidden-files: true/);
+});
+
+test("self-host provisioning assumes the configured staging deployment role through OIDC", () => {
+  const block = jobBlock(selfHost, "provisioning");
+  assert.match(block, /\n    environment: staging/);
+  assert.match(block, /permissions:[\s\S]*?id-token: write/);
+  assert.match(block, /AWS_DEPLOY_ROLE_ARN: \$\{\{ vars\.AWS_DEPLOY_ROLE_ARN \}\}/);
+  assert.match(block, /AWS_REGION: \$\{\{ vars\.AWS_REGION \|\| 'us-east-1' \}\}/);
+  assert.match(block, /uses: aws-actions\/configure-aws-credentials@v6/);
+  assert.match(block, /role-to-assume: \$\{\{ env\.AWS_DEPLOY_ROLE_ARN \}\}/);
+  assert.match(block, /aws-region: \$\{\{ env\.AWS_REGION \}\}/);
+  assert.doesNotMatch(block, /secrets\.AWS_ACCESS_KEY_ID/);
+  assert.doesNotMatch(block, /secrets\.AWS_SECRET_ACCESS_KEY/);
 });
 
 test("self-host artifact workflow is an honest nightly/manual published diagnostic", () => {

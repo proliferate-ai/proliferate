@@ -209,13 +209,21 @@ jobs:
           # need the real persistent identity report blocked (#1069).
           RELEASE_E2E_DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
           RELEASE_E2E_DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
-          RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID }}
+          # Non-secret fixture ids live in GitHub variables. Keep the legacy
+          # secret lookup first so existing repository configuration continues
+          # to work while the configured variable is the normal path.
+          RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID || vars.RELEASE_E2E_DURABLE_ORG_ID }}
           RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
+          RELEASE_E2E_GITHUB_TEST_TOKEN: ${{ secrets.RELEASE_E2E_GITHUB_TEST_TOKEN }}
           # E2B repo secrets carry the runner's manifest names.
           RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID }}
-          # Stripe test mode for the billing scenarios' setup seam.
-          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          # Team ids are non-secret GitHub variables. The release-specific
+          # name is accepted when present; the repository's configured
+          # E2B_TEAM_ID is the fallback used by the local CI lane.
+          RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID || vars.RELEASE_E2E_E2B_TEAM_ID || vars.E2B_TEAM_ID }}
+          # The GitHub secret is named for test mode; the server setting it
+          # populates is STRIPE_SECRET_KEY.
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
           RELEASE_POLICY: ${{ github.event.inputs.policy || 'signal' }}
           LANE: ${{ github.event.inputs.lane || 'local' }}
           SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
@@ -368,14 +376,15 @@ jobs:
           # Org id owning the durable user's account (non-secret). When set, the
           # deferred sandbox scenarios report their staging-deferral reason; when
           # absent they block on this var. Release policy rejects that result.
-          RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID }}
+          RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID || vars.RELEASE_E2E_DURABLE_ORG_ID }}
           # Provisioned for when the deferred sandbox scenarios light up; unused
           # by the first honest pass (those scenarios block before reaching them).
           RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
           RELEASE_E2E_GATEWAY_BASE_URL: ${{ secrets.RELEASE_E2E_GATEWAY_BASE_URL || 'https://staging-gateway.proliferate.com' }}
           RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY || secrets.E2B_API_KEY }}
-          RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID }}
+          RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID || vars.RELEASE_E2E_E2B_TEAM_ID || vars.E2B_TEAM_ID }}
           RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
+          RELEASE_E2E_GITHUB_TEST_TOKEN: ${{ secrets.RELEASE_E2E_GITHUB_TEST_TOKEN }}
           RELEASE_POLICY: ${{ github.event.inputs.policy || 'signal' }}
           SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
           AGENTS: ${{ github.event.inputs.agents || 'all' }}
