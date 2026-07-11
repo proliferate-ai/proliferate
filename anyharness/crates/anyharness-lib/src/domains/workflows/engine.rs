@@ -44,6 +44,14 @@ pub struct StepExecContext {
     /// a durable approval (an `agent.goal` pause-for-approval block). The
     /// executor should re-arm/continue rather than start fresh.
     pub resumed_after_approval: bool,
+    /// True when this execution RE-ENTERS a step that was left `running` by a
+    /// crash (WS5b, spec §6.5): the previous attempt persisted its step as
+    /// `running` but never applied a decision, so an externally meaningful
+    /// effect may have started. The executor consults the effect ledger for the
+    /// crashed attempt (`attempt - 1`) and applies the recovery matrix BEFORE
+    /// re-running anything. A fresh first run and an `on_fail: retry` re-run both
+    /// leave this `false` (a retry decision persists the step as `pending`).
+    pub crash_resumed: bool,
 }
 
 /// The result of executing one step.
@@ -69,6 +77,16 @@ pub enum StepOutcome {
     /// `output`, the run goes terminal `completed`, and every later step is
     /// marked `skipped`. Not subject to the on_fail matrix — `end` is a success.
     EndRun { output: serde_json::Value },
+    /// A crash left an externally meaningful effect's outcome unprovable
+    /// (WS5b, spec §6.5 / plan §7.3). Uncertainty is TERMINAL for the attempt:
+    /// `on_fail` never retries or continues past it — the run fails with a typed
+    /// error naming the effect, and the completed-or-not external effect stays
+    /// durable and auditable. `effect` is the effect kind slug (agent_turn /
+    /// shell / scm / action / gateway); `detail` is an optional non-secret note.
+    OutcomeUncertain {
+        effect: String,
+        detail: Option<String>,
+    },
 }
 
 /// The decision the pure on-fail logic reaches for a completed executor call.
@@ -128,6 +146,22 @@ pub fn decide_after_step(on_fail: OnFail, attempt: i64, outcome: StepOutcome) ->
         // `end` is a deliberate success route, never a failure — the on_fail
         // matrix does not apply.
         StepOutcome::EndRun { output } => StepDecision::EndRun { output },
+        // An uncertain external effect is TERMINAL for the attempt (spec §6.5 /
+        // plan §7.3): `on_fail` NEVER retries or continues past it — you cannot
+        // safely re-run or skip an effect whose outcome you don't know. It fails
+        // the run with a typed `outcome_uncertain` code naming the effect,
+        // regardless of the step's `on_fail` policy.
+        StepOutcome::OutcomeUncertain { effect, detail } => StepDecision::FailRun {
+            code: "outcome_uncertain".to_string(),
+            message: Some(match detail {
+                Some(detail) => format!("{effect} effect outcome is uncertain: {detail}"),
+                None => format!("{effect} effect outcome is uncertain"),
+            }),
+            output: Some(serde_json::json!({
+                "outcome_uncertain": true,
+                "effect": effect,
+            })),
+        },
         StepOutcome::Failed {
             code,
             message,
@@ -240,6 +274,48 @@ mod tests {
         );
         assert!(matches!(
             decide_after_step(on_fail(OnFailKind::Retry, 1), 2, failed()),
+            StepDecision::FailRun { .. }
+        ));
+    }
+
+    fn uncertain() -> StepOutcome {
+        StepOutcome::OutcomeUncertain {
+            effect: "shell".to_string(),
+            detail: Some("process group lost".to_string()),
+        }
+    }
+
+    #[test]
+    fn outcome_uncertain_fails_the_run_naming_the_effect() {
+        let decision = decide_after_step(on_fail(OnFailKind::Stop, 0), 1, uncertain());
+        match decision {
+            StepDecision::FailRun { code, message, output } => {
+                assert_eq!(code, "outcome_uncertain");
+                assert!(message.unwrap().contains("shell"));
+                let output = output.unwrap();
+                assert_eq!(output["outcome_uncertain"], true);
+                assert_eq!(output["effect"], "shell");
+            }
+            other => panic!("expected FailRun(outcome_uncertain), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn outcome_uncertain_never_retries_even_with_budget_remaining() {
+        // on_fail: retry with budget left would retry an ORDINARY failure — but an
+        // uncertain effect is terminal for the attempt and must NOT retry.
+        assert!(matches!(
+            decide_after_step(on_fail(OnFailKind::Retry, 5), 1, uncertain()),
+            StepDecision::FailRun { .. }
+        ));
+    }
+
+    #[test]
+    fn outcome_uncertain_never_continues_past_the_effect() {
+        // on_fail: continue would advance past an ORDINARY failure — but an
+        // uncertain effect must fail the run, never be skipped.
+        assert!(matches!(
+            decide_after_step(on_fail(OnFailKind::Continue, 0), 1, uncertain()),
             StepDecision::FailRun { .. }
         ));
     }

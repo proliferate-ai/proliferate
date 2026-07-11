@@ -194,19 +194,6 @@ pub async fn open_pr_step(
     }
 }
 
-/// Execute a `notify` step. Slack-only (E1b): the runtime records the rendered
-/// message + channel as the step output; the server performs the actual send
-/// (`slack_notify` action). Never a hard failure.
-pub fn notify_step(message: &str, slack_channel_id: &str) -> StepOutcome {
-    StepOutcome::Completed {
-        output: json!({
-            "channel": "slack",
-            "message": message,
-            "slack_channel_id": slack_channel_id,
-        }),
-    }
-}
-
 fn scm_failed(reason: &str, tail: &str) -> StepOutcome {
     StepOutcome::Failed {
         code: "scm_failed".to_string(),
@@ -267,16 +254,5 @@ mod tests {
     fn tail_keeps_the_end() {
         let text = "x".repeat(MAX_OUTPUT_TAIL + 100);
         assert_eq!(tail_of(&text).len(), MAX_OUTPUT_TAIL);
-    }
-
-    #[test]
-    fn notify_slack_outputs_channel_and_message() {
-        let outcome = notify_step("hi", "C12345");
-        let StepOutcome::Completed { output } = outcome else {
-            panic!("notify must not fail");
-        };
-        assert_eq!(output["channel"], "slack");
-        assert_eq!(output["message"], "hi");
-        assert_eq!(output["slack_channel_id"], "C12345");
     }
 }

@@ -566,6 +566,22 @@ CREATE TABLE terminal_command_runs (
     updated_at TEXT NOT NULL
 );
 
+-- table: workflow_effects
+CREATE TABLE workflow_effects (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    step_key TEXT NOT NULL,
+    attempt INTEGER NOT NULL,
+    effect_seq INTEGER NOT NULL DEFAULT 0,
+    effect_kind TEXT NOT NULL,
+    external_identity TEXT,
+    status TEXT NOT NULL,
+    result_json TEXT,
+    replay_key TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, step_key, attempt, effect_seq, effect_kind)
+);
+
 -- table: workflow_lane_cursors
 CREATE TABLE workflow_lane_cursors (
     run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
@@ -884,6 +900,10 @@ CREATE INDEX idx_terminal_command_runs_workspace_activity
 -- index: idx_terminal_command_runs_workspace_created
 CREATE INDEX idx_terminal_command_runs_workspace_created
     ON terminal_command_runs(workspace_id, created_at DESC);
+
+-- index: idx_workflow_effects_step_attempt
+CREATE INDEX idx_workflow_effects_step_attempt
+    ON workflow_effects(run_id, step_key, attempt, effect_seq);
 
 -- index: idx_workflow_injections_run
 CREATE INDEX idx_workflow_injections_run

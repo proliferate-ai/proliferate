@@ -15,7 +15,10 @@ use super::store::WorkflowStore;
 use super::support::{
     advance_or_finish, build_outputs, failed_outcome, finish_step, now, skip_tail,
 };
-use super::templates::{self, StepOutputs};
+use super::templates;
+// Re-exported for `service_tests` (the fn itself now lives in `support` for the
+// WS5b line budget; the test path stays `service::lane_visible_outputs`).
+pub(super) use super::support::lane_visible_outputs;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkflowServiceError {
@@ -357,6 +360,12 @@ impl WorkflowService {
         let existing = step_runs.iter().find(|step| step.step_index == cursor);
         let resumed_after_approval =
             existing.map(|step| step.status == WorkflowStepStatus::Waiting).unwrap_or(false);
+        // Crash-resume signal (WS5b §6.5): a step left `running` by a crash
+        // re-enters here still `running` (a retry decision would have set it
+        // `pending`), so the executor must consult the effect ledger before any
+        // re-run.
+        let crash_resumed =
+            existing.map(|step| step.status == WorkflowStepStatus::Running).unwrap_or(false);
         let attempt = existing.map(|step| step.attempt).unwrap_or(0) + 1;
 
         let resolved = templates::resolve_step(step_def, &outputs);
@@ -368,6 +377,7 @@ impl WorkflowService {
             step_index: cursor as usize,
             attempt,
             resumed_after_approval,
+            crash_resumed,
         };
         let outcome = executor.execute_step(&resolved, &ctx).await;
         let decision = decide_after_step(resolved.on_fail, attempt, outcome);
@@ -528,6 +538,9 @@ impl WorkflowService {
             let resumed_after_approval = existing
                 .map(|step| step.status == WorkflowStepStatus::Waiting)
                 .unwrap_or(false);
+            let crash_resumed = existing
+                .map(|step| step.status == WorkflowStepStatus::Running)
+                .unwrap_or(false);
             let attempt = existing.map(|step| step.attempt).unwrap_or(0) + 1;
             let resolved = templates::resolve_step(step_def, &outputs);
             self.begin_step(run_id, flat as i64, resolved.kind_slug(), attempt)?;
@@ -537,6 +550,7 @@ impl WorkflowService {
                 step_index: flat,
                 attempt,
                 resumed_after_approval,
+                crash_resumed,
             };
             let outcome = executor.execute_step(&resolved, &ctx).await;
             let decision = decide_after_step(resolved.on_fail, attempt, outcome);
@@ -1008,21 +1022,4 @@ impl WorkflowService {
     ) -> anyhow::Result<Vec<WorkflowObservationRecord>> {
         self.store.replay_from(run_id, from_revision)
     }
-}
-
-/// Narrow a run's step outputs to those a parallel lane may reference (minor m1):
-/// every PRE-GROUP output (flat index `< group_start`) plus the lane's OWN steps.
-/// A sibling lane's output (index `>= group_start`, not in this lane) is dropped,
-/// so a mis-crafted plan that references one resolves to nothing (fail closed)
-/// instead of leaking across lanes. Pure — unit-tested directly.
-pub(super) fn lane_visible_outputs(
-    outputs: StepOutputs,
-    group_start: usize,
-    lane_step_indices: &[usize],
-) -> StepOutputs {
-    let own: std::collections::HashSet<usize> = lane_step_indices.iter().copied().collect();
-    outputs
-        .into_iter()
-        .filter(|(idx, _)| *idx < group_start || own.contains(idx))
-        .collect()
 }

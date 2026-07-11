@@ -99,3 +99,20 @@ pub(super) fn build_outputs(step_runs: &[WorkflowStepRunRecord]) -> StepOutputs 
 pub(super) fn now() -> String {
     chrono::Utc::now().to_rfc3339()
 }
+
+/// Narrow a run's step outputs to those a parallel lane may reference (minor m1):
+/// every PRE-GROUP output (flat index `< group_start`) plus the lane's OWN steps.
+/// A sibling lane's output (index `>= group_start`, not in this lane) is dropped,
+/// so a mis-crafted plan that references one resolves to nothing (fail closed)
+/// instead of leaking across lanes. Pure — unit-tested directly.
+pub(super) fn lane_visible_outputs(
+    outputs: StepOutputs,
+    group_start: usize,
+    lane_step_indices: &[usize],
+) -> StepOutputs {
+    let own: std::collections::HashSet<usize> = lane_step_indices.iter().copied().collect();
+    outputs
+        .into_iter()
+        .filter(|(idx, _)| *idx < group_start || own.contains(idx))
+        .collect()
+}
