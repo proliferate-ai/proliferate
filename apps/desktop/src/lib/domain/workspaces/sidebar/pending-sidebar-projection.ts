@@ -53,11 +53,13 @@ export function buildPendingSidebarProjection(args: {
   const sourceRoot = repoRoot?.path
     ?? pendingSidebarSourceRoot(entry)
     ?? repoKey;
-  const detailIndicators: SidebarDetailIndicator[] = [{
-    kind: "materialization",
-    variant,
-    tooltip: pendingMaterializationTooltip(variant),
-  }];
+  const detailIndicators: SidebarDetailIndicator[] = variant === "local"
+    ? []
+    : [{
+      kind: "materialization",
+      variant,
+      tooltip: pendingMaterializationTooltip(variant),
+    }];
 
   return {
     repoKey,
