@@ -4,11 +4,24 @@
 //! `domains/workflows`; this layer owns only the live actor state.
 
 pub(crate) mod actor;
+mod agent_turn;
+#[cfg(test)]
+mod agent_turn_tests;
 mod commands;
+mod effects;
+mod emit;
 mod exec_policy;
 mod executor;
 mod gateway;
+mod goal;
 mod manager;
+mod merge;
+mod observation;
+mod parallel;
+#[cfg(test)]
+mod parallel_tests;
+mod receipts;
+mod turn;
 
 pub use exec_policy::{WorkflowAutoApproveAdvisor, WorkflowOwnedSessions};
 pub use executor::WorkflowExecDeps;
