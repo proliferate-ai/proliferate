@@ -21,10 +21,12 @@ conversation memory.
 | # | Packet | Commit | Deps (SHAs) | Tests run | Result |
 | --- | --- | --- | --- | --- | --- |
 | 1 | WS0 Gate A0 architecture/contract freeze (docs) | `68661e27e8897a4fd8c73cd9bc58caddb58e7376` | baseline `8be1c7706` | doc link check (all feature-spec dependency paths exist); diff review of 12 cross-doc alignment edits | ACCEPTED — architecture commit; no code touched |
+| 2 | WS1 contract spine + golden fixtures | `ac704431616d4eccaf99a7d7042c097b641be8ff` (merged `1f9c73666`) | WS0 `68661e27e` | `python3 scripts/check_workflow_contract_fixtures.py` (py+rust 6/6+ts 10/10); `cargo test -p anyharness-contract` 37; product-domain build+647 tests; captain re-ran checker post-merge | ACCEPTED — T1-WF-CONTRACT-01 GREEN; OpenAPI/SDK regen deferred (models unwired); traceability.yaml now captain-owned |
+| 3 | WS0B-R executor ownership split | `c220bef741b7d9868531e7db0a52cf0b47b2140f` (merged `0c4e4284f`) | WS0 `68661e27e` | `cargo test -p anyharness-lib --lib` 1116/0 in worktree; captain: post-merge build green, max-lines violations 3 (unchanged, all server-test debt owned by WS2b/WS4) | ACCEPTED — executor.rs 2982→307; agent_turn/turn/goal/emit/effects/observation/receipts/parallel/merge modules; allowlist entry removed |
 
 ## Integration HEAD
 
-`68661e27e8897a4fd8c73cd9bc58caddb58e7376` (WS0 architecture freeze)
+`0c4e4284f` (WS1 + WS0B-R merged; WS0B-S in flight)
 
 ## Gate status
 
@@ -40,13 +42,13 @@ conversation memory.
 | Lock | State | Holder |
 | --- | --- | --- |
 | Feature spec + completion plan | FROZEN (arch-review to change) | merge captain |
-| `tests/contracts/workflows/**` + contract versions | ASSIGNED | WS1 |
-| `anyharness-contract/src/v1/workflows.rs` + API mapping | ASSIGNED | WS1 |
-| Server contract request/response models + OpenAPI/SDK regen | ASSIGNED | WS1 (regen gated by captain) |
-| `traceability.yaml` | WS1 creates schema; captain owns after | pending |
+| `tests/contracts/workflows/**` + contract versions | RELEASED by WS1; future edits need captain | — |
+| `anyharness-contract/src/v1/workflows*.rs` + API mapping | RELEASED by WS1 | — |
+| Server contract request/response models + OpenAPI/SDK regen | captain (regen pending, models unwired) | captain |
+| `traceability.yaml` | CAPTAIN-OWNED (append-only) | captain |
 | Workflow ORM + Alembic chain | UNASSIGNED (next: WS2a) | — |
 | `server/cloud/workflows/**` service split | ASSIGNED (ownership-only) | WS0B-S |
-| `anyharness-lib/**/workflows/**` module split | ASSIGNED (ownership-only) | WS0B-R |
+| `anyharness-lib/**/workflows/**` module split | RELEASED by WS0B-R; domain semantics next to WS5a | — |
 | Desktop workflow screens/hooks split | UNASSIGNED (next: WS0B-U) | — |
 | `tests/intent/specs/workflows*.spec.ts` | RESERVED | WS10b |
 | `tests/release/**` + T3 registry + promotion | RESERVED | WS10a→b→c |
@@ -70,9 +72,7 @@ conversation memory.
 
 | Packet | Agent | Worktree | Base SHA | Status |
 | --- | --- | --- | --- | --- |
-| WS1 contracts | (launching) | ~/proliferate-wt/wsc-ws1 | 68661e27e | starting |
-| WS0B-S server split | (launching) | ~/proliferate-wt/wsc-ws0bs | 68661e27e | starting |
-| WS0B-R runtime split | (launching) | ~/proliferate-wt/wsc-ws0br | 68661e27e | starting |
+| WS0B-S server split | agent | ~/proliferate-wt/wsc-ws0bs | 68661e27e | running |
 
 ## Blockers
 
