@@ -70,9 +70,12 @@ test("self-host cleanup/evidence remains unconditional", () => {
 
 test("self-host artifact workflow is an honest nightly/manual published diagnostic", () => {
   assert.doesNotMatch(selfHost, /\n  workflow_call:/);
+  assert.doesNotMatch(selfHost, /\n  pull_request:/);
   assert.match(selfHost, /release_desktop_version:/);
   assert.match(selfHost, /release_date:/);
-  assert.doesNotMatch(selfHost, /release_sha:/);
+  assert.match(selfHost, /release_sha:/);
+  assert.match(selfHost, /RELEASE_E2E_RELEASE_SHA: \$\{\{ inputs\.release_sha \|\| '' \}\}/);
+  assert.match(selfHost, /not candidate[\s\S]*qualification or promotion evidence/);
   assert.match(selfHost, /name: T4-SH-2 published desktop artifact diagnostic/);
 });
 
