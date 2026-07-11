@@ -6,6 +6,7 @@ const BASE_INPUT = {
   primaryPendingInteractionKind: null,
   hasActiveTodoTracker: false,
   hasDelegatedWork: false,
+  hasWorkspaceActivity: false,
   hasSessionGoal: false,
   hasWorkspaceStatusPanel: false,
   hasCloudRuntimePanel: false,
@@ -49,7 +50,7 @@ describe("resolveComposerDockSlots", () => {
     }).activeSlot).toEqual({ kind: "todo_tracker" });
   });
 
-  it("keeps outbound prompts and delegated work behind the session suppression flag", () => {
+  it("keeps workspace activity while suppressing session-owned slots", () => {
     expect(resolveComposerDockSlots({
       ...BASE_INPUT,
       suppressSessionSlots: true,
@@ -57,7 +58,7 @@ describe("resolveComposerDockSlots", () => {
       recoveredPromptCount: 1,
       primaryPendingInteractionKind: "user_input",
       hasActiveTodoTracker: true,
-      hasDelegatedWork: true,
+      hasWorkspaceActivity: true,
       hasSessionGoal: true,
       hasWorkspaceStatusPanel: true,
     })).toEqual({
@@ -67,6 +68,7 @@ describe("resolveComposerDockSlots", () => {
       attachedSlot: {
         ambientSlot: { kind: "workspace_status" },
         delegatedWork: false,
+        workspaceActivity: true,
         sessionGoal: false,
         sessionActivity: false,
       },
@@ -88,6 +90,7 @@ describe("resolveComposerDockSlots", () => {
     }).attachedSlot).toEqual({
       ambientSlot: null,
       delegatedWork: false,
+      workspaceActivity: false,
       sessionGoal: true,
       sessionActivity: false,
     });
@@ -100,6 +103,7 @@ describe("resolveComposerDockSlots", () => {
     }).attachedSlot).toEqual({
       ambientSlot: null,
       delegatedWork: false,
+      workspaceActivity: false,
       sessionGoal: false,
       sessionActivity: true,
     });
@@ -113,15 +117,30 @@ describe("resolveComposerDockSlots", () => {
     }).attachedSlot).toBeNull();
   });
 
+  it("keeps delegated work and workspace activity attached together", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      hasDelegatedWork: true,
+      hasWorkspaceActivity: true,
+    }).attachedSlot).toEqual({
+      ambientSlot: null,
+      delegatedWork: true,
+      workspaceActivity: true,
+      sessionGoal: false,
+      sessionActivity: false,
+    });
+  });
+
   it("prioritizes workspace status over cloud runtime ambient context", () => {
     expect(resolveComposerDockSlots({
       ...BASE_INPUT,
       hasWorkspaceStatusPanel: true,
       hasCloudRuntimePanel: true,
-      hasDelegatedWork: true,
+      hasWorkspaceActivity: true,
     }).attachedSlot).toEqual({
       ambientSlot: { kind: "workspace_status" },
-      delegatedWork: true,
+      delegatedWork: false,
+      workspaceActivity: true,
       sessionGoal: false,
       sessionActivity: false,
     });
@@ -133,10 +152,11 @@ describe("resolveComposerDockSlots", () => {
       suppressWorkspaceStatusPanels: true,
       hasWorkspaceStatusPanel: true,
       hasCloudRuntimePanel: true,
-      hasDelegatedWork: true,
+      hasWorkspaceActivity: true,
     }).attachedSlot).toEqual({
       ambientSlot: null,
-      delegatedWork: true,
+      delegatedWork: false,
+      workspaceActivity: true,
       sessionGoal: false,
       sessionActivity: false,
     });

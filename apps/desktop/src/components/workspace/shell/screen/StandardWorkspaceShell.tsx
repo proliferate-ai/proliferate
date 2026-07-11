@@ -129,28 +129,22 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const runtimeBlockedReason = getWorkspaceRuntimeBlockReason(selectedWorkspaceId);
   const shellActions = useMemo(() => ({
     openTerminalPanel: actions.openTerminalPanel,
+    openRightPanelTool: actions.onSetRightPanelTool,
+    openPublishDialog: actions.openPublishDialog,
+    openPullRequest: data.existingPr
+      ? () => actions.handleViewPr(data.existingPr)
+      : actions.handlePrOpen,
     workspaceWebActions,
     workspaceRemoteAccessActions,
-  }), [actions.openTerminalPanel, workspaceRemoteAccessActions, workspaceWebActions]);
-  const workspaceActionsMenuProps = useMemo(() => ({
-    branchName: data.gitStatus?.currentBranch?.trim() || null,
-    hasExistingPr: data.existingPr !== null,
-    gitActionsDisabledReason: hasRuntimeReadyWorkspace
-      ? runtimeBlockedReason
-      : "Workspace runtime is not ready.",
-    onCommit: actions.handleCommitOpen,
-    onPush: actions.handlePushOpen,
-    onCreatePr: actions.handlePrOpen,
-    onViewPr: actions.handleViewPr,
   }), [
-    actions.handleCommitOpen,
     actions.handlePrOpen,
-    actions.handlePushOpen,
     actions.handleViewPr,
+    actions.onSetRightPanelTool,
+    actions.openPublishDialog,
+    actions.openTerminalPanel,
     data.existingPr,
-    data.gitStatus?.currentBranch,
-    hasRuntimeReadyWorkspace,
-    runtimeBlockedReason,
+    workspaceRemoteAccessActions,
+    workspaceWebActions,
   ]);
   const repoSettingsHref = useMemo(() => resolveWorkspaceRepoSettingsHref({
     cloudRepoOwner: selectedCloudWorkspace?.repo?.owner,
@@ -282,7 +276,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             runLoading={runCommand.isLaunching}
                             runLabel={runCommand.runLabel}
                             runTitle={runCommand.runTitle}
-                            workspaceActions={workspaceActionsMenuProps}
                             onRun={runCommand.onRun}
                             onTogglePanel={actions.toggleRightPanel}
                           />
@@ -335,6 +328,7 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                             runtimeBlockedReason={runtimeBlockedReason}
                             repoDefaultBranch={publishRepoDefaultBranch}
                             onClose={actions.closePublishDialog}
+                            onIntentChange={actions.openPublishDialog}
                             onViewPr={actions.handlePublishDialogViewPr}
                           />
                         )}

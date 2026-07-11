@@ -196,6 +196,7 @@ export function useMainScreenActions({
     toggleRightPanel,
     openTerminalPanel,
     onSetRightPanelTool: openRightPanelTool,
+    openPublishDialog,
     handleCommitOpen,
     handlePushOpen,
     handlePrOpen,
