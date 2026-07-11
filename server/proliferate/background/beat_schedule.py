@@ -7,7 +7,9 @@ from celery.schedules import crontab
 from proliferate.background.config import (
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK,
     WORKFLOW_DELIVER_OUTBOX_TASK,
+    WORKFLOW_FIRE_DUE_POLLS_TASK,
     WORKFLOW_FIRE_DUE_SCHEDULES_TASK,
+    WORKFLOW_POLL_NEXT_PAGE_TASK,
 )
 from proliferate.config import Settings, settings
 from proliferate.constants.workflows import WORKFLOW_SCHEDULER_DEFAULT_INTERVAL_SECONDS
@@ -37,6 +39,20 @@ def build_beat_schedule(config: Settings = settings) -> BeatSchedule:
         }
         schedule["workflow-deliver-outbox"] = {
             "task": WORKFLOW_DELIVER_OUTBOX_TASK,
+            "schedule": WORKFLOW_SCHEDULER_DEFAULT_INTERVAL_SECONDS,
+        }
+
+    # WS4b poll plane (spec §10.3). A SIBLING flag to ``workflows_beat_schedules``
+    # (same default, same cadence) so the poll half of the cutover can flip
+    # independently of the schedule half. While off, the legacy ``poller.py``
+    # loop still polls. WS4c flips this default and deletes the loop.
+    if config.workflows_beat_polls:
+        schedule["workflow-fire-due-polls"] = {
+            "task": WORKFLOW_FIRE_DUE_POLLS_TASK,
+            "schedule": WORKFLOW_SCHEDULER_DEFAULT_INTERVAL_SECONDS,
+        }
+        schedule["workflow-poll-next-page"] = {
+            "task": WORKFLOW_POLL_NEXT_PAGE_TASK,
             "schedule": WORKFLOW_SCHEDULER_DEFAULT_INTERVAL_SECONDS,
         }
 

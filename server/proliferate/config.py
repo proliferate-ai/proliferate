@@ -53,6 +53,17 @@ class Settings(BaseSettings):
             "WORKFLOWS_BEAT_SCHEDULES", "PROLIFERATE_WORKFLOWS_BEAT_SCHEDULES"
         ),
     )
+    # WS4b poll-plane cutover flag (spec §10.3) — a SIBLING of
+    # ``workflows_beat_schedules`` rather than the same flag, so the poll and
+    # schedule halves of the WS4 cutover can flip independently (they are
+    # separate packets with separate acceptance batteries). Same default (off)
+    # and same shape: while ``False`` the legacy ``poller.py`` loop still polls;
+    # flip to ``True`` to move poll attempts onto Beat + the durable inbox +
+    # cursor CAS. WS4c flips this default to ``True`` and deletes the loop.
+    workflows_beat_polls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WORKFLOWS_BEAT_POLLS", "PROLIFERATE_WORKFLOWS_BEAT_POLLS"),
+    )
     # First-run claim (single-org mode only). While the user table is empty the
     # API mints a setup token, persists its hash in the database, and writes the
     # plaintext to this local file so deploy tooling can print it. The file is

@@ -409,6 +409,30 @@ WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED: Final = "spawned"
 WORKFLOW_TRIGGER_ITEM_STATUS_INVALID: Final = "invalid"
 WORKFLOW_TRIGGER_ITEM_STATUS_ERROR: Final = "error"
 
+# --- Durable poll inbox (WS4b; spec §10.3). ------------------------------------
+# ``workflow_poll_inbox`` rows (WS2a) are the at-most-once dedupe + retry/dead-
+# letter ledger the WS4b poll worker owns. Mirrors the table's CHECK constraint.
+WORKFLOW_POLL_INBOX_STATUS_PENDING: Final = "pending"
+WORKFLOW_POLL_INBOX_STATUS_SCHEDULED: Final = "scheduled"
+WORKFLOW_POLL_INBOX_STATUS_DUPLICATE: Final = "duplicate"
+WORKFLOW_POLL_INBOX_STATUS_DEAD_LETTER: Final = "dead_letter"
+# A transient start_run failure retries the same item identity up to this many
+# attempts before becoming a visible dead letter (spec §10.3).
+WORKFLOW_POLL_MAX_ATTEMPTS: Final = 5
+# One poll occurrence processes at most this many pages of one trigger's feed;
+# reaching the budget records the marker below and lets the next scheduled
+# occurrence continue from the last durable cursor (spec §10.3).
+WORKFLOW_POLL_PAGE_BUDGET: Final = 100
+WORKFLOW_POLL_PAGE_BUDGET_EXHAUSTED: Final = "poll_page_budget_exhausted"
+# ``has_more=true`` with a null or unchanged cursor is a permanent contract
+# error, not a loop (spec §10.3) — the trigger is disabled so a broken endpoint
+# cannot be re-polled forever with the same result.
+WORKFLOW_POLL_CONTRACT_ERROR_REPEATED_CURSOR: Final = (
+    "poll_contract_error: has_more=true with a null or unchanged cursor."
+)
+# The beat's due-trigger claim batch and the next-page outbox relay's claim batch.
+WORKFLOW_POLL_NEXT_PAGE_BATCH_SIZE: Final = 50
+
 # --- Concurrency policy (spec 3.5: simple skip | queue, no batch/parallel). -----
 # skip:  a due tick is dropped (recorded with a reason) while a prior run of the
 #        same trigger is still non-terminal.
@@ -464,7 +488,13 @@ WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE: Final = 100
 # commit never loses the follow-up delivery. A local-ready run needs no outbox —
 # it is claimable over its HTTP API the moment it commits (§10.2).
 WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY: Final = "cloud_delivery"
-SUPPORTED_WORKFLOW_OUTBOX_KINDS: Final = frozenset({WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY})
+# WS4b: a poll page whose response carried ``has_more=true`` writes this kind in
+# the SAME transaction as its cursor CAS (spec §10.3) — the next-page relay task
+# consumes it to fetch the following page outside any DB transaction.
+WORKFLOW_OUTBOX_KIND_POLL_NEXT_PAGE: Final = "poll_next_page"
+SUPPORTED_WORKFLOW_OUTBOX_KINDS: Final = frozenset(
+    {WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY, WORKFLOW_OUTBOX_KIND_POLL_NEXT_PAGE}
+)
 # Relay backoff for a claimed cloud-delivery row that could not be delivered this
 # cycle (a transient wake/transport failure, or a run deferred behind its FIFO
 # predecessor under the ``queue`` concurrency policy). The row returns to

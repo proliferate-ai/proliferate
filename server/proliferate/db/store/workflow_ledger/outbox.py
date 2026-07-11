@@ -57,22 +57,32 @@ async def enqueue_outbox(
 
 
 async def claim_due_outbox_rows(
-    db: AsyncSession, *, now: datetime, limit: int
+    db: AsyncSession, *, now: datetime, limit: int, kind: str | None = None
 ) -> tuple[OutboxRecord, ...]:
     """Claim due pending rows: pending -> delivering under SKIP LOCKED.
 
     Two concurrent relays never claim the same row: the row lock plus the
     status re-check make each pending row claimable exactly once per cycle.
+
+    ``kind`` scopes the claim to one outbox kind (e.g. ``cloud_delivery`` vs
+    ``poll_next_page``, WS4b) so two relays with different kind-specific
+    finalization logic never steal each other's rows from this ONE shared
+    table. ``None`` (the default) claims any kind — every current caller passes
+    an explicit kind; the default exists only for direct/legacy-test callers
+    that predate the second outbox kind.
     """
 
+    conditions = [
+        WorkflowRunOutbox.status == "pending",
+        WorkflowRunOutbox.next_attempt_at <= now,
+    ]
+    if kind is not None:
+        conditions.append(WorkflowRunOutbox.kind == kind)
     rows = list(
         (
             await db.execute(
                 select(WorkflowRunOutbox)
-                .where(
-                    WorkflowRunOutbox.status == "pending",
-                    WorkflowRunOutbox.next_attempt_at <= now,
-                )
+                .where(*conditions)
                 .order_by(
                     WorkflowRunOutbox.next_attempt_at.asc(),
                     WorkflowRunOutbox.created_at.asc(),

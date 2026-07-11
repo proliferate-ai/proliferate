@@ -1357,13 +1357,13 @@ async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-
     """Finding 4: the stateless probe refuses a URL whose host is a private,
     metadata, or CGNAT address — a structured error, and ZERO outbound (the guard
     raises before fetch_poll_page is ever called)."""
-    from proliferate.server.cloud.workflows import triggers as triggers_module
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
     from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
+    from proliferate.server.cloud.workflows.worker import poll_http as poll_http_module
 
-    # The guard is bypassed under settings.debug (local/self-host dev); flip it off
-    # so the guard is active for this test.
-    monkeypatch.setattr(triggers_module.settings, "debug", False)
+    # The guard (and its settings.debug bypass) lives in worker/poll_http.py
+    # (WS4b extraction); flip it off so the guard is active for this test.
+    monkeypatch.setattr(poll_http_module.settings, "debug", False)
 
     # A sentinel that FAILS the test if any outbound request is attempted.
     sentinel = AsyncMock(side_effect=AssertionError("no outbound request may be issued"))
@@ -1382,11 +1382,11 @@ async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-
 async def test_inspect_poll_endpoint_guard_bypassed_in_debug(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """Under settings.debug (local/self-host dev), a localhost feed is NOT blocked —
     the guard is skipped so dev feeds keep working."""
-    from proliferate.server.cloud.workflows import triggers as triggers_module
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
     from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
+    from proliferate.server.cloud.workflows.worker import poll_http as poll_http_module
 
-    monkeypatch.setattr(triggers_module.settings, "debug", True)
+    monkeypatch.setattr(poll_http_module.settings, "debug", True)
     good_page = _page([_item("seed_1", title="hi")])
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
         result = await inspect_poll_endpoint(

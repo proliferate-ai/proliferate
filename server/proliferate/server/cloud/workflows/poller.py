@@ -48,8 +48,14 @@ from proliferate.db.store.cloud_workflow_triggers import DuePollTrigger
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import compiler, triggers
-from proliferate.server.cloud.workflows.domain.poll_contract import PollPage, validate_item_data
+from proliferate.server.cloud.workflows import compiler
+from proliferate.server.cloud.workflows.domain.poll_contract import (
+    PollPage,
+    bound_error_message,
+    overlay_item_inputs,
+    validate_item_data,
+)
+from proliferate.server.cloud.workflows.worker.poll_http import guard_poll_endpoint
 from proliferate.utils.crypto import decrypt_text
 
 logger = logging.getLogger(__name__)
@@ -68,32 +74,6 @@ class _PollActor:
     read ``.id`` (runs execute as the workflow owner; v1 has no "Run as")."""
 
     id: UUID
-
-
-def overlay_item_inputs(
-    item_data: object,
-    *,
-    static_inputs: dict[str, object],
-    item_schema: dict[str, object] | None,
-) -> dict[str, object]:
-    """Static presets ⊕ the item's own fields, taken directly by name (D17).
-
-    The trigger's static ``args_json`` presets are the base; each declared input
-    the item's ``data`` carries overrides its preset. There is no dot-path
-    mapping — a field named ``issue_id`` in ``data`` fills the ``issue_id`` input,
-    nothing else. The declared input names are the ``properties`` keys of the
-    derived item schema; fields in ``data`` that are not declared inputs are
-    ignored (``start_run`` rejects unknown inputs). Item shape is validated
-    against the (derived) schema before this overlay, so this never fails.
-    """
-
-    inputs: dict[str, object] = dict(static_inputs or {})
-    declared = set((item_schema or {}).get("properties", {}) or {})
-    if isinstance(item_data, dict):
-        for name in declared:
-            if name in item_data:
-                inputs[name] = item_data[name]
-    return inputs
 
 
 def decrypt_poll_auth(trigger: DuePollTrigger) -> tuple[str, str] | None:
@@ -159,7 +139,15 @@ async def fetch_poll_page(
     return PollPage.model_validate_json(bytes(body))
 
 
-def _poll_error(exc: Exception) -> str:
+def poll_error_message(exc: Exception) -> str:
+    """Bounded, human-readable message for a poll-fetch failure.
+
+    Public (not ``_``-prefixed): the WS4b beat worker (``worker/polls.py``)
+    reuses this exact formatting for its own fetch-failure path so a poll
+    trigger's ``last_poll_error`` reads the same regardless of which lane
+    (legacy loop or Beat) hit the failure.
+    """
+
     if isinstance(exc, httpx.HTTPStatusError):
         message = f"HTTP {exc.response.status_code} from poll endpoint."
     elif isinstance(exc, PollResponseTooLargeError):
@@ -172,10 +160,7 @@ def _poll_error(exc: Exception) -> str:
         message = exc.message
     else:
         message = f"Poll response was not a valid page: {exc}"
-    normalized = " ".join(message.split())
-    if len(normalized) <= WORKFLOW_POLL_ERROR_MAX_LENGTH:
-        return normalized
-    return normalized[: WORKFLOW_POLL_ERROR_MAX_LENGTH - 1] + "…"
+    return bound_error_message(message, max_length=WORKFLOW_POLL_ERROR_MAX_LENGTH)
 
 
 async def _poll_one_trigger(
@@ -214,7 +199,7 @@ async def _poll_one_trigger(
                 # a private/metadata address is the same SSRF as the setup probe.
                 # Bypassed under settings.debug (local/self-host dev). A block here is
                 # recorded like any poll error — cursor kept, trigger stays enabled.
-                triggers.guard_poll_endpoint(trigger.poll_url)
+                guard_poll_endpoint(trigger.poll_url)
                 page = await fetch_poll_page(
                     url=trigger.poll_url,
                     auth_header=auth_header,
@@ -231,7 +216,7 @@ async def _poll_one_trigger(
                     trigger_id=trigger_id,
                     cursor=trigger.poll_cursor,
                     polled_at=now,
-                    error=_poll_error(exc),
+                    error=poll_error_message(exc),
                 )
                 return 0
 
@@ -353,6 +338,13 @@ async def run_workflow_poller_tick(
     # D-003: the launch flag gates the background poll plane too (see the
     # scheduler tick's matching guard).
     if not settings.workflows_enabled:
+        return 0
+    # WS4b cutover: Beat owns poll attempts once ``workflows_beat_polls`` is set
+    # (worker/polls.py + the workflow_fire_due_polls/workflow_poll_next_pages
+    # tasks); this loop then polls nothing (mirrors the schedule loop's
+    # ``workflows_beat_schedules`` gate in scheduler.py). Default (flag off)
+    # keeps this loop polling.
+    if settings.workflows_beat_polls:
         return 0
     now = utcnow()
     return await run_poll_pass(session_factory, now=now, batch_size=batch_size)
