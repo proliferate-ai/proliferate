@@ -20,6 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from alembic import command
+from alembic.script import ScriptDirectory
 from proliferate.db.migrations import build_alembic_config
 from proliferate.db.store import function_invocations as invocations_store
 from tests.postgres import temporary_database
@@ -28,7 +29,6 @@ from tests.unit.workflow_capability_helpers import make_user, seed_invocation
 pytestmark = pytest.mark.asyncio
 
 _PRE_WS3A_HEAD = "d9578c0275f3"
-_WS3A_REVISION = "b3d1f5a9c7e2"
 
 
 async def test_semantic_revision_bumps_on_semantic_edits_only(
@@ -95,6 +95,8 @@ async def test_ws3a_migration_applies_to_populated_pre_ws3a_database() -> None:
 
     async with temporary_database("ws3a_prefeature") as (_name, database_url):
         config = build_alembic_config(database_url)
+        expected_head = ScriptDirectory.from_config(config).get_current_head()
+        assert expected_head is not None
         await asyncio.to_thread(command.upgrade, config, _PRE_WS3A_HEAD)
 
         engine = create_async_engine(database_url, echo=False)
@@ -125,7 +127,7 @@ async def test_ws3a_migration_applies_to_populated_pre_ws3a_database() -> None:
 
             async with engine.connect() as conn:
                 version_num = await conn.scalar(text("SELECT version_num FROM alembic_version"))
-                assert version_num == _WS3A_REVISION
+                assert version_num == expected_head
                 revision = await conn.scalar(
                     text(
                         "SELECT semantic_revision FROM function_invocation_definition "
