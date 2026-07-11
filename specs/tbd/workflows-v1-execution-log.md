@@ -26,13 +26,14 @@ conversation memory.
 | 4b | WS0B-U desktop screens ownership split | `e01bc8be5` (merged `0d57e8a9e`) | WS0B-S in base `3a2336720` | agent: tsc clean, boundaries pass, host/home vitest 17/17, 16 pre-existing unrelated vitest failures verified identical on base; captain post-merge: tsc clean, boundaries pass, host/home 17/17 | ACCEPTED — HomeScreen 619→367, EditorScreen 1212→366, TriggersCard 1064→131; inspector/canvas/trigger components + draft/create/trigger hooks; raw-access violation fixed; 2 max-lines + 3 structure allowlist entries removed |
 | 6 | WS2a persistence skeleton | `3ac1abe46` (rebased `b72e468c4`, merged `ea4f5de5f`) | WS1+WS0B-S via rebase onto `0b25ffcc0` | agent: 77 unit + 39 gateway + 6 migration-integration + heads + populated-DB upgrade test; captain post-rebase: 77 passed + single head d9578c0275f3; post-merge heads verified | ACCEPTED — 7 new tables + run state-axis columns (NULL legacy), workflow_ledger store package, migration c3f8b1d6a4e2→d9578c0275f3. 10 downstream shape decisions recorded in agent handoff (capability_key = WS3a-defined; NULL revision ≡ 0; no fence secret in rows; acquire_session_leases needs caller rollback; workflow_trigger_item/step_action retirement → WS4b/c) |
 | 7 | WS5a runtime acceptance + observation outbox | `bf7055e57` (rebased `b7f4358cc`, merged `3619df135`) | WS1+WS0B-R; rebased onto `bb0eac10c` | agent: full crate 1128/0 (+12 new), workflows 143/0, max-lines byte-identical to base; captain post-rebase: full crate 1128/0 | ACCEPTED — SQLite 0056/0057; gapless same-tx whole-snapshot revisions; lowest_unacked/ack/replay + service seam; optional delivery-identity conflict rejection (HTTP 409), legacy unchanged. DECISION: runtime reuses plan-carried step keys (node.lane.step) — v2 root::uuid grammar activates when WS2b compiles v2 plans; WS2c owns boundary translation if needed |
+| 9 | WS3a exact capability grants | `8f8bec721` (rebased `ea5934e25`, merged `a76e07367`) | WS2a+WS1+WS0B-S; rebased onto `28fa29a2e` | agent: 121 focused tests, heads, ruff, boundaries; captain post-rebase: 60 tests + single head b3d1f5a9c7e2; post-merge heads verified | ACCEPTED — capability_key codec, semantic_revision migration (d9578c0275f3→b3d1f5a9c7e2), StartRun lease freezing, authorize_capability live narrowing beside legacy namespace layer. LEGACY-PARALLEL: namespace token still mints/consumed until WS3b/5c; cold tool cache defers to namespace layer until WS3c; product_mcp arm → WS8. NOTE: future migrations must move _CHAIN_HEAD pin in test_workflow_ledger_skeleton.py |
 | 8 | WS9a product-domain strict model | `4db884977` (rebased `18bf4905e`, merged `28fa29a2e`) | WS1+WS0B-U; rebased onto `96b4befa9` | agent: build + 665/665 (18 new), desktop tsc clean, structure ratchet shrank; captain post-rebase: build + 665/665 | ACCEPTED — identity.ts (UUIDv7/v5 via WS1 module, canonical serialize, §5.1 step keys), read-only unknown versions (type-narrowed serializer), §6.1 slot lineage (replaced 2 wrong duplicate_slot tests), strict emit-schema profile + branch grammar. New exports: workflows/identity, /read-only, /strict-rules |
 | 5 | WS10a strict release runner/policy | `abffe516845b036d511a449bc4c4daba0e296396` (merged `50cdfef80`) | WS1 `ac7044316` | agent: 85/85 tests/release tests, typecheck, live CLI proof both modes; captain: typecheck + 85/85 re-run in worktree | ACCEPTED — signal/release modes; required-workflows.json seeded (content ownership → WS10b); summary artifact + validateSummary for WS10c; SUMMARY_ENV interface recorded; correlation/deadline/no-retry guards. NOTE: focused command is `pnpm -C tests/release exec tsx --test src/runner/workflow-policy.test.ts` (plan's `test -- workflow-policy` does not filter) |
 | 4 | WS0B-S service ownership split | `f11870c4e` (merged `72338fe4b`) | WS0 `68661e27e` | agent: 303 workflow unit tests, ruff, boundaries, AST byte-verification of moves; captain post-merge: test_workflow_service+delivery green | ACCEPTED — service.py 1898→327 + compiler.py/triggers.py/worker/service.py; service.py allowlist entry removed. CAVEATS: triggers.py (943) added to allowlist as carved-out debt (further split owned by WS4a/b); api.py and test_workflow_run_gateway.py allowlist +1 each (import-line necessity, inline-documented). Net violations decreased. |
 
 ## Integration HEAD
 
-`28fa29a2e` (9 packets merged: + WS9a; WS3a post-rebase verify in progress)
+`a76e07367` (10 packets merged: + WS3a). Server chain next: WS2b
 
 ## Gate status
 
@@ -52,7 +53,7 @@ conversation memory.
 | `anyharness-contract/src/v1/workflows*.rs` + API mapping | RELEASED by WS1 | — |
 | Server contract request/response models + OpenAPI/SDK regen | captain (regen pending, models unwired) | captain |
 | `traceability.yaml` | CAPTAIN-OWNED (append-only) | captain |
-| Workflow ORM + Alembic chain | head d9578c0275f3; NEXT slot assigned to WS3a | WS3a |
+| Workflow ORM + Alembic chain | head b3d1f5a9c7e2; next slot WS2b on request | captain |
 | `server/cloud/workflows/**` service split | RELEASED by WS0B-S; compiler/ledger next to WS2b | — |
 | `anyharness-lib/**/workflows/**` module split | RELEASED by WS0B-R; domain semantics next to WS5a | — |
 | Desktop workflow screens/hooks split | RELEASED by WS0B-U; editor behavior next to WS9b | — |
@@ -71,14 +72,14 @@ conversation memory.
 
 ## Migrations
 
-- Alembic chain: c3f8b1d6a4e2 → d9578c0275f3 (WS2a). Next slot: WS3a (in flight).
+- Alembic chain: c3f8b1d6a4e2 → d9578c0275f3 (WS2a) → b3d1f5a9c7e2 (WS3a). Next slot: WS2b if needed.
 
 ## In-flight packets
 
 | Packet | Agent | Worktree | Base SHA | Status |
 | --- | --- | --- | --- | --- |
-| WS3a exact grants | returned `8f8bec721`; captain rebased → `ea5934e25` | ~/proliferate-wt/wsc-ws3a | ea4f5de5f→28fa29a2e | post-rebase check running |
 | WS5b sequential effects | agent (opus) | ~/proliferate-wt/wsc-ws5b | 96b4befa9 | running |
+| WS2b compiler/ledger | agent (opus) | ~/proliferate-wt/wsc-ws2b | a76e07367 | launching |
 
 ## Blockers
 
