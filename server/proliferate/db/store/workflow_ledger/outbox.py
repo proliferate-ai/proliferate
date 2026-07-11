@@ -124,6 +124,36 @@ async def get_outbox_row(db: AsyncSession, outbox_id: UUID) -> OutboxRecord | No
     return None if row is None else record_outbox(row)
 
 
+async def invalidate_run_outbox(db: AsyncSession, *, run_id: UUID) -> int:
+    """Fail every still-live (pending/delivering) outbox row for a run (§8.3).
+
+    Pre-acceptance cancellation invalidates the run's delivery offer so no relay
+    can hand the plan to a runtime after cancel. Terminal rows (delivered/failed)
+    are left as-is. Returns the number of rows invalidated.
+    """
+
+    rows = (
+        (
+            await db.execute(
+                select(WorkflowRunOutbox).where(
+                    WorkflowRunOutbox.run_id == run_id,
+                    WorkflowRunOutbox.status.in_(("pending", "delivering")),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    for row in rows:
+        row.status = "failed"
+        row.last_error = "invalidated: run cancelled before acceptance"
+        row.updated_at = now
+    if rows:
+        await db.flush()
+    return len(rows)
+
+
 # --- control commands (spec §8.3) --------------------------------------------------
 
 

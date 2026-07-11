@@ -29,6 +29,9 @@ from proliferate.server.cloud.runtime_workers.api import (
 from proliferate.server.cloud.secrets.api import router as secrets_router
 from proliferate.server.cloud.webhooks.api import router as webhooks_router
 from proliferate.server.cloud.workflows.api import router as workflows_router
+from proliferate.server.cloud.workflows.executor_credentials_api import (
+    router as workflow_executor_credentials_router,
+)
 from proliferate.server.cloud.workspaces.api import router as workspaces_router
 from proliferate.server.cloud.worktree_policy.api import router as worktree_policy_router
 
@@ -48,6 +51,9 @@ router.include_router(worktree_policy_router)
 router.include_router(agent_gateway_router)
 router.include_router(agent_gateway_organization_router)
 router.include_router(agent_run_config_router)
+# Registered BEFORE the workflows router so the literal control-channel + executor
+# paths win over the ``/{workflow_id}`` param routes.
+router.include_router(workflow_executor_credentials_router)
 router.include_router(workflows_router)
 router.include_router(runtime_workers_router)
 router.include_router(runtime_worker_router)

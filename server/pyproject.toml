@@ -116,6 +116,8 @@ module = [
     "proliferate.server.cloud.managed_sandboxes.models",
     "proliferate.server.cloud.repos.models",
     "proliferate.server.cloud.workflows.models",
+    # WS3b: credential exchange/ACK/rotation request/response models live here.
+    "proliferate.server.cloud.workflows.executor_credentials_api",
     "proliferate.server.cloud.workflows.domain.poll_contract",
     "proliferate.server.support.models",
     "proliferate.config",

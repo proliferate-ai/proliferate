@@ -168,6 +168,67 @@ WORKFLOW_RUN_OBSERVABLE_STATUSES: Final = frozenset(
 # Reverse path: swap the terminal error for a `deferred` status + retry-on-reset.
 WORKFLOW_RUN_ERROR_BUDGET_BLOCKED: Final = "budget_blocked"
 
+# --- Independent run state axes (spec §8.1; WS2c behavioral cutover). -----------
+# The ADD-ONLY axis columns (WS2a) carry desired/delivery/observed/execution-health
+# facts alongside the legacy ``status`` (which stays authoritative for public
+# status until the WS9c/API cutover — WS2c writes BOTH and derives nothing yet).
+
+# desired state: the human/control-plane intent.
+WORKFLOW_DESIRED_STATE_RUNNING: Final = "running"
+WORKFLOW_DESIRED_STATE_CANCEL_REQUESTED: Final = "cancel_requested"
+
+# delivery state: ready -> claimed -> materializing -> delivered -> acknowledged,
+# with retryable_ready / terminal_delivery_failure branches.
+WORKFLOW_DELIVERY_STATE_READY: Final = "ready"
+WORKFLOW_DELIVERY_STATE_CLAIMED: Final = "claimed"
+WORKFLOW_DELIVERY_STATE_MATERIALIZING: Final = "materializing"
+WORKFLOW_DELIVERY_STATE_DELIVERED: Final = "delivered"
+WORKFLOW_DELIVERY_STATE_ACKNOWLEDGED: Final = "acknowledged"
+WORKFLOW_DELIVERY_STATE_RETRYABLE_READY: Final = "retryable_ready"
+WORKFLOW_DELIVERY_STATE_TERMINAL_FAILURE: Final = "terminal_delivery_failure"
+
+# control-plane execution health: healthy -> suspect -> orphaned. ``orphaned`` is
+# a server-owned coordination marker; it NEVER overwrites an observed_* field.
+WORKFLOW_EXECUTION_HEALTH_HEALTHY: Final = "healthy"
+WORKFLOW_EXECUTION_HEALTH_SUSPECT: Final = "suspect"
+WORKFLOW_EXECUTION_HEALTH_ORPHANED: Final = "orphaned"
+
+# pre-acceptance cancellation coordination (§8.3 branch 1).
+WORKFLOW_PREACCEPT_CANCEL_NONE: Final = "none"
+WORKFLOW_PREACCEPT_CANCEL_CANCELLING: Final = "cancelling_preaccept"
+WORKFLOW_PREACCEPT_CANCEL_CANCELLED: Final = "cancelled_before_acceptance"
+
+# --- Revisioned observed-run report path (spec §5.4; WS2c). --------------------
+# The runtime (WS5c) sends a whole ``ObservedRun`` snapshot bound to the immutable
+# delivery identity ``(run_id, plan_hash, binding_hash, execution_generation)``
+# plus a strictly increasing ``revision``. A legacy run (delivered pre-WS2c, or a
+# current run whose binding/generation is not yet set) has NULL identity columns
+# and accepts these unambiguous sentinels (a real hash is ``sha256:…`` and a real
+# generation is ``>= 1``).
+WORKFLOW_LEGACY_HASH_SENTINEL: Final = ""
+WORKFLOW_LEGACY_GENERATION_SENTINEL: Final = 0
+
+# The ObservedRun ``observedState`` vocabulary (contracts/models.py) mapped to the
+# legacy public ``status`` slug so the run view keeps working through the cutover.
+# waiting_action_result / waiting_credential_refresh / quiescing are all live
+# sub-states of a running run in v1 (no human approval — §8.1).
+WORKFLOW_OBSERVED_STATE_TO_LEGACY_STATUS: Final[dict[str, str]] = {
+    "accepted": WORKFLOW_RUN_STATUS_DELIVERED,
+    "running": WORKFLOW_RUN_STATUS_RUNNING,
+    "waiting_action_result": WORKFLOW_RUN_STATUS_RUNNING,
+    "waiting_credential_refresh": WORKFLOW_RUN_STATUS_RUNNING,
+    "waiting_approval": WORKFLOW_RUN_STATUS_WAITING_APPROVAL,
+    "quiescing": WORKFLOW_RUN_STATUS_RUNNING,
+    "completed": WORKFLOW_RUN_STATUS_COMPLETED,
+    "failed": WORKFLOW_RUN_STATUS_FAILED,
+    "cancelled": WORKFLOW_RUN_STATUS_CANCELLED,
+}
+
+# The terminal observed-run states (§5.4: once terminal the snapshot is immutable).
+WORKFLOW_OBSERVED_TERMINAL_STATES: Final = frozenset(
+    {"completed", "failed", "cancelled"}
+)
+
 # --- Step kinds (definition format v2; data-contract §1.2). --------------------
 # human.approval is REMOVED (E1); agent.emit and branch are NEW (A3/C11). The
 # waiting_approval run status survives via goal.on_blocked, not a step kind.
@@ -396,6 +457,20 @@ WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY: Final = (
 # --- Scheduler tick bounds (mirrors the automations beat; spec 3.5). -----------
 WORKFLOW_SCHEDULER_DEFAULT_INTERVAL_SECONDS: Final = 15.0
 WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE: Final = 100
+
+# --- Transactional outbox kinds (WS4a; spec §10.2, §6 WF-6). -------------------
+# A schedule/poll fire that targets a cloud runtime writes a ``cloud_delivery``
+# outbox row in the SAME transaction as the run intent, so a crash after intent
+# commit never loses the follow-up delivery. A local-ready run needs no outbox —
+# it is claimable over its HTTP API the moment it commits (§10.2).
+WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY: Final = "cloud_delivery"
+SUPPORTED_WORKFLOW_OUTBOX_KINDS: Final = frozenset({WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY})
+# Relay backoff for a claimed cloud-delivery row that could not be delivered this
+# cycle (a transient wake/transport failure, or a run deferred behind its FIFO
+# predecessor under the ``queue`` concurrency policy). The row returns to
+# ``pending`` with this delay and is re-claimed on a later relay cycle.
+WORKFLOW_OUTBOX_RELAY_BATCH_SIZE: Final = 50
+WORKFLOW_OUTBOX_RELAY_RETRY_DELAY_SECONDS: Final = 30.0
 # Each cloud delivery wakes a sandbox, so cap wakes per beat to keep it bounded
 # (the house automation loop bounds its per-tick work the same way).
 WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK: Final = 25
@@ -446,6 +521,45 @@ WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS: Final = 24 * 60 * 60
 WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE: Final = "active"
 WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED: Final = "expired"
 WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_REVOKED: Final = "revoked"
+
+# --- WS3b credential audiences (feature spec §5.3 / §7.1). ---------------------
+# Every short-lived workflow credential carries a typed audience. A token minted
+# for one audience is denied at every other endpoint family. A NULL audience is a
+# LEGACY (pre-WS3b) all-purpose run token that still authenticates everywhere it
+# did before migration (compat); enforcement is strict only for new-style tokens.
+WORKFLOW_CREDENTIAL_AUDIENCE_INTEGRATION: Final = "integration"
+WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT: Final = "run_report"
+WORKFLOW_CREDENTIAL_AUDIENCE_PING: Final = "ping"
+WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM: Final = "delivery_claim"
+WORKFLOW_CREDENTIAL_AUDIENCES: Final = frozenset(
+    {
+        WORKFLOW_CREDENTIAL_AUDIENCE_INTEGRATION,
+        WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT,
+        WORKFLOW_CREDENTIAL_AUDIENCE_PING,
+        WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM,
+    }
+)
+# The control channel (§5.3 "authenticated control channel"): the run_report or
+# delivery_claim credential may drive the credential exchange/ACK endpoints.
+WORKFLOW_CONTROL_CHANNEL_AUDIENCES: Final = frozenset(
+    {
+        WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT,
+        WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM,
+    }
+)
+
+# --- WS3b per-slot one-use issuance handles (feature spec §5.3). ---------------
+# A handle is minted per slot into the private envelope at StartRun and exchanged
+# once (per session) for a session-bound integration credential. ``pending`` =
+# minted, never exchanged; ``exchanged`` = credential issued, awaiting runtime
+# install ACK (an identical retry returns the SAME generation); ``acknowledged``
+# = the runtime installed it and the handle is consumed (no further exchange).
+WORKFLOW_ISSUANCE_STATUS_PENDING: Final = "pending"
+WORKFLOW_ISSUANCE_STATUS_EXCHANGED: Final = "exchanged"
+WORKFLOW_ISSUANCE_STATUS_ACKNOWLEDGED: Final = "acknowledged"
+# The short-lived integration credential's lifetime; rotation refreshes it before
+# expiry over the authenticated control channel (§5.3).
+WORKFLOW_INTEGRATION_CREDENTIAL_TTL_SECONDS: Final = 60 * 60
 
 # --- Function invocations (Part II mental-model §1; track 1b phase 2). ---------
 # User-authored HTTP functions exposed at the integration gateway under the

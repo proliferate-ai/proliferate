@@ -24,15 +24,24 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE
+from proliferate.constants.cloud import (
+    CLOUD_WORKFLOW_CREDENTIAL_ACK_PATH_TEMPLATE,
+    CLOUD_WORKFLOW_CREDENTIAL_EXCHANGE_PATH_TEMPLATE,
+    CLOUD_WORKFLOW_CREDENTIAL_ROTATE_PATH_TEMPLATE,
+    CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE,
+)
 from proliferate.constants.workflows import (
     FUNCTION_INVOCATION_PROVIDER_NAMESPACE,
+    WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM,
+    WORKFLOW_CREDENTIAL_AUDIENCE_PING,
+    WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT,
     WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS,
 )
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import function_invocations as invocations_store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
+from proliferate.db.store import workflow_credentials as credentials_store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.errors import CloudApiError
@@ -208,6 +217,32 @@ async def mint_run_gateway_token(
     return token, build_gateway_plan_block(token=token, run_id=run_id, scope=scope)
 
 
+async def mint_private_envelope(
+    db: AsyncSession,
+    *,
+    run_id: UUID,
+    owner_user_id: UUID,
+    scope: dict[str, dict[str, object]],
+    plan_hash: str | None,
+) -> dict[str, object]:
+    """Build the run's PRIVATE execution envelope (feature spec §5.3).
+
+    Mints the legacy all-purpose gateway token (the pre-WS5c runtime keeps using
+    it — it authenticates every audience) AND the WS3b audience-separated control
+    credentials + per-slot one-use integration-credential issuance handles. Never
+    returned by ordinary run APIs; folded into the delivered plan on the cloud
+    delivery task and desktop claim/deliver paths only.
+    """
+
+    _token, gateway_block = await mint_run_gateway_token(
+        db, run_id=run_id, owner_user_id=owner_user_id, scope=scope
+    )
+    credentials_block = await mint_run_credentials(
+        db, run_id=run_id, owner_user_id=owner_user_id, scope=scope, plan_hash=plan_hash
+    )
+    return {"gateway": gateway_block, "credentials": credentials_block}
+
+
 async def rotate_run_gateway_token(
     db: AsyncSession,
     *,
@@ -233,15 +268,95 @@ async def rotate_run_gateway_token(
     )
 
 
-def _ping_url(run_id: UUID) -> str:
+def _worker_url(run_id: UUID, template: str) -> str:
     base = worker_cloud_base_url()
     if not base:
         raise CloudApiError(
             "cloud_worker_misconfigured",
-            "No cloud base URL is configured for the workflow completion ping.",
+            "No cloud base URL is configured for the workflow control channel.",
             status_code=500,
         )
-    return f"{base}{CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE.format(run_id=run_id)}"
+    return f"{base}{template.format(run_id=run_id)}"
+
+
+def _ping_url(run_id: UUID) -> str:
+    return _worker_url(run_id, CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE)
+
+
+async def mint_run_credentials(
+    db: AsyncSession,
+    *,
+    run_id: UUID,
+    owner_user_id: UUID,
+    scope: dict[str, dict[str, object]],
+    plan_hash: str | None,
+) -> dict[str, object]:
+    """WS3b: mint the run's per-audience control credentials + per-slot one-use
+    integration-credential issuance handles, and build the ``credentials`` block
+    of the PRIVATE execution envelope (feature spec §5.3).
+
+    This is minted ALONGSIDE the legacy all-purpose token (:func:`mint_run_gateway_token`)
+    so the pre-WS5c runtime keeps working; WS5c adopts these audience-separated
+    credentials + the exchange handle. Returns the envelope block:
+
+    * ``run_report`` / ``ping`` / ``delivery_claim`` — audience-stamped bearers
+    * ``slot_issuance_handles`` — ``{slot_id: one-use-handle}`` (the plaintext
+      handle rides the envelope; only its hash is stored)
+    * ``exchange_url`` / ``ack_url`` / ``rotate_url`` — the authenticated
+      control-channel routes WS5c calls
+
+    The integration credential itself is NOT minted here: a fresh slot has no
+    session at envelope time, so it is issued only when the runtime exchanges the
+    handle post-session-lease (``credential_exchange.exchange_slot_credential``).
+    """
+
+    organization_id = await _organization_id_for_owner(db, owner_user_id=owner_user_id)
+    expires_at = utcnow() + timedelta(seconds=WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS)
+
+    async def _mint(audience: str) -> dict[str, object]:
+        token = secrets.token_urlsafe(_TOKEN_BYTES)
+        await credentials_store.create_audience_token(
+            db,
+            workflow_run_id=run_id,
+            owner_user_id=owner_user_id,
+            organization_id=organization_id,
+            token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
+            scope_json=scope,
+            audience=audience,
+            generation=1,
+            expires_at=expires_at,
+        )
+        return {
+            "authorization": f"Bearer {token}",
+            "audience": audience,
+            "generation": 1,
+        }
+
+    block: dict[str, object] = {
+        "run_report": await _mint(WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT),
+        "ping": await _mint(WORKFLOW_CREDENTIAL_AUDIENCE_PING),
+        "delivery_claim": await _mint(WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM),
+        "exchange_url": _worker_url(run_id, CLOUD_WORKFLOW_CREDENTIAL_EXCHANGE_PATH_TEMPLATE),
+        "ack_url": _worker_url(run_id, CLOUD_WORKFLOW_CREDENTIAL_ACK_PATH_TEMPLATE),
+        "rotate_url": _worker_url(run_id, CLOUD_WORKFLOW_CREDENTIAL_ROTATE_PATH_TEMPLATE),
+    }
+
+    # One per-slot one-use handle. Slots come from the resolved per-slot scope
+    # (every agent node/lane is its own slot, §6.1). The runtime exchanges each
+    # for its session-bound integration credential after the session lease.
+    handles: dict[str, str] = {}
+    for slot_id in sorted(scope):
+        handle = secrets.token_urlsafe(_TOKEN_BYTES)
+        await credentials_store.create_issuance_handle(
+            db,
+            workflow_run_id=run_id,
+            slot_id=slot_id,
+            handle_hash=runtime_workers_store.hash_workflow_issuance_handle(handle),
+            plan_hash=plan_hash,
+        )
+        handles[slot_id] = handle
+    block["slot_issuance_handles"] = handles
+    return block
 
 
 def build_gateway_plan_block(

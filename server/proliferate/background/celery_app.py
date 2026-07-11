@@ -15,3 +15,4 @@ celery_app.conf.beat_schedule = build_beat_schedule()
 import proliferate.background.tasks.customerio_sync  # noqa: E402,F401
 import proliferate.background.tasks.health  # noqa: E402,F401
 import proliferate.background.tasks.notifications  # noqa: E402,F401
+import proliferate.background.tasks.workflows  # noqa: E402,F401

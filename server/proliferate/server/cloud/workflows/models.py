@@ -182,6 +182,21 @@ class WorkflowRunResponse(WorkflowBaseModel):
     last_heartbeat_at: str | None = Field(default=None, alias="lastHeartbeatAt")
 
 
+class ObservedRunReportResponse(WorkflowBaseModel):
+    """Revisioned observation report result (spec §5.4; WS5c consumes this).
+
+    ``result`` is the CAS/identity verdict (``applied`` / ``retry_noop`` /
+    ``stale_rejected`` / ``future_rejected`` / ``conflict`` / ``terminal_immutable``);
+    ``ackedRevision`` is the highest revision the server has durably accepted, so
+    the runtime replays its ordered outbox from ``ackedRevision + 1``. ``run`` is
+    the (secret-free) mirrored run row, present only when an observation applied.
+    """
+
+    result: str
+    acked_revision: int = Field(alias="ackedRevision")
+    run: WorkflowRunResponse | None = None
+
+
 class StepActionResponse(WorkflowBaseModel):
     step_key: str = Field(alias="stepKey")
     action_kind: str = Field(alias="actionKind")

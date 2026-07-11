@@ -141,6 +141,50 @@ async def test_gateway_receipt_activation_id_is_unique(db_session: AsyncSession)
     assert [r.id for r in per_step] == [receipt.id]
 
 
+# --- required-invocation activations (spec §7.3) --------------------------------------
+
+
+async def test_activation_id_is_globally_unique(db_session: AsyncSession) -> None:
+    user = await make_user(db_session)
+    run = await make_run(db_session, user)
+    plan_hash = f"sha256:{'0' * 64}"
+    step_key = "root::node-1::-::step-1"
+    activation_id = f"act_{uuid.uuid4().hex}"
+
+    activation = await ledger.insert_activation(
+        db_session,
+        run_id=run.id,
+        plan_hash=plan_hash,
+        slot_id="slot-1",
+        session_id="session-1",
+        step_key=step_key,
+        attempt=1,
+        activation_id=activation_id,
+        capability_key="function:fn_notify:3",
+    )
+    assert activation.activation_id == activation_id
+
+    # The same activation id can never be registered twice at the DB layer — the
+    # service layer (register_activation) owns idempotent-vs-conflicting-reuse.
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            await ledger.insert_activation(
+                db_session,
+                run_id=run.id,
+                plan_hash=plan_hash,
+                slot_id="slot-2",
+                session_id="session-2",
+                step_key="root::node-2::-::step-2",
+                attempt=1,
+                activation_id=activation_id,
+                capability_key="function:fn_other:1",
+            )
+
+    recovered = await ledger.get_activation_by_id(db_session, activation_id=activation_id)
+    assert recovered is not None and recovered.id == activation.id
+    assert recovered.slot_id == "slot-1"
+
+
 # --- deterministic action identity (spec §7.4) -----------------------------------------
 
 

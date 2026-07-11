@@ -114,6 +114,16 @@ class WorkflowRunRecord:
     desired_state: str | None = None
     delivery_state: str | None = None
     private_envelope_json: dict[str, object] | None = None
+    # WS2c: the remaining §8.1 axes + delivery identity read side. ``observed_*``
+    # is the runtime-observed mirror written only by the revisioned report path;
+    # ``execution_health``/``preaccept_cancel_state`` are server-owned coordination.
+    binding_hash: str | None = None
+    execution_generation: int | None = None
+    observed_state: str | None = None
+    observed_quiescence_state: str | None = None
+    observed_revision: int | None = None
+    execution_health: str | None = None
+    preaccept_cancel_state: str | None = None
 
 
 def _workflow_record(row: Workflow) -> WorkflowRecord:
@@ -186,6 +196,13 @@ def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
         private_envelope_json=(
             dict(row.private_envelope_json) if row.private_envelope_json is not None else None
         ),
+        binding_hash=row.binding_hash,
+        execution_generation=row.execution_generation,
+        observed_state=row.observed_state,
+        observed_quiescence_state=row.observed_quiescence_state,
+        observed_revision=row.observed_revision,
+        execution_health=row.execution_health,
+        preaccept_cancel_state=row.preaccept_cancel_state,
     )
 
 
@@ -605,12 +622,25 @@ async def update_run(
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
     stopped_by_user_id: UUID | None = None,
+    desired_state: str | None = None,
+    delivery_state: str | None = None,
+    observed_state: str | None = None,
+    observed_quiescence_state: str | None = None,
+    execution_health: str | None = None,
+    preaccept_cancel_state: str | None = None,
     clear_error: bool = False,
 ) -> WorkflowRunRecord | None:
     """Apply a run update. Only non-None arguments are written.
 
     ``clear_error`` is the one exception to the non-None rule: it nulls a prior
     ``delivery_failed`` marker when a re-delivery finally lands.
+
+    The independent state axes (§8.1; WS2c) are written alongside the legacy
+    ``status`` here — ``status`` stays authoritative for public status until the
+    API cutover. ``observed_state`` is set only by the accepted-observation path
+    (worker/service.report_observed_run); ``execution_health`` = ``orphaned``
+    never rides in the same call as an observed_* write (§8.1: orphaned is a
+    server-owned coordination marker and never overwrites a runtime observation).
 
     IMMUTABLE-LEDGER GUARD (WS2b, feature spec §5.2): the logical
     ``resolved_plan_json`` is frozen once the run row exists — it and its
@@ -660,6 +690,18 @@ async def update_run(
         row.finished_at = finished_at
     if stopped_by_user_id is not None:
         row.stopped_by_user_id = stopped_by_user_id
+    if desired_state is not None:
+        row.desired_state = desired_state
+    if delivery_state is not None:
+        row.delivery_state = delivery_state
+    if observed_state is not None:
+        row.observed_state = observed_state
+    if observed_quiescence_state is not None:
+        row.observed_quiescence_state = observed_quiescence_state
+    if execution_health is not None:
+        row.execution_health = execution_health
+    if preaccept_cancel_state is not None:
+        row.preaccept_cancel_state = preaccept_cancel_state
     row.updated_at = utcnow()
     await db.flush()
     return _run_record(row)

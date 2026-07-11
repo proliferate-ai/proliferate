@@ -21,6 +21,7 @@ from proliferate.db.store.integrations import policies as policies_store
 from proliferate.db.store.integrations import tool_call_events as tool_call_events_store
 from proliferate.db.store.integrations.accounts import ReadyAccountRow
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
+from proliferate.db.store.workflow_ledger.records import GatewayReceiptRecord
 from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
 from proliferate.server.cloud.errors import CloudApiError
@@ -33,7 +34,7 @@ from proliferate.server.cloud.integration_gateway.domain.tool_args import (
 from proliferate.server.cloud.integration_gateway.models import GatewayProviderAccount
 from proliferate.server.cloud.integrations.access import resolve_launch
 from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cache
-from proliferate.server.cloud.workflows import capability_authz
+from proliferate.server.cloud.workflows import activation_receipts, capability_authz
 
 _PROTOCOL_VERSION = "2025-06-18"
 
@@ -260,6 +261,26 @@ async def list_tools_for_provider(
     return {"provider": provider, "tools": filtered}
 
 
+def _activation_recovered_result(receipt: GatewayReceiptRecord) -> dict[str, object]:
+    """§7.3 lost-response recovery: an activation that ALREADY has a terminal
+    receipt is never re-dispatched upstream — this shapes a result from the
+    durable record instead. The receipt id is UX metadata only (the spec is
+    explicit that an agent-visible receipt id is never proof)."""
+
+    is_error = receipt.outcome != "success"
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps(
+                    {"recovered": True, "outcome": receipt.outcome}, separators=(",", ":")
+                ),
+            }
+        ],
+        "isError": is_error,
+    }
+
+
 async def call_provider_tool(
     db: AsyncSession,
     *,
@@ -267,6 +288,7 @@ async def call_provider_tool(
     provider: str,
     tool: str,
     arguments: dict[str, object],
+    activation_id: str | None = None,
 ) -> dict[str, object]:
     # Defense in depth (§6.3 / L25): tools/call re-checks scope on every request,
     # both layers, even though tools/list already hid out-of-scope tools. A denial
@@ -284,13 +306,26 @@ async def call_provider_tool(
             decision.detail or "This tool is out of scope for the caller.",
             status_code=403,
         )
-    # WS3a live-narrowing seam: for a workflow run token, the frozen per-run
-    # capability leases are ALSO enforced (both layers must pass). A run with no
-    # leases is legacy and keeps namespace-only behavior; a capability created or
-    # edited after StartRun has no matching frozen lease and is denied here even
-    # though the namespace layer above allowed the provider. No positive cache —
-    # revalidated live on every call (archive/revoke/membership deny next call).
-    if grant.run_id is not None:
+
+    # WS3c (§7.3): a required invocation's trusted activation context SUPERSEDES
+    # the legacy authorize_dispatch narrowing below with an exact, activation-
+    # keyed check + durable receipt. ``resolve_activation_for_call`` raises (no
+    # receipt) for an unknown/wrong-context activation, or raises AFTER writing a
+    # denied receipt for a capability mismatch / live-authorization denial.
+    activation_resolution: activation_receipts.ActivationCallResolution | None = None
+    if activation_id is not None:
+        activation_resolution = await activation_receipts.resolve_activation_for_call(
+            db, grant=grant, provider=provider, tool=tool, activation_id=activation_id
+        )
+        if activation_resolution.existing_receipt is not None:
+            return _activation_recovered_result(activation_resolution.existing_receipt)
+    elif grant.run_id is not None:
+        # WS3a live-narrowing seam: for a workflow run token, the frozen per-run
+        # capability leases are ALSO enforced (both layers must pass). A run with no
+        # leases is legacy and keeps namespace-only behavior; a capability created or
+        # edited after StartRun has no matching frozen lease and is denied here even
+        # though the namespace layer above allowed the provider. No positive cache —
+        # revalidated live on every call (archive/revoke/membership deny next call).
         capability_decision = await capability_authz.authorize_dispatch(
             db,
             run=capability_authz.CapabilityRunContext(
@@ -308,16 +343,37 @@ async def call_provider_tool(
                 or "This capability is not part of the run's frozen authority.",
                 status_code=403,
             )
+
     # Function invocations are a NON-MCP branch: a raw-httpx request our server
     # makes (Part II §11), not an upstream MCP tools/call. Scope was authorized
     # above by the same two-layer machinery (``functions`` provider, tool = name).
     if provider == FUNCTION_INVOCATION_PROVIDER_NAMESPACE:
-        return await functions_dispatch.call_invocation(
-            db,
-            owner_user_id=grant.owner_user_id,
-            name=tool,
-            arguments=arguments,
-        )
+        try:
+            result = await functions_dispatch.call_invocation(
+                db,
+                owner_user_id=grant.owner_user_id,
+                name=tool,
+                arguments=arguments,
+            )
+        except CloudApiError:
+            if activation_resolution is not None:
+                # Durable BEFORE returning to the caller — even if this response
+                # never arrives, the outcome is already recorded (§7.3).
+                await activation_receipts.record_terminal_receipt(
+                    db,
+                    activation=activation_resolution.activation,
+                    authorization_decision="allow",
+                    outcome="upstream_failed",
+                )
+            raise
+        if activation_resolution is not None:
+            await activation_receipts.record_terminal_receipt(
+                db,
+                activation=activation_resolution.activation,
+                authorization_decision="allow",
+                outcome="success",
+            )
+        return result
     # Audit the proxied MCP call on every path — provider-resolution or account
     # failures, upstream transport failures, and a returned tool-level error
     # all count as evidence the call happened. ``ok`` is only True when the
@@ -339,15 +395,39 @@ async def call_provider_tool(
         ok = not is_error
         if is_error:
             error_code = "tool_error"
+        if activation_resolution is not None:
+            # Durable BEFORE returning to the caller (§7.3): the receipt is
+            # written here, inside the same request, before this function
+            # returns — so a lost response never loses the outcome.
+            await activation_receipts.record_terminal_receipt(
+                db,
+                activation=activation_resolution.activation,
+                authorization_decision="allow",
+                outcome="upstream_failed" if is_error else "success",
+            )
         return {
             "content": result.get("content", []),
             "isError": is_error,
         }
     except CloudApiError as error:
         error_code = error.code
+        if activation_resolution is not None:
+            await activation_receipts.record_terminal_receipt(
+                db,
+                activation=activation_resolution.activation,
+                authorization_decision="allow",
+                outcome="upstream_failed",
+            )
         raise
     except McpRemoteError as error:
         error_code = error.code or "mcp_error"
+        if activation_resolution is not None:
+            await activation_receipts.record_terminal_receipt(
+                db,
+                activation=activation_resolution.activation,
+                authorization_decision="allow",
+                outcome="upstream_failed",
+            )
         raise
     finally:
         await tool_call_events_store.record_tool_call_event(
@@ -391,6 +471,7 @@ async def _call_virtual_tool(
             provider=args.provider,
             tool=args.tool,
             arguments=args.arguments,
+            activation_id=args.activation_id,
         )
     raise CloudApiError(
         "integration_gateway_unknown_tool",

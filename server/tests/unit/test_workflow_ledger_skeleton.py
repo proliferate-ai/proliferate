@@ -39,8 +39,11 @@ _PRE_FEATURE_HEAD = "c3f8b1d6a4e2"
 # The current single head of the migration chain ("head" resolves here). Each
 # packet that appends a workflow migration moves this pin: WS2a landed
 # d9578c0275f3; WS3a appended b3d1f5a9c7e2 (function_invocation semantic_revision);
-# WS2b appended a7e2c4f1b9d0 (workflow_run.private_envelope_json — secret-free plan).
-_CHAIN_HEAD = "a7e2c4f1b9d0"
+# WS2b appended a7e2c4f1b9d0 (workflow_run.private_envelope_json — secret-free plan);
+# WS3b appended e5f1a2b3c4d7 (credential audiences + per-slot issuance handles);
+# WS3c appended c7d9e1f3a5b8 (workflow_activation — required-invocation activation
+# identity registration).
+_CHAIN_HEAD = "c7d9e1f3a5b8"
 
 
 # --- session leases (spec §8.2) ----------------------------------------------------
@@ -350,6 +353,7 @@ async def test_ws2a_migration_applies_to_populated_pre_feature_database() -> Non
                     "workflow_run_outbox",
                     "workflow_control_command",
                     "workflow_capability_lease",
+                    "workflow_activation",
                     "workflow_gateway_receipt",
                     "workflow_poll_inbox",
                     "workflow_session_lease",
