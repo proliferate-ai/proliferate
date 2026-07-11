@@ -16,6 +16,7 @@ import {
   captureTelemetryException,
 } from "@/lib/integrations/telemetry/client";
 import { classifyTelemetryFailure } from "@/lib/domain/telemetry/failures";
+import { normalizeReleaseTitle } from "@/lib/domain/updates/release-notice";
 import {
   clearDevUpdaterMockDownload,
   DEV_UPDATER_MOCK_EVENT,
@@ -72,7 +73,11 @@ async function runUpdateCheck(options: { userInitiated?: boolean } = {}): Promis
     void persistUpdaterMetadata({ lastCheckedAt: timestamp });
 
     if (result.kind === "available") {
-      useUpdaterStore.getState().setAvailable(result.version, result.update);
+      useUpdaterStore.getState().setAvailable(
+        result.version,
+        result.update,
+        normalizeReleaseTitle(result.title),
+      );
       trackProductEvent("app_update_available", { version: result.version });
     } else if (result.kind === "current") {
       useUpdaterStore.getState().setPhase("current");
@@ -186,6 +191,7 @@ async function ensureAutoCheckScheduler(): Promise<void> {
 export function useUpdater() {
   const storePhase = useUpdaterStore((s) => s.phase);
   const storeAvailableVersion = useUpdaterStore((s) => s.availableVersion);
+  const storeAvailableTitle = useUpdaterStore((s) => s.availableTitle);
   const storeLastCheckedAt = useUpdaterStore((s) => s.lastCheckedAt);
   const storeErrorMessage = useUpdaterStore((s) => s.errorMessage);
   const storeErrorSource = useUpdaterStore((s) => s.errorSource);
@@ -198,6 +204,9 @@ export function useUpdater() {
 
   const phase = devMock?.phase ?? storePhase;
   const availableVersion = devMock?.version ?? storeAvailableVersion;
+  const availableTitle = devMock
+    ? devMock.title ?? null
+    : storeAvailableTitle;
   const lastCheckedAt = devMock?.lastCheckedAt ?? storeLastCheckedAt;
   const errorMessage = devMock?.errorMessage ?? storeErrorMessage;
   const errorSource = devMock ? devMock.errorSource : storeErrorSource;
@@ -344,6 +353,7 @@ export function useUpdater() {
   return {
     phase,
     availableVersion,
+    availableTitle,
     lastCheckedAt,
     errorMessage,
     errorSource,

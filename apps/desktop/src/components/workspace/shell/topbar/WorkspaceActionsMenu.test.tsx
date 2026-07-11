@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { WorkspaceActionsMenu } from "./WorkspaceActionsMenu";
+import { WorkspaceActions } from "./WorkspaceActionsMenu";
 
 const nativeMenuState = vi.hoisted(() => ({
   show: vi.fn<() => Promise<boolean>>(),
@@ -29,7 +29,7 @@ describe("WorkspaceActionsMenu", () => {
 
   it("keeps the DOM menu closed when the native menu opens", async () => {
     nativeMenuState.show.mockResolvedValue(true);
-    render(<WorkspaceActionsMenu session={session} />);
+    render(<WorkspaceActions session={session} />);
 
     fireEvent.pointerDown(screen.getByRole("button", { name: "Chat actions" }), {
       button: 0,
@@ -42,7 +42,7 @@ describe("WorkspaceActionsMenu", () => {
 
   it("opens the DOM fallback when the native menu cannot open", async () => {
     nativeMenuState.show.mockResolvedValue(false);
-    render(<WorkspaceActionsMenu session={session} />);
+    render(<WorkspaceActions session={session} />);
 
     fireEvent.pointerDown(screen.getByRole("button", { name: "Chat actions" }), {
       button: 0,

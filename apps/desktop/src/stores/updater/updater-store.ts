@@ -15,6 +15,7 @@ export type UpdaterErrorSource = "check" | "download";
 interface UpdaterState {
   phase: UpdaterPhase;
   availableVersion: string | null;
+  availableTitle: string | null;
   lastCheckedAt: string | null;
   errorMessage: string | null;
   errorSource: UpdaterErrorSource | null;
@@ -27,7 +28,11 @@ interface UpdaterState {
   _updateHandle: unknown | null;
 
   setPhase: (phase: UpdaterPhase) => void;
-  setAvailable: (version: string, handle: unknown) => void;
+  setAvailable: (
+    version: string,
+    handle: unknown,
+    title?: string | null,
+  ) => void;
   setDownloadProgress: (progress: number) => void;
   setReady: () => void;
   setError: (message: string, source: UpdaterErrorSource) => void;
@@ -42,6 +47,7 @@ interface UpdaterState {
 export const useUpdaterStore = create<UpdaterState>((set) => ({
   phase: "idle",
   availableVersion: null,
+  availableTitle: null,
   lastCheckedAt: null,
   errorMessage: null,
   errorSource: null,
@@ -54,10 +60,11 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
   setPhase: (phase) =>
     set({ phase, errorMessage: null, errorSource: null, restartPromptOpen: false }),
 
-  setAvailable: (version, handle) =>
+  setAvailable: (version, handle, title = null) =>
     set({
       phase: "available",
       availableVersion: version,
+      availableTitle: title,
       _updateHandle: handle,
       errorMessage: null,
       errorSource: null,
@@ -94,6 +101,7 @@ export const useUpdaterStore = create<UpdaterState>((set) => ({
     set({
       phase: "idle",
       availableVersion: null,
+      availableTitle: null,
       errorMessage: null,
       errorSource: null,
       downloadProgress: null,

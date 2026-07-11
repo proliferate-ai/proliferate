@@ -2,7 +2,16 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { twMerge } from "../utils/tw-merge";
 import { Spinner } from "./Spinner";
 
-type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "destructive" | "inverted" | "unstyled";
+type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "outline"
+  | "ghost"
+  | "destructive"
+  | "inverted"
+  | "sidebar"
+  | "sidebar-link"
+  | "unstyled";
 type ButtonSize = "sm" | "md" | "pill" | "icon" | "icon-sm" | "unstyled";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -24,6 +33,10 @@ const variantClasses: Record<ButtonVariant, string> = {
     "bg-destructive text-destructive-foreground font-medium hover:bg-destructive/90",
   inverted:
     "bg-foreground text-background hover:bg-foreground/80",
+  sidebar:
+    "font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
+  "sidebar-link":
+    "text-ui font-medium text-sidebar-foreground underline decoration-sidebar-muted-foreground/60 underline-offset-2 hover:decoration-sidebar-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-sidebar-ring",
   unstyled: "",
 };
 

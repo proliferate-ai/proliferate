@@ -18,6 +18,9 @@ on:
       publish_updater:
         default: false
         type: boolean
+      release_title:
+        default: ""
+        type: string
       target_os:
         default: all
         type: string
@@ -178,5 +181,6 @@ jobs:
       version: ${{ needs.plan.outputs.version }}
       dry_run: ${{ inputs.dry_run }}
       publish_updater: ${{ inputs.publish_updater }}
+      release_title: ${{ inputs.release_title }}
       target_os: ${{ inputs.target_os }}
     secrets: inherit

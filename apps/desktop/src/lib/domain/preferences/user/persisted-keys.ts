@@ -23,6 +23,8 @@ const USER_PREFERENCE_KEYS = [
   "pasteAttachmentsEnabled",
   "reviewDefaultsByKind",
   "reviewPersonalitiesByKind",
+  "acknowledgedReleaseVersion",
+  "cachedInstalledRelease",
 ] as const satisfies readonly (keyof UserPreferences)[];
 
 const USER_PREFERENCE_KEY_SET = new Set<string>(USER_PREFERENCE_KEYS);
@@ -39,6 +41,8 @@ const DEPRECATED_USER_PREFERENCE_KEYS = [
   "pluginsInCodingSessionsEnabled",
   "powersInCodingSessionsEnabled",
   "cloudRuntimeInputSyncEnabled",
+  "dismissedAvailableVersion",
+  "acknowledgedAvailableVersion",
 ] as const;
 
 const DEPRECATED_USER_PREFERENCE_KEY_SET = new Set<string>(DEPRECATED_USER_PREFERENCE_KEYS);

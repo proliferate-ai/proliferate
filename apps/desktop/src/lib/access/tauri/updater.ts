@@ -3,7 +3,12 @@ export type UpdateHandle = unknown;
 
 export type UpdateCheckResult =
   | { kind: "current" }
-  | { kind: "available"; version: string; update: UpdateHandle }
+  | {
+      kind: "available";
+      version: string;
+      title: string | null;
+      update: UpdateHandle;
+    }
   | { kind: "error"; message: string };
 
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
@@ -11,7 +16,12 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
     const { check } = await import("@tauri-apps/plugin-updater");
     const update = await check();
     if (!update) return { kind: "current" };
-    return { kind: "available", version: update.version, update };
+    return {
+      kind: "available",
+      version: update.version,
+      title: typeof update.body === "string" ? update.body : null,
+      update,
+    };
   } catch (e) {
     return {
       kind: "error",

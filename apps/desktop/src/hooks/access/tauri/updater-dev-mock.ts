@@ -1,8 +1,10 @@
 import type { UpdaterErrorSource, UpdaterPhase } from "@/stores/updater/updater-store";
+import { normalizeReleaseTitle } from "@/lib/domain/updates/release-notice";
 
 const DEV_UPDATER_MOCK_KEY = "proliferate.dev.updaterMock";
 export const DEV_UPDATER_MOCK_EVENT = "proliferate:dev-updater-mock";
 const DEV_UPDATER_MOCK_VERSION = "0.1.3";
+const DEV_UPDATER_MOCK_TITLE = "Introducing release notices";
 const DEV_UPDATER_MOCK_ERROR_MESSAGE = "Simulated updater failure";
 const DEV_UPDATER_MOCK_DOWNLOAD_DELAYS_MS = [200, 450, 700];
 const DEV_UPDATER_MOCK_DOWNLOAD_PROGRESS = [32, 68, 100];
@@ -15,6 +17,7 @@ type DevUpdaterMockPhase = Extract<
 export interface DevUpdaterMockState {
   phase: DevUpdaterMockPhase;
   version: string;
+  title?: string | null;
   downloadProgress: number | null;
   restartPromptOpen: boolean;
   restartWhenIdle: boolean;
@@ -175,6 +178,7 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
     return {
       phase: raw,
       version: DEV_UPDATER_MOCK_VERSION,
+      title: DEV_UPDATER_MOCK_TITLE,
       downloadProgress: raw === "downloading" ? 0 : null,
       restartPromptOpen: raw === "ready",
       restartWhenIdle: false,
@@ -197,6 +201,7 @@ function normalizeDevUpdaterMock(raw: unknown): DevUpdaterMockState | null {
   return {
     phase: candidate.phase,
     version: candidate.version?.trim() || DEV_UPDATER_MOCK_VERSION,
+    title: normalizeReleaseTitle(candidate.title),
     downloadProgress:
       candidate.phase === "downloading"
         ? Math.max(0, Math.min(100, candidate.downloadProgress ?? 0))
