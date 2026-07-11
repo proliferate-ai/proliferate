@@ -103,6 +103,18 @@
       "types": "./dist/workflows/spine-editing.d.ts",
       "import": "./dist/workflows/spine-editing.js"
     },
+    "./workflows/identity": {
+      "types": "./dist/workflows/identity.d.ts",
+      "import": "./dist/workflows/identity.js"
+    },
+    "./workflows/read-only": {
+      "types": "./dist/workflows/read-only.d.ts",
+      "import": "./dist/workflows/read-only.js"
+    },
+    "./workflows/strict-rules": {
+      "types": "./dist/workflows/strict-rules.d.ts",
+      "import": "./dist/workflows/strict-rules.js"
+    },
     "./workflows/contracts/canonical": {
       "types": "./dist/workflows/contracts/canonical.d.ts",
       "import": "./dist/workflows/contracts/canonical.js"
