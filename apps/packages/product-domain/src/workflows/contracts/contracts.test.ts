@@ -25,7 +25,13 @@ import {
   parseResolvedPlan,
   parseWorkflowControlCommand,
 } from "./types";
-import { toPublicRunView, type ObservedRunWire } from "./adapters";
+import {
+  fromWireRequiredInvocation,
+  toPublicRunView,
+  toWireRequiredInvocation,
+  type ObservedRunWire,
+} from "./adapters";
+import type { CapabilityRef } from "./types";
 
 function fixture<T = Record<string, unknown>>(name: string): T {
   const url = new URL(`../../../../../../tests/contracts/workflows/fixtures/${name}`, import.meta.url);
@@ -170,6 +176,45 @@ describe("workflow contract fixtures", () => {
         vector.canonical,
       );
     }
+  });
+
+  it("expands {provider,tool} to an exact integration_tool CapabilityRef, and back", () => {
+    const wire = { provider: "linear", tool: "update_status" };
+    const ref = fromWireRequiredInvocation(wire, {
+      providerRevision: "rev-3",
+      inputSchemaHash: "sha256:abc",
+    });
+    expect(ref).toEqual({
+      kind: "integration_tool",
+      providerDefinitionId: "linear",
+      providerRevision: "rev-3",
+      toolName: "update_status",
+      inputSchemaHash: "sha256:abc",
+    });
+    expect(toWireRequiredInvocation(ref)).toEqual(wire);
+  });
+
+  it("defaults omitted integration_tool details to empty-string placeholders (never dropped)", () => {
+    const ref = fromWireRequiredInvocation({ provider: "github", tool: "get_issue" });
+    expect(ref).toEqual({
+      kind: "integration_tool",
+      providerDefinitionId: "github",
+      providerRevision: "",
+      toolName: "get_issue",
+      inputSchemaHash: "",
+    });
+  });
+
+  it("expands the 'functions' provider namespace to a function CapabilityRef, and back", () => {
+    const wire = { provider: "functions", tool: "record_lookup" };
+    const ref = fromWireRequiredInvocation(wire, { semanticRevision: 3 });
+    expect(ref).toEqual({ kind: "function", definitionId: "record_lookup", semanticRevision: 3 });
+    expect(toWireRequiredInvocation(ref)).toEqual(wire);
+  });
+
+  it("has no wire form for product_mcp (§7.1: not a required-invocation target in v1)", () => {
+    const ref: CapabilityRef = { kind: "product_mcp", definition: "workflow_peer", policyRevision: 1 };
+    expect(toWireRequiredInvocation(ref)).toBeNull();
   });
 
   it("keeps the credential canary out of every non-envelope fixture", () => {

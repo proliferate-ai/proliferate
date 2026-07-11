@@ -15,6 +15,11 @@
  * `serializeCanonicalDefinition` here emits them. `parseCanonicalDefinition`
  * reads ids when present (exact round-trip) and can derive legacy ids when given
  * the workflow-version id.
+ *
+ * `ensureStepId`/`ensureDefinitionIds` (below) are the editor-authoring
+ * counterpart: idempotent UUIDv7 id-minting for an id-less draft, with no
+ * workflow-version id required. The desktop editor's drag-identity module
+ * delegates to these rather than minting locally.
  */
 
 import { deriveLegacyId, type LegacyIdentityKind } from "./contracts/legacy-upgrade";
@@ -145,6 +150,49 @@ export function deriveDefinitionIdentities(
       return group;
     }
     return withLegacyNode(entry, workflowVersionId, `/agents/${i}`, "node");
+  });
+  return { ...definition, agents };
+}
+
+// --- draft id-minting (editor authoring; WS9a addendum item 3) ----------------
+//
+// Moved here from the desktop `drag-identity.ts` (WS9b), which minted these ids
+// locally while this module was frozen mid-packet. `drag-identity.ts` now
+// delegates to `ensureStepId`/`ensureDefinitionIds` below — the transient
+// drag-resolution helpers (id -> current address/index) stay desktop-local,
+// since they are not part of the identity model itself.
+
+/** Assign an id to a step if it has none (preserves an existing id verbatim). */
+export function ensureStepId(step: WorkflowStep): WorkflowStep {
+  return step.id ? step : { ...step, id: newWorkflowObjectId() };
+}
+
+function ensureNodeIds(node: WorkflowAgentNode): WorkflowAgentNode {
+  return {
+    ...node,
+    id: node.id ?? newWorkflowObjectId(),
+    slotId: node.slotId ?? newWorkflowObjectId(),
+    steps: node.steps.map(ensureStepId),
+  };
+}
+
+/**
+ * Idempotently populate every slot/node/group/lane/step id on a draft that was
+ * parsed from the id-less v1 wire. Existing ids are preserved (canonical
+ * round-trip); only gaps are filled with fresh UUIDv7s. Pure — returns a new
+ * definition.
+ */
+export function ensureDefinitionIds(definition: WorkflowDefinition): WorkflowDefinition {
+  const agents: WorkflowSpineEntry[] = definition.agents.map((entry) => {
+    if (isParallelGroup(entry)) {
+      const group: WorkflowParallelGroup = {
+        ...entry,
+        id: entry.id ?? newWorkflowObjectId(),
+        parallel: entry.parallel.map(ensureNodeIds),
+      };
+      return group;
+    }
+    return ensureNodeIds(entry);
   });
   return { ...definition, agents };
 }

@@ -212,6 +212,81 @@ describe("definition parse/serialize", () => {
     expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
   });
 
+  it("round-trips a required_invocation on agent.emit (feature spec §7.1: any agent step, not only prompt)", () => {
+    const wire = {
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            {
+              kind: "agent.emit",
+              on_fail: { kind: "stop" },
+              prompt: "look up the ticket",
+              name: "ticket",
+              required_invocation: { provider: "linear", tool: "get_issue" },
+            },
+          ],
+        },
+      ],
+    };
+    const parsed = parseWorkflowDefinition(wire);
+    expect(parsed.agents[0]!.steps[0]).toMatchObject({
+      kind: "agent.emit",
+      requiredInvocation: { provider: "linear", tool: "get_issue" },
+    });
+    expect(serializeWorkflowDefinition(parsed)).toEqual(wire);
+  });
+
+  it("flags a required_invocation with an empty provider/tool on either agent.prompt or agent.emit", () => {
+    const promptDef: WorkflowDefinition = {
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "main",
+          harness: "claude",
+          model: "sonnet",
+          steps: [
+            {
+              kind: "agent.prompt",
+              onFail: { kind: "stop" },
+              prompt: "go",
+              requiredInvocation: { provider: "", tool: "" },
+            },
+          ],
+        },
+      ],
+    };
+    const promptCodes = validateWorkflowDefinition(promptDef).map((i) => i.code);
+    expect(promptCodes).toContain("invalid_definition");
+
+    const emitDef: WorkflowDefinition = {
+      ...promptDef,
+      agents: [
+        {
+          ...promptDef.agents[0]!,
+          steps: [
+            {
+              kind: "agent.emit",
+              onFail: { kind: "stop" },
+              prompt: "go",
+              name: "out",
+              requiredInvocation: { provider: "", tool: "" },
+            },
+          ],
+        } as WorkflowDefinition["agents"][number],
+      ],
+    };
+    const emitCodes = validateWorkflowDefinition(emitDef).map((i) => i.code);
+    expect(emitCodes).toContain("invalid_definition");
+  });
+
   it("flags a present-but-non-array agent integrations as invalid (not silently absent)", () => {
     // Parse preserves the bad shape verbatim (not treated as absent) so the
     // validator surfaces `invalid_definition`, matching the server's parse.
