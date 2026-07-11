@@ -168,6 +168,67 @@ WORKFLOW_RUN_OBSERVABLE_STATUSES: Final = frozenset(
 # Reverse path: swap the terminal error for a `deferred` status + retry-on-reset.
 WORKFLOW_RUN_ERROR_BUDGET_BLOCKED: Final = "budget_blocked"
 
+# --- Independent run state axes (spec §8.1; WS2c behavioral cutover). -----------
+# The ADD-ONLY axis columns (WS2a) carry desired/delivery/observed/execution-health
+# facts alongside the legacy ``status`` (which stays authoritative for public
+# status until the WS9c/API cutover — WS2c writes BOTH and derives nothing yet).
+
+# desired state: the human/control-plane intent.
+WORKFLOW_DESIRED_STATE_RUNNING: Final = "running"
+WORKFLOW_DESIRED_STATE_CANCEL_REQUESTED: Final = "cancel_requested"
+
+# delivery state: ready -> claimed -> materializing -> delivered -> acknowledged,
+# with retryable_ready / terminal_delivery_failure branches.
+WORKFLOW_DELIVERY_STATE_READY: Final = "ready"
+WORKFLOW_DELIVERY_STATE_CLAIMED: Final = "claimed"
+WORKFLOW_DELIVERY_STATE_MATERIALIZING: Final = "materializing"
+WORKFLOW_DELIVERY_STATE_DELIVERED: Final = "delivered"
+WORKFLOW_DELIVERY_STATE_ACKNOWLEDGED: Final = "acknowledged"
+WORKFLOW_DELIVERY_STATE_RETRYABLE_READY: Final = "retryable_ready"
+WORKFLOW_DELIVERY_STATE_TERMINAL_FAILURE: Final = "terminal_delivery_failure"
+
+# control-plane execution health: healthy -> suspect -> orphaned. ``orphaned`` is
+# a server-owned coordination marker; it NEVER overwrites an observed_* field.
+WORKFLOW_EXECUTION_HEALTH_HEALTHY: Final = "healthy"
+WORKFLOW_EXECUTION_HEALTH_SUSPECT: Final = "suspect"
+WORKFLOW_EXECUTION_HEALTH_ORPHANED: Final = "orphaned"
+
+# pre-acceptance cancellation coordination (§8.3 branch 1).
+WORKFLOW_PREACCEPT_CANCEL_NONE: Final = "none"
+WORKFLOW_PREACCEPT_CANCEL_CANCELLING: Final = "cancelling_preaccept"
+WORKFLOW_PREACCEPT_CANCEL_CANCELLED: Final = "cancelled_before_acceptance"
+
+# --- Revisioned observed-run report path (spec §5.4; WS2c). --------------------
+# The runtime (WS5c) sends a whole ``ObservedRun`` snapshot bound to the immutable
+# delivery identity ``(run_id, plan_hash, binding_hash, execution_generation)``
+# plus a strictly increasing ``revision``. A legacy run (delivered pre-WS2c, or a
+# current run whose binding/generation is not yet set) has NULL identity columns
+# and accepts these unambiguous sentinels (a real hash is ``sha256:…`` and a real
+# generation is ``>= 1``).
+WORKFLOW_LEGACY_HASH_SENTINEL: Final = ""
+WORKFLOW_LEGACY_GENERATION_SENTINEL: Final = 0
+
+# The ObservedRun ``observedState`` vocabulary (contracts/models.py) mapped to the
+# legacy public ``status`` slug so the run view keeps working through the cutover.
+# waiting_action_result / waiting_credential_refresh / quiescing are all live
+# sub-states of a running run in v1 (no human approval — §8.1).
+WORKFLOW_OBSERVED_STATE_TO_LEGACY_STATUS: Final[dict[str, str]] = {
+    "accepted": WORKFLOW_RUN_STATUS_DELIVERED,
+    "running": WORKFLOW_RUN_STATUS_RUNNING,
+    "waiting_action_result": WORKFLOW_RUN_STATUS_RUNNING,
+    "waiting_credential_refresh": WORKFLOW_RUN_STATUS_RUNNING,
+    "waiting_approval": WORKFLOW_RUN_STATUS_WAITING_APPROVAL,
+    "quiescing": WORKFLOW_RUN_STATUS_RUNNING,
+    "completed": WORKFLOW_RUN_STATUS_COMPLETED,
+    "failed": WORKFLOW_RUN_STATUS_FAILED,
+    "cancelled": WORKFLOW_RUN_STATUS_CANCELLED,
+}
+
+# The terminal observed-run states (§5.4: once terminal the snapshot is immutable).
+WORKFLOW_OBSERVED_TERMINAL_STATES: Final = frozenset(
+    {"completed", "failed", "cancelled"}
+)
+
 # --- Step kinds (definition format v2; data-contract §1.2). --------------------
 # human.approval is REMOVED (E1); agent.emit and branch are NEW (A3/C11). The
 # waiting_approval run status survives via goal.on_blocked, not a step kind.

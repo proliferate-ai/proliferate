@@ -59,6 +59,7 @@ from proliferate.db.store.workflow_ledger.outbox import (
     enqueue_control_command,
     enqueue_outbox,
     get_outbox_row,
+    invalidate_run_outbox,
     list_undelivered_control_commands,
     mark_control_command_delivered,
 )
@@ -97,6 +98,7 @@ __all__ = [
     "get_observed_snapshot",
     "get_outbox_row",
     "get_poll_inbox_item",
+    "invalidate_run_outbox",
     "insert_action_effect",
     "insert_capability_lease",
     "insert_gateway_receipt",

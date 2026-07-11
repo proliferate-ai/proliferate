@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.dependencies import current_product_user
@@ -20,6 +20,7 @@ from proliferate.constants.workflows import (
 )
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
+from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows.access import (
     RunTokenActor,
     authorize_run_ping,
@@ -34,6 +35,7 @@ from proliferate.server.cloud.workflows.delivery import (
     refresh_cloud_run,
 )
 from proliferate.server.cloud.workflows.models import (
+    ObservedRunReportResponse,
     PollInputSpecResponse,
     PollInspectRequest,
     PollInspectResponse,
@@ -74,6 +76,7 @@ from proliferate.server.cloud.workflows.service import (
     list_workflows,
     update_workflow,
 )
+from proliferate.server.cloud.workflows.transactions import commit_then_deliver_cloud_run
 from proliferate.server.cloud.workflows.triggers import (
     create_trigger,
     delete_trigger,
@@ -83,7 +86,11 @@ from proliferate.server.cloud.workflows.triggers import (
     list_triggers,
     update_trigger,
 )
-from proliferate.server.cloud.workflows.worker.service import mark_run_delivered, report_run_status
+from proliferate.server.cloud.workflows.worker.service import (
+    mark_run_delivered,
+    report_observed_run,
+    report_run_status,
+)
 
 router = APIRouter(
     prefix="/workflows",
@@ -174,6 +181,40 @@ async def report_run_status_endpoint(
             body,
             authed_via_run_token=isinstance(actor, RunTokenActor),
         )
+    )
+
+
+@router.post("/runs/{run_id}/observations", response_model=ObservedRunReportResponse)
+async def report_observation_endpoint(
+    run_id: UUID,
+    snapshot: Annotated[dict[str, object], Body(...)],
+    db: AsyncSession = Depends(get_async_session),
+    # Same run-report credential the runtime self-reports /status with (§5.3).
+    actor: RunTokenActor | User = Depends(authorize_run_report),
+) -> ObservedRunReportResponse:
+    """Revisioned observed-run report (spec §5.4). The runtime (WS5c) POSTs a whole
+    ``ObservedRun`` snapshot; the server accepts it only at the exact next revision
+    for the matching delivery identity.
+
+    Result -> HTTP: ``applied`` / ``retry_noop`` / ``stale_rejected`` return 200
+    with the acked revision (the runtime advances or is a benign no-op);
+    ``future_rejected`` (gap), ``conflict`` (audited), and ``terminal_immutable``
+    return 409 carrying ``ackedRevision`` so the runtime replays its ordered
+    outbox from ``ackedRevision + 1``.
+    """
+
+    result = await report_observed_run(db, actor, run_id, snapshot)
+    if result.result in ("future_rejected", "conflict", "terminal_immutable"):
+        raise CloudApiError(
+            f"workflow_observation_{result.result}",
+            "Observation rejected; resynchronize from the acked revision.",
+            status_code=409,
+            extra_detail={"ackedRevision": result.acked_revision},
+        )
+    return ObservedRunReportResponse(
+        result=result.result,
+        acked_revision=result.acked_revision,
+        run=run_payload(result.run) if result.run is not None else None,
     )
 
 
@@ -341,13 +382,18 @@ async def start_run_endpoint(
         trigger_id=body.trigger_id,
         session_bindings=body.session_bindings,
     )
-    # Cloud lane: the server delivers gateway-direct to sandbox anyharness in the
-    # request (wake + POST), so the API caller never receives the private envelope.
+    # Cloud lane: the server delivers gateway-direct to sandbox anyharness. Per
+    # §10.2 the run intent MUST be durable BEFORE any sandbox/runtime network call,
+    # so a rolled-back request can never leave an orphan runtime. Commit the intent
+    # (the run row + envelope + leases created by start_run) here, THEN deliver in a
+    # separate unit; a delivery failure leaves a committed pending_delivery row with
+    # delivery_state=retryable_ready that /deliver (and the WS4a outbox relay) retry.
+    # The API caller never receives the private envelope on this lane.
     # Local lane: the desktop client delivers to its own local runtime and calls
     # /delivered itself, so it needs the gateway block folded into resolvedPlan
     # (include_private_envelope) — this is a delivery path, not an ordinary read.
     if run.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
-        run = await deliver_cloud_run(db, user, run)
+        run = await commit_then_deliver_cloud_run(db, user, run)
         return run_payload(run)
     return run_payload(run, include_private_envelope=True)
 
