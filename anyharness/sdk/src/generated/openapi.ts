@@ -2610,8 +2610,8 @@ export interface components {
         ExecutionBinding: {
             baseCommitOid: string;
             bindingHash: string;
-            checkpointContentHash?: string | null;
-            checkpointId?: string | null;
+            checkpointContentHash?: string;
+            checkpointId?: string;
             /** Format: int64 */
             executorGeneration: number;
             executorId: string;
@@ -7892,17 +7892,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Run delivered (idempotent on full delivery identity) */
-            202: {
+            /** @description Invalid plan or delivery identity */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowRunView"];
+                    "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Invalid plan or delivery identity */
-            400: {
+            /** @description Authenticated worker control channel required */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7919,7 +7919,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Delivery identity conflicts with stored run */
+            /** @description Final execution envelope required before activation */
             409: {
                 headers: {
                     [name: string]: unknown;

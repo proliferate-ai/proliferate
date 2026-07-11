@@ -180,6 +180,27 @@ describe("workflow contract fixtures", () => {
     expect(hashExcluding(binding, "bindingHash")).toBe(binding.bindingHash);
   });
 
+  it("rejects invalid execution-binding checkpoint presence", () => {
+    const data = fixture<{
+      commitBase: Record<string, unknown>;
+      checkpointBase: Record<string, unknown>;
+      cases: {
+        name: string;
+        base: "commit" | "checkpoint";
+        set?: Record<string, unknown>;
+        remove?: string[];
+      }[];
+    }>("invalid/execution-binding-invalid-cases.json");
+    for (const testCase of data.cases) {
+      const base = testCase.base === "commit" ? data.commitBase : data.checkpointBase;
+      const document = { ...base, ...testCase.set };
+      for (const field of testCase.remove ?? []) {
+        delete document[field];
+      }
+      expect(() => parseExecutionBinding(document), testCase.name).toThrow();
+    }
+  });
+
   it("normalizes an unsorted checkpoint to the canonical manifest and hash", () => {
     const manifest = fixture("checkpoint-manifest-v1.json");
     const ckptHash = contentHash(normalizeCheckpointManifest(manifest as Record<string, unknown>));

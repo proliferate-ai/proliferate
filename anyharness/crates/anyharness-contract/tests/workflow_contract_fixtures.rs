@@ -70,7 +70,35 @@ fn workflow_contract_commit_binding_roundtrip_omits_checkpoint_optionals() {
     assert!(original.get("checkpointId").is_none());
     assert!(original.get("checkpointContentHash").is_none());
     let typed: ExecutionBinding = serde_json::from_value(original.clone()).unwrap();
-    assert_eq!(serde_json::to_value(typed).unwrap(), original);
+    assert_eq!(serde_json::to_value(&typed).unwrap(), original);
+}
+
+#[test]
+fn workflow_contract_fixtures_reject_invalid_execution_binding_presence() {
+    let fixture: Value =
+        serde_json::from_str(&read("invalid/execution-binding-invalid-cases.json")).unwrap();
+    for case in fixture["cases"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let base_name = match case["base"].as_str().unwrap() {
+            "commit" => "commitBase",
+            "checkpoint" => "checkpointBase",
+            other => panic!("unknown execution binding base {other}"),
+        };
+        let mut document = fixture[base_name].clone();
+        let object = document.as_object_mut().unwrap();
+        if let Some(fields) = case.get("set").and_then(Value::as_object) {
+            object.extend(fields.clone());
+        }
+        if let Some(fields) = case.get("remove").and_then(Value::as_array) {
+            for field in fields {
+                object.remove(field.as_str().unwrap());
+            }
+        }
+        assert!(
+            serde_json::from_value::<ExecutionBinding>(document).is_err(),
+            "invalid execution binding '{name}' must fail strict parsing"
+        );
+    }
 }
 
 #[test]

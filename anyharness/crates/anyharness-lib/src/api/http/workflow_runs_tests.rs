@@ -168,6 +168,15 @@ async fn delivery_route_auth_and_final_gate_have_zero_side_effects() {
         assert_eq!(effect_counts(&state), before);
     }
 
+    let payload = request_payload();
+    let binding = payload["binding"].as_object().unwrap();
+    assert!(!binding.contains_key("checkpointId"));
+    assert!(!binding.contains_key("checkpointContentHash"));
+    assert_eq!(
+        content_hash_excluding(&payload["binding"], "bindingHash").unwrap(),
+        payload["binding"]["bindingHash"]
+    );
+
     let response = app
         .oneshot(
             Request::builder()
@@ -175,7 +184,7 @@ async fn delivery_route_auth_and_final_gate_have_zero_side_effects() {
                 .uri("/v1/workflow-runs")
                 .header(header::CONTENT_TYPE, "application/json")
                 .header(header::AUTHORIZATION, "Bearer worker-secret")
-                .body(Body::from(request_payload().to_string()))
+                .body(Body::from(payload.to_string()))
                 .unwrap(),
         )
         .await
@@ -183,4 +192,43 @@ async fn delivery_route_auth_and_final_gate_have_zero_side_effects() {
     assert_eq!(response.status(), StatusCode::CONFLICT);
     assert_eq!(body(response).await["code"], "FINAL_ENVELOPE_REQUIRED");
     assert_eq!(effect_counts(&state), before);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn delivery_route_rejects_null_checkpoint_members_before_preflight() {
+    let state = state();
+    let before = effect_counts(&state);
+    let app = build_router(state.clone());
+
+    for fields in [
+        vec!["checkpointId"],
+        vec!["checkpointContentHash"],
+        vec!["checkpointId", "checkpointContentHash"],
+    ] {
+        let mut payload = request_payload();
+        let binding = payload["binding"].as_object_mut().unwrap();
+        for field in fields {
+            binding.insert(field.to_string(), Value::Null);
+        }
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/workflow-runs")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::AUTHORIZATION, "Bearer worker-secret")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .expect("worker delivery response");
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            body(response).await["code"],
+            "WORKFLOW_DELIVERY_REQUEST_INVALID"
+        );
+        assert_eq!(effect_counts(&state), before);
+    }
 }

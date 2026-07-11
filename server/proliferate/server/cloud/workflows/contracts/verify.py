@@ -110,14 +110,26 @@ def _check_checkpoint_and_binding() -> None:
     )
     _roundtrip(ExecutionBinding, commit_binding)
     _require(
-        "checkpointId" not in commit_binding
-        and "checkpointContentHash" not in commit_binding,
+        "checkpointId" not in commit_binding and "checkpointContentHash" not in commit_binding,
         "commit binding optional checkpoint fields must be absent",
     )
     _require(
         binding_hash(commit_binding) == commit_binding["bindingHash"],
         "commit binding bindingHash does not match its exact emitted members",
     )
+
+    invalid_bindings = fixtures.load("invalid/execution-binding-invalid-cases.json")
+    for case in invalid_bindings["cases"]:
+        base_key = "commitBase" if case["base"] == "commit" else "checkpointBase"
+        document = dict(invalid_bindings[base_key])
+        document.update(case.get("set", {}))
+        for field in case.get("remove", []):
+            document.pop(field, None)
+        try:
+            ExecutionBinding.model_validate(document)
+        except Exception:
+            continue
+        raise ContractCheckError(f"invalid execution binding '{case['name']}' was accepted")
 
     # Restoration/normalization equivalence.
     restoration = fixtures.load("restoration/checkpoint-restoration-v1.json")

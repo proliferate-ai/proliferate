@@ -304,7 +304,11 @@ pub struct MaterializationOffer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[serde(
+    rename_all = "camelCase",
+    deny_unknown_fields,
+    try_from = "ExecutionBindingWire"
+)]
 pub struct ExecutionBinding {
     pub schema_version: SchemaVersion<1>,
     pub target: WorkflowTarget,
@@ -312,8 +316,10 @@ pub struct ExecutionBinding {
     pub repository_object_format: RepositoryObjectFormat,
     pub base_commit_oid: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = String)]
     pub checkpoint_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = String)]
     pub checkpoint_content_hash: Option<String>,
     pub workspace_id: String,
     pub workspace_generation: i64,
@@ -321,6 +327,69 @@ pub struct ExecutionBinding {
     pub executor_id: String,
     pub executor_generation: i64,
     pub binding_hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ExecutionBindingWire {
+    schema_version: SchemaVersion<1>,
+    target: WorkflowTarget,
+    source_kind: SourceKind,
+    repository_object_format: RepositoryObjectFormat,
+    base_commit_oid: String,
+    #[serde(default, deserialize_with = "deserialize_present_string")]
+    checkpoint_id: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_present_string")]
+    checkpoint_content_hash: Option<String>,
+    workspace_id: String,
+    workspace_generation: i64,
+    materialization_id: String,
+    executor_id: String,
+    executor_generation: i64,
+    binding_hash: String,
+}
+
+fn deserialize_present_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    String::deserialize(deserializer).map(Some)
+}
+
+impl TryFrom<ExecutionBindingWire> for ExecutionBinding {
+    type Error = &'static str;
+
+    fn try_from(wire: ExecutionBindingWire) -> Result<Self, Self::Error> {
+        match wire.source_kind {
+            SourceKind::WorkspaceCheckpoint
+                if wire.checkpoint_id.is_none() || wire.checkpoint_content_hash.is_none() =>
+            {
+                return Err("workspace_checkpoint requires checkpointId and checkpointContentHash");
+            }
+            SourceKind::RemoteCommit | SourceKind::LocalCommit
+                if wire.checkpoint_id.is_some() || wire.checkpoint_content_hash.is_some() =>
+            {
+                return Err("commit source kinds must omit checkpoint fields");
+            }
+            _ => {}
+        }
+
+        Ok(Self {
+            schema_version: wire.schema_version,
+            target: wire.target,
+            source_kind: wire.source_kind,
+            repository_object_format: wire.repository_object_format,
+            base_commit_oid: wire.base_commit_oid,
+            checkpoint_id: wire.checkpoint_id,
+            checkpoint_content_hash: wire.checkpoint_content_hash,
+            workspace_id: wire.workspace_id,
+            workspace_generation: wire.workspace_generation,
+            materialization_id: wire.materialization_id,
+            executor_id: wire.executor_id,
+            executor_generation: wire.executor_generation,
+            binding_hash: wire.binding_hash,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]

@@ -741,7 +741,8 @@ class ExecutionBinding(WfContractModel):
         ):
             raise ValueError("workspace_checkpoint requires checkpointId + checkpointContentHash")
         if self.source_kind != "workspace_checkpoint" and (
-            self.checkpoint_id is not None or self.checkpoint_content_hash is not None
+            "checkpoint_id" in self.model_fields_set
+            or "checkpoint_content_hash" in self.model_fields_set
         ):
             raise ValueError("commit source kinds must omit checkpoint fields")
         return self

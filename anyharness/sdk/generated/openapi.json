@@ -3658,18 +3658,18 @@
           "required": true
         },
         "responses": {
-          "202": {
-            "description": "Run delivered (idempotent on full delivery identity)",
+          "400": {
+            "description": "Invalid plan or delivery identity",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkflowRunView"
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
           },
-          "400": {
-            "description": "Invalid plan or delivery identity",
+          "401": {
+            "description": "Authenticated worker control channel required",
             "content": {
               "application/json": {
                 "schema": {
@@ -3689,7 +3689,7 @@
             }
           },
           "409": {
-            "description": "Delivery identity conflicts with stored run",
+            "description": "Final execution envelope required before activation",
             "content": {
               "application/json": {
                 "schema": {
@@ -9484,16 +9484,10 @@
             "type": "string"
           },
           "checkpointContentHash": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "checkpointId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": "string"
           },
           "executorGeneration": {
             "type": "integer",
