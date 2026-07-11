@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "runId": "wfr_demo_0001",
+  "planHash": "sha256:24db3a9af5b6d6041b3b19641c3bb64c63e0cf6b31a1484d855783892445adea",
+  "target": "local",
+  "executionGeneration": 1,
+  "executorId": "exec_desktop_0001",
+  "executorFence": "DUMMY_FAKE_claim_fence_not_a_real_secret",
+  "sourceIntent": {
+    "kind": "remote_commit",
+    "repo": "github.com/acme/widgets",
+    "ref": "refs/heads/main",
+    "resolvedCommit": "0a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728"
+  },
+  "materializationCredential": "DUMMY_FAKE_materialization_only_credential_not_a_real_secret",
+  "credentialGeneration": 1,
+  "expiresAt": "2026-07-10T01:00:00Z"
+}

@@ -25,6 +25,7 @@ pub mod session_config;
 pub mod sessions;
 pub mod terminals;
 pub mod workflows;
+pub mod workflows_v2;
 pub mod workspaces;
 pub mod worktrees;
 
@@ -55,5 +56,6 @@ pub use session_config::*;
 pub use sessions::*;
 pub use terminals::*;
 pub use workflows::*;
+pub use workflows_v2::*;
 pub use workspaces::*;
 pub use worktrees::*;
