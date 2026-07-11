@@ -85,8 +85,17 @@ conversation memory.
 
 | Packet | Agent | Worktree | Base SHA | Status |
 | --- | --- | --- | --- | --- |
-| WS2c delivery/reconcile | agent (opus) | ~/proliferate-wt/wsc-ws2c | 4b64e2692 (WS3b tip, stacked) | running |
-| STACK awaiting merge ruling | — | branches: completion-audiences 4b64e2692, completion-background 9687cc59f | — | verified; merges after user rules on primary-checkout changes |
+| WS2c delivery/reconcile | agent (opus) | ~/proliferate-wt/wsc-ws2c | 4b64e2692 → rebased 979724a70 onto WS4a tip | agent DONE (71 tests green ×2, commit 39dba1d63); captain diff-reviewed + rebased onto 9687cc59f (one allowlist keep-latest conflict); post-rebase verify RUNNING |
+| WS4b poll contract/inbox | agent (sonnet) | ~/proliferate-wt/wsc-ws4b | 9687cc59f (WS4a tip, stacked) | running |
+| WS3c gateway receipts | agent (sonnet) | ~/proliferate-wt/wsc-ws3c | 979724a70 (WS2c rebased tip, stacked) | running |
+| STACK awaiting merge ruling | — | branches: completion-audiences 4b64e2692 → completion-background 9687cc59f → completion-delivery 979724a70 → completion-receipts (in flight) | — | verified stack; merges after user rules on primary-checkout changes |
+
+### WS2c captain diff-review notes (pre-verify)
+- transactions.py commit-then-deliver honors §10.2; deliver_cloud_run untouched for /deliver, scheduler phase-2, WS4a relay.
+- domain/observed_run.py pure projection: identity sentinels ''/''/0 only match NULL columns; bool-vs-int guards on generation/revision; revision >= 1 enforced.
+- worker/service.report_observed_run: terminal-immutability check BEFORE CAS only for NEW revisions (current-revision duplicates fall through to CAS — identical retry_noop / conflict), first observation stamps delivery_state=acknowledged, every applied stamps execution_health=healthy. Legacy report_run_status never touches observed_*.
+- cancel: _is_pre_acceptance predicate = unclaimed status + no observation + no lease past reserved; branch 1 fabricates NO observation, invalidates outbox, releases reserved-only leases; branch 2 enqueues durable control command with delivery identity.
+- Allowlist bumps (+42 store, +46 api, +15 models) documented inline; service.py entry REMOVED (847→205 split done — clears the Gate A1 blocker).
 
 ## Blockers
 
