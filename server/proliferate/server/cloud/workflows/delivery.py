@@ -66,7 +66,8 @@ from proliferate.server.cloud.workflows.gateway_grants import (
     granted_namespaces,
     resolve_run_scope,
 )
-from proliferate.server.cloud.workflows.service import _visible_run, mark_run_delivered
+from proliferate.server.cloud.workflows.service import _visible_run
+from proliferate.server.cloud.workflows.worker.service import mark_run_delivered
 from proliferate.utils.time import utcnow
 
 logger = logging.getLogger(__name__)

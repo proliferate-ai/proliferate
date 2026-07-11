@@ -64,7 +64,7 @@ from proliferate.server.automations.domain.schedule import (
     due_occurrences_since,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import service
+from proliferate.server.cloud.workflows import compiler
 from proliferate.server.cloud.workflows.actions import sweep_pending_actions
 from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.utils.time import utcnow
@@ -137,7 +137,7 @@ async def _fire_one_trigger(
             return 0  # taken by another beat, disabled, or no longer due
 
         # Bind tenant fields for the rest of this trigger's unit of work so every
-        # log line it emits (including from service.start_run) is correlated
+        # log line it emits (including from compiler.start_run) is correlated
         # (observability spec §8 — background loops must not log anonymously).
         with with_correlation_context(
             organization_id=trigger.workflow_organization_id,
@@ -290,7 +290,7 @@ async def _fire_one_trigger(
                     # or a unique-index conflict (the slot already has a row, e.g. a
                     # re-tick) rolls back just this insert, never the whole tick.
                     async with db.begin_nested():
-                        await service.start_run(
+                        await compiler.start_run(
                             db,
                             actor,
                             trigger.workflow_id,

@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_workflows as store
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import service
+from proliferate.server.cloud.workflows import compiler
 from proliferate.server.cloud.workflows.composition import validate_includes
 from proliferate.server.cloud.workflows.domain.composition import WorkflowCompositionError
 from proliferate.server.cloud.workflows.domain.definition import parse_definition
@@ -105,7 +105,7 @@ async def _store_workflow(
 
 
 async def _run_steps(db: AsyncSession, user: User, workflow_id, inputs: dict) -> list[dict]:
-    run = await service.start_run(db, user, workflow_id, inputs=inputs, target_mode="local")
+    run = await compiler.start_run(db, user, workflow_id, inputs=inputs, target_mode="local")
     return run.resolved_plan_json["steps"]
 
 
@@ -320,7 +320,7 @@ async def test_multi_agent_child_rejected_at_resolution(db_session: AsyncSession
         update_description=False,
     )
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(db_session, user, parent.id, inputs={}, target_mode="local")
+        await compiler.start_run(db_session, user, parent.id, inputs={}, target_mode="local")
     assert exc.value.code == "include_multi_agent"
 
 
@@ -339,7 +339,7 @@ async def test_resolution_depth_cap(db_session: AsyncSession) -> None:
         previous = wf.id
     assert previous is not None
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(db_session, user, previous, inputs={}, target_mode="local")
+        await compiler.start_run(db_session, user, previous, inputs={}, target_mode="local")
     assert exc.value.code == "include_depth_exceeded"
 
 
@@ -453,7 +453,7 @@ async def test_arg_mismatch_at_resolution_when_child_changed(
         update_description=False,
     )
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(db_session, user, parent.id, inputs={}, target_mode="local")
+        await compiler.start_run(db_session, user, parent.id, inputs={}, target_mode="local")
     assert exc.value.code == "include_args_mismatch"
 
 

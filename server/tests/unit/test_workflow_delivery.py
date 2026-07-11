@@ -22,8 +22,9 @@ from proliferate.db.store import cloud_workflows as store
 from proliferate.integrations.anyharness import workflow_runs as runtime_workflow_runs
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.gateway.service import CloudSandboxGatewayAccess
-from proliferate.server.cloud.workflows import delivery, service
+from proliferate.server.cloud.workflows import compiler, delivery, service
 from proliferate.server.cloud.workflows.models import WorkflowCreateRequest
+from proliferate.server.cloud.workflows.worker import service as worker_service
 
 pytestmark = pytest.mark.asyncio
 
@@ -306,7 +307,7 @@ async def test_refresh_syncs_running_snapshot(
 ) -> None:
     user = await _make_user(db_session)
     run = await _make_cloud_run(db_session, user)
-    await service.mark_run_delivered(db_session, user, run.id)
+    await worker_service.mark_run_delivered(db_session, user, run.id)
     _patch_gateway(monkeypatch)
     _patch_client(
         monkeypatch,
@@ -345,7 +346,7 @@ async def test_refresh_syncs_terminal_snapshot(
 ) -> None:
     user = await _make_user(db_session)
     run = await _make_cloud_run(db_session, user)
-    await service.mark_run_delivered(db_session, user, run.id)
+    await worker_service.mark_run_delivered(db_session, user, run.id)
     _patch_gateway(monkeypatch)
     _patch_client(
         monkeypatch,
@@ -365,11 +366,15 @@ async def test_refresh_noop_on_terminal_run(
 ) -> None:
     user = await _make_user(db_session)
     run = await _make_cloud_run(db_session, user)
-    await service.mark_run_delivered(db_session, user, run.id)
+    await worker_service.mark_run_delivered(db_session, user, run.id)
     from proliferate.server.cloud.workflows.models import RunStatusRequest
 
-    await service.report_run_status(db_session, user, run.id, RunStatusRequest(status="running"))
-    await service.report_run_status(db_session, user, run.id, RunStatusRequest(status="failed"))
+    await worker_service.report_run_status(
+        db_session, user, run.id, RunStatusRequest(status="running")
+    )
+    await worker_service.report_run_status(
+        db_session, user, run.id, RunStatusRequest(status="failed")
+    )
 
     called = {"n": 0}
 
@@ -392,7 +397,7 @@ async def test_refresh_ignores_unknown_sandbox_run(
 ) -> None:
     user = await _make_user(db_session)
     run = await _make_cloud_run(db_session, user)
-    await service.mark_run_delivered(db_session, user, run.id)
+    await worker_service.mark_run_delivered(db_session, user, run.id)
     _patch_gateway(monkeypatch)
     _patch_client(monkeypatch, lambda request: httpx.Response(404))
 
@@ -428,7 +433,7 @@ async def test_start_run_cloud_requires_target_workspace(db_session: AsyncSessio
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session, user, workflow.id, inputs={}, target_mode="personal_cloud"
         )
     assert exc.value.code == "target_workspace_required"
@@ -443,7 +448,7 @@ async def test_start_run_cloud_rejects_unowned_workspace(db_session: AsyncSessio
         db_session, other, anyharness_workspace_id="sandbox-ws-x"
     )
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session,
             user,
             workflow.id,
@@ -460,7 +465,7 @@ async def test_start_run_cloud_rejects_unmaterialized_workspace(db_session: Asyn
     workflow = await _make_workflow(db_session, user)
     workspace = await _make_ready_cloud_workspace(db_session, user, anyharness_workspace_id=None)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session,
             user,
             workflow.id,
@@ -478,7 +483,7 @@ async def test_start_run_cloud_stamps_sandbox_workspace_id(db_session: AsyncSess
     workspace = await _make_ready_cloud_workspace(
         db_session, user, anyharness_workspace_id="sandbox-ws-9"
     )
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,
@@ -504,7 +509,7 @@ async def test_start_run_cloud_without_bindings_defaults_to_worktree_isolation(
     workspace = await _make_ready_cloud_workspace(
         db_session, user, anyharness_workspace_id="sandbox-ws-iso"
     )
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,
@@ -527,7 +532,7 @@ async def test_start_run_cloud_with_session_binding_keeps_workspace_isolation(
     workspace = await _make_ready_cloud_workspace(
         db_session, user, anyharness_workspace_id="sandbox-ws-iso-bound"
     )
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,

@@ -16,7 +16,8 @@ from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
-from proliferate.server.cloud.workflows import service
+from proliferate.server.cloud.workflows import compiler, service
+from proliferate.server.cloud.workflows.worker import service as worker_service
 from proliferate.utils.crypto import encrypt_json
 from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
@@ -162,7 +163,7 @@ async def test_seed_workflow_is_visible_runnable_but_not_editable(
 
     # Runnable: the run is owned by the runner (seed has no owner), so its
     # executor_user_id resolves to the launching user.
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         seed.id,
@@ -202,7 +203,7 @@ async def test_start_run_resolves_plan_and_records_pending_delivery(
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
 
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,
@@ -253,7 +254,7 @@ async def test_notify_agent_fields_expands_to_injected_emit(
         WorkflowCreateRequest(name="notify-fields", definition=_definition_with_notify_fields()),
     )
 
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,
@@ -296,7 +297,7 @@ async def test_template_only_notify_resolves_unchanged(db_session: AsyncSession)
     # before — no injected step, byte-identical late-bound message.
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, workflow.id, inputs={"issue": "X", "env": "prod"}, target_mode="local"
     )
     steps = run.resolved_plan_json["steps"]
@@ -365,7 +366,7 @@ async def test_start_run_resolves_parallel_group_keys_and_order(
     )
     # Parallel is cloud-only in v1 (M1) — run against a cloud workspace.
     workspace = await _make_ready_cloud_workspace(db_session, user)
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,
@@ -402,7 +403,7 @@ async def test_start_run_flat_definition_keys_unchanged(db_session: AsyncSession
     # "<node>.-.<step>" keys it always has — byte-identical to before lanes landed.
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, workflow.id, inputs={"issue": "x", "env": "prod"}, target_mode="local"
     )
     keys = [s["key"] for s in run.resolved_plan_json["steps"]]
@@ -417,7 +418,7 @@ async def test_resolve_run_isolation_parallel_forces_worktree() -> None:
     # lone session_binding that would otherwise force workspace (moot in practice
     # since parallel+bindings is rejected upstream, but the invariant is asserted).
     assert (
-        service._resolve_run_isolation(
+        compiler._resolve_run_isolation(
             target_mode="personal_cloud",
             session_bindings={"main": "sess-x"},
             definition_has_parallel=True,
@@ -426,7 +427,7 @@ async def test_resolve_run_isolation_parallel_forces_worktree() -> None:
     )
     # Flat cloud run: worktree by the 2b default.
     assert (
-        service._resolve_run_isolation(
+        compiler._resolve_run_isolation(
             target_mode="personal_cloud",
             session_bindings=None,
             definition_has_parallel=False,
@@ -435,7 +436,7 @@ async def test_resolve_run_isolation_parallel_forces_worktree() -> None:
     )
     # Flat bound run: workspace (2b exception, unchanged).
     assert (
-        service._resolve_run_isolation(
+        compiler._resolve_run_isolation(
             target_mode="personal_cloud",
             session_bindings={"main": "sess-x"},
             definition_has_parallel=False,
@@ -452,7 +453,7 @@ async def test_start_run_rejects_parallel_on_local_target(db_session: AsyncSessi
         db_session, user, WorkflowCreateRequest(name="parallel", definition=_parallel_definition())
     )
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
         )
     assert exc.value.code == "parallel_local_unsupported"
@@ -494,7 +495,7 @@ async def test_start_run_rejects_parallel_with_session_bindings(db_session: Asyn
     )
     workspace = await _make_ready_cloud_workspace(db_session, user)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session,
             user,
             workflow.id,
@@ -514,7 +515,7 @@ async def test_start_run_parallel_cloud_resolves_worktree(db_session: AsyncSessi
         db_session, user, WorkflowCreateRequest(name="parallel", definition=_parallel_definition())
     )
     workspace = await _make_ready_cloud_workspace(db_session, user)
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,
@@ -529,7 +530,7 @@ async def test_start_run_rejects_missing_required_arg(db_session: AsyncSession) 
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(db_session, user, workflow.id, inputs={}, target_mode="local")
+        await compiler.start_run(db_session, user, workflow.id, inputs={}, target_mode="local")
     assert exc.value.code == "missing_argument"
 
 
@@ -537,7 +538,7 @@ async def test_start_run_rejects_bad_target_mode(db_session: AsyncSession) -> No
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="shared_cloud"
         )
     assert exc.value.code == "invalid_target_mode"
@@ -546,26 +547,26 @@ async def test_start_run_rejects_bad_target_mode(db_session: AsyncSession) -> No
 async def test_delivery_then_status_lifecycle(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
     )
 
-    delivered = await service.mark_run_delivered(db_session, user, run.id)
+    delivered = await worker_service.mark_run_delivered(db_session, user, run.id)
     assert delivered.status == "delivered"
     assert delivered.delivered_at is not None
 
     # Delivery is idempotent.
-    again = await service.mark_run_delivered(db_session, user, run.id)
+    again = await worker_service.mark_run_delivered(db_session, user, run.id)
     assert again.status == "delivered"
     assert again.delivered_at == delivered.delivered_at
 
-    running = await service.report_run_status(
+    running = await worker_service.report_run_status(
         db_session, user, run.id, RunStatusRequest(status="running", stepCursor=0)
     )
     assert running.status == "running"
     assert running.started_at is not None
 
-    completed = await service.report_run_status(
+    completed = await worker_service.report_run_status(
         db_session, user, run.id, RunStatusRequest(status="completed", stepCursor=2)
     )
     assert completed.status == "completed"
@@ -576,12 +577,12 @@ async def test_delivery_then_status_lifecycle(db_session: AsyncSession) -> None:
 async def test_status_guard_rejects_illegal_transition(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
     )
     # pending_delivery -> running is not a legal observed transition.
     with pytest.raises(CloudApiError) as exc:
-        await service.report_run_status(
+        await worker_service.report_run_status(
             db_session, user, run.id, RunStatusRequest(status="running")
         )
     assert exc.value.code == "illegal_run_transition"
@@ -591,14 +592,18 @@ async def test_status_guard_rejects_illegal_transition(db_session: AsyncSession)
 async def test_status_rejects_reports_after_terminal(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
     )
-    await service.mark_run_delivered(db_session, user, run.id)
-    await service.report_run_status(db_session, user, run.id, RunStatusRequest(status="running"))
-    await service.report_run_status(db_session, user, run.id, RunStatusRequest(status="failed"))
+    await worker_service.mark_run_delivered(db_session, user, run.id)
+    await worker_service.report_run_status(
+        db_session, user, run.id, RunStatusRequest(status="running")
+    )
+    await worker_service.report_run_status(
+        db_session, user, run.id, RunStatusRequest(status="failed")
+    )
     with pytest.raises(CloudApiError) as exc:
-        await service.report_run_status(
+        await worker_service.report_run_status(
             db_session, user, run.id, RunStatusRequest(status="running")
         )
     assert exc.value.code == "run_already_terminal"
@@ -609,7 +614,7 @@ async def test_cannot_run_archived_workflow(db_session: AsyncSession) -> None:
     workflow, _ = await _create_workflow(db_session, user)
     await service.archive_workflow(db_session, user, workflow.id)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session, user, workflow.id, inputs={"issue": "x"}, target_mode="local"
         )
     assert exc.value.code == "workflow_archived"
@@ -659,7 +664,7 @@ async def test_start_run_rejects_binding_held_by_live_run(db_session: AsyncSessi
         resolved_plan_json={"sessions": {"main": {"bind_session_id": "sess-held"}}},
     )
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session,
             user,
             workflow.id,
@@ -674,7 +679,7 @@ async def test_start_run_rejects_binding_slot_not_in_workflow(db_session: AsyncS
     user = await _make_user(db_session)
     workflow, _ = await _create_workflow(db_session, user)
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session,
             user,
             workflow.id,
@@ -781,7 +786,7 @@ async def test_functions_namespace_grantable_with_live_invocation(
     workflow, _ = await service.create_workflow(
         db_session, user, WorkflowCreateRequest(name="fn-flow", definition=_functions_definition())
     )
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session,
         user,
         workflow.id,
@@ -830,7 +835,7 @@ async def test_functions_readiness_gate_at_start_run(db_session: AsyncSession) -
     )
     assert await invocations_store.archive(db_session, owner_user_id=user.id, name="lookup_ticket")
     with pytest.raises(CloudApiError) as exc:
-        await service.start_run(
+        await compiler.start_run(
             db_session,
             user,
             workflow.id,
