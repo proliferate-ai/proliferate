@@ -41,6 +41,7 @@ from proliferate.server.cloud.workflows.poller import (
     overlay_item_inputs,
     run_poll_pass,
 )
+from proliferate.server.cloud.workflows.worker import poll_http as poll_http_module
 from proliferate.utils.time import utcnow
 
 
@@ -246,6 +247,19 @@ def test_derive_item_schema_omits_covered_from_required() -> None:
 
 def _factory(test_engine) -> async_sessionmaker:  # type: ignore[no-untyped-def]
     return async_sessionmaker(test_engine, expire_on_commit=False)
+
+
+@pytest.fixture(autouse=True)
+def _allow_seeded_loopback_poll_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep legacy-poller persistence tests at their mocked HTTP seam.
+
+    These tests intentionally seed a loopback URL and replace the page fetch so
+    they can exercise cursor/transaction behavior without opening a socket. The
+    shared guard's real loopback denial remains covered through the trigger probe
+    tests below, which explicitly turn debug mode back off.
+    """
+
+    monkeypatch.setattr(poll_http_module.settings, "debug", True)
 
 
 def _mock_client_factory(transport: httpx.MockTransport):  # type: ignore[no-untyped-def]
@@ -1359,7 +1373,6 @@ async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-
     raises before fetch_poll_page is ever called)."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
     from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
-    from proliferate.server.cloud.workflows.worker import poll_http as poll_http_module
 
     # The guard (and its settings.debug bypass) lives in worker/poll_http.py
     # (WS4b extraction); flip it off so the guard is active for this test.
@@ -1384,7 +1397,6 @@ async def test_inspect_poll_endpoint_guard_bypassed_in_debug(monkeypatch) -> Non
     the guard is skipped so dev feeds keep working."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
     from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
-    from proliferate.server.cloud.workflows.worker import poll_http as poll_http_module
 
     monkeypatch.setattr(poll_http_module.settings, "debug", True)
     good_page = _page([_item("seed_1", title="hi")])
