@@ -14,6 +14,7 @@ import type {
   ReviewPersonalitiesByKind,
 } from "@/lib/domain/preferences/review-preferences";
 import { DEFAULT_OPEN_IN_TARGET_ID } from "@/config/open-target-defaults";
+import type { ReleaseTitle } from "@/lib/domain/updates/release-notice";
 
 export type BranchPrefixType = "none" | "proliferate" | "github_username";
 export type TurnEndSoundId = "ding";
@@ -49,6 +50,8 @@ export interface UserPreferences {
   pasteAttachmentsEnabled: boolean;
   reviewDefaultsByKind: ReviewDefaultsByKind;
   reviewPersonalitiesByKind: ReviewPersonalitiesByKind;
+  acknowledgedReleaseVersion: string | null;
+  cachedInstalledRelease: ReleaseTitle | null;
 }
 
 export const NEW_USER_DEFAULTS: UserPreferences = {
@@ -74,6 +77,8 @@ export const NEW_USER_DEFAULTS: UserPreferences = {
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
+  acknowledgedReleaseVersion: null,
+  cachedInstalledRelease: null,
 };
 
 export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
@@ -101,6 +106,8 @@ export const PERSISTED_RECORD_BACKFILL: UserPreferences = {
   pasteAttachmentsEnabled: true,
   reviewDefaultsByKind: { plan: null, code: null },
   reviewPersonalitiesByKind: { plan: [], code: [] },
+  acknowledgedReleaseVersion: null,
+  cachedInstalledRelease: null,
 };
 
 export const USER_PREFERENCE_DEFAULTS = NEW_USER_DEFAULTS;

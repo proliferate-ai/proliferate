@@ -19,6 +19,10 @@ import {
 } from "@/lib/domain/preferences/user/model";
 import { isValidWorktreeAutoDeleteLimit } from "@/lib/domain/preferences/user/worktree-auto-delete";
 import type { LegacyUserPreferencesInput } from "@/lib/domain/preferences/user/persisted-keys";
+import {
+  normalizeReleaseTitlePair,
+  normalizeReleaseVersion,
+} from "@/lib/domain/updates/release-notice";
 
 export function migrateUserPreferences(preferences: LegacyUserPreferencesInput): {
   preferences: UserPreferences;
@@ -176,6 +180,25 @@ export function migrateUserPreferences(preferences: LegacyUserPreferencesInput):
     !== JSON.stringify(next.reviewPersonalitiesByKind)
   ) {
     next.reviewPersonalitiesByKind = sanitizedReviewPersonalitiesByKind;
+    changed = true;
+  }
+
+  const acknowledgedReleaseVersion = normalizeReleaseVersion(
+    next.acknowledgedReleaseVersion,
+  );
+  if (acknowledgedReleaseVersion !== next.acknowledgedReleaseVersion) {
+    next.acknowledgedReleaseVersion = acknowledgedReleaseVersion;
+    changed = true;
+  }
+
+  const cachedInstalledRelease = normalizeReleaseTitlePair(
+    next.cachedInstalledRelease,
+  );
+  if (
+    JSON.stringify(cachedInstalledRelease)
+    !== JSON.stringify(next.cachedInstalledRelease)
+  ) {
+    next.cachedInstalledRelease = cachedInstalledRelease;
     changed = true;
   }
 

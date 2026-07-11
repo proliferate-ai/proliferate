@@ -57,6 +57,15 @@ describe("updater dev mock", () => {
     });
   });
 
+  it("round-trips and normalizes an authored release title", () => {
+    writeDevUpdaterMock(baseState({ title: "  Introducing Grok  " }));
+
+    expect(readDevUpdaterMock()?.title).toBe("Introducing Grok");
+
+    writeDevUpdaterMock(baseState({ title: "line one\nline two" }));
+    expect(readDevUpdaterMock()?.title).toBeNull();
+  });
+
   it("round-trips an armed restart only for the ready phase", () => {
     writeDevUpdaterMock(baseState({ phase: "ready", restartWhenIdle: true }));
     expect(readDevUpdaterMock()).toMatchObject({ phase: "ready", restartWhenIdle: true });

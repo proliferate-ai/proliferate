@@ -92,6 +92,9 @@ at the start of the task, not halfway through implementation.
    - `specs/codebase/features/pending-workspace-shell.md` for pending workspace
      entry, projected session shell, optimistic prompts, or
      workspace/session materialization handoff
+   - `specs/codebase/features/desktop-updates.md` for updater checks,
+     download/restart UX, version-aware release notices, or release-notice
+     acknowledgment
    - `specs/codebase/features/workspace-files.md` for workspace file browsing,
      file viewing, diff viewing, Changes, or all-changes review
 
@@ -153,6 +156,8 @@ Applies to `.github/workflows/**`, `apps/desktop/infra/**`, `server/infra/**`,
 updater publishing, and the desktop updater flow.
 
 1. `specs/developing/deploying/ci-cd.md`
+2. `specs/codebase/features/desktop-updates.md` when changing updater manifest
+   metadata or in-app updater/release-notice behavior.
 
 If a release or deployment change also touches frontend, server, SDK, or
 AnyHarness code, read the relevant area doc too.

@@ -25,6 +25,11 @@ on:
         description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
         type: boolean
         default: false
+      release_title:
+        description: "Optional one-line release notice title (80 characters maximum)"
+        type: string
+        required: false
+        default: ""
   workflow_call:
     inputs:
       git_sha:
@@ -51,6 +56,11 @@ on:
         description: "Allow ad-hoc (unsigned) macOS builds when APPLE_SIGNING_IDENTITY is not configured"
         type: boolean
         default: false
+      release_title:
+        description: "Optional one-line release notice title (80 characters maximum)"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -75,6 +85,13 @@ env:
   ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE: ${{ vars.ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE || vars.E2B_RUNTIME_SENTRY_TRACES_SAMPLE_RATE }}
   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+# Reusable callers provide a bare version, while tag-push and manual tag runs
+# identify the same release with desktop-v*. Normalize both to one lock key so
+# a queued same-version run cannot reach shared release assets concurrently.
+concurrency:
+  group: release-desktop-${{ inputs.version && format('desktop-v{0}', inputs.version) || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build-desktop:
@@ -152,6 +169,15 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "22"
+
+      - name: Validate release title
+        if: steps.filter.outputs.skip != 'true'
+        env:
+          RELEASE_TITLE: ${{ inputs.release_title || '' }}
+        run: |
+          node scripts/generate-updater-manifest.mjs \
+            --notes "$RELEASE_TITLE" \
+            --validate-notes-only true
 
       - name: Resolve release metadata
         if: steps.filter.outputs.skip != 'true'
@@ -636,6 +662,7 @@ jobs:
       - name: Generate updater manifest
         env:
           INPUT_VERSION: ${{ inputs.version || '' }}
+          RELEASE_TITLE: ${{ inputs.release_title || '' }}
         run: |
           version="$INPUT_VERSION"
           if [[ "${GITHUB_REF_NAME:-}" == desktop-v* ]]; then
@@ -647,6 +674,7 @@ jobs:
             --version "$version" \
             --artifacts-dir all-artifacts \
             --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
+            --notes "$RELEASE_TITLE" \
             --output latest.json
 
       - name: Generate installer manifest
@@ -663,6 +691,24 @@ jobs:
             --artifacts-dir all-artifacts \
             --base-url "${{ vars.DESKTOP_DOWNLOADS_BASE_URL }}/desktop/stable" \
             --output installers.json
+
+      - name: Refuse an existing immutable updater manifest
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
+          : "${DESKTOP_RELEASE_VERSION:?Missing desktop release version.}"
+          VERSIONED_KEY="desktop/stable/${DESKTOP_RELEASE_VERSION}/latest.json"
+
+          if head_error="$(aws s3api head-object --bucket "${BUCKET}" --key "${VERSIONED_KEY}" 2>&1)"; then
+            echo "::error::s3://${BUCKET}/${VERSIONED_KEY} already exists. Same-version publishes are refused before any updater asset or rolling manifest is changed."
+            exit 1
+          fi
+
+          if [[ "$head_error" != *"(404)"* ]]; then
+            echo "$head_error" >&2
+            echo "::error::Could not prove that s3://${BUCKET}/${VERSIONED_KEY} is absent; refusing to publish."
+            exit 1
+          fi
 
       - name: Upload desktop assets to S3
         run: |
@@ -681,6 +727,23 @@ jobs:
         run: |
           set -euo pipefail
           BUCKET="${{ vars.DESKTOP_DOWNLOADS_S3_BUCKET }}"
+          # Versioned snapshot the self-hosted server's /desktop/updater/latest.json
+          # 302-redirects to (desktop/stable/<version>/latest.json). Immutable, so
+          # cache it long and skip CloudFront invalidation. Create it atomically
+          # before changing the rolling feed so same-version or concurrent runs
+          # cannot make the two manifests disagree.
+          : "${DESKTOP_RELEASE_VERSION:?Missing desktop release version.}"
+          VERSIONED_KEY="desktop/stable/${DESKTOP_RELEASE_VERSION}/latest.json"
+          if ! aws s3api put-object \
+            --bucket "${BUCKET}" \
+            --key "${VERSIONED_KEY}" \
+            --body latest.json \
+            --content-type "application/json" \
+            --cache-control "max-age=31536000, immutable" \
+            --if-none-match "*"; then
+            echo "::error::Failed to create s3://${BUCKET}/${VERSIONED_KEY} atomically. The rolling updater manifest was not changed."
+            exit 1
+          fi
           aws s3 cp latest.json \
             "s3://${BUCKET}/desktop/stable/latest.json" \
             --content-type "application/json" \
@@ -689,22 +752,6 @@ jobs:
             "s3://${BUCKET}/desktop/stable/installers.json" \
             --content-type "application/json" \
             --cache-control "max-age=300"
-          # Versioned snapshot the self-hosted server's /desktop/updater/latest.json
-          # 302-redirects to (desktop/stable/<version>/latest.json). Immutable, so
-          # cache it long and skip CloudFront invalidation. Because edges may hold
-          # it for up to a year, never overwrite an existing key: a same-version
-          # pipeline re-run would leave edges serving stale signatures. Skip the
-          # upload instead so re-runs stay idempotent.
-          : "${DESKTOP_RELEASE_VERSION:?Missing desktop release version.}"
-          VERSIONED_KEY="desktop/stable/${DESKTOP_RELEASE_VERSION}/latest.json"
-          if aws s3api head-object --bucket "${BUCKET}" --key "${VERSIONED_KEY}" >/dev/null 2>&1; then
-            echo "::warning::s3://${BUCKET}/${VERSIONED_KEY} already exists; skipping the immutable versioned manifest upload (idempotent re-run). If ${DESKTOP_RELEASE_VERSION} was re-signed, delete the key and re-run, then wait out edge caches."
-          else
-            aws s3 cp latest.json \
-              "s3://${BUCKET}/${VERSIONED_KEY}" \
-              --content-type "application/json" \
-              --cache-control "max-age=31536000, immutable"
-          fi
 
       - name: Invalidate CloudFront cache
         run: |

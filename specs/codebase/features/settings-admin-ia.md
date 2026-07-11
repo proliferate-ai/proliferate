@@ -290,6 +290,10 @@ Settings / User         Archived chats
 
 Support and Desktop updates are not `tbr`.
 
+This spec owns the placement and naming of the Desktop updates settings action.
+[`desktop-updates.md`](./desktop-updates.md) owns what that action does and the
+rest of the packaged updater and release-notice experience.
+
 ## 5. Target Model
 
 ### 5.0 Organization control center map
