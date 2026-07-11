@@ -26,10 +26,7 @@ apps/desktop/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 sess
 apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 424 session creation actions pending action-group split
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 940 transcript row model pending row-kind module split
 apps/desktop/src/components/workflows/editor/WorkflowStepPanel.tsx 559 workflows v1 launch surface; split pass queued post-launch
-apps/desktop/src/components/workflows/editor/WorkflowTriggersCard.tsx 1057 workflows v1 launch surface; split pass queued post-launch
 apps/desktop/src/components/workflows/home/WorkflowRunArgsModal.tsx 448 workflows v1 launch surface; split pass queued post-launch
-apps/desktop/src/components/workflows/screen/WorkflowEditorScreen.tsx 1038 workflows v1 launch surface; split pass queued post-launch
-apps/desktop/src/components/workflows/screen/WorkflowsHomeScreen.tsx 491 workflows v1 launch surface; split pass queued post-launch
 apps/packages/product-domain/src/workflows/definition.ts 877 workflows v1 launch surface; split pass queued post-launch
 apps/packages/product-domain/src/workflows/run-status.ts 792 workflows v1 launch surface; split pass queued post-launch
 apps/packages/product-domain/src/workflows/validation.ts 593 workflows v1 launch surface; split pass queued post-launch
