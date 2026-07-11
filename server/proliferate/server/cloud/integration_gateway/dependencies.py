@@ -20,10 +20,11 @@ import dataclasses
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.workflows import WORKFLOW_CREDENTIAL_AUDIENCE_INTEGRATION
 from proliferate.db.engine import get_async_session
-from proliferate.db.store import cloud_workflows as workflows_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
+from proliferate.db.store import workflow_credentials as credentials_store
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integration_gateway import service as gateway_service
@@ -45,15 +46,32 @@ def _bearer_token_from_request(request: Request) -> str:
 async def _resolve_run_token_grant(
     db: AsyncSession, *, token: str
 ) -> IntegrationGatewayGrant | None:
-    """Resolve a per-run workflow gateway token, or None if the bearer isn't one."""
+    """Resolve a per-run workflow gateway token, or None if the bearer isn't one.
 
-    run_token = await workflows_store.get_active_run_gateway_token_by_hash(
+    WS3b (feature spec §5.3/§7.1): the integration gateway accepts only an
+    ``integration``-audience credential (a session-bound credential exchanged from
+    a per-slot handle) or a LEGACY all-purpose run token (NULL audience, compat). A
+    new-style run_report/ping/delivery-claim credential presented here is denied —
+    it cannot call an integration. Trusted context (run/slot/session) comes ONLY
+    from the token row, never from agent-supplied tool arguments.
+    """
+
+    run_token = await credentials_store.get_audience_token_by_hash(
         db,
         token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
         now=utcnow(),
     )
     if run_token is None:
         return None
+    if (
+        run_token.audience is not None
+        and run_token.audience != WORKFLOW_CREDENTIAL_AUDIENCE_INTEGRATION
+    ):
+        raise CloudApiError(
+            "integration_gateway_wrong_audience",
+            f"This credential's audience '{run_token.audience}' cannot call an integration.",
+            status_code=403,
+        )
     # L25 layer 1, re-checked per request: the delivering worker is the owner's
     # active cloud-sandbox worker; a scope narrowed after mint bites here.
     worker_scope = await runtime_workers_store.get_active_worker_gateway_scope_for_owner(
@@ -63,8 +81,15 @@ async def _resolve_run_token_grant(
         owner_user_id=run_token.owner_user_id,
         organization_id=run_token.organization_id,
         run_id=run_token.workflow_run_id,
+        # A session-bound integration credential's ``scope_json`` is its slot's
+        # grant only, so the flattened run scope is that slot's namespaces — slot A
+        # cannot reach slot B's providers. A legacy token carries the whole per-slot
+        # map, so the union is preserved (today's behavior).
         run_scope=_flatten_run_scope(run_token.scope_json),
         worker_scope=worker_scope,
+        slot_id=run_token.slot_id,
+        session_id=run_token.session_id,
+        credential_generation=run_token.generation,
     )
 
 

@@ -62,7 +62,7 @@ from proliferate.server.cloud.workflows.domain.interpolation import (
 from proliferate.server.cloud.workflows.gateway_grants import (
     assert_declared_providers_ready,
     granted_namespaces,
-    mint_run_gateway_token,
+    mint_private_envelope,
     resolve_run_scope,
 )
 from proliferate.server.cloud.workflows.service import visible_workflow
@@ -640,20 +640,14 @@ async def start_run(
         delivery_state="ready",
     )
 
-    # Mint the per-run gateway token for EVERY run (L16), both lanes, empty scope
-    # legal. The plaintext lands in the PRIVATE envelope (spec §5.3) — NEVER the
-    # logical plan — so ordinary run APIs stay secret-free; delivery/claim paths
-    # fold it into the delivered plan. The L25 subset intersection with the
-    # delivering worker happens later, at cloud delivery, when the worker is known
-    # (local lane ships the definition scope unchanged — the runtime errors
-    # explicitly if it can't honor it, §5.3). The token FKs the run row, so it is
-    # minted after create_run, then written to the envelope.
-    _token, gateway_block = await mint_run_gateway_token(
-        db, run_id=run_id, owner_user_id=effective_owner, scope=run_scope
+    # Build the PRIVATE execution envelope (spec §5.3): the legacy all-purpose
+    # gateway token (L16) PLUS the WS3b audience-separated control credentials +
+    # per-slot one-use integration-credential issuance handles. All plaintext lives
+    # ONLY here — never the logical plan — so ordinary run APIs stay secret-free.
+    envelope = await mint_private_envelope(
+        db, run_id=run_id, owner_user_id=effective_owner, scope=run_scope, plan_hash=plan_hash
     )
-    updated = await store.update_run(
-        db, run_id=run_id, private_envelope_json={"gateway": gateway_block}
-    )
+    updated = await store.update_run(db, run_id=run_id, private_envelope_json=envelope)
 
     # WS3a: freeze the run's EXACT per-slot capability leases — the new frozen
     # truth alongside the namespace token above. This runs in parallel with the

@@ -22,6 +22,7 @@ from proliferate.constants.cloud import (
     CLOUD_RUNTIME_WORKER_ENROLLMENT_TOKEN_DOMAIN,
     CLOUD_RUNTIME_WORKER_OFFLINE_THRESHOLD_SECONDS,
     CLOUD_RUNTIME_WORKER_TOKEN_DOMAIN,
+    CLOUD_WORKFLOW_ISSUANCE_HANDLE_DOMAIN,
     CLOUD_WORKFLOW_RUN_GATEWAY_TOKEN_DOMAIN,
 )
 from proliferate.db.models.cloud.runtime_workers import (
@@ -66,6 +67,17 @@ def hash_workflow_run_gateway_token(token: str) -> str:
     return hash_runtime_token(
         domain=CLOUD_WORKFLOW_RUN_GATEWAY_TOKEN_DOMAIN,
         token=token,
+    )
+
+
+def hash_workflow_issuance_handle(handle: str) -> str:
+    """Hash a per-slot one-use issuance handle (WS3b, feature spec §5.3) — same
+    worker-token hashing under its own HMAC domain so a handle can never resolve a
+    gateway-token row. Only the hash is stored; the plaintext handle lives in the
+    private envelope and is never persisted to an ordinary row or log."""
+    return hash_runtime_token(
+        domain=CLOUD_WORKFLOW_ISSUANCE_HANDLE_DOMAIN,
+        token=handle,
     )
 
 
@@ -120,6 +132,13 @@ class IntegrationGatewayGrant:
     # ``cloud_workflow_run_gateway_token`` row; the credential itself proves the run.
     run_id: UUID | None = None
     workflow_id: UUID | None = None
+    # WS3b trusted context (feature spec §5.3/§7.1): a session-bound INTEGRATION
+    # credential also proves its slot + session. These come ONLY from the token
+    # row, never from agent-supplied tool arguments; the gateway uses them for the
+    # per-slot scope and audit context. NULL on a legacy all-purpose run token.
+    slot_id: str | None = None
+    session_id: str | None = None
+    credential_generation: int | None = None
     # L25 layer 2: the run's frozen function grant (``[{provider, tools}]``). None on
     # a per-worker grant (no per-run function restriction).
     run_scope: list[dict[str, object]] | None = None

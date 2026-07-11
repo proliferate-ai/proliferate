@@ -33,15 +33,7 @@ from proliferate.server.cloud.workflows.delivery import (
     observe_run_ping,
     refresh_cloud_run,
 )
-from proliferate.server.cloud.workflows.local_executor import (
-    claim_local_workflow_runs,
-    heartbeat_local_workflow_run,
-)
 from proliferate.server.cloud.workflows.models import (
-    LocalWorkflowClaimActionRequest,
-    LocalWorkflowClaimListResponse,
-    LocalWorkflowClaimMutationResponse,
-    LocalWorkflowClaimRequest,
     PollInputSpecResponse,
     PollInspectRequest,
     PollInspectResponse,
@@ -247,38 +239,9 @@ async def run_ping_endpoint(
     await observe_run_ping(db, run_id=run_id, actor=actor)
 
 
-# --- desktop executor claim plane (track 2a) -----------------------------------
-# Literal paths declared BEFORE the "/{workflow_id}" param routes (same reason the
-# "/runs" routes lead). Auth = the desktop's user session; every claim is
-# owner-scoped in the service, so a session can only claim its own local runs.
-
-
-@router.post("/executor/local/claims", response_model=LocalWorkflowClaimListResponse)
-async def claim_local_workflow_runs_endpoint(
-    body: LocalWorkflowClaimRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> LocalWorkflowClaimListResponse:
-    """Claim a batch of this owner's ``claimable`` (or stale-reclaimable) local
-    scheduled runs for a desktop executor (the 10s claim poll)."""
-
-    return await claim_local_workflow_runs(db, user.id, body)
-
-
-@router.post(
-    "/executor/local/runs/{run_id}/heartbeat",
-    response_model=LocalWorkflowClaimMutationResponse,
-)
-async def heartbeat_local_workflow_run_endpoint(
-    run_id: UUID,
-    body: LocalWorkflowClaimActionRequest,
-    db: AsyncSession = Depends(get_async_session),
-    user: User = Depends(current_product_user),
-) -> LocalWorkflowClaimMutationResponse:
-    """Renew a live claim's TTL (the 30s heartbeat). ``accepted=false`` means the
-    claim was lost (reclaimed / terminal / expired) and the executor must stop."""
-
-    return await heartbeat_local_workflow_run(db, user.id, run_id, body)
+# The desktop executor claim plane (claim + heartbeat) and the runtime credential
+# control channel live in ``executor_credentials_api`` (registered before this
+# router so their literal paths win over ``/{workflow_id}``).
 
 
 @router.get("/slack/channels", response_model=SlackChannelsResponse)

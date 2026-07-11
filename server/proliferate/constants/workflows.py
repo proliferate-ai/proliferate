@@ -447,6 +447,45 @@ WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE: Final = "active"
 WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED: Final = "expired"
 WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_REVOKED: Final = "revoked"
 
+# --- WS3b credential audiences (feature spec §5.3 / §7.1). ---------------------
+# Every short-lived workflow credential carries a typed audience. A token minted
+# for one audience is denied at every other endpoint family. A NULL audience is a
+# LEGACY (pre-WS3b) all-purpose run token that still authenticates everywhere it
+# did before migration (compat); enforcement is strict only for new-style tokens.
+WORKFLOW_CREDENTIAL_AUDIENCE_INTEGRATION: Final = "integration"
+WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT: Final = "run_report"
+WORKFLOW_CREDENTIAL_AUDIENCE_PING: Final = "ping"
+WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM: Final = "delivery_claim"
+WORKFLOW_CREDENTIAL_AUDIENCES: Final = frozenset(
+    {
+        WORKFLOW_CREDENTIAL_AUDIENCE_INTEGRATION,
+        WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT,
+        WORKFLOW_CREDENTIAL_AUDIENCE_PING,
+        WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM,
+    }
+)
+# The control channel (§5.3 "authenticated control channel"): the run_report or
+# delivery_claim credential may drive the credential exchange/ACK endpoints.
+WORKFLOW_CONTROL_CHANNEL_AUDIENCES: Final = frozenset(
+    {
+        WORKFLOW_CREDENTIAL_AUDIENCE_RUN_REPORT,
+        WORKFLOW_CREDENTIAL_AUDIENCE_DELIVERY_CLAIM,
+    }
+)
+
+# --- WS3b per-slot one-use issuance handles (feature spec §5.3). ---------------
+# A handle is minted per slot into the private envelope at StartRun and exchanged
+# once (per session) for a session-bound integration credential. ``pending`` =
+# minted, never exchanged; ``exchanged`` = credential issued, awaiting runtime
+# install ACK (an identical retry returns the SAME generation); ``acknowledged``
+# = the runtime installed it and the handle is consumed (no further exchange).
+WORKFLOW_ISSUANCE_STATUS_PENDING: Final = "pending"
+WORKFLOW_ISSUANCE_STATUS_EXCHANGED: Final = "exchanged"
+WORKFLOW_ISSUANCE_STATUS_ACKNOWLEDGED: Final = "acknowledged"
+# The short-lived integration credential's lifetime; rotation refreshes it before
+# expiry over the authenticated control channel (§5.3).
+WORKFLOW_INTEGRATION_CREDENTIAL_TTL_SECONDS: Final = 60 * 60
+
 # --- Function invocations (Part II mental-model §1; track 1b phase 2). ---------
 # User-authored HTTP functions exposed at the integration gateway under the
 # reserved ``functions`` provider namespace. The agent addresses one by its

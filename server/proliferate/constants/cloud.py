@@ -315,6 +315,12 @@ CLOUD_INTEGRATION_GATEWAY_TOKEN_DOMAIN: Final = "cloud-integration-gateway"
 # table and vice versa, even though both ride the same /integration-gateway/mcp
 # endpoint. Hashing reuses ``hash_runtime_token`` (worker-token hashing, exactly).
 CLOUD_WORKFLOW_RUN_GATEWAY_TOKEN_DOMAIN: Final = "cloud-workflow-run-gateway"
+# WS3b per-slot one-use integration-credential issuance handles (feature spec
+# §5.3). A handle is exchanged over the authenticated control channel for a
+# short-lived slot+session-bound integration credential; only its hash is stored
+# (the plaintext handle rides the private envelope, never an ordinary API row).
+# Its own HMAC domain keeps a handle from ever resolving a gateway-token row.
+CLOUD_WORKFLOW_ISSUANCE_HANDLE_DOMAIN: Final = "cloud-workflow-issuance-handle"
 
 # Cloud sandboxes mint a longer-lived enrollment (the worker boots once per
 # provisioning); desktop mints a short-lived one at login.
@@ -327,6 +333,19 @@ CLOUD_INTEGRATION_GATEWAY_MCP_PATH: Final = "/v1/cloud/integration-gateway/mcp"
 # The per-run completion-ping route (L16 / §3.7). Composed against the worker
 # cloud base URL exactly like the gateway MCP path so the runtime can reach it.
 CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE: Final = "/v1/cloud/workflows/runs/{run_id}/ping"
+# WS3b authenticated control-channel routes (§5.3): the runtime exchanges a
+# per-slot one-use handle for a session-bound integration credential, ACKs its
+# install, and rotates a credential before expiry. Composed against the worker
+# cloud base URL exactly like the ping/gateway paths.
+CLOUD_WORKFLOW_CREDENTIAL_EXCHANGE_PATH_TEMPLATE: Final = (
+    "/v1/cloud/workflows/runs/{run_id}/credentials/exchange"
+)
+CLOUD_WORKFLOW_CREDENTIAL_ACK_PATH_TEMPLATE: Final = (
+    "/v1/cloud/workflows/runs/{run_id}/credentials/ack"
+)
+CLOUD_WORKFLOW_CREDENTIAL_ROTATE_PATH_TEMPLATE: Final = (
+    "/v1/cloud/workflows/runs/{run_id}/credentials/rotate"
+)
 
 # A ready tools/list cache is also considered stale once its fetched_at is
 # older than this, so provider-side tool changes surface within a day.

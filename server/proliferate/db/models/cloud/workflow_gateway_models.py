@@ -19,6 +19,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -96,9 +97,7 @@ class FunctionInvocationDefinition(Base):
     # NOT on a secret-value-only rotation behind the same binding identity. A
     # workflow run freezes the exact ``(id, semantic_revision)`` it resolved, so a
     # later edit produces a new revision and cannot mutate a running run's meaning.
-    semantic_revision: Mapped[int] = mapped_column(
-        Integer, default=1, server_default=text("1")
-    )
+    semantic_revision: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
     # §2 default access modes: WORKFLOW-ONLY until explicitly enabled for chat.
     chat_scope_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
@@ -137,6 +136,15 @@ class WorkflowRunGatewayToken(Base):
             "status IN ('active', 'expired', 'revoked')",
             name="ck_cloud_workflow_run_gateway_token_status",
         ),
+        # WS3b typed audiences (feature spec §5.3): NULL = a LEGACY all-purpose run
+        # token (pre-WS3b, authenticates everywhere it did before migration); a
+        # non-NULL audience is a new-style token strictly enforced to one endpoint
+        # family (integration | run_report | ping | delivery_claim).
+        CheckConstraint(
+            "audience IS NULL OR audience IN "
+            "('integration', 'run_report', 'ping', 'delivery_claim')",
+            name="ck_cloud_workflow_run_gateway_token_audience",
+        ),
         Index("ix_cloud_workflow_run_gateway_token_run_id", "workflow_run_id"),
     )
 
@@ -152,8 +160,77 @@ class WorkflowRunGatewayToken(Base):
     # token's NULL "unscoped" (L25).
     scope_json: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(String(16), default="active")
+    # --- WS3b typed audiences + session-bound integration binding (§5.3). -------
+    # ADD-ONLY. ``audience`` NULL = legacy all-purpose token. A session-bound
+    # integration credential also stamps ``slot_id``/``session_id`` (trusted
+    # context, derived only from this row) and ``generation`` (rotation fencing).
+    audience: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    slot_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # The one-use issuance handle a session-bound integration credential came from
+    # (§5.3). Links the credential back to its ``workflow_credential_issuance`` row.
+    issuance_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+
+class WorkflowCredentialIssuance(Base):
+    """A per-slot one-use integration-credential issuance handle (WS3b, §5.3).
+
+    Minted per slot into the private execution envelope at StartRun/envelope-mint.
+    A fresh slot has no session when the envelope is minted; after AnyHarness
+    registers the session and its lease is prepared/claimed it EXCHANGES the
+    one-use handle over the authenticated control channel for a short-lived
+    integration credential bound to run/plan-hash/generation/slot/session.
+
+    Only ``handle_hash`` is stored — the plaintext handle rides the envelope and
+    is never persisted here or logged. ``session_id`` is bound on the first
+    exchange; an identical retry for the same unacknowledged (handle, session)
+    returns the SAME ``generation``. A different session, a post-``acknowledged``
+    reuse, or an exchange before lease acknowledgment (where leases exist) is
+    denied. The ``(run_id, slot_id)`` uniqueness makes one handle per slot.
+    """
+
+    __tablename__ = "workflow_credential_issuance"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'exchanged', 'acknowledged')",
+            name="ck_workflow_credential_issuance_status",
+        ),
+        UniqueConstraint(
+            "workflow_run_id",
+            "slot_id",
+            name="uq_workflow_credential_issuance_run_slot",
+        ),
+        Index(
+            "ix_workflow_credential_issuance_handle_hash",
+            "handle_hash",
+            unique=True,
+        ),
+        Index("ix_workflow_credential_issuance_run_id", "workflow_run_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workflow_run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow_run.id", ondelete="CASCADE"),
+    )
+    slot_id: Mapped[str] = mapped_column(String(64))
+    handle_hash: Mapped[str] = mapped_column(String(64))
+    # Delivery-identity echo (§5.3) so a credential binds run + plan hash.
+    plan_hash: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # Bound on the first exchange; NULL while ``pending``.
+    session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    generation: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    # The active integration credential row this handle currently backs.
+    integration_token_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

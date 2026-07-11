@@ -39,8 +39,9 @@ _PRE_FEATURE_HEAD = "c3f8b1d6a4e2"
 # The current single head of the migration chain ("head" resolves here). Each
 # packet that appends a workflow migration moves this pin: WS2a landed
 # d9578c0275f3; WS3a appended b3d1f5a9c7e2 (function_invocation semantic_revision);
-# WS2b appended a7e2c4f1b9d0 (workflow_run.private_envelope_json — secret-free plan).
-_CHAIN_HEAD = "a7e2c4f1b9d0"
+# WS2b appended a7e2c4f1b9d0 (workflow_run.private_envelope_json — secret-free plan);
+# WS3b appended e5f1a2b3c4d7 (credential audiences + per-slot issuance handles).
+_CHAIN_HEAD = "e5f1a2b3c4d7"
 
 
 # --- session leases (spec §8.2) ----------------------------------------------------

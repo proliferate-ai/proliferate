@@ -160,21 +160,22 @@ async def test_mint_for_every_run_empty_integrations_empty_scope(db_session: Asy
     assert gateway["url"].endswith("/v1/cloud/integration-gateway/mcp")
     assert gateway["authorization"].startswith("Bearer ")
     assert gateway["ping_url"].endswith(f"/v1/cloud/workflows/runs/{run.id}/ping")
-    tokens = (
+    legacy = (  # WS3b: the legacy token (audience NULL) is still minted.
         (
             await db_session.execute(
                 store.select(WorkflowRunGatewayToken).where(
-                    WorkflowRunGatewayToken.workflow_run_id == run.id
+                    WorkflowRunGatewayToken.workflow_run_id == run.id,
+                    WorkflowRunGatewayToken.audience.is_(None),
                 )
             )
         )
         .scalars()
         .all()
     )
-    assert len(tokens) == 1
+    assert len(legacy) == 1
     # An empty grant is still stamped per slot (§2.6).
-    assert tokens[0].scope_json == _scope_json([])
-    assert tokens[0].status == _ACTIVE
+    assert legacy[0].scope_json == _scope_json([])
+    assert legacy[0].status == _ACTIVE
 
 
 async def test_mint_resolves_declared_scope(db_session: AsyncSession) -> None:
@@ -193,7 +194,8 @@ async def test_mint_resolves_declared_scope(db_session: AsyncSession) -> None:
     token = (
         await db_session.execute(
             store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run.id
+                WorkflowRunGatewayToken.workflow_run_id == run.id,
+                WorkflowRunGatewayToken.audience.is_(None),
             )
         )
     ).scalar_one()
@@ -278,7 +280,8 @@ async def test_mint_stamps_narrowed_scope_per_slot(db_session: AsyncSession) -> 
     token = (
         await db_session.execute(
             store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run.id
+                WorkflowRunGatewayToken.workflow_run_id == run.id,
+                WorkflowRunGatewayToken.audience.is_(None),
             )
         )
     ).scalar_one()
@@ -529,7 +532,8 @@ async def _active_token_status(db: AsyncSession, run_id: uuid.UUID) -> str:
     token = (
         await db.execute(
             store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run_id
+                WorkflowRunGatewayToken.workflow_run_id == run_id,
+                WorkflowRunGatewayToken.audience.is_(None),
             )
         )
     ).scalar_one()
