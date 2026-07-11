@@ -1,28 +1,29 @@
-import { useMemo, type ReactNode } from "react";
 import {
-  parseWorkflowDefinition,
   type AgentConfigStep,
-  type AgentEmitStep,
   type AgentPromptStep,
   type BranchStep,
   type NotifyStep,
   type ScmOpenPrStep,
   type ShellRunStep,
   type WorkflowBranchTarget,
-  type WorkflowIncludeStep,
   type WorkflowStep,
 } from "@proliferate/product-domain/workflows/definition";
 import type { TemplateSuggestion } from "@proliferate/product-domain/workflows/interpolation";
 import { Input } from "@proliferate/ui/primitives/Input";
-import { Label } from "@proliferate/ui/primitives/Label";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { X } from "@proliferate/ui/icons";
 import { WorkflowStepKindBadge } from "@proliferate/product-ui/workflows/WorkflowStepKindBadge";
-import { useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
 import { TemplateVarTextarea } from "./TemplateVarTextarea";
 import { WorkflowGoalAttachment } from "./WorkflowGoalAttachment";
 import { WorkflowSelect } from "./WorkflowSelect";
+import { FieldLabel, InlineRow } from "./WorkflowStepFields";
+import { WorkflowEmitStepEditor } from "./WorkflowEmitStepEditor";
+import { WorkflowIncludeStepEditor } from "./WorkflowIncludeStepEditor";
+import {
+  WorkflowRequiredInvocationField,
+  type RequiredInvocationFunction,
+} from "./WorkflowRequiredInvocationField";
 
 export interface EditorAgent {
   kind: string;
@@ -51,23 +52,13 @@ export interface WorkflowStepPanelProps {
   slackChannels: readonly EditorSlackChannel[];
   /** Owner's non-archived workflows (this one excluded) — the include picker. */
   includableWorkflows: readonly EditorIncludableWorkflow[];
+  /** The workflow-declared integration namespaces (required-invocation universe). */
+  integrations: readonly string[];
+  /** The owner's function invocations (the `functions` provider's tools). */
+  functionInvocations: readonly RequiredInvocationFunction[];
   supportsGoals: (harnessKind: string) => boolean;
   onChange: (step: WorkflowStep) => void;
   onClose: () => void;
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <Label>{children}</Label>;
-}
-
-/** Label-left inline row (Family-4 C): fixed-width muted label, control right. */
-function InlineRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="w-28 shrink-0 text-sm text-muted-foreground">{label}</span>
-      <div className="flex flex-1 justify-end">{children}</div>
-    </div>
-  );
 }
 
 export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
@@ -84,7 +75,12 @@ export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
         {step.kind === "agent.prompt" ? (
           <PromptEditor {...props} step={step} onChange={onChange} />
         ) : step.kind === "agent.emit" ? (
-          <EmitEditor step={step} suggestions={props.suggestions} onChange={onChange} />
+          <WorkflowEmitStepEditor
+            key={step.id ?? "emit"}
+            step={step}
+            suggestions={props.suggestions}
+            onChange={onChange}
+          />
         ) : step.kind === "agent.config" ? (
           <AgentConfigEditor
             step={step}
@@ -107,7 +103,7 @@ export function WorkflowStepPanel(props: WorkflowStepPanelProps) {
         ) : step.kind === "branch" ? (
           <BranchEditor step={step} onChange={onChange} />
         ) : (
-          <IncludeEditor
+          <WorkflowIncludeStepEditor
             step={step}
             suggestions={props.suggestions}
             includableWorkflows={props.includableWorkflows}
@@ -124,6 +120,8 @@ function PromptEditor({
   effectiveHarness,
   agents,
   suggestions,
+  integrations,
+  functionInvocations,
   supportsGoals,
   onChange,
 }: WorkflowStepPanelProps & { step: AgentPromptStep }) {
@@ -152,64 +150,14 @@ function PromptEditor({
         suggestions={suggestions}
         onChange={(goal) => onChange({ ...step, goal })}
       />
+      <WorkflowRequiredInvocationField
+        value={step.requiredInvocation}
+        integrations={integrations}
+        functionInvocations={functionInvocations}
+        onChange={(requiredInvocation) => onChange({ ...step, requiredInvocation })}
+      />
       <p className="text-xs text-faint">
         Runs as <span className="text-muted-foreground">{harnessLabel}</span> in the agent's bypass mode.
-      </p>
-    </div>
-  );
-}
-
-/** Write-output editor (`agent.emit`, data-contract §1.2): a prompt plus the
- * output handle other steps address via `{{name.field}}`. */
-function EmitEditor({
-  step,
-  suggestions,
-  onChange,
-}: {
-  step: AgentEmitStep;
-  suggestions: readonly TemplateSuggestion[];
-  onChange: (step: WorkflowStep) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <FieldLabel>Prompt</FieldLabel>
-        <TemplateVarTextarea
-          value={step.prompt}
-          onChange={(prompt) => onChange({ ...step, prompt })}
-          suggestions={suggestions}
-          rows={5}
-          ariaLabel="Prompt"
-          placeholder="Decide the verdict and write it out."
-          invalid={step.prompt.trim() === ""}
-        />
-      </div>
-      <InlineRow label="Output name">
-        <Input
-          className="w-40 font-mono"
-          value={step.name}
-          placeholder="verdict"
-          onChange={(event) => onChange({ ...step, name: event.target.value })}
-        />
-      </InlineRow>
-      <InlineRow label="Retry budget">
-        <Input
-          type="number"
-          min={1}
-          className="w-32"
-          value={step.maxAttempts ?? ""}
-          placeholder="3"
-          onChange={(event) =>
-            onChange({
-              ...step,
-              maxAttempts: event.target.value === "" ? undefined : Number(event.target.value),
-            })
-          }
-        />
-      </InlineRow>
-      <p className="text-xs text-faint">
-        Later steps reference this output as{" "}
-        <span className="font-mono text-muted-foreground">{`{{${step.name || "name"}.field}}`}</span>.
       </p>
     </div>
   );
@@ -479,81 +427,6 @@ function BranchEditor({
           <p className="text-xs text-destructive">A branch needs at least one case.</p>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-/**
- * Composition editor (spec 3.5 / L20): pick a workflow to inline, then map its
- * declared inputs to templated values written in THIS workflow's context. The
- * target's steps run inline in this workflow's single run — there is no child run
- * (the server splices them at StartRun, before delivery). The child's declared
- * inputs are read from the existing workflow-detail hook once a target is picked.
- */
-function IncludeEditor({
-  step,
-  suggestions,
-  includableWorkflows,
-  onChange,
-}: {
-  step: WorkflowIncludeStep;
-  suggestions: readonly TemplateSuggestion[];
-  includableWorkflows: readonly EditorIncludableWorkflow[];
-  onChange: (step: WorkflowStep) => void;
-}) {
-  const detailQuery = useWorkflowDetail(step.workflowId || null);
-  const childInputs = useMemo(() => {
-    const raw = detailQuery.data?.currentVersion?.definition;
-    return raw ? parseWorkflowDefinition(raw).inputs : [];
-  }, [detailQuery.data]);
-
-  const pickTarget = (workflowId: string) => {
-    // A new target has its own input schema; drop stale mappings on switch.
-    onChange({ ...step, workflowId, args: {} });
-  };
-  const setArg = (name: string, value: string) => {
-    onChange({ ...step, args: { ...step.args, [name]: value } });
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      <InlineRow label="Workflow">
-        <WorkflowSelect
-          ariaLabel="Workflow to include"
-          value={step.workflowId || ""}
-          placeholder={includableWorkflows.length > 0 ? "Select a workflow" : "No other workflows"}
-          disabled={includableWorkflows.length === 0}
-          options={includableWorkflows.map((wf) => ({ value: wf.id, label: wf.name }))}
-          onChange={pickTarget}
-        />
-      </InlineRow>
-      {step.workflowId ? (
-        childInputs.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            <FieldLabel>Inputs</FieldLabel>
-            {childInputs.map((input) => (
-              <div key={input.name} className="flex flex-col gap-1">
-                <span className="font-mono text-xs text-muted-foreground">
-                  {input.name}
-                  {input.required ? <span className="text-destructive"> *</span> : null}
-                </span>
-                <TemplateVarTextarea
-                  value={step.args[input.name] ?? ""}
-                  onChange={(value) => setArg(input.name, value)}
-                  suggestions={suggestions}
-                  rows={2}
-                  placeholder={`{{inputs.…}} or a value for ${input.name}`}
-                />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-faint">This workflow takes no inputs.</p>
-        )
-      ) : null}
-      <p className="text-xs text-faint">
-        Steps run inline in this workflow&apos;s single run.
-      </p>
     </div>
   );
 }

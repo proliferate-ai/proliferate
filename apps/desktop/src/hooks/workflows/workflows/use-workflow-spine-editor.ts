@@ -16,6 +16,11 @@ import {
   withSpineNode,
   type SpineAddress,
 } from "@proliferate/product-domain/workflows/spine-editing";
+import {
+  cloneStepWithNewId,
+  ensureStepId,
+  newAgentNodeWithIds,
+} from "@/lib/domain/workflows/drag-identity";
 
 function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
   const copy = [...list];
@@ -71,7 +76,7 @@ export function useWorkflowSpineEditor({
       return;
     }
     markDirty();
-    const steps = [...node.steps, createWorkflowStep(kind)];
+    const steps = [...node.steps, ensureStepId(createWorkflowStep(kind))];
     patchNode(address, { steps });
     setSelectedStep({ ...address, stepIndex: steps.length - 1 });
   };
@@ -82,7 +87,7 @@ export function useWorkflowSpineEditor({
       return;
     }
     markDirty();
-    const clone = JSON.parse(JSON.stringify(node.steps[stepIndex])) as WorkflowStep;
+    const clone = cloneStepWithNewId(node.steps[stepIndex]!);
     patchNode(address, {
       steps: [...node.steps.slice(0, stepIndex + 1), clone, ...node.steps.slice(stepIndex + 1)],
     });
@@ -116,7 +121,7 @@ export function useWorkflowSpineEditor({
   const addAgentNode = () => {
     if (!definition) return;
     markDirty();
-    const newNode: WorkflowAgentNode = { slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] };
+    const newNode = newAgentNodeWithIds({ slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] });
     patchDefinition({ agents: [...definition.agents, newNode] });
     setSetupTarget({ spineIndex: definition.agents.length, lane: "-" });
     setSelectedStep(null);
@@ -132,7 +137,7 @@ export function useWorkflowSpineEditor({
       return;
     }
     const lastEntry = definition.agents[lastIndex]!;
-    const newNode: WorkflowAgentNode = { slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] };
+    const newNode = newAgentNodeWithIds({ slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] });
     markDirty();
     const nextAgents = isParallelGroup(lastEntry)
       ? addLaneToGroup(definition.agents, lastIndex, newNode)
@@ -144,7 +149,7 @@ export function useWorkflowSpineEditor({
 
   const parallelizeEntry = (spineIndex: number) => {
     if (!definition) return;
-    const newNode: WorkflowAgentNode = { slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] };
+    const newNode = newAgentNodeWithIds({ slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] });
     markDirty();
     patchDefinition({ agents: parallelizeSpineEntry(definition.agents, spineIndex, newNode) });
     setSetupTarget({ spineIndex, lane: newNode.slot });
@@ -153,7 +158,7 @@ export function useWorkflowSpineEditor({
 
   const addLane = (spineIndex: number) => {
     if (!definition) return;
-    const newNode: WorkflowAgentNode = { slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] };
+    const newNode = newAgentNodeWithIds({ slot: nextAgentSlot(definition.agents), harness: "", model: "", steps: [] });
     markDirty();
     patchDefinition({ agents: addLaneToGroup(definition.agents, spineIndex, newNode) });
     setSetupTarget({ spineIndex, lane: newNode.slot });

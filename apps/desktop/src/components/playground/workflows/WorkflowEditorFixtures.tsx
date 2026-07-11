@@ -213,6 +213,8 @@ function PanelHost({ initial, title }: { initial: WorkflowStep; title: string })
           slackConnected={false}
           slackChannels={[]}
           includableWorkflows={[]}
+          integrations={["functions", "slack"]}
+          functionInvocations={[{ name: "capture_event", displayName: "Capture event" }]}
           supportsGoals={() => true}
           onChange={setStep}
           onClose={() => undefined}

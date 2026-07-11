@@ -71,4 +71,3 @@ server/tests/unit/test_workflow_poll.py 1397 poll-trigger regression coverage pe
 server/tests/unit/test_workflow_run_gateway.py 1309 per-run gateway token regression coverage pending split, workflows v1 launch debt (+1: worker/service.py import path, WS0B-S; +6: WS2b envelope split)
 server/tests/unit/test_workflow_service.py 847 workflow service regression coverage pending split, workflows v1 launch debt (+1: WS2b envelope assertion)
 server/tests/unit/test_workflow_triggers.py 1465 trigger CRUD/schedule/poll regression coverage pending split, workflows v1 launch debt
-apps/desktop/src/components/workflows/editor/WorkflowStepPanel.tsx 559 workflows v1 launch surface; split pass queued post-launch

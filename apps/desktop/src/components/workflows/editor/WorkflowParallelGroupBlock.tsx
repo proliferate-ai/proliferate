@@ -1,23 +1,25 @@
-import type { ReactNode } from "react";
-import type { WorkflowAgentNode, WorkflowParallelGroup } from "@proliferate/product-domain/workflows/definition";
+import type { DragEvent, ReactNode } from "react";
+import type {
+  WorkflowAgentNode,
+  WorkflowDefinition,
+  WorkflowParallelGroup,
+} from "@proliferate/product-domain/workflows/definition";
 import type { SpineAddress } from "@proliferate/product-domain/workflows/spine-editing";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { MoreHorizontal } from "@proliferate/ui/icons";
-
-interface DragLane {
-  spineIndex: number;
-  laneIndex: number;
-}
+import { laneIndexById } from "@/lib/domain/workflows/drag-identity";
 
 export interface WorkflowParallelGroupBlockProps {
   entry: WorkflowParallelGroup;
+  /** The whole draft — lane drag resolves a lane ID to its CURRENT index here. */
+  definition: WorkflowDefinition;
   spineIndex: number;
   /** Whether this is the last spine entry (disables "Move down"). */
   isLastSpineEntry: boolean;
-  dragLane: DragLane | null;
-  onDragLaneChange: (lane: DragLane | null) => void;
+  dragLaneId: string | null;
+  onDragLaneIdChange: (id: string | null) => void;
   onReorderSpineEntry: (from: number, to: number) => void;
   onAddLane: (spineIndex: number) => void;
   onReorderLane: (spineIndex: number, from: number, to: number) => void;
@@ -40,10 +42,11 @@ export interface WorkflowParallelGroupBlockProps {
  * its lanes rendered side-by-side, each an agent block card. */
 export function WorkflowParallelGroupBlock({
   entry,
+  definition,
   spineIndex,
   isLastSpineEntry,
-  dragLane,
-  onDragLaneChange,
+  dragLaneId,
+  onDragLaneIdChange,
   onReorderSpineEntry,
   onAddLane,
   onReorderLane,
@@ -104,16 +107,27 @@ export function WorkflowParallelGroupBlock({
           const address: SpineAddress = { spineIndex, lane: laneNode.slot };
           return (
             <div
-              key={laneNode.slot}
+              key={laneNode.id ?? laneNode.slot}
               className="flex min-w-[240px] flex-1 flex-col"
               draggable
-              onDragStart={() => onDragLaneChange({ spineIndex, laneIndex })}
+              onDragStart={(event: DragEvent) => {
+                // Non-bubbling: a lane drag must not also start the group's
+                // spine-entry drag.
+                event.stopPropagation();
+                onDragLaneIdChange(laneNode.id ?? null);
+              }}
               onDragOver={(event) => event.preventDefault()}
-              onDrop={() => {
-                if (dragLane !== null && dragLane.spineIndex === spineIndex) {
-                  onReorderLane(spineIndex, dragLane.laneIndex, laneIndex);
+              onDrop={(event: DragEvent) => {
+                event.stopPropagation();
+                if (dragLaneId !== null) {
+                  // Resolve the dragged lane's CURRENT index by ID — a slot
+                  // rename mid-drag can't retarget the drop.
+                  const from = laneIndexById(definition, spineIndex, dragLaneId);
+                  if (from !== -1) {
+                    onReorderLane(spineIndex, from, laneIndex);
+                  }
                 }
-                onDragLaneChange(null);
+                onDragLaneIdChange(null);
               }}
             >
               {renderAgentBlock(laneNode, address, agentMenu(address, {
