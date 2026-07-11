@@ -455,6 +455,10 @@ Scenarios (selectable via `?s=<key>`):
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
 
+`/playground/subagents` is a separate fixture-only UX lab for Subagents receipts,
+navigation, panes, transcripts, and close/archive behavior. It is DEV-gated and
+does not read or mutate production sessions.
+
 When you change any composer-area component, **load the playground and verify every scenario still looks right** before opening a PR. The playground exists to catch drift — if it stops looking like the real app, either fix the real app or fix the playground (and add a regression scenario).
 
 ### Playground structure
