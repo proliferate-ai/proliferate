@@ -113,11 +113,13 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
   useRefreshAgentCatalog: () => ({ mutate: refreshMutate, isPending: false }),
   useUpsertCatalogOverride: () => ({ mutate: overrideMutate, isPending: false }),
+  useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
 }));
 
+vi.mock("@/hooks/organizations/facade/use-active-organization", () => ({ useActiveOrganization: () => ({ activeOrganizationId: null }) }));
+
 // Local surface + gateway route reads the RUNTIME's resolved gateway models
-// (contract §5) instead of the cloud catalog — mock the anyharness SDK hooks
-// standing in for that runtime call.
+// (contract §5) instead of the cloud catalog; these hooks stand in for that call.
 vi.mock("@anyharness/sdk-react", () => ({
   useAgentGatewayModelsQuery: () => state.gatewayModels,
   useRefreshAgentGatewayModelsMutation: () => ({
@@ -131,12 +133,10 @@ vi.mock("@anyharness/sdk-react", () => ({
 }));
 
 vi.mock("@/stores/toast/toast-store", () => ({
-  useToastStore: (selector: (s: { show: typeof showToast }) => unknown) =>
-    selector({ show: showToast }),
+  useToastStore: (selector: (s: { show: typeof showToast }) => unknown) => selector({ show: showToast }),
 }));
 
-// ModalShell (Radix Dialog) has no jsdom polyfills here — stub the picker to a
-// deterministic button that fires onSelect when the modal is open.
+// Stub the Radix picker to a deterministic button for jsdom.
 vi.mock("./ProviderPickerModal", () => ({
   ProviderPickerModal: ({
     open,

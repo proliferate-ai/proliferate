@@ -56,8 +56,8 @@ describe("DiffViewer chat variant", () => {
     expect(html).toContain("data-content=\"\"");
     expect(html.match(/data-gutter=\"\"/g)).toHaveLength(1);
     expect(html.match(/data-content=\"\"/g)).toHaveLength(1);
-    expect(html).toContain("grid-row:1 / span 4");
-    expect(html).toContain("grid-template-rows:repeat(4, auto)");
+    expect(html).toContain("grid-row:1 / span 5");
+    expect(html).toContain("grid-template-rows:repeat(5, auto)");
     expect(html).toContain("[grid-template-rows:subgrid]");
     expect(html).toContain("--diffs-min-number-column-width:4ch");
     expect(html).toContain("--diffs-min-number-column-width-default:3ch");

@@ -147,9 +147,13 @@ describe("AutomationRunLocationSelector", () => {
     fireEvent.click(screen.getByRole("button", {
       name: "Run location: Team Organization cloud",
     }));
-    expect(screen.getByText("Organization cloud")).toBeTruthy();
+    expect(screen.getByRole("button", {
+      name: "Organization cloudProliferate",
+    })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: /Organization cloud/ }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Organization cloudProliferate",
+    }));
     expect(onSelectOwner).toHaveBeenCalledWith("organization");
     expect(onSelectTarget).toHaveBeenCalledWith(cloudTarget);
   });

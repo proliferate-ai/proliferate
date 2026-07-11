@@ -181,6 +181,10 @@ vi.mock("@/hooks/support/derived/use-support-menu-action", () => ({
   useSupportMenuAction: () => ({ kind: "vendor" as const }),
 }));
 
+vi.mock("@/hooks/access/cloud/use-server-features", () => ({
+  useWorkflowsEnabled: () => true,
+}));
+
 function wrapper({ children }: { children: ReactNode }) {
   return <MemoryRouter initialEntries={["/"]}>{children}</MemoryRouter>;
 }

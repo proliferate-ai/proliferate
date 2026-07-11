@@ -105,12 +105,12 @@ describe("settings navigation", () => {
     });
   });
 
-  it("falls parked budget settings links back to general", () => {
+  it("resolves organization budget settings links", () => {
     expect(resolveSettingsSelection({
       rawSection: "organization-limits",
       repositories: [],
     })).toEqual({
-      activeSection: "general",
+      activeSection: "organization-limits",
       activeRepoSourceRoot: null,
       focus: {},
       joinOrganizationId: null,
@@ -349,9 +349,9 @@ describe("settings navigation", () => {
       rawTarget: "target-1",
       repositories: [],
     })).toEqual({
-      activeSection: "agent-authentication",
+      activeSection: "general",
       activeRepoSourceRoot: null,
-      focus: { target: "target-1" },
+      focus: {},
       joinOrganizationId: null,
     });
   });

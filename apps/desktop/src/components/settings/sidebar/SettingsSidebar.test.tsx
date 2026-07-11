@@ -16,6 +16,7 @@ import {
   runShortcutHandler,
 } from "@/lib/domain/shortcuts/registry";
 import { useSupportModalStore } from "@/stores/support/support-modal-store";
+import { useAuthStore } from "@/stores/auth/auth-store";
 
 vi.mock("@/components/app/sidebar/SidebarAccountFooter", () => ({
   SidebarAccountFooter: () => <div data-testid="sidebar-account-footer" />,
@@ -47,6 +48,8 @@ vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
 
 afterEach(() => {
   cleanup();
+  useAuthStore.setState({ status: "bootstrapping", session: null, user: null, error: null });
+  useSupportModalStore.getState().close();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   clearShortcutHandlerRegistryForTests();
@@ -102,6 +105,7 @@ function renderSettingsSidebar({
 
 describe("SettingsSidebar support modal", () => {
   it("opens the feedback modal from Support", async () => {
+    useAuthStore.setState({ status: "authenticated" });
     renderSettingsSidebar();
 
     fireEvent.click(screen.getByRole("button", { name: "Support" }));
@@ -159,7 +163,6 @@ describe("SettingsSidebar layout and shortcuts", () => {
       "OpenCode",
       "Grok",
       "API keys",
-      "Defaults",
     ];
     let previousIndex = -1;
     for (const label of expectedOrder) {

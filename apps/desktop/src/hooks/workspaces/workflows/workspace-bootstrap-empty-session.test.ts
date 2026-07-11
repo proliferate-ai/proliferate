@@ -10,7 +10,7 @@ describe("handleEmptyWorkspaceBootstrap", () => {
   it("clears remembered sessions with the logical workspace key", async () => {
     const clearLastViewedSession = vi.fn();
     const createEmptySessionWithResolvedConfig = vi.fn();
-    const ensureCloudAgentCatalog = vi.fn();
+    const ensureCloudAgentCatalog = vi.fn().mockResolvedValue({ agents: [] });
     const fetchWorkspaceSessions = vi.fn().mockResolvedValue([session("dismissed-session")]);
     const markWorkspaceBootstrappedInSession = vi.fn();
     const setActiveSessionId = vi.fn();
@@ -31,7 +31,7 @@ describe("handleEmptyWorkspaceBootstrap", () => {
         runtimeUrl: "http://runtime.test",
       } as never,
       workspaceId: "materialized-workspace-1",
-      isCurrent: () => true,
+      isCurrent: () => false,
     }, {
       clearLastViewedSession,
       createEmptySessionWithResolvedConfig: createEmptySessionWithResolvedConfig as never,
@@ -45,9 +45,9 @@ describe("handleEmptyWorkspaceBootstrap", () => {
     expect(clearLastViewedSession).toHaveBeenCalledWith("logical-workspace-1");
     expect(clearLastViewedSession).not.toHaveBeenCalledWith("materialized-workspace-1");
     expect(result.shouldReturn).toBe(true);
-    expect(setActiveSessionId).toHaveBeenCalledWith(null);
-    expect(markWorkspaceBootstrappedInSession).toHaveBeenCalledWith("materialized-workspace-1");
-    expect(ensureCloudAgentCatalog).not.toHaveBeenCalled();
+    expect(setActiveSessionId).not.toHaveBeenCalled();
+    expect(markWorkspaceBootstrappedInSession).not.toHaveBeenCalled();
+    expect(ensureCloudAgentCatalog).toHaveBeenCalledTimes(1);
     expect(createEmptySessionWithResolvedConfig).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createElement, isValidElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ChatComposerDock } from "@/components/workspace/chat/input/ChatComposerDock";
 import { SCENARIOS, type ScenarioKey } from "./playground";
 import { renderDelegationSlot } from "@/components/playground/delegation/PlaygroundComposerDelegation";
@@ -13,6 +15,14 @@ import { PLAYGROUND_SLASH_COMMANDS } from "@/lib/domain/chat/__fixtures__/playgr
 import {
   PLAYGROUND_SUBAGENT_STRIP_ROWS,
 } from "@/lib/domain/chat/__fixtures__/playground/delegation-fixtures";
+
+vi.mock("@/components/workspace/chat/input/RuntimePressureIndicator", () => ({
+  RuntimePressureIndicator: () => null,
+}));
+
+vi.mock("@/components/workspace/chat/input/ComposerWorkflowRunButton", () => ({
+  ComposerWorkflowRunButton: () => null,
+}));
 
 const USER_INPUT_SCENARIOS: ScenarioKey[] = [
   "user-input-single-option",
@@ -67,6 +77,24 @@ const QUEUE_COMPOSER_SCENARIOS: ScenarioKey[] = [
   "subagents-queued-wake",
   "subagents-queued-wake-with-approval",
 ];
+
+function renderComposerScenario(scenario: ScenarioKey): string {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return renderToStaticMarkup(createElement(
+    QueryClientProvider,
+    { client: queryClient },
+    createElement(
+      MemoryRouter,
+      null,
+      renderComposerSurfaceForScenario(scenario),
+    ),
+  ));
+}
 
 describe("playground scenarios", () => {
   it("includes user-input card scenarios for visual iteration", () => {
@@ -195,17 +223,17 @@ describe("playground scenarios", () => {
     expect(Object.keys(SCENARIOS)).toContain("slash-command-empty");
     expect(PLAYGROUND_SLASH_COMMANDS.some((command) => command.group === "MCP")).toBe(true);
 
-    const groupedHtml = renderToStaticMarkup(renderComposerSurfaceForScenario("slash-command-search"));
+    const groupedHtml = renderComposerScenario("slash-command-search");
     expect(groupedHtml).toContain("/compact");
     expect(groupedHtml).toContain("MCP");
 
-    const emptyHtml = renderToStaticMarkup(renderComposerSurfaceForScenario("slash-command-empty"));
+    const emptyHtml = renderComposerScenario("slash-command-empty");
     expect(emptyHtml).toContain("No matching slash commands.");
   });
 
   it("renders a long composer input scenario through the shared editor surface", () => {
     expect(Object.keys(SCENARIOS)).toContain("composer-long-input");
-    const html = renderToStaticMarkup(renderComposerSurfaceForScenario("composer-long-input"));
+    const html = renderComposerScenario("composer-long-input");
     expect(html).toContain("data-chat-composer-editor");
     expect(html).toContain("data-telemetry-mask");
   });

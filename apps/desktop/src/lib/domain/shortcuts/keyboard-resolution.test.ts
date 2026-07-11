@@ -63,7 +63,11 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: true,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toBeNull();
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-default",
+      shortcut: expect.objectContaining({ id: "workspace.new-default" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
   });
 
   it("opens top-level app shortcuts on mac", () => {
@@ -105,11 +109,7 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: false,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toEqual({
-      id: "app.go-plugins",
-      shortcut: expect.objectContaining({ id: "app.go-plugins" }),
-      trigger: expect.objectContaining({ source: "keyboard" }),
-    });
+    } as KeyboardEvent)).toBeNull();
 
     expect(resolveKeyboardShortcut({
       key: "u",
@@ -221,7 +221,11 @@ describe("resolveKeyboardShortcut", () => {
       ctrlKey: false,
       shiftKey: false,
       altKey: false,
-    } as KeyboardEvent)).toBeNull();
+    } as KeyboardEvent)).toEqual({
+      id: "workspace.new-default",
+      shortcut: expect.objectContaining({ id: "workspace.new-default" }),
+      trigger: expect.objectContaining({ source: "keyboard" }),
+    });
   });
 
   it("resolves new workspace shortcuts by physical KeyN on mac", () => {
@@ -342,8 +346,8 @@ describe("resolveKeyboardShortcut", () => {
       shiftKey: false,
       altKey: true,
     } as KeyboardEvent)).toEqual({
-      id: "workspace.by-index",
-      shortcut: expect.objectContaining({ id: "workspace.by-index" }),
+      id: "workspace.tab-by-index",
+      shortcut: expect.objectContaining({ id: "workspace.tab-by-index" }),
       trigger: expect.objectContaining({ source: "keyboard", digit: 1 }),
     });
 
@@ -355,8 +359,8 @@ describe("resolveKeyboardShortcut", () => {
       shiftKey: false,
       altKey: false,
     } as KeyboardEvent).map((resolved) => resolved.id)).toEqual([
-      "workspace.tab-by-index",
       "settings.section-by-index",
+      "workspace.by-index",
     ]);
 
     expect(resolveKeyboardShortcut({

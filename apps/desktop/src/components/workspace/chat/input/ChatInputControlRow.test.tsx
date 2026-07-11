@@ -23,6 +23,9 @@ vi.mock("@/hooks/sessions/lifecycle/use-runtime-pressure-state", () => ({
 vi.mock("./RuntimePressureIndicator", () => ({
   RuntimePressureIndicator: () => null,
 }));
+vi.mock("./ComposerWorkflowRunButton", () => ({
+  ComposerWorkflowRunButton: () => null,
+}));
 
 afterEach(() => {
   cleanup();

@@ -52,6 +52,10 @@ vi.mock("@/hooks/workspaces/workflows/use-workspace-navigation-workflow", () => 
   }),
 }));
 
+vi.mock("@/hooks/access/cloud/use-server-features", () => ({
+  useWorkflowsEnabled: () => true,
+}));
+
 function wrapper({ children }: { children: ReactNode }) {
   return <MemoryRouter initialEntries={["/"]}>{children}</MemoryRouter>;
 }
