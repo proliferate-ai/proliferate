@@ -17,6 +17,15 @@ pub struct WorkflowRunRecord {
     pub target_mode: Option<String>,
     pub workspace_id: String,
     pub plan_json: String,
+    /// Strict delivery identity (WS5a, spec §5.3): the immutable identity is
+    /// `(run_id, plan_hash, binding_hash, execution_generation)`. All three are
+    /// optional — a legacy delivery (before WS2c wires the server side) leaves
+    /// them `None` and no identity assertion happens. When present they are
+    /// immutable after insert; a re-delivery that disagrees is rejected with a
+    /// typed conflict error ([`super::service::WorkflowServiceError::DeliveryIdentityConflict`]).
+    pub plan_hash: Option<String>,
+    pub binding_hash: Option<String>,
+    pub execution_generation: Option<i64>,
     pub status: WorkflowRunStatus,
     pub step_cursor: i64,
     /// Slot-keyed session map (B7): `slot -> session_id`.
@@ -72,6 +81,20 @@ impl WorkflowStepRunRecord {
             .as_deref()
             .and_then(|raw| serde_json::from_str(raw).ok())
     }
+}
+
+/// One immutable row of the durable observation outbox (WS5a, spec §5.4).
+/// `revision` is strictly increasing per run with no skips;
+/// `canonical_snapshot_json` is the whole serialized `ObservedRun` snapshot
+/// stored verbatim (replay returns identical bytes). `acked` is the only
+/// mutable bit: it flips once the server acknowledges the revision.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowObservationRecord {
+    pub run_id: String,
+    pub revision: i64,
+    pub canonical_snapshot_json: String,
+    pub created_at: String,
+    pub acked: bool,
 }
 
 /// A parallel lane's own terminal state (L30). Distinct from the run status:
