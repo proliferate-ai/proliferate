@@ -35,6 +35,16 @@ from proliferate.db.models.cloud.workflows import (
 from proliferate.utils.time import utcnow
 
 
+class WorkflowLedgerImmutableError(ValueError):
+    """Raised when a caller tries to mutate an immutable run-ledger field.
+
+    Once a run row exists, its logical ``resolved_plan_json`` and ``plan_hash``
+    are frozen (feature spec §5.2 — the plan + its content hash are immutable
+    delivery identity). The delivery-time gateway fold now targets the private
+    envelope, so nothing legitimately rewrites the logical plan after creation.
+    """
+
+
 @dataclass(frozen=True)
 class WorkflowRecord:
     id: UUID
@@ -93,6 +103,17 @@ class WorkflowRunRecord:
     claimed_at: datetime | None = None
     claim_expires_at: datetime | None = None
     last_heartbeat_at: datetime | None = None
+    # WS2b: the secret-free plan's immutable identity + the PRIVATE envelope.
+    # ``plan_hash`` is the SHA-256 over RFC 8785 canonical JSON of the logical
+    # plan; ``plan_version`` is the delivery-identity plan schema version (2).
+    # ``private_envelope_json`` holds the run's gateway block (plaintext bearer)
+    # and is NEVER exposed by ordinary run APIs. The desired/delivery state axes
+    # (§8.1) begin here at StartRun; public status still derives from ``status``.
+    plan_hash: str | None = None
+    plan_version: int | None = None
+    desired_state: str | None = None
+    delivery_state: str | None = None
+    private_envelope_json: dict[str, object] | None = None
 
 
 def _workflow_record(row: Workflow) -> WorkflowRecord:
@@ -158,6 +179,13 @@ def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
         claimed_at=row.claimed_at,
         claim_expires_at=row.claim_expires_at,
         last_heartbeat_at=row.last_heartbeat_at,
+        plan_hash=row.plan_hash,
+        plan_version=row.plan_version,
+        desired_state=row.desired_state,
+        delivery_state=row.delivery_state,
+        private_envelope_json=(
+            dict(row.private_envelope_json) if row.private_envelope_json is not None else None
+        ),
     )
 
 
@@ -440,6 +468,11 @@ async def create_run(
     trigger_id: UUID | None = None,
     scheduled_for: datetime | None = None,
     status: str = WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
+    plan_hash: str | None = None,
+    plan_version: int | None = None,
+    desired_state: str | None = None,
+    delivery_state: str | None = None,
+    private_envelope_json: dict[str, object] | None = None,
 ) -> WorkflowRunRecord:
     now = utcnow()
     row = WorkflowRun(
@@ -459,6 +492,13 @@ async def create_run(
         # never changes; recording it lets delivery + refresh resolve the sandbox
         # workspace without re-reading the cloud_workspace row.
         anyharness_workspace_id=anyharness_workspace_id,
+        # WS2b: immutable plan identity + secret-free-plan state axes, stamped at
+        # creation (the logical plan + its hash never change afterward).
+        plan_hash=plan_hash,
+        plan_version=plan_version,
+        desired_state=desired_state,
+        delivery_state=delivery_state,
+        private_envelope_json=private_envelope_json,
         created_at=now,
         updated_at=now,
     )
@@ -554,6 +594,7 @@ async def update_run(
     step_cursor: int | None = None,
     step_outputs_json: dict[str, object] | None = None,
     resolved_plan_json: dict[str, object] | None = None,
+    private_envelope_json: dict[str, object] | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
     anyharness_workspace_id: str | None = None,
@@ -570,19 +611,32 @@ async def update_run(
 
     ``clear_error`` is the one exception to the non-None rule: it nulls a prior
     ``delivery_failed`` marker when a re-delivery finally lands.
+
+    IMMUTABLE-LEDGER GUARD (WS2b, feature spec §5.2): the logical
+    ``resolved_plan_json`` is frozen once the run row exists — it and its
+    ``plan_hash`` are the run's delivery identity. Every run is born with its
+    plan set (``create_run``/``create_missed_run``), so any ``update_run`` attempt
+    to rewrite it is a bug. The delivery-time gateway fold + claim rotation now
+    write ``private_envelope_json`` instead, so no legitimate caller mutates the
+    plan after creation. Raises rather than silently corrupting the ledger.
     """
 
     row = await db.get(WorkflowRun, run_id)
     if row is None:
         return None
+    if resolved_plan_json is not None:
+        raise WorkflowLedgerImmutableError(
+            f"resolved_plan_json is immutable after creation (run {run_id}); the "
+            "delivery-time gateway fold writes private_envelope_json instead."
+        )
     if status is not None:
         row.status = status
     if step_cursor is not None:
         row.step_cursor = step_cursor
     if step_outputs_json is not None:
         row.step_outputs_json = step_outputs_json
-    if resolved_plan_json is not None:
-        row.resolved_plan_json = resolved_plan_json
+    if private_envelope_json is not None:
+        row.private_envelope_json = private_envelope_json
     if clear_error:
         row.error_code = None
         row.error_message = None

@@ -66,6 +66,7 @@ from proliferate.server.cloud.workflows.gateway_grants import (
     granted_namespaces,
     resolve_run_scope,
 )
+from proliferate.server.cloud.workflows.models import build_delivered_plan
 from proliferate.server.cloud.workflows.service import _visible_run
 from proliferate.server.cloud.workflows.worker.service import mark_run_delivered
 from proliferate.utils.time import utcnow
@@ -223,15 +224,35 @@ async def deliver_cloud_run(
     return await mark_run_delivered(db, user, run.id)
 
 
+def _delivered_plan(
+    run: WorkflowRunRecord, gateway: dict[str, object] | None
+) -> dict[str, object]:
+    """The plan shipped to sandbox anyharness: secret-free logical plan + the
+    private gateway block + the pinnable planHash/planVersion (WS2b, §5.2/§5.3)."""
+
+    return build_delivered_plan(
+        run.resolved_plan_json or {},
+        gateway=gateway,
+        plan_hash=run.plan_hash,
+        plan_version=run.plan_version,
+    )
+
+
 async def _apply_delivery_scope_intersection(
     db: AsyncSession, run: WorkflowRunRecord
 ) -> dict[str, object]:
-    """Narrow the run's frozen gateway scope to the delivering worker's allowlist.
+    """Narrow the run's frozen gateway scope to the delivering worker's allowlist,
+    then return the fully-composed plan to deliver (logical plan + gateway block).
+
+    WS2b: the gateway block lives in the PRIVATE envelope, not the logical plan.
+    This reads it from the envelope, narrows it, re-freezes the envelope + token
+    row, and returns the delivered plan (logical + narrowed gateway) — the logical
+    ``resolved_plan_json`` itself is immutable and untouched.
 
     L25 layer 2 ⊆ layer 1, computed at delivery because the worker is only known
     now. NULL worker scope = unscoped passthrough (run scope unchanged, distinct
-    from an empty allowlist). Re-freezes both the token row and the plan's gateway
-    block so the shipped plan and the enforced token agree.
+    from an empty allowlist). Re-freezes both the token row and the envelope's
+    gateway block so the shipped plan and the enforced token agree.
 
     Per-slot narrowing (track 3c phase 2) is preserved: each slot's OWN namespace
     list is intersected with the worker allowlist independently — recomputed from the
@@ -243,25 +264,25 @@ async def _apply_delivery_scope_intersection(
     identity (``_flatten_run_scope`` in integration_gateway/dependencies.py).
     """
 
-    plan = dict(run.resolved_plan_json or {})
-    gateway = plan.get("gateway")
+    envelope = dict(run.private_envelope_json or {})
+    gateway = envelope.get("gateway")
     if not isinstance(gateway, dict):
-        return plan
-    # E3: the plan's gateway carries the flat NAMESPACE grant; the token's
-    # scope_json is per-slot. Narrow both at namespace granularity.
+        return _delivered_plan(run, None)
+    # E3: the gateway carries the flat NAMESPACE grant; the token's scope_json is
+    # per-slot. Narrow both at namespace granularity.
     run_namespaces = gateway.get("integrations")
     if not isinstance(run_namespaces, list):
-        return plan
+        return _delivered_plan(run, gateway)
     worker_scope = await runtime_workers_store.get_active_worker_gateway_scope_for_owner(
         db, owner_user_id=run.executor_user_id
     )
     # NULL worker scope = unscoped passthrough: the frozen (already per-slot) scope
     # is enforced as-is; nothing to narrow.
     if worker_scope is None:
-        return plan
+        return _delivered_plan(run, gateway)
     version = await store.get_version(db, run.workflow_version_id)
     if version is None:  # pragma: no cover - pinned versions are immutable
-        return plan
+        return _delivered_plan(run, gateway)
     # Intersect EACH slot's own grant with the worker allowlist so a slot narrowed at
     # StartRun keeps its narrowing and never gains a worker-allowed namespace it was
     # not granted.
@@ -277,15 +298,15 @@ async def _apply_delivery_scope_intersection(
     intersected_union = granted_namespaces(new_scope_json)
     # Worker allowlist ⊇ the run's union: no namespace dropped from any slot.
     if intersected_union == sorted(run_namespaces):
-        return plan
+        return _delivered_plan(run, gateway)
     await store.refreeze_run_gateway_token_scope(
         db, workflow_run_id=run.id, scope_json=new_scope_json
     )
     gateway = dict(gateway)
     gateway["integrations"] = intersected_union
-    plan["gateway"] = gateway
-    updated = await store.update_run(db, run_id=run.id, resolved_plan_json=plan)
-    return updated.resolved_plan_json if updated is not None else plan
+    envelope["gateway"] = gateway
+    await store.update_run(db, run_id=run.id, private_envelope_json=envelope)
+    return _delivered_plan(run, gateway)
 
 
 # --- Refresh (observed-state reconciliation) -----------------------------------

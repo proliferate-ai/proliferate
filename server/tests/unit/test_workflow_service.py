@@ -793,7 +793,8 @@ async def test_functions_namespace_grantable_with_live_invocation(
         inputs={"issue": "X"},
         target_mode="local",
     )
-    gateway = (run.resolved_plan_json or {}).get("gateway") or {}
+    # WS2b: the gateway block lives in the private envelope, not the logical plan.
+    gateway = (run.private_envelope_json or {}).get("gateway") or {}
     assert gateway.get("integrations") == ["functions"]
 
 
