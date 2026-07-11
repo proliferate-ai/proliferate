@@ -288,7 +288,7 @@ export function HarnessAllModelsSection({
               onChange={(event) => setFilterText(event.target.value)}
             />
             {filterText ? (
-              <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span className="flex shrink-0 items-center gap-1.5 text-ui-sm text-muted-foreground">
                 {filteredRows.length} of {rows.length}
                 <Button
                   variant="unstyled"

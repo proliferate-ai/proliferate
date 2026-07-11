@@ -133,7 +133,7 @@ function FileTreeBody({
             onChange={(event: React.ChangeEvent<HTMLInputElement>) => setFilter(event.target.value)}
             placeholder="Filter files…"
             autoFocus
-            className="h-full border-0 bg-transparent px-0 text-[13px] text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
+            className="h-full border-0 bg-transparent px-0 text-lg text-sidebar-foreground placeholder:text-sidebar-muted-foreground focus:ring-0"
           />
         </div>
       </div>

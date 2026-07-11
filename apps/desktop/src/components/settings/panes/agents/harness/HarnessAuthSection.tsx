@@ -339,7 +339,7 @@ function MethodCard({
         <span className="text-xs font-medium">{label}</span>
       </Button>
       {disabled && disabledReason ? (
-        <p className="px-1 text-[11px] leading-tight text-muted-foreground">
+        <p className="px-1 text-ui leading-tight text-muted-foreground">
           {disabledReason}
         </p>
       ) : null}

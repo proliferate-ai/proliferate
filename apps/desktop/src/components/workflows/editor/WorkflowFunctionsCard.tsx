@@ -91,7 +91,7 @@ export function WorkflowFunctionsCard({ integrations, providers, onChange }: Wor
                 {on ? <Check className="size-3.5" aria-hidden /> : null}
                 <span>{provider.displayName}</span>
                 {!provider.connected ? (
-                  <Badge tone="neutral" className="py-0 text-[10px]">
+                  <Badge tone="neutral" className="py-0 text-ui-sm">
                     not connected
                   </Badge>
                 ) : null}

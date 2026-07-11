@@ -134,7 +134,7 @@ function FileBreadcrumbs({
       aria-label="File path"
       className="hide-scrollbar flex min-w-0 flex-1 flex-row-reverse items-center overflow-x-auto px-2"
     >
-      <ol className="flex min-w-max flex-1 items-center gap-1 text-[12px] leading-none text-muted-foreground">
+      <ol className="flex min-w-max flex-1 items-center gap-1 text-lg leading-none text-muted-foreground">
         {crumbs.map((part, index) => {
           const isLast = index === crumbs.length - 1;
           const isWorkspaceCrumb = workspaceName && index === 0;

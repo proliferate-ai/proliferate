@@ -103,7 +103,7 @@ export function WorkflowStepCard({
     <div className="flex flex-col">
       {scopeLabel ? (
         <div className="mb-1.5 flex items-center gap-2 pl-9">
-          <span className="font-mono text-[10px] leading-tight text-muted-foreground/70">
+          <span className="font-mono text-ui-sm leading-tight text-muted-foreground/70">
             {scopeLabel}
           </span>
         </div>

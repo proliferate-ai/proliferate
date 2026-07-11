@@ -153,7 +153,7 @@ function WorkflowRecommendedCard({
           <ProviderIcon key={provider} kind={provider} className="size-3.5 text-muted-foreground" />
         ))}
         {readinessLabel ? (
-          <Badge tone="warning" className="ml-auto gap-1 text-[11px]">
+          <Badge tone="warning" className="ml-auto gap-1 text-ui">
             {readinessLabel}
           </Badge>
         ) : null}

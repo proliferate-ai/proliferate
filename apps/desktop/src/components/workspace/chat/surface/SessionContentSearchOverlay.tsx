@@ -123,7 +123,7 @@ export function SessionContentSearchOverlay({
             id="content-search-input"
             aria-label={inputLabel}
             placeholder={placeholder}
-            className={`min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0 ${isFileSurface ? "h-5 text-[13px] leading-5" : "h-6 text-base leading-6"}`}
+            className={`min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-foreground outline-none placeholder:text-muted-foreground focus:ring-0 ${isFileSurface ? "h-5 text-lg leading-5" : "h-6 text-base leading-6"}`}
             type="text"
             value={query}
             onChange={(event: ChangeEvent<HTMLInputElement>) =>
@@ -134,7 +134,7 @@ export function SessionContentSearchOverlay({
         </div>
         {hasQuery && (
           <>
-            <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100 ${isFileSurface ? "px-2.5 py-1 text-[13px] leading-5" : "px-4 py-2 text-base leading-6"}`}>
+            <div className={`${resultRowColumnClass} row-[2] flex min-w-0 items-center border-t border-border transition-[border-width,max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100 ${isFileSurface ? "px-2.5 py-1 text-lg leading-5" : "px-4 py-2 text-base leading-6"}`}>
               <div className="flex items-center gap-3">
                 <SearchNavigationButton
                   label="Previous result"
@@ -149,7 +149,7 @@ export function SessionContentSearchOverlay({
                 />
               </div>
             </div>
-            <span className={`pointer-events-none ${resultRowColumnClass} row-[2] min-w-0 text-right text-muted-foreground transition-[max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100 ${isFileSurface ? "px-2.5 py-1 text-[13px] leading-5" : "px-4 py-2 text-base leading-6"}`}>
+            <span className={`pointer-events-none ${resultRowColumnClass} row-[2] min-w-0 text-right text-muted-foreground transition-[max-height,opacity,padding,translate] duration-200 ease-out max-h-9 translate-y-0 opacity-100 ${isFileSurface ? "px-2.5 py-1 text-lg leading-5" : "px-4 py-2 text-base leading-6"}`}>
               {resultLabel}
             </span>
           </>

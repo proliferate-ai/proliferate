@@ -123,7 +123,7 @@ export function WorkflowScopeHeader({
         <span
           aria-hidden
           className={twMerge(
-            "text-[9px] leading-none",
+            "text-base leading-none",
             strong ? "text-foreground" : "text-faint",
           )}
         >
@@ -133,12 +133,12 @@ export function WorkflowScopeHeader({
           <Robot className="size-3.5 shrink-0 text-foreground" aria-hidden />
           <span>Agent</span>
         </span>
-        <span className="truncate font-mono text-[11px] leading-none text-muted-foreground">
+        <span className="truncate font-mono text-ui leading-none text-muted-foreground">
           {harness}{model ? ` · ${model}` : ""}
         </span>
         <span
           className={twMerge(
-            "shrink-0 whitespace-nowrap font-mono text-[10px] leading-none",
+            "shrink-0 whitespace-nowrap font-mono text-ui-sm leading-none",
             strong ? "text-muted-foreground" : "text-faint",
           )}
         >

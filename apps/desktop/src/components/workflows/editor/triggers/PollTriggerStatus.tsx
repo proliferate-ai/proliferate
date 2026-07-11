@@ -84,7 +84,7 @@ function TriggerItemsList({
         <div key={item.itemId} className="flex items-start justify-between gap-2 px-1 py-0.5 text-xs">
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
-              <Badge tone={ITEM_STATUS_TONE[item.status] ?? "neutral"} className="text-[11px]">
+              <Badge tone={ITEM_STATUS_TONE[item.status] ?? "neutral"} className="text-ui">
                 {item.status}
               </Badge>
               <span className="min-w-0 truncate font-mono text-faint">{item.itemId}</span>
