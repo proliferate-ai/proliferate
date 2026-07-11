@@ -1,5 +1,7 @@
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
+import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
+import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
 import { ComposerOverflowControl } from "./ComposerOverflowControl";
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
@@ -43,7 +45,7 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (combined model/reasoning selector, mode, goal,
+ * The leading control cluster (model selector, reasoning bars, fast mode, mode, goal,
  * integrations). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
@@ -70,20 +72,38 @@ export function ComposerLeadingControls({
 
   return (
     <>
-      {/* 1. Model, reasoning effort, and Fast mode — one intelligence control. */}
+      {/* 1. Model/harness selector — leftmost */}
       <div
         className={`flex min-w-0 items-center ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
         }`}
       >
-        <ComposerModelSelectorControl
-          modelSelectorProps={modelSelectorProps}
-          reasoningControl={controlGroups.reasoningEffortControl}
-          fastModeControl={controlGroups.fastModeControl}
-        />
+        <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
       </div>
 
-      {/* 2. Primary working mode control (bypass/plan/etc) */}
+      {/* 2. Reasoning/effort bars */}
+      {controlGroups.reasoningEffortControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerReasoningEffortBars control={controlGroups.reasoningEffortControl} />
+        </span>
+      )}
+
+      {/* 3. Fast mode toggle */}
+      {controlGroups.fastModeControl && (
+        <span
+          className={`inline-flex shrink-0 ${
+            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
+          }`}
+        >
+          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
+        </span>
+      )}
+
+      {/* 4. Primary working mode control (bypass/plan/etc) */}
       {controlGroups.modeControl && (
         <span
           className={`inline-flex min-w-0 ${
@@ -98,7 +118,7 @@ export function ComposerLeadingControls({
         </span>
       )}
 
-      {/* 3. Goal button */}
+      {/* 5. Goal button */}
       {canSetGoal && (
         <ComposerControlButton
           icon={<Target className="size-4" />}
@@ -113,7 +133,7 @@ export function ComposerLeadingControls({
         />
       )}
 
-      {/* 4. Integrations control */}
+      {/* 6. Integrations control */}
       <ComposerIntegrationsControl />
     </>
   );
@@ -165,7 +185,7 @@ export function ComposerTrailingControls({
 
   return (
     <>
-      {/* 5. Plus button — direct file attach */}
+      {/* 7. Plus button — direct file attach */}
       {!isEditingQueuedPrompt && (
         <ComposerControlButton
           iconOnly
@@ -178,10 +198,10 @@ export function ComposerTrailingControls({
         />
       )}
 
-      {/* 6. Runtime pressure */}
+      {/* 8. Runtime pressure */}
       <RuntimePressureIndicator />
 
-      {/* 7. Overflow three-dots */}
+      {/* 9. Overflow three-dots */}
       <span
         className={`inline-flex shrink-0 ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""

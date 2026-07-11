@@ -10,12 +10,10 @@ import type {
   ModelSelectorProps,
   ModelSelectorSelection,
 } from "@/lib/domain/chat/models/model-selector-types";
-import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
-import { resolveReasoningEffortPresentation } from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
 import { PopoverSearchField } from "@proliferate/ui/primitives/PopoverSearchField";
-import { ArrowUpRight, Check, ChevronDown, Plus, Settings, Zap } from "@proliferate/ui/icons";
+import { ArrowUpRight, Check, Plus, Settings } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
@@ -23,14 +21,10 @@ import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 interface ComposerModelSelectorControlProps {
   modelSelectorProps: ModelSelectorProps;
-  reasoningControl?: LiveSessionControlDescriptor | null;
-  fastModeControl?: LiveSessionControlDescriptor | null;
 }
 
 export function ComposerModelSelectorControl({
   modelSelectorProps,
-  reasoningControl = null,
-  fastModeControl = null,
 }: ComposerModelSelectorControlProps) {
   const navigate = useNavigate();
   const {
@@ -43,22 +37,6 @@ export function ComposerModelSelectorControl({
   } = modelSelectorProps;
   const selectorEnabled = connectionState === "healthy" && !isLoading && hasAgents;
   const triggerLabel = resolveTriggerLabel(modelSelectorProps);
-  const selectedReasoningOption = reasoningControl?.options.find((option) => option.selected) ?? null;
-  const reasoningLabel = resolveReasoningEffortPresentation(
-    selectedReasoningOption?.value ?? null,
-    selectedReasoningOption?.label ?? reasoningControl?.detail,
-  ).shortLabel;
-  const triggerTrailing = (
-    <span className="flex items-center gap-1">
-      {fastModeControl?.isEnabled && (
-        <Zap aria-hidden="true" className="size-3 fill-current text-muted-foreground" />
-      )}
-      <PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />
-      <PendingConfigIndicator pendingState={reasoningControl?.pendingState ?? null} />
-      <PendingConfigIndicator pendingState={fastModeControl?.pendingState ?? null} />
-      <ChevronDown aria-hidden="true" className="size-3.5 text-muted-foreground" />
-    </span>
-  );
 
   // UX_SPEC S5: adding a harness routes to Settings -> per-harness agent pages.
   const handleAddProvider = useCallback(() => {
@@ -78,7 +56,6 @@ export function ComposerModelSelectorControl({
         disabled
         icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
         label={triggerLabel}
-        detail={reasoningLabel}
         className="max-w-[15rem]"
       />
     );
@@ -91,11 +68,10 @@ export function ComposerModelSelectorControl({
           emphasizeLabel
           icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
           label={triggerLabel}
-          detail={reasoningLabel}
-          trailing={triggerTrailing}
-          aria-label={`${reasoningLabel
-            ? `Model and reasoning: ${triggerLabel}, ${reasoningLabel}`
-            : `Model: ${triggerLabel}`}${fastModeControl?.isEnabled ? ", Fast mode on" : ""}`}
+          trailing={currentModel?.pendingState
+            ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
+            : null}
+          aria-label={`Model: ${triggerLabel}`}
           className="max-w-[15rem]"
         />
       )}
@@ -108,8 +84,6 @@ export function ComposerModelSelectorControl({
         <ComposerModelPickerPopover
           groups={groups}
           currentModel={currentModel}
-          reasoningControl={reasoningControl}
-          fastModeControl={fastModeControl}
           onSelect={(selection) => {
             onSelect(selection);
             close();
@@ -131,16 +105,12 @@ export function ComposerModelSelectorControl({
 function ComposerModelPickerPopover({
   groups,
   currentModel,
-  reasoningControl,
-  fastModeControl,
   onSelect,
   onAddProvider,
   onSettings,
 }: {
   groups: ModelSelectorGroup[];
   currentModel: ModelSelectorProps["currentModel"];
-  reasoningControl: LiveSessionControlDescriptor | null;
-  fastModeControl: LiveSessionControlDescriptor | null;
   onSelect: (selection: ModelSelectorSelection) => void;
   onAddProvider: () => void;
   onSettings: () => void;
@@ -202,13 +172,6 @@ function ComposerModelPickerPopover({
             No models match "{search}"
           </p>
         )}
-
-        {!search.trim() && (reasoningControl || fastModeControl) && (
-          <ModelTuningControls
-            reasoningControl={reasoningControl}
-            fastModeControl={fastModeControl}
-          />
-        )}
       </div>
 
       <div className="shrink-0 border-t border-border p-1">
@@ -228,74 +191,6 @@ function ComposerModelPickerPopover({
         />
       </div>
     </ComposerPopoverSurface>
-  );
-}
-
-function ModelTuningControls({
-  reasoningControl,
-  fastModeControl,
-}: {
-  reasoningControl: LiveSessionControlDescriptor | null;
-  fastModeControl: LiveSessionControlDescriptor | null;
-}) {
-  const nextFastModeValue = fastModeControl?.isEnabled
-    ? fastModeControl.disabledValue
-    : fastModeControl?.enabledValue;
-
-  return (
-    <div className="mt-1 border-t border-border pt-1">
-      {reasoningControl && (
-        <>
-          <div className="px-2.5 pb-1 pt-1.5 text-ui-sm text-muted-foreground">
-            Reasoning effort
-          </div>
-          {reasoningControl.options.map((option) => (
-            <PopoverMenuItem
-              key={option.value}
-              label={resolveReasoningEffortPresentation(
-                option.value,
-                option.label,
-              ).shortLabel ?? option.label}
-              trailing={(
-                <span className="flex items-center gap-1">
-                  {option.selected && <Check className="size-3.5 text-foreground/60" />}
-                  {option.selected && (
-                    <PendingConfigIndicator pendingState={reasoningControl.pendingState} />
-                  )}
-                </span>
-              )}
-              disabled={!reasoningControl.settable}
-              labelClassName="text-composer"
-              className={`px-2.5 py-2 ${option.selected ? "bg-popover-accent" : ""}`}
-              onClick={() => reasoningControl.onSelect(option.value)}
-            />
-          ))}
-        </>
-      )}
-
-      {fastModeControl && (
-        <PopoverMenuItem
-          icon={(
-            <Zap className={`size-3.5 ${fastModeControl.isEnabled ? "fill-current" : ""}`} />
-          )}
-          label="Fast mode"
-          trailing={(
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <span>{fastModeControl.isEnabled ? "On" : "Off"}</span>
-              <PendingConfigIndicator pendingState={fastModeControl.pendingState} />
-            </span>
-          )}
-          disabled={!fastModeControl.settable || !nextFastModeValue}
-          labelClassName="text-composer"
-          className="px-2.5 py-2"
-          onClick={() => {
-            if (nextFastModeValue) {
-              fastModeControl.onSelect(nextFastModeValue);
-            }
-          }}
-        />
-      )}
-    </div>
   );
 }
 
