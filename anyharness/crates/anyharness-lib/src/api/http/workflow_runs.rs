@@ -226,6 +226,13 @@ fn map_error(error: WorkflowServiceError) -> ApiError {
         WorkflowServiceError::InvalidPlan(detail) => {
             ApiError::bad_request(format!("Invalid workflow plan: {detail}"), "WORKFLOW_PLAN_INVALID")
         }
+        WorkflowServiceError::DeliveryIdentityConflict { field } => ApiError::conflict(
+            format!(
+                "Delivery identity conflicts with the stored run ({field}); the \
+                 (run_id, plan_hash, binding_hash, execution_generation) identity is immutable."
+            ),
+            "WORKFLOW_DELIVERY_IDENTITY_CONFLICT",
+        ),
         WorkflowServiceError::NoPendingApproval => ApiError::conflict(
             "This run has no pending approval to resolve.",
             "WORKFLOW_NO_PENDING_APPROVAL",

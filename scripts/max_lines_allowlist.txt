@@ -56,7 +56,7 @@ anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 739 session 
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
 anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 698 goal runtime pending decomposition, workflows v1 launch debt
 anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs 1074 workflow plan resolution pending decomposition, workflows v1 launch debt
-anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 1036 workflow service pending decomposition, workflows v1 launch debt
+anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 1028 workflow service pending decomposition, workflows v1 launch debt (WS5a tightened)
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1076 workflow service test coverage pending split, workflows v1 launch debt
 server/proliferate/db/models/cloud/workflows.py 583 workflow/run/trigger ORM models pending split, workflows v1 launch debt
 server/proliferate/db/store/cloud_workflows.py 1084 workflow/run/gateway-token store queries pending split, workflows v1 launch debt

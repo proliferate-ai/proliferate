@@ -580,6 +580,17 @@ CREATE TABLE workflow_lane_cursors (
     PRIMARY KEY (run_id, node_index, lane)
 );
 
+-- table: workflow_observations
+CREATE TABLE workflow_observations (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    canonical_snapshot_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    acked INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (run_id, revision),
+    UNIQUE (run_id, revision)
+);
+
 -- table: workflow_runs
 CREATE TABLE workflow_runs (
     run_id TEXT PRIMARY KEY,
@@ -597,7 +608,7 @@ CREATE TABLE workflow_runs (
     error_message TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
-);
+, plan_hash TEXT, binding_hash TEXT, execution_generation INTEGER);
 
 -- table: workflow_session_injections
 CREATE TABLE workflow_session_injections (
@@ -881,6 +892,10 @@ CREATE INDEX idx_workflow_injections_run
 -- index: idx_workflow_lane_cursors_run
 CREATE INDEX idx_workflow_lane_cursors_run
     ON workflow_lane_cursors(run_id);
+
+-- index: idx_workflow_observations_unacked
+CREATE INDEX idx_workflow_observations_unacked
+    ON workflow_observations(run_id, acked, revision);
 
 -- index: idx_workflow_runs_status
 CREATE INDEX idx_workflow_runs_status

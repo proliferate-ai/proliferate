@@ -219,6 +219,15 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0055_workflow_lane_cursors",
         include_str!("sql/0055_workflow_lane_cursors.sql"),
     ),
+    // WS5a: strict delivery identity columns + the durable observation outbox.
+    (
+        "0056_workflow_delivery_identity",
+        include_str!("sql/0056_workflow_delivery_identity.sql"),
+    ),
+    (
+        "0057_workflow_observations",
+        include_str!("sql/0057_workflow_observations.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

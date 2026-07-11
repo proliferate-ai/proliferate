@@ -4,11 +4,17 @@ use super::engine::{
     decide_after_step, CancelToken, EngineProgress, StepDecision, StepExecContext, StepOutcome,
     WorkflowStepExecutor,
 };
+use super::delivery::{delivery_identity_conflict, ConflictAbort, DeliveryIdentity};
 use super::model::{
-    LaneStatus, WorkflowLaneCursorRecord, WorkflowRunRecord, WorkflowStepRunRecord,
+    LaneStatus, WorkflowLaneCursorRecord, WorkflowObservationRecord, WorkflowRunRecord,
+    WorkflowStepRunRecord,
 };
+use super::observations;
 use super::plan::{self, PlanError, PlanLane, PlanSegment, ResolvedPlan, StepKind};
 use super::store::WorkflowStore;
+use super::support::{
+    advance_or_finish, build_outputs, failed_outcome, finish_step, now, skip_tail,
+};
 use super::templates::{self, StepOutputs};
 
 #[derive(Debug, thiserror::Error)]
@@ -19,6 +25,13 @@ pub enum WorkflowServiceError {
     WorkspaceNotFound,
     #[error(transparent)]
     InvalidPlan(#[from] PlanError),
+    /// A re-delivery asserted a delivery identity that conflicts with the
+    /// stored run (spec §5.3: `(run_id, plan_hash, binding_hash,
+    /// execution_generation)` is immutable). Re-delivery of the same complete
+    /// identity is idempotent; a different one for the same `run_id` is
+    /// rejected.
+    #[error("delivery identity conflicts with the stored run ({field})")]
+    DeliveryIdentityConflict { field: &'static str },
     #[error("no pending approval on this run")]
     NoPendingApproval,
     #[error("unexpected step kind for approval resolution")]
@@ -128,19 +141,31 @@ impl WorkflowService {
     // ---------------------------------------------------------------------
 
     /// Create the run + its pending step rows from a resolved plan. Idempotent:
-    /// a re-delivery of a known `run_id` returns the current record untouched
-    /// (the second element is `false`).
+    /// a re-delivery of a known `run_id` with the SAME delivery identity
+    /// returns the current record untouched (the second element is `false`).
+    ///
+    /// Strict acceptance (WS5a, spec §5.3): the delivered payload may carry
+    /// `plan_hash`, `binding_hash`, and `execution_generation` — the rest of
+    /// the immutable delivery identity. When present they are persisted with
+    /// the run; a re-delivery whose identity CONFLICTS with the stored run
+    /// (same `run_id`, different hash/generation) is rejected with
+    /// [`WorkflowServiceError::DeliveryIdentityConflict`]. Absent fields assert
+    /// nothing (legacy mode preserved until WS2c wires the server side).
     pub fn create_run_idempotent(
         &self,
         plan_json: &str,
         workspace_id: &str,
     ) -> Result<(WorkflowRunRecord, bool), WorkflowServiceError> {
         let plan = plan::parse(plan_json)?;
+        let identity = DeliveryIdentity::from_plan_json(plan_json);
         let run_id = plan.run_id.clone();
         let plan_json = plan_json.to_string();
         let workspace_id = workspace_id.to_string();
         let created = self.store.with_tx_anyhow(|tx| {
             if let Some(existing) = WorkflowStore::find_run_tx(tx, &run_id)? {
+                if let Some(field) = delivery_identity_conflict(&existing, &identity) {
+                    return Err(ConflictAbort { field }.into());
+                }
                 return Ok((existing, false));
             }
             let now = now();
@@ -153,6 +178,9 @@ impl WorkflowService {
                 target_mode: plan.target_mode.clone(),
                 workspace_id: workspace_id.clone(),
                 plan_json: plan_json.clone(),
+                plan_hash: identity.plan_hash.clone(),
+                binding_hash: identity.binding_hash.clone(),
+                execution_generation: identity.execution_generation,
                 status: WorkflowRunStatus::Running,
                 step_cursor: 0,
                 session_ids: std::collections::BTreeMap::new(),
@@ -188,9 +216,20 @@ impl WorkflowService {
                 };
                 WorkflowStore::insert_step_run(tx, &step_run)?;
             }
+            // Revision 1: the accepted-delivery snapshot (run created, every
+            // step pending). Same transaction as the creation writes.
+            observations::append_in_tx(tx, &run_id)?;
             Ok((run, true))
-        })?;
-        Ok(created)
+        });
+        match created {
+            Ok(created) => Ok(created),
+            Err(error) => match error.downcast::<ConflictAbort>() {
+                Ok(conflict) => Err(WorkflowServiceError::DeliveryIdentityConflict {
+                    field: conflict.field,
+                }),
+                Err(error) => Err(WorkflowServiceError::Store(error)),
+            },
+        }
     }
 
     /// Record the session a slot is bound to for this run (B7 slot-keyed session
@@ -212,6 +251,7 @@ impl WorkflowService {
             run.session_ids.insert(slot.to_string(), session_id.to_string());
             run.updated_at = now();
             WorkflowStore::update_run(tx, &run)?;
+            observations::append_in_tx(tx, run_id)?;
             Ok(())
         })
     }
@@ -262,6 +302,7 @@ impl WorkflowService {
             step.output_json = Some(output.to_string());
             step.updated_at = now();
             WorkflowStore::update_step_run(tx, &step)?;
+            observations::append_in_tx(tx, run_id)?;
             Ok(())
         })
     }
@@ -582,6 +623,7 @@ impl WorkflowService {
                 updated_at: now,
             };
             WorkflowStore::upsert_lane_cursor_tx(tx, &record)?;
+            observations::append_in_tx(tx, run_id)?;
             Ok(())
         })
     }
@@ -692,6 +734,7 @@ impl WorkflowService {
                 updated_at: now,
             };
             WorkflowStore::upsert_lane_cursor_tx(tx, &record)?;
+            observations::append_in_tx(tx, run_id)?;
             Ok(action)
         })
     }
@@ -718,6 +761,7 @@ impl WorkflowService {
                 EngineProgress::SegmentComplete
             };
             WorkflowStore::update_run(tx, &run)?;
+            observations::append_in_tx(tx, run_id)?;
             Ok(progress)
         })
     }
@@ -799,6 +843,10 @@ impl WorkflowService {
                 run.updated_at = now;
                 WorkflowStore::update_run(tx, &run)?;
             }
+            // Attempt intent is durable BEFORE the executor runs the step
+            // (spec §6.5): the step row now records (run_id, step_key, attempt)
+            // as `running`, and this snapshot rides the same transaction.
+            observations::append_in_tx(tx, run_id)?;
             Ok(())
         })
     }
@@ -897,6 +945,7 @@ impl WorkflowService {
             if end_run {
                 skip_tail(tx, run_id, step_index, step_count, &now)?;
             }
+            observations::append_in_tx(tx, run_id)?;
             Ok(progress)
         })
     }
@@ -922,96 +971,43 @@ impl WorkflowService {
             run.error_message = error_message;
             run.updated_at = now();
             WorkflowStore::update_run(tx, &run)?;
+            observations::append_in_tx(tx, run_id)?;
             Ok(())
         })
     }
-}
 
-fn finish_step(
-    step: &mut WorkflowStepRunRecord,
-    status: WorkflowStepStatus,
-    output: Option<serde_json::Value>,
-    error_code: Option<String>,
-    error_message: Option<String>,
-    now: &str,
-) {
-    step.status = status;
-    if let Some(output) = output {
-        step.output_json = Some(output.to_string());
-    }
-    step.error_code = error_code;
-    step.error_message = error_message;
-    step.ended_at = Some(now.to_string());
-    step.updated_at = now.to_string();
-}
+    // ---------------------------------------------------------------------
+    // Observation outbox (WS5a, spec §5.4) — the reporter seam WS5c consumes.
+    // The existing report path keeps reading the latest run view; these APIs
+    // sit alongside it (no wire change here).
+    // ---------------------------------------------------------------------
 
-/// Mark every step after `after_index` (up to `step_count`) that has not yet
-/// reached a terminal state as `skipped` — the tail a branch `end` cut off.
-fn skip_tail(
-    tx: &rusqlite::Connection,
-    run_id: &str,
-    after_index: i64,
-    step_count: usize,
-    now: &str,
-) -> anyhow::Result<()> {
-    for index in (after_index + 1)..(step_count as i64) {
-        if let Some(mut step) = WorkflowStore::find_step_run_tx(tx, run_id, index)? {
-            if matches!(
-                step.status,
-                WorkflowStepStatus::Pending | WorkflowStepStatus::Running | WorkflowStepStatus::Waiting
-            ) {
-                step.status = WorkflowStepStatus::Skipped;
-                step.ended_at = Some(now.to_string());
-                step.updated_at = now.to_string();
-                WorkflowStore::update_step_run(tx, &step)?;
-            }
-        }
+    /// The next observation to report: the LOWEST unacknowledged revision (the
+    /// reporter sends only this row, retries its identical canonical bytes
+    /// until acknowledged, then asks again — never "the latest snapshot").
+    pub fn get_next_report(
+        &self,
+        run_id: &str,
+    ) -> anyhow::Result<Option<WorkflowObservationRecord>> {
+        self.store.lowest_unacked(run_id)
     }
-    Ok(())
-}
 
-fn advance_or_finish(
-    run: &mut WorkflowRunRecord,
-    step_index: i64,
-    boundary: usize,
-    step_count: usize,
-    now: &str,
-) -> EngineProgress {
-    let next = step_index + 1;
-    run.step_cursor = next;
-    run.updated_at = now.to_string();
-    if next as usize >= step_count {
-        run.status = WorkflowRunStatus::Completed;
-        EngineProgress::Finished(WorkflowRunStatus::Completed)
-    } else if next as usize >= boundary {
-        // Segment done, but the plan continues (a parallel group follows): the
-        // cursor now sits at the group's first step; hand off to the actor.
-        run.status = WorkflowRunStatus::Running;
-        EngineProgress::SegmentComplete
-    } else {
-        run.status = WorkflowRunStatus::Running;
-        EngineProgress::Advanced
+    /// Acknowledge a reported revision (the server accepted it). Duplicate or
+    /// unknown ACKs are no-ops (`false`).
+    pub fn ack_observation(&self, run_id: &str, revision: i64) -> anyhow::Result<bool> {
+        self.store.mark_acked(run_id, revision)
     }
-}
 
-fn failed_outcome(code: &str, message: &str) -> StepOutcome {
-    StepOutcome::Failed {
-        code: code.to_string(),
-        message: Some(message.to_string()),
-        output: None,
+    /// Replay the outbox from a revision (inclusive), in order, acked or not —
+    /// the reconnect resync path (the server names its acknowledged revision;
+    /// the runtime replays from the next). Bytes are verbatim as appended.
+    pub fn replay_observations_from(
+        &self,
+        run_id: &str,
+        from_revision: i64,
+    ) -> anyhow::Result<Vec<WorkflowObservationRecord>> {
+        self.store.replay_from(run_id, from_revision)
     }
-}
-
-/// Build the `{{steps[N].output.*}}` late-binding map from every step run that
-/// has recorded an output (completed steps, plus failed-but-continued steps).
-fn build_outputs(step_runs: &[WorkflowStepRunRecord]) -> StepOutputs {
-    let mut outputs = StepOutputs::new();
-    for step in step_runs {
-        if let Some(value) = step.output_value() {
-            outputs.insert(step.step_index as usize, value);
-        }
-    }
-    outputs
 }
 
 /// Narrow a run's step outputs to those a parallel lane may reference (minor m1):
@@ -1029,8 +1025,4 @@ pub(super) fn lane_visible_outputs(
         .into_iter()
         .filter(|(idx, _)| *idx < group_start || own.contains(idx))
         .collect()
-}
-
-fn now() -> String {
-    chrono::Utc::now().to_rfc3339()
 }
