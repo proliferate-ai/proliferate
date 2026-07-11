@@ -17,8 +17,11 @@
 # check_max_lines.py's own caps, so listing them there would register as stale
 # max-lines entries.
 
-apps/desktop/src/App.tsx 443 top-level desktop app shell/router pending route-tree extraction
+apps/desktop/src/App.tsx 461 top-level desktop app shell/router pending route-tree extraction
 apps/desktop/src/components/content/ui/diff/UnifiedDiffViewer.tsx 414 unified diff viewer pending row-renderer split
+apps/desktop/src/components/playground/subagents-ux/full-flow/FullFlowPrototype.tsx 718 dev-only interaction prototype; split before promotion to product code
+apps/desktop/src/components/playground/subagents-ux/navigation-close/NavigationClosePrototype.tsx 675 dev-only interaction prototype; split before promotion to product code
+apps/desktop/src/components/playground/subagents-ux/popover-pane/PopoverPaneFixtures.tsx 411 dev-only prototype fixture matrix; split before promotion to product code
 apps/desktop/src/components/workspace/git/GitPanel.tsx 429 git panel pending staged/unstaged section split
 apps/desktop/src/components/workspace/git/GitReviewFileRow.tsx 404 git review file row pending action-cluster split
 apps/desktop/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 414 workspace sidebar item pending indicator/menu split

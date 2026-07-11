@@ -8,6 +8,8 @@ import {
 } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
+import { Label } from "@proliferate/ui/primitives/Label";
+import { Select } from "@proliferate/ui/primitives/Select";
 import { X } from "@proliferate/ui/icons";
 import { SubagentIdentityGlyph } from "@/components/playground/subagents-ux/identity-receipts/SubagentIdentityGlyph";
 
@@ -376,19 +378,19 @@ export function NavigationClosePrototype() {
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground">
       {/* Scenario / reset controls */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-        <label htmlFor="nav-close-scenario" className="text-ui-sm text-muted-foreground">
+        <Label htmlFor="nav-close-scenario" className="mb-0 text-ui-sm text-muted-foreground">
           Scenario
-        </label>
-        <select
+        </Label>
+        <Select
           id="nav-close-scenario"
           value={scenarioId}
           onChange={(event) => setScenarioId(event.target.value)}
-          className="h-7 rounded-md border border-border bg-background px-2 text-ui text-foreground"
+          className="h-7 w-auto min-w-40 bg-background px-2 pr-8 text-ui"
         >
           {scenarios.map((option) => (
             <option key={option.id} value={option.id}>{option.label}</option>
           ))}
-        </select>
+        </Select>
         <Button
           type="button"
           variant="ghost"

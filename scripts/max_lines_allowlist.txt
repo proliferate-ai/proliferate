@@ -32,6 +32,8 @@ anyharness/sdk/src/reducer/transcript.ts 1591 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
 apps/desktop/src/components/content/ui/diff/ChatDiffViewer.tsx 622 existing desktop diff viewer component
 apps/desktop/src/components/content/ui/diff/SplitDiffViewer.tsx 540 existing desktop split diff viewer component
+apps/desktop/src/components/playground/subagents-ux/full-flow/FullFlowPrototype.tsx 718 dev-only interaction prototype; split before promotion to product code
+apps/desktop/src/components/playground/subagents-ux/navigation-close/NavigationClosePrototype.tsx 675 dev-only interaction prototype; split before promotion to product code
 apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 900 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
