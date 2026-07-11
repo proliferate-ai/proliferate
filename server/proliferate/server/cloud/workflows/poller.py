@@ -25,17 +25,18 @@ from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 import httpx
+import pydantic
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.workflows import (
     WORKFLOW_POLL_DEFAULT_LIMIT,
     WORKFLOW_POLL_ERROR_MAX_LENGTH,
-    WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS,
-    WORKFLOW_POLL_MAX_RESPONSE_BYTES,
+    WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS,
     WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
     WORKFLOW_TRIGGER_ITEM_STATUS_ERROR,
     WORKFLOW_TRIGGER_ITEM_STATUS_INVALID,
@@ -46,10 +47,21 @@ from proliferate.db import engine as db_engine
 from proliferate.db.store import cloud_workflow_triggers as trigger_store
 from proliferate.db.store.cloud_workflow_triggers import DuePollTrigger
 from proliferate.integrations.sentry import capture_server_sentry_exception
+from proliferate.integrations.workflow_poll import (
+    PollAuthBinding,
+    PollContentEncodingError,
+    PollEndpointMismatchError,
+    PollForbiddenHeaderError,
+    PollInvalidHeaderError,
+    PollResponseTooLargeError,
+    fetch_poll_bytes,
+)
 from proliferate.middleware.request_context import with_correlation_context
+from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import compiler, triggers
+from proliferate.server.cloud.workflows import compiler
 from proliferate.server.cloud.workflows.domain.poll_contract import PollPage, validate_item_data
+from proliferate.server.cloud.workflows.poll_endpoint import guard_poll_endpoint
 from proliferate.utils.crypto import decrypt_text
 
 logger = logging.getLogger(__name__)
@@ -88,7 +100,8 @@ def overlay_item_inputs(
     """
 
     inputs: dict[str, object] = dict(static_inputs or {})
-    declared = set((item_schema or {}).get("properties", {}) or {})
+    raw_properties = (item_schema or {}).get("properties", {})
+    declared = set(raw_properties) if isinstance(raw_properties, dict) else set()
     if isinstance(item_data, dict):
         for name in declared:
             if name in item_data:
@@ -96,82 +109,131 @@ def overlay_item_inputs(
     return inputs
 
 
-def decrypt_poll_auth(trigger: DuePollTrigger) -> tuple[str, str] | None:
-    """Return (header name, plaintext header value) for the request, or None."""
+def decrypt_poll_auth(trigger: DuePollTrigger) -> PollAuthBinding | None:
+    """Decrypt and validate the exact stored binding before request construction."""
 
-    if not trigger.poll_auth_header or not trigger.poll_auth_ciphertext:
+    if trigger.poll_auth_header is None and trigger.poll_auth_ciphertext is None:
         return None
-    return trigger.poll_auth_header, decrypt_text(trigger.poll_auth_ciphertext)
+    if not trigger.poll_auth_header or not trigger.poll_auth_ciphertext:
+        raise PollInvalidHeaderError("Stored poll auth binding is incomplete.")
+    try:
+        value = decrypt_text(trigger.poll_auth_ciphertext)
+    except Exception:
+        # Ciphertext and crypto-library details are never part of an operator-facing
+        # poll error (or a chained exception captured by tracing). Treat a damaged or
+        # no-longer-decryptable stored credential as a pre-send binding failure.
+        raise PollInvalidHeaderError(
+            "Stored poll auth credential could not be resolved."
+        ) from None
+    return PollAuthBinding.create(trigger.poll_auth_header, value)
 
 
-class PollResponseTooLargeError(Exception):
-    """The poll/init endpoint's body exceeded ``WORKFLOW_POLL_MAX_RESPONSE_BYTES``.
+class PollErrorKind(StrEnum):
+    """Stable, mechanically-switchable taxonomy for a failed poll fetch.
 
-    A third-party endpoint could stream unbounded bytes; the read is aborted the
-    moment the cap is crossed so a hostile/broken feed can't exhaust memory. Both
-    the poller (runtime) and the /init setup probe surface this as a trigger error.
+    In-process the failure modes are distinct exception TYPES; this enum is the
+    stable name a later durable layer (WF-POLL-OCC fencing) can persist and branch
+    on without re-parsing a human string. ``classify_poll_error`` maps any
+    poll-path exception to exactly one kind.
     """
+
+    PRE_SEND = "pre_send"  # rejected before request bytes leave
+    DNS_POLICY = "dns_policy"  # SSRF guard denial (private/rebinding/scheme/userinfo)
+    TIMEOUT = "timeout"  # per-op or total wall-clock deadline exceeded
+    UPSTREAM_STATUS = "upstream_status"  # a non-2xx HTTP response
+    SIZE = "size"  # body exceeded the byte cap
+    CONTENT_ENCODING = "content_encoding"  # a non-identity Content-Encoding
+    SCHEMA = "schema"  # 2xx body that isn't a valid PollPage
+    TRANSPORT = "transport"  # connect/TLS/read failure with no status
+
+
+class PollPageLimitError(Exception):
+    """The endpoint returned more items than the request's explicit page limit."""
 
 
 async def fetch_poll_page(
     *,
     url: str,
-    auth_header: str | None,
-    auth_value: str | None,
+    endpoint: net_guard.VettedEndpoint,
+    auth: PollAuthBinding | None,
     cursor: str | None,
     limit: int = WORKFLOW_POLL_DEFAULT_LIMIT,
 ) -> PollPage:
-    """GET one page from a conforming poll endpoint and parse it (spec 4.2).
+    """Fetch and parse one page within the same absolute transport deadline."""
 
-    The request is bounded against a third-party endpoint (mental-model §11 risk
-    profile — this is the first network call inside trigger CRUD): a fixed timeout,
-    ``follow_redirects=False`` (a poll/init URL is authored explicitly; a redirect
-    to a different host is a misconfiguration, never followed silently), and a hard
-    body-size cap enforced *while streaming* so an unbounded response is aborted
-    early rather than buffered whole.
+    async with asyncio.timeout(WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS):
+        body = await fetch_poll_bytes(
+            url=url,
+            endpoint=endpoint,
+            auth=auth,
+            cursor=cursor,
+            limit=limit,
+        )
+        page = PollPage.model_validate_json(body)
+        if len(page.items) > limit:
+            raise PollPageLimitError(
+                f"Poll endpoint returned {len(page.items)} items for limit={limit}."
+            )
+        return page
 
-    Raises ``httpx.HTTPError`` on transport/status failure, ``pydantic``
-    ``ValidationError`` on a malformed page, and ``PollResponseTooLargeError`` when
-    the body exceeds the cap — all surface as a trigger error (and, at setup time,
-    as a clean structured ``poll_probe_failed``).
+
+def classify_poll_error(exc: Exception) -> PollErrorKind:
+    """Map any poll-path exception to its stable ``PollErrorKind``.
+
+    Ordered most-specific-first: timeout subclasses of ``httpx.HTTPError`` are
+    caught before the generic transport bucket, and ``HTTPStatusError`` before the
+    same. This is the single classification authority the human-message helper and
+    (later) the durable fencing layer share."""
+
+    if isinstance(
+        exc,
+        (PollForbiddenHeaderError, PollInvalidHeaderError, PollEndpointMismatchError),
+    ):
+        return PollErrorKind.PRE_SEND
+    if isinstance(exc, CloudApiError):  # the SSRF guard's poll_endpoint_blocked
+        return PollErrorKind.DNS_POLICY
+    if isinstance(exc, PollResponseTooLargeError):
+        return PollErrorKind.SIZE
+    if isinstance(exc, PollContentEncodingError):
+        return PollErrorKind.CONTENT_ENCODING
+    if isinstance(exc, (httpx.TimeoutException, TimeoutError)):
+        return PollErrorKind.TIMEOUT
+    if isinstance(exc, httpx.HTTPStatusError):
+        return PollErrorKind.UPSTREAM_STATUS
+    if isinstance(exc, httpx.HTTPError):
+        return PollErrorKind.TRANSPORT
+    if isinstance(exc, pydantic.ValidationError):
+        return PollErrorKind.SCHEMA
+    if isinstance(exc, PollPageLimitError):
+        return PollErrorKind.SCHEMA
+    return PollErrorKind.SCHEMA
+
+
+def describe_poll_error(exc: Exception) -> str:
+    """Return a bounded, secret-free operator message for a poll failure.
+
+    Never serialize an arbitrary upstream exception. In particular, Pydantic's
+    validation text includes rejected input values, and an HTTP transport
+    exception retains its request (including credential headers). A hostile
+    endpoint can reflect a credential into an invalid response, so schema and
+    transport failures expose only the stable kind/class, not ``str(exc)``.
     """
 
-    headers: dict[str, str] = {}
-    if auth_header and auth_value:
-        headers[auth_header] = auth_value
-    params: dict[str, str | int] = {"limit": limit}
-    if cursor:
-        params["cursor"] = cursor
-    async with (
-        httpx.AsyncClient(
-            timeout=WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS, follow_redirects=False
-        ) as client,
-        client.stream("GET", url, params=params, headers=headers) as response,
-    ):
-        response.raise_for_status()
-        body = bytearray()
-        async for chunk in response.aiter_bytes():
-            body.extend(chunk)
-            if len(body) > WORKFLOW_POLL_MAX_RESPONSE_BYTES:
-                raise PollResponseTooLargeError(
-                    f"Poll response exceeded the {WORKFLOW_POLL_MAX_RESPONSE_BYTES}-byte cap."
-                )
-    return PollPage.model_validate_json(bytes(body))
-
-
-def _poll_error(exc: Exception) -> str:
-    if isinstance(exc, httpx.HTTPStatusError):
+    kind = classify_poll_error(exc)
+    if kind is PollErrorKind.UPSTREAM_STATUS and isinstance(exc, httpx.HTTPStatusError):
         message = f"HTTP {exc.response.status_code} from poll endpoint."
-    elif isinstance(exc, PollResponseTooLargeError):
+    elif kind in (PollErrorKind.SIZE, PollErrorKind.CONTENT_ENCODING, PollErrorKind.PRE_SEND):
         message = str(exc)
-    elif isinstance(exc, httpx.HTTPError):
-        message = f"Poll request failed: {exc.__class__.__name__}: {exc}"
-    elif isinstance(exc, CloudApiError):
+    elif kind is PollErrorKind.DNS_POLICY and isinstance(exc, CloudApiError):
         # The SSRF guard's structured denial (poll_endpoint_blocked) — surface its
         # message verbatim rather than the generic "not a valid page" fallback.
         message = exc.message
+    elif kind is PollErrorKind.TIMEOUT:
+        message = f"Poll request timed out: {exc.__class__.__name__}."
+    elif kind is PollErrorKind.TRANSPORT:
+        message = f"Poll request failed: {exc.__class__.__name__}."
     else:
-        message = f"Poll response was not a valid page: {exc}"
+        message = f"Poll response was not a valid page ({exc.__class__.__name__})."
     normalized = " ".join(message.split())
     if len(normalized) <= WORKFLOW_POLL_ERROR_MAX_LENGTH:
         return normalized
@@ -179,7 +241,11 @@ def _poll_error(exc: Exception) -> str:
 
 
 async def _poll_one_trigger(
-    session_factory: SchedulerSessionFactory, *, trigger_id: UUID, now: datetime
+    session_factory: SchedulerSessionFactory,
+    *,
+    trigger_id: UUID,
+    now: datetime,
+    policy: net_guard.NetworkPolicy = net_guard.PUBLIC_ONLY,
 ) -> int:
     async with session_factory() as db, db.begin():
         trigger = await trigger_store.claim_due_poll_trigger(db, trigger_id=trigger_id, now=now)
@@ -207,21 +273,26 @@ async def _poll_one_trigger(
                 )
                 return 0
 
-            auth = decrypt_poll_auth(trigger)
-            auth_header, auth_value = auth if auth is not None else (None, None)
             try:
                 # SSRF guard on the runtime fetch too: a cloud-hosted server polling
-                # a private/metadata address is the same SSRF as the setup probe.
-                # Bypassed under settings.debug (local/self-host dev). A block here is
-                # recorded like any poll error — cursor kept, trigger stays enabled.
-                triggers.guard_poll_endpoint(trigger.poll_url)
-                page = await fetch_poll_page(
-                    url=trigger.poll_url,
-                    auth_header=auth_header,
-                    auth_value=auth_value,
-                    cursor=trigger.poll_cursor,
-                    limit=WORKFLOW_POLL_DEFAULT_LIMIT,
-                )
+                # a private/metadata address is the same SSRF as the setup probe. The
+                # guard runs the caller-supplied policy (never a debug/env bypass;
+                # production always passes the immutable PUBLIC_ONLY default) and
+                # returns the vetted IP the fetch PINS to — revalidated every tick so
+                # a rebind between ticks is caught. Guard + fetch share ONE absolute
+                # deadline (DNS resolution + request + parse). A block here — or a
+                # forbidden legacy auth header from ``PollAuthBinding.create`` — is
+                # recorded like any poll error: cursor kept, trigger stays enabled.
+                async with asyncio.timeout(WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS):
+                    auth_binding = decrypt_poll_auth(trigger)
+                    endpoint = await guard_poll_endpoint(trigger.poll_url, policy=policy)
+                    page = await fetch_poll_page(
+                        url=trigger.poll_url,
+                        endpoint=endpoint,
+                        auth=auth_binding,
+                        cursor=trigger.poll_cursor,
+                        limit=WORKFLOW_POLL_DEFAULT_LIMIT,
+                    )
             except Exception as exc:
                 # HTTP / shape error: record the error, advance last_poll_at, keep the
                 # old cursor (never advance past items we didn't ingest). Trigger stays
@@ -231,7 +302,7 @@ async def _poll_one_trigger(
                     trigger_id=trigger_id,
                     cursor=trigger.poll_cursor,
                     polled_at=now,
-                    error=_poll_error(exc),
+                    error=describe_poll_error(exc),
                 )
                 return 0
 
@@ -316,7 +387,11 @@ async def _poll_one_trigger(
 
 
 async def run_poll_pass(
-    session_factory: SchedulerSessionFactory, *, now: datetime, batch_size: int
+    session_factory: SchedulerSessionFactory,
+    *,
+    now: datetime,
+    batch_size: int,
+    policy: net_guard.NetworkPolicy = net_guard.PUBLIC_ONLY,
 ) -> int:
     """Poll every due poll trigger, each in its own transaction. Returns the
     number of runs spawned this pass. One trigger blowing up must not stall the
@@ -327,7 +402,9 @@ async def run_poll_pass(
     spawned = 0
     for trigger_id in due_ids:
         try:
-            spawned += await _poll_one_trigger(session_factory, trigger_id=trigger_id, now=now)
+            spawned += await _poll_one_trigger(
+                session_factory, trigger_id=trigger_id, now=now, policy=policy
+            )
         except Exception:
             logger.exception("workflow poll trigger failed trigger_id=%s", trigger_id)
     return spawned

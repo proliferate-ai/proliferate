@@ -27,19 +27,19 @@ validation, and the poll probe.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
-from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
-from proliferate.config import settings
 from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES,
     SUPPORTED_WORKFLOW_MISSED_RUN_POLICIES,
     SUPPORTED_WORKFLOW_TRIGGER_TYPES,
     WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
+    WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS,
     WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
     WORKFLOW_TRIGGER_KIND_POLL,
@@ -51,6 +51,14 @@ from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
 from proliferate.db.store.cloud_workflows import WorkflowRecord, WorkflowVersionRecord
+from proliferate.integrations.workflow_poll import (
+    PollAuthBinding,
+    PollEndpointMismatchError,
+    is_forbidden_poll_header,
+    is_valid_poll_header_name,
+    is_valid_poll_header_value,
+    validate_poll_url,
+)
 from proliferate.server.automations.domain.schedule import (
     AutomationScheduleError,
     ParsedAutomationSchedule,
@@ -81,6 +89,7 @@ from proliferate.server.cloud.workflows.models import (
     WorkflowTriggerCreateRequest,
     WorkflowTriggerUpdateRequest,
 )
+from proliferate.server.cloud.workflows.poll_endpoint import guard_poll_endpoint
 from proliferate.server.cloud.workflows.service import visible_workflow
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
@@ -312,13 +321,27 @@ class _ValidatedPollConfig:
     url: str
     auth_header: str | None
     interval_secs: int
-    # None + update_auth False => keep existing; otherwise write this ciphertext.
     auth_ciphertext: str | None
     update_auth: bool
-    # The plaintext auth value, kept only in-process for the init-time endpoint
-    # probe (never returned to a caller, never stored plaintext). None on an
-    # update that keeps the existing secret — the probe decrypts it instead.
+    # Ephemeral probe-only plaintext; never returned or stored.
     auth_value_plaintext: str | None
+
+
+def _validate_poll_auth_header_name(auth_header: str | None) -> None:
+    if auth_header is None:
+        return
+    if not is_valid_poll_header_name(auth_header):
+        raise CloudApiError(
+            "invalid_poll_config",
+            "auth header name must be a valid HTTP field-name token.",
+            status_code=400,
+        )
+    if is_forbidden_poll_header(auth_header):
+        raise CloudApiError(
+            "invalid_poll_config",
+            f"auth header '{auth_header}' is a transport-controlled header and is not allowed.",
+            status_code=400,
+        )
 
 
 def _validate_poll_config(poll: TriggerPollRequest, *, is_update: bool) -> _ValidatedPollConfig:
@@ -331,26 +354,14 @@ def _validate_poll_config(poll: TriggerPollRequest, *, is_update: bool) -> _Vali
         raise CloudApiError(
             "invalid_poll_config", "poll url must be an http(s) URL.", status_code=400
         )
-    # The stored feed URL must be WIRE-FAITHFUL: what we store is exactly what the
-    # poller (and the /init probe) send. A fragment (``#...``) is never sent on the
-    # wire, so ``init_probe_url`` would otherwise append ``/init`` inside the
-    # fragment and the "probe" would silently GET the real feed — reject it here so
-    # the stored URL can never carry one. Userinfo (``user:pass@host``) is likewise
-    # rejected: credentials belong in the auth header, not baked into the URL (and
-    # the SSRF guard refuses them too).
-    parsed = urlsplit(url)
-    if parsed.fragment:
+    try:
+        validate_poll_url(url)
+    except PollEndpointMismatchError as exc:
         raise CloudApiError(
             "invalid_poll_config",
-            "poll url must not contain a URL fragment ('#...').",
+            str(exc),
             status_code=400,
-        )
-    if parsed.username or parsed.password:
-        raise CloudApiError(
-            "invalid_poll_config",
-            "poll url must not embed credentials ('user:pass@host'); use an auth header.",
-            status_code=400,
-        )
+        ) from None
     if poll.interval_secs < WORKFLOW_POLL_MIN_INTERVAL_SECONDS:
         raise CloudApiError(
             "invalid_poll_interval",
@@ -359,6 +370,8 @@ def _validate_poll_config(poll: TriggerPollRequest, *, is_update: bool) -> _Vali
         )
 
     auth_header = poll.auth_header.strip() if poll.auth_header else None
+    # The configured header is a credential carrier, never transport authority.
+    _validate_poll_auth_header_name(auth_header)
     if auth_header is None:
         # No auth header: any supplied value is meaningless; clear the secret.
         if poll.auth_value:
@@ -376,6 +389,12 @@ def _validate_poll_config(poll: TriggerPollRequest, *, is_update: bool) -> _Vali
             auth_value_plaintext=None,
         )
     if poll.auth_value:
+        if not is_valid_poll_header_value(poll.auth_value):
+            raise CloudApiError(
+                "invalid_poll_config",
+                "auth header value must be bounded visible ASCII without control characters.",
+                status_code=400,
+            )
         return _ValidatedPollConfig(
             url=url,
             auth_header=auth_header,
@@ -422,52 +441,19 @@ def _validate_poll_static_inputs(
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
 
 
-def guard_poll_endpoint(url: str) -> None:
-    """SSRF pre-flight for every server-issued poll/init request (§11 risk profile).
-
-    A cloud-hosted server GETting an operator-supplied URL is an SSRF surface —
-    the same one the function-invocation dispatch faces — so it goes through the
-    SAME shared guard (``net_guard.resolve_and_pin``): private, loopback,
-    link-local (incl. 169.254.169.254 metadata), reserved, multicast, CGNAT
-    (100.64/10) and NAT64 hosts are refused before any packet leaves. Applied on
-    the PROBE path (trigger create/update re-validation + the stateless
-    ``/poll/inspect`` endpoint) AND the runtime poller's fetch.
-
-    Bypassed under ``settings.debug`` (local/self-host dev) so a developer can
-    point a poll trigger at ``http://localhost`` feeds. Tests flip ``debug`` off to
-    exercise the guard. Raises ``CloudApiError('poll_endpoint_blocked')`` — no
-    outbound request — on any denial."""
-
-    if settings.debug:
-        return
-    try:
-        net_guard.resolve_and_pin(url)
-    except net_guard.NetGuardError as exc:
-        raise CloudApiError("poll_endpoint_blocked", str(exc), status_code=400) from None
-
-
 async def _probe_poll_signature(
     config: _ValidatedPollConfig,
     *,
     item_schema: dict[str, object],
     existing_ciphertext: str | None = None,
+    policy: net_guard.NetworkPolicy = net_guard.PUBLIC_ONLY,
 ) -> None:
-    """Init-time inputs-signature check (contract §2.2, amending L33a; mental-model
-    §5 /init reserved path, RULED 2026-07-09).
+    """Probe ``/init`` once and diff every sample field against workflow inputs."""
 
-    GET the reserved ``<endpoint>/init`` path once (NOT the feed URL — that is hit
-    only by poll cycles) and validate that the returned sample items' ``data``
-    carries fields named and typed exactly like the workflow's declared inputs (the
-    derived ``item_schema``). A shape mismatch fails the trigger create/update so a
-    misconfigured endpoint is caught before the poller ever fires — surfaced
-    field-by-field so the setup UI can render the whole diff, not just the first
-    miss. An ``/init`` that serves no sample item passes (nothing to contradict).
-    """
+    from proliferate.server.cloud.workflows.poller import describe_poll_error, fetch_poll_page
 
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
-
-    # SSRF pre-flight BEFORE any outbound request (no packet leaves on a denial).
-    guard_poll_endpoint(init_probe_url(config.url))
+    # Guard, pinned fetch, and parse share one absolute deadline.
+    probe_url = init_probe_url(config.url)
 
     if config.auth_value_plaintext is not None:
         auth_value: str | None = config.auth_value_plaintext
@@ -476,26 +462,30 @@ async def _probe_poll_signature(
     else:
         auth_value = None
     try:
-        page = await fetch_poll_page(
-            url=init_probe_url(config.url),
-            auth_header=config.auth_header,
-            auth_value=auth_value,
-            cursor=None,
-        )
+        async with asyncio.timeout(WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS):
+            endpoint = await guard_poll_endpoint(probe_url, policy=policy)
+            auth = PollAuthBinding.create(config.auth_header, auth_value)
+            page = await fetch_poll_page(
+                url=probe_url,
+                endpoint=endpoint,
+                auth=auth,
+                cursor=None,
+            )
+    except CloudApiError:
+        # Preserve the DNS/policy type for WF-POLL-OCC fencing.
+        raise
     except Exception as exc:
         raise CloudApiError(
             "poll_probe_failed",
-            f"Could not reach the poll endpoint's /init path to verify its item shape: {exc}",
+            "Could not reach the poll endpoint's /init path to verify its item shape: "
+            f"{describe_poll_error(exc)}",
             status_code=400,
-        ) from exc
+        ) from None
     for item in page.items:
         mismatches = diff_item_against_schema(item.data, item_schema)
         if mismatches:
             detail = "; ".join(mismatches)
-            # The FULL field-by-field diff rides the wire in ``extra_detail`` (merged
-            # into the error ``detail`` by the ProliferateError handler), so the setup
-            # UI renders every mismatched field — not just the first, and without
-            # re-parsing the human message (mental-model §5 flow 2).
+            # The UI consumes the full structured mismatch list.
             raise CloudApiError(
                 "poll_signature_mismatch",
                 f"Poll item '{item.id}' does not match the workflow's declared inputs: {detail}",
@@ -506,57 +496,45 @@ async def _probe_poll_signature(
 
 @dataclass(frozen=True)
 class PollInspectResult:
-    """Flow 1 (workflow-from-poll) probe result: the /init sample, the v2 ``inputs``
-    skeleton derived from it, and the sample fields that could NOT become inputs
-    (mental-model §5)."""
+    """Workflow-from-poll sample and derived input skeleton."""
 
     sample_item_id: str | None
     sample_data: dict[str, object] | None
     derived_inputs: list[dict[str, object]]
-    # Non-scalar sample fields (arrays/objects/null) that were skipped, each as
-    # ``{"name", "reason"}`` — the UI shows these so the author knows which fields
-    # didn't become inputs.
     skipped_fields: list[dict[str, str]]
 
 
-async def inspect_poll_endpoint(poll: TriggerPollRequest) -> PollInspectResult:
-    """Flow 1 — workflow-from-poll (mental-model §5, RULED 2026-07-09).
+async def inspect_poll_endpoint(
+    poll: TriggerPollRequest,
+    *,
+    policy: net_guard.NetworkPolicy = net_guard.PUBLIC_ONLY,
+) -> PollInspectResult:
+    """Probe ``/init`` and derive a new workflow's initial input schema."""
 
-    "Enter API key + endpoint → we call ``/init`` → derive the starting inputs from
-    the sample → hard error on bad response." Given an endpoint + optional auth, GET
-    the reserved ``<endpoint>/init`` path (NOT the feed URL — poll cycles hit the
-    feed only), take the first sample item, and project its ``data`` fields into a
-    v2 ``inputs`` block the client seeds a brand-new workflow with. There is no
-    workflow yet, so there is nothing to diff against — this only *derives*.
-
-    A bad ``/init`` response (non-200, malformed, timeout, oversize, unreachable)
-    raises a structured ``poll_probe_failed`` the setup UI renders. This is the same
-    bounded network call as the signature probe (§11 risk profile: timeout,
-    no redirect-following, response-size cap — enforced in ``fetch_poll_page``).
-    An ``/init`` that serves no sample item derives nothing (empty inputs), leaving
-    the author to declare inputs by hand.
-    """
-
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
+    from proliferate.server.cloud.workflows.poller import describe_poll_error, fetch_poll_page
 
     config = _validate_poll_config(poll, is_update=False)
-    # SSRF pre-flight BEFORE any outbound request — this endpoint is stateless and
-    # callable by any authed user with an arbitrary URL, so it is the sharpest edge
-    # of the probe surface.
-    guard_poll_endpoint(init_probe_url(config.url))
+    # The arbitrary operator URL is vetted and pinned before request bytes leave.
+    probe_url = init_probe_url(config.url)
     try:
-        page = await fetch_poll_page(
-            url=init_probe_url(config.url),
-            auth_header=config.auth_header,
-            auth_value=config.auth_value_plaintext,
-            cursor=None,
-        )
+        async with asyncio.timeout(WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS):
+            endpoint = await guard_poll_endpoint(probe_url, policy=policy)
+            auth = PollAuthBinding.create(config.auth_header, config.auth_value_plaintext)
+            page = await fetch_poll_page(
+                url=probe_url,
+                endpoint=endpoint,
+                auth=auth,
+                cursor=None,
+            )
+    except CloudApiError:
+        raise
     except Exception as exc:
         raise CloudApiError(
             "poll_probe_failed",
-            f"Could not reach the poll endpoint's /init path to derive inputs: {exc}",
+            "Could not reach the poll endpoint's /init path to derive inputs: "
+            f"{describe_poll_error(exc)}",
             status_code=400,
-        ) from exc
+        ) from None
 
     if not page.items:
         return PollInspectResult(
@@ -618,6 +596,12 @@ async def create_trigger(
         _split_repo_full_name(body.repo_full_name)
 
     if body.kind == WORKFLOW_TRIGGER_KIND_POLL:
+        if target_workspace_id is None:
+            raise CloudApiError(
+                "poll_target_workspace_required",
+                "A cloud poll trigger requires a target workspace.",
+                status_code=409,
+            )
         return await _create_poll_trigger(
             db, user, workflow, body, target_workspace_id=target_workspace_id
         )
@@ -839,58 +823,64 @@ async def _update_poll_trigger(
 ) -> WorkflowTriggerRecord:
     if body.schedule is not None:
         raise CloudApiError("invalid_schedule", "A poll trigger has no schedule.", status_code=400)
+    if existing.poll_url is None or existing.poll_interval_secs is None:
+        raise CloudApiError(
+            "invalid_poll_config", "Stored poll config is incomplete.", status_code=409
+        )
+    existing_poll_url = existing.poll_url
+    existing_poll_interval_secs = existing.poll_interval_secs
 
-    # Poll config: a supplied ``poll`` block fully replaces the endpoint config
-    # (auth value stays write-only — omitting it keeps the stored secret). Absent,
-    # the existing config stands and only enabled/concurrency/target/args change.
+    # A poll block replaces config; an omitted value keeps the write-only secret.
     config = _validate_poll_config(body.poll, is_update=True) if body.poll is not None else None
+
+    # Enabled writes revalidate legacy auth; disabling stays available as remediation.
+    effective_auth_header = config.auth_header if config is not None else existing.poll_auth_header
+    existing_ciphertext: str | None = None
+    if enabled:
+        _validate_poll_auth_header_name(effective_auth_header)
+        needs_stored_secret = effective_auth_header is not None and (
+            config is None or not config.update_auth
+        )
+        if needs_stored_secret:
+            existing_ciphertext = await trigger_store.get_poll_auth_ciphertext(db, existing.id)
+        effective_ciphertext = (
+            config.auth_ciphertext
+            if config is not None and config.update_auth
+            else existing_ciphertext
+        )
+        if effective_auth_header is not None and not effective_ciphertext:
+            raise CloudApiError(
+                "invalid_poll_config", "Stored poll auth binding is incomplete.", status_code=409
+            )
 
     arg_specs = await _workflow_arg_specs_or_raise(
         db, workflow_current_version_id=workflow.current_version_id
     )
     static_args = body.args if body.args is not None else existing.args_json
     coerced_static = _validate_poll_static_inputs(arg_specs, static_inputs=static_args)
-    # Re-derive the item schema whenever the inputs' static coverage may have moved.
     item_schema = derive_item_schema(arg_specs, covered_names=coerced_static.keys())
 
-    # Re-probe the reserved /init path when EITHER the endpoint config changed (a
-    # poll-block edit could reshape auth/url) OR the workflow's inputs changed since
-    # this trigger was last validated. The derived item_schema drifting from the
-    # stored one IS "the workflow's inputs changed" (mental-model §5: re-checked when
-    # the workflow's inputs change — D17's init-time check mechanism). When only the
-    # inputs moved, the endpoint config is unchanged, so probe it from the existing
-    # config + stored secret. Either way a signature mismatch hard-fails the update.
+    # Re-probe when endpoint config or the derived workflow-input signature changes.
     inputs_changed = item_schema != (existing.poll_item_schema_json or {})
     probe_config = config
     if probe_config is None and inputs_changed:
         probe_config = _ValidatedPollConfig(
-            url=existing.poll_url,
+            url=existing_poll_url,
             auth_header=existing.poll_auth_header,
-            interval_secs=existing.poll_interval_secs,
+            interval_secs=existing_poll_interval_secs,
             auth_ciphertext=None,
             update_auth=False,
             auth_value_plaintext=None,
         )
-    # Never let the /init reprobe block a transition to disabled. A disabled trigger
-    # never polls, so its endpoint shape is irrelevant while off — and forcing a
-    # live probe here would BRICK ``PATCH {enabled:false}`` whenever the endpoint is
-    # down (the very time an operator most wants to disable it). The reprobe still
-    # fires for an enabled trigger whose config/inputs changed; a re-enable later
-    # that changes the config/inputs re-validates then.
+    # Disabling never depends on a reachable endpoint.
     if probe_config is not None and enabled:
-        # The read record omits the write-only secret; the probe decrypts the stored
-        # ciphertext when no fresh auth value was supplied (config-kept-secret or an
-        # inputs-only re-validation).
-        existing_ciphertext = await trigger_store.get_poll_auth_ciphertext(db, existing.id)
         await _probe_poll_signature(
             probe_config,
             item_schema=item_schema,
             existing_ciphertext=existing_ciphertext,
         )
 
-    # Always rewrite the derived item schema (inputs may have changed); pass the
-    # existing endpoint fields through when no poll block was supplied so they are
-    # never nulled.
+    # Always persist the current derived schema without nulling unchanged config.
     updated = await trigger_store.update_trigger(
         db,
         trigger_id=existing.id,
@@ -902,10 +892,10 @@ async def _update_poll_trigger(
         clear_target_workspace=clear_target_workspace,
         args_json=coerced_static,
         write_poll_config=True,
-        poll_url=config.url if config is not None else existing.poll_url,
+        poll_url=config.url if config is not None else existing_poll_url,
         poll_auth_header=(config.auth_header if config is not None else existing.poll_auth_header),
         poll_interval_secs=(
-            config.interval_secs if config is not None else existing.poll_interval_secs
+            config.interval_secs if config is not None else existing_poll_interval_secs
         ),
         poll_item_schema_json=item_schema,
         update_poll_auth=config.update_auth if config is not None else False,

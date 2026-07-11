@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -62,6 +65,41 @@ def test_poll_page_items_not_a_list_is_rejected() -> None:
 def test_poll_page_ignores_unknown_top_level_fields() -> None:
     page = PollPage.model_validate({"items": [], "cursor": "c", "extra": 1})
     assert page.cursor == "c"
+
+
+def test_poll_config_rejects_server_owned_query_fields() -> None:
+    from proliferate.server.cloud.errors import CloudApiError
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.triggers import _validate_poll_config
+
+    request = TriggerPollRequest.model_validate(
+        {"url": "https://issues.example/feed?cursor=forged", "intervalSecs": 60}
+    )
+    with pytest.raises(CloudApiError) as exc:
+        _validate_poll_config(request, is_update=False)
+    assert exc.value.code == "invalid_poll_config"
+
+
+async def test_transport_rejects_legacy_reserved_query_before_client() -> None:
+    from proliferate.integrations.workflow_poll import (
+        PollEndpointMismatchError,
+        fetch_poll_bytes,
+    )
+    from proliferate.server.cloud.net_guard import VettedEndpoint
+
+    endpoint = VettedEndpoint("https", "issues.example", None, "93.184.216.34")
+    with (
+        patch.object(httpx, "AsyncClient") as client,
+        pytest.raises(PollEndpointMismatchError),
+    ):
+        await fetch_poll_bytes(
+            url="https://issues.example/feed?limit=999",
+            endpoint=endpoint,
+            auth=None,
+            cursor=None,
+            limit=50,
+        )
+    client.assert_not_called()
 
 
 # --- item-data schema validation ------------------------------------------------

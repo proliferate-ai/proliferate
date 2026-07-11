@@ -334,14 +334,54 @@ WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS: Final = frozenset(
 # The interval floor keeps a misconfigured trigger from hammering an endpoint.
 WORKFLOW_POLL_MIN_INTERVAL_SECONDS: Final = 60
 WORKFLOW_POLL_DEFAULT_LIMIT: Final = 50
+# Per-operation httpx timeout (connect/read/write/pool each). httpx RESETS this on
+# every successful read, so it alone can't bound a slow-drip endpoint — the total
+# deadline below is the hard ceiling.
 WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS: Final = 10.0
+# One absolute wall-clock deadline for the whole fetch (connect + all reads +
+# parse). Wraps the request in ``asyncio.timeout`` so a peer that dribbles one
+# byte per sub-timeout window forever still gets cut off. 3x the per-op budget.
+WORKFLOW_POLL_TOTAL_DEADLINE_SECONDS: Final = 30.0
 # Hard cap on a poll/init response body. The endpoint is third-party; without a
 # ceiling a hostile or broken feed could stream unbounded bytes into memory. The
 # poller aborts the read (and the /init setup probe fails with a clean error)
-# once this many bytes arrive. 8 MiB comfortably fits a full page of items.
+# once this many RAW (undecoded) bytes arrive. 8 MiB comfortably fits a full page
+# of items. The cap is enforced on the raw wire bytes (we never transparently
+# decompress) so a compressed body can't expand past it after the check.
 WORKFLOW_POLL_MAX_RESPONSE_BYTES: Final = 8 * 1024 * 1024
 WORKFLOW_POLL_ITEM_ID_MAX_LENGTH: Final = 255
 WORKFLOW_POLL_ERROR_MAX_LENGTH: Final = 480
+WORKFLOW_POLL_AUTH_HEADER_NAME_MAX_LENGTH: Final = 128
+WORKFLOW_POLL_AUTH_HEADER_VALUE_MAX_BYTES: Final = 8 * 1024
+# Transport / hop-by-hop / routing-authority header names a poll trigger's auth
+# header may NEVER be (case-insensitive). A caller-authored ``auth_header`` is only
+# ever a credential carrier (Authorization, X-Api-Key, …); letting it be one of
+# these would let a create/update/inspect/dispatch smuggle a Host override
+# (vhost confusion behind the pinned IP), a request-smuggling framing header
+# (Content-Length / Transfer-Encoding), a proxy/forwarding spoof, OR (captain
+# review finding) silently overwrite a header the TRANSPORT itself sets for
+# every request (``Accept-Encoding: identity`` is what makes the non-identity
+# Content-Encoding rejection + byte cap meaningful — an auth_header of
+# 'Accept-Encoding' would otherwise defeat both). Matched as exact names PLUS the
+# prefixes below. Enforced at create, update, inspect, AND dispatch (legacy rows
+# are re-checked before any request bytes leave).
+WORKFLOW_POLL_FORBIDDEN_HEADER_NAMES: Final = frozenset(
+    {
+        "host",
+        "accept-encoding",
+        "content-length",
+        "transfer-encoding",
+        "connection",
+        "keep-alive",
+        "upgrade",
+        "te",
+        "trailer",
+        "expect",
+        "forwarded",
+        "via",
+    }
+)
+WORKFLOW_POLL_FORBIDDEN_HEADER_PREFIXES: Final = ("proxy-", "x-forwarded", "sec-")
 # The poller runs alongside the schedule beat (spec 4.1: same worker process).
 WORKFLOW_POLLER_DEFAULT_BATCH_SIZE: Final = 100
 WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED: Final = "spawned"

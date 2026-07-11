@@ -27,6 +27,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.models.organizations import Organization, OrganizationMembership
 from proliferate.db.models.cloud.workflows import Workflow, WorkflowTrigger, WorkflowVersion
 from proliferate.middleware.request_context import get_correlation_context
+from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.workflows import poller as poller_module
 from proliferate.server.cloud.workflows import scheduler as scheduler_module
 from proliferate.server.cloud.workflows.poller import _poll_one_trigger, run_workflow_poller_tick
@@ -206,7 +207,12 @@ async def test_poll_trigger_poll_binds_org_and_user_context(test_engine) -> None
         return page
 
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=_fake_fetch)):
-        await _poll_one_trigger(factory, trigger_id=trigger_id, now=utcnow())
+        # The trigger's poll_url is a loopback literal (127.0.0.1) — the real guard
+        # runs now (no debug bypass), so an explicit LOOPBACK_TEST policy is required
+        # to reach it; production always passes the immutable PUBLIC_ONLY default.
+        await _poll_one_trigger(
+            factory, trigger_id=trigger_id, now=utcnow(), policy=net_guard.LOOPBACK_TEST
+        )
 
     assert captured["organization_id"] == str(org.id)
     assert captured["user_id"] == str(user.id)

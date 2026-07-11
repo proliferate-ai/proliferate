@@ -62,7 +62,7 @@ server/proliferate/db/store/cloud_workflows.py 1138 workflow/run/gateway-token s
 server/proliferate/server/cloud/workflows/api.py 471 workflow HTTP routes (runs/triggers/executor claim plane/poll setup) pending split, workflows v1 launch debt (+1: compiler/triggers/worker.service import split, WS0B-S; +3: WS2b local-lane envelope-in-response)
 server/proliferate/server/cloud/workflows/domain/definition.py 1121 v2 workflow definition parser/validator pending split, workflows v1 launch debt
 server/proliferate/server/cloud/workflows/models.py 601 workflow request/response Pydantic models pending split, workflows v1 launch debt (+48: WS2b build_delivered_plan + run_payload envelope fold)
-server/proliferate/server/cloud/workflows/triggers.py 943 trigger CRUD/schedule/poll-config validation/poll probe carved out of service.py (WS0B-S); further split TBD, workflows v1 launch debt
+server/proliferate/server/cloud/workflows/triggers.py 933 trigger CRUD/schedule/poll-config validation/poll probe carved out of service.py (WS0B-S); further split TBD, workflows v1 launch debt
 server/tests/unit/test_workflow_definition.py 718 v2 definition parser regression coverage pending split, workflows v1 launch debt
 server/tests/unit/test_workflow_poll.py 1397 poll-trigger regression coverage pending split, workflows v1 launch debt
 server/tests/unit/test_workflow_run_gateway.py 1309 per-run gateway token regression coverage pending split, workflows v1 launch debt (+1: worker/service.py import path, WS0B-S; +6: WS2b envelope split)

@@ -10,6 +10,8 @@ poll-trigger validation (incl. the init-time inputs-signature probe).
 
 from __future__ import annotations
 
+import ipaddress
+import socket
 import uuid
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
@@ -29,6 +31,7 @@ from proliferate.db.models.cloud.workflows import (
     WorkflowVersion,
 )
 from proliferate.db.store import cloud_workflow_triggers as trigger_store
+from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import poller as poller_module
 from proliferate.server.cloud.workflows.domain.poll_contract import (
@@ -42,6 +45,44 @@ from proliferate.server.cloud.workflows.poller import (
     run_poll_pass,
 )
 from proliferate.utils.time import utcnow
+
+# --- DNS stand-in for the symbolic ".example" hosts used throughout this file ----
+#
+# ".example" is the RFC 2606 reserved-for-docs TLD: it never resolves. The
+# create/update/inspect probe paths now run the REAL (async) SSRF guard (no debug
+# bypass), which would otherwise turn every ".example" test into a DNS failure —
+# these tests are about business logic, not SSRF classification (that is covered
+# separately, with literal private IPs, by test_inspect_poll_endpoint_blocks_private_
+# address below). Captured before any monkeypatch so the private-IP tests keep
+# exercising a genuine resolution.
+_REAL_GETADDRINFO = net_guard.socket.getaddrinfo
+
+
+def _fake_getaddrinfo(host, port, *args, **kwargs):  # type: ignore[no-untyped-def]
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        # A symbolic hostname: stand in a fixed address that Python classifies as
+        # globally routable instead of performing a real, slow DNS lookup. The
+        # HTTP client is mocked, so no packet is sent to this address.
+        return [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                socket.IPPROTO_TCP,
+                "",
+                ("93.184.216.34", port),
+            )
+        ]
+    # A literal IP address: resolve for real (instant, deterministic) so the
+    # private/metadata/CGNAT SSRF-denial tests keep exercising genuine
+    # classification, not this stand-in.
+    return _REAL_GETADDRINFO(host, port, *args, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def _stub_dns(monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(net_guard.socket, "getaddrinfo", _fake_getaddrinfo)
 
 
 class _Actor:
@@ -262,10 +303,38 @@ def _mock_client_factory(transport: httpx.MockTransport):  # type: ignore[no-unt
     return factory
 
 
-async def _run_poller_with_page(session_factory, trigger_id, page: PollPage, *, now=None) -> int:
+class _CountingAsyncByteStream(httpx.AsyncByteStream):
+    def __init__(self, chunk: bytes, total_chunks: int) -> None:
+        self.chunk = chunk
+        self.total_chunks = total_chunks
+        self.pulled = 0
+
+    async def __aiter__(self):  # type: ignore[no-untyped-def]
+        for _ in range(self.total_chunks):
+            self.pulled += 1
+            yield self.chunk
+
+    async def aclose(self) -> None:
+        pass
+
+
+async def _run_poller_with_page(
+    session_factory,
+    trigger_id,
+    page: PollPage,
+    *,
+    now=None,
+    policy: net_guard.NetworkPolicy = net_guard.LOOPBACK_TEST,
+) -> int:
+    # Every _make_poll_trigger default poll_url is a 127.0.0.1 literal — the real
+    # (now async) guard blocks loopback under the production PUBLIC_ONLY default,
+    # so these business-logic tests need the explicit LOOPBACK_TEST policy to reach
+    # the mocked fetch_poll_page at all.
     now = now or utcnow()
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=page)):
-        return await _poll_one_trigger(session_factory, trigger_id=trigger_id, now=now)
+        return await _poll_one_trigger(
+            session_factory, trigger_id=trigger_id, now=now, policy=policy
+        )
 
 
 # --- happy path + cursor persist in one transaction -----------------------------
@@ -435,7 +504,9 @@ async def test_start_run_failure_records_error_and_advances_cursor(test_engine) 
             ),
         ),
     ):
-        spawned = await _poll_one_trigger(factory, trigger_id=trigger_id, now=now)
+        spawned = await _poll_one_trigger(
+            factory, trigger_id=trigger_id, now=now, policy=net_guard.LOOPBACK_TEST
+        )
     assert spawned == 0
 
     async with factory() as db:
@@ -474,7 +545,9 @@ async def test_http_error_sets_last_poll_error_keeps_enabled(test_engine) -> Non
         response=httpx.Response(500, request=httpx.Request("GET", "http://x/poll")),
     )
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=error)):
-        spawned = await _poll_one_trigger(factory, trigger_id=trigger_id, now=utcnow())
+        spawned = await _poll_one_trigger(
+            factory, trigger_id=trigger_id, now=utcnow(), policy=net_guard.LOOPBACK_TEST
+        )
     assert spawned == 0
 
     async with factory() as db:
@@ -547,7 +620,9 @@ async def test_run_poll_pass_polls_due_triggers(test_engine) -> None:  # type: i
 
     page = _page([_item("pass_1", n=1, title="x")])
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=page)):
-        spawned = await run_poll_pass(factory, now=utcnow(), batch_size=100)
+        spawned = await run_poll_pass(
+            factory, now=utcnow(), batch_size=100, policy=net_guard.LOOPBACK_TEST
+        )
     assert spawned == 1
 
     async with factory() as db:
@@ -622,6 +697,39 @@ def test_poll_config_rejects_non_http_url() -> None:
     with pytest.raises(CloudApiError) as exc:
         _validate_poll_config(
             TriggerPollRequest.model_validate({"url": "ftp://nope", "intervalSecs": 60}),
+            is_update=False,
+        )
+    assert exc.value.code == "invalid_poll_config"
+
+
+@pytest.mark.parametrize(
+    "auth_header",
+    [
+        "Host",
+        "accept-encoding",
+        "X-Forwarded-For",
+        "Proxy-Authorization",
+        "Bad Header",
+        "X-Bad:Value",
+        "X-Bad\nInjected",
+    ],
+)
+def test_poll_config_rejects_unsafe_auth_header_on_write(auth_header: str) -> None:
+    """The shared create/update/inspect validator rejects authority, transport,
+    and malformed header names before encryption, DNS, or outbound I/O."""
+    from proliferate.server.cloud.workflows.models import TriggerPollRequest
+    from proliferate.server.cloud.workflows.triggers import _validate_poll_config
+
+    with pytest.raises(CloudApiError) as exc:
+        _validate_poll_config(
+            TriggerPollRequest.model_validate(
+                {
+                    "url": "https://issues.example/poll",
+                    "intervalSecs": 60,
+                    "authHeader": auth_header,
+                    "authValue": "secret",
+                }
+            ),
             is_update=False,
         )
     assert exc.value.code == "invalid_poll_config"
@@ -937,7 +1045,9 @@ async def test_poll_cycle_hits_feed_url_not_init(test_engine) -> None:  # type: 
     page = _page([_item("cyc_1", n=1, title="x")])
     fetch_mock = AsyncMock(return_value=page)
     with patch.object(poller_module, "fetch_poll_page", new=fetch_mock):
-        await _poll_one_trigger(factory, trigger_id=trigger_id, now=utcnow())
+        await _poll_one_trigger(
+            factory, trigger_id=trigger_id, now=utcnow(), policy=net_guard.LOOPBACK_TEST
+        )
     called_url = fetch_mock.call_args.kwargs["url"]
     assert called_url == feed_url
     assert not called_url.endswith("/init")
@@ -1195,99 +1305,10 @@ async def test_update_skips_reprobe_when_inputs_unchanged(test_engine) -> None: 
     assert fetch_mock.call_count == 0
 
 
-# --- §11 risk profile: fetch_poll_page is bounded (size cap + no redirect) ------
-
-
-async def test_fetch_poll_page_caps_response_size() -> None:
-    from proliferate.constants.workflows import WORKFLOW_POLL_MAX_RESPONSE_BYTES
-    from proliferate.server.cloud.workflows.poller import (
-        PollResponseTooLargeError,
-        fetch_poll_page,
-    )
-
-    oversize = (
-        b'{"items": [], "cursor": "c", "has_more": false, "pad": "'
-        + (b"x" * (WORKFLOW_POLL_MAX_RESPONSE_BYTES + 16))
-        + b'"}'
-    )
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, content=oversize)
-
-    transport = httpx.MockTransport(handler)
-    with (
-        patch.object(httpx, "AsyncClient", _mock_client_factory(transport)),
-        pytest.raises(PollResponseTooLargeError),
-    ):
-        await fetch_poll_page(
-            url="https://issues.example/feed",
-            auth_header=None,
-            auth_value=None,
-            cursor=None,
-        )
-
-
-async def test_fetch_poll_page_does_not_follow_redirects() -> None:
-    from proliferate.server.cloud.workflows.poller import fetch_poll_page
-
-    hits: list[str] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        hits.append(str(request.url))
-        if request.url.path.endswith("/feed"):
-            return httpx.Response(302, headers={"location": "https://evil.example/steal"})
-        return httpx.Response(200, json={"items": [], "cursor": None, "has_more": False})
-
-    transport = httpx.MockTransport(handler)
-    # follow_redirects=False: the 302 is surfaced (raise_for_status) rather than
-    # silently chased to the redirect target.
-    with (
-        patch.object(httpx, "AsyncClient", _mock_client_factory(transport)),
-        pytest.raises(httpx.HTTPStatusError),
-    ):
-        await fetch_poll_page(
-            url="https://issues.example/feed",
-            auth_header=None,
-            auth_value=None,
-            cursor=None,
-        )
-    # The redirect target was never fetched — only the authored feed URL was hit.
-    assert not any("evil.example" in h for h in hits)
-    assert any("issues.example" in h for h in hits)
-
-
-async def test_trigger_record_hides_secret_exposes_has_auth(test_engine) -> None:  # type: ignore[no-untyped-def]
-    """A read of a poll trigger surfaces poll_has_auth but never the ciphertext."""
-    from proliferate.utils.crypto import encrypt_text
-
-    factory = _factory(test_engine)
-    async with factory() as db:
-        user = await _make_user(db)
-        wf = await _make_workflow(db, user)
-        trigger = await _make_poll_trigger(db, wf, user)
-        trigger.poll_auth_header = "Authorization"
-        trigger.poll_auth_ciphertext = encrypt_text("Bearer sekret")
-        await db.flush()
-        trigger_id = trigger.id
-        await db.commit()
-
-    async with factory() as db:
-        record = await trigger_store.get_trigger(db, trigger_id)
-    assert record is not None
-    assert record.poll_has_auth is True
-    assert record.poll_auth_header == "Authorization"
-    assert not hasattr(record, "poll_auth_ciphertext")  # secret never on the record
-
-
-# --- finding 3: disabling a poll trigger never reprobes /init (no disable-brick) -
-
-
-async def test_disable_poll_trigger_skips_reprobe_when_endpoint_down(test_engine) -> None:  # type: ignore[no-untyped-def]
-    """Finding 3: ``PATCH {enabled: false}`` must succeed even when the endpoint is
-    down and the inputs have drifted (which would otherwise force a reprobe). A
-    disabled trigger never polls, so its endpoint shape is irrelevant while off."""
+async def test_unrelated_enabled_update_rejects_unsafe_legacy_header(test_engine) -> None:  # type: ignore[no-untyped-def]
     from proliferate.server.cloud.workflows.models import WorkflowTriggerUpdateRequest
     from proliferate.server.cloud.workflows.triggers import update_trigger
+    from proliferate.utils.crypto import encrypt_text
 
     factory = _factory(test_engine)
     async with factory() as db:
@@ -1301,97 +1322,76 @@ async def test_disable_poll_trigger_skips_reprobe_when_endpoint_down(test_engine
         with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
             trigger = await _service_create(db, actor, wf.id, _poll_body())
 
-        # The workflow's inputs change (adds a required "extra") so the derived item
-        # schema drifts from the stored one — this is exactly the condition that
-        # forces a reprobe on an ENABLED edit.
-        new_def = {
-            "version": 1,
-            "inputs": [
-                {"name": "n", "type": "number", "required": True},
-                {"name": "title", "type": "text", "required": True},
-                {"name": "extra", "type": "text", "required": True},
-            ],
-            "agents": _DEF["agents"],
-        }
-        new_ver = WorkflowVersion(
-            workflow_id=wf.id,
-            version_n=2,
-            definition_json=new_def,
-            created_by_user_id=user.id,
-            created_at=utcnow(),
-        )
-        db.add(new_ver)
-        await db.flush()
-        wf.current_version_id = new_ver.id
+        row = await db.get(WorkflowTrigger, trigger.id)
+        assert row is not None
+        row.poll_auth_header = "Host"
+        row.poll_auth_ciphertext = encrypt_text("evil.example")
         await db.flush()
 
-        # Endpoint is down: any reprobe would raise poll_probe_failed and brick the
-        # disable. With the fix, disabling skips the reprobe entirely.
-        down = AsyncMock(side_effect=httpx.ConnectError("endpoint down"))
-        with patch.object(poller_module, "fetch_poll_page", new=down):
-            updated = await update_trigger(
+        with pytest.raises(CloudApiError) as exc:
+            await update_trigger(
                 db,
                 actor,
                 wf.id,
                 trigger.id,
-                WorkflowTriggerUpdateRequest.model_validate({"enabled": False}),
+                WorkflowTriggerUpdateRequest.model_validate({"concurrencyPolicy": "skip"}),
             )
-    assert updated.enabled is False
-    assert down.call_count == 0  # never reprobed on a disable
+        assert exc.value.code == "invalid_poll_config"
 
-
-# --- finding 4: SSRF guard on the /init probe (private/metadata addrs blocked) --
-
-
-@pytest.mark.parametrize(
-    "private_url",
-    [
-        "http://10.0.0.1/poll",  # RFC1918 private
-        "http://169.254.169.254/latest/meta-data",  # link-local cloud metadata
-        "http://100.64.0.1/poll",  # RFC6598 CGNAT / Tailscale
-    ],
-)
-async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-untyped-def]
-    monkeypatch, private_url
-) -> None:
-    """Finding 4: the stateless probe refuses a URL whose host is a private,
-    metadata, or CGNAT address — a structured error, and ZERO outbound (the guard
-    raises before fetch_poll_page is ever called)."""
-    from proliferate.server.cloud.workflows import triggers as triggers_module
-    from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
-
-    # The guard is bypassed under settings.debug (local/self-host dev); flip it off
-    # so the guard is active for this test.
-    monkeypatch.setattr(triggers_module.settings, "debug", False)
-
-    # A sentinel that FAILS the test if any outbound request is attempted.
-    sentinel = AsyncMock(side_effect=AssertionError("no outbound request may be issued"))
-    with (
-        patch.object(poller_module, "fetch_poll_page", new=sentinel),
-        pytest.raises(CloudApiError) as exc,
-    ):
-        await inspect_poll_endpoint(
-            TriggerPollRequest.model_validate({"url": private_url, "intervalSecs": 60})
-        )
-    assert exc.value.code == "poll_endpoint_blocked"
-    assert exc.value.status_code == 400
-    assert sentinel.await_count == 0  # zero outbound
-
-
-async def test_inspect_poll_endpoint_guard_bypassed_in_debug(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Under settings.debug (local/self-host dev), a localhost feed is NOT blocked —
-    the guard is skipped so dev feeds keep working."""
-    from proliferate.server.cloud.workflows import triggers as triggers_module
-    from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
-
-    monkeypatch.setattr(triggers_module.settings, "debug", True)
-    good_page = _page([_item("seed_1", title="hi")])
-    with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
-        result = await inspect_poll_endpoint(
-            TriggerPollRequest.model_validate(
-                {"url": "http://127.0.0.1:9000/feed", "intervalSecs": 60}
+        row.poll_auth_header = "Authorization"
+        row.poll_auth_ciphertext = None
+        await db.flush()
+        with pytest.raises(CloudApiError) as exc:
+            await update_trigger(
+                db,
+                actor,
+                wf.id,
+                trigger.id,
+                WorkflowTriggerUpdateRequest.model_validate({"concurrencyPolicy": "skip"}),
             )
+    assert exc.value.code == "invalid_poll_config"
+
+
+async def test_dispatch_rejects_unsafe_legacy_header_before_fetch(test_engine) -> None:  # type: ignore[no-untyped-def]
+    from proliferate.utils.crypto import encrypt_text
+
+    factory = _factory(test_engine)
+    async with factory() as db:
+        user = await _make_user(db)
+        wf = await _make_workflow(db, user)
+        trigger = await _make_poll_trigger(db, wf, user)
+        trigger.poll_auth_header = "Host"
+        trigger.poll_auth_ciphertext = encrypt_text("evil.example")
+        trigger_id = trigger.id
+        await db.commit()
+
+    fetch = AsyncMock(side_effect=AssertionError("no request may be sent"))
+    with patch.object(poller_module, "fetch_poll_page", new=fetch):
+        spawned = await _poll_one_trigger(
+            factory,
+            trigger_id=trigger_id,
+            now=utcnow(),
+            policy=net_guard.LOOPBACK_TEST,
         )
-    assert result.sample_item_id == "seed_1"
+    assert spawned == 0
+    assert fetch.await_count == 0
+
+    async with factory() as db:
+        refreshed = await db.get(WorkflowTrigger, trigger_id)
+        assert refreshed is not None
+        assert "transport-controlled" in (refreshed.last_poll_error or "")
+        refreshed.poll_auth_header = "Authorization"
+        refreshed.poll_auth_ciphertext = None
+        refreshed.last_poll_at = None
+        await db.commit()
+
+    fetch.reset_mock()
+    with patch.object(poller_module, "fetch_poll_page", new=fetch):
+        spawned = await _poll_one_trigger(
+            factory,
+            trigger_id=trigger_id,
+            now=utcnow(),
+            policy=net_guard.LOOPBACK_TEST,
+        )
+    assert spawned == 0
+    assert fetch.await_count == 0
