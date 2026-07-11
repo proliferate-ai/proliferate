@@ -110,10 +110,10 @@ export function useHomeScreen() {
         openAddRepoFlow();
         return;
       case "agent-defaults":
-        navigate("/settings?section=agents");
+        navigate(buildSettingsHref({ section: "agent-claude" }));
         return;
       case "agent-settings":
-        navigate("/settings?section=agents");
+        navigate(buildSettingsHref({ section: "agent-claude" }));
         return;
       case "repository-settings": {
         const firstRepository = repositoryToConfigure ?? repositories[0];

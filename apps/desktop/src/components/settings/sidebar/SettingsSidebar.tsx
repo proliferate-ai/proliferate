@@ -24,7 +24,6 @@ import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFoo
 import { HarnessStatusDot } from "@/components/settings/sidebar/HarnessStatusDot";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
-  SETTINGS_SHORTCUT_SECTION_ORDER,
   TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION,
   type SettingsSection,
 } from "@/config/settings";
@@ -211,13 +210,10 @@ export function SettingsSidebar({
     })).filter((group) => group.items.length > 0),
   [activeScope, adminAccess?.isAdmin]);
   const visibleShortcutSections = useMemo(() => {
-    const visibleSections = new Set(
-      visibleNavGroups.flatMap((group) =>
-        group.items.flatMap((item) => item.kind === "section" ? [item.id] : [])
-      ),
-    );
-    return SETTINGS_SHORTCUT_SECTION_ORDER.filter((section) =>
-      visibleSections.has(section)
+    return visibleNavGroups.flatMap((group) =>
+      group.items.flatMap((item) =>
+        item.kind === "section" ? [item.id] : []
+      )
     );
   }, [visibleNavGroups]);
   const effectiveDisabledSections = useMemo(() => {
