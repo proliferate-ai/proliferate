@@ -19,6 +19,35 @@ import {
 import type { ScenarioFailure } from "../report/types.js";
 import { writeFailureReports, toFailureReport } from "../report/failure-reporter.js";
 import { fileIssuesForFailures } from "../report/issue-filer.js";
+import type { RuntimeLane } from "../config/types.js";
+import {
+  evaluate,
+  loadRequiredManifest,
+  type ResultRow,
+  type ScenarioStatus,
+} from "../runner/workflow-policy.js";
+import { buildSummary, validateSummary } from "../runner/summary-artifact.js";
+import {
+  SCENARIO_DEADLINE_MS,
+  ScenarioRunGuard,
+  scenarioCorrelationId,
+  withDeadline,
+} from "../runner/live-scenario-policy.js";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+
+/**
+ * Maps a runtime lane onto the release manifest's lane vocabulary
+ * (required-workflows.json uses `cloud`/`desktop`). The sandbox runtime lane is
+ * the cloud target; the local runtime lane is the Desktop target. The final
+ * scenario-to-lane binding is WS10b-owned content; this is the provisional
+ * mapping the runner uses to compare results against the required manifest.
+ */
+function runtimeLaneToReleaseLane(runtimeLane: RuntimeLane): string {
+  return runtimeLane === "sandbox" ? "cloud" : "desktop";
+}
+
+const WORKFLOW_SUMMARY_FILENAME = "workflow-release-summary.json";
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
@@ -30,7 +59,7 @@ async function main(): Promise<void> {
 
   console.log(
     `release-e2e: lane=${args.lane} desktop=${args.desktop} agents=${formatSelector(args.agents)} ` +
-      `scenarios=${formatSelector(args.scenarios)} dryRun=${args.dryRun}`,
+      `scenarios=${formatSelector(args.scenarios)} policy=${args.policy} dryRun=${args.dryRun}`,
   );
 
   const scenarios = selectScenarios(args.scenarios);
@@ -58,6 +87,14 @@ async function main(): Promise<void> {
   const failures: ScenarioFailure[] = [];
   const blocked: Array<{ scenarioId: string; lane: string; reason: string }> = [];
   const expectedFail: Array<{ scenarioId: string; lane: string; diagnosis: string }> = [];
+  // Result rows in the release-lane vocabulary, for the WS10a policy gate.
+  const results: ResultRow[] = [];
+  // Structural no-retry-after-external-effect guard (WS10a): each scenario/lane
+  // is driven exactly once — a second attempt throws.
+  const runGuard = new ScenarioRunGuard();
+  const recordResult = (id: string, runtimeLane: RuntimeLane, status: ScenarioStatus): void => {
+    results.push({ id, lane: runtimeLaneToReleaseLane(runtimeLane), status });
+  };
   let greenCount = 0;
 
   for (const scenario of scenarios) {
@@ -77,6 +114,7 @@ async function main(): Promise<void> {
             "host, which has no staging pairing — run it under `--lane local`. On `--lane staging` only the " +
             "sandbox runtime lane targets the staging deployment.",
         });
+        recordResult(scenario.id, runtimeLane, "blocked");
         continue;
       }
 
@@ -106,25 +144,43 @@ async function main(): Promise<void> {
           lane: runtimeLane,
           reason: blockedReasonForMissingEnv(scenario.id, runtimeLane, missingEnv, locallySeeded),
         });
+        recordResult(scenario.id, runtimeLane, "blocked");
         continue;
       }
+      // WS10a live-scenario policy: each scenario/lane runs exactly once (the
+      // guard throws on a re-drive), under a unique correlation ID and a fixed
+      // deadline.
+      runGuard.begin(scenario.id, runtimeLane);
+      const correlationId = scenarioCorrelationId(scenario.id, runtimeLane);
+      if (!args.dryRun) {
+        console.log(`  [${scenario.id}/${runtimeLane}] correlation=${correlationId}`);
+      }
       try {
-        await scenario.run({
-          targetLane: args.lane,
-          runtimeLane,
-          desktop: args.desktop,
-          agents: agentsSelector === "all" ? ["all"] : agentsSelector,
-          dryRun: args.dryRun,
-          env: neededEnv,
-        });
+        await withDeadline(
+          scenario.run({
+            targetLane: args.lane,
+            runtimeLane,
+            desktop: args.desktop,
+            agents: agentsSelector === "all" ? ["all"] : agentsSelector,
+            dryRun: args.dryRun,
+            env: neededEnv,
+            correlationId,
+            deadlineMs: SCENARIO_DEADLINE_MS,
+          }),
+          SCENARIO_DEADLINE_MS,
+          `${scenario.id}/${runtimeLane}`,
+        );
         greenCount += 1;
+        recordResult(scenario.id, runtimeLane, "green");
       } catch (error) {
         if (error instanceof ScenarioBlockedError) {
           blocked.push({ scenarioId: scenario.id, lane: runtimeLane, reason: error.reason });
+          recordResult(scenario.id, runtimeLane, "blocked");
           continue;
         }
         if (error instanceof ScenarioExpectedFailError) {
           expectedFail.push({ scenarioId: scenario.id, lane: runtimeLane, diagnosis: error.diagnosis });
+          recordResult(scenario.id, runtimeLane, "expected-fail");
           continue;
         }
         failures.push({
@@ -134,8 +190,16 @@ async function main(): Promise<void> {
           expected: `${scenario.title} completes without error`,
           error,
         });
+        recordResult(scenario.id, runtimeLane, "failed");
       }
     }
+  }
+
+  // WS10a release gate: in `release` policy the required-scenario manifest
+  // gates the run and a signed summary artifact is emitted. In `signal` policy
+  // this is skipped entirely so behavior is unchanged from today.
+  if (args.policy === "release" && !args.dryRun) {
+    await runReleaseGate(args, results);
   }
 
   if (!args.dryRun) {
@@ -187,6 +251,62 @@ async function main(): Promise<void> {
     console.log(`\nAll ${countRuns(scenarios)} scenario run(s) completed with no failures.`);
   } else {
     console.log(`\nNo red scenario runs (${greenCount} green, ${blocked.length} blocked, ${expectedFail.length} expected-fail).`);
+  }
+}
+
+/**
+ * WS10a release gate. Loads the required-scenario manifest, evaluates the
+ * collected results strictly, emits the signed summary artifact, and sets a
+ * nonzero exit code if any required row is not green or the summary fails
+ * validation (an unknown/absent identity field, a nonzero non-green counter).
+ * A malformed manifest throws `ManifestConfigError` and fails the run loudly.
+ */
+async function runReleaseGate(
+  args: import("./args.js").CliArgs,
+  results: ResultRow[],
+): Promise<void> {
+  const manifest = loadRequiredManifest();
+  const evaluation = evaluate(manifest, results, "release");
+
+  console.log("\nRelease policy: strict manifest gate");
+  for (const row of evaluation.rows) {
+    const mark = row.verdict === "green" ? "ok" : "FAIL";
+    console.log(`  [${mark}] ${row.id}/${row.lane} — ${row.verdict} (${row.detail})`);
+  }
+  console.log(
+    `  counters: missing=${evaluation.counters.missing} skipped=${evaluation.counters.skipped} ` +
+      `blocked=${evaluation.counters.blocked} expectedFail=${evaluation.counters.expectedFail} ` +
+      `cancelled=${evaluation.counters.cancelled} duplicate=${evaluation.counters.duplicate} ` +
+      `failed=${evaluation.counters.failed}`,
+  );
+
+  const summary = buildSummary({
+    policy: "release",
+    target: args.lane,
+    manifest,
+    results,
+    evaluation,
+  });
+  const summaryValidation = validateSummary(summary, "release");
+
+  await mkdir(args.outputDir, { recursive: true });
+  const summaryPath = path.join(args.outputDir, WORKFLOW_SUMMARY_FILENAME);
+  await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
+  console.log(`  summary artifact: ${summaryPath}`);
+
+  if (!evaluation.ok) {
+    console.error("\nRelease policy FAILED — required scenarios not all green:");
+    for (const violation of evaluation.violations) {
+      console.error(`  - ${violation}`);
+    }
+    process.exitCode = 1;
+  }
+  if (!summaryValidation.ok) {
+    console.error("\nRelease summary artifact INVALID:");
+    for (const error of summaryValidation.errors) {
+      console.error(`  - ${error}`);
+    }
+    process.exitCode = 1;
   }
 }
 
