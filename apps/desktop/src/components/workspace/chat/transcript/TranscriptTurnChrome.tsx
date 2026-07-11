@@ -108,6 +108,14 @@ export function TurnAssistantActionRow({
   );
 }
 
+export function TurnLiveTailSlot({ children }: { children: ReactNode }) {
+  return (
+    <div className={`flex items-center ${ASSISTANT_ACTION_SLOT_HEIGHT}`} data-turn-tail-slot>
+      {children}
+    </div>
+  );
+}
+
 /**
  * Inline "✓ Goal achieved in Xs" marker for the final completed message's
  * action footer (Fix 3). Matches the action-row typography (text-chat-meta,

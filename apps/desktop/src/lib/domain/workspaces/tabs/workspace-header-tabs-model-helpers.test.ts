@@ -195,7 +195,6 @@ describe("getKnownSessionViewState", () => {
         streamConnectionState: "open",
         activity: {
           isStreaming: true,
-          endsInFinalAssistantProse: false,
           pendingInteractions: [],
           transcriptTitle: null,
           errorAttentionKey: null,

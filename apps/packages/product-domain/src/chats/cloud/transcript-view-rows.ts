@@ -4,7 +4,9 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import {
+  classifyCollapsedAction,
   formatCollapsedActionsSummary,
+  resolveCurrentCollapsedAction,
   summarizeCollapsedActions,
 } from "../transcript/transcript-collapsed-actions";
 import {
@@ -14,6 +16,7 @@ import {
 import { describeToolCallDisplay } from "../tools/tool-call-display";
 import { getToolCallShellCommand } from "../transcript/transcript-tool-commands";
 import { blockBelongsToCompletedHistory } from "../transcript/transcript-rendering";
+import { formatWorkedForDuration } from "../transcript/transcript-work-duration";
 import { turnHasAssistantRenderableTranscriptContent } from "../pending-prompts/pending-prompts";
 import type { CloudChatTranscriptRowView } from "./transcript-view-model";
 import {
@@ -79,8 +82,11 @@ export function buildRowsFromTurnRow(
         }
         rows.push({
           id: `${row.key}:completed-history`,
-          kind: "system",
-          title: "Work history",
+          kind: "work_history",
+          title: formatWorkedForDuration(
+            transcript.turnsById[row.turnId]?.startedAt,
+            transcript.turnsById[row.turnId]?.completedAt,
+          ) ?? "Worked",
           detail: fragments.join(", "),
           children: historyRows,
         });
@@ -103,17 +109,42 @@ function appendDisplayBlockRows(
   options: { preserveCollapsedGroups?: boolean } = {},
 ): void {
   if (block.kind === "collapsed_actions") {
+    const status = resolveGroupStatus(block.itemIds, transcript);
+    const currentAction = resolveCurrentCollapsedAction(block.itemIds, transcript);
     if (!options.preserveCollapsedGroups && block.itemIds.length === 1) {
+      const rowIndex = rows.length;
       appendItemRows(block.itemIds[0] ?? "", row, transcript, rows);
+      const itemRow = rows[rowIndex];
+      if (status === "running" && itemRow?.kind === "tool") {
+        rows[rowIndex] = {
+          ...itemRow,
+          title: currentAction?.label ?? itemRow.title,
+          actionKind: currentAction?.kind ?? itemRow.actionKind,
+          status,
+        };
+      }
       return;
     }
     const summary = summarizeCollapsedActions(block.itemIds, transcript);
-    const status = resolveGroupStatus(block.itemIds, transcript);
+    const children: CloudChatTranscriptRowView[] = [];
+    for (const itemId of block.itemIds) {
+      appendItemRows(itemId, row, transcript, children);
+    }
+    const currentChild = currentAction
+      ? children.find((child) => child.id === `${row.key}:${currentAction.itemId}`)
+      : null;
     rows.push({
       id: `${row.key}:${block.blockId}`,
       kind: "tool_group",
-      title: formatCollapsedActionsSummary(summary, { active: status === "running" }),
+      title: status === "running"
+        ? currentAction?.label ?? "Working"
+        : formatCollapsedActionsSummary(summary),
       status,
+      actionKind: currentAction?.kind ?? null,
+      actionBaseTitle: currentChild?.actionBaseTitle ?? currentChild?.title ?? null,
+      sourceToolCallId: currentChild?.sourceToolCallId ?? null,
+      children,
+      ...transcriptRowsSeqBounds(children),
     });
     return;
   }
@@ -236,6 +267,8 @@ function toolCallItemToRow(
     id,
     kind: "tool",
     title: display.label,
+    actionKind: classifyCollapsedAction(item),
+    actionBaseTitle: display.label,
     detail: command ?? display.hint ?? item.nativeToolName ?? item.toolKind,
     body: previewText(toolOutputPreview(item)),
     status: statusLabel(item.status),
@@ -276,4 +309,29 @@ function resolveGroupStatus(
   })
     ? "running"
     : "completed";
+}
+
+function transcriptRowsSeqBounds(
+  rows: readonly CloudChatTranscriptRowView[],
+): Pick<CloudChatTranscriptRowView, "firstSeq" | "lastSeq"> {
+  let firstSeq: number | null = null;
+  let lastSeq: number | null = null;
+
+  function includeRow(row: CloudChatTranscriptRowView): void {
+    for (const seq of [row.firstSeq, row.lastSeq]) {
+      if (typeof seq !== "number") {
+        continue;
+      }
+      firstSeq = firstSeq === null ? seq : Math.min(firstSeq, seq);
+      lastSeq = lastSeq === null ? seq : Math.max(lastSeq, seq);
+    }
+    for (const child of row.children ?? []) {
+      includeRow(child);
+    }
+  }
+
+  for (const row of rows) {
+    includeRow(row);
+  }
+  return { firstSeq, lastSeq };
 }

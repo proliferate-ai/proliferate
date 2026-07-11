@@ -1,7 +1,5 @@
 import { ChatComposerActions } from "./ChatComposerActions";
 import { ComposerModelSelectorControl } from "./ComposerModelSelectorControl";
-import { ComposerReasoningEffortBars } from "./ComposerReasoningEffortBars";
-import { ComposerFastModeToggle } from "./ComposerFastModeToggle";
 import { ComposerOverflowControl } from "./ComposerOverflowControl";
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
@@ -49,8 +47,30 @@ export interface ComposerLeadingControlsProps {
   activeSessionId: string | null;
 }
 
+function resolveModelTuningControls(controls: LiveSessionControlDescriptor[]) {
+  const reasoningControl = controls.find((control) =>
+    control.key === "effort" && control.options.length >= 2
+  ) ?? controls.find((control) =>
+    control.key === "reasoning" && control.options.length >= 2
+  ) ?? null;
+  const fastModeControl = controls.find((control) =>
+    control.key === "fast_mode" && control.kind === "toggle"
+  ) ?? null;
+  const promotedControls = new Set(
+    [reasoningControl, fastModeControl].filter(
+      (control): control is LiveSessionControlDescriptor => control !== null,
+    ),
+  );
+
+  return {
+    reasoningControl,
+    fastModeControl,
+    overflowControls: controls.filter((control) => !promotedControls.has(control)),
+  };
+}
+
 /**
- * The leading control cluster (model selector, reasoning bars, fast mode, mode, goal,
+ * The leading control cluster (combined model/reasoning selector, mode, goal,
  * integrations). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
@@ -64,6 +84,7 @@ export function ComposerLeadingControls({
   activeSessionId,
 }: ComposerLeadingControlsProps) {
   const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
+  const modelTuning = resolveModelTuningControls(controlGroups.modelConfigControls);
 
   const sessionGoal = useSessionGoal();
   const beginComposingGoal = useGoalBarStore((state) => state.beginComposing);
@@ -77,38 +98,20 @@ export function ComposerLeadingControls({
 
   return (
     <>
-      {/* 1. Model/harness selector — leftmost */}
+      {/* 1. Model, reasoning effort, and Fast mode — one intelligence control. */}
       <div
         className={`flex min-w-0 items-center ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
         }`}
       >
-        <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
+        <ComposerModelSelectorControl
+          modelSelectorProps={modelSelectorProps}
+          reasoningControl={modelTuning.reasoningControl}
+          fastModeControl={modelTuning.fastModeControl}
+        />
       </div>
 
-      {/* 2. Reasoning/effort bars */}
-      {controlGroups.reasoningEffortControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerReasoningEffortBars control={controlGroups.reasoningEffortControl} />
-        </span>
-      )}
-
-      {/* 3. Fast mode toggle */}
-      {controlGroups.fastModeControl && (
-        <span
-          className={`inline-flex shrink-0 ${
-            runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
-          }`}
-        >
-          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
-        </span>
-      )}
-
-      {/* 4. Primary working mode control (bypass/plan/etc) */}
+      {/* 2. Primary working mode control (bypass/plan/etc) */}
       {controlGroups.modeControl && (
         <span
           className={`inline-flex min-w-0 ${
@@ -123,7 +126,7 @@ export function ComposerLeadingControls({
         </span>
       )}
 
-      {/* 5. Goal button */}
+      {/* 3. Goal button */}
       {canSetGoal && (
         <ComposerControlButton
           icon={<Target className="size-4" />}
@@ -138,7 +141,7 @@ export function ComposerLeadingControls({
         />
       )}
 
-      {/* 6. Integrations control */}
+      {/* 4. Integrations control */}
       <ComposerIntegrationsControl />
     </>
   );
@@ -179,6 +182,7 @@ export function ComposerTrailingControls({
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
   const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
+  const modelTuning = resolveModelTuningControls(controlGroups.modelConfigControls);
   const canAttachFile = canUseUtilityActions && canAttachFiles;
   const attachFileDetail = canAttachFile
     ? "Upload image or text context."
@@ -190,7 +194,7 @@ export function ComposerTrailingControls({
 
   return (
     <>
-      {/* 7. Plus button — direct file attach */}
+      {/* 5. Plus button — direct file attach */}
       {!isEditingQueuedPrompt && (
         <ComposerControlButton
           iconOnly
@@ -203,10 +207,10 @@ export function ComposerTrailingControls({
         />
       )}
 
-      {/* 8. Runtime pressure */}
+      {/* 6. Runtime pressure */}
       <RuntimePressureIndicator />
 
-      {/* 9. Overflow three-dots */}
+      {/* 7. Overflow three-dots */}
       <span
         className={`inline-flex shrink-0 ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
@@ -214,7 +218,7 @@ export function ComposerTrailingControls({
       >
         <ComposerOverflowControl
           agentKind={agentKind}
-          controls={controlGroups.overflowControls}
+          controls={modelTuning.overflowControls}
         />
       </span>
     </>

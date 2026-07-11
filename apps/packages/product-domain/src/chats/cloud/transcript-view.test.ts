@@ -364,10 +364,12 @@ describe("buildCloudTranscriptView", () => {
       events,
       fallbackItems: [],
     });
-    const historyRow = view.rows.find((row) => row.title === "Work history");
+    const historyRow = view.rows.find((row) =>
+      row.kind === "work_history" && row.title.startsWith("Worked")
+    );
 
     expect(historyRow).toEqual(expect.objectContaining({
-      kind: "system",
+      kind: "work_history",
       detail: "1 tool call",
     }));
     expect(historyRow?.children).toEqual([
@@ -378,6 +380,103 @@ describe("buildCloudTranscriptView", () => {
     ]);
     expect(historyRow?.children?.[0]?.detail).toBeUndefined();
     expect(JSON.stringify(historyRow)).not.toContain("1 action");
+  });
+
+  it("projects one animated current action with its semantic kind and ledger", () => {
+    const events: CloudSessionEvent[] = [
+      eventEnvelope(1, "turn_started", turnStartedEnvelope(1)),
+      eventEnvelope(2, "item_completed", readToolCompletedEnvelope(2, "read-1")),
+      {
+        targetId: "target-1",
+        sessionId: "session-1",
+        seq: 3,
+        eventType: "item_started",
+        sourceKind: "runtime",
+        envelope: toolStartEnvelope(3, "command-1"),
+      },
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events,
+      fallbackItems: [],
+    });
+    const liveRow = view.rows.find((row) => row.kind === "tool_group");
+
+    expect(liveRow).toEqual(expect.objectContaining({
+      kind: "tool_group",
+      status: "running",
+      actionKind: "command",
+      title: "Running command",
+    }));
+    expect(liveRow?.children).toHaveLength(2);
+  });
+
+  it("interrupts a stale live action group and its active ledger item", () => {
+    const events: CloudSessionEvent[] = [
+      eventEnvelope(1, "turn_started", turnStartedEnvelope(1)),
+      eventEnvelope(2, "item_completed", readToolCompletedEnvelope(2, "read-1")),
+      eventEnvelope(3, "item_started", toolStartEnvelope(3, "command-1")),
+      eventEnvelope(4, "item_completed", assistantEnvelope(4, "The command stopped.")),
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events,
+      fallbackItems: [],
+    });
+    const group = view.rows.find((row) => row.kind === "tool_group");
+
+    expect(group).toEqual(expect.objectContaining({
+      firstSeq: 2,
+      lastSeq: 3,
+      status: "Interrupted",
+    }));
+    expect(group?.children).toEqual([
+      expect.objectContaining({
+        sourceToolCallId: "read-1",
+        status: "completed",
+      }),
+      expect.objectContaining({
+        sourceToolCallId: "command-1",
+        status: "Interrupted",
+      }),
+    ]);
+  });
+
+  it("keeps permission detail and status on a multi-action group", () => {
+    const events: CloudSessionEvent[] = [
+      eventEnvelope(1, "turn_started", turnStartedEnvelope(1)),
+      eventEnvelope(2, "item_completed", readToolCompletedEnvelope(2, "read-1")),
+      eventEnvelope(3, "item_started", toolStartEnvelope(3, "command-1")),
+    ];
+    const pendingInteractions: CloudPendingInteraction[] = [
+      pendingPermissionInteraction({
+        requestId: "permission-1",
+        requestedSeq: 4,
+        toolCallId: "command-1",
+        title: "pnpm test",
+      }),
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events,
+      fallbackItems: [],
+      pendingInteractions,
+    });
+    const group = view.rows.find((row) => row.kind === "tool_group");
+
+    expect(group).toEqual(expect.objectContaining({
+      kind: "tool_group",
+      title: "Command",
+      detail: "pnpm test",
+      status: "Needs approval",
+      sourceRequestId: "permission-1",
+      sourceToolCallId: "command-1",
+      firstSeq: 2,
+      lastSeq: 3,
+    }));
   });
 
   it("uses newer event rows instead of stale projection when later envelopes render", () => {

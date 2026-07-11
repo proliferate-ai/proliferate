@@ -34,6 +34,55 @@ describe("transcript rendering helpers", () => {
     )).toBeNull();
   });
 
+  it("does not keep a completed trailing exploration group live", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read", "completed"),
+    };
+    const turn = turnRecord(["read"]);
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(findTrailingLiveExplorationBlock(
+      presentation.displayBlocks,
+      transcript,
+      true,
+    )).toBeNull();
+  });
+
+  it("keeps an active trailing exploration group live", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read", "in_progress"),
+    };
+    const turn = turnRecord(["read"]);
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(findTrailingLiveExplorationBlock(
+      presentation.displayBlocks,
+      transcript,
+      true,
+    )).toEqual({
+      kind: "collapsed_actions",
+      blockId: "read-read",
+      itemIds: ["read"],
+    });
+  });
+
+  it("does not keep a failed trailing exploration group live", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read", "failed"),
+    };
+    const turn = turnRecord(["read"]);
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(findTrailingLiveExplorationBlock(
+      presentation.displayBlocks,
+      transcript,
+      true,
+    )).toBeNull();
+  });
+
   it("does not treat an earlier action batch as the live bottom phase", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {

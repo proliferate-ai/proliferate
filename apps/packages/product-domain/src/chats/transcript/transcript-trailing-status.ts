@@ -11,44 +11,23 @@ export function shouldAllowTurnTrailingStatus({
   transcript: TranscriptState;
   isLatestTurnInProgress: boolean;
 }): boolean {
-  // OWNER RULE: once the turn's tail is assistant prose with text — streaming
-  // or completed — no trailing "Thinking…" below it. The final rendered
-  // message must be the last thing in the turn; if the agent genuinely keeps
-  // working after prose, the next tool/work item announces itself when it
-  // arrives. (Previously completed prose re-showed the indicator, which read
-  // as "thinking…" lingering under an already-finished answer whenever
-  // turn_ended trailed the final tokens.)
+  // Streaming prose owns the live tail while fresh tokens are arriving.
+  // Completed prose is not evidence that the turn is over: commentary can be
+  // followed by a long period of hidden reasoning before the next visible
+  // action. Keep the working status eligible until the turn itself completes.
   return isLatestTurnInProgress
-    && !lastTopLevelItemIsAssistantProseWithText(turn, transcript);
+    && latestStreamingAssistantProseRevision(turn, transcript) === null;
 }
 
-export function lastTopLevelItemIsAssistantProseWithText(
+export function latestStreamingAssistantProseRevision(
   turn: { itemOrder: readonly string[] },
   transcript: TranscriptState,
-): boolean {
+): string | null {
   const item = findLastTopLevelItem(turn, transcript);
-  return item?.kind === "assistant_prose" && !!item.text;
-}
-
-/**
- * True when the transcript's latest turn is still in progress but already
- * ends in completed assistant prose — the "settling" window between the final
- * rendered answer and the backend's turn_ended/phase flip. Session-level
- * status presentation uses this to stop showing "iterating" once the answer
- * is fully on screen, mirroring how shouldAllowTurnTrailingStatus suppresses
- * the trailing "Thinking…" indicator. A prose tail that is still streaming
- * does NOT count: genuinely running states stay authoritative.
- */
-export function transcriptEndsInFinalAssistantProse(
-  transcript: TranscriptState,
-): boolean {
-  const latestTurnId = transcript.turnOrder[transcript.turnOrder.length - 1];
-  const turn = latestTurnId ? transcript.turnsById[latestTurnId] : undefined;
-  if (!turn || turn.completedAt !== null) {
-    return false;
+  if (item?.kind !== "assistant_prose" || !item.text || !item.isStreaming) {
+    return null;
   }
-  const item = findLastTopLevelItem(turn, transcript);
-  return item?.kind === "assistant_prose" && !!item.text && !item.isStreaming;
+  return `${item.itemId}:${item.lastUpdatedSeq}`;
 }
 
 export function latestTransientStatusText(
@@ -58,9 +37,23 @@ export function latestTransientStatusText(
   for (let i = turn.itemOrder.length - 1; i >= 0; i--) {
     const itemId = turn.itemOrder[i];
     const item = itemId ? transcript.itemsById[itemId] : undefined;
-    if (item?.kind === "thought" && item.isTransient && item.text.trim()) {
+    if (!item) continue;
+    if ("parentToolCallId" in item && item.parentToolCallId) {
+      const parent = transcript.itemsById[item.parentToolCallId];
+      if (parent?.kind === "tool_call") continue;
+    }
+    if (
+      item.kind === "thought"
+      && item.isTransient
+      && item.isStreaming
+      && item.text.trim()
+    ) {
       return item.text.trim();
     }
+    // A transient label only describes the current tail. Once prose or tool
+    // work follows it, reviving the older label would falsely present stale
+    // work as the agent's current action.
+    return null;
   }
   return null;
 }

@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   Brain,
   ChevronRight,
-  Wrench,
 } from "lucide-react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ThinkingText } from "@proliferate/ui/primitives/ThinkingText";
@@ -17,6 +16,7 @@ import {
 import {
   firstLine,
   iconForRow,
+  isActionActivelyRunning,
   loadingStatusLabel,
   resolveActionStatus,
   titleForRow,
@@ -92,8 +92,15 @@ export function CloudChatToolRow({ row }: { row: CloudChatTranscriptRowView }) {
   return (
     <article className="flex justify-start">
       <CloudTranscriptActionRow
-        icon={<Icon size={12} />}
-        label={row.title ?? titleForRow(row)}
+        icon={<Icon className="size-4" />}
+        label={isActionActivelyRunning(row)
+          ? (
+            <ThinkingText
+              text={row.title ?? titleForRow(row)}
+              className="block max-w-full truncate font-normal leading-[inherit]"
+            />
+          )
+          : row.title ?? titleForRow(row)}
         hint={hint}
         status={status}
         statusLabel={row.status}
@@ -120,27 +127,26 @@ export function CloudChatToolGroupRow({
   row: CloudChatTranscriptRowView;
   renderChildRow: (row: CloudChatTranscriptRowView) => ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const body = row.body?.trim() ?? "";
   const children = row.children ?? [];
   const label = row.title ?? row.detail ?? "Work history";
   const hasExpandedContent = body.length > 0 || children.length > 0;
+  const status = resolveActionStatus(row);
+  const Icon = iconForRow(row);
+  const statusLabel = nonLiveActionStatusLabel(row.status);
 
   return (
-    <article className="py-1">
-      <CloudTurnSeparator
-        label={label}
-        interactive={hasExpandedContent}
-        expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      />
-      {row.status ? (
-        <div className="mt-0.5 text-center text-chat leading-[var(--text-chat--line-height)] text-muted-foreground">
-          {row.status}
-        </div>
-      ) : null}
-      {expanded && hasExpandedContent ? (
-        <div className="mt-2 space-y-1.5">
+    <article className="flex justify-start py-0.5">
+      <CloudTranscriptActionRow
+        icon={<Icon className="size-4" />}
+        label={isActionActivelyRunning(row)
+          ? <ThinkingText text={label} className="block max-w-full truncate font-normal" />
+          : label}
+        hint={row.detail}
+        status={status}
+        statusLabel={statusLabel}
+      >
+        {hasExpandedContent ? <div className="space-y-1.5">
           {body ? (
             <CloudTranscriptDetailsPanel>
               <div className="max-h-72 overflow-auto px-3 py-2.5" data-telemetry-mask>
@@ -158,8 +164,8 @@ export function CloudChatToolGroupRow({
               renderChildRow={renderChildRow}
             />
           ))}
-        </div>
-      ) : null}
+        </div> : null}
+      </CloudTranscriptActionRow>
     </article>
   );
 }
@@ -173,13 +179,13 @@ export function CloudChatWorkHistoryRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const children = row.children ?? [];
-  const summary = row.detail ?? row.body ?? row.title ?? "Work history";
+  const label = row.title ?? "Worked";
   const hasExpandedContent = children.length > 0 || Boolean(row.body?.trim());
 
   return (
-    <article className="py-1">
+    <article className="py-1" data-cloud-work-history>
       <CloudTurnSeparator
-        label={summary}
+        label={label}
         interactive={hasExpandedContent}
         expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
@@ -203,9 +209,13 @@ export function CloudChatWorkHistoryRow({
               renderChildRow={renderChildRow}
             />
           ))}
-          <CloudTurnSeparator label="Final message" />
         </div>
       ) : null}
+      <div
+        aria-hidden="true"
+        data-chat-transcript-ignore
+        className="mt-1 w-full border-t border-border"
+      />
     </article>
   );
 }
@@ -218,22 +228,33 @@ function CloudChatHistoryChildRow({
   renderChildRow: (row: CloudChatTranscriptRowView) => ReactNode;
 }) {
   if (row.kind === "tool_group") {
-    const status = resolveActionStatus(row);
-    const statusLabel = row.status && row.status !== "completed" ? row.status : null;
     return (
-      <article className="flex justify-start">
-        <CloudTranscriptActionRow
-          icon={<Wrench size={12} />}
-          label={row.title ?? "Tool activity"}
-          hint={row.detail}
-          status={status}
-          statusLabel={statusLabel}
-        />
-      </article>
+      <CloudChatToolGroupRow
+        row={row}
+        renderChildRow={renderChildRow}
+      />
     );
   }
 
   return <>{renderChildRow(row)}</>;
+}
+
+function nonLiveActionStatusLabel(status: string | null | undefined): string | null {
+  const value = status?.trim();
+  if (!value) {
+    return null;
+  }
+  switch (value.toLowerCase()) {
+    case "completed":
+    case "running":
+    case "in progress":
+    case "in_progress":
+    case "streaming":
+    case "sending":
+      return null;
+    default:
+      return value;
+  }
 }
 
 export function CloudChatSystemRow({

@@ -27,12 +27,6 @@ export interface TurnPresentation {
   finalAssistantItemId: string | null;
   completedHistoryRootIds: string[];
   completedHistorySummary: CompletedHistorySummary | null;
-  /**
-   * Top-level assistant-prose item ids that begin a NEW assistant message and
-   * should render a message-boundary divider immediately before them (see
-   * `computeMessageBoundaryItemIds`).
-   */
-  messageBoundaryItemIds: Set<string>;
 }
 
 export function buildTranscriptDisplayBlocks({
@@ -178,65 +172,7 @@ export function buildTurnPresentation(
     finalAssistantItemId,
     completedHistoryRootIds,
     completedHistorySummary,
-    messageBoundaryItemIds: computeMessageBoundaryItemIds({
-      displayBlocks,
-      transcript,
-      completedHistoryRootIds: new Set(completedHistoryRootIds),
-      hasCompletedHistorySummary: completedHistorySummary !== null,
-    }),
   };
-}
-
-/**
- * Compute the set of top-level assistant-prose item ids that begin a NEW
- * assistant message and therefore need a leading message-boundary divider.
- *
- * A boundary is inserted before a top-level `assistant_prose` `item` block when
- * an earlier top-level `assistant_prose` block has already rendered in the same
- * turn's displayed sequence. Blocks in between (tool activity, reasoning, plans)
- * belong to whichever message and never reset the tracking — the divider marks
- * the transition from one prose message to a later prose message.
- *
- * Blocks collapsed into the "Work history" summary are excluded: they render as
- * a single group with its own "Final message" separator, so they must not count
- * as top-level prose nor receive a boundary.
- */
-export function computeMessageBoundaryItemIds({
-  displayBlocks,
-  transcript,
-  completedHistoryRootIds,
-  hasCompletedHistorySummary,
-}: {
-  displayBlocks: readonly TurnDisplayBlock[];
-  transcript: TranscriptState;
-  completedHistoryRootIds: ReadonlySet<string>;
-  hasCompletedHistorySummary: boolean;
-}): Set<string> {
-  const boundaryItemIds = new Set<string>();
-  let hasRenderedAssistantProse = false;
-
-  for (const block of displayBlocks) {
-    if (
-      hasCompletedHistorySummary
-      && block.kind === "item"
-      && completedHistoryRootIds.has(block.itemId)
-    ) {
-      // Collapsed into the Work history summary — not a top-level block.
-      continue;
-    }
-
-    if (
-      block.kind === "item"
-      && transcript.itemsById[block.itemId]?.kind === "assistant_prose"
-    ) {
-      if (hasRenderedAssistantProse) {
-        boundaryItemIds.add(block.itemId);
-      }
-      hasRenderedAssistantProse = true;
-    }
-  }
-
-  return boundaryItemIds;
 }
 
 export function isTransientTranscriptItem(item: TranscriptItem | undefined): boolean {

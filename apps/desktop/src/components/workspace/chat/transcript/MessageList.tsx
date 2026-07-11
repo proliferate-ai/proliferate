@@ -75,6 +75,7 @@ interface MessageListProps {
   isLoadingOlderHistory?: boolean;
   olderHistoryCursor?: number | null;
   bottomInsetPx?: number;
+  nonDisplacingBottomInsetPx?: number;
   onLoadOlderHistory?: () => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   onOpenSession?: TranscriptOpenSessionHandler;
@@ -93,6 +94,7 @@ export function MessageList({
   isLoadingOlderHistory = false,
   olderHistoryCursor = null,
   bottomInsetPx = CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
+  nonDisplacingBottomInsetPx = 0,
   onLoadOlderHistory,
   onHandOffPlanToNewSession,
   onOpenSession,
@@ -126,10 +128,12 @@ export function MessageList({
     },
     layout: {
       bottomInsetPx,
+      nonDisplacingBottomInsetPx,
     },
   }), [
     activeSessionId,
     bottomInsetPx,
+    nonDisplacingBottomInsetPx,
     goalEvents,
     hasOlderHistory,
     isLoadingOlderHistory,

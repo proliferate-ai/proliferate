@@ -8,27 +8,26 @@ export function resolveReasoningEffortPresentation(
   value: string | null,
   label?: string | null,
 ): SessionReasoningEffortPresentation {
-  const normalizedValue = normalizeReasoningEffortValue(value);
-
   return {
-    shortLabel: resolveShortLabel(normalizedValue, label),
+    shortLabel: resolveShortLabel(value?.toLowerCase() ?? null, label),
   };
 }
 
-function normalizeReasoningEffortValue(value: string | null): string | null {
-  const normalizedValue = value?.toLowerCase() ?? null;
-  return normalizedValue === "max" ? "xhigh" : normalizedValue;
-}
-
 function resolveShortLabel(value: string | null, label?: string | null): string | null {
-  if (value === "xhigh") {
-    return "Xhigh";
-  }
   if (label && label.trim().length > 0) {
-    return label;
+    return label.trim();
   }
   if (!value) {
     return null;
+  }
+  if (value === "xhigh") {
+    return "Extra High";
+  }
+  if (value === "max") {
+    return "Max";
+  }
+  if (value === "ultra") {
+    return "Ultra";
   }
 
   const parts = value

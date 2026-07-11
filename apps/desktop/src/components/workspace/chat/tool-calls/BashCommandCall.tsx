@@ -1,4 +1,4 @@
-import { SquareTerminal } from "@proliferate/ui/icons";
+import { CommandWindow } from "@proliferate/ui/icons";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
 import { ToolActionRow } from "./ToolActionRow";
@@ -23,7 +23,7 @@ export function BashCommandCall({
 
   return (
     <ToolActionRow
-      icon={<SquareTerminal />}
+      icon={<CommandWindow />}
       label={label}
       hint={command}
       status={status}

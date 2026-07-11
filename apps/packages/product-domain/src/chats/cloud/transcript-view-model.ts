@@ -1,4 +1,5 @@
 import type { TranscriptState } from "@anyharness/sdk";
+import type { CollapsedActionKind } from "../transcript/transcript-collapsed-actions";
 
 export type CloudChatTranscriptRowKind =
   | "assistant"
@@ -7,6 +8,7 @@ export type CloudChatTranscriptRowKind =
   | "thought"
   | "tool"
   | "tool_group"
+  | "work_history"
   | "proposed_plan"
   | "user";
 
@@ -18,6 +20,8 @@ export interface CloudChatTranscriptRowView {
   detail?: string | null;
   status?: string | null;
   streaming?: boolean;
+  actionKind?: CollapsedActionKind | null;
+  actionBaseTitle?: string | null;
   children?: CloudChatTranscriptRowView[];
   firstSeq?: number | null;
   lastSeq?: number | null;

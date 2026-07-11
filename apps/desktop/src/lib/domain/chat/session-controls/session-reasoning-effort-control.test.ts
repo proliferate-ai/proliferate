@@ -2,15 +2,21 @@ import { describe, expect, it } from "vitest";
 import { resolveReasoningEffortPresentation } from "./session-reasoning-effort-control";
 
 describe("resolveReasoningEffortPresentation", () => {
-  it("normalizes legacy max reasoning to xhigh presentation", () => {
+  it("preserves authored catalog labels", () => {
     expect(resolveReasoningEffortPresentation("max", "Max")).toEqual({
-      shortLabel: "Xhigh",
+      shortLabel: "Max",
     });
   });
 
-  it("uses the canonical xhigh label even when a raw option label is present", () => {
+  it("uses a human fallback for xhigh when no label is authored", () => {
     expect(resolveReasoningEffortPresentation("xhigh", "Extra High")).toEqual({
-      shortLabel: "Xhigh",
+      shortLabel: "Extra High",
+    });
+    expect(resolveReasoningEffortPresentation("xhigh")).toEqual({
+      shortLabel: "Extra High",
+    });
+    expect(resolveReasoningEffortPresentation("ultra")).toEqual({
+      shortLabel: "Ultra",
     });
   });
 });

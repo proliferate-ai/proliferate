@@ -74,4 +74,27 @@ describe("VirtualizedTranscriptRowList", () => {
     const button = container.querySelector('[aria-label="Scroll to bottom"]');
     expect(button?.getAttribute("aria-hidden")).toBe("false");
   });
+
+  it("adds an overlay spacer without changing the current scroll position", () => {
+    const props = makeProps();
+    const { container, rerender } = render(
+      <VirtualizedTranscriptRowList {...props} />,
+    );
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "scrollHeight", { value: 1_000, configurable: true });
+    viewport.scrollTop = 600;
+
+    rerender(
+      <VirtualizedTranscriptRowList
+        {...props}
+        bottomInsetPx={160}
+        nonDisplacingBottomInsetPx={160}
+      />,
+    );
+
+    expect(viewport.scrollTop).toBe(600);
+    expect(
+      container.querySelector<HTMLElement>("[data-transcript-bottom-overlay-inset]")?.style.height,
+    ).toBe("160px");
+  });
 });

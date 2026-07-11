@@ -1,4 +1,4 @@
-import { FileText } from "@proliferate/ui/icons";
+import { ReadBook } from "@proliferate/ui/icons";
 import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import { ToolActionDetailsPanel } from "./ToolActionDetailsPanel";
@@ -67,7 +67,7 @@ export function FileReadCall({
 
   return (
     <ToolActionRow
-      icon={<FileText />}
+      icon={<ReadBook />}
       label={fileLabel}
       status={status}
       duration={duration}

@@ -74,6 +74,26 @@ describe("FullTranscriptRowList", () => {
     expect(viewport.scrollTop).toBe(500);
   });
 
+  it("re-sticks synchronously when a row updates without changing row count", () => {
+    const props = makeProps(vi.fn(), 50);
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "scrollHeight", {
+      value: 700,
+      configurable: true,
+    });
+    viewport.scrollTop = 100;
+
+    rerender(
+      <FullTranscriptRowList
+        {...props}
+        rows={ROWS.map((row) => ({ ...row }))}
+      />,
+    );
+
+    expect(viewport.scrollTop).toBe(700);
+  });
+
   it("leaves the viewport alone on resize after scrolling away from the bottom", () => {
     const notifyResize = stubCapturingResizeObserver();
     const { container } = render(
@@ -89,6 +109,40 @@ describe("FullTranscriptRowList", () => {
     notifyResize();
 
     expect(viewport.scrollTop).toBe(600);
+  });
+
+  it("adds manual scroll range for composer cards without moving the transcript", () => {
+    const notifyResize = stubCapturingResizeObserver();
+    const props = makeProps(vi.fn(), 50);
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    let scrollHeight = 840;
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "clientHeight", {
+      value: 0,
+      configurable: true,
+    });
+    viewport.scrollTop = 840;
+    scrollHeight = 1_000;
+
+    rerender(
+      <FullTranscriptRowList
+        {...props}
+        bottomInsetPx={160}
+        nonDisplacingBottomInsetPx={160}
+      />,
+    );
+
+    expect(viewport.scrollTop).toBe(840);
+    expect(
+      container.querySelector<HTMLElement>("[data-transcript-bottom-inset]")?.style.height,
+    ).toBe("160px");
+
+    notifyResize();
+    expect(viewport.scrollTop).toBe(840);
   });
 });
 

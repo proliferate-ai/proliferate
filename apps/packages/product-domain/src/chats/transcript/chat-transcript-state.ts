@@ -38,6 +38,11 @@ export interface ChatTranscriptHistoryState {
 
 export interface ChatTranscriptLayoutState {
   bottomInsetPx?: number;
+  /**
+   * Portion of bottomInsetPx created by cards above the composer. It expands
+   * the manual scroll range without moving an already-rendered transcript.
+   */
+  nonDisplacingBottomInsetPx?: number;
   columnClassName?: string;
   gutterClassName?: string;
 }

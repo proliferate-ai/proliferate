@@ -87,7 +87,20 @@ export function CloudChatTranscriptRow({
     );
   }
 
+  if (row.kind === "work_history") {
+    return (
+      <CloudChatWorkHistoryRow
+        row={row}
+        renderChildRow={(child) => (
+          <CloudChatTranscriptRow row={child} />
+        )}
+      />
+    );
+  }
+
   if (row.kind === "system") {
+    // Compatibility for older projections that predate the explicit
+    // work_history row kind.
     if ((row.title ?? "").toLowerCase() === "work history") {
       return (
         <CloudChatWorkHistoryRow

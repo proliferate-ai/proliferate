@@ -6,6 +6,7 @@ import {
   PendingInteractionMarkerView,
   TurnAssistantActionRow,
   TurnGoalMetMarker,
+  TurnLiveTailSlot,
   TurnShell,
   pendingInteractionMarkerKind,
   resolvePendingPromptTrailingStatus,
@@ -68,6 +69,18 @@ describe("TurnAssistantActionRow", () => {
     );
     expect(container.textContent).toContain("Goal achieved in 40s");
     expect(container.textContent).toContain("5:02pm");
+  });
+
+  it("reserves identical height for live status and completed copy actions", () => {
+    const live = render(<TurnLiveTailSlot>Thinking</TurnLiveTailSlot>);
+    const liveSlot = live.container.querySelector("[data-turn-tail-slot]");
+    expect(liveSlot?.className).toContain("h-6");
+    live.unmount();
+
+    const completed = render(
+      <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
+    );
+    expect(completed.container.querySelector(".h-6")).not.toBeNull();
   });
 });
 

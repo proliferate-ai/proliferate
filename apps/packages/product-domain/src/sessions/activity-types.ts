@@ -32,15 +32,6 @@ export interface SessionActivitySnapshot {
   transcript: {
     isStreaming: boolean;
     pendingInteractions: PendingInteractionLike[];
-    /**
-     * True when the latest in-progress turn already ends in completed
-     * assistant prose (see transcriptEndsInFinalAssistantProse). Status
-     * derivation then presents the session as idle during the settling
-     * window between the final rendered answer and the backend phase flip,
-     * instead of a dead-looking "iterating". Undefined preserves legacy
-     * behavior (phase stays authoritative).
-     */
-    endsInFinalAssistantProse?: boolean;
   };
 }
 

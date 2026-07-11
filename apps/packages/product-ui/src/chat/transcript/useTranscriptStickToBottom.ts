@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /** Classification of a viewport scroll event: our own snap vs the user. */
 export interface TranscriptScrollSample {
@@ -32,6 +32,12 @@ export interface UseTranscriptStickToBottomOptions {
   onScrollSample: (sample?: TranscriptScrollSample) => void;
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
+  /**
+   * Manual-only scroll range created by cards overlaying the transcript. Auto
+   * follow stops before this range until the user explicitly reaches the hard
+   * bottom or clicks the scroll-to-bottom button.
+   */
+  autoFollowBottomInsetPx?: number;
 }
 
 export interface TranscriptStickToBottom {
@@ -41,7 +47,7 @@ export interface TranscriptStickToBottom {
   pinnedRef: RefObject<boolean>;
   /** Wire to AutoHideScrollArea's onViewportScroll. Owns stickiness + direction + onScrollSample. */
   onViewportScroll: (viewport: HTMLDivElement) => void;
-  /** Imperative snap to the true bottom (always snaps; callers gate on pinnedRef). */
+  /** Snap to the active follow target (soft overlay bottom or user-chosen hard bottom). */
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
   handleScrollToBottomClick: () => void;
@@ -64,12 +70,27 @@ export function useTranscriptStickToBottom({
   scrollRef,
   onScrollSample,
   repinThresholdPx = REPIN_BOTTOM_THRESHOLD_PX,
+  autoFollowBottomInsetPx = 0,
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
   const programmaticRef = useRef<{ expectedTop: number; frame: number } | null>(null);
   const glueFrameRef = useRef<number | null>(null);
+  const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
+  const consumedAutoFollowBottomInsetRef = useRef(0);
+
+  // Registered before consumer layout effects. Preserve however much of an
+  // existing overlay range the user deliberately consumed; if another card is
+  // stacked above the composer, only the NEW height remains manual-only.
+  useLayoutEffect(() => {
+    const nextInset = Math.max(0, autoFollowBottomInsetPx);
+    consumedAutoFollowBottomInsetRef.current = Math.min(
+      consumedAutoFollowBottomInsetRef.current,
+      nextInset,
+    );
+    autoFollowBottomInsetRef.current = nextInset;
+  }, [autoFollowBottomInsetPx]);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -113,11 +134,16 @@ export function useTranscriptStickToBottom({
     // (e.g. the row appended by this very update) and visibly bounces when the
     // measurement corrects a frame later.
     notifyProgrammaticScroll(() => {
-      viewport.scrollTop = viewport.scrollHeight;
+      viewport.scrollTop = resolveAutoFollowScrollTop(
+        viewport,
+        autoFollowBottomInsetRef.current,
+        consumedAutoFollowBottomInsetRef.current,
+      );
     });
   }, [notifyProgrammaticScroll, scrollRef]);
 
   const handleScrollToBottomClick = useCallback(() => {
+    consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
     setPinned(true);
     scrollToBottom();
   }, [scrollToBottom, setPinned]);
@@ -155,12 +181,17 @@ export function useTranscriptStickToBottom({
     });
     const delta = top - previousTop;
     if (distance > repinThresholdPx) {
+      consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     } else if (delta > -DIRECTION_EPSILON_PX) {
       // Within the bottom band and not moving up — the user returned to bottom.
+      if (distance <= PROGRAMMATIC_MATCH_TOL_PX) {
+        consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
+      }
       setPinned(true);
     } else {
       // Within the band but still moving up — the user is leaving.
+      consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     }
     onScrollSample({ programmatic: false });
@@ -184,7 +215,11 @@ export function useTranscriptStickToBottom({
         return;
       }
       notifyProgrammaticScroll(() => {
-        viewport.scrollTop = viewport.scrollHeight;
+        viewport.scrollTop = resolveAutoFollowScrollTop(
+          viewport,
+          autoFollowBottomInsetRef.current,
+          consumedAutoFollowBottomInsetRef.current,
+        );
       });
       const height = viewport.scrollHeight;
       if (height === lastHeight) {
@@ -213,6 +248,7 @@ export function useTranscriptStickToBottom({
     }
     programmaticRef.current = null;
     lastScrollTopRef.current = 0;
+    consumedAutoFollowBottomInsetRef.current = 0;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
@@ -310,4 +346,19 @@ export function useTranscriptStickToBottom({
     setPinned,
     resetForSession,
   };
+}
+
+function resolveAutoFollowScrollTop(
+  viewport: HTMLDivElement,
+  bottomInsetPx: number,
+  consumedBottomInsetPx: number,
+): number {
+  const remainingManualInsetPx = Math.max(0, bottomInsetPx - consumedBottomInsetPx);
+  if (remainingManualInsetPx <= 0) {
+    // Preserve the established write-to-scrollHeight behavior: browsers clamp
+    // this to their exact maximum scrollTop without subpixel bookkeeping.
+    return viewport.scrollHeight;
+  }
+  const hardBottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  return Math.max(0, hardBottom - remainingManualInsetPx);
 }

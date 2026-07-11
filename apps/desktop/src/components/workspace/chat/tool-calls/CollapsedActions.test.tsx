@@ -51,11 +51,12 @@ describe("CollapsedActions", () => {
       />,
     );
 
-    expect(screen.queryByText("Reading read.ts")).toBeNull();
+    expect(document.querySelector("[data-collapsed-actions-ledger]")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /Exploring 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Reading read\.ts/i }));
 
-    expect(screen.getByText("Reading read.ts")).toBeTruthy();
+    expect(document.querySelector("[data-collapsed-actions-ledger]")).not.toBeNull();
+    expect(screen.getAllByText("Reading read.ts").length).toBeGreaterThan(0);
   });
 
   it("marks active action batches with the live row affordance", () => {
@@ -71,10 +72,10 @@ describe("CollapsedActions", () => {
       />,
     );
 
-    const activeButton = screen.getByRole("button", { name: /Exploring 1 file/i });
+    const activeButton = screen.getByRole("button", { name: /Reading read\.ts/i });
     expect(activeButton.getAttribute("data-active")).toBe("true");
     expect(activeButton.innerHTML).toContain("thinking-text");
-    expect(activeButton.innerHTML).toContain("data-text=\"Exploring 1 file\"");
+    expect(activeButton.innerHTML).toContain("data-text=\"Reading read.ts\"");
     expect(activeButton.innerHTML).not.toContain("motion-safe:animate-pulse");
     const activeLabel = activeButton.querySelector("[data-thinking-text]");
     const activeLabelClasses = activeLabel?.className.split(/\s+/) ?? [];
@@ -97,7 +98,31 @@ describe("CollapsedActions", () => {
     expect(completedButton.innerHTML).not.toContain("motion-safe:animate-pulse");
   });
 
-  it("keeps the trailing action batch live while waiting for the next stream event", () => {
+  it("uses the current action label and icon while keeping prior work in the ledger", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      command: terminalItem("command", "turn-1", 1, "pnpm test", "completed"),
+      read: toolItem("read", "turn-1", 2, "file_read", "in_progress"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["command", "read"]}
+        transcript={transcript}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: /Reading read\.ts/i });
+    expect(button.textContent).not.toContain("commands");
+    expect(button.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 20 20");
+    expect(button.querySelector("path")?.getAttribute("d")).toContain("16.3965 5.01128");
+
+    fireEvent.click(button);
+    expect(screen.getByRole("button", { name: /Running: pnpm test/i })).toBeTruthy();
+    expect(screen.getAllByText("Reading read.ts").length).toBeGreaterThan(0);
+  });
+
+  it("does not revive a completed trailing action from the auto-follow hint", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       edit: toolItem("edit", "turn-1", 1, "file_change", "completed"),
@@ -111,10 +136,9 @@ describe("CollapsedActions", () => {
       />,
     );
 
-    const liveButton = screen.getByRole("button", { name: /Editing 1 file/i });
-    expect(liveButton.getAttribute("data-active")).toBe("true");
-    expect(liveButton.innerHTML).toContain("thinking-text");
-    expect(liveButton.innerHTML).not.toContain("motion-safe:animate-pulse");
+    const completedButton = screen.getByRole("button", { name: /Edited 1 file/i });
+    expect(completedButton.getAttribute("data-active")).toBeNull();
+    expect(completedButton.innerHTML).not.toContain("thinking-text");
   });
 
   it("animates live command counts with the thinking text treatment", () => {
@@ -130,10 +154,10 @@ describe("CollapsedActions", () => {
       />,
     );
 
-    const liveButton = screen.getByRole("button", { name: /Running 1 command/i });
+    const liveButton = screen.getByRole("button", { name: /Running command/i });
     expect(liveButton.getAttribute("data-active")).toBe("true");
     expect(liveButton.innerHTML).toContain("thinking-text");
-    expect(liveButton.innerHTML).toContain("data-text=\"Running 1 command\"");
+    expect(liveButton.innerHTML).toContain("data-text=\"Running command\"");
   });
 
   it("does not cap the expanded ledger when it contains edits", () => {
@@ -173,7 +197,7 @@ describe("CollapsedActions", () => {
         autoFollow
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Exploring 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Explored 1 file/i }));
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
@@ -200,8 +224,8 @@ describe("CollapsedActions", () => {
 
     const commandRow = screen.getByRole("button", { name: /Running: pnpm test/i });
     const readRow = screen.getByText("Read read.ts");
-    expect(commandRow.className).toContain("text-muted-foreground/75");
-    expect(readRow.className).toContain("text-muted-foreground/60");
+    expect(commandRow.className).toContain("text-muted-foreground");
+    expect(readRow.className).toContain("text-muted-foreground");
   });
 
   it("starts grouped edit cards closed inside the expanded action batch", () => {

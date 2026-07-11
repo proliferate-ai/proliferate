@@ -4,22 +4,23 @@ import type {
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
+  CommandWindow,
+  ChevronRight,
   FilePen,
-  FileText,
   FolderList,
+  ReadBook,
   Search,
   Settings,
-  SquareTerminal,
 } from "@proliferate/ui/icons";
 import {
+  type CollapsedActionKind,
   type CollapsedActionSummary,
   formatCollapsedActionsSummary,
+  resolveCurrentCollapsedAction,
   summarizeCollapsedActions,
 } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { CollapsedActionRows } from "@/components/workspace/chat/tool-calls/CollapsedActionRows";
-
-const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
 interface CollapsedActionsProps {
   itemIds: string[];
@@ -40,11 +41,18 @@ export function CollapsedActions({
   });
   const [expanded, setExpanded] = useState(false);
   const actionSummary = summarizeCollapsedActions(itemIds, transcript);
-  const summaryIcon = renderCollapsedActionsIcon(actionSummary);
   const containsEdits = actionSummary.edits > 0;
   const shouldAutoFollow = autoFollow || hasActiveAction;
-  const isLiveAction = autoFollow || hasActiveAction;
-  const summary = formatCollapsedActionsSummary(actionSummary, { active: isLiveAction });
+  // Item status is authoritative. `autoFollow` is only a scrolling hint and
+  // must never revive a completed action as live work.
+  const isLiveAction = hasActiveAction;
+  const currentAction = isLiveAction
+    ? resolveCurrentCollapsedAction(itemIds, transcript)
+    : null;
+  const summary = currentAction?.label ?? formatCollapsedActionsSummary(actionSummary);
+  const summaryIcon = currentAction
+    ? renderCollapsedActionKindIcon(currentAction.kind)
+    : renderCollapsedActionsIcon(actionSummary);
 
   return (
     <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
@@ -55,17 +63,15 @@ export function CollapsedActions({
         data-chat-transcript-ignore
         data-active={isLiveAction ? "true" : undefined}
         aria-expanded={expanded}
-        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline ${
-          isLiveAction ? "text-muted-foreground/75" : "text-muted-foreground/60"
-        }`}
+        className="group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
         onClick={() => setExpanded((value) => !value)}
       >
         <span
           aria-hidden="true"
-          className={`flex size-3 shrink-0 items-center justify-center transition-colors [&_svg]:size-2.5 ${
+          className={`flex size-4 shrink-0 items-center justify-center transition-colors [&_svg]:size-4 ${
             expanded
-              ? "text-foreground/70"
-              : "text-faint group-hover/collapsed-actions:text-muted-foreground group-focus-visible/collapsed-actions:text-muted-foreground"
+              ? "text-foreground"
+              : "text-muted-foreground group-hover/collapsed-actions:text-foreground group-focus-visible/collapsed-actions:text-foreground"
           }`}
         >
           {summaryIcon}
@@ -80,6 +86,14 @@ export function CollapsedActions({
             )
             : summary}
         </span>
+        <ChevronRight
+          aria-hidden="true"
+          className={`size-3.5 shrink-0 text-muted-foreground transition-[transform,opacity] ${
+            expanded ? "rotate-90 opacity-100" : isLiveAction
+              ? "opacity-100"
+              : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
+          }`}
+        />
       </Button>
       {expanded && (
         <div className="mt-1 flex flex-col gap-1">
@@ -97,7 +111,7 @@ export function CollapsedActions({
 
 function renderCollapsedActionsIcon(summary: CollapsedActionSummary): ReactNode {
   if (summary.commands > 0) {
-    return <SquareTerminal />;
+    return <CommandWindow />;
   }
   if (summary.edits > 0) {
     return <FilePen />;
@@ -109,9 +123,28 @@ function renderCollapsedActionsIcon(summary: CollapsedActionSummary): ReactNode 
     return <FolderList />;
   }
   if (summary.reads > 0 || summary.fetches > 0) {
-    return <FileText />;
+    return <ReadBook />;
   }
   return <Settings />;
+}
+
+function renderCollapsedActionKindIcon(kind: CollapsedActionKind): ReactNode {
+  switch (kind) {
+    case "command":
+      return <CommandWindow />;
+    case "read":
+    case "fetch":
+      return <ReadBook />;
+    case "edit":
+      return <FilePen />;
+    case "listing":
+      return <FolderList />;
+    case "search":
+      return <Search />;
+    case "action":
+    default:
+      return <Settings />;
+  }
 }
 
 function CollapsedActionsLedger({

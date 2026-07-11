@@ -75,6 +75,7 @@ export function ChatTranscriptView({
       isLoadingOlderHistory={model.isLoadingOlderHistory}
       olderHistoryCursor={model.olderHistoryCursor}
       bottomInsetPx={model.bottomInsetPx}
+      nonDisplacingBottomInsetPx={model.nonDisplacingBottomInsetPx}
       selectedWorkspaceId={model.selectedWorkspaceId}
       activeSessionId={model.activeSessionId}
       isSessionBusy={

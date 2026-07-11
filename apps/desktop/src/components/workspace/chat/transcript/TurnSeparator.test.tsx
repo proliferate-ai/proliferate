@@ -5,7 +5,7 @@ import { TurnSeparator } from "./TurnSeparator";
 
 describe("TurnSeparator", () => {
 
-  it("keeps interactive history summaries on the same chat font size as final-message separators", () => {
+  it("renders a left-aligned disclosure without centered side rules", () => {
     const html = renderToStaticMarkup(
       createElement(TurnSeparator, {
         label: "2 messages, 3 tool calls",
@@ -16,7 +16,8 @@ describe("TurnSeparator", () => {
     );
 
     expect(html).toContain("2 messages, 3 tool calls");
-    expect(html).toContain("text-[length:var(--text-chat)]");
-    expect(html).not.toContain("text-xs");
+    expect(html).toContain("text-chat");
+    expect(html).toContain("aria-expanded=\"false\"");
+    expect(html).not.toContain("flex-1 border-t");
   });
 });

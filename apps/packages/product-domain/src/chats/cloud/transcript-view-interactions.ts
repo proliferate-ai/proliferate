@@ -123,6 +123,7 @@ function applyPendingPermissionRows(
     unmatched.delete(match.interaction.requestId);
     return {
       ...row,
+      title: row.actionBaseTitle ?? row.title,
       detail: match.title || row.detail,
       body: row.body ?? match.description,
       status: pendingPermissionStatusLabel(match.interaction),
@@ -137,6 +138,7 @@ function applyPendingPermissionRows(
       id: `pending-permission:${info.interaction.requestId}`,
       kind: "tool",
       title: "Command",
+      actionBaseTitle: "Command",
       body: info.description,
       detail: info.title,
       status: pendingPermissionStatusLabel(info.interaction),
@@ -166,8 +168,19 @@ function markStaleRunningToolRows(
       && typeof laterRow.firstSeq === "number"
       && laterRow.firstSeq > rowSeq
     );
-    return laterTranscriptProgress ? { ...row, status: "Interrupted" } : row;
+    return laterTranscriptProgress ? interruptRunningToolTree(row) : row;
   });
+}
+
+function interruptRunningToolTree(
+  row: CloudChatTranscriptRowView,
+): CloudChatTranscriptRowView {
+  const children = row.children?.map(interruptRunningToolTree);
+  return {
+    ...row,
+    ...(isRunningToolRow(row) ? { status: "Interrupted" } : {}),
+    ...(children ? { children } : {}),
+  };
 }
 
 function isRunningToolRow(row: CloudChatTranscriptRowView): boolean {

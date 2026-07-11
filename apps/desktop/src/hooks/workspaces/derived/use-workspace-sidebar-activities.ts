@@ -86,7 +86,6 @@ function buildWorkspaceSidebarActivitySignature(
       entry.hasAttemptedPrompt ? "prompted" : "",
       entry.streamConnectionState,
       entry.activity.isStreaming ? "streaming" : "idle",
-      entry.activity.endsInFinalAssistantProse ? "final-prose" : "",
       pendingInteractionSignature(entry.activity.pendingInteractions),
       includeErrorAttention ? entry.activity.errorAttentionKey ?? "" : "",
     ].join("\u001f");
