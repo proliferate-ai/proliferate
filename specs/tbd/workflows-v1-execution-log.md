@@ -86,6 +86,16 @@ conversation memory.
 
 ## Blockers
 
+- MERGE PAUSED (WS3b verified-accepted, unmerged): the primary checkout
+  /Users/pablohansen/proliferate has ~31 files of uncommitted changes not
+  authored by this program (compiler.py → domain/resolved_plan.py extraction,
+  test_workflow_triggers/actions splits, intent-tests.yml → blocking gate,
+  Makefile, tests/intent stack changes, new specs/tbd/patient-zero-workflows.md).
+  They conflict with the WS3b merge paths. Captain will not stash/overwrite
+  user work — awaiting user ruling on whether to adopt these as a packet or
+  have them committed by their author. WS3b branch: workflows/completion-
+  audiences @ 4b64e2692 (post-rebase 54 tests green, head e5f1a2b3c4d7).
+
 - Gate A1: test_workflow_service.py max-lines split is WS2b-assigned debt, not
   yet done (file grew to 847). Must land before Gate A1 sign-off — assign to a
   cleanup packet or fold into WS2c acceptance.
