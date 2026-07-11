@@ -3,38 +3,41 @@ name: Release E2E — Self-hosting (T3-SH / T4-SH)
 # The self-hosting battery from the tier-3 release runner
 # (specs/developing/testing/self-hosting.md). Two lanes:
 #
-#   artifact-chain (T4-SH-2): the 2026-07-09 incident gate. Pure HTTP + git
-#     against the published desktop release — no box, no credentials — so it can
-#     and SHOULD go red when the artifact chain is broken (server advanced past
-#     the shipped desktop artifact). Exposed via workflow_call so the release
-#     pipeline can run it as a gate, per the spec ("must run in the release gate,
-#     not nightly-only"); also runs nightly for continuous coverage.
+#   artifact-chain (T4-SH-2): a post-publish diagnostic for the 2026-07-09
+#     incident class. Pure HTTP + git against the published stable desktop — no
+#     box or credentials — so it goes red when that public chain is broken. It
+#     runs nightly and manually. It is deliberately not reusable as a release
+#     gate: pre-publish qualification must validate the immutable candidate
+#     manifest before moving the stable pointer, and no such caller exists yet.
 #
 #   provisioning (T3-SH-1 cold boot, T4-SH-1 update motion): stand up a throwaway
 #     EC2 self-hosted control plane (production compose bundle, sslip.io + real
 #     TLS) and tear it down. Costs real infra, so it is gated behind the
 #     RELEASE_E2E_SELFHOST_PROVISION opt-in and AWS credentials; without either
-#     the runner reports those scenarios blocked (never red — the blocked/
-#     expected-fail convention in tests/release/src/cli/run.ts). continue-on-error
-#     like the rest of tier 3: it never gates a merge. T3-SH-2 (native desktop)
-#     reports blocked until its driver exists; T3-SH-3 (gateway add-on) reports
-#     blocked until standing-box + gateway secrets are provisioned.
+#     the runner reports those scenarios blocked in signal mode. A genuine
+#     scenario failure remains red; this workflow never gates a merge. T3-SH-2
+#     (native desktop) reports blocked until its driver exists; T3-SH-3 (gateway
+#     add-on) reports blocked until standing-box + gateway secrets are provisioned.
 
 on:
   workflow_dispatch:
     inputs:
+      release_desktop_version:
+        description: Published desktop version to inspect (blank resolves the CDN stable manifest).
+        default: ""
+        required: false
+        type: string
+      release_date:
+        description: Expected UTC release day, YYYY-MM-DD (blank resolves the desktop tag commit day).
+        default: ""
+        required: false
+        type: string
       provision:
         description: Provision throwaway EC2 boxes for T3-SH-1 / T4-SH-1 (costs a few cents).
         default: "false"
         required: false
         type: choice
         options: ["false", "true"]
-  workflow_call:
-    inputs:
-      release_desktop_version:
-        description: Desktop version the release ships (defaults to the repo VERSION).
-        required: false
-        type: string
   schedule:
     # Nightly, after the release train + the main tier-3 runner.
     - cron: "30 11 * * *"
@@ -51,12 +54,13 @@ env:
 
 jobs:
   artifact-chain:
-    name: T4-SH-2 desktop artifact chain (release gate)
+    name: T4-SH-2 published desktop artifact diagnostic
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # fetch-depth 0 + tags: T4-SH-2 verifies the desktop-v<version> tag exists
-      # and shares lineage with the release SHA.
+      # fetch-depth 0 + tags: T4-SH-2 verifies the published desktop tag shares
+      # lineage with this mainline diagnostic checkout. This is not candidate
+      # qualification or promotion evidence.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -66,17 +70,54 @@ jobs:
       - uses: pnpm/action-setup@v6
         with:
           version: 10
+      - name: Resolve published desktop metadata
+        id: release
+        env:
+          INPUT_RELEASE_DATE: ${{ inputs.release_date || '' }}
+          INPUT_VERSION: ${{ inputs.release_desktop_version || '' }}
+          STABLE_MANIFEST_URL: https://downloads.proliferate.com/desktop/stable/latest.json
+        run: |
+          set -euo pipefail
+          manifest="$(mktemp)"
+          curl --fail --location --silent --show-error "$STABLE_MANIFEST_URL" --output "$manifest"
+          stable_version="$(node -e '
+            const manifest = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            if (typeof manifest.version !== "string" || manifest.version.length === 0) process.exit(2);
+            process.stdout.write(manifest.version);
+          ' "$manifest")"
+          version="${INPUT_VERSION:-$stable_version}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid desktop version '$version'."
+            exit 1
+          fi
+
+          tag="desktop-v$version"
+          git fetch --force --no-tags --quiet origin "refs/tags/$tag:refs/tags/$tag"
+          # Annotated release tags may be created after their target commit.
+          # `creatordate` uses the tagger date for annotated tags and the commit
+          # date for lightweight tags, matching the publish event in both cases.
+          tag_created_at="$(git for-each-ref --format='%(creatordate:iso-strict)' "refs/tags/$tag")"
+          : "${tag_created_at:?Unable to resolve creation date for $tag.}"
+          tag_date="${tag_created_at%%T*}"
+          release_date="${INPUT_RELEASE_DATE:-$tag_date}"
+          if [[ ! "$release_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::Invalid release date '$release_date'; expected YYYY-MM-DD."
+            exit 1
+          fi
+          {
+            echo "version=$version"
+            echo "release_date=$release_date"
+          } >> "$GITHUB_OUTPUT"
       - name: Run T4-SH-2
         env:
-          RELEASE_E2E_RELEASE_DESKTOP_VERSION: ${{ inputs.release_desktop_version }}
+          RELEASE_E2E_RELEASE_DATE: ${{ steps.release.outputs.release_date }}
+          RELEASE_E2E_RELEASE_DESKTOP_VERSION: ${{ steps.release.outputs.version }}
         run: make release-e2e LANE=local DESKTOP=web AGENTS=all SCENARIOS=T4-SH-2
 
   provisioning:
     name: T3-SH-1 / T4-SH-1 / T3-SH-2 / T3-SH-3 (provisional)
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # Never gates a merge (README CI mapping — tier 3 is not a merge gate).
-    continue-on-error: true
     steps:
       - name: Preflight — provisioning opt-in + AWS credentials
         id: preflight

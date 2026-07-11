@@ -169,25 +169,26 @@ Normal production flow:
    The run must be a non-dry-run deploy with a `deploy-summary-staging`
    artifact whose JSON `headSha` matches the promoted SHA; a dry-run plan is
    not enough.
-2. Dispatch `Promote Production` with `require_staging_success=true`.
-3. The promote plan verifies the promoted commit is reachable from `main`.
-4. Approve the GitHub `Production` environment gates as they appear.
-5. Watch every selected lane until completion.
-6. Verify the production surfaces that ran.
+2. Confirm trusted CI produced a strict qualification artifact satisfying
+   [`../testing/core-release-validation.md`](../testing/core-release-validation.md)
+   for the same SHA, required-manifest hash, and exact artifact digests.
+3. Dispatch `Promote Production` with `require_staging_success=true`.
+4. The promote plan verifies the promoted commit is reachable from `main` and
+   validates the qualification evidence before any production mutation.
+5. Approve the GitHub `Production` environment gates as they appear.
+6. Watch every selected lane until completion.
+7. Verify the production surfaces that ran.
 
 The production GitHub environment currently exists as `Production`; workflow
 inputs and reusable workflow calls use `production`, and GitHub resolves that
 to the existing protected environment.
 
-Bypass `require_staging_success` only when explicitly directed. If bypassing
-staging, the agent must state that staging was bypassed and should watch the
-E2B lane closely because production will build and smoke the immutable template
-before moving the rolling production tag.
-If a human operator explicitly asks to go to production while a staging run is
-still in progress, dispatch production from the exact `main` SHA with
-`require_staging_success=false`. Leave the staging run alone, but do not treat
-it as the production gate; production is successful only after the production
-run itself completes and the live production URLs/artifacts verify.
+`require_staging_success=false` is not a release-qualification bypass. An
+explicitly authorized emergency deployment using it is recorded as
+unqualified, cannot publish a stable updater/feed or move runtime, worker,
+catalog, or template production pins, and must run the same qualification
+battery before it is treated as the current qualified release. A normal
+production release never bypasses staging or exact-SHA qualification evidence.
 
 If forcing `e2b` in production while `require_staging_success=true`, first
 force `e2b` in staging for the same SHA. Production uses `promote_only` in
@@ -196,7 +197,17 @@ Dry-run production promotes upload `deploy-plan-production`, not
 `deploy-summary-production`, and are excluded from future production
 deploy-base resolution.
 
+Migration exception: the current `promote-production.yml` implementation
+checks `deploy-summary-staging` but does not yet consume the product-wide
+qualification artifact or validate the exact artifact identities it would
+bind. Until it does, a successful promote workflow is a deployment result, not
+proof that the candidate satisfies the core release validation contract.
+
 #### Workflow-enabled release overlay
+
+This section adds workflow-specific evidence to the product-wide contract in
+[`../testing/core-release-validation.md`](../testing/core-release-validation.md);
+it does not narrow qualification to Workflows.
 
 The general staging bypass above does not apply when production Workflows are
 enabled, or when a release moves the workflow server/runtime/Desktop/template
@@ -979,8 +990,9 @@ Deploy graph:
    - E2B builds immutable `sha-*` tags for staging, then moves the rolling
      `staging` tag after smoke
    - production E2B promotes the already-built `sha-*` tag to `production`
-     when staging success is required; if staging is explicitly bypassed, it
-     builds and smokes the immutable `sha-*` tag before promotion
+     only after staging and exact-SHA qualification; an explicitly authorized
+     emergency unqualified deployment may build and smoke the immutable tag
+     but must not move the rolling `production` tag
    - server deploys ECR/ECS, runs Alembic, and smokes health
    - web deploys through Vercel, aliases the environment URL, and smokes it
    - mobile uses EAS build/submit when `MOBILE_DEPLOY_ENABLED=true`
@@ -1228,8 +1240,9 @@ Known failure signatures and what they mean:
   failure is not enough by itself to identify a code fix.
 - E2B cache warnings such as GitHub cache `Failed to save` or `Failed to
   restore` are not deploy failures when the E2B job completes successfully.
-- A transient CI failure in an unrelated Rust test should be rerun once before
-  blocking a web-only production promote; do not bypass a repeatable failure.
+- A plausibly transient CI failure may be rerun cleanly on the same SHA. Only
+  a complete green exact-SHA qualification can promote; do not bypass a
+  repeatable failure or exclude it as unrelated to the selected surface.
 
 ## 5. Source of Truth
 

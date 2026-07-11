@@ -1,0 +1,747 @@
+{
+  "schemaVersion": 1,
+  "authoritativeContract": "core-release-validation.md",
+  "note": "Complete target scenario-id inventory. Execution/lane mappings remain a migration gap documented by the authoritative contract.",
+  "requiredScenarios": [
+    {
+      "id": "T2-AUTH-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTH-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTH-3",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTH-4",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTH-5",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTH-6",
+      "tier": 2
+    },
+    {
+      "id": "T2-INV-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-INV-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-ORG-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-ORG-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-SURF-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-SURF-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-COMPOSER-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-TRANSCRIPT-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-SETTINGS-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-MOBILE-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-DISPATCH-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-API-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-DELEGATE-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-SUPPORT-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-WS-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-WS-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-WS-3",
+      "tier": 2
+    },
+    {
+      "id": "T2-WS-4",
+      "tier": 2
+    },
+    {
+      "id": "T2-WS-5",
+      "tier": 2
+    },
+    {
+      "id": "T2-MOBILITY-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-GHAPP-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-SEC-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-INT-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-MCP-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-AGENTAUTH-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-RUNTIMECFG-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-MODELREG-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-POL-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-PERM-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-SESSION-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTHZ-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-CMD-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-WF-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-WF-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-WF-3",
+      "tier": 2
+    },
+    {
+      "id": "T2-WF-4",
+      "tier": 2
+    },
+    {
+      "id": "T2-WF-5",
+      "tier": 2
+    },
+    {
+      "id": "T2-WF-6",
+      "tier": 2
+    },
+    {
+      "id": "T2-WF-7",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTO-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-AUTO-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-SLACK-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-3",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-4",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-5",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-6",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-7",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-8",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-9",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-10",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-11",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-12",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-13",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-14",
+      "tier": 2
+    },
+    {
+      "id": "T2-BILL-15",
+      "tier": 2
+    },
+    {
+      "id": "T2-SH-1",
+      "tier": 2
+    },
+    {
+      "id": "T2-SH-2",
+      "tier": 2
+    },
+    {
+      "id": "T2-SH-3",
+      "tier": 2
+    },
+    {
+      "id": "T2-SH-4",
+      "tier": 2
+    },
+    {
+      "id": "T2-OBS-1",
+      "tier": 2
+    },
+    {
+      "id": "T3-AUTH-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-AUTH-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-AUTH-3",
+      "tier": 3
+    },
+    {
+      "id": "T3-SURF-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-ONBOARD-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-PROV-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-PROV-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-PROV-3",
+      "tier": 3
+    },
+    {
+      "id": "T3-WT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-REPO-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-MOBILITY-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-MOBILITY-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-LIFE-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-CLAIM-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-FILES-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-FILES-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-TERM-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-DISPATCH-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-API-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-GHAPP-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-MOBILE-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-MOBILE-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-CHAT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-AUTHROUTE-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-AGENT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-CFG-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SESSION-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-TRANSCRIPT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-PLAN-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-POL-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-PERM-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-MCP-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-CRASH-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-BYOK-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-AGENTAUTH-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-RUNTIMECFG-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-MODELREG-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SUBAGENT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-COWORK-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-REVIEW-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-ARTIFACT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-DELEGATE-UI-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-ARTIFACT-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-WORKER-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-WORKER-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-WORKER-3",
+      "tier": 3
+    },
+    {
+      "id": "T3-SUP-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-ISO-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-ISO-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-CMD-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-DESKTOP-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-TEMPLATE-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SDK-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SEC-MAT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SEC-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-INT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-INT-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-INT-3",
+      "tier": 3
+    },
+    {
+      "id": "T3-NOTIFY-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SLACK-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SUPPORT-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-3",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-4",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-5",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-6",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-7",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-8",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-9",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-10",
+      "tier": 3
+    },
+    {
+      "id": "T3-BILL-11",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-3",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-4",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-5",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-6",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-7",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-8",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-9",
+      "tier": 3
+    },
+    {
+      "id": "T3-WF-10",
+      "tier": 3
+    },
+    {
+      "id": "T3-AUTO-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-AUTO-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-SH-1",
+      "tier": 3
+    },
+    {
+      "id": "T3-SH-2",
+      "tier": 3
+    },
+    {
+      "id": "T3-SH-3",
+      "tier": 3
+    },
+    {
+      "id": "T3-SH-4",
+      "tier": 3
+    },
+    {
+      "id": "T3-SH-5",
+      "tier": 3
+    },
+    {
+      "id": "T3-OBS-1",
+      "tier": 3
+    },
+    {
+      "id": "T4-WORKER-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-RUNTIME-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-SUPERVISOR-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-CATALOG-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-MODELREG-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-RUNTIMECFG-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-SEED-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-DESKTOP-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-MOBILE-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-DATA-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-MOBILITY-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-DELEGATE-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-COWORKART-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-SLACK-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-SUPPORT-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-TEMPLATE-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-ROLLING-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-CONTRACT-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-DISPATCH-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-CREDENTIAL-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-GHAPP-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-BILL-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-BILL-2",
+      "tier": 4
+    },
+    {
+      "id": "T4-BILL-3",
+      "tier": 4
+    },
+    {
+      "id": "T4-BILL-4",
+      "tier": 4
+    },
+    {
+      "id": "T4-SELFHOST-1",
+      "tier": 4
+    },
+    {
+      "id": "T4-ARTIFACT-1",
+      "tier": 4
+    }
+  ]
+}

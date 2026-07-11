@@ -4,23 +4,9 @@ on:
   push:
     branches: [main]
     tags: ["server-v*"]
-    paths:
-      - ".dockerignore"
-      - ".github/workflows/server-ci.yml"
-      - "catalogs/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "scripts/validate-agent-catalog.mjs"
-      - "server/**"
   pull_request:
-    paths:
-      - ".dockerignore"
-      - ".github/workflows/server-ci.yml"
-      - "catalogs/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "scripts/validate-agent-catalog.mjs"
-      - "server/**"
+  # Merge-queue commits rerun the suite on the exact integration commit.
+  merge_group:
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -50,6 +36,7 @@ env:
 
 jobs:
   lint:
+    name: Server lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -89,11 +76,12 @@ jobs:
         run: ruff format --check proliferate/ tests/
 
   test:
+    name: Server tests
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
       DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
-      JWT_SECRET: test-jwt-secret
+      JWT_SECRET: test-jwt-secret-at-least-32-bytes-long
       CLOUD_SECRET_KEY: test-cloud-secret
     services:
       postgres:
@@ -136,9 +124,13 @@ jobs:
         run: uv pip install --system -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py -q --durations=20
+        run: >-
+          pytest tests/unit tests/integration tests/e2e/cloud/test_e2b_webhooks.py
+          -m "not cloud_e2e" -p tests.strict_ci_plugin
+          -q --durations=20
 
   docker:
+    name: Server images
     runs-on: ubuntu-latest
     needs: [lint, test]
     # Reusable-workflow calls inherit the caller's event name (never

@@ -10,9 +10,10 @@
  *            default so nothing currently green changes behavior.
  *
  *   release  strict mode — every required (id, lane) row in the manifest must
- *            be present exactly once and green. A required row that is missing,
- *            skipped, blocked, expected-fail, cancelled, failed, or DUPLICATED
- *            in the results makes the run exit nonzero.
+ *            be present exactly once and green, and every additional emitted
+ *            registered result must also be green and unique. Missing required
+ *            work or any skipped, blocked, expected-fail, cancelled, failed, or
+ *            DUPLICATED result makes the run exit nonzero.
  *
  * This module is pure and lane-agnostic: it evaluates already-collected result
  * rows against the required manifest. The CLI maps its runtime lanes onto the
@@ -200,7 +201,7 @@ export interface PolicyEvaluation {
   exitCode: 0 | 1;
   rows: RowEvaluation[];
   counters: PolicyCounters;
-  /** One line per required row that is not green (the reasons for a nonzero exit). */
+  /** One line per required or emitted row that is not green. */
   violations: string[];
 }
 
@@ -244,7 +245,12 @@ function bumpCounter(counters: PolicyCounters, verdict: RowVerdict): void {
  * - >1 matching results (a DUPLICATED result) → `duplicate`.
  * - exactly 1 → that result's status (green or a non-green status).
  *
- * In `release` policy the gate fails (exit 1) if any required row is not green.
+ * Emitted result keys outside the provisional manifest are also evaluated: an
+ * extra green result is valid, while an extra non-green or duplicate result is
+ * a violation. This prevents a narrow manifest from hiding failures in other
+ * registered product scenarios.
+ *
+ * In `release` policy the gate fails (exit 1) if any evaluated row is not green.
  * In `signal` policy the gate is informational: `ok` is always true and the
  * exit code is 0 (the CLI keeps its own independent failure gate). Throws
  * `ManifestConfigError` if the manifest fails uniqueness/shape validation.
@@ -273,6 +279,21 @@ export function evaluate(
   const rows: RowEvaluation[] = [];
   const counters = emptyCounters();
   const violations: string[] = [];
+  const requiredKeys = new Set(manifest.required.map(requiredKey));
+
+  const recordEvaluation = (
+    id: string,
+    lane: string,
+    verdict: RowVerdict,
+    detail: string,
+  ): void => {
+    const key = requiredKey({ id, lane });
+    rows.push({ id, lane, verdict, detail });
+    bumpCounter(counters, verdict);
+    if (verdict !== "green") {
+      violations.push(`${key}: ${verdict} (${detail})`);
+    }
+  };
 
   for (const required of manifest.required) {
     const key = requiredKey(required);
@@ -291,11 +312,21 @@ export function evaluate(
       verdict = matches[0].status;
       detail = `status=${matches[0].status}`;
     }
-    rows.push({ id: required.id, lane: required.lane, verdict, detail });
-    bumpCounter(counters, verdict);
-    if (verdict !== "green") {
-      violations.push(`${key}: ${verdict} (${detail})`);
+    recordEvaluation(required.id, required.lane, verdict, detail);
+  }
+
+  for (const [key, matches] of byKey) {
+    if (requiredKeys.has(key)) {
+      continue;
     }
+    const [first] = matches;
+    const verdict: RowVerdict = matches.length > 1 ? "duplicate" : first.status;
+    const detail = matches.length > 1
+      ? `${matches.length} emitted result rows for one non-manifest scenario/lane (statuses: ${matches
+          .map((match) => match.status)
+          .join(", ")})`
+      : `emitted non-manifest result status=${first.status}`;
+    recordEvaluation(first.id, first.lane, verdict, detail);
   }
 
   if (policy === "signal") {

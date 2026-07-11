@@ -1,14 +1,19 @@
 # Flow Registry
 
-The inventory of end-to-end flows that must never break. Owned and dictated by
-Pablo; agents keep the pointers live. Rules:
+Implementation traceability for the required journeys in
+[`core-release-validation.md`](core-release-validation.md). That document owns
+the complete target manifest and pass/fail semantics; this file records which
+collected test currently enforces each journey. A pointer is evidence only
+when every required assertion and lane is collected and green. Rules:
 
 - Adding or materially changing a flow adds/updates a row **in the same PR**.
 - `Test pointer` names the spec/scenario file that enforces the flow at its
   tier. `—` means not yet implemented; an empty pointer is a to-do, not an
   excuse.
-- A completeness audit (agent-run) checks: every row has a live pointer, and
-  every pointer's test actually runs in the gate its tier claims.
+- A completeness audit checks that every normative scenario id has a live
+  pointer, every pointer is collected, every required lane runs in the strict
+  gate, and no required result escapes through skip, blocked, expected-fail,
+  or signal-only status.
 
 Tiers per `README.md`: **2** = mocked intent (per-PR, blocks merge),
 **3** = live end-to-end (release train), **4** = upgrade path (release train).
@@ -97,11 +102,11 @@ Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md
 | `/meta` capability contract holds on a REAL running process (not a synthetic Settings object): self-managed/add-ons-off advertises everything false; hosted mode advertises everything true | 2 | tests/intent/specs/capability-contract.spec.ts (T2-SH-5; two dedicated ephemeral server-only boots, no desktop-web/AnyHarness needed for `/meta`) |
 | Cloud-workspace provisioning stays safe when E2B is half-configured: control plane comes up healthy (never crash-loops), a real create request gets the actionable 503 | 2 | tests/intent/specs/cloud-provisioning-gating.spec.ts (T2-SH-6; ephemeral server-only boot, `DEBUG=false` + `E2B_API_KEY` set + `E2B_TEMPLATE_NAME` empty — the shared stack's `DEBUG=true` posture can't reach this case) |
 | SSO discover truthfulness: a connection marked enabled but missing required OIDC config still reports enabled=false with the specific reason, never a false positive | 2 | tests/intent/specs/sso-entry-points.spec.ts (T2-SH-7 / extends T2-AUTH-5; seeded via `seedIncompleteEnabledOrgSsoConnection`, `oidc_client_id_missing` by org-id query; slug query still collapses to the non-enumerating generic answer) |
-| Gateway model eligibility: session creation on a gateway-only route rejects a bare native model id and accepts a real gateway-catalog id | 2 | tests/intent/specs/gateway-eligibility.spec.ts (T2-SH-7; runtime-dependent — self-skips, not fails, when the local AnyHarness runtime is unreachable, matching workspace-entry.spec.ts's documented precedent; the CURRENT CI profile sets TIER2_INTENT_SKIP_RUNTIME=1 so this is real-locally/CI-when-unblocked today, not yet enforced in the merge gate) |
+| Gateway model eligibility: session creation on a gateway-only route rejects a bare native model id and accepts a real gateway-catalog id | 2 | tests/intent/specs/gateway-eligibility.spec.ts (historical runner label T2-SH-7; this is the gateway-eligibility slice of normative T2-SH-4. Required CI builds and boots AnyHarness with `TIER2_INTENT_REQUIRE_RUNTIME=1`; build, startup, or reachability failure is red, never a green skip. The label mismatch remains a manifest-traceability gap.) |
 | Cold boot to second user on real infra (bootstrap → claim → invite → register → login over real TLS/DNS) | 3 | tests/release/src/scenarios/selfhost/t3-sh-1.ts (T3-SH-1; provisions a throwaway EC2 box via tests/release/scripts/selfhost-box.sh — production compose bundle, sslip.io + real Caddy TLS — walks the journey over real TLS and asserts the rows in the instance Postgres, then terminates. Gated behind RELEASE_E2E_SELFHOST_PROVISION) |
 | Real (Tauri) desktop connect to alpha/beta: relaunch + config.json + keychain end-to-end | 3 | tests/release/src/scenarios/selfhost/t3-sh-2.ts (T3-SH-2; the only lane that proves the Tauri connect slice T2-SH-1 can't — reports blocked until the headless native connect driver exists, the analogue of the T4-DESKTOP-1 updater-driver) |
-| Model gateway real product path: enroll route (state.json only) → create session with no workspace-env injection (#1106) → real streamed turn on a gateway-eligible model | 3 | tests/release/src/scenarios/t3-gw-1.ts (T3-GW-1; local runtime lane, supplements T3-SH-3's direct completion — asserts the shipped workspace→session→turn path over the gateway with the credential living only in `agent-auth/state.json` and a concrete gateway model id resolved, never a bare native selector. Needs a reachable local AnyHarness runtime + RELEASE_E2E_GATEWAY_TEST_KEY/_BASE_URL; BLOCKED otherwise. Eligibility-rejection half pinned at unit tier, `catalog::service_tests::gateway_context_gates_native_ids_and_offers_only_gateway_models`, AND now proven for real at tier 2 without needing a real gateway key — tests/intent/specs/gateway-eligibility.spec.ts, T2-SH-7) |
-| Model gateway add-on: `--profile agent-gateway` + LiteLLM → real agent response | 3 | tests/release/src/scenarios/selfhost/t3-sh-3.ts (T3-SH-3; real cheapest-model (claude-haiku-4-5) completion through the standing box's public gateway route (Caddy /llm), plus read-only SSH assertions that the profiled litellm service is healthy + AGENT_GATEWAY_ENABLED — read-plus-additive, never brings the standing add-on up/down. Green live 2026-07-09 against the alpha box, serverVersion 0.3.18. Needs RELEASE_E2E_SELFHOST_URL + RELEASE_E2E_GATEWAY_TEST_KEY; SSH assertions optional) |
+| Model gateway real product path: enroll route (state.json only) → create session with no workspace-env injection (#1106) → real streamed turn on a gateway-eligible model | 3 | tests/release/src/scenarios/t3-gw-1.ts (T3-GW-1; local runtime lane, supplements T3-SH-3's direct completion — asserts the shipped workspace→session→turn path over the gateway with the credential living only in `agent-auth/state.json` and a concrete gateway model id resolved, never a bare native selector. Needs a reachable local AnyHarness runtime + RELEASE_E2E_GATEWAY_TEST_KEY/_BASE_URL; BLOCKED otherwise. Eligibility rejection is pinned at unit tier by `catalog::service_tests::gateway_context_gates_native_ids_and_offers_only_gateway_models` and at Tier 2 by tests/intent/specs/gateway-eligibility.spec.ts, whose historical T2-SH-7 label maps to the normative T2-SH-4 slice.) |
+| Model gateway add-on: Bifrost public inference path → real agent response | 3 | — (the current T3-SH-3 pointer proves the superseded LiteLLM-forwarding shape, so it is historical signal rather than qualification evidence for the Bifrost contract) |
 | Base-install capability contract holds on the real deploy artifact: never hosted_product, never vendor support/pricing, never a hosted web app, `/meta`/`/health` versions agree | 3 | tests/release/src/scenarios/selfhost/t3-sh-4.ts (T3-SH-4; read-only against the standing box, RELEASE_E2E_SELFHOST_URL — posture-agnostic on add-ons so it never competes with T3-SH-3's gateway-on state; BLOCKED without that var) |
 | Adaptive sign-in surface is truthful on the real deploy artifact: password login always advertised, github methods/availability agree, SSO discover survives with no context | 3 | tests/release/src/scenarios/selfhost/t3-sh-5.ts (T3-SH-5; read-only against the standing box, RELEASE_E2E_SELFHOST_URL; no login attempted — this box's real admin credentials are not available to the scenario; BLOCKED without that var) |
 | Operator update motion: `./update.sh` migrates + restarts, `/meta` reports N, data intact | 4 | tests/release/src/scenarios/upgrade/t4-sh-1.ts (T4-SH-1; boots a box at N-1, claims, runs ./update.sh to N, asserts migrations + health + /meta == N + the pre-update admin still logs in. Gated behind RELEASE_E2E_SELFHOST_PROVISION) |
@@ -143,15 +148,15 @@ Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md
 | Seat-based billing on Pro orgs: invite/remove/re-invite reconciles Stripe quantity + proration grants, no double-grant | 2 | tests/intent/specs/billing/seats.spec.ts (T2-BILL-3) |
 | Team checkout: new-org-via-checkout activation + failure/expiry terminal states | 2 | tests/intent/specs/billing/seats.spec.ts (T2-BILL-4; intent-create + activation idempotency; failed_billing_state/expiry noted tier-1) |
 | Compute overage: bills metered usage up to cap, writes off past it, then hard-blocks; disabled → immediate cutoff | 2 | tests/intent/specs/billing/overage.spec.ts (T2-BILL-5) |
-| LLM credits: exhaustion disables key, admin caps independent of credit refill, auto top-up incl. declined-card fail-closed | 2 | tests/intent/specs/billing/overage.spec.ts (T2-BILL-6; balance/cap surfaces + fail-closed top-up; LiteLLM key-disable is tier-3) |
+| Managed LLM credits: exhaustion/caps disable scoped Bifrost keys; entitlement/cap changes recover managed access; BYOK/Team is an alternate path; no automatic charge/grant | 2 | — (the current overage spec asserts the obsolete auto-top-up/LiteLLM behavior and does not satisfy T2-BILL-6/14/15) |
 | Stripe webhook robustness: duplicate/replay idempotent, concurrent 409, failure retried once-only, out-of-order safe | 2 | tests/intent/specs/billing/webhooks.spec.ts (T2-BILL-7) |
 | Subscription edges: payment-failed hold + clear, mid-period cancel + rollover grace, billing modes off/observe/enforce, one-trial-per-GitHub-identity | 2 | tests/intent/specs/billing/webhooks.spec.ts (T2-BILL-8; finding-7 subscription.deleted hold pinned expected-fail — issue filed) |
 | Usage surfaces truthful: seeded usage matches summary/timeseries/by-user/llm-balance APIs + UI | 2 | tests/intent/specs/billing/usage.spec.ts (T2-BILL-9; #1028 org-attribution guarded by T2BILLING_ORG_COMPUTE_ATTRIBUTION flag) |
-| Credits consumed properly: real session → LLM **and compute** meter events + credit decrement match consumption; Stripe webhook delivery live on staging | 3 | tests/release/src/scenarios/t3-bill-1.ts (T3-BILL-1; ledger reader + as-built compute-attribution assertion green via billing_probe.py; LLM half blocked on RELEASE_E2E_GATEWAY_TEST_KEY, compute half blocked on github_link_required + public webhook URL. Compute-attribution asserted via ORG_COMPUTE_ATTRIBUTION_FIXED, true since #1028 merged; the paying subject stays personal) |
+| Credits consumed properly: real session → Bifrost log/import/debit for managed LLM plus compute segment/meter events; Stripe webhook delivery live on staging | 3 | tests/release/src/scenarios/t3-bill-1.ts (current pointer covers only part of T3-BILL-1/2; Bifrost import and complete compute provider path remain qualification gaps) |
 | Out of credits: sandbox paused and not accessible — **including every bypass route** (direct API resume, stale session, webhook race, pre-exhaustion key, other org member, trigger-driven start) | 3 | tests/release/src/scenarios/t3-bill-2.ts (T3-BILL-2; exhaustion setup via drain-grants green; enforcement + 6-route bypass sweep blocked on github_link_required — cloud routes need a real sandbox + gate lift PR #1023) |
-| Out of credits: gateway LLM access gated; reactivates on refill | 3 | tests/release/src/scenarios/t3-bill-2.ts (T3-BILL-2, LLM side; blocked on RELEASE_E2E_GATEWAY_TEST_KEY — no key to reject) |
-| Overage bills real money correctly: compute metered events + amounts match up to cap then hard-block; LLM auto top-up charges once then fail-closes on payment failure | 3 | — |
-| Plan gates the model list: user sees/uses exactly the models their plan allows | 3 | — |
+| Managed-credit exhaustion disables the scoped Bifrost key; entitlement/cap change recovers it, while BYOK remains a separate route | 3 | — |
+| Compute overage meters exact amounts to cap then hard-blocks; managed LLM remains hard-capped with no automatic charge/grant | 3 | — |
+| Billing budget and agent-auth model/provider policy remain separate and both fail closed at their owning boundary | 3 | — |
 
 ## Upgrade & release
 
@@ -193,10 +198,11 @@ it only inside the app bundle, and that stays bundle-only by design (the worker
 leaves the gate off). The supervisor `update/` module stages but never fetches
 or swaps, and is not the update owner in v1.
 
-## Deferred — add on first production break
+## Compatibility matrix
 
-Explicitly not in scope until one breaks in production (postmortem rule then
-applies and the test lands with the fix):
-
-- OpenCode configuration correctness per harness
-- Full agent × auth-method matrix (beyond the default auth method per agent)
+No supported core path is deferred until a production break. OpenCode and
+every other cataloged harness, every supported auth route, and every cataloged
+configuration value are required by the dynamic Tier 3 matrix in
+[`core-release-validation.md`](core-release-validation.md). The registry must
+gain the collected pointers as those implementations land; absence is a
+qualification gap, not an exclusion.

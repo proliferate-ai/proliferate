@@ -4,7 +4,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from sqlalchemy import text
+from sqlalchemy import make_url, text
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from alembic import command
@@ -19,29 +19,24 @@ import proliferate.db.models.cloud  # noqa: F401
 import proliferate.db.models.organizations  # noqa: F401
 from proliferate.db.models.base import Base
 
-POSTGRES_USER = "proliferate"
-POSTGRES_PASSWORD = "localdev"
-POSTGRES_HOST = "127.0.0.1"
-POSTGRES_PORT = 5432
+DEFAULT_DATABASE_URL = "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate"
+BASE_DATABASE_URL = make_url(os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL))
 TEST_DATABASE_NAME = os.environ.get(
     "PROLIFERATE_TEST_DATABASE_NAME",
     f"proliferate_test_{os.getpid()}",
 )
-ADMIN_DATABASE_URL = (
-    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
-    f"{POSTGRES_HOST}:{POSTGRES_PORT}/postgres"
-)
-TEST_DATABASE_URL = (
-    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
-    f"{POSTGRES_HOST}:{POSTGRES_PORT}/{TEST_DATABASE_NAME}"
-)
 
 
 def make_database_url(database_name: str) -> str:
-    return (
-        f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
-        f"{POSTGRES_HOST}:{POSTGRES_PORT}/{database_name}"
+    """Preserve the configured server/credentials while selecting a test DB."""
+
+    return BASE_DATABASE_URL.set(database=database_name).render_as_string(
+        hide_password=False,
     )
+
+
+ADMIN_DATABASE_URL = make_database_url("postgres")
+TEST_DATABASE_URL = make_database_url(TEST_DATABASE_NAME)
 
 
 def _quote_identifier(identifier: str) -> str:

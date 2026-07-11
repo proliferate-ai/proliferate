@@ -8,6 +8,7 @@
   "scripts": {
     "export-session-events": "tsx src/tools/export-session-events.ts",
     "test": "vitest run",
+    "test:deterministic": "cargo build -p anyharness --bin anyharness && vitest run src/tools/export-session-events.test.ts src/scenarios/workspaces/file-git-worktree.test.ts",
     "test:watch": "vitest",
     "test:cloud:e2b": "tsx src/runners/run-cloud-runtime-suite.ts e2b"
   },

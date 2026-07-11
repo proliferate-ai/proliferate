@@ -2,8 +2,12 @@
 
 How tests are organized across the repo: what each tier owns, where test files
 live, what gates merges vs releases, and how a change decides which tests it
-must add. `flows.md` (sibling) is the registry of end-to-end flows that must
-never break; this doc is the law those flows are enforced under.
+must add. [`core-release-validation.md`](core-release-validation.md) is the
+complete normative Tier 2/3/4 qualification manifest. `flows.md` maps the
+currently implemented subset to collected tests, and `scenarios.md` records
+implementation detail; neither is complete enough to qualify a release today.
+`core-release-scenario-manifest.json` is the machine-checked target ID
+inventory, not a complete collected execution/lane map.
 
 Companion: `specs/developing/qa/README.md` owns *manual* release QA. This doc
 owns automated testing. A flow covered by an automated tier here does not also
@@ -19,14 +23,15 @@ where the boundary to fakes sits. Four tiers:
 | Tier | What is real | What is faked | Runs | Gates |
 | --- | --- | --- | --- | --- |
 | **1 — Unit / contract** | Logic; Postgres/SQLite where the guarantee lives in the DB | Everything across a network | Every PR, seconds | **Merge** |
-| **2 — Mocked intent** | Server + desktop web frontend + real Postgres, booted on a port | AnyHarness, sandbox provider, LLM, IdP, email, Slack — every third party | Every PR, minutes | **Merge** |
+| **2 — Mocked intent** | Server + product browser surface + real Postgres; Stripe test mode; optional non-LLM AnyHarness HTTP seam | Sandbox/LLM execution and controlled provider fixtures | Every PR, minutes | **Merge** |
 | **3 — Live end-to-end** | Everything: real E2B template for the version, real AnyHarness binary, real agents on cheap models | Nothing (cheap LLM + cheap sandbox tier, but real) | Release train + nightly | **Release** |
 | **4 — Upgrade path** | An N−1 install upgraded in place to N | The update feed (stub server; the artifacts it serves are real) | Release train | **Release** |
 
-**The gate rule (hard):** the merge gate is tiers 1–2 only. No real LLM, real
-sandbox, or real third party ever runs in the merge gate. A flaky merge gate
-poisons agent-driven merging; tier 3/4 failures block the *release* and file
-issues into the issues service — they never block a merge.
+**The gate rule (hard):** the merge gate is Tiers 1–2 only. No real LLM,
+sandbox, or provider execution runs there except the explicit Stripe test-mode
+contract. Controlled provider fixtures and the narrow non-LLM AnyHarness seam
+are deterministic Tier 2 dependencies. Tier 3/4 failures block the *release*,
+not an ordinary merge.
 
 **Real-LLM tests assert outcomes, not transcripts.** "Run reached `completed`,
 file exists, emit validated against schema" — never "the agent said X."
@@ -88,17 +93,23 @@ The fakes that do exist are cheap and stable:
 | Stripe | Stripe test mode + test clocks |
 | Poll feeds | Stub feed (replaying, per the poll contract) |
 
+A narrow non-LLM local AnyHarness process is allowed only for an HTTP contract
+seam such as runtime model-eligibility validation. It may not launch an agent,
+call a provider, or substitute for a Tier 3 journey.
+
 Lives in `tests/intent/`: one stack-boot fixture (`stack/`), fakes as
 pluggable slots (`fakes/`), one spec file per flow (`specs/`). Seeding wraps
 the existing three-layer local auth story
 (`specs/developing/local/feature-worktree-auth.md`).
 
-Tier 2 covers auth, invitation (including expired/reused/wrong-email
-negatives), SSO round-trip and negatives, org/user CRUD, repo add, secrets
-CRUD, and billing flows. For sandbox-adjacent flows, tier 2 tests **up to the
-seam**: workflow create/edit/trigger asserts "run created, plan resolved,
+The complete Tier 2 scope is the manifest in
+[`core-release-validation.md`](core-release-validation.md): identity,
+organizations, browser surfaces, workspace and configuration intent, secrets,
+integrations, agent policy, sessions, Workflows, Automations, billing, and
+self-hosted/degraded postures. For sandbox-adjacent flows, Tier 2 tests **up to
+the seam**: workflow create/edit/trigger asserts "run created, plan resolved,
 delivery attempted"; cloud workspace create asserts the request path and UI
-state — never sandbox readiness or run completion, which are tier 3.
+state — never sandbox readiness or run completion, which are Tier 3.
 
 ---
 
@@ -145,37 +156,36 @@ sandboxes. Two constraints:
 ## Tier 4 — upgrade path
 
 Fresh-install testing never catches a broken updater, and a broken updater
-strands every existing user. There is no single "upgrade path" — five distinct
-mechanisms exist, and each is tested at its own seam. The general pattern:
+strands every existing user. There is no single "upgrade path." The table
+below tracks the principal mechanisms that already have concrete runner
+designs; the complete required upgrade, data, compatibility, credential,
+billing, self-hosted, mobile, and artifact matrix lives in
+[`core-release-validation.md`](core-release-validation.md). The general
+pattern is:
 boot N−1 from kept artifacts with seeded N−1 data, stub the *feed* (the
 artifacts it serves are real), trigger the mechanism, assert convergence.
 
 | Mechanism | Learns via | Feed knob | Testable today? |
 | --- | --- | --- | --- |
-| Worker self-update (sandbox only) | Heartbeat `desiredVersions.worker` | Server pins (`WORKER_VERSION`) + CDN base `DESKTOP_DOWNLOADS_BASE_URL` — both **server-side** env vars (the worker asks the API server, which 302-redirects to the CDN base; stub by pointing the base at a file server the sandbox can reach, e.g. via ngrok) | **Yes** — the priority scenario |
-| Agent catalog convergence (existing sandboxes + local runtimes) | Heartbeat `desiredVersions.catalogVersion` → worker pushes catalog → runtime reconcile reinstalls drifted CLIs | Server catalog version | **Yes** — full-chain test; today only per-hop units exist |
-| AnyHarness binary self-update (sandbox only) | Heartbeat `desiredVersions.anyharness` → worker downloads pinned runtime, stops/swaps/relaunches it in place | Server pin (`RUNTIME_VERSION`) + the download base the redirect resolves to — both **server-side** (same stub shape as the worker row) | Mechanism built (`specs/tbd/anyharness-self-update-v1.md`); scenario written (`tests/release/src/scenarios/upgrade/t4-cloud-1.ts`, T4-CLOUD-1). Two gaps it surfaced: the `runtime/`/`worker/` CDN trees the redirects resolve to were never published (now `scripts/ci-cd/publish-runtime-cdn.sh` + release-runtime.yml `publish-cdn`), and the binary's hardcoded `CARGO_PKG_VERSION` (0.1.0) `--version`/`/health` fails the worker's exact-match preflight/health-gate — no real pin converges (issue #1089) |
+| Worker target update (sandbox only) | Worker compares heartbeat `desiredVersions.worker` and writes an atomic mailbox request; it never downloads/swaps/restarts itself | Server pin plus the feed consumed by the separately specified target activation owner | Required, but the activation owner must be specified before the scenario can qualify |
+| Bundled catalog/registry convergence (existing sandboxes + local runtimes) | N runtime/Desktop/template ships the trusted inputs; installed-only reconcile repairs drifted CLIs | Candidate runtime/Desktop/template artifact | **Yes** — full-chain test; no server-pushed catalog may become a trusted runtime input |
+| AnyHarness target update (sandbox only) | Worker compares `desiredVersions.anyharness` and writes an atomic update request; it does not perform activation | Server pin plus the feed consumed by the separately specified target activation owner | Required, but activation/rollback ownership must be explicit; the current scenario is diagnostic until then |
 | Desktop app (Tauri updater; bundles anyharness/worker sidecars) | 30-min poll of `latest.json` | Shipped default hardcoded in `tauri.conf.json`; **build-overridable** via a `tauri build --config` overlay (`make desktop-test-build UPDATER_URL=...`) — the shipped build is untouched | **Yes** — build an N−1 app pointed at a local feed and drive a real update. See [desktop-update-testing.md](./desktop-update-testing.md) |
 | E2B template | Build-time only; rolling `:staging`/`:production` tags affect **new** sandboxes only | `E2B_TEMPLATE_NAME` / `E2B_TEMPLATE_REF` | Yes — new-sandbox-gets-new-template + old-workspace-still-wakes |
 | SQLite/Alembic migrations | Ships inside the new binary/server | — | Yes — forward-apply on kept N−1 data |
 
-The two heartbeat-driven mechanisms are the priority: they are the ones that
-run **unattended against every live customer sandbox** on every release, and
-neither has an end-to-end test today (coverage is per-hop unit tests). The
-worker scenario must include a live session on the box surviving the
-swap-and-exec.
+The heartbeat-driven request mechanisms are priority coverage because they run
+unattended against customer sandboxes. Tests must preserve the ownership cut:
+Worker observes desired state, persists the request, and later reports
+convergence; it never downloads, swaps, restarts, or rolls back itself. A
+qualifying test names and drives the target activation owner as a black box and
+keeps a live session intact across that owner's action.
 
-Sandbox AnyHarness in-place update is **built**
-(`specs/tbd/anyharness-self-update-v1.md`): the sandbox worker watches
-`desiredVersions.anyharness`, downloads the pinned runtime through the server
-redirect, and stops/swaps/relaunches the binary in place, health-gating and
-rolling back on failure. A new anyharness now reaches a running sandbox without
-a new template. Desktop gets a new anyharness only via the app bundle, and that
-remains bundle-only by design (the worker leaves the gate off). The supervisor
-`update/` module validates and stages artifacts handed to it but fetches and
-swaps nothing, and is deliberately not the update owner in v1. The end-to-end
-T4 scenario that asserts convergence (binary **and** agent versions, cloud and
-local consistent) is the remaining follow-up.
+The Supervisor `update/` module validates and privately stages artifacts handed
+to it but does not fetch, activate, or roll them back. Desktop receives a new
+AnyHarness only through the app bundle. Any sandbox Worker/AnyHarness
+activation path remains non-qualifying until its owner and shipped trigger are
+specified; tests must not invent that ownership to make the scenario green.
 
 Lives in `tests/release/upgrade/`, runs under the same runner CLI.
 
@@ -201,8 +211,9 @@ end-to-end flows also add a row to `flows.md` in the same PR.
 
 **Postmortem rule:** any bug caught at tier 3/4 or in production gets an
 answer to "which lower tier should have owned this," and that test lands with
-the fix. Tier 3 growing per-feature is the smell that a seam test is missing —
-tier 3 stays O(1) per lane, not O(features).
+the fix. The Tier 3 deployed world boots O(1) times per lane and runs the
+required scenarios inside that world; adding a second boot-the-world harness
+for one feature is the smell that a seam test is missing.
 
 ---
 
@@ -213,11 +224,11 @@ the harness that already exists and lands in the right gate.
 
 ### Tier 2 — a new mocked-intent spec
 
-Tier 2 lives entirely in `tests/intent/`. It boots the **real server + real
-desktop web build** (`apps/desktop` in web-port mode) against a seeded
-Postgres and drives a browser with Playwright. Everything across a network —
-sandbox provider, LLM, IdP, email, Slack — is faked or absent; a flow that
-genuinely needs a real agent or sandbox is tier 3, not tier 2.
+Tier 2 lives entirely in `tests/intent/`. It boots the **real server + product
+browser build** against seeded Postgres and drives a browser with Playwright.
+Network dependencies use controlled fixtures; sandbox and LLM execution remain
+absent. A narrow non-LLM AnyHarness HTTP seam is allowed, but a flow that needs
+a real agent or sandbox is Tier 3.
 
 - **One spec per flow.** Add `tests/intent/specs/<flow>.spec.ts` (billing specs
   nest under `specs/billing/`). Copy the shape of an existing sibling —
@@ -247,10 +258,12 @@ genuinely needs a real agent or sandbox is tier 3, not tier 2.
   `flows.md` completeness audit both enforce this).
 - **Run it locally:** `pnpm -C tests/intent test` (or a single file, e.g.
   `pnpm -C tests/intent exec playwright test specs/<flow>.spec.ts`).
-  `TIER2_INTENT_SKIP_RUNTIME=1` skips building the Rust runtime (nothing in
-  scope reads through it); `TIER2_INTENT_PROFILE=<name>` boots on an isolated
-  profile so parallel worktrees don't collide; `TIER2_INTENT_VERBOSE=1` streams
-  the server/vite logs.
+  `TIER2_INTENT_SKIP_RUNTIME=1` is only for a targeted run that excludes every
+  runtime-dependent spec; it cannot make the complete suite pass. Required CI
+  supplies a prebuilt runtime and sets `TIER2_INTENT_REQUIRE_RUNTIME=1`, so a
+  missing or unhealthy runtime fails setup. `TIER2_INTENT_PROFILE=<name>` boots
+  on an isolated profile so parallel worktrees don't collide;
+  `TIER2_INTENT_VERBOSE=1` streams the server/vite logs.
 
 ### Tier 3 — a new live scenario
 
@@ -283,12 +296,12 @@ the tier.
 
 ---
 
-## What gates what (current CI mapping)
+## Required gate mapping
 
 | Gate | Jobs |
 | --- | --- |
-| Merge (every PR) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-frontend-package vitest, desktop vitest, tier-2 intent suite (`intent-tests` + `intent-billing` in `.github/workflows/intent-tests.yml`) |
-| Staging → production promotion | Tier 3 runner per lane + tier 4 upgrade scenario, against staging. Red blocks promotion and files an issue. **Flake-tolerant:** a green re-run unblocks; repeated red on the same scenario is a real failure, not a flake |
+| Merge (every PR or trusted merge-queue run) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, every frontend/SDK/Desktop suite, and the complete Tier 2 manifest in `core-release-validation.md` |
+| Staging → production promotion | Complete strict Tier 3 manifest plus every Tier 4 row triggered by the candidate artifacts. Only green exact-SHA evidence permits promotion |
 | Nightly | Tier 3 lanes (incl. native-shell smoke) against whatever is on staging; failures file issues, never block merges |
 
 ## Running tier 3/4 locally
@@ -302,21 +315,26 @@ developed and debugged locally against staging:
   plus tunnel.
 - Every key the runner needs (cheap-LLM key, E2B team, sandbox-mode Stripe,
   test Slack workspace, test provider accounts) is inventoried in
-  `specs/developing/reference/env-vars.yaml` with where to obtain it. A missing
-  key blocks only the scenarios/lanes that require it (reported as blocked, the
-  same as an out-of-band gate) rather than failing the whole run, so a
-  partially-credentialed environment still produces signal. No scenario ever
-  embeds a credential. The CI local lane additionally self-seeds its durable
-  user per run through the real `/setup` claim, so the local-lane server-
-  mediated scenarios run without any repo secret (the durable-user env stays
-  the mechanism for the staging lane).
+  `specs/developing/reference/env-vars.yaml` with where to obtain it. Signal
+  runs may continue through independent scenarios and report a missing key as
+  blocked. Strict qualification treats any blocked required row as a failed
+  qualification. No scenario embeds a credential. Disposable run-scoped
+  identities are the canonical fixture; a durable shared identity is a local
+  debugging fallback, not release evidence.
 - A red CI run must be reproducible by copying the run's lane flags into the
   local command against the same staging deploy.
 
-Migration exceptions, named per house rule: desktop vitest (443 files) is not
-yet wired into the merge gate. (The tier-2 intent suite and the tier-3/4 runner
-now exist — `tests/intent/` and `tests/release/` respectively — and the "how to
-add one" mechanics are in "Writing a new test" above.)
+Migration exceptions, named per house rule: several product suites are still
+outside the merge gate. Executed Tier 2 jobs now fail closed, but fork and
+Dependabot PRs explicitly skip the secret-bearing billing job and are
+non-qualifying until the trusted merge-queue rerun. The collected suite is not
+the complete 68-row target. Release-E2E manual runs enforce only the current
+12-row provisional Workflow manifest; scheduled local/source runs are signal,
+staging is dispatch-only, and self-host artifact checks are post-publish
+diagnostics. Complete exact-artifact aggregation and production-promotion
+consumption remain absent, so these workflows do not satisfy
+[`core-release-validation.md`](core-release-validation.md) or constitute WS10c
+evidence. The harnesses live in `tests/intent/` and `tests/release/`.
 `scripts/validate-agent-catalog.mjs` remains a hand-kept
 mirror of the Rust catalog validator until the contract-fixture pattern
 absorbs it.

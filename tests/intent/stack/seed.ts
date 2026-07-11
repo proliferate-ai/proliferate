@@ -33,9 +33,9 @@ export function webBaseUrl(): string {
   return value;
 }
 
-/** The local AnyHarness runtime's base URL, published even when the runtime
- * itself is not running (TIER2_INTENT_SKIP_RUNTIME=1 in CI) — callers must
- * probe reachability and skip gracefully, per gateway-eligibility.spec.ts. */
+/** The local AnyHarness runtime's base URL. Required CI runs prove `/v1/agents`
+ * reachable during global setup; targeted server-only profiles may publish the
+ * allocated address without starting a runtime. */
 export function anyharnessBaseUrl(): string {
   const value = process.env.TIER2_INTENT_ANYHARNESS_BASE_URL;
   if (!value) {

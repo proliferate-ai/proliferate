@@ -2,14 +2,16 @@ name: Intent Tests
 
 # Tier-2 "mocked intent" suite (specs/developing/testing/README.md §Tier 2):
 # real server + real desktop web frontend + real Postgres, Playwright driving
-# a browser. PROVISIONAL: this job is explicitly NON-blocking while the
-# harness earns trust — do NOT add it to branch-protection required checks
-# yet. Failures are signal to read, not a merge gate. The tier-2 suite joins
-# the merge gate (per the testing standard's CI mapping) once it has a
-# demonstrated flake-free record.
+# a browser. The public-dependency job runs on every event. The secret-bearing
+# billing job runs only for trusted same-repository PRs and trusted integration
+# events; fork and Dependabot PRs receive an explicit non-qualifying skip, then
+# the complete collected Tier-2 suite reruns fail-closed in the merge queue.
 
 on:
+  push:
+    branches: [main]
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -20,12 +22,9 @@ env:
 
 jobs:
   intent-tests:
-    name: intent-tests (provisional)
+    name: intent-tests
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    # Provisional posture, enforced twice: the job name says so, and the job
-    # never fails the workflow while it is provisional.
-    continue-on-error: true
+    timeout-minutes: 60
     services:
       postgres:
         image: postgres:16-alpine
@@ -62,6 +61,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target/runtime-local"
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -72,6 +75,17 @@ jobs:
       - name: Install Playwright chromium
         run: pnpm -C tests/intent exec playwright install --with-deps chromium
 
+      - name: Build required AnyHarness HTTP seam
+        env:
+          CARGO_TARGET_DIR: target/runtime-local
+        run: cargo build -p anyharness --bin anyharness
+
+      - name: Typecheck tier-2 suite
+        run: pnpm -C tests/intent exec tsc --noEmit
+
+      - name: Test fail-closed tier-2 reporter
+        run: pnpm -C tests/intent run test:reporter
+
       - name: Run tier-2 intent suite
         env:
           # The boot fixture allocates the t2intent profile itself; on the
@@ -79,7 +93,8 @@ jobs:
           USE_EXISTING_POSTGRES: "1"
           USE_EXISTING_REDIS: "1"
           LOCAL_PGHOST: 127.0.0.1
-          TIER2_INTENT_SKIP_RUNTIME: "1"
+          ANYHARNESS_DEV_RUNTIME_BIN: ${{ github.workspace }}/target/runtime-local/debug/anyharness
+          TIER2_INTENT_REQUIRE_RUNTIME: "1"
           CI: "true"
         run: pnpm -C tests/intent test
 
@@ -93,15 +108,22 @@ jobs:
 
   # Tier-2 BILLING suite (scenarios.md T2-BILL-1..9). Split into its own job
   # because it boots the stack with Stripe test mode + enforcement on, needs
-  # the Stripe CLI, and self-signs webhook deliveries. Provisional and
-  # non-blocking like the suite above. Requires a Stripe TEST secret key in the
-  # STRIPE_TEST_SECRET_KEY repo secret; with no key the suite skips itself
-  # cleanly (globalSetup detects it and marks every spec skipped, not failed).
+  # the Stripe CLI, and self-signs webhook deliveries. Requires a Stripe TEST
+  # secret key in the STRIPE_TEST_SECRET_KEY repo secret. Missing or non-test
+  # credentials fail global setup on a trusted run; billing can never qualify
+  # by skipping its collected scenarios.
   intent-billing:
-    name: intent-billing (provisional)
+    name: intent-billing
+    # Pull-request code does not receive the Stripe secret when it comes from a
+    # fork or Dependabot. Skip those untrusted PR events explicitly instead of
+    # manufacturing a deterministic red job. merge_group, main, manual, and
+    # trusted same-repository PR runs execute the real fail-closed suite.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
     services:
       postgres:
         image: postgres:16-alpine
@@ -160,7 +182,7 @@ jobs:
           LOCAL_PGHOST: 127.0.0.1
           TIER2_INTENT_SKIP_RUNTIME: "1"
           CI: "true"
-          # Stripe TEST key (sk_test_...). Absent → the suite skips itself.
+          # Stripe TEST key (sk_test_...). Absent or invalid → setup fails.
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
         run: pnpm -C tests/intent run test:billing
 

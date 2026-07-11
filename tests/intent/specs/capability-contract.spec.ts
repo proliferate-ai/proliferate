@@ -28,6 +28,10 @@
 import { expect, test } from "@playwright/test";
 import { bootStack, type BootedStack } from "../stack/boot.ts";
 
+const PROFILE_PREFIX = process.env.TIER2_INTENT_PROFILE ?? "t2intent";
+const SELF_MANAGED_PROFILE = `${PROFILE_PREFIX}-cap-self`;
+const HOSTED_PROFILE = `${PROFILE_PREFIX}-cap-hosted`;
+
 interface MetaResponse {
   serverVersion: string;
   capabilities: {
@@ -53,8 +57,11 @@ test.describe("T2-SH-5: /meta capability contract — self-managed, every add-on
   let stack: BootedStack;
 
   test.beforeAll(async () => {
+    // Cold migrations for a nested profile are setup work, not the latency
+    // budget of the /meta assertion below.
+    test.setTimeout(600_000);
     stack = await bootStack({
-      profile: "t2capself",
+      profile: SELF_MANAGED_PROFILE,
       skipFrontend: true,
       extraServerEnv: {
         TELEMETRY_MODE: "self_managed",
@@ -99,8 +106,9 @@ test.describe("T2-SH-5: /meta capability contract — hosted mode advertises ful
   let stack: BootedStack;
 
   test.beforeAll(async () => {
+    test.setTimeout(600_000);
     stack = await bootStack({
-      profile: "t2caphosted",
+      profile: HOSTED_PROFILE,
       skipFrontend: true,
       extraServerEnv: {
         TELEMETRY_MODE: "hosted_product",

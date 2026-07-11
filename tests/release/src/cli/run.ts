@@ -196,7 +196,8 @@ async function main(): Promise<void> {
   }
 
   // WS10a release gate: in `release` policy the required-scenario manifest
-  // gates the run and a signed summary artifact is emitted. In `signal` policy
+  // gates missing work, every emitted registered result must also be unique
+  // and green, and a signed summary artifact is emitted. In `signal` policy
   // this is skipped entirely so behavior is unchanged from today.
   if (args.policy === "release" && !args.dryRun) {
     await runReleaseGate(args, results);

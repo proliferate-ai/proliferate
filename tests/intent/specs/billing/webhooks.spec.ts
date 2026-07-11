@@ -12,7 +12,7 @@
 
 import { expect } from "@playwright/test";
 
-import { test, adminContext, skipIfNoStripe } from "./_fixtures.ts";
+import { test, adminContext } from "./_fixtures.ts";
 import * as b from "../../stack/billing.ts";
 
 
@@ -35,8 +35,6 @@ async function subscribedPersonalSubject() {
 }
 
 test.describe("T2-BILL-7: webhook robustness", () => {
-  skipIfNoStripe(test);
-
   test("exact duplicate delivery of invoice.paid is idempotent — no double grant", async () => {
     const { subject, fullSub, invoice } = await subscribedPersonalSubject();
     await b.deliverEvent({ type: "customer.subscription.created", object: fullSub });
@@ -90,8 +88,6 @@ test.describe("T2-BILL-7: webhook robustness", () => {
 });
 
 test.describe("T2-BILL-8: subscription edge states", () => {
-  skipIfNoStripe(test);
-
   test("payment_failed applies a hold that blocks; invoice.paid clears it", async () => {
     const { token, subject, customer, fullSub, invoice } = await subscribedPersonalSubject();
     await b.deliverEvent({ type: "customer.subscription.created", object: fullSub });

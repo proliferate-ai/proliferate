@@ -3,25 +3,15 @@
 // three named negatives.
 //
 // ── Headline finding, read before touching this file ──
-// The desktop-web login screen's SSO button can only ever discover/start a
-// *deployment*-scoped (env-var) SSO connection. `useSsoDiscovery`
-// (apps/desktop/src/hooks/access/cloud/auth/use-sso-discovery.ts) is called
-// with no email; `useSsoSignIn`/`signInWithSso` never supply organizationId
-// or connectionId either. Server-side, `_connection_for_start`'s email-only
-// branch (server/proliferate/auth/sso/service.py) resolves
-// `deployment_sso_connection()` regardless of the email's domain — there is
-// no email-domain-to-organization lookup at all. So an org admin can create
-// and enable an `sso_connection` (this file proves the whole round trip
-// works once you know the connection id) but there is currently **no UI
-// entry point that ever reaches it**. This file documents that gap with a
-// direct assertion (see "BUG:" below) and drives the rest of the scenario via
-// the connection id directly — the only way the org-scope contract is
-// reachable today, and the same mechanism a future "your org's login link"
-// or email-first step would use.
+// Email-only discovery deliberately resolves deployment SSO only. Product-auth
+// forbids email-domain-to-organization lookup as an enumeration defense; org
+// SSO cold login uses the explicit slug/org-id entry points covered by
+// sso-entry-points.spec.ts. This file drives the OIDC connection-id contract
+// directly after admin configuration.
 //
 // Given that, this suite drives discovery/start/callback over HTTP directly
 // (real server, real mock IdP, real DB) and only uses a real browser page for
-// the one check that's actually about the browser: does the app's own
+// the one check that's about the browser: does the app's own
 // session-bootstrap code accept a token minted through this flow. Everything
 // else — the OIDC handshake, JIT provisioning, membership, the negatives — is
 // the server's contract, asserted directly against it.
@@ -137,12 +127,10 @@ test.describe("T2-AUTH-3: SSO OIDC round trip (mock IdP)", () => {
     expect(body.organizationId).toBe(organizationId);
   });
 
-  test("BUG: discovery by email alone never resolves an organization-scoped connection, even on an allowed domain", async () => {
-    // This is the exact call the login screen makes (see file header). Even
-    // though "allowed.example.com" is the happy connection's allowed domain
-    // and that connection is enabled, email-only discovery has no path to an
-    // org-scoped connection — it only ever resolves the deployment-scoped
-    // (env-var) one, which this profile never configures.
+  test("security: email-only discovery never enumerates an organization-scoped connection", async () => {
+    // Even though the connection allows this domain, explicit slug/org-id or
+    // connection context is required. This uniform response prevents domain
+    // probing from revealing which organizations configured SSO.
     const { status, body } = await discoverSso({ email: "newuser@allowed.example.com" });
     expect(status).toBe(200);
     expect(body.enabled).toBe(false);

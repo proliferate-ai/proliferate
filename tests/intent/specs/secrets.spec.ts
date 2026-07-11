@@ -103,11 +103,10 @@ test.describe("T2-SEC-1: secrets CRUD, all three scopes", () => {
     expect(after.status).toBe(200);
     expect(after.body.version).toBe(versionBefore + 1);
     expect(after.body.envVars.some((entry) => entry.name === PERSONAL_ENV_NAME)).toBe(true);
-    // materialization has no runtime to converge against under
-    // TIER2_INTENT_SKIP_RUNTIME — "pending" (the default whenever the secret
-    // set has desired state the recorded materialization hasn't caught up
-    // to, per _materialization_payload) is the only status this spec can
-    // assert without a real cloud sandbox.
+    // Tier 2 has no real cloud target on which to materialize this server-side
+    // secret. "pending" (the default whenever desired state is ahead of the
+    // recorded materialization, per _materialization_payload) is therefore the
+    // only status this spec can assert without a real cloud sandbox.
     expect(after.body.materialization?.status).toBe("pending");
   });
 

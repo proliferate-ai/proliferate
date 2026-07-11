@@ -140,6 +140,42 @@ test("release mode reports every bad row at once with correct counters", () => {
   });
 });
 
+test("release mode rejects a non-green emitted result outside the provisional manifest", () => {
+  const results: ResultRow[] = [
+    ...allGreen(),
+    { id: "T3-BILL-1", lane: "cloud", status: "blocked" },
+  ];
+  const evalResult = evaluate(MANIFEST, results, "release");
+  assert.equal(evalResult.ok, false);
+  assert.equal(evalResult.exitCode, 1);
+  assert.equal(evalResult.counters.blocked, 1);
+  assert.match(evalResult.violations.join("\n"), /T3-BILL-1\/cloud: blocked/);
+});
+
+test("release mode rejects duplicate emitted results outside the provisional manifest", () => {
+  const results: ResultRow[] = [
+    ...allGreen(),
+    { id: "T3-CHAT-1", lane: "cloud", status: "green" },
+    { id: "T3-CHAT-1", lane: "cloud", status: "green" },
+  ];
+  const evalResult = evaluate(MANIFEST, results, "release");
+  assert.equal(evalResult.ok, false);
+  assert.equal(evalResult.counters.duplicate, 1);
+  assert.match(evalResult.violations.join("\n"), /T3-CHAT-1\/cloud: duplicate/);
+});
+
+test("release mode accepts an additional unique green registered result", () => {
+  const results: ResultRow[] = [
+    ...allGreen(),
+    { id: "T3-PROV-1", lane: "cloud", status: "green" },
+  ];
+  const evalResult = evaluate(MANIFEST, results, "release");
+  assert.equal(evalResult.ok, true);
+  assert.equal(evalResult.exitCode, 0);
+  assert.deepEqual(evalResult.violations, []);
+  assert.equal(evalResult.rows.at(-1)?.verdict, "green");
+});
+
 // --- signal mode: permissive ------------------------------------------------
 
 test("signal mode preserves current permissive behavior (blocked/expected-fail/missing pass)", () => {
