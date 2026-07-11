@@ -1,4 +1,4 @@
-"""Poll-trigger poller (spec 4.2/4.3).
+"""Parked poll-trigger machinery (spec 4.2/4.3).
 
 Proliferate GETs a conforming endpoint on an interval and spawns one run per new
 item, idempotently. The three-layer at-least-once story (spec 4.4):
@@ -9,10 +9,12 @@ item, idempotently. The three-layer at-least-once story (spec 4.4):
           ↓
     issues-service claim() CAS     (service side: at-most-one CLAIM per issue)
 
-The poller owns the middle layer. It runs alongside the schedule beat (same
-worker process, spec 4.1): the tick calls ``run_poll_pass`` after firing schedule
-triggers. Everything for one trigger happens in ONE transaction — the item
-seen-set rows and the advanced cursor commit together, so a crash anywhere
+WF-ID retains the identity-aware implementation for the later atomic cutover,
+but both tick entry and the per-trigger path reject before network or ledger
+writes. The dormant implementation would otherwise own the middle layer and run
+alongside the schedule beat (same worker process, spec 4.1). Everything for one
+trigger happens in one transaction: item seen-set rows and the advanced cursor
+commit together, so a crash anywhere
 re-polls the old cursor and the seen-set absorbs the replay. The cursor never
 advances past items that weren't recorded.
 """
@@ -37,6 +39,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_POLL_HTTP_TIMEOUT_SECONDS,
     WORKFLOW_POLL_MAX_RESPONSE_BYTES,
     WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
+    WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TRIGGER_ITEM_STATUS_ERROR,
     WORKFLOW_TRIGGER_ITEM_STATUS_INVALID,
     WORKFLOW_TRIGGER_ITEM_STATUS_SPAWNED,
@@ -48,7 +51,7 @@ from proliferate.db.store.cloud_workflow_triggers import DuePollTrigger
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import compiler, triggers
+from proliferate.server.cloud.workflows import compiler, trigger_activation, triggers
 from proliferate.server.cloud.workflows.domain.poll_contract import PollPage, validate_item_data
 from proliferate.utils.crypto import decrypt_text
 
@@ -194,6 +197,10 @@ async def _poll_one_trigger(
             user_id=trigger.workflow_owner_user_id,
             worker_id="workflow_poller",
         ):
+            # WF-POLL-NET/OUTBOX/POLL-OCC and WF-TRIGGER-CUTOVER own unattended
+            # activation. Park both targets before endpoint I/O, seen-set
+            # inserts, cursor writes, or StartRun.
+            trigger_activation.reject_unattended_activation()
             if trigger.workflow_archived:
                 # Record the poll (advance last_poll_at, keep the cursor) so a
                 # disabled/archived workflow's trigger stops being re-scanned every
@@ -281,7 +288,11 @@ async def _poll_one_trigger(
                             inputs=inputs,
                             target_mode=trigger.target_mode,
                             trigger_kind=WORKFLOW_TRIGGER_KIND_POLL,
-                            target_workspace_id=trigger.target_workspace_id,
+                            target_workspace_id=(
+                                trigger.local_workspace_id
+                                if trigger.target_mode == WORKFLOW_TARGET_MODE_LOCAL
+                                else trigger.target_workspace_id
+                            ),
                             trigger_id=trigger_id,
                         )
                 except CloudApiError as exc:
@@ -318,9 +329,10 @@ async def _poll_one_trigger(
 async def run_poll_pass(
     session_factory: SchedulerSessionFactory, *, now: datetime, batch_size: int
 ) -> int:
-    """Poll every due poll trigger, each in its own transaction. Returns the
-    number of runs spawned this pass. One trigger blowing up must not stall the
-    rest of the beat (mirrors the schedule scheduler's per-trigger isolation)."""
+    """Feature-off entry; due-row discovery is forbidden in WF-ID."""
+
+    if not trigger_activation.unattended_activation_enabled():
+        return 0
 
     async with session_factory() as db:
         due_ids = await trigger_store.list_due_poll_trigger_ids(db, now=now, limit=batch_size)
@@ -353,6 +365,8 @@ async def run_workflow_poller_tick(
     # D-003: the launch flag gates the background poll plane too (see the
     # scheduler tick's matching guard).
     if not settings.workflows_enabled:
+        return 0
+    if not trigger_activation.unattended_activation_enabled():
         return 0
     now = utcnow()
     return await run_poll_pass(session_factory, now=now, batch_size=batch_size)

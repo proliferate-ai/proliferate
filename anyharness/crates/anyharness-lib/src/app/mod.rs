@@ -8,6 +8,10 @@ use crate::adapters::git::WorkspaceFileSearchCache;
 use crate::adapters::hosting::PrStatusCache;
 use crate::adapters::processes::ProcessService;
 use crate::api::auth::AuthManager;
+use crate::domains::activity::feeds::FeedService;
+use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
+use crate::domains::activity::service::ActivityService;
+use crate::domains::activity::store::ActivityStore;
 use crate::domains::agents::catalog::gateway_probe::GatewayProbeStore;
 use crate::domains::agents::catalog::gateway_resolver::GatewayModelResolver;
 use crate::domains::agents::catalog::service::AgentCatalogService;
@@ -15,10 +19,6 @@ use crate::domains::agents::catalog::sync::CatalogSyncService;
 use crate::domains::agents::installer::reconcile::execution::AgentReconcileService;
 use crate::domains::agents::installer::seed::AgentSeedStore;
 use crate::domains::agents::runtime::AgentRuntime;
-use crate::domains::activity::feeds::FeedService;
-use crate::domains::activity::runtime::{ActivityRuntime, ActivitySessionHooks};
-use crate::domains::activity::service::ActivityService;
-use crate::domains::activity::store::ActivityStore;
 use crate::domains::artifacts::protection::ArtifactProtectionService;
 use crate::domains::artifacts::runtime::ArtifactRuntime;
 use crate::domains::cowork::artifacts::CoworkArtifactRuntime;
@@ -413,8 +413,8 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
-        // Workflow run engine (W3): the durable service + the live run manager
-        // (its own actors, spawned on delivery and on startup-resume).
+        // Workflow run service plus the WF-ID preflight/control manager. Actor
+        // activation remains hard-disabled until a later final-envelope cutover.
         let workflow_service = Arc::new(WorkflowService::new(WorkflowStore::new(db.clone())));
         let workflow_manager = WorkflowRunManager::new(Arc::new(WorkflowExecDeps {
             session_runtime: session_runtime.clone(),
@@ -523,7 +523,7 @@ impl AppState {
         // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
         #[cfg(not(test))]
         agent_runtime.clone().spawn_startup_pass();
-        // Crash-resume: reload non-terminal workflow runs and respawn actors.
+        // Audit historical non-terminal rows without resuming actors.
         #[cfg(not(test))]
         workflow_manager.clone().spawn_startup_pass();
         Ok(Self {

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
@@ -90,6 +90,7 @@ class RuntimeWorkerValue:
     cloud_sandbox_id: UUID | None
     desktop_install_id: str | None
     status: str
+    generation: int
     worker_version: str | None
     anyharness_version: str | None
     hostname: str | None
@@ -162,6 +163,7 @@ def _worker_value(row: CloudRuntimeWorker) -> RuntimeWorkerValue:
         cloud_sandbox_id=row.cloud_sandbox_id,
         desktop_install_id=row.desktop_install_id,
         status=row.status,
+        generation=row.generation,
         worker_version=row.worker_version,
         anyharness_version=row.anyharness_version,
         hostname=row.hostname,
@@ -254,6 +256,26 @@ async def revoke_active_workers_for_identity(
     await _revoke_workers_and_gateway_tokens(db, stmt)
 
 
+async def acquire_worker_identity_lock(
+    db: AsyncSession,
+    *,
+    cloud_sandbox_id: UUID | None,
+    desktop_install_id: str | None,
+) -> None:
+    """Serialize revoke + monotonic generation allocation for one identity."""
+
+    if cloud_sandbox_id is not None:
+        identity = f"cloud:{cloud_sandbox_id}"
+    elif desktop_install_id:
+        identity = f"desktop:{desktop_install_id}"
+    else:
+        raise ValueError("worker identity is incomplete")
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:identity, 0))"),
+        {"identity": f"runtime-worker:{identity}"},
+    )
+
+
 async def revoke_active_workers_for_desktop_install(
     db: AsyncSession,
     *,
@@ -323,6 +345,20 @@ async def create_worker(
     machine_fingerprint: str | None = None,
 ) -> RuntimeWorkerValue:
     now = utcnow()
+    identity_filters = [CloudRuntimeWorker.runtime_kind == enrollment.runtime_kind]
+    if enrollment.cloud_sandbox_id is not None:
+        identity_filters.append(CloudRuntimeWorker.cloud_sandbox_id == enrollment.cloud_sandbox_id)
+    else:
+        identity_filters.append(
+            CloudRuntimeWorker.desktop_install_id == enrollment.desktop_install_id
+        )
+    generation = (
+        await db.scalar(
+            select(func.coalesce(func.max(CloudRuntimeWorker.generation), 0)).where(
+                *identity_filters
+            )
+        )
+    ) + 1
     row = CloudRuntimeWorker(
         owner_user_id=enrollment.owner_user_id,
         organization_id=enrollment.organization_id,
@@ -331,6 +367,7 @@ async def create_worker(
         desktop_install_id=enrollment.desktop_install_id,
         token_hash=token_hash,
         status="online",
+        generation=generation,
         worker_version=worker_version,
         anyharness_version=anyharness_version,
         hostname=hostname,
@@ -374,6 +411,22 @@ async def get_worker_by_token_hash(
             )
         )
     ).scalar_one_or_none()
+    return _worker_value(row) if row is not None else None
+
+
+async def get_active_worker_by_id(
+    db: AsyncSession,
+    *,
+    worker_id: UUID,
+    lock_row: bool = False,
+) -> RuntimeWorkerValue | None:
+    statement = select(CloudRuntimeWorker).where(
+        CloudRuntimeWorker.id == worker_id,
+        CloudRuntimeWorker.status != "revoked",
+    )
+    if lock_row:
+        statement = statement.with_for_update()
+    row = await db.scalar(statement)
     return _worker_value(row) if row is not None else None
 
 

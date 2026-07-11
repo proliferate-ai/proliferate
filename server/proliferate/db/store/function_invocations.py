@@ -16,7 +16,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.workflows import FunctionInvocationDefinition
+from proliferate.db.models.cloud.workflow_gateway_models import FunctionInvocationDefinition
 from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 

@@ -170,6 +170,7 @@ async def test_seed_workflow_is_visible_runnable_but_not_editable(
         inputs={"command": "pytest", "slack_channel_id": "C1"},
         target_mode="local",
         trigger_kind=WORKFLOW_TRIGGER_MANUAL,
+        target_workspace_id=uuid.uuid4(),
     )
     assert run.executor_user_id == user.id
 
@@ -793,9 +794,9 @@ async def test_functions_namespace_grantable_with_live_invocation(
         inputs={"issue": "X"},
         target_mode="local",
     )
-    # WS2b: the gateway block lives in the private envelope, not the logical plan.
-    gateway = (run.private_envelope_json or {}).get("gateway") or {}
-    assert gateway.get("integrations") == ["functions"]
+    # Readiness accepts the namespace; WF-ID mints no credential before binding.
+    assert run.status == "pending_delivery"
+    assert run.private_envelope_json is None
 
 
 async def test_functions_namespace_rejected_without_invocations(

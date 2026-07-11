@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, NoReturn
+from urllib.parse import quote
 
 import httpx
 
@@ -79,8 +81,17 @@ class GitHubRepoEmpty(GitHubIntegrationError):
     pass
 
 
+class GitHubBranchNotFound(GitHubIntegrationError):
+    pass
+
+
 class GitHubInvalidCursor(GitHubIntegrationError):
     pass
+
+
+_GITHUB_REF_RESPONSE_MAX_BYTES = 64 * 1024
+_GITHUB_REF_READ_CHUNK_BYTES = 8 * 1024
+_GITHUB_REF_WALL_TIMEOUT_SECONDS = 12.0
 
 
 def _github_headers(access_token: str) -> dict[str, str]:
@@ -451,6 +462,99 @@ async def get_github_repo_branches(
         archived=repo_payload.get("archived") is True,
         disabled=repo_payload.get("disabled") is True,
     )
+
+
+async def get_github_branch_head(
+    access_token: str,
+    git_owner: str,
+    git_repo_name: str,
+    branch: str,
+) -> str:
+    """Resolve one exact branch head over a fixed, proxy-free GitHub boundary."""
+
+    values = (git_owner, git_repo_name, branch)
+    if not all(
+        value
+        and value == value.strip()
+        and len(value) <= 255
+        and not any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+        for value in values
+    ):
+        raise GitHubIntegrationError("Could not resolve the selected GitHub branch.")
+    expected_ref = f"refs/heads/{branch}"
+    path = "/repos/{}/{}/git/ref/heads/{}".format(
+        quote(git_owner, safe=""),
+        quote(git_repo_name, safe=""),
+        quote(branch, safe=""),
+    )
+    headers = {**_github_headers(access_token), "Accept-Encoding": "identity"}
+    body = bytearray()
+    try:
+        async with asyncio.timeout(_GITHUB_REF_WALL_TIMEOUT_SECONDS):
+            async with httpx.AsyncClient(
+                base_url="https://api.github.com",
+                timeout=httpx.Timeout(10.0, connect=5.0),
+                trust_env=False,
+                follow_redirects=False,
+            ) as client:
+                async with client.stream("GET", path, headers=headers) as response:
+                    if response.status_code == 404:
+                        raise GitHubBranchNotFound(
+                            "The selected GitHub branch could not be resolved."
+                        )
+                    if response.status_code < 200 or response.status_code >= 300:
+                        raise GitHubIntegrationError(
+                            "Could not resolve the selected GitHub branch."
+                        )
+                    content_length = response.headers.get("content-length")
+                    if content_length is not None:
+                        try:
+                            declared_length = int(content_length)
+                        except ValueError:
+                            raise GitHubIntegrationError(
+                                "GitHub returned an invalid branch response."
+                            ) from None
+                        if (
+                            declared_length < 0
+                            or declared_length > _GITHUB_REF_RESPONSE_MAX_BYTES
+                        ):
+                            raise GitHubIntegrationError(
+                                "GitHub returned an oversized branch response."
+                            )
+                    async for chunk in response.aiter_raw(
+                        chunk_size=_GITHUB_REF_READ_CHUNK_BYTES
+                    ):
+                        remaining = _GITHUB_REF_RESPONSE_MAX_BYTES - len(body)
+                        if len(chunk) > remaining:
+                            raise GitHubIntegrationError(
+                                "GitHub returned an oversized branch response."
+                            )
+                        body.extend(chunk)
+    except GitHubIntegrationError:
+        raise
+    except (httpx.HTTPError, TimeoutError):
+        raise GitHubIntegrationError(
+            "Could not resolve the selected GitHub branch."
+        ) from None
+
+    try:
+        payload = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise GitHubIntegrationError(
+            "GitHub returned an invalid branch response."
+        ) from None
+    response_ref = payload.get("ref") if isinstance(payload, dict) else None
+    target = payload.get("object") if isinstance(payload, dict) else None
+    object_type = target.get("type") if isinstance(target, dict) else None
+    sha = target.get("sha") if isinstance(target, dict) else None
+    if (
+        response_ref != expected_ref
+        or object_type != "commit"
+        or not isinstance(sha, str)
+        or re.fullmatch(r"[0-9a-fA-F]{40}", sha) is None
+    ):
+        raise GitHubIntegrationError("GitHub returned an invalid branch response.")
+    return sha.lower()
 
 
 # Public alias used by cloud repos service.

@@ -1,14 +1,9 @@
-"""Run-report resource-access deps for the workflow gateway plane (D18/L16, E7).
+"""Fail-closed legacy run-report credential lookups during WF-ID cutover.
 
-Two run-facing HTTP surfaces authenticate with a run-scoped bearer credential
-instead of route-level org authorization: the per-run gateway token (anyharness
-reporting on its own behalf, or the completion ping) and, for ``/status`` and
-``/delivered``, a fallback to the caller's own user session (the desktop
-local-lane relay). Both deps below resolve the credential against the route's
-``run_id`` path param and return an actor the service layer treats uniformly
-(:class:`RunTokenActor` or the reporting ``User``) — the same
-resource-lookup-plus-actor-composition shape ``server/<domain>/access.py``
-deps use elsewhere, just keyed off a bearer credential instead of org standing.
+The old routes remain mounted only to return typed feature-off errors and to
+reject unknown/mismatched credentials safely. WF-ID parks every historical
+run-token row and has no mint path. These dependencies therefore provide no
+activation edge; the future final-envelope contract must replace them.
 """
 
 from __future__ import annotations
@@ -23,8 +18,8 @@ from proliferate.auth.dependencies import optional_current_active_user
 from proliferate.config import settings
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
-from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import runtime_workers as runtime_workers_store
+from proliferate.db.store.workflow_ledger import legacy_tokens as legacy_token_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.utils.time import utcnow
 
@@ -47,9 +42,7 @@ def require_workflows_enabled() -> None:
 
 @dataclass(frozen=True)
 class RunTokenActor:
-    """Minimal actor for a runtime-authenticated run report (D18 / L16). The per-run
-    gateway token proves the run, so the owner id is all downstream owner-scoped
-    checks need — the executor is always the workflow owner in v1."""
+    """Legacy actor shape used only before the feature-off service gate."""
 
     id: UUID
 
@@ -68,9 +61,7 @@ async def authorize_run_report(
     db: AsyncSession = Depends(get_async_session),
     user: User | None = Depends(optional_current_active_user),
 ) -> RunTokenActor | User:
-    """D18 (E7): accept EITHER the per-run gateway token (anyharness reporting on
-    its own behalf) OR a user session (the desktop local-lane relay) as the
-    credential for ``/status`` and ``/delivered``.
+    """Resolve a still-valid legacy token or user only to reach the feature-off gate.
 
     A valid run token that belongs to a *different* run is a spoofing attempt →
     403 (mirrors ``/ping``). A bearer that is not a run token falls through to
@@ -79,7 +70,7 @@ async def authorize_run_report(
 
     token = bearer_token_from_request(request)
     if token:
-        grant = await store.get_active_run_gateway_token_by_hash(
+        grant = await legacy_token_store.get_active_run_gateway_token_by_hash(
             db,
             token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
             now=utcnow(),
@@ -106,10 +97,11 @@ async def authorize_run_ping(
     request: Request,
     db: AsyncSession = Depends(get_async_session),
 ) -> RunTokenActor:
-    """Completion ping (L16 / §3.7) authentication. NO user-session auth — the
-    per-run gateway token IS the auth. Requires token<->run_id match (so run A's
-    token can't ping run B). Duplicate/stale/late pings are safe by construction,
-    so the endpoint body only needs a valid, matching token to proceed.
+    """Fail closed on legacy completion-ping credentials before the parked gate.
+
+    Requires token<->run_id match so a historical run A credential cannot reach
+    run B. WF-ID creates no such credentials and the migration expires all old
+    rows.
     """
 
     token = bearer_token_from_request(request)
@@ -119,7 +111,7 @@ async def authorize_run_ping(
             "Missing or malformed run ping token.",
             status_code=401,
         )
-    grant = await store.get_active_run_gateway_token_by_hash(
+    grant = await legacy_token_store.get_active_run_gateway_token_by_hash(
         db,
         token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
         now=utcnow(),

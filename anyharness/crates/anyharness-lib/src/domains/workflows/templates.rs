@@ -52,11 +52,7 @@ pub fn resolve_string(template: &str, outputs: &StepOutputs) -> String {
 /// is the first `{`). Returns the replacement text and the index just past the
 /// closing `}}`, or `None` if this is not a resolvable `steps[..].output..`
 /// placeholder (leaving the caller to emit the text verbatim).
-fn try_placeholder(
-    chars: &[char],
-    start: usize,
-    outputs: &StepOutputs,
-) -> Option<(String, usize)> {
+fn try_placeholder(chars: &[char], start: usize, outputs: &StepOutputs) -> Option<(String, usize)> {
     // Find the closing `}}`.
     let mut j = start + 2;
     while j + 1 < chars.len() {
@@ -125,6 +121,7 @@ pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
         }),
         StepKind::AgentEmit(emit) => StepKind::AgentEmit(AgentEmitStep {
             prompt: resolve_string(&emit.prompt, outputs),
+            name: emit.name.clone(),
             max_attempts: emit.max_attempts,
             output_schema: emit.output_schema.clone(),
         }),
@@ -152,6 +149,7 @@ pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
     };
     PlanStep {
         key: step.key.clone(),
+        key_v2: step.key_v2.clone(),
         slot: step.slot.clone(),
         label: step.label.clone(),
         on_fail: step.on_fail,

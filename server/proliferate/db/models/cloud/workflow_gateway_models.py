@@ -96,9 +96,7 @@ class FunctionInvocationDefinition(Base):
     # NOT on a secret-value-only rotation behind the same binding identity. A
     # workflow run freezes the exact ``(id, semantic_revision)`` it resolved, so a
     # later edit produces a new revision and cannot mutate a running run's meaning.
-    semantic_revision: Mapped[int] = mapped_column(
-        Integer, default=1, server_default=text("1")
-    )
+    semantic_revision: Mapped[int] = mapped_column(Integer, default=1, server_default=text("1"))
     # §2 default access modes: WORKFLOW-ONLY until explicitly enabled for chat.
     chat_scope_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")
@@ -113,22 +111,19 @@ class FunctionInvocationDefinition(Base):
 
 
 class WorkflowRunGatewayToken(Base):
-    """The per-run integration-gateway credential (PR E / OPEN-3(a), L16).
+    """Tombstoned legacy per-run integration-gateway credential.
 
-    Every run mints exactly one of these at StartRun — even a run whose plan needs
-    no integration tools (``scope_json`` is then an empty list, which is legal and
-    NEVER conflated with an unscoped worker token). Its plaintext rides inside the
-    run's ``resolved_plan_json.gateway`` block to the sandbox; only the hash is
-    stored (hashed exactly like the worker token, under its own HMAC domain).
+    WF-ID revokes and parks every historical row, old-writer fences prevent
+    revival, and current StartRun/binding code has no mint path. The table remains
+    temporarily so the migration can inventory/revoke legacy credentials and old
+    authentication lookups fail closed during the staged cutover.
 
     The token is the run-report credential too: the runtime pings
     ``/runs/{run_id}/ping`` with it. Identity is proven by the credential, so a
     request's run attribution is not a claim — ``workflow_run_id`` IS the run.
 
-    ``scope_json`` is the frozen function grant (the definition's ``functions[]``,
-    resolved), narrowed at delivery to the intersection with the delivering
-    worker's allowlist (L25 layer 2 ⊆ layer 1). ``status`` walks
-    active -> expired (terminal run status) | revoked.
+    ``scope_json`` is legacy evidence only. ``status`` is terminally expired or
+    revoked after cutover; it is never a source for a new logical plan.
     """
 
     __tablename__ = "cloud_workflow_run_gateway_token"
@@ -137,9 +132,18 @@ class WorkflowRunGatewayToken(Base):
             "status IN ('active', 'expired', 'revoked')",
             name="ck_cloud_workflow_run_gateway_token_status",
         ),
+        CheckConstraint(
+            "identity_schema_version = 1 AND (NOT identity_cutover_parked "
+            "OR status IN ('expired', 'revoked'))",
+            name="ck_cloud_workflow_run_gateway_token_identity_writer_fence",
+        ),
         Index("ix_cloud_workflow_run_gateway_token_run_id", "workflow_run_id"),
     )
 
+    # No server defaults: a pre-cutover binary omits these columns and its insert
+    # fails. New code stamps v1/unparked explicitly through SQLAlchemy defaults.
+    identity_schema_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    identity_cutover_parked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     workflow_run_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("workflow_run.id", ondelete="CASCADE"),

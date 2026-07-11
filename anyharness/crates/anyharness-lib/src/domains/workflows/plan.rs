@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
+const JSON_SAFE_INTEGER_MAX: u64 = 9_007_199_254_740_991;
+
 #[derive(Debug, thiserror::Error)]
 pub enum PlanError {
     #[error("resolved plan payload is not valid JSON: {0}")]
@@ -24,13 +26,18 @@ pub enum PlanError {
 /// `steps` list; each step carries its structured `key` and its `slot` (an opaque
 /// session-affinity string). Per-slot session provisioning is described by
 /// `sessions` (replacing the old single `setup`). The runtime never learns the
-/// words "agents", "integrations", or a named ref — those were resolved away.
+/// words "agents" or a named ref — those were resolved away. Public per-slot
+/// integration namespaces remain as authorization intent; gateway endpoints and
+/// credentials never enter this logical plan.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResolvedPlan {
     pub run_id: String,
     /// Document-format version; strict parsers may reject unknown versions.
-    #[serde(default)]
+    #[serde(default, rename = "planVersion")]
     pub plan_version: Option<i64>,
+    #[serde(default, rename = "planHash")]
+    pub plan_hash: Option<String>,
     #[serde(default)]
     pub workflow_id: Option<String>,
     #[serde(default)]
@@ -41,6 +48,8 @@ pub struct ResolvedPlan {
     pub trigger_kind: Option<String>,
     #[serde(default)]
     pub target_mode: Option<String>,
+    #[serde(default, rename = "sourceIntent")]
+    pub source_intent: Option<SourceIntent>,
     /// Run isolation (wave 2b): whether the run's sessions execute directly in
     /// the pinned workspace's checkout (`workspace`, the legacy behavior) or in a
     /// fresh git worktree minted per run inside that checkout (`worktree`).
@@ -54,40 +63,21 @@ pub struct ResolvedPlan {
     #[serde(default)]
     pub sessions: BTreeMap<String, SessionSpec>,
     /// Server-resolved input values, kept verbatim for the run record.
-    #[serde(default, alias = "args")]
-    pub inputs: serde_json::Value,
-    /// Per-run integration-gateway block (§6.4/OPEN-3(a), §3.7/L16). Present
-    /// whenever the delivery minted a per-run gateway token — which, under L16,
-    /// is every run (an empty `integrations` list is legal). Absent for legacy
-    /// plans predating PR E. Carries the MCP URL + credential the executor
-    /// injects into workflow-owned sessions, and the completion-ping endpoint
-    /// the actor nudges after each step transition.
     #[serde(default)]
-    pub gateway: Option<PlanGateway>,
+    pub inputs: serde_json::Value,
     pub steps: Vec<PlanStep>,
 }
 
-/// The per-run gateway block the server mints at StartRun and threads through
-/// `resolved_plan_json.gateway`. `authorization` is the full `Authorization`
-/// header value (e.g. `"Bearer <per-run-token>"`), used verbatim — matching the
-/// worker dotfile convention ([`crate::integrations::integration_gateway`]) and
-/// the gateway's own `Bearer <token>` parsing.
 #[derive(Debug, Clone, Deserialize)]
-pub struct PlanGateway {
-    /// The integration-gateway MCP endpoint URL (`SessionMcpServer::Http`).
-    pub url: String,
-    /// The full `Authorization` header value (verbatim), used for both the MCP
-    /// server header and the completion ping.
-    pub authorization: String,
-    /// The completion-ping endpoint the actor `POST`s after each transition (L16).
-    pub ping_url: String,
-    /// The namespace-level scope this run's token grants — the definition's
-    /// resolved `integrations[]` (E3: integration namespaces, no tool lists; the
-    /// gateway treats a namespace grant as "all tools of that provider"). Empty
-    /// is legal (the token exists only to authorize the completion ping). The
-    /// runtime only reads its emptiness (L22 local-lane fail-fast).
+#[serde(deny_unknown_fields)]
+pub struct SourceIntent {
+    pub kind: String,
     #[serde(default)]
-    pub integrations: Vec<String>,
+    pub repo: Option<String>,
+    #[serde(default, rename = "ref")]
+    pub ref_: Option<String>,
+    #[serde(default, rename = "resolvedCommit")]
+    pub resolved_commit: Option<String>,
 }
 
 /// Run isolation posture (wave 2b, mental-model §9/§11). `snake_case` on the
@@ -107,6 +97,67 @@ pub enum Isolation {
 }
 
 impl ResolvedPlan {
+    fn validate_integer_domains(&self) -> Result<(), PlanError> {
+        if self
+            .version_n
+            .is_some_and(|value| value <= 0 || value > i64::from(i32::MAX))
+        {
+            return Err(PlanError::Malformed(
+                "version_n is outside the positive PostgreSQL INTEGER domain".to_string(),
+            ));
+        }
+        for step in &self.steps {
+            match (step.on_fail.kind, step.on_fail.n) {
+                (OnFailKind::Retry, count) if count > 0 => {}
+                (OnFailKind::Stop | OnFailKind::Continue, 0) => {}
+                _ => {
+                    return Err(PlanError::Malformed(
+                        "on_fail.n is required only as a positive u32 retry count".to_string(),
+                    ));
+                }
+            }
+            match &step.kind {
+                StepKind::AgentPrompt(prompt) => {
+                    if let Some(goal) = &prompt.goal {
+                        if goal.max_turns == 0
+                            || goal.max_wall_secs == 0
+                            || goal.max_wall_secs > JSON_SAFE_INTEGER_MAX
+                            || goal.token_budget.is_some_and(|value| {
+                                value <= 0 || value as u64 > JSON_SAFE_INTEGER_MAX
+                            })
+                        {
+                            return Err(PlanError::Malformed(
+                                "goal integer fields are outside their frozen domains".to_string(),
+                            ));
+                        }
+                    }
+                }
+                StepKind::AgentEmit(emit) if emit.max_attempts == 0 => {
+                    return Err(PlanError::Malformed(
+                        "agent.emit max_attempts must be a positive u32".to_string(),
+                    ));
+                }
+                StepKind::ShellRun(shell)
+                    if shell
+                        .timeout_secs
+                        .is_some_and(|value| value == 0 || value > JSON_SAFE_INTEGER_MAX) =>
+                {
+                    return Err(PlanError::Malformed(
+                        "shell.run timeout_secs is outside the positive safe-integer domain"
+                            .to_string(),
+                    ));
+                }
+                StepKind::AgentConfig(_)
+                | StepKind::AgentEmit(_)
+                | StepKind::ShellRun(_)
+                | StepKind::ScmOpenPr(_)
+                | StepKind::Notify(_)
+                | StepKind::Branch(_) => {}
+            }
+        }
+        Ok(())
+    }
+
     pub fn step(&self, index: usize) -> Option<&PlanStep> {
         self.steps.get(index)
     }
@@ -286,6 +337,7 @@ impl PlanSegment {
 
 /// How one slot's session is provisioned (data-contract §4 `sessions[slot]`).
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SessionSpec {
     pub harness: String,
     #[serde(default)]
@@ -295,6 +347,10 @@ pub struct SessionSpec {
     /// L29: bind an existing session instead of creating a fresh one.
     #[serde(default)]
     pub bind_session_id: Option<String>,
+    /// Public namespace grants resolved for this slot. Credentials and gateway
+    /// endpoints are carried only in the private post-binding envelope.
+    #[serde(default)]
+    pub integrations: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -323,6 +379,9 @@ impl SessionBinding {
 pub struct PlanStep {
     #[serde(default)]
     pub key: String,
+    /// Stable v2 observation identity riding alongside the legacy execution key.
+    #[serde(default)]
+    pub key_v2: Option<String>,
     #[serde(default)]
     pub slot: String,
     #[serde(default)]
@@ -374,6 +433,7 @@ impl StepKind {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgentPromptStep {
     pub prompt: String,
     #[serde(default)]
@@ -388,8 +448,13 @@ pub struct AgentPromptStep {
 /// emit `name` is resolved away server-side (refs are already indexed), so the
 /// runtime only needs the re-ask budget + optional schema.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgentEmitStep {
     pub prompt: String,
+    /// Legacy producer output handle. Runtime references are already rewritten
+    /// to step indices, so execution does not consume this field.
+    #[serde(default)]
+    pub name: Option<String>,
     #[serde(default = "default_max_attempts")]
     pub max_attempts: u32,
     #[serde(default)]
@@ -401,6 +466,7 @@ fn default_max_attempts() -> u32 {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RequiredInvocation {
     pub provider: String,
     pub tool: String,
@@ -411,12 +477,14 @@ pub struct RequiredInvocation {
 /// there is no harness-switch. Executes instantly and never opens a session of
 /// its own.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgentConfigStep {
     #[serde(default)]
     pub model: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GoalSpec {
     pub objective: String,
     pub max_turns: u32,
@@ -442,12 +510,14 @@ pub enum OnBlocked {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct VerifySpec {
     pub shell: String,
     pub expect_exit: i32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ShellRunStep {
     pub command: String,
     #[serde(default)]
@@ -462,6 +532,7 @@ pub struct ShellRunStep {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ScmOpenPrStep {
     #[serde(default)]
     pub base: Option<String>,
@@ -475,6 +546,7 @@ pub struct ScmOpenPrStep {
 /// Slack-only notify (E1b): the server sends it (`slack_notify` action);
 /// template-only in v1. No channel discriminator, no in-app variant.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NotifyStep {
     pub slack_channel_id: String,
     pub message: String,
@@ -484,6 +556,7 @@ pub struct NotifyStep {
 /// indexed ref) and route each case to continue|end. The engine arm lands in a
 /// later phase; the plan carries the shape now.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BranchStep {
     pub on: String,
     pub cases: BTreeMap<String, BranchCase>,
@@ -492,6 +565,7 @@ pub struct BranchStep {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BranchCase {
     pub to: BranchTarget,
 }
@@ -507,6 +581,7 @@ pub enum BranchTarget {
 
 /// Per-step failure policy. Defaults to `stop`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OnFail {
     #[serde(default)]
     pub kind: OnFailKind,
@@ -535,14 +610,82 @@ pub enum OnFailKind {
 
 /// Strictly deserialize a resolved plan from its raw JSON string.
 pub fn parse(plan_json: &str) -> Result<ResolvedPlan, PlanError> {
-    let value: serde_json::Value =
-        serde_json::from_str(plan_json).map_err(|error| PlanError::InvalidJson(error.to_string()))?;
+    let value: serde_json::Value = serde_json::from_str(plan_json)
+        .map_err(|error| PlanError::InvalidJson(error.to_string()))?;
     parse_value(value)
 }
 
 /// Strictly deserialize a resolved plan from an already-parsed JSON value.
 pub fn parse_value(value: serde_json::Value) -> Result<ResolvedPlan, PlanError> {
-    serde_json::from_value(value).map_err(|error| PlanError::Malformed(error.to_string()))
+    if contains_private_credential_fields(&value) {
+        return Err(PlanError::Malformed(
+            "private credential material is not accepted in a resolved plan".to_string(),
+        ));
+    }
+    let plan: ResolvedPlan =
+        serde_json::from_value(value).map_err(|error| PlanError::Malformed(error.to_string()))?;
+    plan.validate_integer_domains()?;
+    Ok(plan)
+}
+
+fn contains_private_credential_fields(value: &serde_json::Value) -> bool {
+    const PRIVATE_KEYS: &[&str] = &[
+        "gateway",
+        "authorization",
+        "accesstoken",
+        "refreshtoken",
+        "apikey",
+        "token",
+        "secret",
+        "password",
+        "credential",
+        "credentials",
+        "privateenvelope",
+        "privatecallbacks",
+        "runreportcredential",
+        "deliveryclaimfence",
+        "perslotcredentialissuance",
+    ];
+
+    fn has_private_key(
+        values: &serde_json::Map<String, serde_json::Value>,
+        private_keys: &[&str],
+    ) -> bool {
+        values.keys().any(|key| {
+            let normalized: String = key
+                .chars()
+                .filter(|character| character.is_ascii_alphanumeric())
+                .flat_map(char::to_lowercase)
+                .collect();
+            private_keys.contains(&normalized.as_str())
+        })
+    }
+
+    fn input_has_private_key(value: &serde_json::Value, private_keys: &[&str]) -> bool {
+        match value {
+            serde_json::Value::Array(values) => values
+                .iter()
+                .any(|value| input_has_private_key(value, private_keys)),
+            serde_json::Value::Object(values) => {
+                has_private_key(values, private_keys)
+                    || values
+                        .values()
+                        .any(|value| input_has_private_key(value, private_keys))
+            }
+            serde_json::Value::Null
+            | serde_json::Value::Bool(_)
+            | serde_json::Value::Number(_)
+            | serde_json::Value::String(_) => false,
+        }
+    }
+
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+    has_private_key(object, PRIVATE_KEYS)
+        || object
+            .get("inputs")
+            .is_some_and(|inputs| input_has_private_key(inputs, PRIVATE_KEYS))
 }
 
 #[cfg(test)]
@@ -552,7 +695,7 @@ mod tests {
     fn full_plan_json() -> &'static str {
         r#"{
             "run_id": "run-1",
-            "plan_version": 1,
+            "planVersion": 1,
             "workflow_id": "wf-1",
             "workflow_version_id": "wfv-1",
             "version_n": 2,
@@ -610,10 +753,19 @@ mod tests {
 
         // sessions map, keyed by slot.
         assert_eq!(plan.sessions.len(), 2);
-        assert_eq!(plan.sessions["fix"].bind_session_id.as_deref(), Some("sess_abc"));
-        assert_eq!(plan.sessions["fix"].session_binding, SessionBinding::Headless);
+        assert_eq!(
+            plan.sessions["fix"].bind_session_id.as_deref(),
+            Some("sess_abc")
+        );
+        assert_eq!(
+            plan.sessions["fix"].session_binding,
+            SessionBinding::Headless
+        );
         assert_eq!(plan.sessions["triage"].harness, "claude");
-        assert_eq!(plan.sessions["triage"].session_binding, SessionBinding::Fresh);
+        assert_eq!(
+            plan.sessions["triage"].session_binding,
+            SessionBinding::Fresh
+        );
 
         // steps carry structured key + slot + label.
         assert_eq!(plan.steps[0].key, "0.-.0");
@@ -630,7 +782,10 @@ mod tests {
         let StepKind::AgentPrompt(agent) = &plan.steps[1].kind else {
             panic!("expected agent.prompt");
         };
-        let inv = agent.required_invocation.as_ref().expect("required_invocation");
+        let inv = agent
+            .required_invocation
+            .as_ref()
+            .expect("required_invocation");
         assert_eq!(inv.provider, "linear");
         assert_eq!(inv.tool, "update_status");
         let goal = agent.goal.as_ref().expect("goal");
@@ -667,7 +822,10 @@ mod tests {
             }"#,
         )
         .expect("parse minimal plan");
-        assert_eq!(plan.sessions["main"].session_binding, SessionBinding::Headless);
+        assert_eq!(
+            plan.sessions["main"].session_binding,
+            SessionBinding::Headless
+        );
         assert!(plan.sessions["main"].model.is_none());
         let StepKind::AgentPrompt(agent) = &plan.steps[0].kind else {
             panic!("expected agent.prompt");
@@ -782,11 +940,9 @@ mod tests {
         assert!(matches!(error, PlanError::Malformed(_)));
     }
 
-    // --- per-run gateway block (PR E, E3 namespace-level scope) ---
-
     #[test]
-    fn parses_full_gateway_block_with_integrations() {
-        let plan = parse(
+    fn rejects_legacy_gateway_credential_block() {
+        let error = parse(
             r#"{
                 "run_id": "run-gw",
                 "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
@@ -799,36 +955,147 @@ mod tests {
                 "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
             }"#,
         )
-        .expect("parse gateway plan");
-        let gateway = plan.gateway.as_ref().expect("gateway present");
-        assert_eq!(gateway.url, "https://cloud.test/v1/cloud/integration-gateway/mcp");
-        assert_eq!(gateway.authorization, "Bearer per-run-secret");
-        assert_eq!(
-            gateway.ping_url,
-            "https://cloud.test/v1/cloud/workflows/runs/run-gw/ping"
-        );
-        assert_eq!(gateway.integrations, vec!["issues", "slack"]);
+        .expect_err("legacy gateway-bearing plans must stay parked");
+        assert!(matches!(error, PlanError::Malformed(_)));
     }
 
     #[test]
-    fn gateway_integrations_default_to_empty() {
-        // §3.7/L16: a token is minted for every run, so a gateway block can be
-        // present with no integration scopes at all (empty `integrations`).
-        let plan = parse(
+    fn rejects_legacy_private_callback_fields() {
+        let error = parse(
             r#"{
-                "run_id": "run-gw-empty",
+                "run_id": "run-private-callback",
                 "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
-                "gateway": {
-                    "url": "https://cloud.test/mcp",
-                    "authorization": "Bearer t",
-                    "ping_url": "https://cloud.test/ping"
-                },
+                "privateCallbacks": { "controlEndpoint": "https://cloud.test/control" },
                 "steps": [ { "key": "0.-.0", "slot": "main", "kind": "shell.run", "command": "x" } ]
             }"#,
         )
-        .expect("parse gateway plan without integrations");
-        let gateway = plan.gateway.as_ref().expect("gateway present");
-        assert!(gateway.integrations.is_empty());
+        .expect_err("private callback-bearing plans must stay parked");
+        assert!(matches!(error, PlanError::Malformed(_)));
+    }
+
+    #[test]
+    fn rejects_every_legacy_private_envelope_alias() {
+        for field in [
+            "privateEnvelope",
+            "private_envelope",
+            "runReportCredential",
+            "run_report_credential",
+            "deliveryClaimFence",
+            "delivery_claim_fence",
+            "perSlotCredentialIssuance",
+            "per_slot_credential_issuance",
+        ] {
+            let mut value = serde_json::json!({
+                "run_id": "run-private",
+                "sessions": {
+                    "main": { "harness": "claude", "session_binding": "fresh" }
+                },
+                "steps": [
+                    { "key": "0.-.0", "slot": "main", "kind": "shell.run", "command": "x" }
+                ]
+            });
+            value
+                .as_object_mut()
+                .expect("plan object")
+                .insert(field.to_string(), serde_json::json!({ "secret": "canary" }));
+            let error = parse_value(value).expect_err("private envelope alias must be rejected");
+            assert!(matches!(error, PlanError::Malformed(_)), "field={field}");
+        }
+    }
+
+    #[test]
+    fn rejects_renamed_structures_and_secret_typed_inputs() {
+        for value in [
+            serde_json::json!({
+                "run_id": "run-renamed",
+                "sessions": {},
+                "inputs": {},
+                "steps": [],
+                "opaque": { "nested": "Bearer renamed-secret-canary" }
+            }),
+            serde_json::json!({
+                "run_id": "run-input",
+                "sessions": {},
+                "inputs": {
+                    "nested": { "authorization": "Bearer input-secret-canary" }
+                },
+                "steps": []
+            }),
+            serde_json::json!({
+                "run_id": "run-step",
+                "sessions": {},
+                "inputs": {},
+                "steps": [{
+                    "key": "0.-.0",
+                    "slot": "main",
+                    "kind": "shell.run",
+                    "command": "true",
+                    "opaque": { "nested": "Bearer step-secret-canary" }
+                }]
+            }),
+        ] {
+            let error = parse_value(value)
+                .expect_err("unknown structures and secret-typed inputs must be rejected");
+            assert!(matches!(error, PlanError::Malformed(_)));
+        }
+    }
+
+    #[test]
+    fn ordinary_text_may_discuss_bearer_auth() {
+        parse_value(serde_json::json!({
+            "run_id": "run-auth-docs",
+            "sessions": {
+                "main": { "harness": "claude", "session_binding": "fresh" }
+            },
+            "inputs": { "topic": "Explain the Bearer authentication scheme" },
+            "steps": [{
+                "key": "0.-.0",
+                "slot": "main",
+                "kind": "agent.prompt",
+                "prompt": "Document how an HTTP Bearer header is structured."
+            }]
+        }))
+        .expect("ordinary auth documentation text is not a credential");
+    }
+
+    #[test]
+    fn rejects_benign_unknown_structural_fields() {
+        for value in [
+            serde_json::json!({
+                "run_id": "run-top",
+                "sessions": {},
+                "inputs": {},
+                "steps": [],
+                "unexpected": { "not_secret": true }
+            }),
+            serde_json::json!({
+                "run_id": "run-session",
+                "sessions": {
+                    "main": {
+                        "harness": "claude",
+                        "session_binding": "fresh",
+                        "unexpected": true
+                    }
+                },
+                "inputs": {},
+                "steps": []
+            }),
+            serde_json::json!({
+                "run_id": "run-step",
+                "sessions": {},
+                "inputs": {},
+                "steps": [{
+                    "key": "0.-.0",
+                    "slot": "main",
+                    "kind": "shell.run",
+                    "command": "true",
+                    "unexpected": true
+                }]
+            }),
+        ] {
+            let error = parse_value(value).expect_err("unknown structural field must be rejected");
+            assert!(matches!(error, PlanError::Malformed(_)));
+        }
     }
 
     // --- notify agent-filled fields (track 3c) ---
@@ -843,7 +1110,7 @@ mod tests {
         let plan = parse(
             r#"{
                 "run_id": "run-nf",
-                "plan_version": 1,
+                "planVersion": 1,
                 "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
                 "steps": [
                     { "key": "0.-.0", "slot": "main", "kind": "agent.emit",
@@ -906,12 +1173,7 @@ mod tests {
         // An injected notify-fields emit keyed "1.fix.0.notify_fields" is grouped
         // into lane "fix" of node 1's parallel group alongside the notify it backs
         // — never split out or mis-scoped to NO_LANE.
-        let plan = plan_with_keys(&[
-            "0.-.0",
-            "1.fix.0.notify_fields",
-            "1.fix.0",
-            "1.docs.0",
-        ]);
+        let plan = plan_with_keys(&["0.-.0", "1.fix.0.notify_fields", "1.fix.0", "1.docs.0"]);
         let segments = plan.segments();
         assert_eq!(
             segments,
@@ -922,8 +1184,14 @@ mod tests {
                     start: 1,
                     end: 4,
                     lanes: vec![
-                        PlanLane { name: "fix".to_string(), step_indices: vec![1, 2] },
-                        PlanLane { name: "docs".to_string(), step_indices: vec![3] },
+                        PlanLane {
+                            name: "fix".to_string(),
+                            step_indices: vec![1, 2]
+                        },
+                        PlanLane {
+                            name: "docs".to_string(),
+                            step_indices: vec![3]
+                        },
                     ],
                 },
             ]
@@ -966,9 +1234,7 @@ mod tests {
         let steps: Vec<String> = keys
             .iter()
             .map(|key| {
-                format!(
-                    r#"{{ "key": "{key}", "slot": "s", "kind": "shell.run", "command": "c" }}"#
-                )
+                format!(r#"{{ "key": "{key}", "slot": "s", "kind": "shell.run", "command": "c" }}"#)
             })
             .collect();
         parse(&format!(
@@ -1010,9 +1276,7 @@ mod tests {
     #[test]
     fn pre_group_post_partitions_into_three_segments() {
         // node 0 flat (pre), node 1 parallel {a,b}, node 2 flat (post).
-        let plan = plan_with_keys(&[
-            "0.-.0", "1.a.0", "1.a.1", "1.b.0", "2.-.0",
-        ]);
+        let plan = plan_with_keys(&["0.-.0", "1.a.0", "1.a.1", "1.b.0", "2.-.0"]);
         assert!(plan.has_parallel_groups());
         let segments = plan.segments();
         assert_eq!(
@@ -1024,8 +1288,14 @@ mod tests {
                     start: 1,
                     end: 4,
                     lanes: vec![
-                        PlanLane { name: "a".to_string(), step_indices: vec![1, 2] },
-                        PlanLane { name: "b".to_string(), step_indices: vec![3] },
+                        PlanLane {
+                            name: "a".to_string(),
+                            step_indices: vec![1, 2]
+                        },
+                        PlanLane {
+                            name: "b".to_string(),
+                            step_indices: vec![3]
+                        },
                     ],
                 },
                 PlanSegment::Sequential { start: 4, end: 5 },
@@ -1058,17 +1328,14 @@ mod tests {
     }
 
     #[test]
-    fn plans_without_gateway_still_parse() {
-        // A token is minted for every run under L16, but a gateway-less plan
-        // must still parse (the block is `serde(default)`).
-        let plan = parse(
+    fn secret_free_plans_still_parse() {
+        parse(
             r#"{
                 "run_id": "run-nogw",
                 "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
                 "steps": [ { "key": "0.-.0", "slot": "main", "kind": "agent.prompt", "prompt": "hi" } ]
             }"#,
         )
-        .expect("parse plan without gateway");
-        assert!(plan.gateway.is_none());
+        .expect("parse secret-free plan");
     }
 }

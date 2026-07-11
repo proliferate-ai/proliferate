@@ -44,6 +44,15 @@ from proliferate.server.cloud.workflows.poller import (
 from proliferate.utils.time import utcnow
 
 
+@pytest.fixture(autouse=True)
+def _bypass_wf_id_poller_gate_for_lower_layer_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = poller_module.trigger_activation
+    monkeypatch.setattr(gate, "reject_unattended_activation", lambda: None)
+    monkeypatch.setattr(gate, "unattended_activation_enabled", lambda: True)
+
+
 class _Actor:
     """Minimal owner identity — the owner-scoped services only read ``.id``."""
 
@@ -75,6 +84,7 @@ _ITEM_SCHEMA = {
     "properties": {"n": {"type": "number"}, "title": {"type": "string"}},
     "required": ["n", "title"],
 }
+_LOCAL_WORKSPACE_ID = uuid.UUID("22222222-2222-4222-8222-222222222222")
 
 
 async def _make_user(db: AsyncSession) -> User:
@@ -140,6 +150,7 @@ async def _make_poll_trigger(
         # poller-lane logic under test is target-agnostic.
         repo_full_name="acme/widgets",
         target_workspace_id=None,
+        local_workspace_id=_LOCAL_WORKSPACE_ID,
         poll_url="http://127.0.0.1:9911/poll",
         poll_interval_secs=interval_secs,
         poll_item_schema_json=item_schema if item_schema is not None else _ITEM_SCHEMA,
@@ -173,8 +184,6 @@ def _item(item_id: str, **data: object) -> dict:
 
 
 # --- overlay_item_inputs + derive_item_schema (pure, D17) -----------------------
-
-
 def test_overlay_item_inputs_static_overlaid_by_name() -> None:
     # Declared inputs (schema properties) are n + title. The item's own n + title
     # override the static presets; the preset-only "n" default is replaced, "extra"
@@ -305,6 +314,7 @@ async def test_poll_spawns_runs_and_persists_cursor(test_engine) -> None:  # typ
         )
         assert len(runs) == 2
         assert all(r.trigger_kind == WORKFLOW_TRIGGER_KIND_POLL for r in runs)
+        assert all(r.anyharness_workspace_id == str(_LOCAL_WORKSPACE_ID) for r in runs)
         refreshed = await db.get(WorkflowTrigger, trigger_id)
         assert refreshed.poll_cursor == "cur1"
         assert refreshed.last_poll_at is not None
@@ -585,20 +595,9 @@ def _poll_body(**overrides):  # type: ignore[no-untyped-def]
         "args": {},
     }
     defaults.update(overrides)
+    if defaults["targetMode"] == "local" and "localWorkspaceId" not in defaults:
+        defaults["localWorkspaceId"] = str(_LOCAL_WORKSPACE_ID)
     return WorkflowTriggerCreateRequest.model_validate(defaults)
-
-
-async def test_poll_trigger_rejects_local_target(test_engine) -> None:  # type: ignore[no-untyped-def]
-
-    factory = _factory(test_engine)
-    async with factory() as db:
-        user = await _make_user(db)
-        wf = await _make_workflow(db, user)
-        await db.commit()
-        actor = _Actor(user.id)
-        with pytest.raises(CloudApiError) as exc:
-            await _service_create(db, actor, wf.id, _poll_body(targetMode="local"))
-    assert exc.value.code == "poll_local_unsupported"
 
 
 def test_poll_config_rejects_bad_interval() -> None:

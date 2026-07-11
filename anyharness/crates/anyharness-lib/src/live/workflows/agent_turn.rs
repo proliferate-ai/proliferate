@@ -15,12 +15,12 @@ use crate::domains::sessions::runtime::CreateAndStartSessionError;
 use crate::domains::workflows::engine::StepOutcome;
 use crate::domains::workflows::model::WorkflowRunRecord;
 use crate::domains::workflows::plan::{
-    worktree_scope, AgentConfigStep, Isolation, PlanGateway, StepKind, NO_LANE,
+    worktree_scope, AgentConfigStep, Isolation, StepKind, NO_LANE,
 };
 use crate::origin::OriginContext;
 
 use super::executor::{failed_msg, WorkflowStepExecutorImpl};
-use super::gateway::workflow_gateway_server;
+use super::gateway::{workflow_gateway_server, WorkflowPrivateGateway};
 use super::parallel::{recover_resume_worktree, worktree_branch_for_scope};
 
 /// The (session_id, harness) a slot currently owns.
@@ -74,7 +74,9 @@ impl WorkflowStepExecutorImpl {
                     // Re-arm the always-bypass safety net for the resumed session
                     // (the registry is in-memory, so a restart would otherwise drop
                     // it).
-                    self.deps.workflow_owned_sessions.mark(session_id, &self.run_id);
+                    self.deps
+                        .workflow_owned_sessions
+                        .mark(session_id, &self.run_id);
                     // Re-register the per-run gateway server too, so a relaunch of
                     // the resumed session (crash-resume) re-injects it (same
                     // in-memory registry, dropped on restart).
@@ -175,7 +177,11 @@ impl WorkflowStepExecutorImpl {
     /// machinery. A slot carrying `bind_session_id` (L29 / PR F) loads the
     /// existing session instead of creating one; that field is always absent
     /// until the session-plane PR lands.
-    pub(super) async fn ensure_session(&self, slot: &str, scope: &str) -> Result<String, StepOutcome> {
+    pub(super) async fn ensure_session(
+        &self,
+        slot: &str,
+        scope: &str,
+    ) -> Result<String, StepOutcome> {
         // §5.3 builder obligation (L22 fail-fast): a gateway block that grants
         // integration scopes but carries no usable gateway in this lane (empty
         // authorization/URL, e.g. the local lane where nothing mints a per-run
@@ -192,13 +198,7 @@ impl WorkflowStepExecutorImpl {
             return Ok(current.session_id.clone());
         }
         let harness = self.harness_for_slot(slot)?;
-        let model = self
-            .models
-            .lock()
-            .unwrap()
-            .get(slot)
-            .cloned()
-            .flatten();
+        let model = self.models.lock().unwrap().get(slot).cloned().flatten();
         let bind_session_id = self
             .sessions
             .get(slot)
@@ -310,19 +310,17 @@ impl WorkflowStepExecutorImpl {
                             false,
                             OriginContext::system_local_runtime(),
                         )
-                        .map_err(|error| {
-                            failed_msg("session_start_failed", format!("{error:?}"))
-                        })?
+                        .map_err(|error| failed_msg("session_start_failed", format!("{error:?}")))?
                 }
-                Err(error) => {
-                    return Err(failed_msg("session_start_failed", format!("{error:?}")))
-                }
+                Err(error) => return Err(failed_msg("session_start_failed", format!("{error:?}"))),
             };
             // Register the session as workflow-owned so the inbound permission
             // advisor auto-approves for it. Done before launch/first turn.
-            self.deps.workflow_owned_sessions.mark(&record.id, &self.run_id);
+            self.deps
+                .workflow_owned_sessions
+                .mark(&record.id, &self.run_id);
             // Register the per-run gateway MCP server for this session so the
-            // launch extension injects it (plan block wins over the worker
+            // launch extension injects it (private run grant wins over the worker
             // dotfile via the extension ordering + dedupe on
             // connection_id/server_name).
             if let Some(server) = workflow_gateway_server(self.gateway.as_ref()) {
@@ -338,7 +336,9 @@ impl WorkflowStepExecutorImpl {
         };
         // Register the session as workflow-owned so the inbound permission
         // advisor auto-approves for it. Done before the first prompt/turn.
-        self.deps.workflow_owned_sessions.mark(&session_id, &self.run_id);
+        self.deps
+            .workflow_owned_sessions
+            .mark(&session_id, &self.run_id);
         let _ = self
             .deps
             .workflow_service
@@ -399,7 +399,7 @@ impl WorkflowStepExecutorImpl {
 /// honor — non-empty `integrations` with an empty/absent credential or URL —
 /// must fail the run explicitly rather than silently launch the agent with zero
 /// tools.
-pub(super) fn gateway_functions_unsupported(gateway: Option<&PlanGateway>) -> bool {
+pub(super) fn gateway_functions_unsupported(gateway: Option<&WorkflowPrivateGateway>) -> bool {
     match gateway {
         Some(gateway) => {
             !gateway.integrations.is_empty()

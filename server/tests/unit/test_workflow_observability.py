@@ -13,6 +13,7 @@ from __future__ import annotations
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from proliferate.constants.organizations import (
@@ -47,6 +48,27 @@ _DEF = {
         }
     ],
 }
+
+
+@pytest.fixture(autouse=True)
+def _bypass_wf_id_trigger_gates_for_lower_layer_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        poller_module.trigger_activation,
+        "reject_unattended_activation",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        scheduler_module.trigger_activation,
+        "reject_unattended_activation",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        scheduler_module.trigger_activation,
+        "unattended_activation_enabled",
+        lambda: True,
+    )
 
 
 def _factory(test_engine) -> async_sessionmaker:  # type: ignore[no-untyped-def]

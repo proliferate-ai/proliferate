@@ -95,7 +95,10 @@ function validateNode(node: unknown, isRoot: boolean): void {
   }
 
   for (const numericKey of ["minimum", "maximum"]) {
-    if (numericKey in node && typeof node[numericKey] !== "number") {
+    if (
+      numericKey in node
+      && (typeof node[numericKey] !== "number" || !Number.isFinite(node[numericKey]))
+    ) {
       throw new SchemaProfileError("invalid_bound", `${numericKey} must be a finite number`);
     }
   }

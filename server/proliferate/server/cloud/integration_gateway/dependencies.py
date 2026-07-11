@@ -21,10 +21,10 @@ from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.db.engine import get_async_session
-from proliferate.db.store import cloud_workflows as workflows_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
+from proliferate.db.store.workflow_ledger import legacy_tokens as legacy_token_store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.integration_gateway import service as gateway_service
 from proliferate.utils.time import utcnow
@@ -47,7 +47,7 @@ async def _resolve_run_token_grant(
 ) -> IntegrationGatewayGrant | None:
     """Resolve a per-run workflow gateway token, or None if the bearer isn't one."""
 
-    run_token = await workflows_store.get_active_run_gateway_token_by_hash(
+    run_token = await legacy_token_store.get_active_run_gateway_token_by_hash(
         db,
         token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
         now=utcnow(),

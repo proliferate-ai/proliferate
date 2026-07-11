@@ -52,28 +52,53 @@ pub async fn list_workflow_runs(
     path = "/v1/workflow-runs",
     request_body = CreateWorkflowRunRequest,
     responses(
-        (status = 202, description = "Run delivered (idempotent on run_id)", body = WorkflowRunView),
-        (status = 400, description = "Invalid plan", body = anyharness_contract::v1::ProblemDetails),
+        (status = 400, description = "Invalid plan or delivery identity", body = anyharness_contract::v1::ProblemDetails),
+        (status = 401, description = "Authenticated worker control channel required", body = anyharness_contract::v1::ProblemDetails),
         (status = 404, description = "Workspace not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Final execution envelope required before activation", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "workflows"
 )]
 pub async fn create_workflow_run(
     State(state): State<AppState>,
     Extension(auth): Extension<AuthContext>,
-    Json(request): Json<CreateWorkflowRunRequest>,
-) -> Result<(StatusCode, Json<WorkflowRunView>), ApiError> {
-    assert_workspace_auth_scope(&auth, &request.workspace_id)?;
-    let plan_json =
-        serde_json::to_string(&request.plan).map_err(|error| ApiError::internal(error.to_string()))?;
-    let record = state
+    Json(raw_request): Json<serde_json::Value>,
+) -> Result<StatusCode, ApiError> {
+    if !matches!(auth, AuthContext::Worker) {
+        return Err(ApiError::unauthorized(
+            "Workflow delivery requires the authenticated internal worker control channel.",
+            "WORKFLOW_DELIVERY_WORKER_AUTH_REQUIRED",
+        ));
+    }
+    let request: CreateWorkflowRunRequest =
+        serde_json::from_value(raw_request).map_err(|error| {
+            ApiError::bad_request(
+                format!("Invalid workflow delivery request: {error}"),
+                "WORKFLOW_DELIVERY_REQUEST_INVALID",
+            )
+        })?;
+    let plan_json = serde_json::to_string(&request.plan)
+        .map_err(|error| ApiError::internal(error.to_string()))?;
+    let identity = crate::domains::workflows::delivery::DeliveryIdentity {
+        run_id: request.delivery_identity.run_id.clone(),
+        plan_hash: request.delivery_identity.plan_hash.clone(),
+        binding_hash: request.delivery_identity.binding_hash.clone(),
+        execution_generation: request.delivery_identity.execution_generation,
+    };
+    state
         .workflow_manager
-        .deliver(&plan_json, &request.workspace_id)
+        .preflight_delivery(
+            &plan_json,
+            &request.workspace_id,
+            request.delivery_identity.schema_version,
+            &identity,
+            &request.binding,
+        )
         .map_err(map_error)?;
-    // The step runs exist from creation; echo the full view (delivery is
-    // idempotent, so a re-POST returns the current state).
-    let steps = load_steps(&state, &record.run_id)?;
-    Ok((StatusCode::ACCEPTED, Json(run_view(&record, &steps))))
+    Err(ApiError::conflict(
+        "Workflow identity preflight passed, but activation requires the final execution envelope.",
+        "FINAL_ENVELOPE_REQUIRED",
+    ))
 }
 
 #[utoipa::path(
@@ -161,10 +186,7 @@ fn load_run(
         .ok_or_else(|| ApiError::not_found("Workflow run not found", "NOT_FOUND"))
 }
 
-fn load_steps(
-    state: &AppState,
-    run_id: &str,
-) -> Result<Vec<WorkflowStepRunRecord>, ApiError> {
+fn load_steps(state: &AppState, run_id: &str) -> Result<Vec<WorkflowStepRunRecord>, ApiError> {
     Ok(load_run(state, run_id)?.1)
 }
 
@@ -223,8 +245,12 @@ fn map_error(error: WorkflowServiceError) -> ApiError {
         WorkflowServiceError::WorkspaceNotFound => {
             ApiError::not_found("Workspace not found", "WORKSPACE_NOT_FOUND")
         }
-        WorkflowServiceError::InvalidPlan(detail) => {
-            ApiError::bad_request(format!("Invalid workflow plan: {detail}"), "WORKFLOW_PLAN_INVALID")
+        WorkflowServiceError::InvalidPlan(detail) => ApiError::bad_request(
+            format!("Invalid workflow plan: {detail}"),
+            "WORKFLOW_PLAN_INVALID",
+        ),
+        WorkflowServiceError::InvalidDeliveryIdentity(detail) => {
+            ApiError::bad_request(detail, "WORKFLOW_DELIVERY_IDENTITY_INVALID")
         }
         WorkflowServiceError::DeliveryIdentityConflict { field } => ApiError::conflict(
             format!(
@@ -232,6 +258,10 @@ fn map_error(error: WorkflowServiceError) -> ApiError {
                  (run_id, plan_hash, binding_hash, execution_generation) identity is immutable."
             ),
             "WORKFLOW_DELIVERY_IDENTITY_CONFLICT",
+        ),
+        WorkflowServiceError::FinalEnvelopeRequired => ApiError::conflict(
+            "Workflow activation requires the final execution envelope.",
+            "FINAL_ENVELOPE_REQUIRED",
         ),
         WorkflowServiceError::NoPendingApproval => ApiError::conflict(
             "This run has no pending approval to resolve.",

@@ -5,6 +5,27 @@ use super::WorkspaceStore;
 use crate::domains::workspaces::model::{WorkspaceKind, WorkspaceRecord};
 
 impl WorkspaceStore {
+    pub fn find_generation(&self, id: &str) -> anyhow::Result<Option<i64>> {
+        self.db.with_conn(|conn| {
+            conn.query_row(
+                "SELECT generation FROM workspaces WHERE id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+        })
+    }
+
+    pub fn advance_generation(&self, id: &str, expected: i64) -> anyhow::Result<bool> {
+        self.db.with_conn(|conn| {
+            Ok(conn.execute(
+                "UPDATE workspaces SET generation = generation + 1 \
+                 WHERE id = ?1 AND generation = ?2",
+                params![id, expected],
+            )? == 1)
+        })
+    }
+
     pub fn find_by_path(&self, path: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
         self.db.with_conn(|conn| {
             conn.query_row(

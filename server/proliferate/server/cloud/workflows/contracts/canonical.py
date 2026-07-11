@@ -57,6 +57,30 @@ class CanonicalizationError(ValueError):
     """A value cannot be represented in the canonical JSON subset."""
 
 
+def _validate_well_formed_unicode(value: object) -> None:
+    """Reject UTF-16 surrogate code points anywhere in a JSON value.
+
+    RFC 8785 requires Unicode scalar values and explicitly rejects lone
+    surrogates. Python strings can still contain those code points (notably
+    after ``json.loads('"\\ud800"')``), so validate recursively before either
+    UTF-16 key sorting or UTF-8 encoding can leak a raw ``UnicodeEncodeError``.
+    """
+
+    if isinstance(value, str):
+        if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+            raise CanonicalizationError("lone UTF-16 surrogate is not canonicalizable")
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            _validate_well_formed_unicode(item)
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if isinstance(key, str):
+                _validate_well_formed_unicode(key)
+            _validate_well_formed_unicode(item)
+
+
 def _decimal_digits_and_n(magnitude: float) -> tuple[str, int]:
     """Shortest round-trip digit string ``s`` and decimal exponent ``n`` for a
     finite, strictly positive float, such that the value equals
@@ -109,7 +133,7 @@ def _es_number_to_string(value: float) -> str:
     return "-" + out if negative else out
 
 
-def _canon(value: Any) -> str:
+def _canon(value: object) -> str:
     if value is None:
         return "null"
     if value is True:
@@ -123,7 +147,21 @@ def _canon(value: Any) -> str:
     if isinstance(value, bool):  # pragma: no cover - handled above
         return "true" if value else "false"
     if isinstance(value, int):
-        return str(value)
+        # JCS's interoperable number domain is IEEE-754 binary64. Preserve an
+        # integer's decimal spelling only when binary64 represents that exact
+        # integer; otherwise Python would hash bytes that JavaScript cannot
+        # represent and AnyHarness must reject rather than silently round.
+        try:
+            binary64 = float(value)
+        except OverflowError as exc:
+            raise CanonicalizationError(
+                "integer is not exactly representable as IEEE-754 binary64"
+            ) from exc
+        if not math.isfinite(binary64) or int(binary64) != value:
+            raise CanonicalizationError(
+                "integer is not exactly representable as IEEE-754 binary64"
+            )
+        return _es_number_to_string(binary64)
     if isinstance(value, float):
         if not math.isfinite(value):
             raise CanonicalizationError("non-finite number is not canonicalizable")
@@ -131,11 +169,13 @@ def _canon(value: Any) -> str:
     if isinstance(value, (list, tuple)):
         return "[" + ",".join(_canon(item) for item in value) + "]"
     if isinstance(value, dict):
-        # Sort by Unicode code point of the key, matching the TS implementation.
+        # RFC 8785 sorts object property names lexicographically by UTF-16 code
+        # units (the ordering used by JavaScript Array#sort), not by Unicode
+        # scalar value. The distinction matters for supplementary-plane keys.
+        if any(not isinstance(key, str) for key in value):
+            raise CanonicalizationError("object keys must be strings")
         parts = []
-        for key in sorted(value.keys()):
-            if not isinstance(key, str):
-                raise CanonicalizationError("object keys must be strings")
+        for key in sorted(value.keys(), key=lambda item: item.encode("utf-16-be")):
             parts.append(
                 json.dumps(key, ensure_ascii=False, separators=(",", ":"))
                 + ":"
@@ -145,17 +185,21 @@ def _canon(value: Any) -> str:
     raise CanonicalizationError(f"unsupported type in canonical JSON: {type(value)!r}")
 
 
-def canonicalize(value: Any) -> bytes:
+def canonicalize(value: object) -> bytes:
     """Return the RFC 8785 canonical JSON byte sequence for ``value``."""
 
-    return _canon(value).encode("utf-8")
+    _validate_well_formed_unicode(value)
+    try:
+        return _canon(value).encode("utf-8")
+    except UnicodeEncodeError as exc:  # defensive: never leak codec failures
+        raise CanonicalizationError("ill-formed Unicode is not canonicalizable") from exc
 
 
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def content_hash(value: Any) -> str:
+def content_hash(value: object) -> str:
     """`sha256:<lowercase hex>` over the canonical JSON of ``value``."""
 
     return "sha256:" + sha256_hex(canonicalize(value))

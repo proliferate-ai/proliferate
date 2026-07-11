@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use super::ExecutionBinding;
+
 /// The anyharness-local run status vocabulary (mirrors the server ledger's
 /// observed state; the server owns the desired/delivery states separately).
 /// Non-terminal: `running | waiting_approval`; terminal: `completed | failed |
@@ -105,14 +107,36 @@ pub struct WorkflowRunListResponse {
     pub runs: Vec<WorkflowRunSummaryView>,
 }
 
-/// Delivery request: the fully-resolved plan JSON (opaque here — the runtime's
-/// workflow domain deserializes it strictly and rejects unknown step kinds) and
-/// the workspace the run executes in. Idempotent on the plan's `run_id`.
+/// Credential-free, versioned delivery identity bridge.
+///
+/// This bridge deliberately contains only the immutable delivery identity. It
+/// is not an execution envelope and must never grow report, control, gateway,
+/// or integration credentials. Those belong to the separately versioned final
+/// execution envelope.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowDeliveryIdentityV1 {
+    /// Pinned bridge schema. Values other than 1 are rejected by validation at
+    /// the delivery boundary.
+    pub schema_version: u32,
+    pub run_id: String,
+    pub plan_hash: String,
+    pub binding_hash: String,
+    pub execution_generation: i64,
+}
+
+/// Delivery request: the fully-resolved plan JSON (opaque here — the runtime's
+/// workflow domain deserializes it strictly and rejects unknown step kinds),
+/// the workspace the run executes in, and the explicit credential-free
+/// delivery identity + accepted redacted binding. Idempotent only on the full
+/// `(run_id, plan_hash, binding_hash, execution_generation)` identity.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateWorkflowRunRequest {
     pub plan: serde_json::Value,
     pub workspace_id: String,
+    pub delivery_identity: WorkflowDeliveryIdentityV1,
+    pub binding: ExecutionBinding,
 }
 
 /// Resolve a durable approval (`human.approval`, or an `agent.goal` step paused
@@ -126,6 +150,9 @@ pub struct ResolveWorkflowApprovalRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::v1::workflows_v2::{
+        RepositoryObjectFormat, SchemaVersion, SourceKind, WorkflowTarget,
+    };
 
     #[test]
     fn run_view_serializes_camel_case() {
@@ -176,15 +203,67 @@ mod tests {
 
     #[test]
     fn create_request_round_trips_plan_verbatim() {
+        const RUN_ID: &str = "11111111-1111-4111-8111-111111111111";
         let request = CreateWorkflowRunRequest {
-            plan: serde_json::json!({ "run_id": "run-1", "steps": [] }),
+            plan: serde_json::json!({
+                "planVersion": 1,
+                "planHash": format!("sha256:{}", "a".repeat(64)),
+                "run_id": RUN_ID,
+                "workflow_id": "22222222-2222-4222-8222-222222222222",
+                "workflow_version_id": "33333333-3333-4333-8333-333333333333",
+                "version_n": 1,
+                "trigger_kind": "manual",
+                "target_mode": "local",
+                "sourceIntent": {
+                    "kind": "local_commit",
+                    "resolvedCommit": "1111111111111111111111111111111111111111"
+                },
+                "isolation": "workspace",
+                "sessions": {},
+                "inputs": {},
+                "steps": []
+            }),
             workspace_id: "ws-1".to_string(),
+            delivery_identity: WorkflowDeliveryIdentityV1 {
+                schema_version: 1,
+                run_id: RUN_ID.to_string(),
+                plan_hash: format!("sha256:{}", "a".repeat(64)),
+                binding_hash: format!("sha256:{}", "b".repeat(64)),
+                execution_generation: 1,
+            },
+            binding: ExecutionBinding {
+                schema_version: SchemaVersion::<1>,
+                target: WorkflowTarget::Local,
+                source_kind: SourceKind::LocalCommit,
+                repository_object_format: RepositoryObjectFormat::Sha1,
+                base_commit_oid: "1".repeat(40),
+                checkpoint_id: None,
+                checkpoint_content_hash: None,
+                workspace_id: "ws-1".to_string(),
+                workspace_generation: 1,
+                materialization_id: "mat-1".to_string(),
+                executor_id: "executor-1".to_string(),
+                executor_generation: 1,
+                binding_hash: format!("sha256:{}", "b".repeat(64)),
+            },
         };
         let json = serde_json::to_value(&request).expect("serialize");
-        assert_eq!(json["plan"]["run_id"], "run-1");
+        assert_eq!(json["plan"]["run_id"], RUN_ID);
         assert_eq!(json["workspaceId"], "ws-1");
         let round_tripped: CreateWorkflowRunRequest =
             serde_json::from_value(json).expect("deserialize");
-        assert_eq!(round_tripped.plan["run_id"], "run-1");
+        assert_eq!(round_tripped.plan["run_id"], RUN_ID);
+        assert_eq!(round_tripped.delivery_identity.schema_version, 1);
+    }
+
+    #[test]
+    fn create_request_rejects_missing_explicit_identity_bridge() {
+        let error = serde_json::from_value::<CreateWorkflowRunRequest>(serde_json::json!({
+            "plan": {"run_id": "run-1", "steps": []},
+            "workspaceId": "ws-1"
+        }))
+        .expect_err("deliveryIdentity and binding are mandatory");
+        let detail = error.to_string();
+        assert!(detail.contains("deliveryIdentity") || detail.contains("delivery_identity"));
     }
 }

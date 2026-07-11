@@ -19,6 +19,7 @@ from proliferate.integrations.github.app_user_tokens import (
     refresh_github_app_user_authorization,
 )
 from proliferate.integrations.github.repos import (
+    GitHubBranchNotFound,
     GitHubIntegrationError,
     GitHubInvalidCursor,
     GitHubRateLimited,
@@ -28,6 +29,7 @@ from proliferate.integrations.github.repos import (
     GitHubRepositoryPage,
     GitHubRepositorySummary,
     GitHubUserProfile,
+    get_github_branch_head,
     get_github_repo_branches,
     get_github_user_profile,
     list_branches,
@@ -38,6 +40,7 @@ httpx = _repos.httpx
 
 __all__ = [
     "GitHubIntegrationError",
+    "GitHubBranchNotFound",
     "GitHubAppInstallationInfo",
     "GitHubAppInvalidGrant",
     "GitHubAppRepositoryCoverage",
@@ -51,6 +54,7 @@ __all__ = [
     "GitHubRepositorySummary",
     "GitHubUserProfile",
     "get_github_repo_branches",
+    "get_github_branch_head",
     "get_github_app_installation",
     "get_github_user_profile",
     "exchange_github_app_code",

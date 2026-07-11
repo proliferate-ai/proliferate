@@ -55,6 +55,25 @@ fn workflow_contract_fixtures_roundtrip_all() {
 }
 
 #[test]
+fn workflow_contract_commit_binding_roundtrip_omits_checkpoint_optionals() {
+    let fixture: Value =
+        serde_json::from_str(&read("canonical-structure-vectors-v1.json")).unwrap();
+    let vector = fixture["vectors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|vector| {
+            vector["name"].as_str() == Some("remote-commit-binding-omits-checkpoint-optionals")
+        })
+        .expect("commit binding vector");
+    let original = vector["value"].clone();
+    assert!(original.get("checkpointId").is_none());
+    assert!(original.get("checkpointContentHash").is_none());
+    let typed: ExecutionBinding = serde_json::from_value(original.clone()).unwrap();
+    assert_eq!(serde_json::to_value(typed).unwrap(), original);
+}
+
+#[test]
 fn workflow_contract_fixtures_reject_unknown_plan_version() {
     let mut plan: Value = serde_json::from_str(&read("resolved-plan-v2.json")).unwrap();
     plan["planVersion"] = Value::from(99);
@@ -72,6 +91,20 @@ fn workflow_contract_fixtures_reject_unknown_step_kind() {
         serde_json::from_value::<ResolvedPlan>(plan).is_err(),
         "an unknown step kind must fail strict parsing"
     );
+}
+
+#[test]
+fn workflow_contract_fixtures_reject_lone_utf16_surrogates() {
+    let fixture: Value =
+        serde_json::from_str(&read("canonical-structure-vectors-v1.json")).unwrap();
+    for case in fixture["rejectedUnicodeJson"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let candidate = case["json"].as_str().unwrap();
+        assert!(
+            serde_json::from_str::<Value>(candidate).is_err(),
+            "lone-surrogate JSON '{name}' must be rejected before canonicalization"
+        );
+    }
 }
 
 #[test]
@@ -109,8 +142,7 @@ fn workflow_contract_fixtures_legacy_upgrade_grammar_and_shape() {
         let identity = row["identity"].as_str().unwrap();
         let name = row["name"].as_str().unwrap();
         let uuid = row["uuid"].as_str().unwrap();
-        let expected_name =
-            format!("workflow-version={version}\nkind={kind}\nidentity={identity}");
+        let expected_name = format!("workflow-version={version}\nkind={kind}\nidentity={identity}");
         assert_eq!(name, expected_name, "legacy identity name grammar");
         // Lowercase, dashed, and a UUIDv5 (version nibble at index 14 is '5').
         assert_eq!(uuid, uuid.to_lowercase(), "uuid must be lowercase");
@@ -128,7 +160,10 @@ fn workflow_contract_fixtures_legacy_upgrade_grammar_and_shape() {
 fn workflow_contract_fixtures_credential_canary_absent() {
     let canary: Value = serde_json::from_str(&read("credential-canary.json")).unwrap();
     let marker = canary["marker"].as_str().unwrap();
-    for name in canary["fixturesThatMustNotContainMarker"].as_array().unwrap() {
+    for name in canary["fixturesThatMustNotContainMarker"]
+        .as_array()
+        .unwrap()
+    {
         let text = read(name.as_str().unwrap());
         assert!(
             !text.contains(marker),

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.db.models.base import Base, utcnow
@@ -12,6 +12,7 @@ from proliferate.db.models.base import Base, utcnow
 class CloudWorkspace(Base):
     __tablename__ = "cloud_workspace"
     __table_args__ = (
+        CheckConstraint("generation > 0", name="ck_cloud_workspace_generation"),
         Index(
             "ux_cloud_workspace_anyharness_workspace",
             "owner_user_id",
@@ -49,6 +50,9 @@ class CloudWorkspace(Base):
         index=True,
         nullable=True,
     )
+    # Monotonic lineage for the AnyHarness workspace target. Initialized on
+    # creation and incremented whenever the target runtime workspace id changes.
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

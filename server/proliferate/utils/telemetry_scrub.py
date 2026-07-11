@@ -5,12 +5,13 @@ from typing import Any
 
 SENSITIVE_KEY_PATTERN = re.compile(
     r"(authorization|cookie|token|secret|password|api[_-]?key|credential|"
-    r"prompt|content|stdout|stderr|request_body|body|env|file_path|path)",
+    r"materialization|prompt|content|stdout|stderr|request_body|body|env|file_path|path)",
     re.IGNORECASE,
 )
 ABSOLUTE_PATH_PATTERN = re.compile(r"(?:/Users/[^\s]+|/home/[^\s]+|[A-Za-z]:\\[^\s]+)")
 BEARER_TOKEN_PATTERN = re.compile(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", re.IGNORECASE)
 JWT_PATTERN = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_.-]+\.[A-Za-z0-9_.-]+\b")
+WORKFLOW_MATERIALIZATION_PATTERN = re.compile(r"\bwfm1\.[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]+\b")
 
 
 def _scrub_string_patterns(value: str) -> str:
@@ -22,9 +23,12 @@ def _scrub_string_patterns(value: str) -> str:
 
 
 def scrub_text(value: str) -> str:
-    return JWT_PATTERN.sub(
-        "[redacted-jwt]",
-        ABSOLUTE_PATH_PATTERN.sub("[redacted-path]", _scrub_string_patterns(value)),
+    return WORKFLOW_MATERIALIZATION_PATTERN.sub(
+        "[redacted-workflow-materialization]",
+        JWT_PATTERN.sub(
+            "[redacted-jwt]",
+            ABSOLUTE_PATH_PATTERN.sub("[redacted-path]", _scrub_string_patterns(value)),
+        ),
     )
 
 

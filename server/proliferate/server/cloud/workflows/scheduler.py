@@ -1,7 +1,9 @@
-"""Workflow schedule-trigger scheduler (spec 3.5).
+"""Parked workflow schedule-trigger scheduler (spec 3.5).
 
-Runs as a second beat beside the automations scheduler (they own different tables
-and fail independently). Each tick has two phases:
+WF-ID returns at tick entry before due/delivery/action discovery, while the
+per-trigger path independently rejects before writes. The implementation below
+is dormant substrate for the later atomic trigger cutover; when enabled it runs
+as a second beat beside the automations scheduler and has two phases:
 
 **Phase 1 — fire due triggers.** Enumerate due schedule triggers, then process
 each in its own transaction: lock the row (``FOR UPDATE SKIP LOCKED``), apply the
@@ -49,6 +51,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_SCHEDULER_MAX_CATCH_UP_SLOTS,
     WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK,
     WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
+    WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TRIGGER_KIND_SCHEDULE,
     WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY,
     WORKFLOW_TRIGGER_SKIP_REASON_MAX_LENGTH,
@@ -64,8 +67,7 @@ from proliferate.server.automations.domain.schedule import (
     due_occurrences_since,
 )
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import compiler
-from proliferate.server.cloud.workflows.actions import sweep_pending_actions
+from proliferate.server.cloud.workflows import compiler, trigger_activation
 from proliferate.server.cloud.workflows.delivery import deliver_cloud_run, refresh_cloud_run
 from proliferate.utils.time import utcnow
 
@@ -144,6 +146,10 @@ async def _fire_one_trigger(
             user_id=trigger.workflow_owner_user_id,
             worker_id="workflow_scheduler",
         ):
+            # WF-TRIGGER-CUTOVER owns unattended occurrences. Park both targets
+            # before missed history, StartRun, action creation, or cursor writes;
+            # the surrounding transaction leaves the due slot intact.
+            trigger_activation.reject_unattended_activation()
             if trigger.workflow_archived:
                 await trigger_store.disable_trigger_with_reason(
                     db, trigger_id=trigger_id, now=now, reason="Workflow was archived."
@@ -297,7 +303,11 @@ async def _fire_one_trigger(
                             inputs=trigger.args_json,
                             target_mode=trigger.target_mode,
                             trigger_kind=WORKFLOW_TRIGGER_KIND_SCHEDULE,
-                            target_workspace_id=trigger.target_workspace_id,
+                            target_workspace_id=(
+                                trigger.local_workspace_id
+                                if trigger.target_mode == WORKFLOW_TARGET_MODE_LOCAL
+                                else trigger.target_workspace_id
+                            ),
                             trigger_id=trigger_id,
                             scheduled_for=slot,
                         )
@@ -462,9 +472,10 @@ async def _refresh_in_flight_runs(
     return refreshed
 
 
-async def _sweep_actions(session_factory: SchedulerSessionFactory) -> int:
-    async with session_factory() as db, db.begin():
-        return await sweep_pending_actions(db)
+async def _sweep_actions(_session_factory: SchedulerSessionFactory) -> int:
+    # WF-DETERMINISTIC-ACTIONS/EFFECT owns action receipts. Do not even open a
+    # discovery transaction while the feature is off.
+    return 0
 
 
 # --- tick + loop ---------------------------------------------------------------
@@ -481,6 +492,8 @@ async def run_workflow_scheduler_tick(
     # sandboxes, consuming budget) on a deployment whose workflows API is dark
     # and whose /cancel would 404.
     if not settings.workflows_enabled:
+        return WorkflowSchedulerTickResult(created_runs=0, delivered_runs=0)
+    if not trigger_activation.unattended_activation_enabled():
         return WorkflowSchedulerTickResult(created_runs=0, delivered_runs=0)
     now = utcnow()
     created = await _fire_due_triggers(session_factory, now=now, batch_size=batch_size)

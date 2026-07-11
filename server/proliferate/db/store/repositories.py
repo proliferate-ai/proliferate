@@ -28,6 +28,7 @@ class RepoEnvironmentValue:
     default_branch: str | None
     setup_script: str
     run_command: str
+    generation: int
     created_at: datetime
     updated_at: datetime
 
@@ -63,6 +64,7 @@ def _environment_value(row: RepoEnvironment, repo: RepoConfig) -> RepoEnvironmen
         default_branch=row.default_branch,
         setup_script=row.setup_script,
         run_command=row.run_command,
+        generation=row.generation,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -182,18 +184,21 @@ async def get_cloud_repo_environment(
 async def get_repo_environment_by_id(
     db: AsyncSession,
     repo_environment_id: UUID,
+    *,
+    lock_row: bool = False,
 ) -> RepoEnvironmentValue | None:
-    row = (
-        await db.execute(
-            select(RepoEnvironment, RepoConfig)
-            .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
-            .where(
-                RepoEnvironment.id == repo_environment_id,
-                RepoEnvironment.deleted_at.is_(None),
-                RepoConfig.deleted_at.is_(None),
-            )
+    statement = (
+        select(RepoEnvironment, RepoConfig)
+        .join(RepoConfig, RepoEnvironment.repo_config_id == RepoConfig.id)
+        .where(
+            RepoEnvironment.id == repo_environment_id,
+            RepoEnvironment.deleted_at.is_(None),
+            RepoConfig.deleted_at.is_(None),
         )
-    ).one_or_none()
+    )
+    if lock_row:
+        statement = statement.with_for_update(of=RepoEnvironment)
+    row = (await db.execute(statement)).one_or_none()
     if row is None:
         return None
     environment, repo = row
@@ -307,11 +312,20 @@ async def _upsert_environment(
         )
         db.add(row)
     else:
+        changed = (
+            row.desktop_install_id != desktop_install_id
+            or row.local_path != local_path
+            or row.default_branch != normalized_default_branch
+            or row.setup_script != setup_script
+            or row.run_command != run_command
+        )
         row.desktop_install_id = desktop_install_id
         row.local_path = local_path
         row.default_branch = normalized_default_branch
         row.setup_script = setup_script
         row.run_command = run_command
+        if changed:
+            row.generation += 1
         row.updated_at = now
     repo.updated_at = now
     await db.flush()

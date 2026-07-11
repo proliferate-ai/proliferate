@@ -119,6 +119,11 @@ class WorkflowRun(Base):
     """Durable run ledger. The run id is the delivery idempotency key."""
 
     __tablename__ = "workflow_run"
+
+    # No server defaults: post-cutover inserts from an old binary fail instead of
+    # silently entering the new identity ledger. New ORM writers stamp both.
+    identity_schema_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    identity_cutover_parked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     __table_args__ = (
         CheckConstraint(
             "trigger_kind IN ('manual', 'schedule', 'poll', 'chat', 'agent', 'api')",
@@ -171,6 +176,27 @@ class WorkflowRun(Base):
             "preaccept_cancel_state IS NULL OR preaccept_cancel_state IN ("
             "'none', 'cancelling_preaccept', 'cancelled_before_acceptance')",
             name="ck_workflow_run_preaccept_cancel_state",
+        ),
+        CheckConstraint(
+            "(binding_hash IS NULL AND execution_generation IS NULL "
+            "AND execution_binding_json IS NULL) OR "
+            "(binding_hash IS NOT NULL AND execution_generation > 0 "
+            "AND execution_binding_json IS NOT NULL)",
+            name="ck_workflow_run_binding_identity_complete",
+        ),
+        CheckConstraint(
+            "binding_hash IS NULL OR binding_hash ~ '^sha256:[0-9a-f]{64}$'",
+            name="ck_workflow_run_binding_hash_canonical",
+        ),
+        CheckConstraint(
+            "identity_schema_version = 1 AND (NOT identity_cutover_parked OR ("
+            "status IN ('completed', 'failed', 'cancelled', 'missed') AND "
+            "private_envelope_json IS NULL AND "
+            "(jsonb_typeof(resolved_plan_json) != 'object' OR "
+            "NOT (resolved_plan_json ? 'gateway')) AND "
+            "binding_hash IS NULL AND execution_generation IS NULL AND "
+            "execution_binding_json IS NULL))",
+            name="ck_workflow_run_identity_writer_fence",
         ),
         Index("ix_workflow_run_workflow_created", "workflow_id", "created_at"),
         Index("ix_workflow_run_executor_user_id", "executor_user_id"),
@@ -284,6 +310,12 @@ class WorkflowRun(Base):
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Server-owned Desktop claim lineage and the runtime workspace lineage the
+    # authenticated claimant reported at claim time. Reclaim increments the
+    # former and replaces the latter under the run row lock.
+    claim_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    claimed_workspace_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    claimed_workspace_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # --- WS2a persistence skeleton: independent run state axes (spec §8.1). -------
     # ADD-ONLY. The legacy ``status`` column above keeps driving all current code;
     # nothing reads/writes these axes yet except WS2a's own tests. WS2b/2c cut over
@@ -312,12 +344,10 @@ class WorkflowRun(Base):
     execution_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     execution_binding_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
-    # WS2b secret-free plan: the PRIVATE execution envelope (spec §5.3). Holds the
-    # run's gateway block (url + plaintext bearer + ping_url + granted namespaces)
-    # and any future runtime-only credentials. NEVER returned by ordinary run
-    # list/detail/status APIs — only folded into the delivered plan on the cloud
-    # delivery task and the desktop claim/deliver paths. The logical
-    # ``resolved_plan_json`` above is now secret-free and immutable after creation.
+    # Tombstoned pre-WF-ID private envelope column. The cutover migration scrubs
+    # every populated value and constrains current rows to NULL. Future private
+    # credentials require a separately versioned final-envelope store/contract;
+    # they must not revive this legacy plan-adjacent field.
     private_envelope_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
 
@@ -351,8 +381,10 @@ class WorkflowTrigger(Base):
         # StartRun's own rule, pinned at the trigger: a cloud target names a
         # workspace; a local target must not.
         CheckConstraint(
-            "(target_mode = 'personal_cloud' AND target_workspace_id IS NOT NULL) "
-            "OR (target_mode = 'local' AND target_workspace_id IS NULL)",
+            "(target_mode = 'personal_cloud' AND target_workspace_id IS NOT NULL "
+            "AND local_workspace_id IS NULL) OR "
+            "(target_mode = 'local' AND target_workspace_id IS NULL "
+            "AND (enabled = false OR local_workspace_id IS NOT NULL))",
             name="ck_workflow_trigger_target_workspace",
         ),
         # A schedule trigger must carry a complete, cursor-able schedule.
@@ -423,6 +455,10 @@ class WorkflowTrigger(Base):
         ForeignKey("cloud_workspace.id", ondelete="CASCADE"),
         nullable=True,
     )
+    # Exact AnyHarness workspace selected for an unattended local run. Unlike
+    # target_workspace_id this is not a CloudWorkspace FK; Desktop proves it in
+    # the claim and binding generations.
+    local_workspace_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
     # D16 schedule enable-gate: the preset input values (mock's ScheduleConfig
     # presets). A schedule trigger cannot be enabled until every required workflow
     # input has a preset here. For schedule triggers it mirrors args_json (the
@@ -516,75 +552,3 @@ class WorkflowTriggerItem(Base):
     # Schema-validation / mapping / StartRun failure detail for non-spawned items.
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class WorkflowStepAction(Base):
-    """Server-side actions claimed off observed step completions.
-
-    An action performs the side effect of a step the runtime already executed;
-    it never decides or causes what executes next (L19).
-
-    The (run_id, step_key, action_kind) unique constraint IS the claim: the
-    transaction that inserts the row owns the action. status walks
-    pending -> done | failed; a sweeper retries stale 'pending' rows (an owner
-    that crashed before performing) and transient 'failed' rows (below the
-    attempt cap).
-
-    Honest guarantee: the ledger gives *exactly-once claim*. Action execution is
-    *at-least-once completion* via the sweeper. A crash inside the action window
-    (after the Slack POST succeeded, before status='done' committed) can
-    duplicate a send -- the same guarantee class as every non-transactional
-    external side effect.
-    """
-
-    __tablename__ = "workflow_step_action"
-    __table_args__ = (
-        UniqueConstraint(
-            "run_id",
-            "step_key",
-            "action_kind",
-            name="uq_workflow_step_action_claim",
-        ),
-        CheckConstraint(
-            "action_kind IN ('slack_notify')",
-            name="ck_workflow_step_action_kind",
-        ),
-        CheckConstraint(
-            "status IN ('pending', 'done', 'failed')",
-            name="ck_workflow_step_action_status",
-        ),
-        Index(
-            "ix_workflow_step_action_sweep",
-            "updated_at",
-            postgresql_where=text("status IN ('pending', 'failed')"),
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    run_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("workflow_run.id", ondelete="CASCADE"),
-    )
-    # B5 (D2): the structured step key "<node>.<lane>.<step>" — the step's stable
-    # identity across the format (bare integer indices are gone).
-    step_key: Mapped[str] = mapped_column(String(64))
-    action_kind: Mapped[str] = mapped_column(String(32))
-    status: Mapped[str] = mapped_column(String(16), default="pending")
-    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
-    result_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utcnow,
-        onupdate=utcnow,
-    )
-
-
-# Re-exported for existing importers; the classes moved to
-# ``workflow_gateway_models.py`` in WS2a (size discipline, no behavior change).
-from proliferate.db.models.cloud.workflow_gateway_models import (  # noqa: E402
-    FunctionInvocationDefinition as FunctionInvocationDefinition,
-)
-from proliferate.db.models.cloud.workflow_gateway_models import (  # noqa: E402
-    WorkflowRunGatewayToken as WorkflowRunGatewayToken,
-)

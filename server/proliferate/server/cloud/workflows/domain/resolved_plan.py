@@ -209,6 +209,7 @@ def resolve_plan(
     session_bindings: dict[str, str],
     agents: list[dict[str, object]],
     isolation: str = WORKFLOW_ISOLATION_DEFAULT,
+    source_intent: dict[str, object],
 ) -> dict[str, object]:
     """The single resolution pass (data-contract §4): flatten the agents spine
     into one ordered step list, stamp each step with its structured key + slot +
@@ -320,13 +321,17 @@ def resolve_plan(
             steps.append(resolved)
 
     return {
+        "planVersion": 1,
         "run_id": str(run_id),
-        "plan_version": 1,
         "workflow_id": str(workflow_id),
         "workflow_version_id": str(workflow_version_id),
         "version_n": version_n,
         "trigger_kind": trigger_kind,
         "target_mode": target_mode,
+        # Canonical source intent is part of the immutable logical plan. The
+        # materializer later proves the concrete commit/checkpoint in its
+        # ExecutionBinding; this intent deliberately carries no fabricated OID.
+        "sourceIntent": source_intent,
         # Wave 2b: plan-level run isolation. Emitted explicitly so the plan is
         # self-describing; the runtime treats an absent field as "workspace"
         # (back-compat). The source that pins "worktree" (plan setup / trigger)

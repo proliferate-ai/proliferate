@@ -334,6 +334,12 @@ export function parseExecutionBinding(value: unknown): Record<string, unknown> {
   if (record.sourceKind === "workspace_checkpoint" && (!record.checkpointId || !record.checkpointContentHash)) {
     throw new ContractParseError("ExecutionBinding: workspace_checkpoint requires checkpointId + checkpointContentHash");
   }
+  if (
+    record.sourceKind !== "workspace_checkpoint"
+    && (record.checkpointId !== undefined || record.checkpointContentHash !== undefined)
+  ) {
+    throw new ContractParseError("ExecutionBinding: commit source kinds must omit checkpoint fields");
+  }
   return record;
 }
 

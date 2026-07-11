@@ -4,19 +4,14 @@ A trigger pins target + schedule + concurrency and funnels to the *same*
 ``compiler.start_run`` — it owns no execution. Validation reuses the house
 pieces: schedule RRULE/timezone via ``automations.domain.schedule.normalize_schedule``
 (identical hourly/daily cursor rules), arg coverage via ``coerce_arguments``
-(so required args must be covered), workspace ownership via
-``_ensure_trigger_target_workspace`` below.
+(so required args must be covered), and target ownership via ``trigger_targets``.
 
-Local SCHEDULE triggers (track 2a): supported. This lifts the v1 L15 reject by
+Local schedule and poll triggers are supported. This lifts the v1 L15 reject by
 building the server→desktop claim protocol — a due local schedule trigger fires a
 ``claimable`` run a desktop executor claims (see the claim plane in the store +
-local_executor). A local schedule trigger keeps its repo pin (D16 CHECK; it tells
-the desktop which local worktree) but does NOT derive a cloud workspace
+local_executor), and a poll item does the same. A local trigger keeps its repo pin
+(D16 CHECK; it tells the desktop which local worktree) but does NOT derive a cloud workspace
 (target_workspace_id stays NULL — the local CHECK invariant).
-
-Local POLL triggers stay rejected: poll runs are created per-item by the poller,
-not by the missed-run-aware scheduler, so the claim/missed-run machinery this
-track adds does not cover them yet (follow-up).
 
 Split out of ``service.py`` (ownership-only, WS0B-S): API-facing workflow
 CRUD/visibility stays in ``service.py``; StartRun compilation lives in
@@ -29,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from urllib.parse import urlsplit
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,8 +42,6 @@ from proliferate.constants.workflows import (
 )
 from proliferate.db.store import cloud_workflow_triggers as trigger_store
 from proliferate.db.store import cloud_workflows as store
-from proliferate.db.store import cloud_workspaces as cloud_workspace_store
-from proliferate.db.store import repositories as repositories_store
 from proliferate.db.store.cloud_workflow_triggers import WorkflowTriggerRecord
 from proliferate.db.store.cloud_workflows import WorkflowRecord, WorkflowVersionRecord
 from proliferate.server.automations.domain.schedule import (
@@ -60,7 +53,6 @@ from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows.domain.definition import (
     WorkflowDefinitionError,
-    has_parallel_groups,
     parse_definition,
 )
 from proliferate.server.cloud.workflows.domain.interpolation import (
@@ -82,84 +74,18 @@ from proliferate.server.cloud.workflows.models import (
     WorkflowTriggerUpdateRequest,
 )
 from proliferate.server.cloud.workflows.service import visible_workflow
+from proliferate.server.cloud.workflows.trigger_targets import (
+    assert_parallel_target_supported,
+    ensure_trigger_target_workspace,
+    split_repo_full_name,
+    validate_trigger_target_mode,
+)
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
 # Cross-module call into service.py, the API-facing owner of workflow
 # visibility (one-directional: service.py does not import this module).
 _visible_workflow = visible_workflow
-
-_TRIGGER_LOCAL_UNSUPPORTED_MESSAGE = (
-    "Scheduled local runs are coming; run this workflow manually, or schedule it "
-    "on a cloud workspace."
-)
-_POLL_LOCAL_UNSUPPORTED_MESSAGE = (
-    "Poll triggers run in the cloud; point this trigger at a cloud workspace."
-)
-
-
-def _split_repo_full_name(repo_full_name: str | None) -> tuple[str, str]:
-    """Parse an "owner/name" repo pin. Raises 400 on a malformed value."""
-
-    cleaned = (repo_full_name or "").strip()
-    owner, _, name = cleaned.partition("/")
-    if not owner or not name or "/" in name:
-        raise CloudApiError(
-            "invalid_repo",
-            "Pin a repository as 'owner/name'.",
-            status_code=400,
-        )
-    return owner, name
-
-
-async def _ensure_trigger_target_workspace(
-    db: AsyncSession, *, user: ActorIdentity, repo_full_name: str | None
-) -> UUID:
-    """D16: derive the trigger's target workspace from its repo pin.
-
-    The trigger authors a repo; the server owns the workspace. This resolves the
-    caller's cloud repo environment for the pin and provisions a dedicated,
-    server-owned cloud workspace row for it (one warm workspace per trigger). The
-    anyharness worktree is NOT materialized here — that stays a retry-at-fire
-    concern (``start_run`` raises ``target_workspace_not_ready`` until the runtime
-    workspace is ready), exactly as before the repo pin existed.
-    """
-
-    owner, name = _split_repo_full_name(repo_full_name)
-    repo_environment = await repositories_store.get_cloud_repo_environment(
-        db, user_id=user.id, git_owner=owner, git_repo_name=name
-    )
-    if repo_environment is None:
-        raise CloudApiError(
-            "cloud_repo_environment_not_found",
-            "Configure this repository as a cloud environment before pinning it to a trigger.",
-            status_code=404,
-        )
-    # Reuse the warm workspace this repo already has, if any; otherwise create the
-    # dedicated row. Either way the trigger-fire path is unchanged — it stamps this
-    # id into start_run, which re-checks materialization (target_workspace_not_ready
-    # stays a retry-at-fire concern for a row whose worktree isn't ready yet).
-    existing = await cloud_workspace_store.get_active_cloud_workspace_for_repo_environment(
-        db, user_id=user.id, repo_environment_id=repo_environment.id
-    )
-    if existing is not None:
-        return existing.id
-    branch = f"workflow-trigger/{uuid4().hex[:12]}"
-    workspace = await cloud_workspace_store.create_cloud_workspace(
-        db,
-        user_id=user.id,
-        repo_environment_id=repo_environment.id,
-        display_name=f"{owner}/{name}",
-        git_branch=branch,
-        git_base_branch=repo_environment.default_branch or "main",
-    )
-    if workspace is None:  # pragma: no cover - the generated branch is unique
-        raise CloudApiError(
-            "cloud_workspace_create_failed",
-            "Could not provision a workspace for the pinned repository.",
-            status_code=409,
-        )
-    return workspace.id
 
 
 def workflow_arg_specs(version: WorkflowVersionRecord) -> list[ArgSpec]:
@@ -195,55 +121,6 @@ def _validate_missed_run_policy(policy: str) -> None:
         raise CloudApiError(
             "invalid_missed_run_policy",
             f"missed_run_policy must be one of {allowed}.",
-            status_code=400,
-        )
-
-
-def _validate_trigger_target_mode(
-    mode: str, *, kind: str = WORKFLOW_TRIGGER_KIND_SCHEDULE
-) -> None:
-    is_poll = kind == WORKFLOW_TRIGGER_KIND_POLL
-    if mode == WORKFLOW_TARGET_MODE_LOCAL:
-        # 2a: local SCHEDULE triggers are now a real path (desktop claim plane).
-        # Local POLL triggers remain cloud-only until the poller lane learns the
-        # claim/missed-run protocol.
-        if is_poll:
-            raise CloudApiError(
-                "poll_local_unsupported",
-                _POLL_LOCAL_UNSUPPORTED_MESSAGE,
-                status_code=400,
-            )
-        return
-    if mode != WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
-        raise CloudApiError(
-            "invalid_target_mode",
-            "target_mode must be 'personal_cloud' or 'local' for "
-            + ("poll" if is_poll else "scheduled")
-            + " triggers.",
-            status_code=400,
-        )
-
-
-async def _assert_parallel_target_supported(
-    db: AsyncSession, *, workflow: WorkflowRecord, target_mode: str
-) -> None:
-    """M1 (L30): a workflow whose current definition has parallel groups is
-    cloud-only in v1 — reject a LOCAL-target trigger up front, mirroring the
-    same StartRun bound (``parallel_local_unsupported``). No-op for cloud targets
-    or a version-less draft (nothing runnable to laned-reject yet)."""
-
-    if target_mode != WORKFLOW_TARGET_MODE_LOCAL:
-        return
-    if workflow.current_version_id is None:
-        return
-    version = await store.get_version(db, workflow.current_version_id)
-    if version is None:
-        return
-    if has_parallel_groups(version.definition_json.get("agents")):
-        raise CloudApiError(
-            "parallel_local_unsupported",
-            "Workflows with parallel groups are cloud-only in v1; a local (desktop) "
-            "target is not supported for their triggers.",
             status_code=400,
         )
 
@@ -600,26 +477,45 @@ async def create_trigger(
     _validate_trigger_kind(body.kind)
     _validate_concurrency(body.concurrency_policy)
     _validate_missed_run_policy(body.missed_run_policy)
-    _validate_trigger_target_mode(body.target_mode, kind=body.kind)
-    await _assert_parallel_target_supported(db, workflow=workflow, target_mode=body.target_mode)
+    validate_trigger_target_mode(body.target_mode, kind=body.kind)
+    await assert_parallel_target_supported(db, workflow=workflow, target_mode=body.target_mode)
     # D16: the repo pin is the authored "where". For a CLOUD target the server
     # derives + owns the cloud workspace it maps to. For a LOCAL target (2a) the
     # repo pin names the desktop's local worktree instead — no cloud workspace is
     # provisioned and target_workspace_id stays NULL (the local CHECK invariant).
     target_workspace_id: UUID | None = None
+    local_workspace_id: UUID | None = None
     if body.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
-        target_workspace_id = await _ensure_trigger_target_workspace(
+        if body.local_workspace_id is not None:
+            raise CloudApiError(
+                "local_workspace_forbidden",
+                "localWorkspaceId is only valid for a local trigger.",
+                status_code=400,
+            )
+        target_workspace_id = await ensure_trigger_target_workspace(
             db, user=user, repo_full_name=body.repo_full_name
         )
     else:
         # Local target: the repo pin names the desktop's local worktree — validate
         # its "owner/name" shape (raises invalid_repo on missing/malformed) but do
         # NOT provision a cloud workspace.
-        _split_repo_full_name(body.repo_full_name)
+        split_repo_full_name(body.repo_full_name)
+        if body.local_workspace_id is None:
+            raise CloudApiError(
+                "local_workspace_required",
+                "A local trigger must pin its intended AnyHarness workspace.",
+                status_code=400,
+            )
+        local_workspace_id = body.local_workspace_id
 
     if body.kind == WORKFLOW_TRIGGER_KIND_POLL:
         return await _create_poll_trigger(
-            db, user, workflow, body, target_workspace_id=target_workspace_id
+            db,
+            user,
+            workflow,
+            body,
+            target_workspace_id=target_workspace_id,
+            local_workspace_id=local_workspace_id,
         )
 
     parsed = _normalize_trigger_schedule(_require_schedule(body.schedule))
@@ -638,6 +534,7 @@ async def create_trigger(
         target_mode=body.target_mode,
         repo_full_name=body.repo_full_name,
         target_workspace_id=target_workspace_id,
+        local_workspace_id=local_workspace_id,
         input_presets_json=presets,
         schedule_rrule=parsed.rrule_text,
         schedule_timezone=parsed.timezone,
@@ -663,7 +560,8 @@ async def _create_poll_trigger(
     workflow: WorkflowRecord,
     body: WorkflowTriggerCreateRequest,
     *,
-    target_workspace_id: UUID,
+    target_workspace_id: UUID | None,
+    local_workspace_id: UUID | None,
 ) -> WorkflowTriggerRecord:
     if body.poll is None:
         raise CloudApiError(
@@ -687,6 +585,7 @@ async def _create_poll_trigger(
         target_mode=body.target_mode,
         repo_full_name=body.repo_full_name,
         target_workspace_id=target_workspace_id,
+        local_workspace_id=local_workspace_id,
         poll_url=config.url,
         poll_auth_header=config.auth_header,
         poll_auth_ciphertext=config.auth_ciphertext,
@@ -737,8 +636,8 @@ async def update_trigger(
     enabled = body.enabled if body.enabled is not None else existing.enabled
     _validate_concurrency(concurrency)
     _validate_missed_run_policy(missed_run_policy)
-    _validate_trigger_target_mode(target_mode, kind=existing.kind)
-    await _assert_parallel_target_supported(db, workflow=workflow, target_mode=target_mode)
+    validate_trigger_target_mode(target_mode, kind=existing.kind)
+    await assert_parallel_target_supported(db, workflow=workflow, target_mode=target_mode)
 
     # D16: re-pinning the repo re-derives a fresh server-owned workspace; leaving
     # it alone keeps the existing derived workspace.
@@ -755,11 +654,29 @@ async def update_trigger(
     if clear_target_workspace:
         target_workspace_id: UUID | None = None
     elif repo_changed or existing.target_workspace_id is None:
-        target_workspace_id = await _ensure_trigger_target_workspace(
+        target_workspace_id = await ensure_trigger_target_workspace(
             db, user=user, repo_full_name=repo_full_name
         )
     else:
         target_workspace_id = existing.target_workspace_id
+    if target_mode == WORKFLOW_TARGET_MODE_LOCAL:
+        local_workspace_id = body.local_workspace_id or existing.local_workspace_id
+        if local_workspace_id is None and enabled:
+            raise CloudApiError(
+                "local_workspace_required",
+                "An enabled local trigger must pin its intended AnyHarness workspace.",
+                status_code=400,
+            )
+        clear_local_workspace = False
+    else:
+        if body.local_workspace_id is not None:
+            raise CloudApiError(
+                "local_workspace_forbidden",
+                "localWorkspaceId is only valid for a local trigger.",
+                status_code=400,
+            )
+        local_workspace_id = None
+        clear_local_workspace = True
 
     if existing.kind == WORKFLOW_TRIGGER_KIND_POLL:
         return await _update_poll_trigger(
@@ -773,6 +690,8 @@ async def update_trigger(
             repo_full_name=repo_full_name,
             target_workspace_id=target_workspace_id,
             clear_target_workspace=clear_target_workspace,
+            local_workspace_id=local_workspace_id,
+            clear_local_workspace=clear_local_workspace,
         )
     if body.poll is not None:
         raise CloudApiError(
@@ -812,6 +731,8 @@ async def update_trigger(
         repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
         clear_target_workspace=clear_target_workspace,
+        local_workspace_id=local_workspace_id,
+        clear_local_workspace=clear_local_workspace,
         input_presets_json=presets,
         write_input_presets=True,
         schedule_rrule=parsed.rrule_text,
@@ -836,6 +757,8 @@ async def _update_poll_trigger(
     repo_full_name: str | None,
     target_workspace_id: UUID | None,
     clear_target_workspace: bool,
+    local_workspace_id: UUID | None,
+    clear_local_workspace: bool,
 ) -> WorkflowTriggerRecord:
     if body.schedule is not None:
         raise CloudApiError("invalid_schedule", "A poll trigger has no schedule.", status_code=400)
@@ -900,6 +823,8 @@ async def _update_poll_trigger(
         repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
         clear_target_workspace=clear_target_workspace,
+        local_workspace_id=local_workspace_id,
+        clear_local_workspace=clear_local_workspace,
         args_json=coerced_static,
         write_poll_config=True,
         poll_url=config.url if config is not None else existing.poll_url,

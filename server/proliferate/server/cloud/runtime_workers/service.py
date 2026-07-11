@@ -193,6 +193,12 @@ async def enroll_worker(
             status_code=401,
         )
 
+    await store.acquire_worker_identity_lock(
+        db,
+        cloud_sandbox_id=enrollment.cloud_sandbox_id,
+        desktop_install_id=enrollment.desktop_install_id,
+    )
+
     # Single active worker per identity: retire any prior worker + gateway
     # token. Desktop installs run exactly one physical worker process, so a
     # desktop enrollment retires predecessors regardless of owner — otherwise

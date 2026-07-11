@@ -28,6 +28,9 @@ from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_STEP_KINDS,
     WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS,
     WORKFLOW_INPUT_TYPE_CHOICE,
+    WORKFLOW_INT32_MAX,
+    WORKFLOW_INT32_MIN,
+    WORKFLOW_JSON_SAFE_INTEGER_MAX,
     WORKFLOW_MAX_AGENTS,
     WORKFLOW_MAX_ARGS,
     WORKFLOW_MAX_STEPS,
@@ -44,6 +47,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_STEP_SCM_OPEN_PR,
     WORKFLOW_STEP_SHELL_RUN,
     WORKFLOW_STEP_WORKFLOW_INCLUDE,
+    WORKFLOW_UINT32_MAX,
 )
 from proliferate.server.cloud.workflows.domain.interpolation import (
     ArgSpec,
@@ -136,22 +140,42 @@ def _optional_bool(obj: dict[str, object], key: str, *, field: str) -> bool | No
     return value
 
 
-def _positive_int(obj: dict[str, object], key: str, *, field: str, required: bool) -> int | None:
+def _positive_int(
+    obj: dict[str, object],
+    key: str,
+    *,
+    field: str,
+    required: bool,
+    maximum: int,
+) -> int | None:
     if key not in obj or obj[key] is None:
         if required:
             raise _err("invalid_definition", f"'{field}.{key}' is required.")
         return None
     value = obj[key]
     # bool is an int subclass; reject it explicitly.
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise _err("invalid_definition", f"'{field}.{key}' must be a positive integer.")
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0 or value > maximum:
+        raise _err(
+            "invalid_definition",
+            f"'{field}.{key}' must be a positive integer no greater than {maximum}.",
+        )
     return value
 
 
-def _int_field(obj: dict[str, object], key: str, *, field: str) -> int:
+def _int_field(
+    obj: dict[str, object],
+    key: str,
+    *,
+    field: str,
+    minimum: int,
+    maximum: int,
+) -> int:
     value = obj.get(key)
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise _err("invalid_definition", f"'{field}.{key}' is required and must be an integer.")
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum or value > maximum:
+        raise _err(
+            "invalid_definition",
+            f"'{field}.{key}' must be an integer from {minimum} through {maximum}.",
+        )
     return value
 
 
@@ -287,7 +311,13 @@ def _parse_on_fail(raw: object, *, field: str) -> dict[str, object]:
             f"'{field}.on_fail.kind' must be one of {sorted(SUPPORTED_WORKFLOW_ON_FAIL_KINDS)}.",
         )
     if kind == WORKFLOW_ON_FAIL_RETRY:
-        n = _positive_int(on_fail, "n", field=f"{field}.on_fail", required=True)
+        n = _positive_int(
+            on_fail,
+            "n",
+            field=f"{field}.on_fail",
+            required=True,
+            maximum=WORKFLOW_UINT32_MAX,
+        )
         return {"kind": kind, "n": n}
     if "n" in on_fail:
         raise _err("unknown_field", f"'{field}.on_fail.n' is only valid for retry.")
@@ -305,9 +335,27 @@ def _parse_goal(raw: object, *, field: str) -> dict[str, object]:
         field=f"{field}.goal",
     )
     objective = _require_str(goal, "objective", field=f"{field}.goal")
-    max_turns = _positive_int(goal, "max_turns", field=f"{field}.goal", required=True)
-    max_wall_secs = _positive_int(goal, "max_wall_secs", field=f"{field}.goal", required=True)
-    token_budget = _positive_int(goal, "token_budget", field=f"{field}.goal", required=False)
+    max_turns = _positive_int(
+        goal,
+        "max_turns",
+        field=f"{field}.goal",
+        required=True,
+        maximum=WORKFLOW_UINT32_MAX,
+    )
+    max_wall_secs = _positive_int(
+        goal,
+        "max_wall_secs",
+        field=f"{field}.goal",
+        required=True,
+        maximum=WORKFLOW_JSON_SAFE_INTEGER_MAX,
+    )
+    token_budget = _positive_int(
+        goal,
+        "token_budget",
+        field=f"{field}.goal",
+        required=False,
+        maximum=WORKFLOW_JSON_SAFE_INTEGER_MAX,
+    )
     on_blocked = goal.get("on_blocked")
     if on_blocked not in SUPPORTED_WORKFLOW_GOAL_ON_BLOCKED:
         allowed = sorted(SUPPORTED_WORKFLOW_GOAL_ON_BLOCKED)
@@ -328,7 +376,13 @@ def _parse_goal(raw: object, *, field: str) -> dict[str, object]:
         _reject_unknown_keys(verify, {"shell", "expect_exit"}, field=f"{field}.goal.verify")
         canonical["verify"] = {
             "shell": _require_str(verify, "shell", field=f"{field}.goal.verify"),
-            "expect_exit": _int_field(verify, "expect_exit", field=f"{field}.goal.verify"),
+            "expect_exit": _int_field(
+                verify,
+                "expect_exit",
+                field=f"{field}.goal.verify",
+                minimum=WORKFLOW_INT32_MIN,
+                maximum=WORKFLOW_INT32_MAX,
+            ),
         }
     return canonical
 
@@ -383,7 +437,13 @@ def _parse_agent_emit(step: dict[str, object], *, field: str) -> dict[str, objec
     canonical: dict[str, object] = {
         "prompt": _require_str(step, "prompt", field=field),
         "name": name,
-        "max_attempts": _positive_int(step, "max_attempts", field=field, required=False)
+        "max_attempts": _positive_int(
+            step,
+            "max_attempts",
+            field=field,
+            required=False,
+            maximum=WORKFLOW_UINT32_MAX,
+        )
         or WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS,
     }
     if "output_schema" in step and step["output_schema"] is not None:
@@ -409,7 +469,13 @@ def _parse_shell_run(step: dict[str, object], *, field: str) -> dict[str, object
         step, {"kind", "on_fail", "label", "command", "timeout_secs", "output_name"}, field=field
     )
     canonical: dict[str, object] = {"command": _require_str(step, "command", field=field)}
-    timeout_secs = _positive_int(step, "timeout_secs", field=field, required=False)
+    timeout_secs = _positive_int(
+        step,
+        "timeout_secs",
+        field=field,
+        required=False,
+        maximum=WORKFLOW_JSON_SAFE_INTEGER_MAX,
+    )
     if timeout_secs is not None:
         canonical["timeout_secs"] = timeout_secs
     output_name = _optional_str(step, "output_name", field=field)

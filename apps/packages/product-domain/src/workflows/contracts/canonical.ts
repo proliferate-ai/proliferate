@@ -19,6 +19,24 @@
 
 import { sha256Hex, utf8Bytes } from "./hashing";
 
+function assertWellFormedUnicode(value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = value.charCodeAt(index);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      // `charCodeAt(length)` returns NaN, whose ordered comparisons are both
+      // false. Check the boundary explicitly so a trailing high surrogate
+      // cannot slip through as if it had a valid low-surrogate pair.
+      if (index + 1 >= value.length || next < 0xdc00 || next > 0xdfff) {
+        throw new Error("lone UTF-16 surrogate is not canonicalizable");
+      }
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      throw new Error("lone UTF-16 surrogate is not canonicalizable");
+    }
+  }
+}
+
 function canon(value: unknown): string {
   if (value === null) {
     return "null";
@@ -27,6 +45,7 @@ function canon(value: unknown): string {
     return value ? "true" : "false";
   }
   if (typeof value === "string") {
+    assertWellFormedUnicode(value);
     return JSON.stringify(value);
   }
   if (typeof value === "number") {
@@ -44,6 +63,9 @@ function canon(value: unknown): string {
   if (typeof value === "object") {
     const obj = value as Record<string, unknown>;
     const keys = Object.keys(obj).sort();
+    for (const key of keys) {
+      assertWellFormedUnicode(key);
+    }
     return `{${keys.map((k) => `${JSON.stringify(k)}:${canon(obj[k])}`).join(",")}}`;
   }
   throw new Error(`unsupported type in canonical JSON: ${typeof value}`);

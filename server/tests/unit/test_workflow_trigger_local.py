@@ -15,24 +15,26 @@ from proliferate.constants.workflows import (
     WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST,
     WORKFLOW_RUN_STATUS_CLAIMABLE,
     WORKFLOW_RUN_STATUS_CLAIMED,
-    WORKFLOW_RUN_STATUS_COMPLETED,
     WORKFLOW_RUN_STATUS_MISSED,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
-    WORKFLOW_RUN_STATUS_RUNNING,
     WORKFLOW_TARGET_MODE_LOCAL,
 )
-from proliferate.db.models.cloud.workflows import WorkflowRun, WorkflowRunGatewayToken
+from proliferate.db.models.cloud.workflow_gateway_models import WorkflowRunGatewayToken
+from proliferate.db.models.cloud.workflows import WorkflowRun
 from proliferate.db.store import cloud_workflows as store
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows import local_executor, scheduler, triggers
-from proliferate.server.cloud.workflows.models import (
+from proliferate.server.cloud.workflows.local_models import (
     LocalWorkflowClaimActionRequest,
     LocalWorkflowClaimRequest,
+)
+from proliferate.server.cloud.workflows.models import (
     RunStatusRequest,
 )
 from proliferate.server.cloud.workflows.worker import service as worker_service
 from proliferate.utils.time import utcnow
 from tests.unit.workflow_trigger_test_support import (
+    _LOCAL_WORKSPACE_ID,
     _REPO,
     _create_body,
     _make_due,
@@ -43,7 +45,6 @@ from tests.unit.workflow_trigger_test_support import (
     _patch_gateway,
     _patch_recording_gateway,
     _push_cursor_back,
-    _seed_trigger,
     _trigger_runs,
 )
 
@@ -53,6 +54,24 @@ pytestmark = pytest.mark.asyncio
 @pytest.fixture
 def session_factory(test_engine):  # type: ignore[no-untyped-def]
     return async_sessionmaker(test_engine, expire_on_commit=False)
+
+
+@pytest.fixture(autouse=True)
+def _bypass_wf_id_scheduler_gate_for_lower_layer_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """This legacy suite exercises scheduling below the WF-ID feature-off gate."""
+
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "reject_unattended_activation",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "unattended_activation_enabled",
+        lambda: True,
+    )
 
 
 # --- track 2a: desktop-executor local scheduling (lifts L15) --------------------
@@ -91,7 +110,12 @@ async def _claim_batch(
         resp = await local_executor.claim_local_workflow_runs(
             db,
             owner,
-            LocalWorkflowClaimRequest(executorId=executor_id, limit=limit),  # type: ignore[call-arg]
+            LocalWorkflowClaimRequest(
+                executorId=executor_id,
+                workspaceId=str(_LOCAL_WORKSPACE_ID),
+                workspaceGeneration=1,
+                limit=limit,
+            ),  # type: ignore[call-arg]
         )
     return list(resp.runs)
 
@@ -106,19 +130,9 @@ async def test_create_accepts_local_schedule_trigger(db_session: AsyncSession) -
     )
     assert trigger.target_mode == "local"
     assert trigger.target_workspace_id is None
+    assert trigger.local_workspace_id == _LOCAL_WORKSPACE_ID
     assert trigger.repo_full_name == _REPO
     assert trigger.next_run_at is not None and trigger.next_run_at > utcnow()
-
-
-async def test_create_still_rejects_local_poll_trigger(db_session: AsyncSession) -> None:
-    """Poll triggers stay cloud-only (the poller lane has no claim/missed machinery)."""
-    user = await _make_user(db_session)
-    workflow = await _make_workflow(db_session, user)
-    body = _create_body(target_mode="local")
-    body.kind = "poll"  # type: ignore[assignment]
-    with pytest.raises(CloudApiError) as exc:
-        await triggers.create_trigger(db_session, user, workflow.id, body)
-    assert exc.value.code == "poll_local_unsupported"
 
 
 async def test_local_schedule_fires_claimable_run_no_server_delivery(
@@ -229,7 +243,7 @@ async def test_local_stale_claim_is_reclaimable_exactly_once(
     # ...and it is not stale now, so a follow-up poll finds nothing (no double-claim).
     assert await _claim_batch(session_factory, owner=owner, executor_id="desktop-3") == []
 
-    # The stale holder's heartbeat (old claim_id) is rejected; the winner's works.
+    # Neither a stale claim nor a wrong executor holding the right claim can renew.
     async with session_factory() as db, db.begin():
         stale = await local_executor.heartbeat_local_workflow_run(
             db,
@@ -238,6 +252,16 @@ async def test_local_stale_claim_is_reclaimable_exactly_once(
             LocalWorkflowClaimActionRequest(executorId="desktop-1", claimId=original_claim),  # type: ignore[call-arg]
         )
     assert stale.accepted is False and stale.run is None
+    async with session_factory() as db, db.begin():
+        wrong_executor = await local_executor.heartbeat_local_workflow_run(
+            db,
+            owner,
+            run_id,
+            LocalWorkflowClaimActionRequest(  # type: ignore[call-arg]
+                executorId="desktop-3", claimId=reclaimed[0].claim_id
+            ),
+        )
+    assert wrong_executor.accepted is False and wrong_executor.run is None
     async with session_factory() as db, db.begin():
         ok = await local_executor.heartbeat_local_workflow_run(
             db,
@@ -250,13 +274,10 @@ async def test_local_stale_claim_is_reclaimable_exactly_once(
     assert ok.accepted is True and ok.run is not None
 
 
-async def test_local_terminal_report_expires_gateway_token_like_cloud(
+async def test_local_terminal_report_has_no_prebinding_gateway_token(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """(d) A local run reports terminal through the SAME /status path the cloud lane
-    uses, so the shared terminal side effect fires: the per-run gateway token is
-    expired the instant the run goes terminal (one observability + one credential
-    surface for both lanes)."""
+    """WF-ID never mints a final gateway credential during StartRun or claim."""
     trigger_id, workflow_id = await _seed_local_trigger(session_factory)
     await _make_due(session_factory, trigger_id)
     _patch_gateway(monkeypatch)
@@ -270,9 +291,6 @@ async def test_local_terminal_report_expires_gateway_token_like_cloud(
     claim_id = claimed[0].claim_id
     assert claim_id is not None
 
-    # Every run mints a token (L16). A claim ROTATES it (BLOCKER fix): the StartRun
-    # token is expired and a fresh one minted for the claimant, so after the claim
-    # exactly one token is active (the rotated one) and the original is expired.
     async def _token_statuses() -> list[str]:
         async with session_factory() as db:
             rows = (
@@ -289,32 +307,24 @@ async def test_local_terminal_report_expires_gateway_token_like_cloud(
         return list(rows)
 
     before = await _token_statuses()
-    assert before.count("active") == 1  # exactly the rotated token is live
-    assert before.count("expired") == 1  # the original StartRun token was expired
+    assert before == []
 
-    # The relay reports via owner auth and MUST carry the live claim_id (2a).
+    # Reporting stays parked until the authenticated final envelope exists.
     actor = SimpleNamespace(id=owner)
-    async with session_factory() as db, db.begin():
-        await worker_service.report_run_status(
-            db,
-            actor,
-            run_id,
-            RunStatusRequest(status="running", claimId=claim_id),  # type: ignore[arg-type,call-arg]
-        )
-    async with session_factory() as db, db.begin():
-        await worker_service.report_run_status(
-            db,
-            actor,
-            run_id,
-            RunStatusRequest(status="completed", claimId=claim_id),  # type: ignore[arg-type,call-arg]
-        )
+    with pytest.raises(CloudApiError) as caught:
+        async with session_factory() as db, db.begin():
+            await worker_service.report_run_status(
+                db,
+                actor,
+                run_id,
+                RunStatusRequest(status="running", claimId=claim_id),  # type: ignore[arg-type,call-arg]
+            )
+    assert caught.value.code == "workflow_final_envelope_unavailable"
 
     after = await _token_statuses()
-    # Terminal report expired the (rotated) active token, like the cloud path — no
-    # token is left live for the run.
-    assert "active" not in after and set(after) == {"expired"}
+    assert after == []
     runs = await _trigger_runs(session_factory, owner, trigger_id)
-    assert runs[0].status == WORKFLOW_RUN_STATUS_COMPLETED
+    assert runs[0].status == WORKFLOW_RUN_STATUS_CLAIMED
 
 
 async def _fire_and_claim_local(
@@ -336,11 +346,7 @@ async def _fire_and_claim_local(
 async def test_local_reclaim_rejects_stale_claim_report_and_leaves_run_untouched(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """BLOCKER (owner-auth path): after laptop B reclaims a stale run, laptop A's
-    relay — which reports via OWNER auth (same user owns both laptops, so the token
-    check can't distinguish them) — carries A's now-stale claim_id. That report is
-    rejected 409 ``workflow_run_stale_claim`` and the run is untouched, so A cannot
-    clobber the run B now owns."""
+    """Every legacy report is parked before it can mutate a reclaimed run."""
     trigger_id, owner, first = await _fire_and_claim_local(session_factory, monkeypatch)
     assert len(first) == 1
     run_id = uuid.UUID(first[0].id)
@@ -367,7 +373,7 @@ async def test_local_reclaim_rejects_stale_claim_report_and_leaves_run_untouched
                 run_id,
                 RunStatusRequest(status="running", claimId=stale_claim),  # type: ignore[arg-type,call-arg]
             )
-    assert exc.value.code == "workflow_run_stale_claim"
+    assert exc.value.code == "workflow_final_envelope_unavailable"
     assert exc.value.status_code == 409
     async with session_factory() as db:
         untouched = await store.get_run(db, run_id)
@@ -376,23 +382,11 @@ async def test_local_reclaim_rejects_stale_claim_report_and_leaves_run_untouched
     assert str(untouched.claim_id) == new_claim  # still B's claim
     assert untouched.started_at is None
 
-    # B's relay (current claim_id) drives the run normally.
-    async with session_factory() as db, db.begin():
-        ok = await worker_service.report_run_status(
-            db,
-            actor,
-            run_id,
-            RunStatusRequest(status="running", claimId=new_claim),  # type: ignore[arg-type,call-arg]
-        )
-    assert ok.status == WORKFLOW_RUN_STATUS_RUNNING
-
 
 async def test_local_claimed_run_report_without_claim_id_rejected(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """BLOCKER: an owner-authed report on a live-claimed LOCAL run that omits the
-    claim_id is rejected (the relay must thread it) — otherwise the owner-auth path
-    is unauthenticated at the claim granularity."""
+    """Legacy owner reports share the final-envelope feature-off gate."""
     _trigger_id, owner, claimed = await _fire_and_claim_local(session_factory, monkeypatch)
     run_id = uuid.UUID(claimed[0].id)
     actor = SimpleNamespace(id=owner)
@@ -404,17 +398,14 @@ async def test_local_claimed_run_report_without_claim_id_rejected(
                 run_id,
                 RunStatusRequest(status="running"),  # type: ignore[arg-type]
             )
-    assert exc.value.code == "workflow_run_claim_required"
+    assert exc.value.code == "workflow_final_envelope_unavailable"
     assert exc.value.status_code == 409
 
 
-async def test_local_claim_rotates_gateway_token(
+async def test_local_claim_and_reclaim_mint_no_gateway_token(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """BLOCKER (token path): each claim/reclaim rotates the per-run gateway token —
-    the prior holder's token is expired and a fresh one minted, so a partitioned
-    laptop's runtime is 401'd by the gateway + token-authed /status. Exactly one
-    token is active after each claim, and its hash changes on reclaim."""
+    """Claims select a materializer but WF-CRED still owns final credentials."""
     trigger_id, owner, first = await _fire_and_claim_local(session_factory, monkeypatch)
     run_id = uuid.UUID(first[0].id)
 
@@ -431,12 +422,9 @@ async def test_local_claim_rotates_gateway_token(
             )
 
     after_first = await _token_rows()
-    active_first = [h for s, h in after_first if s == "active"]
-    # StartRun minted one, the claim rotated it: exactly one active, one expired.
-    assert len(active_first) == 1
-    assert sum(1 for s, _ in after_first if s == "expired") == 1
+    assert after_first == []
 
-    # Reclaim after the claim lapses: the token rotates again.
+    # Reclaim after the claim lapses still mints nothing.
     async with session_factory() as db, db.begin():
         row = await db.get(WorkflowRun, run_id)
         assert row is not None
@@ -444,17 +432,10 @@ async def test_local_claim_rotates_gateway_token(
     await _claim_batch(session_factory, owner=owner, executor_id="desktop-2")
 
     after_reclaim = await _token_rows()
-    active_reclaim = [h for s, h in after_reclaim if s == "active"]
-    assert len(active_reclaim) == 1  # still exactly one live token
-    assert active_reclaim[0] != active_first[0]  # ...and it is a NEW token hash
-    # The prior claimant's token hash is now expired — its runtime is locked out.
-    assert active_first[0] not in [h for s, h in after_reclaim if s == "active"]
+    assert after_reclaim == []
 
 
-async def test_cloud_run_report_needs_no_claim_id(db_session: AsyncSession) -> None:
-    """Regression: a cloud run never carries a claim, so its /status reports are
-    unchanged — no claim_id is required and the guard is a no-op (the runtime
-    self-reports via its per-run gateway token)."""
+async def test_cloud_run_report_is_parked_without_mutation(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     workflow = await _make_workflow(db_session, user)
     assert workflow.current_version_id is not None
@@ -469,37 +450,37 @@ async def test_cloud_run_report_needs_no_claim_id(db_session: AsyncSession) -> N
         resolved_plan_json={},
         status="delivered",
     )
-    updated = await worker_service.report_run_status(
-        db_session,
-        user,
-        run.id,
-        RunStatusRequest(status="running"),  # type: ignore[arg-type]
-    )
-    assert updated.status == WORKFLOW_RUN_STATUS_RUNNING
-    assert updated.claim_id is None
+    with pytest.raises(CloudApiError) as caught:
+        await worker_service.report_run_status(
+            db_session,
+            user,
+            run.id,
+            RunStatusRequest(status="running"),  # type: ignore[arg-type]
+        )
+    assert caught.value.code == "workflow_final_envelope_unavailable"
+    stored = await store.get_run(db_session, run.id)
+    assert stored is not None and stored.status == "delivered"
 
 
 async def test_cloud_scheduled_run_is_never_claimable_regression(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """(e) Regression: a CLOUD schedule trigger is unaffected by 2a — its run is
-    pending_delivery and server-delivered as before, and the local claim plane never
-    returns it (a cloud run must never be handed to a desktop executor)."""
-    trigger_id, workflow_id = await _seed_trigger(session_factory, concurrency="skip")
-    await _make_due(session_factory, trigger_id)
-    _patch_gateway(monkeypatch)
-    seen = _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
-
-    result = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
-    assert result.created_runs == 1
-    assert result.delivered_runs == 1  # cloud lane still delivers
-    assert len(seen) == 1
-
-    owner = await _owner(session_factory, workflow_id)
-    runs = await _trigger_runs(session_factory, owner, trigger_id)
-    assert len(runs) == 1
-    assert runs[0].target_mode == "personal_cloud"
-    assert runs[0].status not in (WORKFLOW_RUN_STATUS_CLAIMABLE, WORKFLOW_RUN_STATUS_CLAIMED)
-
-    # The local claim poll for this owner returns nothing — cloud runs are off-limits.
+    """Even a pre-existing cloud row is outside the local claim plane."""
+    del monkeypatch
+    async with session_factory() as db, db.begin():
+        user = await _make_user(db)
+        workflow = await _make_workflow(db, user)
+        assert workflow.current_version_id is not None
+        await store.create_run(
+            db,
+            workflow_id=workflow.id,
+            workflow_version_id=workflow.current_version_id,
+            trigger_kind="schedule",
+            executor_user_id=user.id,
+            args_json={},
+            target_mode="personal_cloud",
+            resolved_plan_json={},
+            status="pending_delivery",
+        )
+        owner = user.id
     assert await _claim_batch(session_factory, owner=owner) == []

@@ -1,12 +1,13 @@
-"""Per-run gateway token minting + scope resolution (PR E / OPEN-3a, L16/L22/L25).
+"""Secret-free workflow namespace scope resolution and readiness checks.
 
-Every run mints exactly one per-run gateway token at StartRun — even a run with an
-empty function grant (L16: the token doubles as the completion-ping credential).
-The plaintext rides inside ``resolved_plan_json.gateway``; only the hash is stored.
+WF-ID deliberately has no callable plaintext gateway-token mint/rotation/builder
+path. StartRun freezes public namespace/capability intent only; later credential
+packets must introduce a separately versioned private execution envelope before
+runtime activation can be enabled.
 
 Scope resolution is layered (E3: NAMESPACE-LEVEL — no tool lists anywhere):
 
-* mint (StartRun): scope = the definition's ``integrations[]`` namespaces, stamped
+* StartRun: scope = the definition's ``integrations[]`` namespaces, stamped
   per slot into ``scope_json`` (``{"<slot>": {"integrations": [...]}}`` — §2.6). No
   ``tools/list`` fetch, no new failure mode. L22 fail-fast — a declared namespace
   with no ready account (org-aware, the same lookup the gateway uses) FAILS the run
@@ -18,32 +19,17 @@ Scope resolution is layered (E3: NAMESPACE-LEVEL — no tool lists anywhere):
 
 from __future__ import annotations
 
-import secrets
-from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.cloud import CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE
-from proliferate.constants.workflows import (
-    FUNCTION_INVOCATION_PROVIDER_NAMESPACE,
-    WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS,
-)
-from proliferate.db.store import cloud_workflows as store
+from proliferate.constants.workflows import FUNCTION_INVOCATION_PROVIDER_NAMESPACE
 from proliferate.db.store import function_invocations as invocations_store
 from proliferate.db.store import organizations as organizations_store
-from proliferate.db.store import runtime_workers as runtime_workers_store
 from proliferate.db.store.integrations import accounts as accounts_store
 from proliferate.db.store.integrations import definitions as definitions_store
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.runtime_workers.service import (
-    integration_gateway_config,
-    worker_cloud_base_url,
-)
 from proliferate.server.cloud.workflows.domain.definition import iter_agent_nodes
-from proliferate.utils.time import utcnow
-
-_TOKEN_BYTES = 48
 
 
 def resolve_run_scope(definition: dict[str, object]) -> dict[str, dict[str, object]]:
@@ -57,11 +43,9 @@ def resolve_run_scope(definition: dict[str, object]) -> dict[str, dict[str, obje
     already per-slot" note; no schema change to the frozen token). No
     ``tools/list`` fetch, no per-provider tool arrays.
 
-    Enforcement caveat: the per-run gateway token is per-run, not per-slot, and a
-    caller does not identify its slot, so the gateway enforces the UNION of every
-    slot's grant (``_flatten_run_scope`` in integration_gateway/dependencies.py).
-    The per-slot grant here narrows what each slot is GIVEN in the frozen token; true
-    per-slot enforcement (callers identifying their slot) is Part II future work.
+    The per-slot map is public authorization intent. Exact enforcement is owned by
+    capability leases plus the future private credential envelope; this module
+    does not mint or deliver a bearer.
 
     Composition (L20) inlines a child's *steps*, not its grant: the run's scope is
     the top-level definition's own ``integrations[]`` (L24 — each definition sizes
@@ -97,10 +81,9 @@ def resolve_run_scope(definition: dict[str, object]) -> dict[str, dict[str, obje
 def granted_namespaces(scope: dict[str, dict[str, object]]) -> list[str]:
     """The flat, sorted union of integration namespaces a run's scope grants.
 
-    Used for the L22 ready-account check, the plan's gateway ``integrations``
-    block, and the save-time visibility check. Since v1 stamps every slot with the
-    same workflow-level list, this is just that list; the union keeps it correct if
-    per-slot narrowing lands later.
+    Used for the L22 ready-account check, capability freezing, and the save-time
+    visibility check. Since v1 stamps every slot with the same workflow-level list,
+    this is just that list; the union keeps it correct under per-slot narrowing.
     """
 
     out: set[str] = set()
@@ -179,83 +162,3 @@ async def assert_declared_providers_ready(
                 f"ready '{provider}' integration. Connect it before running.",
                 status_code=409,
             )
-
-
-async def mint_run_gateway_token(
-    db: AsyncSession,
-    *,
-    run_id: UUID,
-    owner_user_id: UUID,
-    scope: dict[str, dict[str, object]],
-) -> tuple[str, dict[str, object]]:
-    """Mint the run's gateway token and build the ``resolved_plan_json.gateway`` block.
-
-    Returns ``(plaintext_token, gateway_block)``. The run row must already exist
-    (the token FKs ``workflow_run.id``). Identical shape on every lane (L16).
-    """
-
-    organization_id = await _organization_id_for_owner(db, owner_user_id=owner_user_id)
-    token = secrets.token_urlsafe(_TOKEN_BYTES)
-    await store.create_run_gateway_token(
-        db,
-        workflow_run_id=run_id,
-        owner_user_id=owner_user_id,
-        organization_id=organization_id,
-        token_hash=runtime_workers_store.hash_workflow_run_gateway_token(token),
-        scope_json=scope,
-        expires_at=utcnow() + timedelta(seconds=WORKFLOW_RUN_GATEWAY_TOKEN_TTL_SECONDS),
-    )
-    return token, build_gateway_plan_block(token=token, run_id=run_id, scope=scope)
-
-
-async def rotate_run_gateway_token(
-    db: AsyncSession,
-    *,
-    run_id: UUID,
-    owner_user_id: UUID,
-    scope: dict[str, dict[str, object]],
-) -> tuple[str, dict[str, object]]:
-    """Rotate a run's per-run gateway token (track 2a claim/reclaim).
-
-    Expires the run's existing active token(s) and mints a fresh one bound to the
-    same run + scope. Used on every local claim/reclaim so a laptop that lost the
-    run (reclaimed by another device) is left holding an EXPIRED token: the gateway
-    refuses its calls and the token-authed ``/status`` path 401s it
-    (``get_active_run_gateway_token_by_hash`` already filters on status=active AND
-    unexpired). Returns the same ``(plaintext_token, gateway_block)`` pair as
-    :func:`mint_run_gateway_token` so the caller can fold it into the resolved plan
-    it hands the new claimant, exactly mirroring StartRun's mint+embed.
-    """
-
-    await store.expire_run_gateway_tokens_for_run(db, workflow_run_id=run_id)
-    return await mint_run_gateway_token(
-        db, run_id=run_id, owner_user_id=owner_user_id, scope=scope
-    )
-
-
-def _ping_url(run_id: UUID) -> str:
-    base = worker_cloud_base_url()
-    if not base:
-        raise CloudApiError(
-            "cloud_worker_misconfigured",
-            "No cloud base URL is configured for the workflow completion ping.",
-            status_code=500,
-        )
-    return f"{base}{CLOUD_WORKFLOW_RUN_PING_PATH_TEMPLATE.format(run_id=run_id)}"
-
-
-def build_gateway_plan_block(
-    *, token: str, run_id: UUID, scope: dict[str, dict[str, object]]
-) -> dict[str, object]:
-    """The plan's gateway block: url (same as enroll composes), authorization,
-    ping_url, and the resolved namespace grant (E3: a flat list of integration
-    namespaces, possibly empty — the runtime only reads its emptiness for the L22
-    local-lane fail-fast; it never inspects tools)."""
-
-    config = integration_gateway_config(token)
-    return {
-        "url": config.url,
-        "authorization": config.authorization,
-        "ping_url": _ping_url(run_id),
-        "integrations": granted_namespaces(scope),
-    }

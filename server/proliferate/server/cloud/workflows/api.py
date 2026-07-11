@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.auth.dependencies import current_product_user
 from proliferate.constants.workflows import (
     WORKFLOW_POLL_MIN_INTERVAL_SECONDS,
-    WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
 )
 from proliferate.db.engine import get_async_session
 from proliferate.db.models.auth import User
@@ -26,6 +25,7 @@ from proliferate.server.cloud.workflows.access import (
     authorize_run_report,
     require_workflows_enabled,
 )
+from proliferate.server.cloud.workflows.binding.api import router as binding_router
 from proliferate.server.cloud.workflows.compiler import start_run
 from proliferate.server.cloud.workflows.delivery import (
     cancel_run,
@@ -37,11 +37,13 @@ from proliferate.server.cloud.workflows.local_executor import (
     claim_local_workflow_runs,
     heartbeat_local_workflow_run,
 )
-from proliferate.server.cloud.workflows.models import (
+from proliferate.server.cloud.workflows.local_models import (
     LocalWorkflowClaimActionRequest,
     LocalWorkflowClaimListResponse,
     LocalWorkflowClaimMutationResponse,
     LocalWorkflowClaimRequest,
+)
+from proliferate.server.cloud.workflows.models import (
     PollInputSpecResponse,
     PollInspectRequest,
     PollInspectResponse,
@@ -98,6 +100,7 @@ router = APIRouter(
     tags=["cloud-workflows"],
     dependencies=[Depends(require_workflows_enabled)],
 )
+router.include_router(binding_router)
 
 
 @router.get("", response_model=WorkflowListResponse)
@@ -158,7 +161,7 @@ async def get_run_endpoint(
 async def mark_run_delivered_endpoint(
     run_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    # D18: run token (anyharness) OR user session (desktop local-lane relay).
+    # Legacy auth remains mounted only to return the common feature-off gate.
     actor: RunTokenActor | User = Depends(authorize_run_report),
 ) -> WorkflowRunResponse:
     return run_payload(await mark_run_delivered(db, actor, run_id))
@@ -169,11 +172,9 @@ async def report_run_status_endpoint(
     run_id: UUID,
     body: RunStatusRequest,
     db: AsyncSession = Depends(get_async_session),
-    # D18 (E7): run token (anyharness self-report) OR user session (local relay).
+    # No observed-state mutation exists until authenticated observation cutover.
     actor: RunTokenActor | User = Depends(authorize_run_report),
 ) -> WorkflowRunResponse:
-    # The claim-ownership guard (2a) applies only to the owner-authed relay path; the
-    # runtime's token-authed self-report is guarded by claim-time token rotation.
     return run_payload(
         await report_run_status(
             db,
@@ -191,10 +192,7 @@ async def cancel_run_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> WorkflowRunResponse:
-    """Take over / cancel a run (D15). User auth, owner-scoped (a run the caller
-    can't see 404s). This is the single human override; the UI's take-over action
-    routes here, and a blocked mutating verb's 409 ``SESSION_WORKFLOW_HELD`` sends
-    the user to it."""
+    """Owner-scoped feature-off gate; pre-cutover runtime state stays parked."""
 
     return run_payload(await cancel_run(db, user, run_id))
 
@@ -205,7 +203,7 @@ async def redeliver_run_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> WorkflowRunResponse:
-    """Retry cloud delivery for a run stuck in ``pending_delivery`` (idempotent)."""
+    """Feature-off gate; never wakes or contacts a runtime."""
 
     run = await get_run(db, user, run_id)
     return run_payload(await deliver_cloud_run(db, user, run))
@@ -217,11 +215,7 @@ async def refresh_run_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> WorkflowRunResponse:
-    """Pull observed state for a cloud run from the sandbox and sync the ledger.
-
-    Cloud runs have no worker→server push channel in v1, so the UI polls this to
-    keep the run view fresh; local runs stay fresh via the desktop relay.
-    """
+    """Feature-off gate; never reads runtime state or mutates observations."""
 
     run = await get_run(db, user, run_id)
     return run_payload(await refresh_cloud_run(db, user, run))
@@ -231,18 +225,11 @@ async def refresh_run_endpoint(
 async def run_ping_endpoint(
     run_id: UUID,
     db: AsyncSession = Depends(get_async_session),
-    # NO user-session auth — the per-run gateway token IS the auth (validated +
-    # matched to run_id by the dependency).
+    # Legacy bearer lookup only; WF-ID creates no token and the service always
+    # stops at the final-envelope feature-off gate.
     actor: RunTokenActor = Depends(authorize_run_ping),
 ) -> None:
-    """Completion ping (L16 / §3.7). The runtime fires this after each step
-    transition; ``authorize_run_ping`` validates the token and its run_id match,
-    then this wakes the existing refresh path for cloud-lane runs.
-
-    The body carries nothing: it is a stateless nudge. Duplicate/stale/late pings
-    are safe by construction — refresh is reconcile-shaped and run-status
-    transitions are monotonic — so no state is added here.
-    """
+    """Legacy ping gate; no refresh or observation mutation."""
 
     await observe_run_ping(db, run_id=run_id, actor=actor)
 
@@ -259,10 +246,15 @@ async def claim_local_workflow_runs_endpoint(
     db: AsyncSession = Depends(get_async_session),
     user: User = Depends(current_product_user),
 ) -> LocalWorkflowClaimListResponse:
-    """Claim a batch of this owner's ``claimable`` (or stale-reclaimable) local
-    scheduled runs for a desktop executor (the 10s claim poll)."""
+    """Claim this owner's eligible local runs for a desktop executor.
 
-    return await claim_local_workflow_runs(db, user.id, body)
+    All local sources use this authority transition; an accepted binding is never
+    stale-reclaimed into a different executor.
+    """
+
+    claimed = await claim_local_workflow_runs(db, user.id, body)
+    await db.commit()
+    return claimed
 
 
 @router.post(
@@ -377,16 +369,13 @@ async def start_run_endpoint(
         target_workspace_id=body.target_workspace_id,
         trigger_id=body.trigger_id,
         session_bindings=body.session_bindings,
+        release_source_snapshot=db.rollback,
     )
-    # Cloud lane: the server delivers gateway-direct to sandbox anyharness in the
-    # request (wake + POST), so the API caller never receives the private envelope.
-    # Local lane: the desktop client delivers to its own local runtime and calls
-    # /delivered itself, so it needs the gateway block folded into resolvedPlan
-    # (include_private_envelope) — this is a delivery path, not an ordinary read.
-    if run.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
-        run = await deliver_cloud_run(db, user, run)
-        return run_payload(run)
-    return run_payload(run, include_private_envelope=True)
+    await db.commit()
+    # WF-ID is materialization-only: StartRun records the immutable logical plan
+    # but neither lane receives a private/final envelope and cloud delivery does
+    # not wake a sandbox. The caller next requests a fenced materialization offer.
+    return run_payload(run)
 
 
 @router.get("/{workflow_id}/runs", response_model=WorkflowRunListResponse)

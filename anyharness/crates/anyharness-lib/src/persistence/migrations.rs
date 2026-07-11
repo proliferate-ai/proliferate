@@ -237,6 +237,14 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0059_pending_prompt_queue_position",
         include_str!("sql/0059_pending_prompt_queue_position.sql"),
     ),
+    (
+        "0059_workspace_generation",
+        include_str!("sql/0059_workspace_generation.sql"),
+    ),
+    (
+        "0060_workflow_secret_scrub",
+        include_str!("sql/0060_workflow_secret_scrub.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
@@ -469,6 +477,48 @@ mod tests {
             [],
         )
         .expect("insert retryable failed assignment");
+    }
+
+    #[test]
+    fn workflow_secret_scrub_parks_and_removes_populated_legacy_credentials() {
+        let mut conn = Connection::open_in_memory().expect("open in-memory db");
+        run_migrations(&mut conn).expect("run migrations");
+        conn.execute_batch(
+            "PRAGMA foreign_keys = OFF;
+             DELETE FROM _migrations WHERE name = '0060_workflow_secret_scrub';",
+        )
+        .expect("prepare legacy row");
+        let canary = "Bearer local-legacy-secret";
+        let plan = format!(
+            r#"{{"run_id":"run-secret","renamed":{{"nested":{{"opaque":"{canary}"}}}},"steps":[]}}"#
+        );
+        conn.execute(
+            "INSERT INTO workflow_runs (
+                run_id, workspace_id, plan_json, status, step_cursor, created_at, updated_at
+             ) VALUES (?1, 'missing-workspace', ?2, 'running', 0, datetime('now'), datetime('now'))",
+            rusqlite::params!["run-secret", plan],
+        )
+        .expect("insert legacy workflow run");
+
+        run_named_migration(&mut conn, "0060_workflow_secret_scrub", |tx| {
+            tx.execute_batch(include_str!("sql/0060_workflow_secret_scrub.sql"))
+        })
+        .expect("scrub legacy workflow runs");
+
+        let (stored_plan, status, error_code): (String, String, Option<String>) = conn
+            .query_row(
+                "SELECT plan_json, status, error_code FROM workflow_runs WHERE run_id = 'run-secret'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("read scrubbed row");
+        assert!(!stored_plan.contains(canary));
+        assert_eq!(stored_plan, "{}");
+        assert_eq!(status, "failed");
+        assert_eq!(
+            error_code.as_deref(),
+            Some("workflow_identity_upgrade_required")
+        );
     }
 
     #[test]

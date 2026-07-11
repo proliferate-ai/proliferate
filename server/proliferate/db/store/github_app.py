@@ -51,6 +51,15 @@ class GitHubAppAuthorizationValue:
 
 
 @dataclass(frozen=True)
+class GitHubAppAuthorizationFenceValue:
+    id: UUID
+    user_id: UUID
+    token_expires_at: datetime | None
+    status: str
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
 class GitHubAppInstallationValue:
     id: UUID
     organization_id: UUID | None
@@ -179,6 +188,29 @@ async def get_github_app_authorization_for_user(
         statement = statement.with_for_update()
     row = (await db.execute(statement)).scalar_one_or_none()
     return _authorization_value(row) if row is not None else None
+
+
+async def get_github_app_authorization_fence_by_id(
+    db: AsyncSession,
+    *,
+    authorization_id: UUID,
+    lock_row: bool = False,
+) -> GitHubAppAuthorizationFenceValue | None:
+    statement = select(GitHubAppAuthorization).where(
+        GitHubAppAuthorization.id == authorization_id
+    )
+    if lock_row:
+        statement = statement.with_for_update()
+    row = await db.scalar(statement)
+    if row is None:
+        return None
+    return GitHubAppAuthorizationFenceValue(
+        id=row.id,
+        user_id=row.user_id,
+        token_expires_at=row.token_expires_at,
+        status=row.status,
+        updated_at=row.updated_at,
+    )
 
 
 async def upsert_github_app_authorization(
@@ -313,6 +345,21 @@ async def get_github_app_installation_for_organization(
     return _installation_value(row) if row is not None else None
 
 
+async def get_github_app_installation_by_id(
+    db: AsyncSession,
+    *,
+    installation_id: UUID,
+    lock_row: bool = False,
+) -> GitHubAppInstallationValue | None:
+    statement = select(GitHubAppInstallation).where(
+        GitHubAppInstallation.id == installation_id
+    )
+    if lock_row:
+        statement = statement.with_for_update()
+    row = await db.scalar(statement)
+    return _installation_value(row) if row is not None else None
+
+
 async def mark_github_app_installation_deleted(
     db: AsyncSession,
     *,
@@ -391,6 +438,21 @@ async def get_fresh_installation_repo_cache(
             .where(GitHubAppInstallationRepository.updated_at >= threshold)
         )
     ).scalar_one_or_none()
+    return _repo_value(row) if row is not None else None
+
+
+async def get_installation_repo_cache_by_id(
+    db: AsyncSession,
+    *,
+    repository_cache_id: UUID,
+    lock_row: bool = False,
+) -> GitHubAppInstallationRepositoryValue | None:
+    statement = select(GitHubAppInstallationRepository).where(
+        GitHubAppInstallationRepository.id == repository_cache_id
+    )
+    if lock_row:
+        statement = statement.with_for_update()
+    row = await db.scalar(statement)
     return _repo_value(row) if row is not None else None
 
 

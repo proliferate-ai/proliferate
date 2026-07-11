@@ -16,6 +16,8 @@ mod executor;
 mod gateway;
 mod goal;
 mod manager;
+#[cfg(test)]
+mod manager_tests;
 mod merge;
 mod observation;
 mod parallel;
@@ -27,7 +29,6 @@ mod turn;
 pub use exec_policy::{WorkflowAutoApproveAdvisor, WorkflowOwnedSessions};
 pub use executor::WorkflowExecDeps;
 pub use gateway::{
-    HttpRunPingSink, RunPingSink, WorkflowGatewaySessions,
-    WorkflowRunGatewaySessionLaunchExtension,
+    HttpRunPingSink, RunPingSink, WorkflowGatewaySessions, WorkflowRunGatewaySessionLaunchExtension,
 };
 pub use manager::WorkflowRunManager;

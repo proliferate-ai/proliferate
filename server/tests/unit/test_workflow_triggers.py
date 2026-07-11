@@ -17,6 +17,7 @@ from proliferate.utils.time import utcnow
 from tests.unit.workflow_trigger_test_support import (
     _DAILY_9,
     _HOURLY,
+    _LOCAL_WORKSPACE_ID,
     _REPO,
     _create_body,
     _make_cloud_repo_environment,
@@ -211,10 +212,13 @@ async def test_update_switches_cloud_target_to_local_nulls_workspace(
         user,
         workflow.id,
         trigger.id,
-        WorkflowTriggerUpdateRequest(targetMode="local"),  # type: ignore[call-arg]
+        WorkflowTriggerUpdateRequest(
+            targetMode="local", localWorkspaceId=_LOCAL_WORKSPACE_ID
+        ),  # type: ignore[call-arg]
     )
     assert updated.target_mode == "local"
     assert updated.target_workspace_id is None
+    assert updated.local_workspace_id == _LOCAL_WORKSPACE_ID
 
 
 async def test_update_switches_local_target_to_cloud_derives_workspace(

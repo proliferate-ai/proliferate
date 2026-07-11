@@ -99,10 +99,11 @@ mod tests {
 
     use super::*;
     use crate::app::test_support;
+    use crate::domains::workflows::delivery::WorkflowServiceIdentityFixture;
     use crate::domains::workflows::engine::{StepExecContext, StepOutcome};
-    use crate::domains::workflows::plan::{PlanGateway, PlanStep};
+    use crate::domains::workflows::plan::PlanStep;
     use crate::domains::workflows::store::WorkflowStore;
-    use crate::live::workflows::gateway::{fire_run_ping, RunPingSink};
+    use crate::live::workflows::gateway::{fire_run_ping, RunPingSink, WorkflowPrivateGateway};
     use crate::persistence::Db;
 
     use crate::live::workflows::gateway::test_support::RecordingPingSink;
@@ -113,14 +114,14 @@ mod tests {
     /// contract is exercised end-to-end.
     struct PingingExecutor {
         outcomes: Mutex<VecDeque<StepOutcome>>,
-        gateway: Option<PlanGateway>,
+        gateway: Option<WorkflowPrivateGateway>,
         sink: Arc<RecordingPingSink>,
     }
 
     impl PingingExecutor {
         fn new(
             outcomes: Vec<StepOutcome>,
-            gateway: Option<PlanGateway>,
+            gateway: Option<WorkflowPrivateGateway>,
             sink: Arc<RecordingPingSink>,
         ) -> Self {
             Self {
@@ -148,8 +149,8 @@ mod tests {
         }
     }
 
-    fn gateway() -> PlanGateway {
-        PlanGateway {
+    fn gateway() -> WorkflowPrivateGateway {
+        WorkflowPrivateGateway {
             url: "https://cloud.test/mcp".to_string(),
             authorization: "Bearer per-run".to_string(),
             ping_url: "https://cloud.test/runs/run-1/ping".to_string(),
@@ -159,7 +160,12 @@ mod tests {
 
     fn service_with_run(steps: &str) -> (WorkflowService, String) {
         let db = Db::open_in_memory().expect("open db");
-        test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/workspace-1");
+        test_support::seed_workspace_with_repo_root(
+            &db,
+            "workspace-1",
+            "local",
+            "/tmp/workspace-1",
+        );
         let service = WorkflowService::new(WorkflowStore::new(db));
         let plan_json = format!(
             r#"{{
@@ -169,7 +175,7 @@ mod tests {
             }}"#
         );
         let (run, created) = service
-            .create_run_idempotent(&plan_json, "workspace-1")
+            .create_run_with_valid_identity_fixture(&plan_json, "workspace-1")
             .expect("create run");
         assert!(created);
         (service, run.run_id)
@@ -191,11 +197,17 @@ mod tests {
                 { "kind": "shell.run", "command": "c" }]"#,
         );
         let sink = Arc::new(RecordingPingSink::new());
-        let executor =
-            PingingExecutor::new(vec![completed(), completed(), completed()], Some(gateway()), sink.clone());
+        let executor = PingingExecutor::new(
+            vec![completed(), completed(), completed()],
+            Some(gateway()),
+            sink.clone(),
+        );
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-        assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+        assert_eq!(
+            progress,
+            EngineProgress::Finished(WorkflowRunStatus::Completed)
+        );
         assert_eq!(sink.count(), 3, "one ping per applied transition");
         let calls = sink.calls.lock().unwrap();
         assert!(calls
@@ -223,7 +235,10 @@ mod tests {
         );
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-        assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+        assert_eq!(
+            progress,
+            EngineProgress::Finished(WorkflowRunStatus::Failed)
+        );
         assert_eq!(sink.count(), 1);
     }
 
@@ -236,7 +251,10 @@ mod tests {
         let executor = PingingExecutor::new(vec![completed(), completed()], None, sink.clone());
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-        assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+        assert_eq!(
+            progress,
+            EngineProgress::Finished(WorkflowRunStatus::Completed)
+        );
         assert_eq!(sink.count(), 0);
     }
 
@@ -258,7 +276,7 @@ mod tests {
         }
         struct InertExecutor {
             sink: Arc<InertFailingSink>,
-            gateway: PlanGateway,
+            gateway: WorkflowPrivateGateway,
         }
         #[async_trait::async_trait]
         impl WorkflowStepExecutor for InertExecutor {
@@ -272,8 +290,7 @@ mod tests {
             }
         }
 
-        let (service, run_id) =
-            service_with_run(r#"[{ "kind": "shell.run", "command": "a" }]"#);
+        let (service, run_id) = service_with_run(r#"[{ "kind": "shell.run", "command": "a" }]"#);
         let sink = Arc::new(InertFailingSink {
             fired: Mutex::new(0),
         });
@@ -283,9 +300,14 @@ mod tests {
         };
         let cancel = CancelToken::new();
         let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-        assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+        assert_eq!(
+            progress,
+            EngineProgress::Finished(WorkflowRunStatus::Completed)
+        );
         let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
-        assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+        assert!(steps
+            .iter()
+            .all(|s| s.status == WorkflowStepStatus::Completed));
         assert_eq!(*sink.fired.lock().unwrap(), 1);
     }
 }

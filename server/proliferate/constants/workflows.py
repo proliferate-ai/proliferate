@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from typing import Final
 
+# The only credential WF-ID mints. It authorizes acceptance of one redacted
+# ExecutionBinding and nothing else (no runtime/report/control/integration use).
+WORKFLOW_MATERIALIZATION_CREDENTIAL_AUDIENCE: Final = "workflow_materialization"
+WORKFLOW_MATERIALIZATION_CREDENTIAL_TTL_SECONDS: Final = 300
+WORKFLOW_MATERIALIZATION_CREDENTIAL_HEADER: Final = "X-Proliferate-Workflow-Materialization"
+
 # --- Trigger kinds (spec 3.5). Every trigger funnels through one StartRun. -----
 WORKFLOW_TRIGGER_MANUAL: Final = "manual"
 WORKFLOW_TRIGGER_SCHEDULE: Final = "schedule"
@@ -199,6 +205,18 @@ SUPPORTED_WORKFLOW_STEP_KINDS: Final = frozenset(
 
 # Default emit re-ask budget (executor MAX_EMIT_ATTEMPTS; overridable per emit).
 WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS: Final = 3
+
+# Cross-language integer contract for the legacy resolved-plan bridge. These
+# bounds are explicit producer/runtime wire limits, not host-language accidents:
+# retry/turn/attempt counters are Rust u32, verify exit codes are Rust i32, and
+# wider Rust i64/u64 values are capped at the largest integer every RFC 8785
+# implementation can represent exactly as an ECMAScript Number. Version numbers
+# also fit the PostgreSQL INTEGER column that owns them.
+WORKFLOW_UINT32_MAX: Final = 4_294_967_295
+WORKFLOW_INT32_MIN: Final = -2_147_483_648
+WORKFLOW_INT32_MAX: Final = 2_147_483_647
+WORKFLOW_JSON_SAFE_INTEGER_MAX: Final = 9_007_199_254_740_991
+WORKFLOW_VERSION_N_MAX: Final = WORKFLOW_INT32_MAX
 
 # Max workflow.include nesting depth (spec 3.5 / L20). A breach fails at save time
 # (cycle/depth walk) and, defensively, at resolution time (include_depth_exceeded)

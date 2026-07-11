@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 
 use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
@@ -7,7 +7,7 @@ use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 /// the StartRun payload is the whole contract). `step_cursor` is the index of
 /// the step the actor is at; `session_ids` is the slot-keyed session map (B7):
 /// `{"triage": "sess_…"}` — one session per agent slot, opened lazily.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct WorkflowRunRecord {
     pub run_id: String,
     pub workflow_id: Option<String>,
@@ -34,6 +34,20 @@ pub struct WorkflowRunRecord {
     pub error_message: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+impl fmt::Debug for WorkflowRunRecord {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WorkflowRunRecord")
+            .field("run_id", &self.run_id)
+            .field("workflow_id", &self.workflow_id)
+            .field("workspace_id", &self.workspace_id)
+            .field("plan_json", &"[redacted]")
+            .field("status", &self.status)
+            .field("error_code", &self.error_code)
+            .finish_non_exhaustive()
+    }
 }
 
 impl WorkflowRunRecord {
@@ -187,5 +201,38 @@ pub fn step_status_from_db(value: &str) -> Option<WorkflowStepStatus> {
         "failed" => Some(WorkflowStepStatus::Failed),
         "skipped" => Some(WorkflowStepStatus::Skipped),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workflow_run_debug_redacts_persisted_plan() {
+        let canary = "Bearer legacy-secret-canary";
+        let run = WorkflowRunRecord {
+            run_id: "run-1".into(),
+            workflow_id: None,
+            workflow_version_id: None,
+            version_n: None,
+            trigger_kind: None,
+            target_mode: None,
+            workspace_id: "workspace-1".into(),
+            plan_json: format!(r#"{{"gateway":{{"authorization":"{canary}"}}}}"#),
+            plan_hash: None,
+            binding_hash: None,
+            execution_generation: None,
+            status: WorkflowRunStatus::Failed,
+            step_cursor: 0,
+            session_ids: BTreeMap::new(),
+            error_code: None,
+            error_message: None,
+            created_at: "2026-07-11T00:00:00Z".into(),
+            updated_at: "2026-07-11T00:00:00Z".into(),
+        };
+        let rendered = format!("{run:?}");
+        assert!(!rendered.contains(canary));
+        assert!(rendered.contains("[redacted]"));
     }
 }

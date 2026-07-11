@@ -15,11 +15,15 @@ import {
   isWorkflowSlot,
   spineAgentNodes,
   WORKFLOW_BRANCH_TARGETS,
+  WORKFLOW_INT32_MAX,
+  WORKFLOW_INT32_MIN,
+  WORKFLOW_JSON_SAFE_INTEGER_MAX,
   WORKFLOW_MAX_AGENTS,
   WORKFLOW_MAX_ARGS,
   WORKFLOW_MAX_STEPS,
   WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX,
   WORKFLOW_RESERVED_REF_SEGMENTS,
+  WORKFLOW_UINT32_MAX,
   type WorkflowAgentNode,
   type WorkflowDefinition,
   type WorkflowInputSpec,
@@ -104,14 +108,24 @@ function templatedFields(step: WorkflowStep): TemplatedField[] {
   }
 }
 
-/** Mirrors the server's `_positive_int`: present, not boolean, integer, > 0. */
-function isPositiveInteger(value: unknown): boolean {
-  return typeof value === "number" && Number.isInteger(value) && value > 0;
+/** Mirrors the server's bounded `_positive_int`. */
+function isPositiveInteger(value: unknown, maximum: number): boolean {
+  return (
+    typeof value === "number"
+    && Number.isInteger(value)
+    && value > 0
+    && value <= maximum
+  );
 }
 
-/** Mirrors the server's `_int_field`: an integer of any sign (goal expectExit). */
-function isIntegerValue(value: unknown): boolean {
-  return typeof value === "number" && Number.isInteger(value);
+/** Mirrors the server's bounded `_int_field` (goal expectExit). */
+function isIntegerValue(value: unknown, minimum: number, maximum: number): boolean {
+  return (
+    typeof value === "number"
+    && Number.isInteger(value)
+    && value >= minimum
+    && value <= maximum
+  );
 }
 
 /** Mirrors `_coerce_number`: a real number, or a string that parses as one. */
@@ -254,26 +268,45 @@ function validateStep(
     }
   };
 
+  if (step.onFail.kind === "retry") {
+    if (!isPositiveInteger(step.onFail.n, WORKFLOW_UINT32_MAX)) {
+      push({
+        code: "invalid_definition",
+        message: `Retry count must be a positive integer no greater than ${WORKFLOW_UINT32_MAX}.`,
+        location: { scope: "step", stepIndex, field: "onFail.n" },
+      });
+    }
+  } else if (step.onFail.n !== undefined) {
+    push({
+      code: "invalid_definition",
+      message: "Retry count is valid only when on-fail is retry.",
+      location: { scope: "step", stepIndex, field: "onFail.n" },
+    });
+  }
+
   switch (step.kind) {
     case "agent.prompt": {
       push(requireText(step.prompt, "Prompt text is required.", stepIndex, "prompt"));
       if (step.goal) {
         push(requireText(step.goal.objective, "Goal objective is required.", stepIndex, "goal.objective"));
-        if (!(step.goal.maxTurns > 0)) {
+        if (!isPositiveInteger(step.goal.maxTurns, WORKFLOW_UINT32_MAX)) {
           push({
             code: "invalid_definition",
-            message: "Goal max turns is required.",
+            message: `Goal max turns must be a positive integer no greater than ${WORKFLOW_UINT32_MAX}.`,
             location: { scope: "step", stepIndex, field: "goal.maxTurns" },
           });
         }
-        if (!(step.goal.maxWallSecs > 0)) {
+        if (!isPositiveInteger(step.goal.maxWallSecs, WORKFLOW_JSON_SAFE_INTEGER_MAX)) {
           push({
             code: "invalid_definition",
-            message: "Goal max time is required.",
+            message: `Goal max time must be a positive safe integer no greater than ${WORKFLOW_JSON_SAFE_INTEGER_MAX}.`,
             location: { scope: "step", stepIndex, field: "goal.maxWallSecs" },
           });
         }
-        if (step.goal.tokenBudget !== undefined && !isPositiveInteger(step.goal.tokenBudget)) {
+        if (
+          step.goal.tokenBudget !== undefined
+          && !isPositiveInteger(step.goal.tokenBudget, WORKFLOW_JSON_SAFE_INTEGER_MAX)
+        ) {
           push({
             code: "invalid_definition",
             message: "Goal token budget must be a positive integer.",
@@ -282,7 +315,13 @@ function validateStep(
         }
         if (step.goal.verify) {
           push(requireText(step.goal.verify.shell, "Verify command is required.", stepIndex, "goal.verify.shell"));
-          if (!isIntegerValue(step.goal.verify.expectExit)) {
+          if (
+            !isIntegerValue(
+              step.goal.verify.expectExit,
+              WORKFLOW_INT32_MIN,
+              WORKFLOW_INT32_MAX,
+            )
+          ) {
             push({
               code: "invalid_definition",
               message: "Verify expected exit code must be an integer.",
@@ -325,7 +364,10 @@ function validateStep(
           location: { scope: "step", stepIndex, field: "name" },
         });
       }
-      if (step.maxAttempts !== undefined && !isPositiveInteger(step.maxAttempts)) {
+      if (
+        step.maxAttempts !== undefined
+        && !isPositiveInteger(step.maxAttempts, WORKFLOW_UINT32_MAX)
+      ) {
         push({
           code: "invalid_definition",
           message: "Max attempts must be a positive integer.",
@@ -344,7 +386,10 @@ function validateStep(
       break;
     case "shell.run": {
       push(requireText(step.command, "A command is required.", stepIndex, "command"));
-      if (step.timeoutSecs !== undefined && !isPositiveInteger(step.timeoutSecs)) {
+      if (
+        step.timeoutSecs !== undefined
+        && !isPositiveInteger(step.timeoutSecs, WORKFLOW_JSON_SAFE_INTEGER_MAX)
+      ) {
         push({
           code: "invalid_definition",
           message: "Timeout must be a positive integer.",

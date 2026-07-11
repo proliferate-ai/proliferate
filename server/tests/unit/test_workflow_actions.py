@@ -13,13 +13,22 @@ from proliferate.constants.organizations import (
     ORGANIZATION_ROLE_OWNER,
     ORGANIZATION_STATUS_ACTIVE,
 )
-from proliferate.db.models.cloud.workflows import WorkflowStepAction
+from proliferate.db.models.cloud.workflow_actions import WorkflowStepAction
 from proliferate.db.store.integrations.accounts import ReadyAccountRow
+from proliferate.server.cloud.workflows import actions as actions_module
 from proliferate.server.cloud.workflows.actions import apply_step_actions, claim_step_action
 from proliferate.utils.time import utcnow
 from tests.unit.workflow_action_test_support import _make_run_record, _make_user
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _bypass_wf_id_action_gate_for_lower_layer_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(actions_module, "_ACTION_ACTIVATION_ENABLED", True)
+
 
 # --- claim CAS wins-once --------------------------------------------------------
 

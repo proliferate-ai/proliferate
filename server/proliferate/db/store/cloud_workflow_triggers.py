@@ -49,6 +49,7 @@ class WorkflowTriggerRecord:
     target_mode: str
     repo_full_name: str | None
     target_workspace_id: UUID | None
+    local_workspace_id: UUID | None
     input_presets_json: dict[str, object] | None
     schedule_rrule: str | None
     schedule_timezone: str | None
@@ -86,6 +87,7 @@ class DueScheduleTrigger:
     missed_run_policy: str
     target_mode: str
     target_workspace_id: UUID | None
+    local_workspace_id: UUID | None
     schedule_rrule: str
     schedule_timezone: str
     args_json: dict[str, object]
@@ -112,6 +114,7 @@ class DuePollTrigger:
     workflow_archived: bool
     target_mode: str
     target_workspace_id: UUID | None
+    local_workspace_id: UUID | None
     poll_url: str
     poll_auth_header: str | None
     poll_auth_ciphertext: str | None
@@ -142,6 +145,7 @@ def _record(row: WorkflowTrigger) -> WorkflowTriggerRecord:
         target_mode=row.target_mode,
         repo_full_name=row.repo_full_name,
         target_workspace_id=row.target_workspace_id,
+        local_workspace_id=row.local_workspace_id,
         input_presets_json=(
             dict(row.input_presets_json) if row.input_presets_json is not None else None
         ),
@@ -193,6 +197,7 @@ async def create_trigger(
     target_mode: str,
     repo_full_name: str | None = None,
     target_workspace_id: UUID | None,
+    local_workspace_id: UUID | None = None,
     input_presets_json: dict[str, object] | None = None,
     schedule_rrule: str | None = None,
     schedule_timezone: str | None = None,
@@ -217,6 +222,7 @@ async def create_trigger(
         target_mode=target_mode,
         repo_full_name=repo_full_name,
         target_workspace_id=target_workspace_id,
+        local_workspace_id=local_workspace_id,
         input_presets_json=input_presets_json,
         schedule_rrule=schedule_rrule,
         schedule_timezone=schedule_timezone,
@@ -282,6 +288,8 @@ async def update_trigger(
     repo_full_name: str | None = None,
     target_workspace_id: UUID | None = None,
     clear_target_workspace: bool = False,
+    local_workspace_id: UUID | None = None,
+    clear_local_workspace: bool = False,
     input_presets_json: dict[str, object] | None = None,
     write_input_presets: bool = False,
     schedule_rrule: str | None = None,
@@ -327,6 +335,10 @@ async def update_trigger(
         row.target_workspace_id = None
     elif target_workspace_id is not None:
         row.target_workspace_id = target_workspace_id
+    if clear_local_workspace:
+        row.local_workspace_id = None
+    elif local_workspace_id is not None:
+        row.local_workspace_id = local_workspace_id
     # write_input_presets lets the caller set presets to a fresh dict (incl. {})
     # unambiguously; a bare None default means "no change".
     if write_input_presets:
@@ -430,6 +442,7 @@ async def claim_due_schedule_trigger(
         missed_run_policy=row.missed_run_policy,
         target_mode=row.target_mode,
         target_workspace_id=row.target_workspace_id,
+        local_workspace_id=row.local_workspace_id,
         schedule_rrule=row.schedule_rrule,
         schedule_timezone=row.schedule_timezone,
         args_json=dict(row.args_json or {}),
@@ -581,6 +594,7 @@ async def claim_due_poll_trigger(
         workflow_archived=workflow.archived_at is not None,
         target_mode=row.target_mode,
         target_workspace_id=row.target_workspace_id,
+        local_workspace_id=row.local_workspace_id,
         poll_url=row.poll_url,
         poll_auth_header=row.poll_auth_header,
         poll_auth_ciphertext=row.poll_auth_ciphertext,

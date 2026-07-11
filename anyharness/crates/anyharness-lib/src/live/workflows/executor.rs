@@ -19,19 +19,19 @@ use std::sync::{Arc, Mutex};
 use serde_json::json;
 
 use super::agent_turn::CurrentSession;
-use super::turn::InjectionMeta;
 use super::exec_policy::WorkflowOwnedSessions;
-use super::gateway::{fire_run_ping, RunPingSink, WorkflowGatewaySessions};
+use super::gateway::{fire_run_ping, RunPingSink, WorkflowGatewaySessions, WorkflowPrivateGateway};
 use super::parallel::worktree_branch_for_scope;
+use super::turn::InjectionMeta;
 use crate::domains::goals::runtime::GoalRuntime;
-use crate::domains::workflows::effects::EffectKind;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
+use crate::domains::workflows::effects::EffectKind;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
-use crate::domains::workflows::plan::{
-    BranchStep, BranchTarget, Isolation, PlanGateway, PlanStep, SessionSpec, StepKind,
-};
 use crate::domains::workflows::plan::worktree_scope;
+use crate::domains::workflows::plan::{
+    BranchStep, BranchTarget, Isolation, PlanStep, SessionSpec, StepKind,
+};
 use crate::domains::workflows::service::WorkflowService;
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
@@ -107,11 +107,10 @@ pub struct WorkflowStepExecutorImpl {
     /// slot -> effective model (base `sessions[slot].model`, folded by
     /// `agent.config`).
     pub(super) models: Mutex<HashMap<String, Option<String>>>,
-    /// The plan's per-run gateway block (§6.4/§3.7). Drives both the
-    /// session-launch MCP injection and the completion ping. Cloned from the
-    /// plan at construction; recomputed identically on crash-resume (the plan
-    /// is re-parsed to build the executor).
-    pub(super) gateway: Option<PlanGateway>,
+    /// Private post-binding gateway material. It never resides in the logical
+    /// plan; the execution-envelope owner supplies it when constructing the
+    /// executor and must refresh it independently on resume.
+    pub(super) gateway: Option<WorkflowPrivateGateway>,
 }
 
 impl WorkflowStepExecutorImpl {
@@ -121,7 +120,7 @@ impl WorkflowStepExecutorImpl {
         workspace_id: String,
         isolation: Isolation,
         sessions: BTreeMap<String, SessionSpec>,
-        gateway: Option<PlanGateway>,
+        gateway: Option<WorkflowPrivateGateway>,
     ) -> Self {
         let models = sessions
             .iter()
@@ -207,7 +206,8 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
                 let outcome = match &agent.goal {
                     None => self.run_prompt(slot, agent, &meta, &scope).await,
                     Some(goal) => {
-                        self.run_goal(slot, agent, goal, ctx.step_index, &meta, &scope).await
+                        self.run_goal(slot, agent, goal, ctx.step_index, &meta, &scope)
+                            .await
                     }
                 };
                 self.finish_effect(key, attempt, 0, EffectKind::AgentTurn, &outcome);
@@ -216,7 +216,8 @@ impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
             // `agent.emit` records its OWN per-corrective-turn effects (durable
             // audit of the bounded loop); its crash recovery is uncertain.
             StepKind::AgentEmit(emit) => {
-                self.run_emit(slot, emit, ctx.step_index, attempt, &meta, &scope).await
+                self.run_emit(slot, emit, ctx.step_index, attempt, &meta, &scope)
+                    .await
             }
             StepKind::ShellRun(shell) => {
                 self.begin_effect(

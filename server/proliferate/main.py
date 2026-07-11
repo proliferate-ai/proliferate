@@ -61,6 +61,9 @@ from proliferate.server.cloud.github_app.api import (
     setup_callback_router as github_app_setup_callback_router,
 )
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
+from proliferate.server.cloud.workflows.binding.cache_control import (
+    WorkflowBindingNoStoreMiddleware,
+)
 from proliferate.server.cloud.workflows.seeds import sync_seed_workflow_definitions
 from proliferate.server.devtools.api import router as devtools_router
 from proliferate.server.health import router as health_router
@@ -122,7 +125,16 @@ def _validate_e2b_template_configuration() -> None:
 # 422 handler echoes the offending input verbatim, so a single unrelated invalid
 # field (e.g. a missing displayName) would otherwise reflect the whole body —
 # including a plaintext API-key secret — back to the caller.
-_SENSITIVE_INPUT_FRAGMENTS = ("secret", "password", "token", "payload", "ciphertext")
+_SENSITIVE_INPUT_FRAGMENTS = (
+    "secret",
+    "password",
+    "token",
+    "payload",
+    "ciphertext",
+    "credential",
+    "authorization",
+    "materialization",
+)
 _REDACTED_INPUT = "[redacted]"
 
 
@@ -245,6 +257,7 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(RequestTelemetryMiddleware)
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(WorkflowBindingNoStoreMiddleware)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(ProliferateError, _proliferate_error_handler)
 

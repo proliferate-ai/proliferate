@@ -9,7 +9,7 @@ AnyHarness reads from a dotfile to reach the Cloud integration gateway.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,6 +27,7 @@ class CloudRuntimeWorker(Base):
             "status IN ('online', 'offline', 'revoked')",
             name="ck_cloud_runtime_worker_status",
         ),
+        CheckConstraint("generation > 0", name="ck_cloud_runtime_worker_generation"),
         CheckConstraint(
             "(runtime_kind = 'cloud_sandbox' AND cloud_sandbox_id IS NOT NULL "
             "AND desktop_install_id IS NULL) OR "
@@ -48,6 +49,20 @@ class CloudRuntimeWorker(Base):
             "desktop_install_id",
             unique=True,
             postgresql_where=("status != 'revoked' AND desktop_install_id IS NOT NULL"),
+        ),
+        Index(
+            "ux_cloud_runtime_worker_sandbox_generation",
+            "cloud_sandbox_id",
+            "generation",
+            unique=True,
+            postgresql_where="cloud_sandbox_id IS NOT NULL",
+        ),
+        Index(
+            "ux_cloud_runtime_worker_desktop_generation",
+            "desktop_install_id",
+            "generation",
+            unique=True,
+            postgresql_where="desktop_install_id IS NOT NULL",
         ),
         Index("ix_cloud_runtime_worker_last_seen_at", "last_seen_at"),
     )
@@ -71,6 +86,8 @@ class CloudRuntimeWorker(Base):
     desktop_install_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(32), default="online")
+    # Monotonic per sandbox/Desktop identity; each re-enrollment increments it.
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     # Self-reported at enrollment/heartbeat; all nullable because pre-versions
     # workers never report them.
     worker_version: Mapped[str | None] = mapped_column(String(64), nullable=True)

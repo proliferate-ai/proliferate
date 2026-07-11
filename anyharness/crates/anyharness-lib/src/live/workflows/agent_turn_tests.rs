@@ -2,18 +2,18 @@
 //! (matching the repo's `*_tests.rs` convention, e.g.
 //! `domains/workflows/service_tests.rs`).
 
+use crate::domains::workflows::engine::StepOutcome;
 use anyharness_contract::v1::{
     ContentPart, ItemCompletedEvent, SessionEvent, TranscriptItemKind, TranscriptItemPayload,
     TranscriptItemStatus,
 };
-use crate::domains::workflows::engine::StepOutcome;
-use crate::domains::workflows::plan::PlanGateway;
 
 use super::agent_turn::{gateway_functions_unsupported, validate_bind_target};
+use super::gateway::WorkflowPrivateGateway;
 use super::turn::collect_tool_names;
 
-fn plan_gateway(integrations: Vec<String>) -> PlanGateway {
-    PlanGateway {
+fn plan_gateway(integrations: Vec<String>) -> WorkflowPrivateGateway {
+    WorkflowPrivateGateway {
         url: "https://cloud.test/mcp".to_string(),
         authorization: "Bearer per-run".to_string(),
         ping_url: "https://cloud.test/ping".to_string(),
@@ -26,7 +26,9 @@ fn functions_unsupported_only_when_grants_lack_a_usable_gateway() {
     // No gateway at all → supported (nothing granted).
     assert!(!gateway_functions_unsupported(None));
     // Gateway with no integration grants → supported (ping-only token).
-    assert!(!gateway_functions_unsupported(Some(&plan_gateway(Vec::new()))));
+    assert!(!gateway_functions_unsupported(Some(&plan_gateway(
+        Vec::new()
+    ))));
     // Grants + a usable gateway → supported.
     assert!(!gateway_functions_unsupported(Some(&plan_gateway(vec![
         "issues".to_string()
@@ -56,9 +58,7 @@ fn bind_target_ok_when_harness_matches_and_not_held() {
 #[test]
 fn bind_target_rebinding_own_run_is_idempotent() {
     // A session already held by THIS run may be re-bound (idempotent).
-    assert!(
-        validate_bind_target("sess-1", "run-a", "claude", "claude", Some("run-a")).is_ok()
-    );
+    assert!(validate_bind_target("sess-1", "run-a", "claude", "claude", Some("run-a")).is_ok());
 }
 
 #[test]
@@ -110,6 +110,9 @@ fn collect_tool_names_pulls_from_item_events() {
         prompt_provenance: None,
     };
     let mut out = Vec::new();
-    collect_tool_names(&SessionEvent::ItemCompleted(ItemCompletedEvent { item }), &mut out);
+    collect_tool_names(
+        &SessionEvent::ItemCompleted(ItemCompletedEvent { item }),
+        &mut out,
+    );
     assert_eq!(out, vec!["mcp__linear__update_status".to_string()]);
 }

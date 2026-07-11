@@ -72,6 +72,7 @@ async def _make_workflow(db: AsyncSession, user: User, *, required_arg: bool = F
 
 
 _REPO = "acme/widgets"
+_LOCAL_WORKSPACE_ID = uuid.UUID("11111111-1111-4111-8111-111111111111")
 
 
 async def _make_cloud_repo_environment(
@@ -123,12 +124,16 @@ def _create_body(
     timezone: str = "UTC",
     args: dict | None = None,
     enabled: bool = True,
+    local_workspace_id: uuid.UUID | None = None,
 ) -> WorkflowTriggerCreateRequest:
     return WorkflowTriggerCreateRequest(
         concurrencyPolicy=concurrency,  # type: ignore[call-arg]
         missedRunPolicy=missed_run_policy,  # type: ignore[call-arg]
         targetMode=target_mode,  # type: ignore[call-arg]
         repoFullName=repo_full_name,  # type: ignore[call-arg]
+        localWorkspaceId=(
+            local_workspace_id or _LOCAL_WORKSPACE_ID if target_mode == "local" else None
+        ),  # type: ignore[call-arg]
         enabled=enabled,
         schedule=TriggerScheduleRequest(rrule=rrule, timezone=timezone),
         args=args or {},
@@ -145,7 +150,9 @@ def _patch_gateway(monkeypatch: pytest.MonkeyPatch, *, raises: Exception | None 
             runtime_generation=1,
         )
 
-    monkeypatch.setattr(delivery, "ensure_cloud_sandbox_gateway_access", _access)
+    monkeypatch.setattr(
+        delivery, "ensure_cloud_sandbox_gateway_access", _access, raising=False
+    )
 
 
 def _patch_client(
@@ -179,7 +186,6 @@ async def _seed_trigger(
     async with session_factory() as db, db.begin():
         user = await _make_user(db)
         workflow = await _make_workflow(db, user)
-        await _make_ready_cloud_workspace(db, user)
         trigger = await triggers.create_trigger(
             db,
             user,
@@ -187,6 +193,7 @@ async def _seed_trigger(
             _create_body(
                 concurrency=concurrency,
                 missed_run_policy=missed_run_policy,
+                target_mode="local",
                 args={"issue": "seed"},
             ),
         )
@@ -230,7 +237,9 @@ def _patch_recording_gateway(monkeypatch: pytest.MonkeyPatch) -> list[object]:
             runtime_generation=1,
         )
 
-    monkeypatch.setattr(delivery, "ensure_cloud_sandbox_gateway_access", _access)
+    monkeypatch.setattr(
+        delivery, "ensure_cloud_sandbox_gateway_access", _access, raising=False
+    )
     return calls
 
 

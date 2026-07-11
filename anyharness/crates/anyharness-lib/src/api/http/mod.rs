@@ -16,8 +16,8 @@ mod git_contract;
 mod git_task;
 pub mod goals;
 pub mod health;
-pub mod loops;
 pub mod hosting;
+pub mod loops;
 pub mod mobility;
 mod mobility_archive_contract;
 mod mobility_contract;
@@ -42,6 +42,8 @@ pub mod sessions_resume;
 pub mod subagents;
 pub mod terminals;
 pub mod workflow_runs;
+#[cfg(test)]
+mod workflow_runs_tests;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;
 pub mod workspaces_lifecycle;

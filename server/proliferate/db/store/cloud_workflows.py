@@ -5,17 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
     WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES,
     WORKFLOW_LOCAL_RECLAIMABLE_STATUSES,
-    WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
-    WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED,
     WORKFLOW_RUN_STATUS_CLAIMABLE,
     WORKFLOW_RUN_STATUS_CLAIMED,
     WORKFLOW_RUN_STATUS_MISSED,
@@ -25,11 +24,11 @@ from proliferate.constants.workflows import (
     WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
 )
+from proliferate.db.models.cloud.workflow_actions import WorkflowStepAction
+from proliferate.db.models.cloud.workflow_identity import WorkflowMaterializationOffer
 from proliferate.db.models.cloud.workflows import (
     Workflow,
     WorkflowRun,
-    WorkflowRunGatewayToken,
-    WorkflowStepAction,
     WorkflowVersion,
 )
 from proliferate.utils.time import utcnow
@@ -103,17 +102,23 @@ class WorkflowRunRecord:
     claimed_at: datetime | None = None
     claim_expires_at: datetime | None = None
     last_heartbeat_at: datetime | None = None
-    # WS2b: the secret-free plan's immutable identity + the PRIVATE envelope.
+    claim_generation: int | None = None
+    claimed_workspace_id: str | None = None
+    claimed_workspace_generation: int | None = None
+    # WF-ID: the secret-free plan's immutable identity and binding state.
     # ``plan_hash`` is the SHA-256 over RFC 8785 canonical JSON of the logical
-    # plan; ``plan_version`` is the delivery-identity plan schema version (2).
-    # ``private_envelope_json`` holds the run's gateway block (plaintext bearer)
-    # and is NEVER exposed by ordinary run APIs. The desired/delivery state axes
-    # (§8.1) begin here at StartRun; public status still derives from ``status``.
+    # plan. ``plan_version`` is 1 for the honest current flattened legacy wire;
+    # WF-PLAN-V2 owns the later atomic producer + runtime-adapter cutover.
+    # The legacy private-envelope column is intentionally absent from this ordinary
+    # repr-bearing carrier; migration reads/purges it directly with SQL.
     plan_hash: str | None = None
+    binding_hash: str | None = None
+    execution_generation: int | None = None
+    execution_binding_json: dict[str, object] | None = None
     plan_version: int | None = None
     desired_state: str | None = None
     delivery_state: str | None = None
-    private_envelope_json: dict[str, object] | None = None
+    preaccept_cancel_state: str | None = None
 
 
 def _workflow_record(row: Workflow) -> WorkflowRecord:
@@ -143,7 +148,19 @@ def _version_record(row: WorkflowVersion) -> WorkflowVersionRecord:
     )
 
 
+def _secret_free_resolved_plan(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return cast(dict[str, object], value)
+    plan = dict(value)
+    # Pre-split legacy rows embedded a plaintext gateway bearer in the plan.
+    # Execution is parked, so ordinary carriers expose only the logical portion.
+    plan.pop("gateway", None)
+    return plan
+
+
 def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
+    resolved_plan = row.resolved_plan_json
+    execution_binding = row.execution_binding_json
     return WorkflowRunRecord(
         id=row.id,
         workflow_id=row.workflow_id,
@@ -154,7 +171,10 @@ def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
         executor_user_id=row.executor_user_id,
         args_json=dict(row.args_json or {}),
         target_mode=row.target_mode,
-        resolved_plan_json=dict(row.resolved_plan_json or {}),
+        # Preserve malformed historical JSON values for the owning service to
+        # reject with a typed fail-closed error. Coercing with ``dict(value)``
+        # here can itself raise and turn stored corruption into an HTTP 500.
+        resolved_plan_json=_secret_free_resolved_plan(resolved_plan),
         status=row.status,
         step_cursor=row.step_cursor,
         step_outputs_json=(
@@ -179,13 +199,21 @@ def _run_record(row: WorkflowRun) -> WorkflowRunRecord:
         claimed_at=row.claimed_at,
         claim_expires_at=row.claim_expires_at,
         last_heartbeat_at=row.last_heartbeat_at,
+        claim_generation=row.claim_generation,
+        claimed_workspace_id=row.claimed_workspace_id,
+        claimed_workspace_generation=row.claimed_workspace_generation,
         plan_hash=row.plan_hash,
+        binding_hash=row.binding_hash,
+        execution_generation=row.execution_generation,
+        execution_binding_json=(
+            dict(execution_binding)
+            if isinstance(execution_binding, dict)
+            else cast(dict[str, object] | None, execution_binding)
+        ),
         plan_version=row.plan_version,
         desired_state=row.desired_state,
         delivery_state=row.delivery_state,
-        private_envelope_json=(
-            dict(row.private_envelope_json) if row.private_envelope_json is not None else None
-        ),
+        preaccept_cancel_state=row.preaccept_cancel_state,
     )
 
 
@@ -271,8 +299,13 @@ async def append_version(
     return _workflow_record(workflow), _version_record(version)
 
 
-async def get_workflow(db: AsyncSession, workflow_id: UUID) -> WorkflowRecord | None:
-    row = await db.get(Workflow, workflow_id)
+async def get_workflow(
+    db: AsyncSession, workflow_id: UUID, *, lock_row: bool = False
+) -> WorkflowRecord | None:
+    statement = select(Workflow).where(Workflow.id == workflow_id)
+    if lock_row:
+        statement = statement.with_for_update()
+    row = await db.scalar(statement)
     return None if row is None else _workflow_record(row)
 
 
@@ -428,8 +461,13 @@ async def archive_workflow(db: AsyncSession, workflow_id: UUID) -> WorkflowRecor
     return _workflow_record(row)
 
 
-async def get_version(db: AsyncSession, version_id: UUID) -> WorkflowVersionRecord | None:
-    row = await db.get(WorkflowVersion, version_id)
+async def get_version(
+    db: AsyncSession, version_id: UUID, *, lock_row: bool = False
+) -> WorkflowVersionRecord | None:
+    statement = select(WorkflowVersion).where(WorkflowVersion.id == version_id)
+    if lock_row:
+        statement = statement.with_for_update()
+    row = await db.scalar(statement)
     return None if row is None else _version_record(row)
 
 
@@ -472,7 +510,7 @@ async def create_run(
     plan_version: int | None = None,
     desired_state: str | None = None,
     delivery_state: str | None = None,
-    private_envelope_json: dict[str, object] | None = None,
+    preaccept_cancel_state: str | None = None,
 ) -> WorkflowRunRecord:
     now = utcnow()
     row = WorkflowRun(
@@ -498,7 +536,7 @@ async def create_run(
         plan_version=plan_version,
         desired_state=desired_state,
         delivery_state=delivery_state,
-        private_envelope_json=private_envelope_json,
+        preaccept_cancel_state=preaccept_cancel_state,
         created_at=now,
         updated_at=now,
     )
@@ -544,6 +582,8 @@ async def create_missed_run(
             target_mode=target_mode,
             resolved_plan_json={},
             status=WORKFLOW_RUN_STATUS_MISSED,
+            identity_schema_version=1,
+            identity_cutover_parked=False,
             created_at=now,
             updated_at=now,
             finished_at=now,
@@ -566,7 +606,12 @@ async def lock_run(db: AsyncSession, run_id: UUID) -> WorkflowRunRecord | None:
     """Row-lock a run for a status transition. Requires an open transaction."""
 
     row = (
-        await db.execute(select(WorkflowRun).where(WorkflowRun.id == run_id).with_for_update())
+        await db.execute(
+            select(WorkflowRun)
+            .where(WorkflowRun.id == run_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
     ).scalar_one_or_none()
     return None if row is None else _run_record(row)
 
@@ -594,7 +639,6 @@ async def update_run(
     step_cursor: int | None = None,
     step_outputs_json: dict[str, object] | None = None,
     resolved_plan_json: dict[str, object] | None = None,
-    private_envelope_json: dict[str, object] | None = None,
     error_code: str | None = None,
     error_message: str | None = None,
     anyharness_workspace_id: str | None = None,
@@ -616,9 +660,7 @@ async def update_run(
     ``resolved_plan_json`` is frozen once the run row exists — it and its
     ``plan_hash`` are the run's delivery identity. Every run is born with its
     plan set (``create_run``/``create_missed_run``), so any ``update_run`` attempt
-    to rewrite it is a bug. The delivery-time gateway fold + claim rotation now
-    write ``private_envelope_json`` instead, so no legitimate caller mutates the
-    plan after creation. Raises rather than silently corrupting the ledger.
+    to rewrite it is a bug. Raises rather than silently corrupting the ledger.
     """
 
     row = await db.get(WorkflowRun, run_id)
@@ -626,8 +668,7 @@ async def update_run(
         return None
     if resolved_plan_json is not None:
         raise WorkflowLedgerImmutableError(
-            f"resolved_plan_json is immutable after creation (run {run_id}); the "
-            "delivery-time gateway fold writes private_envelope_json instead."
+            f"resolved_plan_json is immutable after creation (run {run_id})."
         )
     if status is not None:
         row.status = status
@@ -635,8 +676,6 @@ async def update_run(
         row.step_cursor = step_cursor
     if step_outputs_json is not None:
         row.step_outputs_json = step_outputs_json
-    if private_envelope_json is not None:
-        row.private_envelope_json = private_envelope_json
     if clear_error:
         row.error_code = None
         row.error_message = None
@@ -822,6 +861,8 @@ async def claim_local_workflow_runs(
     *,
     user_id: UUID,
     executor_id: str,
+    workspace_id: str,
+    workspace_generation: int,
     claim_ttl: timedelta,
     limit: int,
     now: datetime,
@@ -841,6 +882,13 @@ async def claim_local_workflow_runs(
     predicates = [
         WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_LOCAL,
         WorkflowRun.executor_user_id == user_id,
+        WorkflowRun.anyharness_workspace_id == workspace_id,
+        # A bound execution cannot be silently transferred to another claimant.
+        # WF-LEASE/RECOVERY later owns explicit orphan recovery; until then the
+        # complete immutable binding triple must remain attached to its claimant.
+        WorkflowRun.binding_hash.is_(None),
+        WorkflowRun.execution_generation.is_(None),
+        WorkflowRun.execution_binding_json.is_(None),
         or_(
             WorkflowRun.status == WORKFLOW_RUN_STATUS_CLAIMABLE,
             and_(
@@ -866,8 +914,19 @@ async def claim_local_workflow_runs(
     expires_at = now + claim_ttl
     claimed: list[WorkflowRunRecord] = []
     for row in rows:
+        await db.execute(
+            update(WorkflowMaterializationOffer)
+            .where(
+                WorkflowMaterializationOffer.workflow_run_id == row.id,
+                WorkflowMaterializationOffer.status == "pending",
+            )
+            .values(status="revoked", updated_at=now)
+        )
         row.status = WORKFLOW_RUN_STATUS_CLAIMED
         row.executor_id = executor_id
+        row.claim_generation = (row.claim_generation or 0) + 1
+        row.claimed_workspace_id = workspace_id
+        row.claimed_workspace_generation = workspace_generation
         row.claim_id = uuid4()
         row.claimed_at = now
         row.claim_expires_at = expires_at
@@ -883,12 +942,13 @@ async def heartbeat_local_workflow_run(
     *,
     run_id: UUID,
     claim_id: UUID,
+    executor_id: str,
     user_id: UUID,
     claim_ttl: timedelta,
     now: datetime,
 ) -> WorkflowRunRecord | None:
     """Extend a live claim's TTL. Returns the run when the heartbeat is accepted,
-    ``None`` when the (run_id, claim_id) pair no longer owns an active local claim
+    ``None`` when the (run_id, claim_id, executor_id) tuple no longer owns a claim
     (reclaimed by another executor, terminal, or expired) — the executor must then
     stop, its claim is gone.
     """
@@ -899,6 +959,7 @@ async def heartbeat_local_workflow_run(
             .where(
                 WorkflowRun.id == run_id,
                 WorkflowRun.claim_id == claim_id,
+                WorkflowRun.executor_id == executor_id,
                 WorkflowRun.executor_user_id == user_id,
                 WorkflowRun.target_mode == WORKFLOW_TARGET_MODE_LOCAL,
                 WorkflowRun.status.in_(tuple(WORKFLOW_LOCAL_ACTIVE_CLAIM_STATUSES)),
@@ -990,132 +1051,6 @@ async def list_actions_for_run(db: AsyncSession, *, run_id: UUID) -> tuple[StepA
         .all()
     )
     return tuple(_action_record(row) for row in rows)
-
-
-# --- per-run gateway token (PR E / OPEN-3a) ------------------------------------
-
-
-@dataclass(frozen=True)
-class RunGatewayTokenRecord:
-    id: UUID
-    workflow_run_id: UUID
-    owner_user_id: UUID
-    organization_id: UUID | None
-    # E3: per-slot namespace grant ``{"<slot>": {"integrations": [...]}}`` (§2.6).
-    scope_json: dict[str, dict[str, object]]
-    status: str
-    expires_at: datetime
-
-
-def _run_gateway_token_record(row: WorkflowRunGatewayToken) -> RunGatewayTokenRecord:
-    scope = row.scope_json if isinstance(row.scope_json, dict) else {}
-    return RunGatewayTokenRecord(
-        id=row.id,
-        workflow_run_id=row.workflow_run_id,
-        owner_user_id=row.owner_user_id,
-        organization_id=row.organization_id,
-        scope_json=dict(scope),
-        status=row.status,
-        expires_at=row.expires_at,
-    )
-
-
-async def create_run_gateway_token(
-    db: AsyncSession,
-    *,
-    workflow_run_id: UUID,
-    owner_user_id: UUID,
-    organization_id: UUID | None,
-    token_hash: str,
-    scope_json: dict[str, dict[str, object]],
-    expires_at: datetime,
-) -> RunGatewayTokenRecord:
-    now = utcnow()
-    row = WorkflowRunGatewayToken(
-        workflow_run_id=workflow_run_id,
-        owner_user_id=owner_user_id,
-        organization_id=organization_id,
-        token_hash=token_hash,
-        scope_json=scope_json,
-        status=WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
-        expires_at=expires_at,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(row)
-    await db.flush()
-    return _run_gateway_token_record(row)
-
-
-async def get_active_run_gateway_token_by_hash(
-    db: AsyncSession, *, token_hash: str, now: datetime
-) -> RunGatewayTokenRecord | None:
-    """An active, unexpired run gateway token by its hash (the ping/gateway auth)."""
-
-    row = (
-        await db.execute(
-            select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.token_hash == token_hash,
-                WorkflowRunGatewayToken.status == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
-                WorkflowRunGatewayToken.expires_at > now,
-            )
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        return None
-    row.last_used_at = now
-    await db.flush()
-    return _run_gateway_token_record(row)
-
-
-async def refreeze_run_gateway_token_scope(
-    db: AsyncSession, *, workflow_run_id: UUID, scope_json: dict[str, dict[str, object]]
-) -> None:
-    """L25 delivery re-freeze: set the active token's scope to the intersection."""
-
-    rows = (
-        (
-            await db.execute(
-                select(WorkflowRunGatewayToken).where(
-                    WorkflowRunGatewayToken.workflow_run_id == workflow_run_id,
-                    WorkflowRunGatewayToken.status == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    now = utcnow()
-    for row in rows:
-        row.scope_json = scope_json
-        row.updated_at = now
-    if rows:
-        await db.flush()
-
-
-async def expire_run_gateway_tokens_for_run(db: AsyncSession, *, workflow_run_id: UUID) -> int:
-    """Flip a run's active gateway token(s) to expired. Idempotent: an already
-    terminal run has no active token, so the update touches nothing."""
-
-    rows = (
-        (
-            await db.execute(
-                select(WorkflowRunGatewayToken).where(
-                    WorkflowRunGatewayToken.workflow_run_id == workflow_run_id,
-                    WorkflowRunGatewayToken.status == WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
-    now = utcnow()
-    for row in rows:
-        row.status = WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED
-        row.updated_at = now
-    if rows:
-        await db.flush()
-    return len(rows)
 
 
 async def list_in_flight_triggered_cloud_runs(

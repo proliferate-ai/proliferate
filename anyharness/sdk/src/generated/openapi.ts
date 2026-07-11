@@ -2522,10 +2522,14 @@ export interface components {
         };
         /**
          * @description Delivery request: the fully-resolved plan JSON (opaque here — the runtime's
-         *     workflow domain deserializes it strictly and rejects unknown step kinds) and
-         *     the workspace the run executes in. Idempotent on the plan's `run_id`.
+         *     workflow domain deserializes it strictly and rejects unknown step kinds),
+         *     the workspace the run executes in, and the explicit credential-free
+         *     delivery identity + accepted redacted binding. Idempotent only on the full
+         *     `(run_id, plan_hash, binding_hash, execution_generation)` identity.
          */
         CreateWorkflowRunRequest: {
+            binding: components["schemas"]["ExecutionBinding"];
+            deliveryIdentity: components["schemas"]["WorkflowDeliveryIdentityV1"];
             plan: unknown;
             workspaceId: string;
         };
@@ -2602,6 +2606,23 @@ export interface components {
             /** @enum {string} */
             kind: "network_connection";
             provider?: string | null;
+        };
+        ExecutionBinding: {
+            baseCommitOid: string;
+            bindingHash: string;
+            checkpointContentHash?: string | null;
+            checkpointId?: string | null;
+            /** Format: int64 */
+            executorGeneration: number;
+            executorId: string;
+            materializationId: string;
+            repositoryObjectFormat: components["schemas"]["RepositoryObjectFormat"];
+            schemaVersion: components["schemas"]["SchemaVersion"];
+            sourceKind: components["schemas"]["SourceKind"];
+            target: components["schemas"]["WorkflowTarget"];
+            /** Format: int64 */
+            workspaceGeneration: number;
+            workspaceId: string;
         };
         ExportReplayRecordingRequest: {
             name?: string | null;
@@ -3832,6 +3853,8 @@ export interface components {
         };
         /** @enum {string} */
         RepoRootKind: "external" | "managed";
+        /** @enum {string} */
+        RepositoryObjectFormat: "sha1" | "sha256";
         ResizeTerminalRequest: {
             /** Format: int32 */
             cols: number;
@@ -4076,6 +4099,8 @@ export interface components {
             subagentId?: string | null;
             wakeScheduled: boolean;
         };
+        /** Format: int32 */
+        SchemaVersion: number;
         SearchWorkspaceFilesResponse: {
             results: components["schemas"]["WorkspaceFileSearchResult"][];
         };
@@ -4454,6 +4479,8 @@ export interface components {
         };
         /** @enum {string} */
         SetupScriptStatus: "queued" | "running" | "succeeded" | "failed";
+        /** @enum {string} */
+        SourceKind: "remote_commit" | "local_commit" | "workspace_checkpoint";
         StagePatchRequest: {
             /** @description A valid unified diff patch (file headers + hunk) to apply to the index. */
             patch: string;
@@ -4698,6 +4725,27 @@ export interface components {
             selectedOptionLabel?: string | null;
             text?: string | null;
         };
+        /**
+         * @description Credential-free, versioned delivery identity bridge.
+         *
+         *     This bridge deliberately contains only the immutable delivery identity. It
+         *     is not an execution envelope and must never grow report, control, gateway,
+         *     or integration credentials. Those belong to the separately versioned final
+         *     execution envelope.
+         */
+        WorkflowDeliveryIdentityV1: {
+            bindingHash: string;
+            /** Format: int64 */
+            executionGeneration: number;
+            planHash: string;
+            runId: string;
+            /**
+             * Format: int32
+             * @description Pinned bridge schema. Values other than 1 are rejected by validation at
+             *     the delivery boundary.
+             */
+            schemaVersion: number;
+        };
         WorkflowRunListResponse: {
             runs: components["schemas"]["WorkflowRunSummaryView"][];
         };
@@ -4772,6 +4820,8 @@ export interface components {
          * @enum {string}
          */
         WorkflowStepStatus: "pending" | "running" | "waiting" | "completed" | "failed" | "skipped";
+        /** @enum {string} */
+        WorkflowTarget: "local" | "personal_cloud" | "shared_cloud";
         Workspace: {
             cleanupAttemptedAt?: string | null;
             cleanupErrorMessage?: string | null;
@@ -7842,7 +7892,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Run delivered (idempotent on run_id) */
+            /** @description Run delivered (idempotent on full delivery identity) */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -7851,7 +7901,7 @@ export interface operations {
                     "application/json": components["schemas"]["WorkflowRunView"];
                 };
             };
-            /** @description Invalid plan */
+            /** @description Invalid plan or delivery identity */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7862,6 +7912,15 @@ export interface operations {
             };
             /** @description Workspace not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Delivery identity conflicts with stored run */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

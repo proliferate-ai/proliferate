@@ -13,6 +13,18 @@ use crate::domains::workspaces::types::{
 const MAX_WORKSPACE_DISPLAY_NAME_CHARS: usize = 160;
 
 impl WorkspaceRuntime {
+    pub fn get_workspace_generation(&self, workspace_id: &str) -> anyhow::Result<Option<i64>> {
+        self.store.find_generation(workspace_id)
+    }
+
+    pub fn advance_workspace_generation(
+        &self,
+        workspace_id: &str,
+        expected: i64,
+    ) -> anyhow::Result<bool> {
+        self.store.advance_generation(workspace_id, expected)
+    }
+
     pub fn get_workspace(&self, workspace_id: &str) -> anyhow::Result<Option<WorkspaceRecord>> {
         let record = self.store.find_by_id(workspace_id)?;
         if let Some(record) = record.as_ref() {

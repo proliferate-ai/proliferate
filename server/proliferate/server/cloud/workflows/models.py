@@ -101,9 +101,8 @@ class RunStatusRequest(WorkflowBaseModel):
     # holds a live claim on (claimed/running/waiting_approval), an owner-authed
     # report whose claim_id != the run's CURRENT claim is rejected (409 stale_claim)
     # and one that omits it is rejected too — so a laptop whose run was reclaimed by
-    # another device can't drive the run via owner-authed /status. Absent on cloud
-    # runs (the runtime self-reports via its per-run gateway token); behavior there
-    # is unchanged.
+    # another device can't drive the run via owner-authed /status. The legacy
+    # report path is feature-off under WF-ID until the final envelope lands.
     claim_id: UUID | None = Field(default=None, alias="claimId")
 
 
@@ -260,55 +259,9 @@ def _decimal_str(value: Decimal | None) -> str | None:
     return None if value is None else format(value, "f")
 
 
-def build_delivered_plan(
-    logical_plan: dict[str, object],
-    *,
-    gateway: dict[str, object] | None,
-    plan_hash: str | None,
-    plan_version: int | None,
-) -> dict[str, object]:
-    """The plan shape delivered to a runtime (cloud delivery task / desktop
-    claim+deliver): the secret-free logical plan folded with the private gateway
-    block plus the pinnable ``planHash``/``planVersion`` (spec §5.2/§5.3).
+def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
+    """Serialize only the secret-free logical run ledger."""
 
-    The runtime keeps consuming the same combined shape it does today (logical
-    plan + a top-level ``gateway`` block), so no Rust change is needed; the
-    ``planHash``/``planVersion`` fields are additive for WS5a pinning.
-    """
-
-    plan = dict(logical_plan)
-    if gateway is not None:
-        plan["gateway"] = gateway
-    if plan_hash is not None:
-        plan["planHash"] = plan_hash
-    if plan_version is not None:
-        plan["planVersion"] = plan_version
-    return plan
-
-
-def run_payload(
-    record: WorkflowRunRecord, *, include_private_envelope: bool = False
-) -> WorkflowRunResponse:
-    """Serialize a run for the API.
-
-    ``include_private_envelope`` is set ONLY on the desktop delivery/claim paths
-    (the local-lane StartRun response + the executor claim/heartbeat responses):
-    it folds the private gateway block into the returned ``resolvedPlan`` so the
-    desktop can deliver it to its own runtime. Every ordinary run
-    list/detail/status API leaves it ``False`` — those responses carry the
-    secret-free logical plan only (spec §5.3 — the envelope is never returned by
-    ordinary run APIs).
-    """
-
-    resolved_plan = record.resolved_plan_json
-    if include_private_envelope:
-        gateway = (record.private_envelope_json or {}).get("gateway")
-        resolved_plan = build_delivered_plan(
-            record.resolved_plan_json,
-            gateway=gateway if isinstance(gateway, dict) else None,
-            plan_hash=record.plan_hash,
-            plan_version=record.plan_version,
-        )
     return WorkflowRunResponse(
         id=str(record.id),
         workflow_id=str(record.workflow_id),
@@ -319,7 +272,7 @@ def run_payload(
         executor_user_id=str(record.executor_user_id),
         args=record.args_json,
         target_mode=record.target_mode,
-        resolved_plan=resolved_plan,
+        resolved_plan=record.resolved_plan_json,
         status=record.status,
         step_cursor=record.step_cursor,
         step_outputs=record.step_outputs_json,
@@ -341,37 +294,6 @@ def run_payload(
         claim_expires_at=_iso(record.claim_expires_at),
         last_heartbeat_at=_iso(record.last_heartbeat_at),
     )
-
-
-# --- desktop executor claim plane (track 2a) -----------------------------------
-
-
-class LocalWorkflowClaimRequest(WorkflowBaseModel):
-    """A desktop executor's claim poll: identify the executor + cap the batch."""
-
-    executor_id: str = Field(alias="executorId")
-    limit: int = 5
-
-
-class LocalWorkflowClaimActionRequest(WorkflowBaseModel):
-    """A per-run action (heartbeat) proving which claim the executor holds."""
-
-    executor_id: str = Field(alias="executorId")
-    claim_id: UUID = Field(alias="claimId")
-
-
-class LocalWorkflowClaimListResponse(WorkflowBaseModel):
-    """Runs the poll claimed this cycle — each carries its resolved plan + claim."""
-
-    runs: list[WorkflowRunResponse]
-
-
-class LocalWorkflowClaimMutationResponse(WorkflowBaseModel):
-    """A heartbeat outcome: the refreshed run, or ``accepted=false`` when the claim
-    is no longer live (reclaimed / terminal / expired) and the executor must stop."""
-
-    run: WorkflowRunResponse | None = None
-    accepted: bool
 
 
 # --- triggers (spec 3.5) -------------------------------------------------------
@@ -454,6 +376,7 @@ class WorkflowTriggerCreateRequest(WorkflowBaseModel):
     # The server derives + owns the dedicated cloud workspace. Required for
     # schedule/poll (validated in the service, enforced by DB CHECK).
     repo_full_name: str | None = Field(default=None, alias="repoFullName")
+    local_workspace_id: UUID | None = Field(default=None, alias="localWorkspaceId")
     # Exactly one of schedule / poll is required, matching ``kind``.
     schedule: TriggerScheduleRequest | None = None
     poll: TriggerPollRequest | None = None
@@ -475,6 +398,7 @@ class WorkflowTriggerUpdateRequest(WorkflowBaseModel):
     target_mode: WorkflowTriggerTargetMode | None = Field(default=None, alias="targetMode")
     # D16: re-pinning the repo re-derives the workspace. None = no change.
     repo_full_name: str | None = Field(default=None, alias="repoFullName")
+    local_workspace_id: UUID | None = Field(default=None, alias="localWorkspaceId")
     schedule: TriggerScheduleRequest | None = None
     poll: TriggerPollRequest | None = None
     args: dict[str, object] | None = None
@@ -512,6 +436,7 @@ class WorkflowTriggerResponse(WorkflowBaseModel):
     # D16: the authored repo pin + the derived (server-owned) workspace it maps to.
     repo_full_name: str | None = Field(alias="repoFullName")
     target_workspace_id: str | None = Field(alias="targetWorkspaceId")
+    local_workspace_id: str | None = Field(alias="localWorkspaceId")
     # Schedule preset input values (the enable-gate record); null for poll.
     input_presets: dict[str, object] | None = Field(default=None, alias="inputPresets")
     schedule: TriggerScheduleResponse | None
@@ -578,6 +503,7 @@ def trigger_payload(record: WorkflowTriggerRecord) -> WorkflowTriggerResponse:
         target_workspace_id=(
             str(record.target_workspace_id) if record.target_workspace_id else None
         ),
+        local_workspace_id=(str(record.local_workspace_id) if record.local_workspace_id else None),
         input_presets=record.input_presets_json,
         schedule=schedule,
         poll=poll,

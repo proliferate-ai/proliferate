@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 
 import pytest
 
 from proliferate.config import settings
 from proliferate.integrations import sentry as sentry_integration
+
+_MATERIALIZATION_CANARY = (
+    "wfm1.11111111-1111-4111-8111-111111111111.super_secret_value"
+)
 
 
 class _FakeScope:
@@ -104,6 +109,65 @@ def test_capture_server_sentry_exception_scrubs_extras_and_sets_scope_fields(
         "detail": "opened [redacted-path]",
         "token": "[redacted]",
     }
+
+
+def test_workflow_materialization_canary_is_absent_from_serialized_sentry_event() -> None:
+    raw = _MATERIALIZATION_CANARY
+    event = {
+        "message": f"binding failure for {raw}",
+        "logentry": {"message": f"worker logged {raw}"},
+        "extra": {
+            "ordinary": f"nested extra {raw}",
+            "materializationCredential": raw,
+        },
+        "request": {
+            "url": f"https://api.example/runs/1?credential={raw}",
+            "headers": {
+                "X-Proliferate-Workflow-Materialization": raw,
+                "x-proliferate-workflow-materialization": raw,
+                "X-Debug": f"seen {raw}",
+            },
+        },
+        "breadcrumbs": {
+            "values": [
+                {
+                    "category": "workflow.binding",
+                    "message": f"offer={raw}",
+                    "data": {"url": f"https://worker.example/?offer={raw}"},
+                }
+            ]
+        },
+    }
+
+    scrubbed = sentry_integration._scrub_event(event, {})
+    assert scrubbed is not None
+    serialized = json.dumps(scrubbed, sort_keys=True)
+    assert raw not in serialized
+    assert "[redacted-workflow-materialization]" in serialized
+    assert scrubbed["request"]["headers"][  # type: ignore[index]
+        "X-Proliferate-Workflow-Materialization"
+    ] == "[redacted]"
+    assert scrubbed["request"]["headers"][  # type: ignore[index]
+        "x-proliferate-workflow-materialization"
+    ] == "[redacted]"
+
+
+def test_workflow_materialization_canary_is_absent_from_serialized_breadcrumb() -> None:
+    raw = _MATERIALIZATION_CANARY
+    scrubbed = sentry_integration._scrub_breadcrumb(
+        {
+            "message": f"heartbeat rejected {raw}",
+            "data": {
+                "log_message": f"raw={raw}",
+                "X-PROLIFERATE-WORKFLOW-MATERIALIZATION": raw,
+            },
+        },
+        {},
+    )
+    assert scrubbed is not None
+    serialized = json.dumps(scrubbed, sort_keys=True)
+    assert raw not in serialized
+    assert "[redacted-workflow-materialization]" in serialized
 
 
 def test_init_server_sentry_disables_logging_event_capture(

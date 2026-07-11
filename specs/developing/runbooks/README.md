@@ -17,6 +17,7 @@ permissions, happy path, verification, and failure modes for one operation.
 | [worker-enrollment-failure.md](worker-enrollment-failure.md) | Triage worker enrollment, heartbeat, and control-loop delivery failures. |
 | [managed-target-replacement.md](managed-target-replacement.md) | Contain unrecoverable managed targets until the operator-safe replacement flow ships. |
 | [operator-security-posture.md](operator-security-posture.md) | Baseline for break-glass access, secret rotation, support bundle handling, and audit closeout. |
+| [workflow-identity-cutover.md](workflow-identity-cutover.md) | Perform the non-rolling WF-ID drain, migration, writer fence, and verification sequence. |
 
 ## Adding A Runbook
 

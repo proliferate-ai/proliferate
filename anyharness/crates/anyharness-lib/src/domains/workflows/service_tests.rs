@@ -2,8 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
-
+use super::delivery::WorkflowServiceIdentityFixture;
 use super::engine::{
     CancelToken, EngineProgress, StepExecContext, StepOutcome, WorkflowStepExecutor,
 };
@@ -14,6 +13,7 @@ use super::store::WorkflowStore;
 use crate::app::test_support;
 use crate::live::workflows::actor::drive_run;
 use crate::persistence::Db;
+use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
 // --------------------------------------------------------------------------
 // Test harness: an in-memory service + a scripted fake executor (the house
@@ -91,11 +91,7 @@ fn end_run(output: serde_json::Value) -> StepOutcome {
 
 /// Drive the run to a resting point (terminal or suspended), exactly like the
 /// actor loop.
-async fn drive(
-    service: &WorkflowService,
-    run_id: &str,
-    executor: &FakeExecutor,
-) -> EngineProgress {
+async fn drive(service: &WorkflowService, run_id: &str, executor: &FakeExecutor) -> EngineProgress {
     let cancel = CancelToken::new();
     loop {
         let progress = service
@@ -115,7 +111,7 @@ fn plan_json(steps: &str) -> String {
     format!(
         r#"{{
             "run_id": "run-1",
-            "plan_version": 1,
+            "planVersion": 1,
             "sessions": {{ "main": {{ "harness": "claude", "session_binding": "fresh" }} }},
             "steps": {steps}
         }}"#
@@ -124,7 +120,7 @@ fn plan_json(steps: &str) -> String {
 
 fn create(service: &WorkflowService, steps: &str) -> String {
     let (run, created) = service
-        .create_run_idempotent(&plan_json(steps), "workspace-1")
+        .create_run_with_valid_identity_fixture(&plan_json(steps), "workspace-1")
         .expect("create run");
     assert!(created);
     run.run_id
@@ -139,12 +135,12 @@ fn create_run_is_idempotent_on_run_id() {
     let service = test_service();
     let steps = r#"[{ "kind": "agent.prompt", "prompt": "hi" }]"#;
     let (first, created_first) = service
-        .create_run_idempotent(&plan_json(steps), "workspace-1")
+        .create_run_with_valid_identity_fixture(&plan_json(steps), "workspace-1")
         .expect("create");
     assert!(created_first);
     assert_eq!(first.status, WorkflowRunStatus::Running);
     let (again, created_again) = service
-        .create_run_idempotent(&plan_json(steps), "workspace-1")
+        .create_run_with_valid_identity_fixture(&plan_json(steps), "workspace-1")
         .expect("re-create");
     assert!(!created_again);
     assert_eq!(again.run_id, first.run_id);
@@ -162,7 +158,7 @@ fn create_run_is_idempotent_on_run_id() {
 fn create_rejects_an_invalid_plan() {
     let service = test_service();
     let error = service
-        .create_run_idempotent(
+        .create_run_with_valid_identity_fixture(
             &plan_json(r#"[{ "kind": "tool.call" }]"#),
             "workspace-1",
         )
@@ -189,12 +185,17 @@ async fn drives_two_steps_to_completion() {
         completed(serde_json::json!({ "exit_code": 0 })),
     ]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(run.status, WorkflowRunStatus::Completed);
     assert_eq!(run.step_cursor, 2);
-    assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+    assert!(steps
+        .iter()
+        .all(|s| s.status == WorkflowStepStatus::Completed));
     assert_eq!(steps[0].attempt, 1);
 }
 
@@ -229,7 +230,10 @@ async fn on_fail_stop_fails_the_run() {
     );
     let executor = FakeExecutor::script(vec![failed("nonzero_exit")]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Failed)
+    );
     let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(run.error_code.as_deref(), Some("nonzero_exit"));
     assert_eq!(steps[0].status, WorkflowStepStatus::Failed);
@@ -246,9 +250,15 @@ async fn on_fail_continue_advances_past_failure() {
         r#"[{ "kind": "shell.run", "command": "x", "on_fail": { "kind": "continue" } },
             { "kind": "shell.run", "command": "y" }]"#,
     );
-    let executor = FakeExecutor::script(vec![failed("nonzero_exit"), completed(serde_json::json!({}))]);
+    let executor = FakeExecutor::script(vec![
+        failed("nonzero_exit"),
+        completed(serde_json::json!({})),
+    ]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
     let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(steps[0].status, WorkflowStepStatus::Failed);
     assert_eq!(steps[1].status, WorkflowStepStatus::Completed);
@@ -265,7 +275,10 @@ async fn on_fail_retry_retries_then_fails_when_exhausted() {
     );
     let executor = FakeExecutor::script(vec![failed("nonzero_exit"), failed("nonzero_exit")]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Failed)
+    );
     let calls = executor.calls();
     assert_eq!(calls.len(), 2);
     assert_eq!(calls[0].attempt, 1);
@@ -279,9 +292,15 @@ async fn on_fail_retry_succeeds_on_second_attempt() {
         &service,
         r#"[{ "kind": "shell.run", "command": "x", "on_fail": { "kind": "retry", "n": 2 } }]"#,
     );
-    let executor = FakeExecutor::script(vec![failed("nonzero_exit"), completed(serde_json::json!({ "ok": true }))]);
+    let executor = FakeExecutor::script(vec![
+        failed("nonzero_exit"),
+        completed(serde_json::json!({ "ok": true })),
+    ]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
     let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(steps[0].status, WorkflowStepStatus::Completed);
     assert_eq!(steps[0].attempt, 2);
@@ -306,10 +325,15 @@ async fn branch_continue_advances_to_the_next_step() {
         completed(serde_json::json!({ "exit_code": 0 })),
     ]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
     let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(run.step_cursor, 2);
-    assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+    assert!(steps
+        .iter()
+        .all(|s| s.status == WorkflowStepStatus::Completed));
 }
 
 #[tokio::test]
@@ -328,7 +352,10 @@ async fn branch_end_completes_run_and_skips_the_tail() {
         end_run(serde_json::json!({ "value": "wont_fix", "target": "end" })),
     ]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(run.status, WorkflowRunStatus::Completed);
@@ -365,7 +392,10 @@ async fn goal_block_approve_reruns_the_step() {
              "goal": { "objective": "done", "max_turns": 5, "max_wall_secs": 60, "on_blocked": "pause_for_approval" } }]"#,
     );
     // First execution blocks (suspend); after approve, re-run completes.
-    let executor = FakeExecutor::script(vec![suspend("blocked"), completed(serde_json::json!({ "met_reason": "done" }))]);
+    let executor = FakeExecutor::script(vec![
+        suspend("blocked"),
+        completed(serde_json::json!({ "met_reason": "done" })),
+    ]);
     let progress = drive(&service, &run_id, &executor).await;
     assert_eq!(progress, EngineProgress::SuspendedForApproval);
     let outcome = service
@@ -373,7 +403,10 @@ async fn goal_block_approve_reruns_the_step() {
         .expect("resolve");
     assert!(outcome.resume);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
     let calls = executor.calls();
     assert_eq!(calls.len(), 2);
     // re-run bumps the attempt
@@ -408,7 +441,10 @@ async fn cancel_between_steps_marks_run_cancelled() {
         .run_next_step(&run_id, &executor, &cancel)
         .await
         .expect("run next");
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Cancelled));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Cancelled)
+    );
     assert_eq!(executor.calls().len(), 0);
 }
 
@@ -439,7 +475,10 @@ async fn resume_reenters_a_step_that_was_running() {
         .run_next_step(&run_id, &executor, &cancel)
         .await
         .unwrap();
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
     // Re-entry bumped the attempt from the crashed 1 to 2.
     assert_eq!(executor.calls()[0].attempt, 2);
 }
@@ -448,10 +487,16 @@ async fn resume_reenters_a_step_that_was_running() {
 fn set_session_for_slot_is_slot_keyed_and_idempotent() {
     let service = test_service();
     let run_id = create(&service, r#"[{ "kind": "shell.run", "command": "x" }]"#);
-    service.set_session_for_slot(&run_id, "triage", "session-1").unwrap();
+    service
+        .set_session_for_slot(&run_id, "triage", "session-1")
+        .unwrap();
     // Same (slot, session) is a no-op; a second slot adds a key.
-    service.set_session_for_slot(&run_id, "triage", "session-1").unwrap();
-    service.set_session_for_slot(&run_id, "fix", "session-2").unwrap();
+    service
+        .set_session_for_slot(&run_id, "triage", "session-1")
+        .unwrap();
+    service
+        .set_session_for_slot(&run_id, "fix", "session-2")
+        .unwrap();
     let run = service.get_run(&run_id).unwrap().unwrap();
     assert_eq!(run.session_ids.len(), 2);
     assert_eq!(run.session_ids["triage"], "session-1");
@@ -484,16 +529,25 @@ async fn agent_config_step_advances_the_cursor_and_records_output() {
         ]"#,
     );
     let executor = FakeExecutor::script(vec![
-        completed(serde_json::json!({ "harness": "codex", "model": "opus", "session_switched": true })),
+        completed(
+            serde_json::json!({ "harness": "codex", "model": "opus", "session_switched": true }),
+        ),
         completed(serde_json::json!({ "session_id": "sess-1" })),
     ]);
     let progress = drive(&service, &run_id, &executor).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     let (_, rows) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(rows[0].kind, "agent.config");
     assert_eq!(rows[0].status, WorkflowStepStatus::Completed);
-    assert!(rows[0].output_json.as_ref().unwrap().contains("session_switched"));
+    assert!(rows[0]
+        .output_json
+        .as_ref()
+        .unwrap()
+        .contains("session_switched"));
 }
 
 #[test]
@@ -508,7 +562,11 @@ fn record_step_goal_progress_only_writes_while_running() {
     // Pending step: the snapshot is a no-op (a terminal write must never be
     // clobbered by a late snapshot, and pending steps have not begun).
     service
-        .record_step_goal_progress(&run_id, 0, serde_json::json!({ "goal": { "iterations": 1 } }))
+        .record_step_goal_progress(
+            &run_id,
+            0,
+            serde_json::json!({ "goal": { "iterations": 1 } }),
+        )
         .unwrap();
     let (_, rows) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert!(rows[0].output_json.is_none());
@@ -546,11 +604,27 @@ fn record_step_goal_progress_only_writes_while_running() {
 fn record_injection_round_trips_and_is_idempotent() {
     let service = test_service();
     service
-        .record_injection("sess-1", "turn-1", "run-1", "0.-.0", "agent.prompt", "Investigate", "do the thing")
+        .record_injection(
+            "sess-1",
+            "turn-1",
+            "run-1",
+            "0.-.0",
+            "agent.prompt",
+            "Investigate",
+            "do the thing",
+        )
         .unwrap();
     // Idempotent on (session_id, turn_id): a crash-resume re-send is a no-op.
     service
-        .record_injection("sess-1", "turn-1", "run-1", "0.-.0", "agent.prompt", "Investigate", "changed")
+        .record_injection(
+            "sess-1",
+            "turn-1",
+            "run-1",
+            "0.-.0",
+            "agent.prompt",
+            "Investigate",
+            "changed",
+        )
         .unwrap();
     let row = service
         .store()
@@ -565,7 +639,11 @@ fn record_injection_round_trips_and_is_idempotent() {
     // INSERT OR IGNORE: the first write wins.
     assert_eq!(text, "do the thing");
     // An un-injected (human) turn has no row: absence = human, presence = machine.
-    assert!(service.store().find_injection("sess-1", "turn-2").unwrap().is_none());
+    assert!(service
+        .store()
+        .find_injection("sess-1", "turn-2")
+        .unwrap()
+        .is_none());
 }
 
 // --------------------------------------------------------------------------
@@ -662,14 +740,14 @@ fn parallel_plan(run_id: &str, sessions: &[&str], steps_json: &str) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        r#"{{ "run_id": "{run_id}", "plan_version": 1,
+        r#"{{ "run_id": "{run_id}", "planVersion": 1,
               "sessions": {{ {sessions_map} }}, "steps": {steps_json} }}"#
     )
 }
 
 fn create_plan(service: &WorkflowService, plan_json: &str) -> String {
     let (run, created) = service
-        .create_run_idempotent(plan_json, "workspace-1")
+        .create_run_with_valid_identity_fixture(plan_json, "workspace-1")
         .expect("create run");
     assert!(created);
     run.run_id
@@ -707,12 +785,17 @@ async fn parallel_group_runs_all_lanes_and_joins() {
     let executor = KeyedExecutor::new(vec![]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     let (run, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(run.status, WorkflowRunStatus::Completed);
     assert_eq!(run.step_cursor, 3, "cursor jumps to the group end on join");
-    assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+    assert!(steps
+        .iter()
+        .all(|s| s.status == WorkflowStepStatus::Completed));
 
     // Each lane reached its own terminal cursor, independently.
     let mut cursors = lane_cursors(&service, &run_id);
@@ -743,7 +826,10 @@ async fn pre_group_post_run_in_segment_order() {
     let executor = KeyedExecutor::new(vec![]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     let calls = executor.calls();
     let pos = |key: &str| calls.iter().position(|c| c == key).unwrap();
@@ -751,7 +837,9 @@ async fn pre_group_post_run_in_segment_order() {
     assert!(pos("0.-.0") < pos("1.a.0") && pos("0.-.0") < pos("1.b.0"));
     assert!(pos("2.-.0") > pos("1.a.0") && pos("2.-.0") > pos("1.b.0"));
     let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
-    assert!(steps.iter().all(|s| s.status == WorkflowStepStatus::Completed));
+    assert!(steps
+        .iter()
+        .all(|s| s.status == WorkflowStepStatus::Completed));
 }
 
 #[tokio::test]
@@ -774,18 +862,33 @@ async fn lane_failure_completes_siblings_then_fails_run_and_skips_post_group() {
     let executor = KeyedExecutor::new(vec![("0.a.0", vec![failed("boom")])]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Failed)
+    );
 
     let (run, _) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(run.status, WorkflowRunStatus::Failed);
     assert_eq!(run.error_code.as_deref(), Some("boom"));
 
     // Lane a failed; lane b ran BOTH its steps to completion (siblings not killed).
-    assert_eq!(step_status(&service, &run_id, "0.a.0"), WorkflowStepStatus::Failed);
-    assert_eq!(step_status(&service, &run_id, "0.b.0"), WorkflowStepStatus::Completed);
-    assert_eq!(step_status(&service, &run_id, "0.b.1"), WorkflowStepStatus::Completed);
+    assert_eq!(
+        step_status(&service, &run_id, "0.a.0"),
+        WorkflowStepStatus::Failed
+    );
+    assert_eq!(
+        step_status(&service, &run_id, "0.b.0"),
+        WorkflowStepStatus::Completed
+    );
+    assert_eq!(
+        step_status(&service, &run_id, "0.b.1"),
+        WorkflowStepStatus::Completed
+    );
     // Post-group step never executed.
-    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Pending);
+    assert_eq!(
+        step_status(&service, &run_id, "1.-.0"),
+        WorkflowStepStatus::Pending
+    );
     assert!(!executor.calls().contains(&"1.-.0".to_string()));
 
     let mut cursors = lane_cursors(&service, &run_id);
@@ -807,7 +910,11 @@ fn lane_visible_outputs_hides_sibling_lane_outputs() {
     let filtered = lane_visible_outputs(outputs, 1, &[1, 2]);
     let mut visible: Vec<usize> = filtered.keys().copied().collect();
     visible.sort();
-    assert_eq!(visible, vec![0, 1, 2], "pre-group + own steps only; sibling step 3 hidden");
+    assert_eq!(
+        visible,
+        vec![0, 1, 2],
+        "pre-group + own steps only; sibling step 3 hidden"
+    );
 }
 
 #[tokio::test]
@@ -829,11 +936,20 @@ async fn clean_join_merges_lanes_back_in_lane_order() {
     let executor = KeyedExecutor::new(vec![]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
     // Merge-back ran once with the lanes in lane order.
-    assert_eq!(executor.merge_calls(), vec![vec!["a".to_string(), "b".to_string()]]);
+    assert_eq!(
+        executor.merge_calls(),
+        vec![vec!["a".to_string(), "b".to_string()]]
+    );
     // Post-group step ran AFTER the merge-back (it sees merged lane work).
-    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Completed);
+    assert_eq!(
+        step_status(&service, &run_id, "1.-.0"),
+        WorkflowStepStatus::Completed
+    );
 }
 
 #[tokio::test]
@@ -853,8 +969,14 @@ async fn failed_join_skips_merge_back() {
     let executor = KeyedExecutor::new(vec![("0.a.0", vec![failed("boom")])]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
-    assert!(executor.merge_calls().is_empty(), "a failed join must not merge back");
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Failed)
+    );
+    assert!(
+        executor.merge_calls().is_empty(),
+        "a failed join must not merge back"
+    );
 }
 
 #[tokio::test]
@@ -876,13 +998,19 @@ async fn merge_conflict_at_join_fails_run_and_skips_post_group() {
     let executor = KeyedExecutor::new(vec![]).with_merge_conflict("a");
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Failed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Failed)
+    );
 
     let (run, _) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     assert_eq!(run.status, WorkflowRunStatus::Failed);
     assert_eq!(run.error_code.as_deref(), Some("lane_merge_conflict"));
     // Post-group step never executed (cursor never advanced past the group).
-    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Pending);
+    assert_eq!(
+        step_status(&service, &run_id, "1.-.0"),
+        WorkflowStepStatus::Pending
+    );
     assert!(!executor.calls().contains(&"1.-.0".to_string()));
 }
 
@@ -978,7 +1106,10 @@ async fn crash_resume_mid_group_resumes_only_the_unfinished_lane() {
     let executor = KeyedExecutor::new(vec![]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     // ONLY the unfinished lane-b step ran; the completed steps were not re-run.
     assert_eq!(executor.calls(), vec!["0.b.1".to_string()]);
@@ -1011,7 +1142,10 @@ async fn lanes_run_concurrently() {
     )
     .await
     .expect("lanes must run concurrently (no sequential deadlock at the barrier)");
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 }
 
 #[tokio::test]
@@ -1030,11 +1164,17 @@ async fn lane_step_retries_through_the_pure_matrix() {
     let run_id = create_plan(&service, &plan);
     let executor = KeyedExecutor::new(vec![(
         "0.a.0",
-        vec![failed("flaky"), completed(serde_json::json!({ "ok": true }))],
+        vec![
+            failed("flaky"),
+            completed(serde_json::json!({ "ok": true })),
+        ],
     )]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     let (_, steps) = service.get_run_with_steps(&run_id).unwrap().unwrap();
     let a0 = steps.iter().find(|s| s.step_key == "0.a.0").unwrap();
@@ -1061,16 +1201,33 @@ async fn branch_end_inside_a_lane_ends_the_lane_not_the_run() {
     let run_id = create_plan(&service, &plan);
     let executor = KeyedExecutor::new(vec![(
         "0.a.0",
-        vec![end_run(serde_json::json!({ "value": "stop", "target": "end" }))],
+        vec![end_run(
+            serde_json::json!({ "value": "stop", "target": "end" }),
+        )],
     )]);
     let cancel = CancelToken::new();
     let progress = drive_run(&service, &executor, &run_id, &cancel).await;
-    assert_eq!(progress, EngineProgress::Finished(WorkflowRunStatus::Completed));
+    assert_eq!(
+        progress,
+        EngineProgress::Finished(WorkflowRunStatus::Completed)
+    );
 
     // The lane's branch step completed; its tail step was skipped; the run did
     // NOT end (post-group step ran).
-    assert_eq!(step_status(&service, &run_id, "0.a.0"), WorkflowStepStatus::Completed);
-    assert_eq!(step_status(&service, &run_id, "0.a.1"), WorkflowStepStatus::Skipped);
-    assert_eq!(step_status(&service, &run_id, "0.b.0"), WorkflowStepStatus::Completed);
-    assert_eq!(step_status(&service, &run_id, "1.-.0"), WorkflowStepStatus::Completed);
+    assert_eq!(
+        step_status(&service, &run_id, "0.a.0"),
+        WorkflowStepStatus::Completed
+    );
+    assert_eq!(
+        step_status(&service, &run_id, "0.a.1"),
+        WorkflowStepStatus::Skipped
+    );
+    assert_eq!(
+        step_status(&service, &run_id, "0.b.0"),
+        WorkflowStepStatus::Completed
+    );
+    assert_eq!(
+        step_status(&service, &run_id, "1.-.0"),
+        WorkflowStepStatus::Completed
+    );
 }

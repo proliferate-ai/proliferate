@@ -27,11 +27,9 @@ async def _cancel_test_background_tasks() -> None:
 def _cloud_worker_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configure a cloud base URL for the suite.
 
-    Every workflow StartRun now mints a per-run gateway token and composes its
-    gateway + ping URLs from this base (PR E / L16), exactly as worker enrollment
-    already does. Real deployments always set it; tests default it to a stable
-    value so StartRun-exercising suites don't need to. Tests that assert on a
-    specific base monkeypatch it themselves within the test.
+    Worker enrollment and unrelated cloud surfaces compose URLs from this base.
+    WF-ID StartRun does not mint a run bearer or embed a gateway URL. Tests that
+    assert on a specific base monkeypatch it themselves within the test.
     """
     monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
 

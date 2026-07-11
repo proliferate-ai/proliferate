@@ -2,9 +2,10 @@
 //! (§3.7/L16) and the session-launch injection of the per-run gateway MCP
 //! server (§6.4/OPEN-3(a)).
 //!
-//! Both hang off the plan's [`PlanGateway`] block, which the server mints at
-//! StartRun and threads through `resolved_plan_json.gateway`. The runtime never
-//! mints or formats a credential — it forwards `gateway.authorization` verbatim
+//! Both hang off a private execution-envelope gateway grant. The grant is kept
+//! out of the immutable logical plan and is supplied only after binding. The
+//! runtime never mints or formats a credential — it forwards
+//! `gateway.authorization` verbatim
 //! (matching the worker dotfile convention in
 //! [`crate::integrations::integration_gateway`] and the gateway's own
 //! `Bearer <token>` parsing).
@@ -26,11 +27,14 @@
 //! by `connection_id`+`server_name`, keeping the first occurrence. Both the
 //! per-run server and the dotfile server use [`INTEGRATION_GATEWAY_ID`], so
 //! ordering this extension *before* the dotfile extension in the session
-//! extension list makes the plan block win for workflow-owned sessions.
+//! extension list makes the private run grant win for workflow-owned sessions.
 
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+
+use serde::Deserialize;
 
 use crate::domains::sessions::extensions::{
     SessionExtension, SessionLaunchContext, SessionLaunchExtras,
@@ -39,8 +43,33 @@ use crate::domains::sessions::mcp_bindings::model::{
     SessionMcpHeader, SessionMcpHttpServer, SessionMcpServer,
 };
 use crate::domains::sessions::model::SessionMcpBindingPolicy;
-use crate::domains::workflows::plan::PlanGateway;
 use crate::integrations::integration_gateway::INTEGRATION_GATEWAY_ID;
+
+/// Private per-run gateway material from the post-binding execution envelope.
+///
+/// This type intentionally does not live in `domains::workflows::plan`: a
+/// logical plan containing any of these fields is rejected before execution.
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowPrivateGateway {
+    pub url: String,
+    pub authorization: String,
+    pub ping_url: String,
+    #[serde(default)]
+    pub integrations: Vec<String>,
+}
+
+impl fmt::Debug for WorkflowPrivateGateway {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("WorkflowPrivateGateway")
+            .field("url", &self.url)
+            .field("authorization", &"[REDACTED]")
+            .field("ping_url", &self.ping_url)
+            .field("integrations", &self.integrations)
+            .finish()
+    }
+}
 
 /// A short cap on the completion ping: the ping is a best-effort nudge, so it
 /// must never tie up a task for long.
@@ -105,7 +134,7 @@ impl RunPingSink for HttpRunPingSink {
 /// Fire the completion ping for a step transition, gated on the plan carrying a
 /// gateway block. No gateway → no ping (nothing to nudge). Extracted so the
 /// gating logic is unit-testable without the live executor.
-pub fn fire_run_ping(gateway: Option<&PlanGateway>, sink: &dyn RunPingSink) {
+pub fn fire_run_ping(gateway: Option<&WorkflowPrivateGateway>, sink: &dyn RunPingSink) {
     if let Some(gateway) = gateway {
         sink.fire(&gateway.ping_url, &gateway.authorization);
     }
@@ -115,11 +144,13 @@ pub fn fire_run_ping(gateway: Option<&PlanGateway>, sink: &dyn RunPingSink) {
 // Per-run gateway MCP server injection (§6.4/OPEN-3(a))
 // ---------------------------------------------------------------------------
 
-/// Build the per-run gateway MCP server from the plan block, or `None` when the
-/// block is absent or carries no usable credential. Uses the same
+/// Build the per-run gateway MCP server from the private grant, or `None` when
+/// the grant is absent or carries no usable credential. Uses the same
 /// `SessionMcpServer::Http` shape and [`INTEGRATION_GATEWAY_ID`] as the worker
 /// dotfile extension, with `authorization` forwarded verbatim.
-pub fn workflow_gateway_server(gateway: Option<&PlanGateway>) -> Option<SessionMcpServer> {
+pub fn workflow_gateway_server(
+    gateway: Option<&WorkflowPrivateGateway>,
+) -> Option<SessionMcpServer> {
     let gateway = gateway?;
     if gateway.authorization.trim().is_empty() || gateway.url.trim().is_empty() {
         return None;
@@ -178,7 +209,7 @@ impl WorkflowGatewaySessions {
 
 /// Session-launch extension that injects the per-run gateway MCP server for a
 /// workflow-owned session. Reuses the existing launch-extension seam; must be
-/// ordered before the worker-dotfile extension so the plan block wins on dedupe.
+/// ordered before the worker-dotfile extension so the private grant wins on dedupe.
 #[derive(Clone)]
 pub struct WorkflowRunGatewaySessionLaunchExtension {
     sessions: Arc<WorkflowGatewaySessions>,
@@ -205,7 +236,7 @@ impl SessionExtension for WorkflowRunGatewaySessionLaunchExtension {
         };
         tracing::info!(
             session_id = %ctx.session.id,
-            "injecting per-run workflow gateway MCP server (plan block)"
+            "injecting per-run workflow gateway MCP server (private run grant)"
         );
         Ok(SessionLaunchExtras {
             mcp_servers: vec![server],
@@ -253,8 +284,8 @@ mod tests {
     use super::test_support::RecordingPingSink;
     use super::*;
 
-    fn gateway(integrations: Vec<String>) -> PlanGateway {
-        PlanGateway {
+    fn gateway(integrations: Vec<String>) -> WorkflowPrivateGateway {
+        WorkflowPrivateGateway {
             url: "https://cloud.test/mcp".to_string(),
             authorization: "Bearer per-run-secret".to_string(),
             ping_url: "https://cloud.test/runs/run-1/ping".to_string(),
@@ -309,6 +340,14 @@ mod tests {
     }
 
     #[test]
+    fn private_gateway_debug_redacts_authorization() {
+        let gw = gateway(vec!["issues".to_string()]);
+        let rendered = format!("{gw:?}");
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(!rendered.contains("per-run-secret"));
+    }
+
+    #[test]
     fn registry_round_trips_a_server_by_session_id() {
         let registry = WorkflowGatewaySessions::new();
         assert!(registry.get("sess-1").is_none());
@@ -331,20 +370,32 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             name
         );
-        let raw = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("read fixture {path}: {e}"));
+        let raw =
+            std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("read fixture {path}: {e}"));
         serde_json::from_str(&raw).unwrap_or_else(|e| panic!("parse fixture {path}: {e}"))
     }
 
     #[test]
     fn parses_golden_gateway_block_and_emits_matching_ping() {
-        let block = fixture("gateway-block.json");
-        // The runtime parses resolved_plan_json.gateway into PlanGateway
-        // (unknown `_comment` field ignored).
-        let parsed: PlanGateway =
-            serde_json::from_value(block.clone()).expect("gateway block parses into PlanGateway");
+        let mut block = fixture("gateway-block.json");
+        // Private envelope material is strict. The fixture's documentation-only
+        // member is deliberately rejected and removed by the fixture harness;
+        // no production plan or private-envelope parser ignores it.
+        assert!(
+            serde_json::from_value::<WorkflowPrivateGateway>(block.clone()).is_err(),
+            "unknown private-envelope members must fail closed"
+        );
+        block
+            .as_object_mut()
+            .expect("gateway fixture object")
+            .remove("_comment");
+        let parsed: WorkflowPrivateGateway = serde_json::from_value(block.clone())
+            .expect("gateway block parses into private gateway material");
         assert_eq!(parsed.url, block["url"].as_str().unwrap());
-        assert_eq!(parsed.authorization, block["authorization"].as_str().unwrap());
+        assert_eq!(
+            parsed.authorization,
+            block["authorization"].as_str().unwrap()
+        );
         assert_eq!(parsed.ping_url, block["ping_url"].as_str().unwrap());
         assert_eq!(parsed.integrations, vec!["issues", "slack"]);
 
@@ -354,7 +405,10 @@ mod tests {
         // Method + body are fixed by HttpRunPingSink (POST, no body); assert the
         // fixture agrees so a server-side change to either forces a runtime fix.
         assert_eq!(ping["method"].as_str(), Some("POST"));
-        assert!(ping["body"].is_null(), "completion ping carries an empty body");
+        assert!(
+            ping["body"].is_null(),
+            "completion ping carries an empty body"
+        );
         // url + authorization are what the runtime actually emits — assert via
         // the real fire path (recording sink), and cross-check against the
         // gateway block (a run's own token: run A can never ping run B).
@@ -365,7 +419,10 @@ mod tests {
         let (emitted_url, emitted_auth) = &calls[0];
         assert_eq!(emitted_url, ping["url"].as_str().unwrap());
         assert_eq!(emitted_url, &parsed.ping_url);
-        assert_eq!(emitted_auth, ping["headers"]["authorization"].as_str().unwrap());
+        assert_eq!(
+            emitted_auth,
+            ping["headers"]["authorization"].as_str().unwrap()
+        );
         assert_eq!(emitted_auth, &parsed.authorization);
     }
 }

@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use anyharness_contract::v1::workflows_v2::{ObservedRun, ObservedStepStatus};
 use anyharness_contract::v1::{WorkflowRunStatus, WorkflowStepStatus};
 
+use super::delivery::{DeliveryIdentity, WorkflowServiceIdentityFixture};
 use super::engine::{CancelToken, StepExecContext, StepOutcome, WorkflowStepExecutor};
 use super::model::WorkflowObservationRecord;
 use super::plan::PlanStep;
@@ -31,7 +32,7 @@ fn identity_plan(plan_hash: &str, binding_hash: &str, generation: i64) -> String
     format!(
         r#"{{
             "run_id": "run-1",
-            "plan_hash": "{plan_hash}",
+            "planHash": "{plan_hash}",
             "binding_hash": "{binding_hash}",
             "execution_generation": {generation},
             "sessions": {{ "main": {{ "harness": "claude", "session_binding": "fresh" }} }},
@@ -94,7 +95,10 @@ fn parse_snapshot(record: &WorkflowObservationRecord) -> ObservedRun {
 fn identity_fields_are_persisted_on_the_run() {
     let service = test_service();
     let (run, created) = service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect("create");
     assert!(created);
     assert_eq!(run.plan_hash.as_deref(), Some("sha256:aaa"));
@@ -106,16 +110,21 @@ fn identity_fields_are_persisted_on_the_run() {
 fn redelivery_with_the_same_identity_is_idempotent() {
     let service = test_service();
     let plan = identity_plan("sha256:aaa", "sha256:bbb", 1);
-    let (_, created) = service.create_run_idempotent(&plan, "workspace-1").expect("create");
+    let (_, created) = service
+        .create_run_with_valid_identity_fixture(&plan, "workspace-1")
+        .expect("create");
     assert!(created);
     let (run, created_again) = service
-        .create_run_idempotent(&plan, "workspace-1")
+        .create_run_with_valid_identity_fixture(&plan, "workspace-1")
         .expect("redeliver");
     assert!(!created_again, "same complete identity is idempotent");
     assert_eq!(run.run_id, "run-1");
     // The idempotent redelivery appended no extra observation.
     assert_eq!(
-        service.replay_observations_from("run-1", 1).expect("replay").len(),
+        service
+            .replay_observations_from("run-1", 1)
+            .expect("replay")
+            .len(),
         1
     );
 }
@@ -124,10 +133,16 @@ fn redelivery_with_the_same_identity_is_idempotent() {
 fn conflicting_plan_hash_is_rejected() {
     let service = test_service();
     service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect("create");
     let error = service
-        .create_run_idempotent(&identity_plan("sha256:DIFFERENT", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:DIFFERENT", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect_err("conflicting plan_hash must reject");
     assert!(matches!(
         error,
@@ -139,17 +154,28 @@ fn conflicting_plan_hash_is_rejected() {
 fn conflicting_binding_hash_and_generation_are_rejected() {
     let service = test_service();
     service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect("create");
     let error = service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:OTHER", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:OTHER", 1),
+            "workspace-1",
+        )
         .expect_err("conflicting binding_hash must reject");
     assert!(matches!(
         error,
-        WorkflowServiceError::DeliveryIdentityConflict { field: "binding_hash" }
+        WorkflowServiceError::DeliveryIdentityConflict {
+            field: "binding_hash"
+        }
     ));
     let error = service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:bbb", 2), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:bbb", 2),
+            "workspace-1",
+        )
         .expect_err("conflicting generation must reject");
     assert!(matches!(
         error,
@@ -163,43 +189,68 @@ fn conflicting_binding_hash_and_generation_are_rejected() {
 fn conflict_rejection_leaves_the_stored_run_untouched() {
     let service = test_service();
     service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect("create");
     let _ = service
-        .create_run_idempotent(&identity_plan("sha256:x", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:x", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect_err("conflict");
     let run = service.get_run("run-1").expect("get").expect("run exists");
     assert_eq!(run.plan_hash.as_deref(), Some("sha256:aaa"));
     // No observation was appended by the rejected delivery.
     assert_eq!(
-        service.replay_observations_from("run-1", 1).expect("replay").len(),
+        service
+            .replay_observations_from("run-1", 1)
+            .expect("replay")
+            .len(),
         1
     );
 }
 
 #[test]
-fn legacy_plans_without_identity_stay_idempotent_and_unasserted() {
-    // DENY-PATH: a legacy delivery (no identity fields) keeps today's exact
-    // behavior — idempotent on run_id, nothing asserted, nothing rejected.
+fn legacy_stored_run_with_null_identity_is_parked() {
     let service = test_service();
     let plan = legacy_plan("run-legacy");
-    let (run, created) = service.create_run_idempotent(&plan, "workspace-1").expect("create");
+    let (_, created) = service
+        .create_run_with_valid_identity_fixture(&plan, "workspace-1")
+        .expect("create");
     assert!(created);
-    assert_eq!(run.plan_hash, None);
-    assert_eq!(run.binding_hash, None);
-    assert_eq!(run.execution_generation, None);
-    let (_, created_again) = service
-        .create_run_idempotent(&plan, "workspace-1")
-        .expect("legacy redelivery");
-    assert!(!created_again);
-    // A later identity-bearing delivery against a stored LEGACY run asserts
-    // nothing either (absent stored side): WS2c owns the backfill story.
-    let with_identity = identity_plan("sha256:aaa", "sha256:bbb", 1)
-        .replace("\"run_id\": \"run-1\"", "\"run_id\": \"run-legacy\"");
-    let (_, created_third) = service
-        .create_run_idempotent(&with_identity, "workspace-1")
-        .expect("identity-vs-legacy is not a conflict");
-    assert!(!created_third);
+    service
+        .store()
+        .with_tx_anyhow(|tx| {
+            tx.execute(
+                "UPDATE workflow_runs SET plan_hash = NULL, binding_hash = NULL, \
+             execution_generation = NULL WHERE run_id = ?1",
+                ["run-legacy"],
+            )?;
+            Ok(())
+        })
+        .expect("simulate pre-identity row");
+    let identity = DeliveryIdentity {
+        run_id: "run-legacy".to_string(),
+        plan_hash: format!("sha256:{}", "a".repeat(64)),
+        binding_hash: format!("sha256:{}", "b".repeat(64)),
+        execution_generation: 1,
+    };
+    let error = service
+        .create_run_with_identity(&plan, "workspace-1", &identity)
+        .expect_err("legacy NULL identity must never be upgraded by redelivery");
+    assert!(matches!(
+        error,
+        WorkflowServiceError::DeliveryIdentityConflict { field: "plan_hash" }
+    ));
+    assert_eq!(
+        service
+            .replay_observations_from("run-legacy", 1)
+            .expect("replay")
+            .len(),
+        1
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -210,7 +261,10 @@ fn legacy_plans_without_identity_stay_idempotent_and_unasserted() {
 async fn revisions_are_strictly_sequential_whole_snapshots() {
     let service = test_service();
     service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect("create");
     let executor = ScriptedExecutor::script(vec![]);
     let cancel = CancelToken::new();
@@ -221,13 +275,22 @@ async fn revisions_are_strictly_sequential_whole_snapshots() {
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
 
-    let rows = service.replay_observations_from("run-1", 1).expect("replay");
+    let rows = service
+        .replay_observations_from("run-1", 1)
+        .expect("replay");
     assert!(!rows.is_empty());
     // Strictly sequential: 1..=N with no skips, in order.
     for (idx, row) in rows.iter().enumerate() {
-        assert_eq!(row.revision, idx as i64 + 1, "no skipped/reordered revisions");
+        assert_eq!(
+            row.revision,
+            idx as i64 + 1,
+            "no skipped/reordered revisions"
+        );
         let snapshot = parse_snapshot(row);
-        assert_eq!(snapshot.revision, row.revision, "snapshot self-describes its revision");
+        assert_eq!(
+            snapshot.revision, row.revision,
+            "snapshot self-describes its revision"
+        );
         assert_eq!(snapshot.run_id, "run-1");
         assert_eq!(snapshot.plan_hash, "sha256:aaa");
         assert_eq!(snapshot.binding_hash, "sha256:bbb");
@@ -261,23 +324,33 @@ async fn revisions_are_strictly_sequential_whole_snapshots() {
 async fn reporter_seam_walks_lowest_unacked_in_order_and_replay_is_identical_bytes() {
     let service = test_service();
     service
-        .create_run_idempotent(&identity_plan("sha256:aaa", "sha256:bbb", 1), "workspace-1")
+        .create_run_with_valid_identity_fixture(
+            &identity_plan("sha256:aaa", "sha256:bbb", 1),
+            "workspace-1",
+        )
         .expect("create");
     let executor = ScriptedExecutor::script(vec![]);
     let cancel = CancelToken::new();
     crate::live::workflows::actor::drive_run(&service, &executor, "run-1", &cancel).await;
 
-    let all = service.replay_observations_from("run-1", 1).expect("replay");
+    let all = service
+        .replay_observations_from("run-1", 1)
+        .expect("replay");
     let total = all.len() as i64;
 
     // get_next_report returns revisions 1..N in order as each is acked.
     let mut reported = Vec::new();
     while let Some(next) = service.get_next_report("run-1").expect("next") {
         // Un-acked retry returns the SAME row (identical canonical bytes).
-        let again = service.get_next_report("run-1").expect("next again").unwrap();
+        let again = service
+            .get_next_report("run-1")
+            .expect("next again")
+            .unwrap();
         assert_eq!(again.revision, next.revision);
         assert_eq!(again.canonical_snapshot_json, next.canonical_snapshot_json);
-        assert!(service.ack_observation("run-1", next.revision).expect("ack"));
+        assert!(service
+            .ack_observation("run-1", next.revision)
+            .expect("ack"));
         reported.push(next);
     }
     assert_eq!(reported.len() as i64, total);
@@ -289,7 +362,9 @@ async fn reporter_seam_walks_lowest_unacked_in_order_and_replay_is_identical_byt
     // Replay (post-ACK) returns the identical bytes that were reported, and
     // includes acked rows (reconnect resync reads the durable outbox, not the
     // ack bits).
-    let replayed = service.replay_observations_from("run-1", 1).expect("replay");
+    let replayed = service
+        .replay_observations_from("run-1", 1)
+        .expect("replay");
     assert_eq!(replayed.len(), reported.len());
     for (replayed_row, reported_row) in replayed.iter().zip(&reported) {
         assert_eq!(replayed_row.revision, reported_row.revision);
@@ -300,7 +375,9 @@ async fn reporter_seam_walks_lowest_unacked_in_order_and_replay_is_identical_byt
         assert!(replayed_row.acked);
     }
     // Replay-from mid-stream honors the inclusive lower bound.
-    let tail = service.replay_observations_from("run-1", 3).expect("replay tail");
+    let tail = service
+        .replay_observations_from("run-1", 3)
+        .expect("replay tail");
     assert_eq!(tail.len() as i64, total - 2);
     assert_eq!(tail[0].revision, 3);
 }
@@ -309,7 +386,7 @@ async fn reporter_seam_walks_lowest_unacked_in_order_and_replay_is_identical_byt
 fn duplicate_append_at_the_same_revision_fails() {
     let service = test_service();
     service
-        .create_run_idempotent(&legacy_plan("run-dup"), "workspace-1")
+        .create_run_with_valid_identity_fixture(&legacy_plan("run-dup"), "workspace-1")
         .expect("create");
     // Creation appended revision 1. A manual insert at revision 1 must hit the
     // (run_id, revision) uniqueness constraint — the outbox is immutable.
@@ -348,7 +425,9 @@ async fn attempts_are_durable_before_execution_and_survive_retries() {
               "on_fail": { "kind": "retry", "n": 2 } }
         ]
     }"#;
-    service.create_run_idempotent(plan, "workspace-1").expect("create");
+    service
+        .create_run_with_valid_identity_fixture(plan, "workspace-1")
+        .expect("create");
     let executor = ScriptedExecutor::script(vec![
         StepOutcome::Failed {
             code: "nonzero_exit".to_string(),
@@ -367,13 +446,18 @@ async fn attempts_are_durable_before_execution_and_survive_retries() {
     let cancel = CancelToken::new();
     crate::live::workflows::actor::drive_run(&service, &executor, "run-retry", &cancel).await;
 
-    let (_, steps) = service.get_run_with_steps("run-retry").expect("get").expect("run");
+    let (_, steps) = service
+        .get_run_with_steps("run-retry")
+        .expect("get")
+        .expect("run");
     assert_eq!(steps[0].attempt, 3, "third attempt succeeded");
     assert_eq!(steps[0].status, WorkflowStepStatus::Completed);
 
     // The outbox observed every attempt's begin_step (attempt stamped while the
     // step was running — i.e. persisted before the executor's outcome landed).
-    let rows = service.replay_observations_from("run-retry", 1).expect("replay");
+    let rows = service
+        .replay_observations_from("run-retry", 1)
+        .expect("replay");
     let running_attempts: Vec<i64> = rows
         .iter()
         .map(parse_snapshot)
@@ -394,7 +478,7 @@ async fn restart_rehydration_reconstructs_cursor_attempts_sessions_and_outbox() 
 
     let plan = r#"{
         "run_id": "run-restart",
-        "plan_hash": "sha256:ph",
+        "planHash": "sha256:ph",
         "binding_hash": "sha256:bh",
         "execution_generation": 1,
         "sessions": { "main": { "harness": "claude", "session_binding": "fresh" } },
@@ -409,7 +493,9 @@ async fn restart_rehydration_reconstructs_cursor_attempts_sessions_and_outbox() 
         let db = Db::open(&home).expect("open db");
         test_support::seed_workspace_with_repo_root(&db, "workspace-1", "local", "/tmp/w1");
         let service = service_on(&db);
-        service.create_run_idempotent(plan, "workspace-1").expect("create");
+        service
+            .create_run_with_valid_identity_fixture(plan, "workspace-1")
+            .expect("create");
         service
             .set_session_for_slot("run-restart", "main", "sess-1")
             .expect("bind slot session");
@@ -422,9 +508,17 @@ async fn restart_rehydration_reconstructs_cursor_attempts_sessions_and_outbox() 
             .run_next_step("run-restart", &executor, &cancel)
             .await
             .expect("run one step");
-        assert_eq!(progress, crate::domains::workflows::engine::EngineProgress::Advanced);
-        let rows = service.replay_observations_from("run-restart", 1).expect("replay");
-        let next = service.get_next_report("run-restart").expect("next").expect("row");
+        assert_eq!(
+            progress,
+            crate::domains::workflows::engine::EngineProgress::Advanced
+        );
+        let rows = service
+            .replay_observations_from("run-restart", 1)
+            .expect("replay");
+        let next = service
+            .get_next_report("run-restart")
+            .expect("next")
+            .expect("row");
         (rows, next)
     };
 
@@ -441,16 +535,24 @@ async fn restart_rehydration_reconstructs_cursor_attempts_sessions_and_outbox() 
     assert_eq!(run.plan_hash.as_deref(), Some("sha256:ph"));
     assert_eq!(run.binding_hash.as_deref(), Some("sha256:bh"));
     assert_eq!(run.execution_generation, Some(1));
-    assert_eq!(run.session_ids.get("main").map(String::as_str), Some("sess-1"));
+    assert_eq!(
+        run.session_ids.get("main").map(String::as_str),
+        Some("sess-1")
+    );
     assert_eq!(steps[0].status, WorkflowStepStatus::Completed);
     assert_eq!(steps[0].attempt, 1, "attempt restored");
     assert_eq!(steps[1].status, WorkflowStepStatus::Pending);
 
     // The outbox replays byte-identically across the restart, and the reporter
     // resumes from the same lowest-unacked row.
-    let post_rows = service.replay_observations_from("run-restart", 1).expect("replay");
+    let post_rows = service
+        .replay_observations_from("run-restart", 1)
+        .expect("replay");
     assert_eq!(post_rows, pre_rows, "outbox identical after reopen");
-    let next = service.get_next_report("run-restart").expect("next").expect("row");
+    let next = service
+        .get_next_report("run-restart")
+        .expect("next")
+        .expect("row");
     assert_eq!(next, pre_next_report);
 
     // The run keeps driving from the restored cursor, and the outbox continues
@@ -463,7 +565,9 @@ async fn restart_rehydration_reconstructs_cursor_attempts_sessions_and_outbox() 
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
-    let final_rows = service.replay_observations_from("run-restart", 1).expect("replay");
+    let final_rows = service
+        .replay_observations_from("run-restart", 1)
+        .expect("replay");
     for (idx, row) in final_rows.iter().enumerate() {
         assert_eq!(row.revision, idx as i64 + 1, "gapless across the restart");
     }
@@ -491,7 +595,9 @@ async fn lane_snapshots_carry_per_lane_cursors() {
             { "key": "0.b.0", "slot": "b", "kind": "shell.run", "command": "b0" }
         ]
     }"#;
-    service.create_run_idempotent(plan, "workspace-1").expect("create");
+    service
+        .create_run_with_valid_identity_fixture(plan, "workspace-1")
+        .expect("create");
     let executor = ScriptedExecutor::script(vec![]);
     let cancel = CancelToken::new();
     let progress =
@@ -500,7 +606,9 @@ async fn lane_snapshots_carry_per_lane_cursors() {
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
-    let rows = service.replay_observations_from("run-lanes", 1).expect("replay");
+    let rows = service
+        .replay_observations_from("run-lanes", 1)
+        .expect("replay");
     let last = parse_snapshot(rows.last().unwrap());
     assert_eq!(last.lane_cursors.get("a").map(String::as_str), Some("end"));
     assert_eq!(last.lane_cursors.get("b").map(String::as_str), Some("end"));
@@ -509,5 +617,8 @@ async fn lane_snapshots_carry_per_lane_cursors() {
         .iter()
         .map(parse_snapshot)
         .any(|snapshot| snapshot.lane_cursors.get("a").map(String::as_str) == Some("0.a.0"));
-    assert!(saw_lane_key, "a running lane's cursor names its stable step key");
+    assert!(
+        saw_lane_key,
+        "a running lane's cursor names its stable step key"
+    );
 }

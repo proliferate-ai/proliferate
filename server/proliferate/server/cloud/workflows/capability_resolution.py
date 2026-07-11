@@ -7,10 +7,9 @@ MOMENT, and each is persisted as a ``workflow_capability_lease`` row — the new
 frozen truth. A tool/function created or edited after StartRun resolves to a
 different identity and therefore can never widen the run.
 
-This runs ALONGSIDE the existing namespace-based per-run gateway token
-(``gateway_grants.py``): the runtime still consumes namespaces until WS3b/WS5c,
-and enforcement cutover is WS3b/WS3c. WS3a only freezes the leases and adds the
-live-authorization seam (``capability_authz.py``).
+WF-ID freezes these leases without minting a per-run gateway bearer. Runtime
+activation remains feature-off until the later credential/receipt packets add
+the separately versioned private envelope and exact live-authorization seam.
 
 Enumeration rules at mint (E3 forbids a ``tools/list`` fetch, so no new failure
 mode is introduced):
@@ -21,8 +20,8 @@ mode is introduced):
 * an integration namespace -> one ``integration_tool`` ref per tool in the
   owner's WARM tool-schema cache for that provider, at the definition's current
   ``updated_at`` (reused as ``provider_revision`` — no new column). A COLD cache
-  yields no integration_tool leases for that provider: the namespace grant in the
-  per-run token still governs it (legacy-parallel), and WS3c tightens the exact
+  yields no integration_tool leases for that provider. Execution stays parked
+  rather than falling back to a namespace bearer; WS3c tightens the exact
   integration-tool freeze when the receipt/tool-cache path lands. We never invent
   a fake ``inputSchemaHash``; a tool with no cached schema records the explicit
   ``"unknown"`` sentinel.

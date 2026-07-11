@@ -23,6 +23,7 @@ use super::action::{
     recover_action_handshake, run_action_handshake, ActionIdentity, ActionResult, ActionSubmit,
     ActionWaitPolicy, TestActionSubmitter,
 };
+use super::delivery::WorkflowServiceIdentityFixture;
 use super::effects::{
     self, recover_agent_turn, recover_scm, recover_shell, EffectKind, EffectResult, EffectStatus,
 };
@@ -48,7 +49,7 @@ fn service_with_run(steps: &str) -> (WorkflowService, Db, String) {
               "steps": {steps} }}"#
     );
     let (run, created) = service
-        .create_run_idempotent(&plan_json, "workspace-1")
+        .create_run_with_valid_identity_fixture(&plan_json, "workspace-1")
         .expect("create run");
     assert!(created);
     (service, db, run.run_id)
@@ -70,24 +71,42 @@ fn inject_started_effect_crash(
 ) {
     store
         .with_tx_anyhow(|tx| {
-            let mut step = WorkflowStore::find_step_run_tx(tx, run_id, step_index)?
-                .expect("step run exists");
+            let mut step =
+                WorkflowStore::find_step_run_tx(tx, run_id, step_index)?.expect("step run exists");
             step.status = WorkflowStepStatus::Running;
             step.attempt = 1;
             step.started_at = Some(now());
             step.updated_at = now();
             WorkflowStore::update_step_run(tx, &step)?;
             effects::insert_started_tx(
-                tx, run_id, step_key, 1, 0, kind, identity, replay_key, &now(),
+                tx,
+                run_id,
+                step_key,
+                1,
+                0,
+                kind,
+                identity,
+                replay_key,
+                &now(),
             )?;
             Ok(())
         })
         .expect("inject crash state");
 }
 
-fn latest_effect(store: &WorkflowStore, run_id: &str, step_key: &str, attempt: i64, kind: EffectKind) -> Option<effects::WorkflowEffectRecord> {
+fn latest_effect(
+    store: &WorkflowStore,
+    run_id: &str,
+    step_key: &str,
+    attempt: i64,
+    kind: EffectKind,
+) -> Option<effects::WorkflowEffectRecord> {
     store
-        .with_tx_anyhow(|tx| Ok(effects::latest_effect_for_attempt_tx(tx, run_id, step_key, attempt, kind)?))
+        .with_tx_anyhow(|tx| {
+            Ok(effects::latest_effect_for_attempt_tx(
+                tx, run_id, step_key, attempt, kind,
+            )?)
+        })
         .unwrap()
 }
 
@@ -116,8 +135,14 @@ struct LedgerExecutor {
 impl LedgerExecutor {
     fn clone_outcome(&self) -> StepOutcome {
         match &self.fresh_outcome {
-            StepOutcome::Completed { output } => StepOutcome::Completed { output: output.clone() },
-            StepOutcome::Failed { code, message, output } => StepOutcome::Failed {
+            StepOutcome::Completed { output } => StepOutcome::Completed {
+                output: output.clone(),
+            },
+            StepOutcome::Failed {
+                code,
+                message,
+                output,
+            } => StepOutcome::Failed {
                 code: code.clone(),
                 message: message.clone(),
                 output: output.clone(),
@@ -132,12 +157,18 @@ impl WorkflowStepExecutor for LedgerExecutor {
     async fn execute_step(&self, step: &PlanStep, ctx: &StepExecContext) -> StepOutcome {
         let key = step.key.clone();
         if ctx.crash_resumed {
-            if let Some(effect) = latest_effect(&self.store, &self.run_id, &key, ctx.attempt - 1, self.kind) {
+            if let Some(effect) =
+                latest_effect(&self.store, &self.run_id, &key, ctx.attempt - 1, self.kind)
+            {
                 let recovery = match self.kind {
-                    EffectKind::AgentTurn => recover_agent_turn(&effect, self.agent_durable.clone()),
-                    EffectKind::Shell => {
-                        recover_shell(&effect, self.shell_pg_alive, self.shell_durable_exit.clone())
+                    EffectKind::AgentTurn => {
+                        recover_agent_turn(&effect, self.agent_durable.clone())
                     }
+                    EffectKind::Shell => recover_shell(
+                        &effect,
+                        self.shell_pg_alive,
+                        self.shell_durable_exit.clone(),
+                    ),
                     EffectKind::Scm => recover_scm(&effect, self.scm_pr.clone()),
                     other => panic!("recovery for {other:?} is tested elsewhere"),
                 };
@@ -185,7 +216,14 @@ impl WorkflowStepExecutor for LedgerExecutor {
             self.store
                 .with_tx_anyhow(|tx| {
                     effects::mark_terminal_tx(
-                        tx, &self.run_id, &key, ctx.attempt, 0, self.kind, &result, &now(),
+                        tx,
+                        &self.run_id,
+                        &key,
+                        ctx.attempt,
+                        0,
+                        self.kind,
+                        &result,
+                        &now(),
                     )?;
                     Ok(())
                 })
@@ -223,7 +261,15 @@ async fn workflow_fault_local_effect_shell_started_no_key_is_uncertain() {
         r#"[{ "key": "0.-.0", "slot": "s", "kind": "shell.run", "command": "deploy.sh" }]"#,
     );
     let store = WorkflowStore::new(db);
-    inject_started_effect_crash(&store, &run_id, 0, "0.-.0", EffectKind::Shell, Some("4242"), None);
+    inject_started_effect_crash(
+        &store,
+        &run_id,
+        0,
+        "0.-.0",
+        EffectKind::Shell,
+        Some("4242"),
+        None,
+    );
 
     let executor = base_executor(store.clone(), &run_id, EffectKind::Shell);
     let fresh_runs = executor.fresh_runs.clone();
@@ -233,7 +279,11 @@ async fn workflow_fault_local_effect_shell_started_no_key_is_uncertain() {
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Failed)
     );
-    assert_eq!(fresh_runs.load(Ordering::SeqCst), 0, "no idempotent key ⇒ never blindly replayed");
+    assert_eq!(
+        fresh_runs.load(Ordering::SeqCst),
+        0,
+        "no idempotent key ⇒ never blindly replayed"
+    );
     let run = service.get_run(&run_id).unwrap().unwrap();
     assert_eq!(run.error_code.as_deref(), Some("outcome_uncertain"));
     // The crashed effect row is retained (durable + auditable), not overwritten.
@@ -250,7 +300,13 @@ async fn workflow_fault_local_effect_shell_with_idempotent_key_replays() {
     );
     let store = WorkflowStore::new(db);
     inject_started_effect_crash(
-        &store, &run_id, 0, "0.-.0", EffectKind::Shell, Some("4242"), Some("build-abc"),
+        &store,
+        &run_id,
+        0,
+        "0.-.0",
+        EffectKind::Shell,
+        Some("4242"),
+        Some("build-abc"),
     );
 
     let executor = base_executor(store.clone(), &run_id, EffectKind::Shell);
@@ -261,7 +317,11 @@ async fn workflow_fault_local_effect_shell_with_idempotent_key_replays() {
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
-    assert_eq!(fresh_runs.load(Ordering::SeqCst), 1, "idempotent key ⇒ safe replay");
+    assert_eq!(
+        fresh_runs.load(Ordering::SeqCst),
+        1,
+        "idempotent key ⇒ safe replay"
+    );
     // The replay ran under attempt 2 and completed; the crashed attempt-1 row stays.
     let attempt2 = latest_effect(&store, &run_id, "0.-.0", 2, EffectKind::Shell).unwrap();
     assert_eq!(attempt2.status, EffectStatus::Completed);
@@ -274,7 +334,15 @@ async fn workflow_fault_local_effect_shell_durable_exit_reconciles_without_rerun
         r#"[{ "key": "0.-.0", "slot": "s", "kind": "shell.run", "command": "deploy.sh" }]"#,
     );
     let store = WorkflowStore::new(db);
-    inject_started_effect_crash(&store, &run_id, 0, "0.-.0", EffectKind::Shell, Some("4242"), None);
+    inject_started_effect_crash(
+        &store,
+        &run_id,
+        0,
+        "0.-.0",
+        EffectKind::Shell,
+        Some("4242"),
+        None,
+    );
 
     let mut executor = base_executor(store.clone(), &run_id, EffectKind::Shell);
     // The process left a durable exit-0 result behind: reconcile it, don't re-run.
@@ -288,7 +356,11 @@ async fn workflow_fault_local_effect_shell_durable_exit_reconciles_without_rerun
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
-    assert_eq!(fresh_runs.load(Ordering::SeqCst), 0, "durable exit ⇒ reconcile, never re-run");
+    assert_eq!(
+        fresh_runs.load(Ordering::SeqCst),
+        0,
+        "durable exit ⇒ reconcile, never re-run"
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -301,7 +373,15 @@ async fn workflow_fault_local_effect_agent_turn_unprovable_is_uncertain_never_re
         r#"[{ "key": "0.-.0", "slot": "s", "kind": "agent.prompt", "prompt": "do it" }]"#,
     );
     let store = WorkflowStore::new(db);
-    inject_started_effect_crash(&store, &run_id, 0, "0.-.0", EffectKind::AgentTurn, Some("turn-1"), None);
+    inject_started_effect_crash(
+        &store,
+        &run_id,
+        0,
+        "0.-.0",
+        EffectKind::AgentTurn,
+        Some("turn-1"),
+        None,
+    );
 
     // agent_durable = None: the harness cannot prove the turn's terminal state.
     let executor = base_executor(store.clone(), &run_id, EffectKind::AgentTurn);
@@ -312,7 +392,11 @@ async fn workflow_fault_local_effect_agent_turn_unprovable_is_uncertain_never_re
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Failed)
     );
-    assert_eq!(fresh_runs.load(Ordering::SeqCst), 0, "never auto re-prompt an unprovable turn");
+    assert_eq!(
+        fresh_runs.load(Ordering::SeqCst),
+        0,
+        "never auto re-prompt an unprovable turn"
+    );
     let run = service.get_run(&run_id).unwrap().unwrap();
     assert_eq!(run.error_code.as_deref(), Some("outcome_uncertain"));
 }
@@ -323,7 +407,15 @@ async fn workflow_fault_local_effect_agent_turn_durable_transcript_reconciles() 
         r#"[{ "key": "0.-.0", "slot": "s", "kind": "agent.prompt", "prompt": "do it" }]"#,
     );
     let store = WorkflowStore::new(db);
-    inject_started_effect_crash(&store, &run_id, 0, "0.-.0", EffectKind::AgentTurn, Some("turn-1"), None);
+    inject_started_effect_crash(
+        &store,
+        &run_id,
+        0,
+        "0.-.0",
+        EffectKind::AgentTurn,
+        Some("turn-1"),
+        None,
+    );
 
     let mut executor = base_executor(store.clone(), &run_id, EffectKind::AgentTurn);
     executor.agent_durable = Some(EffectResult::Completed {
@@ -336,7 +428,11 @@ async fn workflow_fault_local_effect_agent_turn_durable_transcript_reconciles() 
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
-    assert_eq!(fresh_runs.load(Ordering::SeqCst), 0, "durable transcript ⇒ reconcile, no re-prompt");
+    assert_eq!(
+        fresh_runs.load(Ordering::SeqCst),
+        0,
+        "durable transcript ⇒ reconcile, no re-prompt"
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -351,7 +447,13 @@ async fn workflow_fault_local_effect_scm_started_reissues_with_identical_identit
     let store = WorkflowStore::new(db);
     // Crashed mid-open with the branch identity persisted.
     inject_started_effect_crash(
-        &store, &run_id, 0, "0.-.0", EffectKind::Scm, Some("workflow-run/run-1/-"), None,
+        &store,
+        &run_id,
+        0,
+        "0.-.0",
+        EffectKind::Scm,
+        Some("workflow-run/run-1/-"),
+        None,
     );
 
     let mut executor = base_executor(store.clone(), &run_id, EffectKind::Scm);
@@ -367,7 +469,11 @@ async fn workflow_fault_local_effect_scm_started_reissues_with_identical_identit
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
-    assert_eq!(fresh_runs.load(Ordering::SeqCst), 1, "no PR found ⇒ reissue");
+    assert_eq!(
+        fresh_runs.load(Ordering::SeqCst),
+        1,
+        "no PR found ⇒ reissue"
+    );
     let reissued = latest_effect(&store, &run_id, "0.-.0", 2, EffectKind::Scm).unwrap();
     assert_eq!(
         reissued.external_identity.as_deref(),
@@ -383,7 +489,13 @@ async fn workflow_fault_local_effect_scm_found_pr_reconciles_without_reissue() {
     );
     let store = WorkflowStore::new(db);
     inject_started_effect_crash(
-        &store, &run_id, 0, "0.-.0", EffectKind::Scm, Some("workflow-run/run-1/-"), None,
+        &store,
+        &run_id,
+        0,
+        "0.-.0",
+        EffectKind::Scm,
+        Some("workflow-run/run-1/-"),
+        None,
     );
 
     let mut executor = base_executor(store.clone(), &run_id, EffectKind::Scm);
@@ -398,7 +510,11 @@ async fn workflow_fault_local_effect_scm_found_pr_reconciles_without_reissue() {
         progress,
         crate::domains::workflows::engine::EngineProgress::Finished(WorkflowRunStatus::Completed)
     );
-    assert_eq!(fresh_runs.load(Ordering::SeqCst), 0, "PR found ⇒ reconcile, no second push");
+    assert_eq!(
+        fresh_runs.load(Ordering::SeqCst),
+        0,
+        "PR found ⇒ reconcile, no second push"
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -427,7 +543,11 @@ async fn workflow_fault_local_effect_action_result_lost_recovers_by_identity() {
         .await
         .unwrap();
     assert!(matches!(result, ActionResult::Delivered { .. }));
-    assert_eq!(submitter.submits(), 0, "lost-response recovery never re-submits");
+    assert_eq!(
+        submitter.submits(),
+        0,
+        "lost-response recovery never re-submits"
+    );
 }
 
 #[tokio::test]
@@ -436,9 +556,12 @@ async fn workflow_fault_local_effect_action_submitted_but_result_pending_then_de
     // only on the authoritative receipt — one submit total.
     let submitter = TestActionSubmitter::new(
         "act-9",
-        vec![None, Some(ActionResult::Delivered {
-            receipt: serde_json::json!({ "ts": "3.3" }),
-        })],
+        vec![
+            None,
+            Some(ActionResult::Delivered {
+                receipt: serde_json::json!({ "ts": "3.3" }),
+            }),
+        ],
     );
     let submit = ActionSubmit {
         run_id: "run-1".to_string(),
@@ -468,14 +591,45 @@ async fn workflow_fault_local_effect_duplicate_wake_does_not_duplicate_completed
         r#"[{ "key": "0.-.0", "slot": "s", "kind": "shell.run", "command": "x" }]"#,
     );
     let store = WorkflowStore::new(db);
-    let result = EffectResult::Completed { output: serde_json::json!({ "exit_code": 0 }) };
+    let result = EffectResult::Completed {
+        output: serde_json::json!({ "exit_code": 0 }),
+    };
     store
         .with_tx_anyhow(|tx| {
-            effects::insert_started_tx(tx, &run_id, "0.-.0", 1, 0, EffectKind::Shell, Some("42"), None, &now())?;
-            effects::mark_terminal_tx(tx, &run_id, "0.-.0", 1, 0, EffectKind::Shell, &result, &now())?;
+            effects::insert_started_tx(
+                tx,
+                &run_id,
+                "0.-.0",
+                1,
+                0,
+                EffectKind::Shell,
+                Some("42"),
+                None,
+                &now(),
+            )?;
+            effects::mark_terminal_tx(
+                tx,
+                &run_id,
+                "0.-.0",
+                1,
+                0,
+                EffectKind::Shell,
+                &result,
+                &now(),
+            )?;
             // A duplicate actor wake re-persists the intent: INSERT OR IGNORE keeps
             // the COMPLETED row, never resurrecting it as `started`.
-            effects::insert_started_tx(tx, &run_id, "0.-.0", 1, 0, EffectKind::Shell, Some("42"), None, &now())?;
+            effects::insert_started_tx(
+                tx,
+                &run_id,
+                "0.-.0",
+                1,
+                0,
+                EffectKind::Shell,
+                Some("42"),
+                None,
+                &now(),
+            )?;
             Ok(())
         })
         .unwrap();
@@ -500,8 +654,15 @@ async fn workflow_fault_local_effect_emit_corrective_attempts_durable_across_res
         .with_tx_anyhow(|tx| {
             for seq in 0..3 {
                 effects::insert_started_tx(
-                    tx, &run_id, "0.-.0", 1, seq, EffectKind::AgentTurn,
-                    Some(&format!("turn-{seq}")), None, &now(),
+                    tx,
+                    &run_id,
+                    "0.-.0",
+                    1,
+                    seq,
+                    EffectKind::AgentTurn,
+                    Some(&format!("turn-{seq}")),
+                    None,
+                    &now(),
                 )?;
                 let result = EffectResult::Failed {
                     code: "emit_invalid".to_string(),
@@ -509,7 +670,16 @@ async fn workflow_fault_local_effect_emit_corrective_attempts_durable_across_res
                     output: None,
                 };
                 if seq < 2 {
-                    effects::mark_terminal_tx(tx, &run_id, "0.-.0", 1, seq, EffectKind::AgentTurn, &result, &now())?;
+                    effects::mark_terminal_tx(
+                        tx,
+                        &run_id,
+                        "0.-.0",
+                        1,
+                        seq,
+                        EffectKind::AgentTurn,
+                        &result,
+                        &now(),
+                    )?;
                 }
             }
             Ok(())
@@ -521,7 +691,11 @@ async fn workflow_fault_local_effect_emit_corrective_attempts_durable_across_res
     let all = restarted
         .with_tx_anyhow(|tx| Ok(effects::list_effects_tx(tx, &run_id)?))
         .unwrap();
-    assert_eq!(all.len(), 3, "every corrective turn is durable across restart");
+    assert_eq!(
+        all.len(),
+        3,
+        "every corrective turn is durable across restart"
+    );
     assert_eq!(all[0].effect_seq, 0);
     assert_eq!(all[2].effect_seq, 2);
     assert_eq!(all[2].external_identity.as_deref(), Some("turn-2"));

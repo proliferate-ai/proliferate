@@ -3,7 +3,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, Index, String, Text, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from proliferate.constants.cloud import (
@@ -87,6 +97,7 @@ class RepoEnvironment(Base):
             "(environment_kind = 'cloud' AND local_path IS NULL))",
             name="ck_repo_environment_kind_fields",
         ),
+        CheckConstraint("generation > 0", name="ck_repo_environment_generation"),
         Index(
             "ux_repo_environment_cloud",
             "repo_config_id",
@@ -117,6 +128,7 @@ class RepoEnvironment(Base):
     default_branch: Mapped[str | None] = mapped_column(String(255), nullable=True)
     setup_script: Mapped[str] = mapped_column(Text, default="")
     run_command: Mapped[str] = mapped_column(Text, default="")
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

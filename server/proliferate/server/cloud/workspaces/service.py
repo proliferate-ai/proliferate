@@ -294,6 +294,12 @@ async def create_cloud_workspace_for_user(
         anyharness_workspace_id=anyharness_workspace.workspace_id,
         workspace=workspace,
     )
+    if workspace is None:
+        raise CloudApiError(
+            "workspace_materialization_stale",
+            "A newer workspace materialization replaced this request.",
+            status_code=409,
+        )
     return await _workspace_payload(db, workspace, detail=True)
 
 
@@ -331,7 +337,14 @@ async def archive_cloud_workspace_for_user(
     workspace_id: UUID,
 ) -> WorkspaceDetail:
     workspace = await _load_user_workspace(db, user_id=user_id, workspace_id=workspace_id)
-    workspace = await cloud_workspace_store.archive_cloud_workspace(db, workspace)
+    try:
+        workspace = await cloud_workspace_store.archive_cloud_workspace(db, workspace)
+    except cloud_workspace_store.CloudWorkspaceGenerationConflict as exc:
+        raise CloudApiError(
+            "cloud_workspace_generation_conflict",
+            "A newer workspace lifecycle change replaced this request.",
+            status_code=409,
+        ) from exc
     return await _workspace_payload(db, workspace, detail=True)
 
 
@@ -353,7 +366,14 @@ async def restore_cloud_workspace_for_user(
             f"A cloud workspace already exists for branch '{workspace.git_branch}'.",
             status_code=409,
         )
-    restored = await cloud_workspace_store.restore_cloud_workspace(db, workspace)
+    try:
+        restored = await cloud_workspace_store.restore_cloud_workspace(db, workspace)
+    except cloud_workspace_store.CloudWorkspaceGenerationConflict as exc:
+        raise CloudApiError(
+            "cloud_workspace_generation_conflict",
+            "A newer workspace lifecycle change replaced this request.",
+            status_code=409,
+        ) from exc
     if restored is None:
         raise CloudApiError(
             "cloud_branch_already_exists",

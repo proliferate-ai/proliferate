@@ -234,6 +234,7 @@ fn openapi_registers_workspace_session_and_event_schemas() {
         "BranchPullRequestSummary",
         "BranchPullRequestStatus",
         "RepoPullRequestStatusesResponse",
+        "WorkflowDeliveryIdentityV1",
     ] {
         assert!(
             schemas.contains_key(schema),

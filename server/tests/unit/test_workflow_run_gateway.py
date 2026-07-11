@@ -1,29 +1,23 @@
-"""Per-run gateway tokens, completion ping, and namespace-level scope (PR E / E3).
+"""Secret-free workflow scopes and fail-closed legacy gateway seams.
 
-Tier-1: a real DB (the mint/expiry/scope guarantees live in it) via ``db_session``
-and the ASGI ``client``; the upstream MCP + sandbox wake are faked across the
-network boundary. Rulings exercised: L16 (mint every run + ping credential), L22
-(fail-fast on a declared namespace with no ready account), L25 (frozen run scope ⊆
-delivering worker allowlist, re-checked per request, NAMESPACE granularity), L26
-(sandbox purpose), §3.7 (ping auth + refresh), §6.4/6.7 (gateway scope enforcement),
-E3 (namespace-only grant = ALL tools of the provider; no tool lists).
+Tier-1 uses a real DB. StartRun freezes public scope/readiness without minting a
+run bearer; manually seeded legacy rows prove old auth surfaces stop at the WF-ID
+feature-off gate. The remaining gateway tests cover the independent per-worker
+chat policy and namespace enforcement paths.
 """
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.constants.workflows import (
-    WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE,
-    WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED,
     WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
 )
@@ -37,7 +31,8 @@ from proliferate.db.models.cloud.runtime_workers import (
     CloudRuntimeWorker,
 )
 from proliferate.db.models.cloud.sandboxes import CloudSandbox
-from proliferate.db.models.cloud.workflows import WorkflowRun, WorkflowRunGatewayToken
+from proliferate.db.models.cloud.workflow_gateway_models import WorkflowRunGatewayToken
+from proliferate.db.models.cloud.workflows import WorkflowRun
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as runtime_workers_store
@@ -48,17 +43,12 @@ from proliferate.server.cloud.integration_gateway import dependencies as gateway
 from proliferate.server.cloud.integration_gateway import service as gateway_service
 from proliferate.server.cloud.integration_gateway.domain import scope
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
-from proliferate.server.cloud.workflows import compiler, delivery
+from proliferate.server.cloud.workflows import compiler
 from proliferate.server.cloud.workflows.domain.definition import parse_definition
-from proliferate.server.cloud.workflows.worker.service import report_run_status
 from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 
 pytestmark = pytest.mark.asyncio
-
-_FIXTURE_DIR = Path(__file__).resolve().parents[3] / "fixtures" / "contracts" / "run-ping"
-_ACTIVE = WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_ACTIVE
-_EXPIRED = WORKFLOW_RUN_GATEWAY_TOKEN_STATUS_EXPIRED
 
 
 def _definition(*, integrations: list[str] | None = None, steps: list[dict] | None = None) -> dict:
@@ -144,22 +134,24 @@ async def _store_workflow(db: AsyncSession, owner: User, definition: dict, *, na
     return workflow
 
 
-# --- mint at StartRun (L16, L22) -----------------------------------------------
+# --- no credential mint at StartRun (WF-ID) -----------------------------------
 
 
-async def test_mint_for_every_run_empty_integrations_empty_scope(db_session: AsyncSession) -> None:
+async def test_startrun_with_empty_scope_mints_no_gateway_token(
+    db_session: AsyncSession,
+) -> None:
     user = await _make_user(db_session)
     wf = await _store_workflow(db_session, user, _definition(), name="no-integrations")
     run = await compiler.start_run(
-        db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
+        db_session,
+        user,
+        wf.id,
+        inputs={},
+        target_mode=WORKFLOW_TARGET_MODE_LOCAL,
+        target_workspace_id=uuid.uuid4(),
     )
-    # WS2b: the gateway block lives in the PRIVATE envelope, never the logical plan.
     assert "gateway" not in run.resolved_plan_json
-    gateway = run.private_envelope_json["gateway"]
-    assert gateway["integrations"] == []
-    assert gateway["url"].endswith("/v1/cloud/integration-gateway/mcp")
-    assert gateway["authorization"].startswith("Bearer ")
-    assert gateway["ping_url"].endswith(f"/v1/cloud/workflows/runs/{run.id}/ping")
+    assert not hasattr(run, "private_envelope_json")
     tokens = (
         (
             await db_session.execute(
@@ -171,34 +163,39 @@ async def test_mint_for_every_run_empty_integrations_empty_scope(db_session: Asy
         .scalars()
         .all()
     )
-    assert len(tokens) == 1
-    # An empty grant is still stamped per slot (§2.6).
-    assert tokens[0].scope_json == _scope_json([])
-    assert tokens[0].status == _ACTIVE
+    assert tokens == []
 
 
-async def test_mint_resolves_declared_scope(db_session: AsyncSession) -> None:
+async def test_startrun_validates_declared_scope_without_mint(
+    db_session: AsyncSession,
+) -> None:
     user = await _make_user(db_session)
     await _seed_ready_account(db_session, user_id=user.id, namespace="context7")
     wf = await _store_workflow(
         db_session, user, _definition(integrations=["context7"]), name="scoped"
     )
     run = await compiler.start_run(
-        db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
+        db_session,
+        user,
+        wf.id,
+        inputs={},
+        target_mode=WORKFLOW_TARGET_MODE_LOCAL,
+        target_workspace_id=uuid.uuid4(),
     )
-    # The envelope's gateway carries the flat namespace list (E3); WS2b keeps it
-    # out of the secret-free logical plan.
     assert "gateway" not in run.resolved_plan_json
-    assert run.private_envelope_json["gateway"]["integrations"] == ["context7"]
-    token = (
-        await db_session.execute(
-            store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run.id
+    assert not hasattr(run, "private_envelope_json")
+    tokens = (
+        (
+            await db_session.execute(
+                store.select(WorkflowRunGatewayToken).where(
+                    WorkflowRunGatewayToken.workflow_run_id == run.id
+                )
             )
         )
-    ).scalar_one()
-    # The token's scope_json is per-slot (§2.6) — no tool lists.
-    assert token.scope_json == _scope_json(["context7"])
+        .scalars()
+        .all()
+    )
+    assert tokens == []
 
 
 # --- per-slot integration narrowing (track 3c phase 2) -------------------------
@@ -254,7 +251,9 @@ async def test_resolve_run_scope_empty_narrowing_grants_nothing_to_that_slot() -
     assert resolve_run_scope(definition) == {"quiet": {"integrations": []}}
 
 
-async def test_mint_stamps_narrowed_scope_per_slot(db_session: AsyncSession) -> None:
+async def test_narrowed_scope_is_validated_without_token_mint(
+    db_session: AsyncSession,
+) -> None:
     user = await _make_user(db_session)
     await _seed_ready_account(db_session, user_id=user.id, namespace="context7")
     definition = {
@@ -273,16 +272,18 @@ async def test_mint_stamps_narrowed_scope_per_slot(db_session: AsyncSession) -> 
     }
     wf = await _store_workflow(db_session, user, definition, name="narrowed")
     run = await compiler.start_run(
-        db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
+        db_session,
+        user,
+        wf.id,
+        inputs={},
+        target_mode=WORKFLOW_TARGET_MODE_LOCAL,
+        target_workspace_id=uuid.uuid4(),
     )
-    token = (
-        await db_session.execute(
-            store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run.id
-            )
-        )
-    ).scalar_one()
-    assert token.scope_json == {"quiet": {"integrations": []}}
+    assert not hasattr(run, "private_envelope_json")
+    token_count = await db_session.scalar(
+        select(func.count()).select_from(WorkflowRunGatewayToken)
+    )
+    assert token_count == 0
 
 
 async def test_l22_fail_fast_provider_without_ready_account(db_session: AsyncSession) -> None:
@@ -295,7 +296,12 @@ async def test_l22_fail_fast_provider_without_ready_account(db_session: AsyncSes
     )
     with pytest.raises(CloudApiError) as excinfo:
         await compiler.start_run(
-            db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
+            db_session,
+            user,
+            wf.id,
+            inputs={},
+            target_mode=WORKFLOW_TARGET_MODE_LOCAL,
+            target_workspace_id=uuid.uuid4(),
         )
     assert excinfo.value.code == "workflow_function_provider_not_ready"
     # No dangling run and no token — failure is before the run row is created.
@@ -311,14 +317,16 @@ async def test_l22_fail_fast_provider_without_ready_account(db_session: AsyncSes
     assert runs == []
 
 
-# --- L25 intersection at delivery (namespace granularity) ----------------------
-
-
 async def _seed_worker_with_scope(
     db: AsyncSession, *, owner_user_id: uuid.UUID, scope_json: list[str] | None
 ) -> None:
+    """Seed the independent per-worker policy used by gateway auth tests."""
+
     sandbox = CloudSandbox(
-        owner_user_id=owner_user_id, sandbox_type="e2b", status="ready", purpose="interactive"
+        owner_user_id=owner_user_id,
+        sandbox_type="e2b",
+        status="ready",
+        purpose="interactive",
     )
     db.add(sandbox)
     await db.flush()
@@ -351,342 +359,65 @@ async def _seed_run_with_token(
     target_mode: str = WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
     status: str = "delivered",
 ) -> tuple[uuid.UUID, str]:
-    wf = await _store_workflow(
-        db, owner, _definition(integrations=integrations), name=f"r-{uuid.uuid4().hex[:6]}"
+    """Seed tombstoned auth evidence directly; production has no mint builder."""
+
+    workflow = await _store_workflow(
+        db,
+        owner,
+        _definition(integrations=integrations),
+        name=f"legacy-run-{uuid.uuid4().hex[:6]}",
     )
-    version = await store.get_version(db, wf.current_version_id)
-    plan = {
-        "steps": [],
-        "sessions": {"main": {"harness": "claude", "model": "sonnet"}},
-    }
+    assert workflow.current_version_id is not None
     run = await store.create_run(
         db,
-        workflow_id=wf.id,
-        workflow_version_id=version.id,
+        workflow_id=workflow.id,
+        workflow_version_id=workflow.current_version_id,
         trigger_kind="manual",
         executor_user_id=owner.id,
         args_json={},
         target_mode=target_mode,
-        resolved_plan_json=plan,
-        # WS2b: the gateway block lives in the private envelope now.
-        private_envelope_json={"gateway": {"integrations": list(integrations)}},
+        resolved_plan_json={"steps": [], "sessions": {}},
     )
     if status != "pending_delivery":
         await store.update_run(db, run_id=run.id, status=status)
-    plaintext = f"tok-{uuid.uuid4().hex}"
-    await store.create_run_gateway_token(
-        db,
-        workflow_run_id=run.id,
-        owner_user_id=owner.id,
-        organization_id=None,
-        token_hash=runtime_workers_store.hash_workflow_run_gateway_token(plaintext),
-        scope_json=_scope_json(integrations),
-        expires_at=utcnow() + timedelta(hours=24),
+    plaintext = f"legacy-test-{uuid.uuid4().hex}"
+    db.add(
+        WorkflowRunGatewayToken(
+            workflow_run_id=run.id,
+            owner_user_id=owner.id,
+            organization_id=None,
+            token_hash=runtime_workers_store.hash_workflow_run_gateway_token(plaintext),
+            scope_json=_scope_json(integrations),
+            status="active",
+            expires_at=utcnow() + timedelta(hours=24),
+        )
     )
+    await db.flush()
     return run.id, plaintext
 
 
-async def test_delivery_intersects_run_scope_with_narrower_worker(
-    db_session: AsyncSession,
+# --- retired legacy bearer delivery path --------------------------------------
+
+
+async def test_manually_seeded_legacy_ping_stops_at_feature_off_gate(
+    client: AsyncClient, db_session: AsyncSession
 ) -> None:
     user = await _make_user(db_session)
-    await _seed_worker_with_scope(db_session, owner_user_id=user.id, scope_json=["context7"])
-    run_id, _ = await _seed_run_with_token(
-        db_session, owner=user, integrations=["context7", "exa"]
-    )
-    run = await store.get_run(db_session, run_id)
-
-    plan = await delivery._apply_delivery_scope_intersection(db_session, run)
-
-    assert plan["gateway"]["integrations"] == ["context7"]
-    token = (
-        await db_session.execute(
-            store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run_id
-            )
-        )
-    ).scalar_one()
-    assert token.scope_json == _scope_json(["context7"])
-
-
-async def test_delivery_null_worker_scope_is_unscoped_passthrough(
-    db_session: AsyncSession,
-) -> None:
-    user = await _make_user(db_session)
-    # NULL worker scope (unscoped) — distinct from empty; the run scope is unchanged.
-    await _seed_worker_with_scope(db_session, owner_user_id=user.id, scope_json=None)
-    run_id, _ = await _seed_run_with_token(db_session, owner=user, integrations=["context7"])
-    run = await store.get_run(db_session, run_id)
-
-    plan = await delivery._apply_delivery_scope_intersection(db_session, run)
-    assert plan["gateway"]["integrations"] == ["context7"]
-
-
-async def test_delivery_empty_worker_scope_grants_nothing(db_session: AsyncSession) -> None:
-    user = await _make_user(db_session)
-    # Empty allowlist [] is NOT unscoped — it drops every namespace.
-    await _seed_worker_with_scope(db_session, owner_user_id=user.id, scope_json=[])
-    run_id, _ = await _seed_run_with_token(db_session, owner=user, integrations=["context7"])
-    run = await store.get_run(db_session, run_id)
-
-    plan = await delivery._apply_delivery_scope_intersection(db_session, run)
-    assert plan["gateway"]["integrations"] == []
-
-
-async def test_delivery_preserves_per_slot_narrowing_under_worker_intersection(
-    db_session: AsyncSession,
-) -> None:
-    """MAJOR-B regression: a worker allowlist that narrows the run must intersect
-    EACH slot's OWN grant, not stamp every slot with the flat union. A slot narrowed
-    at StartRun keeps its narrowing and never silently gains a namespace it was not
-    granted (which the old union-per-slot rebuild did)."""
-    user = await _make_user(db_session)
-    # Worker drops 'github' but keeps linear+slack, so the run's union is narrowed
-    # (forces the re-freeze path) while both remaining namespaces survive.
-    await _seed_worker_with_scope(
-        db_session, owner_user_id=user.id, scope_json=["linear", "slack"]
-    )
-    definition = {
-        "version": 1,
-        "inputs": [],
-        "integrations": ["github", "linear", "slack"],
-        "agents": [
-            {
-                "slot": "triage",
-                "harness": "claude",
-                "model": "sonnet",
-                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
-                "integrations": ["linear"],  # narrowed to a single namespace
-            },
-            {
-                "slot": "fix",
-                "harness": "claude",
-                "model": "sonnet",
-                "steps": [{"kind": "agent.prompt", "prompt": "hi"}],
-                # no integrations key -> default = full workflow-level list
-            },
-        ],
-    }
-    wf = await _store_workflow(db_session, user, definition, name="multi-slot")
-    version = await store.get_version(db_session, wf.current_version_id)
-    plan = {
-        "steps": [],
-        "sessions": {
-            "triage": {"harness": "claude", "model": "sonnet"},
-            "fix": {"harness": "claude", "model": "sonnet"},
-        },
-    }
-    run = await store.create_run(
-        db_session,
-        workflow_id=wf.id,
-        workflow_version_id=version.id,
-        trigger_kind="manual",
-        executor_user_id=user.id,
-        args_json={},
-        target_mode=WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
-        resolved_plan_json=plan,
-        # WS2b: gateway block lives in the private envelope.
-        private_envelope_json={"gateway": {"integrations": ["github", "linear", "slack"]}},
-    )
-    await store.create_run_gateway_token(
-        db_session,
-        workflow_run_id=run.id,
-        owner_user_id=user.id,
-        organization_id=None,
-        token_hash=runtime_workers_store.hash_workflow_run_gateway_token(
-            f"tok-{uuid.uuid4().hex}"
-        ),
-        scope_json={
-            "triage": {"integrations": ["linear"]},
-            "fix": {"integrations": ["github", "linear", "slack"]},
-        },
-        expires_at=utcnow() + timedelta(hours=24),
-    )
-
-    result = await delivery._apply_delivery_scope_intersection(db_session, run)
-
-    # Flat plan gateway list = union of the per-slot intersections (sorted).
-    assert result["gateway"]["integrations"] == ["linear", "slack"]
-    token = (
-        await db_session.execute(
-            store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run.id
-            )
-        )
-    ).scalar_one()
-    # The narrowed slot KEEPS ["linear"] (never gains slack); the default slot loses
-    # only the worker-dropped 'github'.
-    assert token.scope_json == {
-        "triage": {"integrations": ["linear"]},
-        "fix": {"integrations": ["linear", "slack"]},
-    }
-
-
-# --- terminal token expiry -----------------------------------------------------
-
-
-async def _active_token_status(db: AsyncSession, run_id: uuid.UUID) -> str:
-    token = (
-        await db.execute(
-            store.select(WorkflowRunGatewayToken).where(
-                WorkflowRunGatewayToken.workflow_run_id == run_id
-            )
-        )
-    ).scalar_one()
-    return token.status
-
-
-async def test_terminal_report_expires_token(db_session: AsyncSession) -> None:
-    from proliferate.server.cloud.workflows.models import RunStatusRequest
-
-    user = await _make_user(db_session)
-    wf = await _store_workflow(db_session, user, _definition(), name="term-report")
-    run = await compiler.start_run(
-        db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
-    )
-    assert await _active_token_status(db_session, run.id) == _ACTIVE
-    # pending_delivery -> cancelled is a legal terminal transition.
-    await report_run_status(db_session, user, run.id, RunStatusRequest(status="cancelled"))
-    assert await _active_token_status(db_session, run.id) == _EXPIRED
-
-
-async def test_terminal_refresh_expires_token(db_session: AsyncSession) -> None:
-    user = await _make_user(db_session)
-    run_id, _ = await _seed_run_with_token(
+    run_id, plaintext = await _seed_run_with_token(
         db_session, owner=user, integrations=[], status="running"
     )
-    view = delivery._SandboxRunView(
-        status="completed",
-        step_cursor=1,
-        step_outputs=None,
-        session_ids=None,
-        workspace_id=None,
-        error_code=None,
-        error_message=None,
-    )
-    await delivery._sync_run_from_view(db_session, run_id, view)
-    assert await _active_token_status(db_session, run_id) == _EXPIRED
-
-
-# --- ping endpoint (§3.7 / L16) ------------------------------------------------
-
-
-@pytest.fixture
-def _recording_refresh(monkeypatch: pytest.MonkeyPatch) -> list:
-    calls: list = []
-
-    async def _fake_refresh(db, user, run):  # type: ignore[no-untyped-def]
-        calls.append(run.id)
-        return run
-
-    monkeypatch.setattr(
-        "proliferate.server.cloud.workflows.delivery.refresh_cloud_run", _fake_refresh
-    )
-    return calls
-
-
-async def test_ping_happy_triggers_refresh_for_cloud_run(
-    client: AsyncClient, db_session: AsyncSession, _recording_refresh: list
-) -> None:
-    user = await _make_user(db_session)
-    run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
     await db_session.commit()
-
-    resp = await client.post(
-        f"/v1/cloud/workflows/runs/{run_id}/ping",
-        headers={"Authorization": f"Bearer {plaintext}"},
-    )
-    assert resp.status_code == 202
-    assert _recording_refresh == [run_id]
-
-
-async def test_ping_local_run_no_op_refresh(
-    client: AsyncClient, db_session: AsyncSession, _recording_refresh: list
-) -> None:
-    user = await _make_user(db_session)
-    run_id, plaintext = await _seed_run_with_token(
-        db_session, owner=user, integrations=[], target_mode=WORKFLOW_TARGET_MODE_LOCAL
-    )
-    await db_session.commit()
-
-    resp = await client.post(
-        f"/v1/cloud/workflows/runs/{run_id}/ping",
-        headers={"Authorization": f"Bearer {plaintext}"},
-    )
-    assert resp.status_code == 202
-    assert _recording_refresh == []  # relay owns local observation
-
-
-async def test_ping_token_for_other_run_is_forbidden(
-    client: AsyncClient, db_session: AsyncSession, _recording_refresh: list
-) -> None:
-    user = await _make_user(db_session)
-    run_a, token_a = await _seed_run_with_token(db_session, owner=user, integrations=[])
-    run_b, _ = await _seed_run_with_token(db_session, owner=user, integrations=[])
-    await db_session.commit()
-
-    resp = await client.post(
-        f"/v1/cloud/workflows/runs/{run_b}/ping",
-        headers={"Authorization": f"Bearer {token_a}"},
-    )
-    assert resp.status_code == 403
-    assert _recording_refresh == []
-
-
-async def test_ping_expired_token_unauthorized(
-    client: AsyncClient, db_session: AsyncSession, _recording_refresh: list
-) -> None:
-    user = await _make_user(db_session)
-    run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
-    await store.expire_run_gateway_tokens_for_run(db_session, workflow_run_id=run_id)
-    await db_session.commit()
-
-    resp = await client.post(
-        f"/v1/cloud/workflows/runs/{run_id}/ping",
-        headers={"Authorization": f"Bearer {plaintext}"},
-    )
-    assert resp.status_code == 401
-    assert _recording_refresh == []
-
-
-async def test_ping_after_terminal_is_safe(
-    client: AsyncClient, db_session: AsyncSession, _recording_refresh: list
-) -> None:
-    # A late ping after the run went terminal: the token is expired, so the ping is
-    # a no-regression 401 that changes no run state.
-    user = await _make_user(db_session)
-    run_id, plaintext = await _seed_run_with_token(
-        db_session, owner=user, integrations=[], status="completed"
-    )
-    await store.expire_run_gateway_tokens_for_run(db_session, workflow_run_id=run_id)
-    await db_session.commit()
-
     before = await store.get_run(db_session, run_id)
-    resp = await client.post(
+
+    response = await client.post(
         f"/v1/cloud/workflows/runs/{run_id}/ping",
         headers={"Authorization": f"Bearer {plaintext}"},
     )
-    assert resp.status_code == 401
-    await db_session.refresh(await db_session.get(WorkflowRun, run_id))
+
+    assert response.status_code == 409
     after = await store.get_run(db_session, run_id)
     assert after.status == before.status
-
-
-async def test_ping_is_idempotent(
-    client: AsyncClient, db_session: AsyncSession, _recording_refresh: list
-) -> None:
-    user = await _make_user(db_session)
-    run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
-    await db_session.commit()
-    headers = {"Authorization": f"Bearer {plaintext}"}
-
-    first = await client.post(f"/v1/cloud/workflows/runs/{run_id}/ping", headers=headers)
-    second = await client.post(f"/v1/cloud/workflows/runs/{run_id}/ping", headers=headers)
-    assert first.status_code == 202
-    assert second.status_code == 202
-    assert _recording_refresh == [run_id, run_id]
-
-
+    assert after.updated_at == before.updated_at
 # --- gateway scope: pure helpers (E3 namespace-level) --------------------------
 
 
@@ -968,46 +699,7 @@ async def test_purpose_defaults_interactive_on_create(db_session: AsyncSession) 
     assert created.purpose == "interactive"
 
 
-# --- contract fixture (tier-1 contract) ----------------------------------------
-
-
-async def test_gateway_block_matches_contract_fixture() -> None:
-    from proliferate.server.cloud.workflows.gateway_grants import build_gateway_plan_block
-
-    golden = json.loads((_FIXTURE_DIR / "gateway-block.json").read_text())
-    golden_keys = {k for k in golden if not k.startswith("_")}
-    run_id = uuid.uuid4()
-    scope_json = _scope_json(["issues", "slack"])
-    block = build_gateway_plan_block(token="per-run-token-abc123", run_id=run_id, scope=scope_json)
-    assert set(block) == golden_keys
-    assert block["authorization"].startswith("Bearer ")
-    assert block["url"].endswith("/v1/cloud/integration-gateway/mcp")
-    assert block["ping_url"].endswith(f"/v1/cloud/workflows/runs/{run_id}/ping")
-    # E3: the block carries a flat list of namespaces matching the fixture.
-    assert block["integrations"] == golden["integrations"]
-    assert all(isinstance(ns, str) for ns in golden["integrations"])
-
-
-async def test_ping_accepts_contract_request_shape(
-    client: AsyncClient, db_session: AsyncSession, _recording_refresh: list
-) -> None:
-    ping = json.loads((_FIXTURE_DIR / "ping-request.json").read_text())
-    assert ping["method"] == "POST"
-    assert ping["body"] is None
-    assert "authorization" in ping["headers"]
-
-    user = await _make_user(db_session)
-    run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
-    await db_session.commit()
-    # Same request shape as the fixture: POST, Bearer auth header, empty body.
-    resp = await client.post(
-        f"/v1/cloud/workflows/runs/{run_id}/ping",
-        headers={"Authorization": f"Bearer {plaintext}"},
-    )
-    assert resp.status_code == 202
-
-
-# --- D18 (E7): /status + /delivered run-token OR user auth ---------------------
+# --- parked legacy report authentication --------------------------------------
 
 
 class _StubRequest:
@@ -1018,19 +710,23 @@ class _StubRequest:
         self.headers = {} if authorization is None else {"authorization": authorization}
 
 
-async def test_status_accepts_run_token(client: AsyncClient, db_session: AsyncSession) -> None:
-    """The runtime self-reports /status with its per-run gateway token (no session)."""
+async def test_status_token_stops_at_feature_off_gate(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
     user = await _make_user(db_session)
     run_id, plaintext = await _seed_run_with_token(db_session, owner=user, integrations=[])
     await db_session.commit()
+    before = await store.get_run(db_session, run_id)
 
     resp = await client.post(
         f"/v1/cloud/workflows/runs/{run_id}/status",
         headers={"Authorization": f"Bearer {plaintext}"},
         json={"status": "running"},
     )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "running"
+    assert resp.status_code == 409
+    after = await store.get_run(db_session, run_id)
+    assert after.status == before.status
+    assert after.updated_at == before.updated_at
 
 
 async def test_status_rejects_mismatched_run_token(
@@ -1098,7 +794,9 @@ async def test_authorize_run_report_prefers_run_token(db_session: AsyncSession) 
     assert actor.id == user.id
 
 
-async def test_delivered_accepts_run_token(client: AsyncClient, db_session: AsyncSession) -> None:
+async def test_delivered_token_stops_at_feature_off_gate(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
     user = await _make_user(db_session)
     run_id, plaintext = await _seed_run_with_token(
         db_session, owner=user, integrations=[], status="pending_delivery"
@@ -1109,8 +807,9 @@ async def test_delivered_accepts_run_token(client: AsyncClient, db_session: Asyn
         f"/v1/cloud/workflows/runs/{run_id}/delivered",
         headers={"Authorization": f"Bearer {plaintext}"},
     )
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "delivered"
+    assert resp.status_code == 409
+    after = await store.get_run(db_session, run_id)
+    assert after.status == "pending_delivery"
 
 
 # --- Track 1b Phase 1: gateway CHAT default-access modes (§2) -------------------

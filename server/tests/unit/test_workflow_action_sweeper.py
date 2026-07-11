@@ -9,13 +9,21 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.db.models.cloud.workflows import WorkflowStepAction
+from proliferate.db.models.cloud.workflow_actions import WorkflowStepAction
 from proliferate.db.store.integrations.accounts import ReadyAccountRow
+from proliferate.server.cloud.workflows import actions as actions_module
 from proliferate.server.cloud.workflows.actions import _MAX_ATTEMPTS, sweep_pending_actions
 from proliferate.utils.time import utcnow
 from tests.unit.workflow_action_test_support import _make_sweep_run
 
 pytestmark = pytest.mark.asyncio
+
+
+@pytest.fixture(autouse=True)
+def _bypass_wf_id_action_gate_for_lower_layer_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(actions_module, "_ACTION_ACTIVATION_ENABLED", True)
 
 
 async def test_sweeper_retries_stale_pending_and_respects_bound(

@@ -1,0 +1,148 @@
+{
+  "$schema": "canonical-structure-vectors-v1",
+  "description": "Cross-language JCS vectors beyond ordinary floats. The accepted integer domain contains only values represented exactly by IEEE-754 binary64; non-representable integer literals are rejected before hashing rather than rounded differently across Python, TypeScript, and Rust.",
+  "vectors": [
+    {
+      "name": "unicode-string-and-control-escaping",
+      "value": "line\né 😀",
+      "canonical": "\"line\\né 😀\""
+    },
+    {
+      "name": "unicode-bmp-key-ordering",
+      "value": { "Ω": "omega", "A": "ascii", "é": "accent" },
+      "canonical": "{\"A\":\"ascii\",\"é\":\"accent\",\"Ω\":\"omega\"}"
+    },
+    {
+      "name": "utf16-supplementary-before-high-bmp-key",
+      "value": { "�": "replacement", "😀": "grinning" },
+      "canonical": "{\"😀\":\"grinning\",\"�\":\"replacement\"}"
+    },
+    {
+      "name": "large-exact-integer-policy",
+      "value": {
+        "maxSafe": 9007199254740991,
+        "minSafe": -9007199254740991,
+        "exactPower": 9007199254740992,
+        "negative": -9007199254740992
+      },
+      "canonical": "{\"exactPower\":9007199254740992,\"maxSafe\":9007199254740991,\"minSafe\":-9007199254740991,\"negative\":-9007199254740992}"
+    },
+    {
+      "name": "integer-ecmascript-placement-thresholds",
+      "value": {
+        "positiveFixed": 100000000000000000000,
+        "positiveExp": 1000000000000000000000,
+        "negativeFixed": -100000000000000000000,
+        "negativeExp": -1000000000000000000000
+      },
+      "canonical": "{\"negativeExp\":-1e+21,\"negativeFixed\":-100000000000000000000,\"positiveExp\":1e+21,\"positiveFixed\":100000000000000000000}"
+    },
+    {
+      "name": "remote-commit-binding-omits-checkpoint-optionals",
+      "value": {
+        "schemaVersion": 1,
+        "target": "personal_cloud",
+        "sourceKind": "remote_commit",
+        "repositoryObjectFormat": "sha1",
+        "baseCommitOid": "4444444444444444444444444444444444444444",
+        "workspaceId": "sandbox-ws-1",
+        "workspaceGeneration": 7,
+        "materializationId": "cloud-materialization-1",
+        "executorId": "worker-1",
+        "executorGeneration": 3,
+        "bindingHash": "sha256:8e509bd340b3911cbefd16a02f989b6d334a3afbd3cc8a92a5f80a205aba9549"
+      },
+      "canonical": "{\"baseCommitOid\":\"4444444444444444444444444444444444444444\",\"bindingHash\":\"sha256:8e509bd340b3911cbefd16a02f989b6d334a3afbd3cc8a92a5f80a205aba9549\",\"executorGeneration\":3,\"executorId\":\"worker-1\",\"materializationId\":\"cloud-materialization-1\",\"repositoryObjectFormat\":\"sha1\",\"schemaVersion\":1,\"sourceKind\":\"remote_commit\",\"target\":\"personal_cloud\",\"workspaceGeneration\":7,\"workspaceId\":\"sandbox-ws-1\"}"
+    },
+    {
+      "name": "nested-arrays-booleans-and-null",
+      "value": { "z": [true, null, "\\\""], "a": { "b": false } },
+      "canonical": "{\"a\":{\"b\":false},\"z\":[true,null,\"\\\\\\\"\"]}"
+    }
+  ],
+  "legacyIntegerDomains": [
+    {
+      "name": "version_n",
+      "runtimeType": "PostgreSQL INTEGER / Rust i32 bridge",
+      "planPointer": "/version_n",
+      "minimum": 1,
+      "maximum": 2147483647,
+      "belowMinimum": 0,
+      "aboveMaximum": 2147483648
+    },
+    {
+      "name": "on_fail.n",
+      "runtimeType": "Rust u32",
+      "planPointer": "/steps/1/on_fail/n",
+      "minimum": 1,
+      "maximum": 4294967295,
+      "belowMinimum": 0,
+      "aboveMaximum": 4294967296
+    },
+    {
+      "name": "goal.max_turns",
+      "runtimeType": "Rust u32",
+      "planPointer": "/steps/1/goal/max_turns",
+      "minimum": 1,
+      "maximum": 4294967295,
+      "belowMinimum": 0,
+      "aboveMaximum": 4294967296
+    },
+    {
+      "name": "goal.max_wall_secs",
+      "runtimeType": "Rust u64 capped to exact RFC 8785 integer",
+      "planPointer": "/steps/1/goal/max_wall_secs",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "belowMinimum": 0,
+      "aboveMaximum": 9007199254740992
+    },
+    {
+      "name": "goal.token_budget",
+      "runtimeType": "Rust i64 capped to exact RFC 8785 integer",
+      "planPointer": "/steps/1/goal/token_budget",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "belowMinimum": 0,
+      "aboveMaximum": 9007199254740992
+    },
+    {
+      "name": "goal.verify.expect_exit",
+      "runtimeType": "Rust i32",
+      "planPointer": "/steps/1/goal/verify/expect_exit",
+      "minimum": -2147483648,
+      "maximum": 2147483647,
+      "belowMinimum": -2147483649,
+      "aboveMaximum": 2147483648
+    },
+    {
+      "name": "agent.emit.max_attempts",
+      "runtimeType": "Rust u32",
+      "planPointer": "/steps/2/max_attempts",
+      "minimum": 1,
+      "maximum": 4294967295,
+      "belowMinimum": 0,
+      "aboveMaximum": 4294967296
+    },
+    {
+      "name": "shell.run.timeout_secs",
+      "runtimeType": "Rust u64 capped to exact RFC 8785 integer",
+      "planPointer": "/steps/3/timeout_secs",
+      "minimum": 1,
+      "maximum": 9007199254740991,
+      "belowMinimum": 0,
+      "aboveMaximum": 9007199254740992
+    }
+  ],
+  "rejectedIntegerLiterals": [
+    "9007199254740993",
+    "-9007199254740993",
+    "9223372036854775807"
+  ],
+  "rejectedUnicodeJson": [
+    { "name": "lone-high-surrogate-value", "json": "\"\\ud800\"" },
+    { "name": "lone-low-surrogate-value", "json": "\"\\udfff\"" },
+    { "name": "lone-high-surrogate-key", "json": "{\"\\ud800\":1}" },
+    { "name": "lone-low-surrogate-key", "json": "{\"\\udfff\":1}" }
+  ]
+}

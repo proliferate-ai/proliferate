@@ -4,7 +4,6 @@ use super::engine::{
     decide_after_step, CancelToken, EngineProgress, StepDecision, StepExecContext, StepOutcome,
     WorkflowStepExecutor,
 };
-use super::delivery::{delivery_identity_conflict, ConflictAbort, DeliveryIdentity};
 use super::model::{
     LaneStatus, WorkflowLaneCursorRecord, WorkflowObservationRecord, WorkflowRunRecord,
     WorkflowStepRunRecord,
@@ -28,6 +27,8 @@ pub enum WorkflowServiceError {
     WorkspaceNotFound,
     #[error(transparent)]
     InvalidPlan(#[from] PlanError),
+    #[error("invalid workflow delivery identity: {0}")]
+    InvalidDeliveryIdentity(String),
     /// A re-delivery asserted a delivery identity that conflicts with the
     /// stored run (spec §5.3: `(run_id, plan_hash, binding_hash,
     /// execution_generation)` is immutable). Re-delivery of the same complete
@@ -35,6 +36,8 @@ pub enum WorkflowServiceError {
     /// rejected.
     #[error("delivery identity conflicts with the stored run ({field})")]
     DeliveryIdentityConflict { field: &'static str },
+    #[error("final execution envelope required before workflow activation")]
+    FinalEnvelopeRequired,
     #[error("no pending approval on this run")]
     NoPendingApproval,
     #[error("unexpected step kind for approval resolution")]
@@ -63,7 +66,10 @@ pub struct ApprovalOutcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum LaneResult {
     Completed,
-    Failed { code: String, message: Option<String> },
+    Failed {
+        code: String,
+        message: Option<String>,
+    },
     Cancelled,
 }
 
@@ -75,7 +81,10 @@ enum LaneResume {
     /// The lane already completed (crash-resume): run nothing.
     Done,
     /// The lane already failed (crash-resume): surface it to the join.
-    Failed { code: String, message: Option<String> },
+    Failed {
+        code: String,
+        message: Option<String>,
+    },
 }
 
 /// What driving one lane step decided for the lane's cursor.
@@ -88,7 +97,10 @@ enum LaneStep {
     /// The lane is done (all steps ran, or a branch `end` ended the lane).
     Completed,
     /// The lane hit a run-fatal decision; the join will fail the run.
-    Failed { code: String, message: Option<String> },
+    Failed {
+        code: String,
+        message: Option<String>,
+    },
 }
 
 /// Durable rules over the workflow tables: idempotent run creation, cursor
@@ -128,111 +140,12 @@ impl WorkflowService {
         Ok(Some((run, steps)))
     }
 
-    pub fn list_runs(
-        &self,
-        workspace_id: Option<&str>,
-    ) -> anyhow::Result<Vec<WorkflowRunRecord>> {
+    pub fn list_runs(&self, workspace_id: Option<&str>) -> anyhow::Result<Vec<WorkflowRunRecord>> {
         self.store.list_runs(workspace_id)
     }
 
     pub fn list_non_terminal_runs(&self) -> anyhow::Result<Vec<WorkflowRunRecord>> {
         self.store.list_non_terminal_runs()
-    }
-
-    // ---------------------------------------------------------------------
-    // Creation (idempotent on run_id — the delivery idempotency contract)
-    // ---------------------------------------------------------------------
-
-    /// Create the run + its pending step rows from a resolved plan. Idempotent:
-    /// a re-delivery of a known `run_id` with the SAME delivery identity
-    /// returns the current record untouched (the second element is `false`).
-    ///
-    /// Strict acceptance (WS5a, spec §5.3): the delivered payload may carry
-    /// `plan_hash`, `binding_hash`, and `execution_generation` — the rest of
-    /// the immutable delivery identity. When present they are persisted with
-    /// the run; a re-delivery whose identity CONFLICTS with the stored run
-    /// (same `run_id`, different hash/generation) is rejected with
-    /// [`WorkflowServiceError::DeliveryIdentityConflict`]. Absent fields assert
-    /// nothing (legacy mode preserved until WS2c wires the server side).
-    pub fn create_run_idempotent(
-        &self,
-        plan_json: &str,
-        workspace_id: &str,
-    ) -> Result<(WorkflowRunRecord, bool), WorkflowServiceError> {
-        let plan = plan::parse(plan_json)?;
-        let identity = DeliveryIdentity::from_plan_json(plan_json);
-        let run_id = plan.run_id.clone();
-        let plan_json = plan_json.to_string();
-        let workspace_id = workspace_id.to_string();
-        let created = self.store.with_tx_anyhow(|tx| {
-            if let Some(existing) = WorkflowStore::find_run_tx(tx, &run_id)? {
-                if let Some(field) = delivery_identity_conflict(&existing, &identity) {
-                    return Err(ConflictAbort { field }.into());
-                }
-                return Ok((existing, false));
-            }
-            let now = now();
-            let run = WorkflowRunRecord {
-                run_id: run_id.clone(),
-                workflow_id: plan.workflow_id.clone(),
-                workflow_version_id: plan.workflow_version_id.clone(),
-                version_n: plan.version_n,
-                trigger_kind: plan.trigger_kind.clone(),
-                target_mode: plan.target_mode.clone(),
-                workspace_id: workspace_id.clone(),
-                plan_json: plan_json.clone(),
-                plan_hash: identity.plan_hash.clone(),
-                binding_hash: identity.binding_hash.clone(),
-                execution_generation: identity.execution_generation,
-                status: WorkflowRunStatus::Running,
-                step_cursor: 0,
-                session_ids: std::collections::BTreeMap::new(),
-                error_code: None,
-                error_message: None,
-                created_at: now.clone(),
-                updated_at: now.clone(),
-            };
-            WorkflowStore::insert_run(tx, &run)?;
-            for (index, step) in plan.steps.iter().enumerate() {
-                // v2 plans stamp a structured key; be resilient to a keyless
-                // plan by synthesizing a unique flat key (the SQLite unique index
-                // on (run_id, step_key) would otherwise collide on empty keys).
-                let step_key = if step.key.is_empty() {
-                    format!("0.-.{index}")
-                } else {
-                    step.key.clone()
-                };
-                let step_run = WorkflowStepRunRecord {
-                    run_id: run_id.clone(),
-                    step_index: index as i64,
-                    step_key,
-                    kind: step.kind_slug().to_string(),
-                    status: WorkflowStepStatus::Pending,
-                    attempt: 0,
-                    output_json: None,
-                    error_code: None,
-                    error_message: None,
-                    started_at: None,
-                    ended_at: None,
-                    created_at: now.clone(),
-                    updated_at: now.clone(),
-                };
-                WorkflowStore::insert_step_run(tx, &step_run)?;
-            }
-            // Revision 1: the accepted-delivery snapshot (run created, every
-            // step pending). Same transaction as the creation writes.
-            observations::append_in_tx(tx, &run_id)?;
-            Ok((run, true))
-        });
-        match created {
-            Ok(created) => Ok(created),
-            Err(error) => match error.downcast::<ConflictAbort>() {
-                Ok(conflict) => Err(WorkflowServiceError::DeliveryIdentityConflict {
-                    field: conflict.field,
-                }),
-                Err(error) => Err(WorkflowServiceError::Store(error)),
-            },
-        }
     }
 
     /// Record the session a slot is bound to for this run (B7 slot-keyed session
@@ -251,7 +164,8 @@ impl WorkflowService {
             if run.session_ids.get(slot).map(String::as_str) == Some(session_id) {
                 return Ok(());
             }
-            run.session_ids.insert(slot.to_string(), session_id.to_string());
+            run.session_ids
+                .insert(slot.to_string(), session_id.to_string());
             run.updated_at = now();
             WorkflowStore::update_run(tx, &run)?;
             observations::append_in_tx(tx, run_id)?;
@@ -341,7 +255,10 @@ impl WorkflowService {
         cancel: &CancelToken,
         boundary: usize,
     ) -> Result<EngineProgress, WorkflowServiceError> {
-        let run = self.store.find_run(run_id)?.ok_or(WorkflowServiceError::RunNotFound)?;
+        let run = self
+            .store
+            .find_run(run_id)?
+            .ok_or(WorkflowServiceError::RunNotFound)?;
         if run.is_terminal() {
             return Ok(EngineProgress::Finished(run.status));
         }
@@ -358,14 +275,16 @@ impl WorkflowService {
         let step_runs = self.store.find_step_runs(run_id)?;
         let outputs = build_outputs(&step_runs);
         let existing = step_runs.iter().find(|step| step.step_index == cursor);
-        let resumed_after_approval =
-            existing.map(|step| step.status == WorkflowStepStatus::Waiting).unwrap_or(false);
+        let resumed_after_approval = existing
+            .map(|step| step.status == WorkflowStepStatus::Waiting)
+            .unwrap_or(false);
         // Crash-resume signal (WS5b §6.5): a step left `running` by a crash
         // re-enters here still `running` (a retry decision would have set it
         // `pending`), so the executor must consult the effect ledger before any
         // re-run.
-        let crash_resumed =
-            existing.map(|step| step.status == WorkflowStepStatus::Running).unwrap_or(false);
+        let crash_resumed = existing
+            .map(|step| step.status == WorkflowStepStatus::Running)
+            .unwrap_or(false);
         let attempt = existing.map(|step| step.attempt).unwrap_or(0) + 1;
 
         let resolved = templates::resolve_step(step_def, &outputs);
@@ -413,7 +332,10 @@ impl WorkflowService {
         executor: &dyn WorkflowStepExecutor,
         cancel: &CancelToken,
     ) -> Result<EngineProgress, WorkflowServiceError> {
-        let run = self.store.find_run(run_id)?.ok_or(WorkflowServiceError::RunNotFound)?;
+        let run = self
+            .store
+            .find_run(run_id)?
+            .ok_or(WorkflowServiceError::RunNotFound)?;
         if run.is_terminal() {
             return Ok(EngineProgress::Finished(run.status));
         }
@@ -424,8 +346,12 @@ impl WorkflowService {
         let plan = plan::parse(&run.plan_json)?;
         let step_count = plan.step_count();
         let cursor = run.step_cursor.max(0) as usize;
-        let Some(PlanSegment::Parallel { node, start, end, lanes }) =
-            plan.segment_containing(cursor)
+        let Some(PlanSegment::Parallel {
+            node,
+            start,
+            end,
+            lanes,
+        }) = plan.segment_containing(cursor)
         else {
             return Err(WorkflowServiceError::Store(anyhow::anyhow!(
                 "run_parallel_group called at a non-parallel cursor {cursor}"
@@ -436,7 +362,16 @@ impl WorkflowService {
         // Drive every lane concurrently; the join awaits all of them (siblings
         // run to completion even after one fails — D-031b).
         let lane_futures = lanes.iter().map(|lane| {
-            self.drive_lane(run_id, executor, cancel, node, start, lane, &plan, &workspace_id)
+            self.drive_lane(
+                run_id,
+                executor,
+                cancel,
+                node,
+                start,
+                lane,
+                &plan,
+                &workspace_id,
+            )
         });
         let results = futures::future::join_all(lane_futures).await;
 
@@ -590,7 +525,9 @@ impl WorkflowService {
                 return Ok(match record.status {
                     LaneStatus::Completed => LaneResume::Done,
                     LaneStatus::Failed => LaneResume::Failed {
-                        code: record.error_code.unwrap_or_else(|| "lane_failed".to_string()),
+                        code: record
+                            .error_code
+                            .unwrap_or_else(|| "lane_failed".to_string()),
                         message: record.error_message,
                     },
                     LaneStatus::Running => LaneResume::Resume(record.cursor),
@@ -663,17 +600,61 @@ impl WorkflowService {
 
             let (action, lane_status, lane_cursor, err_code, err_msg) = match decision {
                 StepDecision::Complete { output } => {
-                    finish_step(&mut step, WorkflowStepStatus::Completed, Some(output), None, None, &now);
-                    (LaneStep::Advance(lane_idx + 1), LaneStatus::Running, lane_idx + 1, None, None)
-                }
-                StepDecision::Continue { code, message, output } => {
-                    finish_step(&mut step, WorkflowStepStatus::Failed, output, Some(code), message, &now);
-                    (LaneStep::Advance(lane_idx + 1), LaneStatus::Running, lane_idx + 1, None, None)
-                }
-                StepDecision::FailRun { code, message, output } => {
-                    finish_step(&mut step, WorkflowStepStatus::Failed, output, Some(code.clone()), message.clone(), &now);
+                    finish_step(
+                        &mut step,
+                        WorkflowStepStatus::Completed,
+                        Some(output),
+                        None,
+                        None,
+                        &now,
+                    );
                     (
-                        LaneStep::Failed { code: code.clone(), message: message.clone() },
+                        LaneStep::Advance(lane_idx + 1),
+                        LaneStatus::Running,
+                        lane_idx + 1,
+                        None,
+                        None,
+                    )
+                }
+                StepDecision::Continue {
+                    code,
+                    message,
+                    output,
+                } => {
+                    finish_step(
+                        &mut step,
+                        WorkflowStepStatus::Failed,
+                        output,
+                        Some(code),
+                        message,
+                        &now,
+                    );
+                    (
+                        LaneStep::Advance(lane_idx + 1),
+                        LaneStatus::Running,
+                        lane_idx + 1,
+                        None,
+                        None,
+                    )
+                }
+                StepDecision::FailRun {
+                    code,
+                    message,
+                    output,
+                } => {
+                    finish_step(
+                        &mut step,
+                        WorkflowStepStatus::Failed,
+                        output,
+                        Some(code.clone()),
+                        message.clone(),
+                        &now,
+                    );
+                    (
+                        LaneStep::Failed {
+                            code: code.clone(),
+                            message: message.clone(),
+                        },
                         LaneStatus::Failed,
                         lane_idx,
                         Some(code),
@@ -693,8 +674,9 @@ impl WorkflowService {
                     // (there is no single-cursor park to hang the run on); fail the
                     // lane honestly so the group's join surfaces it.
                     let code = "approval_in_lane_unsupported".to_string();
-                    let message =
-                        Some("approval/suspend is not supported inside a parallel lane".to_string());
+                    let message = Some(
+                        "approval/suspend is not supported inside a parallel lane".to_string(),
+                    );
                     finish_step(
                         &mut step,
                         WorkflowStepStatus::Failed,
@@ -704,7 +686,10 @@ impl WorkflowService {
                         &now,
                     );
                     (
-                        LaneStep::Failed { code: code.clone(), message: message.clone() },
+                        LaneStep::Failed {
+                            code: code.clone(),
+                            message: message.clone(),
+                        },
                         LaneStatus::Failed,
                         lane_idx,
                         Some(code),
@@ -715,9 +700,20 @@ impl WorkflowService {
                     // A branch `end` inside a lane ends THE LANE (not the whole
                     // run): the step completes, the lane's remaining steps are
                     // skipped, and the lane joins as completed.
-                    finish_step(&mut step, WorkflowStepStatus::Completed, Some(output), None, None, &now);
-                    for &tail_flat in &lane_step_indices[(lane_idx as usize + 1).min(lane_step_indices.len())..] {
-                        if let Some(mut tail) = WorkflowStore::find_step_run_tx(tx, run_id, tail_flat as i64)? {
+                    finish_step(
+                        &mut step,
+                        WorkflowStepStatus::Completed,
+                        Some(output),
+                        None,
+                        None,
+                        &now,
+                    );
+                    for &tail_flat in
+                        &lane_step_indices[(lane_idx as usize + 1).min(lane_step_indices.len())..]
+                    {
+                        if let Some(mut tail) =
+                            WorkflowStore::find_step_run_tx(tx, run_id, tail_flat as i64)?
+                        {
                             if matches!(
                                 tail.status,
                                 WorkflowStepStatus::Pending
@@ -731,7 +727,13 @@ impl WorkflowService {
                             }
                         }
                     }
-                    (LaneStep::Completed, LaneStatus::Completed, lane_len, None, None)
+                    (
+                        LaneStep::Completed,
+                        LaneStatus::Completed,
+                        lane_len,
+                        None,
+                        None,
+                    )
                 }
             };
 
@@ -791,7 +793,10 @@ impl WorkflowService {
         run_id: &str,
         input: ApprovalInput,
     ) -> Result<ApprovalOutcome, WorkflowServiceError> {
-        let run = self.store.find_run(run_id)?.ok_or(WorkflowServiceError::RunNotFound)?;
+        let run = self
+            .store
+            .find_run(run_id)?
+            .ok_or(WorkflowServiceError::RunNotFound)?;
         if run.status != WorkflowRunStatus::WaitingApproval {
             return Err(WorkflowServiceError::NoPendingApproval);
         }
@@ -883,7 +888,14 @@ impl WorkflowService {
             let mut end_run = false;
             let progress = match decision {
                 StepDecision::Complete { output } => {
-                    finish_step(&mut step, WorkflowStepStatus::Completed, Some(output), None, None, &now);
+                    finish_step(
+                        &mut step,
+                        WorkflowStepStatus::Completed,
+                        Some(output),
+                        None,
+                        None,
+                        &now,
+                    );
                     advance_or_finish(&mut run, step_index, boundary, step_count, &now)
                 }
                 StepDecision::Continue {
@@ -943,7 +955,14 @@ impl WorkflowService {
                 // taken-case output; the cursor jumps to the end; the run goes
                 // terminal `completed`; every later step is marked `skipped`.
                 StepDecision::EndRun { output } => {
-                    finish_step(&mut step, WorkflowStepStatus::Completed, Some(output), None, None, &now);
+                    finish_step(
+                        &mut step,
+                        WorkflowStepStatus::Completed,
+                        Some(output),
+                        None,
+                        None,
+                        &now,
+                    );
                     run.step_cursor = step_count as i64;
                     run.status = WorkflowRunStatus::Completed;
                     run.updated_at = now.clone();

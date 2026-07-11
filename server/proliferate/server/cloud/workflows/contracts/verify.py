@@ -13,6 +13,7 @@ Runnable directly (used by scripts/check_workflow_contract_fixtures.py):
 
 from __future__ import annotations
 
+import json
 import sys
 
 from . import fixtures
@@ -26,6 +27,7 @@ from .models import (
     MaterializationOffer,
     ObservedRun,
     ResolvedPlan,
+    WfContractModel,
     WorkflowControlCommand,
     binding_hash,
     checkpoint_content_hash,
@@ -46,7 +48,7 @@ def _require(condition: bool, message: str) -> None:
         raise ContractCheckError(message)
 
 
-def _roundtrip(model_cls, raw: dict) -> None:
+def _roundtrip(model_cls: type[WfContractModel], raw: dict[str, object]) -> None:
     """Strict parse + serialize; canonical bytes must be preserved exactly."""
 
     parsed = model_cls.model_validate(raw)
@@ -100,6 +102,23 @@ def _check_checkpoint_and_binding() -> None:
         "binding bindingHash does not match the canonical content hash",
     )
 
+    structure_vectors = fixtures.load("canonical-structure-vectors-v1.json")
+    commit_binding = next(
+        vector["value"]
+        for vector in structure_vectors["vectors"]
+        if vector["name"] == "remote-commit-binding-omits-checkpoint-optionals"
+    )
+    _roundtrip(ExecutionBinding, commit_binding)
+    _require(
+        "checkpointId" not in commit_binding
+        and "checkpointContentHash" not in commit_binding,
+        "commit binding optional checkpoint fields must be absent",
+    )
+    _require(
+        binding_hash(commit_binding) == commit_binding["bindingHash"],
+        "commit binding bindingHash does not match its exact emitted members",
+    )
+
     # Restoration/normalization equivalence.
     restoration = fixtures.load("restoration/checkpoint-restoration-v1.json")
     normalized = normalize_checkpoint_manifest(restoration["unsortedManifest"])
@@ -124,9 +143,7 @@ def _check_checkpoint_and_binding() -> None:
             CheckpointManifest.model_validate(case["document"])
         except Exception:
             continue
-        raise ContractCheckError(
-            f"invalid checkpoint manifest '{case['name']}' was accepted"
-        )
+        raise ContractCheckError(f"invalid checkpoint manifest '{case['name']}' was accepted")
 
 
 def _check_offer_and_envelope() -> None:
@@ -157,9 +174,7 @@ def _check_observed_receipt_command() -> None:
     observed = fixtures.load("observed-run-v2.json")
     _roundtrip(ObservedRun, observed)
     _require(observed["planHash"] == plan["planHash"], "observed planHash mismatch")
-    _require(
-        observed["bindingHash"] == binding["bindingHash"], "observed bindingHash mismatch"
-    )
+    _require(observed["bindingHash"] == binding["bindingHash"], "observed bindingHash mismatch")
     # Sessions are a slot map at every boundary.
     slot_ids = {slot["slotId"] for slot in plan["slots"]}
     _require(
@@ -174,9 +189,7 @@ def _check_observed_receipt_command() -> None:
     command = fixtures.load("workflow-control-command-v1.json")
     _roundtrip(WorkflowControlCommand, command)
     _require(command["planHash"] == plan["planHash"], "command planHash mismatch")
-    _require(
-        command["bindingHash"] == binding["bindingHash"], "command bindingHash mismatch"
-    )
+    _require(command["bindingHash"] == binding["bindingHash"], "command bindingHash mismatch")
 
 
 def _check_schema_profile() -> None:
@@ -201,9 +214,7 @@ def _check_schema_profile() -> None:
                 f"expected {case['reasonCode']}",
             )
         else:
-            raise ContractCheckError(
-                f"invalid emit schema '{case['name']}' was accepted"
-            )
+            raise ContractCheckError(f"invalid emit schema '{case['name']}' was accepted")
 
 
 def _check_legacy_upgrade() -> None:
@@ -242,6 +253,33 @@ def _check_canonical_number_vectors() -> None:
         )
 
 
+def _check_canonical_structure_vectors() -> None:
+    """Shared strings, key ordering, nesting, and integer-domain vectors."""
+
+    data = fixtures.load("canonical-structure-vectors-v1.json")
+    for vector in data["vectors"]:
+        got = canonicalize(vector["value"]).decode("utf-8")
+        _require(
+            got == vector["canonical"],
+            f"canonical-structure-vectors: {vector['name']} canonicalized to "
+            f"{got!r}, expected {vector['canonical']!r}",
+        )
+    for literal in data["rejectedIntegerLiterals"]:
+        try:
+            canonicalize(int(literal))
+        except ValueError:
+            continue
+        raise ContractCheckError(
+            f"canonical-structure-vectors: non-binary64 integer {literal} was accepted"
+        )
+    for case in data["rejectedUnicodeJson"]:
+        try:
+            canonicalize(json.loads(case["json"]))
+        except ValueError:
+            continue
+        raise ContractCheckError(f"canonical-structure-vectors: {case['name']} was accepted")
+
+
 def _check_credential_canary() -> None:
     canary = fixtures.load("credential-canary.json")
     _require(canary["marker"] == CANARY_MARKER, "canary marker drift")
@@ -252,8 +290,7 @@ def _check_credential_canary() -> None:
             f"credential canary marker leaked into {name}",
         )
     # Public (non-envelope) surfaces must carry no dummy credential either.
-    for name in ("resolved-plan-v2.json", "observed-run-v2.json",
-                 "gateway-call-receipt-v1.json"):
+    for name in ("resolved-plan-v2.json", "observed-run-v2.json", "gateway-call-receipt-v1.json"):
         text = fixtures.load_text(name)
         _require(
             "DUMMY_FAKE" not in text,
@@ -269,6 +306,7 @@ CHECKS = (
     _check_schema_profile,
     _check_legacy_upgrade,
     _check_canonical_number_vectors,
+    _check_canonical_structure_vectors,
     _check_credential_canary,
 )
 

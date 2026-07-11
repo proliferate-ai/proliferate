@@ -15,6 +15,15 @@ import { canonicalize, contentHash, hashExcluding } from "./canonical";
 import { deriveLegacyId, type LegacyIdentityKind } from "./legacy-upgrade";
 import { SchemaProfileError, validateSchemaProfile } from "./schema-profile";
 import {
+  WORKFLOW_INT32_MAX,
+  WORKFLOW_INT32_MIN,
+  WORKFLOW_JSON_SAFE_INTEGER_MAX,
+  WORKFLOW_UINT32_MAX,
+  WORKFLOW_VERSION_N_MAX,
+  type WorkflowDefinition,
+} from "../definition";
+import { validateWorkflowDefinition } from "../validation";
+import {
   normalizeCheckpointManifest,
   parseCheckpointManifest,
   parseExecutionBinding,
@@ -45,6 +54,90 @@ function fixtureText(name: string): string {
 
 const CANARY_MARKER = "PROLIFERATE_WF_CREDENTIAL_CANARY_c0ffee9a1b2c3d4e";
 
+function integerDomainDefinition(): WorkflowDefinition {
+  return {
+    version: 1,
+    inputs: [],
+    integrations: [],
+    agents: [{
+      slot: "main",
+      harness: "claude",
+      model: "sonnet",
+      steps: [
+        { kind: "agent.config", onFail: { kind: "stop" }, model: "sonnet" },
+        {
+          kind: "agent.prompt",
+          onFail: { kind: "retry", n: 2 },
+          prompt: "work",
+          goal: {
+            objective: "finish",
+            maxTurns: 3,
+            maxWallSecs: 300,
+            tokenBudget: 1_000,
+            onBlocked: "fail",
+            verify: { shell: "true", expectExit: 0 },
+          },
+        },
+        {
+          kind: "agent.emit",
+          onFail: { kind: "stop" },
+          prompt: "emit",
+          name: "result",
+          maxAttempts: 3,
+        },
+        {
+          kind: "shell.run",
+          onFail: { kind: "stop" },
+          command: "true",
+          timeoutSecs: 300,
+        },
+      ],
+    }],
+  };
+}
+
+function setIntegerField(
+  definition: WorkflowDefinition,
+  field: string,
+  value: number,
+): void {
+  const node = definition.agents[0];
+  if (!node || "parallel" in node) {
+    throw new Error("integer-domain fixture requires one sequential node");
+  }
+  const prompt = node.steps[1];
+  const emit = node.steps[2];
+  const shell = node.steps[3];
+  if (prompt?.kind !== "agent.prompt" || emit?.kind !== "agent.emit" || shell?.kind !== "shell.run") {
+    throw new Error("integer-domain fixture step shape drifted");
+  }
+  switch (field) {
+    case "on_fail.n":
+      prompt.onFail = { kind: "retry", n: value };
+      return;
+    case "goal.max_turns":
+      prompt.goal!.maxTurns = value;
+      return;
+    case "goal.max_wall_secs":
+      prompt.goal!.maxWallSecs = value;
+      return;
+    case "goal.token_budget":
+      prompt.goal!.tokenBudget = value;
+      return;
+    case "goal.verify.expect_exit":
+      prompt.goal!.verify!.expectExit = value;
+      return;
+    case "agent.emit.max_attempts":
+      emit.maxAttempts = value;
+      return;
+    case "shell.run.timeout_secs":
+      shell.timeoutSecs = value;
+      return;
+    default:
+      throw new Error(`unknown integer-domain field ${field}`);
+  }
+}
+
 describe("workflow contract fixtures", () => {
   it("round-trips the resolved plan and matches planHash", () => {
     const raw = fixture("resolved-plan-v2.json");
@@ -69,6 +162,21 @@ describe("workflow contract fixtures", () => {
     const binding = fixture<Record<string, unknown>>("execution-binding-v1.json");
     parseExecutionBinding(binding);
     expect(binding.checkpointContentHash).toBe(ckptHash);
+    expect(hashExcluding(binding, "bindingHash")).toBe(binding.bindingHash);
+  });
+
+  it("round-trips a commit binding with absent checkpoint optionals", () => {
+    const data = fixture<{
+      vectors: { name: string; value: Record<string, unknown>; canonical: string }[];
+    }>("canonical-structure-vectors-v1.json");
+    const vector = data.vectors.find(
+      (candidate) => candidate.name === "remote-commit-binding-omits-checkpoint-optionals",
+    );
+    expect(vector).toBeDefined();
+    const binding = parseExecutionBinding(vector!.value);
+    expect(binding).not.toHaveProperty("checkpointId");
+    expect(binding).not.toHaveProperty("checkpointContentHash");
+    expect(canonicalize(binding)).toBe(vector!.canonical);
     expect(hashExcluding(binding, "bindingHash")).toBe(binding.bindingHash);
   });
 
@@ -175,6 +283,74 @@ describe("workflow contract fixtures", () => {
       expect(canonicalize(vector.value), vector.note ?? String(vector.value)).toBe(
         vector.canonical,
       );
+    }
+  });
+
+  it("canonicalizes shared Unicode, key-order, and exact-integer vectors", () => {
+    const data = fixture<{
+      vectors: { name: string; value: unknown; canonical: string }[];
+      rejectedIntegerLiterals: string[];
+      rejectedUnicodeJson: { name: string; json: string }[];
+    }>("canonical-structure-vectors-v1.json");
+    for (const vector of data.vectors) {
+      expect(canonicalize(vector.value), vector.name).toBe(vector.canonical);
+    }
+    // An integer literal that cannot be represented exactly as a JS Number
+    // must enter JavaScript as BigInt; BigInt is intentionally outside the JCS
+    // JSON value domain and is rejected rather than rounded.
+    for (const literal of data.rejectedIntegerLiterals) {
+      expect(() => canonicalize(BigInt(literal)), literal).toThrow(
+        "unsupported type in canonical JSON",
+      );
+    }
+    for (const testCase of data.rejectedUnicodeJson) {
+      expect(() => canonicalize(JSON.parse(testCase.json)), testCase.name).toThrow(
+        "lone UTF-16 surrogate is not canonicalizable",
+      );
+    }
+  });
+
+  it("enforces every shared legacy integer boundary in editor validation", () => {
+    const data = fixture<{
+      legacyIntegerDomains: {
+        name: string;
+        minimum: number;
+        maximum: number;
+        belowMinimum: number;
+        aboveMaximum: number;
+      }[];
+    }>("canonical-structure-vectors-v1.json");
+    expect(WORKFLOW_UINT32_MAX).toBe(4_294_967_295);
+    expect(WORKFLOW_INT32_MIN).toBe(-2_147_483_648);
+    expect(WORKFLOW_INT32_MAX).toBe(2_147_483_647);
+    expect(WORKFLOW_JSON_SAFE_INTEGER_MAX).toBe(Number.MAX_SAFE_INTEGER);
+    expect(WORKFLOW_VERSION_N_MAX).toBe(2_147_483_647);
+
+    for (const vector of data.legacyIntegerDomains) {
+      if (vector.name === "version_n") {
+        expect(vector.maximum).toBe(WORKFLOW_VERSION_N_MAX);
+        continue;
+      }
+      const atMaximum = integerDomainDefinition();
+      setIntegerField(atMaximum, vector.name, vector.maximum);
+      expect(validateWorkflowDefinition(atMaximum), `${vector.name} maximum`).toEqual([]);
+
+      if (vector.minimum < 0) {
+        const atMinimum = integerDomainDefinition();
+        setIntegerField(atMinimum, vector.name, vector.minimum);
+        expect(validateWorkflowDefinition(atMinimum), `${vector.name} minimum`).toEqual([]);
+      }
+      for (const [boundary, value] of [
+        ["belowMinimum", vector.belowMinimum],
+        ["aboveMaximum", vector.aboveMaximum],
+      ] as const) {
+        const rejected = integerDomainDefinition();
+        setIntegerField(rejected, vector.name, value);
+        expect(
+          validateWorkflowDefinition(rejected).map((issue) => issue.code),
+          `${vector.name} ${boundary}`,
+        ).toContain("invalid_definition");
+      }
     }
   });
 

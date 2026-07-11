@@ -52,6 +52,15 @@ export const WORKFLOW_MAX_ARGS = 25;
 export const WORKFLOW_MAX_AGENTS = 20;
 export const WORKFLOW_EMIT_DEFAULT_MAX_ATTEMPTS = 3;
 
+// Explicit cross-language limits for the current legacy resolved-plan bridge.
+// They mirror the server constants and the Rust runtime field domains; wider
+// i64/u64 fields stop at the largest exactly representable ECMAScript integer.
+export const WORKFLOW_UINT32_MAX = 4_294_967_295;
+export const WORKFLOW_INT32_MIN = -2_147_483_648;
+export const WORKFLOW_INT32_MAX = 2_147_483_647;
+export const WORKFLOW_JSON_SAFE_INTEGER_MAX = Number.MAX_SAFE_INTEGER;
+export const WORKFLOW_VERSION_N_MAX = WORKFLOW_INT32_MAX;
+
 /** Reserved reference first-segments (never legal emit names). */
 export const WORKFLOW_RESERVED_REF_SEGMENTS = ["inputs", "steps", "fields"] as const;
 

@@ -211,7 +211,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             git_provider, git_owner, git_repo_name, original_branch, current_branch,
             display_name, created_at, updated_at, repo_root_id, surface, origin_json,
             lifecycle_state, cleanup_state, creator_context_json, cleanup_error_message,
-            cleanup_failed_at, cleanup_attempted_at, cleanup_operation
+            cleanup_failed_at, cleanup_attempted_at, cleanup_operation, generation
         )
         SELECT
             lower(
@@ -243,7 +243,8 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             r.cleanup_error_message,
             r.cleanup_failed_at,
             r.cleanup_attempted_at,
-            r.cleanup_operation
+            r.cleanup_operation,
+            COALESCE(r.generation, 1)
         FROM referenced_repo_rows r
         WHERE r.replacement_rank = 1
           AND NOT EXISTS (
@@ -539,6 +540,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             cleanup_error_message TEXT,
             cleanup_failed_at TEXT,
             cleanup_attempted_at TEXT,
+            generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -547,7 +549,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             id, kind, repo_root_id, path, surface, original_branch, current_branch,
             display_name, origin_json, creator_context_json, lifecycle_state, cleanup_state,
             cleanup_operation, cleanup_error_message, cleanup_failed_at, cleanup_attempted_at,
-            created_at, updated_at
+            generation, created_at, updated_at
         )
         SELECT
             id,
@@ -566,6 +568,7 @@ fn migrate_simplify_workspace_records(tx: &Transaction<'_>) -> rusqlite::Result<
             cleanup_error_message,
             cleanup_failed_at,
             cleanup_attempted_at,
+            COALESCE(generation, 1),
             created_at,
             updated_at
         FROM workspaces
@@ -758,17 +761,17 @@ mod tests {
         conn.execute_batch(
             "INSERT INTO workspaces (
                 id, kind, path, source_repo_root_path, git_provider, git_owner, git_repo_name,
-                display_name, current_branch, created_at, updated_at
+                display_name, current_branch, generation, created_at, updated_at
              ) VALUES (
                 'repo-ws', 'repo', '/tmp/repo', '/tmp/repo', 'github', 'owner', 'repo',
-                'Repo', 'main', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
+                'Repo', 'main', 7, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'
              );
              INSERT INTO workspaces (
                 id, kind, path, source_repo_root_path, source_workspace_id,
-                original_branch, current_branch, created_at, updated_at
+                original_branch, current_branch, generation, created_at, updated_at
              ) VALUES (
                 'worktree-1', 'worktree', '/tmp/repo-worktree', '/tmp/repo', 'repo-ws',
-                'main', 'feature', '2026-01-01T00:01:00Z', '2026-01-01T00:01:00Z'
+                'main', 'feature', 9, '2026-01-01T00:01:00Z', '2026-01-01T00:01:00Z'
              );
              INSERT INTO workspaces (
                 id, kind, path, source_repo_root_path, repo_root_id,
@@ -905,6 +908,23 @@ mod tests {
             )
             .expect("worktree repo root");
         assert_eq!(worktree_repo_root_id, replacement_repo_root_id);
+
+        let replacement_generation: i64 = conn
+            .query_row(
+                "SELECT generation FROM workspaces WHERE id = ?1",
+                [&replacement_id],
+                |row| row.get(0),
+            )
+            .expect("replacement generation");
+        assert_eq!(replacement_generation, 7);
+        let worktree_generation: i64 = conn
+            .query_row(
+                "SELECT generation FROM workspaces WHERE id = 'worktree-1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("worktree generation");
+        assert_eq!(worktree_generation, 9);
 
         let fk_violations: i64 = conn
             .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {

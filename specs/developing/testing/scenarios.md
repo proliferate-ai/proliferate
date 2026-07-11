@@ -356,18 +356,21 @@ environment + materialized workspace, poll seen-set/cursor READS) and the
 poller-tick driver.
 
 Two environment facts shape the seams these hit:
-- **Cloud runs stop earlier than the delivery attempt in tier-2.** A
-  `personal_cloud` StartRun/poll run mints a per-run gateway token whose config
-  needs `worker_cloud_base_url` (satisfied by `API_BASE_URL`); the local-lane
-  run's seam is `pending_delivery` → owner-relay `/delivered` → `delivered`
-  (no sandbox wake). The server-wakes-sandbox cloud delivery is tier-3.
+- **The WF-ID cutover stops before delivery in tier-2.** StartRun creates the
+  secret-free logical plan and durable run/binding identity; it does not mint
+  or embed a run gateway token. Legacy delivery, owner-relay `/delivered`, and
+  gateway ping/status endpoints are feature-off until the final one-use
+  credential envelope and receipt path replace them. Current tier-2 scenarios
+  therefore stop at creation/binding; older delivery-seam assertions are
+  replaced rather than accepted as launch evidence. The server-wakes-sandbox
+  cloud delivery remains tier-3 work.
 - **Poll (and cloud-target schedule) triggers derive a server-owned cloud
   workspace from their repo pin (D16)**, which needs a cloud repo environment;
   the product create path is GitHub-App-gated and unreachable in tier-2, so the
   repo environment + a materialized workspace are seeded directly (the same
   direct-DB exception cloud-workspace.spec.ts documents).
 
-### T2-WF-1: definition lifecycle + run-to-delivery-seam
+### T2-WF-1: definition lifecycle + run-to-binding-seam
 Steps: create a workflow via the API (valid v2 definition, one declared input);
 GET round-trips the canonical definition and pins version 1; update appends an
 immutable version 2. Drive the EDITOR UI (desktop web build): open
@@ -376,12 +379,13 @@ undeclared input → the header issue counter appears and Save is disabled (live
 client-side validation, `@proliferate/product-domain/workflows/validation`); fix
 the reference → issues clear, Save re-enables, click Save → the API reflects the
 fixed prompt. Manual LOCAL StartRun with args.
-Assert: `workflow_run` row created, status `pending_delivery`,
-`resolved_plan_json` populated with the interpolated args (`{{inputs.*}}`
-resolved into the step prompt); a missing required input is rejected at the
-coercion seam (`missing_argument`, no dangling run row); the local-lane relay
-`POST /runs/{id}/delivered` transitions `pending_delivery` → `delivered` (and is
-idempotent). **Stop at the seam** — no runtime execution, no sandbox.
+Assert: `workflow_run` row and its revisioned execution binding are created;
+the secret-free `resolved_plan_json` is populated with the interpolated args
+(`{{inputs.*}}` resolved into the step prompt), and contains no credential or
+gateway delivery block. A missing required input is rejected at the coercion
+seam (`missing_argument`, no dangling run row). Legacy `/delivered` remains
+feature-off and must not mutate the run. **Stop at the binding seam** — no
+runtime execution, credential envelope, or sandbox wake.
 
 ### T2-WF-2: poll trigger against stub feed
 Against the intent stub's `/poll-feed` (replays the same three items: two valid

@@ -3659,7 +3659,7 @@
         },
         "responses": {
           "202": {
-            "description": "Run delivered (idempotent on run_id)",
+            "description": "Run delivered (idempotent on full delivery identity)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3669,7 +3669,7 @@
             }
           },
           "400": {
-            "description": "Invalid plan",
+            "description": "Invalid plan or delivery identity",
             "content": {
               "application/json": {
                 "schema": {
@@ -3680,6 +3680,16 @@
           },
           "404": {
             "description": "Workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Delivery identity conflicts with stored run",
             "content": {
               "application/json": {
                 "schema": {
@@ -9066,17 +9076,26 @@
       },
       "CreateWorkflowRunRequest": {
         "type": "object",
-        "description": "Delivery request: the fully-resolved plan JSON (opaque here — the runtime's\nworkflow domain deserializes it strictly and rejects unknown step kinds) and\nthe workspace the run executes in. Idempotent on the plan's `run_id`.",
+        "description": "Delivery request: the fully-resolved plan JSON (opaque here — the runtime's\nworkflow domain deserializes it strictly and rejects unknown step kinds),\nthe workspace the run executes in, and the explicit credential-free\ndelivery identity + accepted redacted binding. Idempotent only on the full\n`(run_id, plan_hash, binding_hash, execution_generation)` identity.",
         "required": [
           "plan",
-          "workspaceId"
+          "workspaceId",
+          "deliveryIdentity",
+          "binding"
         ],
         "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/ExecutionBinding"
+          },
+          "deliveryIdentity": {
+            "$ref": "#/components/schemas/WorkflowDeliveryIdentityV1"
+          },
           "plan": {},
           "workspaceId": {
             "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CreateWorkspaceFileEntryKind": {
         "type": "string",
@@ -9441,6 +9460,72 @@
             }
           }
         ]
+      },
+      "ExecutionBinding": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "target",
+          "sourceKind",
+          "repositoryObjectFormat",
+          "baseCommitOid",
+          "workspaceId",
+          "workspaceGeneration",
+          "materializationId",
+          "executorId",
+          "executorGeneration",
+          "bindingHash"
+        ],
+        "properties": {
+          "baseCommitOid": {
+            "type": "string"
+          },
+          "bindingHash": {
+            "type": "string"
+          },
+          "checkpointContentHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "checkpointId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "executorGeneration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "executorId": {
+            "type": "string"
+          },
+          "materializationId": {
+            "type": "string"
+          },
+          "repositoryObjectFormat": {
+            "$ref": "#/components/schemas/RepositoryObjectFormat"
+          },
+          "schemaVersion": {
+            "$ref": "#/components/schemas/SchemaVersion"
+          },
+          "sourceKind": {
+            "$ref": "#/components/schemas/SourceKind"
+          },
+          "target": {
+            "$ref": "#/components/schemas/WorkflowTarget"
+          },
+          "workspaceGeneration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "ExportReplayRecordingRequest": {
         "type": "object",
@@ -14181,6 +14266,13 @@
           "managed"
         ]
       },
+      "RepositoryObjectFormat": {
+        "type": "string",
+        "enum": [
+          "sha1",
+          "sha256"
+        ]
+      },
       "ResizeTerminalRequest": {
         "type": "object",
         "required": [
@@ -15234,6 +15326,11 @@
             "type": "boolean"
           }
         }
+      },
+      "SchemaVersion": {
+        "type": "integer",
+        "format": "int32",
+        "minimum": 0
       },
       "SearchWorkspaceFilesResponse": {
         "type": "object",
@@ -16945,6 +17042,14 @@
           "failed"
         ]
       },
+      "SourceKind": {
+        "type": "string",
+        "enum": [
+          "remote_commit",
+          "local_commit",
+          "workspace_checkpoint"
+        ]
+      },
       "StagePatchRequest": {
         "type": "object",
         "required": [
@@ -17954,6 +18059,39 @@
           }
         }
       },
+      "WorkflowDeliveryIdentityV1": {
+        "type": "object",
+        "description": "Credential-free, versioned delivery identity bridge.\n\nThis bridge deliberately contains only the immutable delivery identity. It\nis not an execution envelope and must never grow report, control, gateway,\nor integration credentials. Those belong to the separately versioned final\nexecution envelope.",
+        "required": [
+          "schemaVersion",
+          "runId",
+          "planHash",
+          "bindingHash",
+          "executionGeneration"
+        ],
+        "properties": {
+          "bindingHash": {
+            "type": "string"
+          },
+          "executionGeneration": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "planHash": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Pinned bridge schema. Values other than 1 are rejected by validation at\nthe delivery boundary.",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
       "WorkflowRunListResponse": {
         "type": "object",
         "required": [
@@ -18177,6 +18315,14 @@
           "completed",
           "failed",
           "skipped"
+        ]
+      },
+      "WorkflowTarget": {
+        "type": "string",
+        "enum": [
+          "local",
+          "personal_cloud",
+          "shared_cloud"
         ]
       },
       "Workspace": {

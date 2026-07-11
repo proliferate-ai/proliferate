@@ -2,8 +2,8 @@
 
 Load the pinned immutable version, coerce args, expand ``workflow.include``
 composition, resolve run isolation, eagerly interpolate ``{{args.*}}`` into a
-self-contained resolved plan, and record a ``pending_delivery`` (or, for a
-server-delivered local run, ``claimable``) run whose id is the delivery
+self-contained resolved plan, and record a cloud ``pending_delivery`` or local
+``claimable`` run whose id is the delivery
 idempotency key.
 
 Split out of ``service.py`` (ownership-only, WS0B-S): ``service.py`` keeps
@@ -14,9 +14,13 @@ lives in ``worker/service.py``, and trigger CRUD/poll validation lives in
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from copy import deepcopy
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID, uuid4
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
@@ -25,19 +29,27 @@ from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_TRIGGER_KINDS,
     WORKFLOW_RUN_STATUS_CLAIMABLE,
     WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
-    WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS,
     WORKFLOW_TARGET_MODE_LOCAL,
     WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
     WORKFLOW_TRIGGER_MANUAL,
 )
 from proliferate.db.store import cloud_workflows as store
-from proliferate.db.store import cloud_workspaces as cloud_workspace_store
 from proliferate.db.store import organizations as organizations_store
-from proliferate.db.store.cloud_workflows import WorkflowRunRecord
+from proliferate.db.store.cloud_workflows import (
+    WorkflowRunRecord,
+    WorkflowVersionRecord,
+)
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.workflows import source_resolution, trigger_activation
 from proliferate.server.cloud.workflows.capability_resolution import freeze_capability_leases
 from proliferate.server.cloud.workflows.composition import resolve_included_agents
-from proliferate.server.cloud.workflows.contracts import content_hash
+from proliferate.server.cloud.workflows.contracts.canonical import CanonicalizationError
+from proliferate.server.cloud.workflows.contracts.models import (
+    LegacyResolvedPlanV1,
+)
+from proliferate.server.cloud.workflows.contracts.models import (
+    plan_hash as compute_plan_hash,
+)
 from proliferate.server.cloud.workflows.domain.composition import WorkflowCompositionError
 from proliferate.server.cloud.workflows.domain.definition import (
     WorkflowDefinitionError,
@@ -58,7 +70,6 @@ from proliferate.server.cloud.workflows.domain.resolved_plan import (
 from proliferate.server.cloud.workflows.gateway_grants import (
     assert_declared_providers_ready,
     granted_namespaces,
-    mint_run_gateway_token,
     resolve_run_scope,
 )
 from proliferate.server.cloud.workflows.service import visible_workflow
@@ -68,38 +79,50 @@ from proliferate.server.cloud.workflows.service import visible_workflow
 _visible_workflow = visible_workflow
 
 
-# Delivery-identity resolved-plan schema version (spec §5.2/§5.3).
-_RESOLVED_PLAN_VERSION = 2
+# Honest version of the currently executable legacy flattened plan. WF-PLAN-V2
+# owns the later atomic producer + runtime-adapter cutover to strict plan v2.
+_RESOLVED_PLAN_VERSION = 1
 
 
-async def _resolve_cloud_target_workspace_id(
-    db: AsyncSession, *, user: ActorIdentity, target_workspace_id: UUID | None
-) -> str:
-    """Validate ownership of the cloud workspace a ``personal_cloud`` run targets.
+@dataclass(frozen=True)
+class _WorkflowSnapshot:
+    owner_user_id: UUID | None
+    is_seed: bool
 
-    Returns its sandbox (anyharness) workspace id — the delivery destination.
-    """
 
-    if target_workspace_id is None:
-        raise CloudApiError(
-            "target_workspace_required",
-            "A cloud workspace is required to run this workflow in the cloud.",
-            status_code=400,
-        )
-    workspace = await cloud_workspace_store.get_cloud_workspace_for_user(
-        db, user.id, target_workspace_id
+@dataclass(frozen=True)
+class _VersionSnapshot:
+    id: UUID
+    workflow_id: UUID
+    version_n: int
+    definition_json: dict[str, object]
+    created_by_user_id: UUID | None
+    created_at: datetime
+
+
+def _snapshot_version(version: WorkflowVersionRecord) -> _VersionSnapshot:
+    return _VersionSnapshot(
+        id=version.id,
+        workflow_id=version.workflow_id,
+        version_n=version.version_n,
+        definition_json=deepcopy(version.definition_json),
+        created_by_user_id=version.created_by_user_id,
+        created_at=version.created_at,
     )
-    if workspace is None or workspace.archived_at is not None:
-        raise CloudApiError(
-            "target_workspace_not_found", "Cloud workspace not found.", status_code=404
-        )
-    if not workspace.anyharness_workspace_id:
-        raise CloudApiError(
-            "target_workspace_not_ready",
-            "This cloud workspace is still materializing; try again shortly.",
-            status_code=409,
-        )
-    return workspace.anyharness_workspace_id
+
+
+def _version_matches(
+    snapshot: _VersionSnapshot, current: WorkflowVersionRecord | None
+) -> bool:
+    return (
+        current is not None
+        and current.id == snapshot.id
+        and current.workflow_id == snapshot.workflow_id
+        and current.version_n == snapshot.version_n
+        and current.definition_json == snapshot.definition_json
+        and current.created_by_user_id == snapshot.created_by_user_id
+        and current.created_at == snapshot.created_at
+    )
 
 
 async def start_run(
@@ -115,7 +138,9 @@ async def start_run(
     trigger_id: UUID | None = None,
     scheduled_for: datetime | None = None,
     session_bindings: dict[str, str] | None = None,
+    release_source_snapshot: Callable[[], Awaitable[None]] | None = None,
 ) -> WorkflowRunRecord:
+    user_id = user.id
     if target_mode not in SUPPORTED_WORKFLOW_TARGET_MODES:
         raise CloudApiError(
             "invalid_target_mode",
@@ -124,6 +149,8 @@ async def start_run(
         )
     if trigger_kind not in SUPPORTED_WORKFLOW_TRIGGER_KINDS:
         raise CloudApiError("invalid_trigger_kind", "Unsupported trigger kind.", status_code=400)
+    if trigger_kind != WORKFLOW_TRIGGER_MANUAL:
+        trigger_activation.reject_unattended_activation()
 
     workflow = await _visible_workflow(db, user=user, workflow_id=workflow_id)
     if workflow.archived_at is not None:
@@ -132,22 +159,22 @@ async def start_run(
         )
 
     # A seed (track 1f) has no owner — the runner is its effective owner for this
-    # run: the run row, gateway token, provider-readiness check, and include
-    # resolution are all scoped to the user launching it.
-    effective_owner = workflow.owner_user_id or user.id
+    # run: the run row, provider-readiness check, and include resolution are all
+    # scoped to the user launching it.
+    workflow_snapshot = _WorkflowSnapshot(
+        owner_user_id=workflow.owner_user_id,
+        is_seed=workflow.is_seed,
+    )
+    effective_owner = workflow_snapshot.owner_user_id or user_id
 
-    # Cloud runs must name an owned, materialized workspace up front — resolve its
-    # sandbox workspace id before creating the run so a bad target never records a
-    # dangling pending_delivery row.
-    cloud_anyharness_workspace_id: str | None = None
-    if target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
-        cloud_anyharness_workspace_id = await _resolve_cloud_target_workspace_id(
-            db, user=user, target_workspace_id=target_workspace_id
-        )
-
+    # Capture the immutable workflow version before any source-provider I/O.
+    # Source resolution invokes the caller-owned read-transaction
+    # release before GitHub is called; this frozen value is the version the
+    # run compiles even if the workflow's current-version pointer changes while
+    # that provider request is in flight.
     if version_id is not None:
-        version = await store.get_version(db, version_id)
-        if version is None or version.workflow_id != workflow_id:
+        version_record = await store.get_version(db, version_id)
+        if version_record is None or version_record.workflow_id != workflow_id:
             raise CloudApiError(
                 "workflow_version_not_found", "Workflow version not found.", status_code=404
             )
@@ -156,11 +183,59 @@ async def start_run(
             raise CloudApiError(
                 "workflow_no_version", "Workflow has no current version.", status_code=409
             )
-        version = await store.get_version(db, workflow.current_version_id)
-        if version is None:
+        version_record = await store.get_version(db, workflow.current_version_id)
+        if version_record is None:
             raise CloudApiError(
                 "workflow_version_not_found", "Workflow version not found.", status_code=404
             )
+    version = _snapshot_version(version_record)
+
+    # Cloud runs must name an owned, materialized workspace up front — resolve its
+    # sandbox workspace id before creating the run so a bad target never records a
+    # dangling pending_delivery row.
+    cloud_anyharness_workspace_id: str | None = None
+    source_intent: dict[str, object] = {"kind": "workspace_checkpoint"}
+    if target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
+        if release_source_snapshot is None:
+            raise CloudApiError(
+                "workflow_source_transaction_boundary_required",
+                "Manual cloud source resolution requires a caller-owned transaction boundary.",
+                status_code=409,
+            )
+        cloud_target = await source_resolution.resolve_cloud_target(
+            db,
+            user=user,
+            target_workspace_id=target_workspace_id,
+            release_source_snapshot=release_source_snapshot,
+        )
+        cloud_anyharness_workspace_id = cloud_target.anyharness_workspace_id
+        source_intent = cloud_target.source_intent
+        # The full source-fence lock order is workspace -> repository -> GitHub
+        # auth -> installation -> repository coverage -> workflow -> version.
+        # Provider I/O completed before the first lock; none follows a re-lock.
+        current_workflow = await store.get_workflow(db, workflow_id, lock_row=True)
+        current_version = await store.get_version(db, version.id, lock_row=True)
+        if (
+            current_workflow is None
+            or current_workflow.archived_at is not None
+            or current_workflow.owner_user_id != workflow_snapshot.owner_user_id
+            or current_workflow.is_seed != workflow_snapshot.is_seed
+            or (current_workflow.owner_user_id != user_id and not current_workflow.is_seed)
+            or not _version_matches(version, current_version)
+        ):
+            raise CloudApiError(
+                "workflow_source_fence_changed",
+                "Workflow authorization or pinned version changed during source resolution.",
+                status_code=409,
+            )
+    elif target_workspace_id is None:
+        raise CloudApiError(
+            "local_target_workspace_required",
+            "A local run must pin its intended AnyHarness workspace before claiming.",
+            status_code=400,
+        )
+    else:
+        cloud_anyharness_workspace_id = str(target_workspace_id)
 
     # Re-parse the pinned definition to obtain arg specs; it was validated on write.
     try:
@@ -281,21 +356,34 @@ async def start_run(
         session_bindings=session_bindings or {},
         agents=resolved_agents,
         isolation=isolation,
+        source_intent=source_intent,
     )
-    # SHA-256 over RFC 8785 canonical JSON of the complete logical (secret-free)
-    # plan (spec §5.2 duty 9). The plan carries no ``planHash`` field, so the
-    # content hash over the whole plan is exactly "excluding planHash". Immutable
-    # once persisted alongside the plan.
-    plan_hash = content_hash(resolved_plan)
-    # Desktop-executor lane (2a, lifts L15): a server-created LOCAL run (a schedule
-    # trigger firing on a local target) is born ``claimable`` — nothing on the
-    # server delivers it; it waits for a desktop executor to claim it. A local
-    # manual/chat run stays ``pending_delivery``: the desktop that called StartRun
-    # already holds the plan and delivers it to its own runtime + calls /delivered.
-    is_server_delivered = trigger_kind in WORKFLOW_SERVER_DELIVERED_TRIGGER_KINDS
+    # SHA-256 over RFC 8785 canonical JSON of the complete logical plan excluding
+    # only ``planHash``. Persist the same self-describing legacy-v1 object that is hashed;
+    # delivery must never append a second version/hash spelling later.
+    try:
+        plan_hash = compute_plan_hash(resolved_plan)
+    except CanonicalizationError as exc:
+        raise CloudApiError(
+            "workflow_plan_canonicalization_invalid",
+            "Run inputs or stored workflow content contain non-canonical JSON.",
+            status_code=409,
+        ) from exc
+    resolved_plan["planHash"] = plan_hash
+    try:
+        LegacyResolvedPlanV1.model_validate(resolved_plan)
+    except ValidationError as exc:
+        raise CloudApiError(
+            "workflow_plan_contract_invalid",
+            "Resolved workflow content is outside the executable plan contract.",
+            status_code=409,
+        ) from exc
+    # Every local run, including manual/chat, is born ``claimable``. Claim is the
+    # sole authority transition into materialization; no caller-side alternate
+    # delivery path exists. Unattended trigger activation itself remains parked.
     initial_status = (
         WORKFLOW_RUN_STATUS_CLAIMABLE
-        if target_mode == WORKFLOW_TARGET_MODE_LOCAL and is_server_delivered
+        if target_mode == WORKFLOW_TARGET_MODE_LOCAL
         else WORKFLOW_RUN_STATUS_PENDING_DELIVERY
     )
     run = await store.create_run(
@@ -319,21 +407,7 @@ async def start_run(
         plan_version=_RESOLVED_PLAN_VERSION,
         desired_state="running",
         delivery_state="ready",
-    )
-
-    # Mint the per-run gateway token for EVERY run (L16), both lanes, empty scope
-    # legal. The plaintext lands in the PRIVATE envelope (spec §5.3) — NEVER the
-    # logical plan — so ordinary run APIs stay secret-free; delivery/claim paths
-    # fold it into the delivered plan. The L25 subset intersection with the
-    # delivering worker happens later, at cloud delivery, when the worker is known
-    # (local lane ships the definition scope unchanged — the runtime errors
-    # explicitly if it can't honor it, §5.3). The token FKs the run row, so it is
-    # minted after create_run, then written to the envelope.
-    _token, gateway_block = await mint_run_gateway_token(
-        db, run_id=run_id, owner_user_id=effective_owner, scope=run_scope
-    )
-    updated = await store.update_run(
-        db, run_id=run_id, private_envelope_json={"gateway": gateway_block}
+        preaccept_cancel_state="none",
     )
 
     # WS3a: freeze the run's EXACT per-slot capability leases — the new frozen
@@ -350,4 +424,7 @@ async def start_run(
         run_scope=run_scope,
         plan_hash=plan_hash,
     )
-    return updated if updated is not None else run
+    # WF-ID stops here. No gateway/report/control/integration credential is
+    # minted and no runtime receives the plan. Materialization offer + binding
+    # acceptance happen next; WF-CRED later owns the final execution envelope.
+    return run

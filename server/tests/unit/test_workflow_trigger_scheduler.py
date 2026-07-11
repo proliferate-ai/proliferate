@@ -14,10 +14,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL,
     WORKFLOW_MISSED_RUN_POLICY_RUN_LATEST,
     WORKFLOW_MISSED_RUN_POLICY_SKIP_ALL,
-    WORKFLOW_RUN_ERROR_BUDGET_BLOCKED,
-    WORKFLOW_RUN_STATUS_FAILED,
     WORKFLOW_RUN_STATUS_MISSED,
-    WORKFLOW_RUN_STATUS_PENDING_DELIVERY,
     WORKFLOW_RUN_STATUS_RUNNING,
     WORKFLOW_RUN_TERMINAL_STATUSES,
     WORKFLOW_TRIGGER_KIND_SCHEDULE,
@@ -28,7 +25,6 @@ from proliferate.db.store import cloud_workflows as store
 from proliferate.server.cloud.workflows import scheduler
 from proliferate.utils.time import utcnow
 from tests.unit.workflow_trigger_test_support import (
-    _force_budget,
     _make_due,
     _owner,
     _patch_client,
@@ -42,13 +38,32 @@ from tests.unit.workflow_trigger_test_support import (
 
 pytestmark = pytest.mark.asyncio
 
+_REAL_REJECT_UNATTENDED_ACTIVATION = scheduler.trigger_activation.reject_unattended_activation
+_REAL_UNATTENDED_ACTIVATION_ENABLED = scheduler.trigger_activation.unattended_activation_enabled
+
 
 @pytest.fixture
 def session_factory(test_engine):  # type: ignore[no-untyped-def]
     return async_sessionmaker(test_engine, expire_on_commit=False)
 
 
-async def test_tick_fires_due_trigger_and_delivers(
+@pytest.fixture(autouse=True)
+def _bypass_wf_id_scheduler_gate_for_lower_layer_tests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "reject_unattended_activation",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "unattended_activation_enabled",
+        lambda: True,
+    )
+
+
+async def test_tick_fires_due_local_trigger_without_delivery(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     trigger_id, workflow_id = await _seed_trigger(session_factory, concurrency="skip")
@@ -59,8 +74,8 @@ async def test_tick_fires_due_trigger_and_delivers(
     result = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
 
     assert result.created_runs == 1
-    assert result.delivered_runs == 1
-    assert len(seen) == 1  # exactly one sandbox wake + deliver
+    assert result.delivered_runs == 0
+    assert seen == []
     # The trigger advanced its cursor to a fresh future slot and cleared skip.
     async with session_factory() as db:
         trigger = await trigger_store.get_trigger(db, trigger_id)
@@ -150,12 +165,10 @@ async def test_tick_disables_trigger_when_workflow_archived(
     assert again.created_runs == 0 and again.delivered_runs == 0
 
 
-async def test_tick_queue_policy_defers_then_delivers(
+async def test_tick_feature_off_parks_queue_policy_before_delivery(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     trigger_id, workflow_id = await _seed_trigger(session_factory, concurrency="queue")
-    # A prior run of this trigger is still running — queue must create the new run
-    # but hold its delivery.
     async with session_factory() as db, db.begin():
         workflow = await store.get_workflow(db, workflow_id)
         assert workflow is not None and workflow.current_version_id is not None
@@ -173,84 +186,71 @@ async def test_tick_queue_policy_defers_then_delivers(
             scheduled_for=utcnow() - timedelta(hours=2),
         )
         await store.update_run(db, run_id=prior.id, status=WORKFLOW_RUN_STATUS_RUNNING)
-        prior_id = prior.id
     await _make_due(session_factory, trigger_id)
-    _patch_gateway(monkeypatch)
-    seen = _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
-
-    # Tick 1: queue creates the run but defers delivery behind the running prior.
-    first = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
-    assert first.created_runs == 1
-    assert first.delivered_runs == 0
-    assert len(seen) == 0
-    queued = await _runs_for_trigger(session_factory, trigger_id)
-    assert len(queued) == 1
-    assert queued[0].status == WORKFLOW_RUN_STATUS_PENDING_DELIVERY
-
-    # The prior run finishes -> the queued run becomes deliverable.
-    async with session_factory() as db, db.begin():
-        await store.update_run(db, run_id=prior_id, status="completed", finished_at=utcnow())
-
-    # Tick 2: no new slot is due, but the deferred run now delivers.
-    second = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
-    assert second.created_runs == 0
-    assert second.delivered_runs == 1
-    assert len(seen) == 1
-    remaining = await _runs_for_trigger(session_factory, trigger_id)
-    assert remaining == []  # delivered, no longer pending
-
-
-# --- 1c: budget_blocked deny path (D-002) + missed-run catch-up policy ----------
-async def test_tick_over_budget_lands_budget_blocked_zero_dispatch(
-    session_factory, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """(a) Over-budget org + due schedule -> exactly one terminal budget_blocked
-    run and ZERO sandbox launch / agent dispatch (asserted at the wake + deliver
-    boundaries, not on prose)."""
-    trigger_id, workflow_id = await _seed_trigger(session_factory, concurrency="skip")
-    await _make_due(session_factory, trigger_id)
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "reject_unattended_activation",
+        _REAL_REJECT_UNATTENDED_ACTIVATION,
+    )
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "unattended_activation_enabled",
+        _REAL_UNATTENDED_ACTIVATION_ENABLED,
+    )
     wakes = _patch_recording_gateway(monkeypatch)
     seen = _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
-    _force_budget(monkeypatch, blocked=True)
 
     result = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
 
-    assert result.created_runs == 1  # phase-1 still records the run row
-    assert result.delivered_runs == 0  # phase-2 refused to deliver
-    assert wakes == []  # DISPATCH BOUNDARY: no sandbox was ever woken
-    assert seen == []  # no agent dispatch (no gateway deliver POST)
-
-    runs = await _runs_for_trigger(session_factory, trigger_id)
-    # No longer pending (it went terminal), so re-read the full ledger.
-    async with session_factory() as db:
-        all_runs = await store.list_runs(
-            db, executor_user_id=(await _owner(session_factory, workflow_id))
-        )
-    blocked = [r for r in all_runs if r.trigger_id == trigger_id]
-    assert len(blocked) == 1
-    assert blocked[0].status == WORKFLOW_RUN_STATUS_FAILED
-    assert blocked[0].error_code == WORKFLOW_RUN_ERROR_BUDGET_BLOCKED
-    assert blocked[0].finished_at is not None
-    assert runs == []  # not sitting pending anymore
+    assert result.created_runs == 0
+    assert result.delivered_runs == 0
+    assert wakes == []
+    assert seen == []
+    assert await _runs_for_trigger(session_factory, trigger_id) == []
 
 
-async def test_tick_budget_restored_delivers_normally(
+async def test_tick_feature_off_parks_before_budget_evaluation(
     session_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """(b) With enforce on but the org NOT over budget, the next tick runs
-    normally: the sandbox is woken and the plan delivered."""
     trigger_id, _workflow_id = await _seed_trigger(session_factory, concurrency="skip")
     await _make_due(session_factory, trigger_id)
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "unattended_activation_enabled",
+        _REAL_UNATTENDED_ACTIVATION_ENABLED,
+    )
     wakes = _patch_recording_gateway(monkeypatch)
     seen = _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
-    _force_budget(monkeypatch, blocked=False)
 
     result = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
 
-    assert result.created_runs == 1
-    assert result.delivered_runs == 1
-    assert len(wakes) == 1  # sandbox woken
-    assert len(seen) == 1  # plan delivered
+    assert result.created_runs == 0
+    assert result.delivered_runs == 0
+    assert wakes == []
+    assert seen == []
+    assert await _runs_for_trigger(session_factory, trigger_id) == []
+
+
+async def test_tick_feature_off_remains_parked_when_budget_is_restored(
+    session_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trigger_id, _workflow_id = await _seed_trigger(session_factory, concurrency="skip")
+    await _make_due(session_factory, trigger_id)
+    monkeypatch.setattr(
+        scheduler.trigger_activation,
+        "unattended_activation_enabled",
+        _REAL_UNATTENDED_ACTIVATION_ENABLED,
+    )
+    wakes = _patch_recording_gateway(monkeypatch)
+    seen = _patch_client(monkeypatch, lambda req: httpx.Response(202, json={"status": "running"}))
+
+    result = await scheduler.run_workflow_scheduler_tick(session_factory=session_factory)
+
+    assert result.created_runs == 0
+    assert result.delivered_runs == 0
+    assert wakes == []
+    assert seen == []
+    assert await _runs_for_trigger(session_factory, trigger_id) == []
 
 
 async def test_missed_run_latest_fires_newest_records_older_missed(

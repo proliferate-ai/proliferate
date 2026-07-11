@@ -1,9 +1,10 @@
-"""Step-actions ledger: claim, perform, and sweep server-side actions.
+"""Feature-off step-action ledger retained for deterministic-action cutover.
 
 Invariant (L19): actions perform side effects of steps the runtime already
 executed; they never decide or cause what executes next.
 
-The ledger gives *exactly-once claim*. Action execution is *at-least-once
+WF-ID hard-disables claim, apply, and sweep before discovery/decryption/network.
+The dormant ledger gives *exactly-once claim*. Action execution is *at-least-once
 completion* via the sweeper, which retries stale 'pending' rows (an owner that
 crashed before performing) and transient 'failed' rows (e.g. a Slack API
 error), up to a max attempt count. A crash inside the action window (after the
@@ -24,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from proliferate.constants.workflows import (
     WORKFLOW_STEP_NOTIFY,
 )
-from proliferate.db.models.cloud.workflows import WorkflowStepAction
+from proliferate.db.models.cloud.workflow_actions import WorkflowStepAction
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_workflows import WorkflowRunRecord
@@ -41,6 +42,7 @@ ACTION_STEP_KINDS: dict[str, str] = {
 
 _SWEEP_STALE_THRESHOLD = timedelta(seconds=60)
 _MAX_ATTEMPTS = 5
+_ACTION_ACTIVATION_ENABLED = False
 
 
 async def claim_step_action(
@@ -48,6 +50,8 @@ async def claim_step_action(
 ) -> UUID | None:
     """INSERT ... ON CONFLICT DO NOTHING. Returns the new action id when this
     caller won the claim, None when another observer already owns it."""
+    if not _ACTION_ACTIVATION_ENABLED:
+        return None
     action_id = uuid4()
     now = utcnow()
     stmt = (
@@ -90,6 +94,8 @@ async def apply_step_actions(db: AsyncSession, *, run: WorkflowRunRecord) -> Non
     """Scan observed step outputs for action-bearing completed steps; claim and
     perform any not yet owned. Safe to call on every report/refresh: the ledger
     CAS makes re-observation free."""
+    if not _ACTION_ACTIVATION_ENABLED:
+        return
     steps_by_key = _steps_by_key(run)
     for step_key, output in (run.step_outputs_json or {}).items():
         step = steps_by_key.get(step_key, {})
@@ -177,9 +183,7 @@ async def _perform_slack_notify(
     # (oauth-bundle-v1, see integrations/oauth/service._build_oauth_bundle and the
     # refresh path in integrations/access.py). Keep "bot_token"/"access_token" as
     # fallbacks for any classic-bot-token bundle shape.
-    bot_token = (
-        bundle.get("bot_token") or bundle.get("accessToken") or bundle.get("access_token")
-    )
+    bot_token = bundle.get("bot_token") or bundle.get("accessToken") or bundle.get("access_token")
     if not bot_token:
         await _mark_action_failed(db, action_id, error_message="No token in credential bundle")
         return
@@ -236,6 +240,8 @@ async def sweep_pending_actions(db: AsyncSession) -> int:
 
     Returns the number of actions retried.
     """
+    if not _ACTION_ACTIVATION_ENABLED:
+        return 0
     stale_before = utcnow() - _SWEEP_STALE_THRESHOLD
     actions = await store.list_retryable_actions(
         db, before=stale_before, max_attempts=_MAX_ATTEMPTS, limit=50
