@@ -5,28 +5,32 @@
  * Editor drag state must NOT be keyed by array index or by the editable slot
  * label — renaming a lane mid-drag, or a concurrent reorder, would otherwise
  * land a drop on the wrong node. Every slot/node/group/lane/step carries a
- * stable lowercase-UUID `id` (WS9a `identity.ts`); this module mints those ids
- * for an id-less draft on load, mints ids for freshly-authored objects, and
- * resolves an id back to its CURRENT `SpineAddress`/index at drop time. The
- * spine mutators keep taking `SpineAddress`+index (cheap, unchanged); only the
- * transient drag handle is id-based.
+ * stable lowercase-UUID `id` (WS9a `identity.ts`); this module resolves an id
+ * back to its CURRENT `SpineAddress`/index at drop time. The spine mutators
+ * keep taking `SpineAddress`+index (cheap, unchanged); only the transient drag
+ * handle is id-based.
+ *
+ * `ensureStepId`/`ensureDefinitionIds` — the id-minting for an id-less draft on
+ * load — now live in `@proliferate/product-domain/workflows/identity` (WS9a
+ * addendum item 3, moved out of here once that package unfroze); re-exported
+ * below so existing imports of this module are unaffected.
  */
 
 import {
   isParallelGroup,
   type WorkflowAgentNode,
   type WorkflowDefinition,
-  type WorkflowParallelGroup,
   type WorkflowSpineEntry,
   type WorkflowStep,
 } from "@proliferate/product-domain/workflows/definition";
-import { newWorkflowObjectId } from "@proliferate/product-domain/workflows/identity";
+import {
+  ensureDefinitionIds,
+  ensureStepId,
+  newWorkflowObjectId,
+} from "@proliferate/product-domain/workflows/identity";
 import type { SpineAddress } from "@proliferate/product-domain/workflows/spine-editing";
 
-/** Assign an id to a step if it has none (preserves an existing id verbatim). */
-export function ensureStepId(step: WorkflowStep): WorkflowStep {
-  return step.id ? step : { ...step, id: newWorkflowObjectId() };
-}
+export { ensureDefinitionIds, ensureStepId };
 
 /** A fresh clone of a step with a brand-new id (spec §5.1: clone creates new
  * ids). Deep-cloned so nested objects (goal, cases, args, schema) are detached. */
@@ -35,39 +39,14 @@ export function cloneStepWithNewId(step: WorkflowStep): WorkflowStep {
   return { ...clone, id: newWorkflowObjectId() };
 }
 
-function ensureNodeIds(node: WorkflowAgentNode): WorkflowAgentNode {
-  return {
-    ...node,
-    id: node.id ?? newWorkflowObjectId(),
-    slotId: node.slotId ?? newWorkflowObjectId(),
-    steps: node.steps.map(ensureStepId),
-  };
-}
-
 /** A fresh agent node with ids populated (freshly-authored slot). */
 export function newAgentNodeWithIds(node: Omit<WorkflowAgentNode, "id" | "slotId">): WorkflowAgentNode {
-  return ensureNodeIds(node as WorkflowAgentNode);
-}
-
-/**
- * Idempotently populate every slot/node/group/lane/step id on a draft that was
- * parsed from the id-less v1 wire. Existing ids are preserved (canonical
- * round-trip); only gaps are filled with fresh UUIDv7s. Pure — returns a new
- * definition.
- */
-export function ensureDefinitionIds(definition: WorkflowDefinition): WorkflowDefinition {
-  const agents: WorkflowSpineEntry[] = definition.agents.map((entry) => {
-    if (isParallelGroup(entry)) {
-      const group: WorkflowParallelGroup = {
-        ...entry,
-        id: entry.id ?? newWorkflowObjectId(),
-        parallel: entry.parallel.map(ensureNodeIds),
-      };
-      return group;
-    }
-    return ensureNodeIds(entry);
-  });
-  return { ...definition, agents };
+  return {
+    ...node,
+    id: newWorkflowObjectId(),
+    slotId: newWorkflowObjectId(),
+    steps: node.steps.map(ensureStepId),
+  } as WorkflowAgentNode;
 }
 
 /** The stable id of a spine entry (a group's `id`, or a standalone node's `id`). */

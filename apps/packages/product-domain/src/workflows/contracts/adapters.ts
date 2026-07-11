@@ -8,6 +8,7 @@
  * credential is ever present on a public run view (feature spec §5.3/§5.4).
  */
 
+import type { WorkflowRequiredInvocation } from "../definition";
 import type { CapabilityRef, ResolvedPlan } from "./types";
 
 export interface ObservedStepWire {
@@ -98,4 +99,75 @@ export function toPublicRunView(plan: ResolvedPlan, observed: ObservedRunWire): 
     }
   }
   return view;
+}
+
+// --- required-invocation <-> CapabilityRef (WS9a addendum, forward-compat) ----
+
+/**
+ * The reserved virtual provider namespace for owner HTTP function invocations
+ * (mirrors `WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES`, definition.ts) — the
+ * `{provider, tool}` wire shape's signal that a required-invocation targets a
+ * `function` capability rather than an `integration_tool` one.
+ */
+export const REQUIRED_INVOCATION_FUNCTIONS_PROVIDER = "functions";
+
+/**
+ * Extra fields the coarse `{provider, tool}` wire shape cannot carry, needed to
+ * build an exact tagged-union `CapabilityRef` (feature spec §7.1). Omit them
+ * while the server compiler still speaks the coarse shape — the editor can fill
+ * them in once a resolved plan/capability picker supplies the real values.
+ */
+export interface RequiredInvocationCapabilityDetails {
+  /** `integration_tool` only. */
+  providerRevision?: string;
+  inputSchemaHash?: string;
+  /** `function` only. */
+  semanticRevision?: number;
+}
+
+/**
+ * Expand the editor's current `{provider, tool}` required-invocation literal
+ * into the exact tagged-union `CapabilityRef` (feature spec §7.1). `provider
+ * === "functions"` maps to the `function` kind (namespace convention shared
+ * with `WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES`); anything else maps to
+ * `integration_tool`. `details` fills the fields the coarse shape cannot carry
+ * (defaulted to empty/zero placeholders when the caller does not have them
+ * yet — never silently dropped, so a round-trip through `toWireRequiredInvocation`
+ * is exact).
+ */
+export function fromWireRequiredInvocation(
+  inv: WorkflowRequiredInvocation,
+  details: RequiredInvocationCapabilityDetails = {},
+): CapabilityRef {
+  if (inv.provider === REQUIRED_INVOCATION_FUNCTIONS_PROVIDER) {
+    return {
+      kind: "function",
+      definitionId: inv.tool,
+      semanticRevision: details.semanticRevision ?? 0,
+    };
+  }
+  return {
+    kind: "integration_tool",
+    providerDefinitionId: inv.provider,
+    providerRevision: details.providerRevision ?? "",
+    toolName: inv.tool,
+    inputSchemaHash: details.inputSchemaHash ?? "",
+  };
+}
+
+/**
+ * Collapse an exact tagged-union `CapabilityRef` back to the editor's current
+ * `{provider, tool}` required-invocation literal. `product_mcp` has no wire
+ * form here — feature spec §7.1: "Product MCP is not a required-invocation
+ * target in v1" — so it returns `null` rather than a lossy guess.
+ */
+export function toWireRequiredInvocation(ref: CapabilityRef): WorkflowRequiredInvocation | null {
+  switch (ref.kind) {
+    case "integration_tool":
+      return { provider: ref.providerDefinitionId, tool: ref.toolName };
+    case "function":
+      return { provider: REQUIRED_INVOCATION_FUNCTIONS_PROVIDER, tool: ref.definitionId };
+    case "product_mcp":
+      return null;
+  }
 }

@@ -159,6 +159,12 @@ export interface AgentEmitStep extends StepBase {
   outputSchema?: Record<string, unknown>;
   /** Re-ask budget (default 3). */
   maxAttempts?: number;
+  /**
+   * L27 gate: require this provider+tool was invoked during the turn (feature
+   * spec §7.1 — a required-invocation step may be any agent step, including
+   * emit, not only `agent.prompt`).
+   */
+  requiredInvocation?: WorkflowRequiredInvocation;
 }
 
 /** Switch-model step: narrows to `{model}` only (same-harness rule, A3). */
@@ -470,6 +476,15 @@ function parseNotifyAgentFields(raw: unknown): WorkflowNotifyAgentFields | undef
   return { slot: asString(record.slot) ?? "", schema };
 }
 
+/** Parse a `{provider, tool}` required-invocation block (agent.prompt/agent.emit gate, §7.1). */
+function parseRequiredInvocation(raw: unknown): WorkflowRequiredInvocation | undefined {
+  const record = asRecord(raw);
+  if (!record) {
+    return undefined;
+  }
+  return { provider: asString(record.provider) ?? "", tool: asString(record.tool) ?? "" };
+}
+
 function parseStep(raw: unknown): WorkflowStep | null {
   const record = asRecord(raw);
   const kind = record?.kind;
@@ -486,12 +501,9 @@ function parseStep(raw: unknown): WorkflowStep | null {
       if (goal) {
         step.goal = goal;
       }
-      const inv = asRecord(record.required_invocation);
+      const inv = parseRequiredInvocation(record.required_invocation);
       if (inv) {
-        step.requiredInvocation = {
-          provider: asString(inv.provider) ?? "",
-          tool: asString(inv.tool) ?? "",
-        };
+        step.requiredInvocation = inv;
       }
       return step;
     }
@@ -509,6 +521,10 @@ function parseStep(raw: unknown): WorkflowStep | null {
       const maxAttempts = asPositiveInt(record.max_attempts);
       if (maxAttempts !== undefined) {
         step.maxAttempts = maxAttempts;
+      }
+      const inv = parseRequiredInvocation(record.required_invocation);
+      if (inv) {
+        step.requiredInvocation = inv;
       }
       return step;
     }
@@ -687,6 +703,10 @@ function serializeGoal(goal: WorkflowGoal): Record<string, unknown> {
   return out;
 }
 
+function serializeRequiredInvocation(inv: WorkflowRequiredInvocation): Record<string, unknown> {
+  return { provider: inv.provider, tool: inv.tool };
+}
+
 function serializeStep(step: WorkflowStep): Record<string, unknown> {
   const base: Record<string, unknown> = { kind: step.kind, on_fail: serializeOnFail(step.onFail) };
   if (step.label !== undefined) {
@@ -699,10 +719,7 @@ function serializeStep(step: WorkflowStep): Record<string, unknown> {
         base.goal = serializeGoal(step.goal);
       }
       if (step.requiredInvocation) {
-        base.required_invocation = {
-          provider: step.requiredInvocation.provider,
-          tool: step.requiredInvocation.tool,
-        };
+        base.required_invocation = serializeRequiredInvocation(step.requiredInvocation);
       }
       return base;
     }
@@ -714,6 +731,9 @@ function serializeStep(step: WorkflowStep): Record<string, unknown> {
       }
       if (step.maxAttempts !== undefined) {
         base.max_attempts = step.maxAttempts;
+      }
+      if (step.requiredInvocation) {
+        base.required_invocation = serializeRequiredInvocation(step.requiredInvocation);
       }
       return base;
     }

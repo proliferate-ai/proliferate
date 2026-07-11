@@ -20,6 +20,8 @@ import {
 } from "./definition";
 import {
   deriveDefinitionIdentities,
+  ensureDefinitionIds,
+  ensureStepId,
   newWorkflowObjectId,
   parseCanonicalDefinition,
   resolvedStepKey,
@@ -72,6 +74,130 @@ describe("stable identities: canonical round-trip", () => {
     expect(resolvedStepKey({ nodeId: "n1", laneId: null, stepId: "s1" })).toBe("root::n1::-::s1");
     expect(resolvedStepKey({ includePath: ["i1", "i2"], nodeId: "n1", laneId: "la", stepId: "s1" }))
       .toBe("i1/i2::n1::la::s1");
+  });
+});
+
+// --- draft id-minting (WS9a addendum item 3, moved from desktop drag-identity) -
+
+describe("ensureDefinitionIds / ensureStepId (editor authoring)", () => {
+  function idlessDraft(): WorkflowDefinition {
+    return {
+      version: 1,
+      inputs: [],
+      integrations: [],
+      agents: [
+        {
+          slot: "intake",
+          harness: "claude",
+          model: "haiku",
+          steps: [
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "a" },
+            { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "b" },
+          ],
+        },
+        {
+          parallel: [
+            {
+              slot: "review_a",
+              harness: "claude",
+              model: "haiku",
+              steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "ra1" }],
+            },
+            {
+              slot: "review_b",
+              harness: "claude",
+              model: "haiku",
+              steps: [{ kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "rb1" }],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it("mints stable ids for every slot/node/group/lane/step", () => {
+    const withIds = ensureDefinitionIds(idlessDraft());
+
+    const node = withIds.agents[0]!;
+    if (isParallelGroup(node)) {
+      throw new Error("expected a sequential node");
+    }
+    expect(node.id).toBeTruthy();
+    expect(node.slotId).toBeTruthy();
+    expect(node.steps).toHaveLength(2);
+    for (const step of node.steps) {
+      expect(step.id).toBeTruthy();
+    }
+
+    const group = withIds.agents[1]!;
+    if (!isParallelGroup(group)) {
+      throw new Error("expected a parallel group");
+    }
+    expect(group.id).toBeTruthy();
+    expect(group.parallel).toHaveLength(2);
+    for (const lane of group.parallel) {
+      expect(lane.id).toBeTruthy();
+      expect(lane.slotId).toBeTruthy();
+      for (const step of lane.steps) {
+        expect(step.id).toBeTruthy();
+      }
+    }
+
+    // Every minted id is a distinct lowercase UUIDv7.
+    const ids: string[] = [
+      node.id!, node.slotId!, ...node.steps.map((s) => s.id!),
+      group.id!,
+      ...group.parallel.flatMap((lane) => [lane.id!, lane.slotId!, ...lane.steps.map((s) => s.id!)]),
+    ];
+    for (const id of ids) {
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("is idempotent: re-running on an already-id'd definition changes nothing", () => {
+    const once = ensureDefinitionIds(idlessDraft());
+    const twice = ensureDefinitionIds(once);
+    expect(twice).toEqual(once);
+  });
+
+  it("preserves existing ids and only fills gaps on a partially-id'd definition", () => {
+    const draft = idlessDraft();
+    const node = draft.agents[0]!;
+    if (isParallelGroup(node)) {
+      throw new Error("expected a sequential node");
+    }
+    const preAssignedNodeId = "018f8b00-0000-7000-8000-00000000aaaa";
+    const preAssignedStepId = "018f8b00-0000-7000-8000-00000000bbbb";
+    draft.agents[0] = {
+      ...node,
+      id: preAssignedNodeId,
+      steps: [{ ...node.steps[0]!, id: preAssignedStepId }, node.steps[1]!],
+    };
+
+    const withIds = ensureDefinitionIds(draft);
+    const filled = withIds.agents[0]!;
+    if (isParallelGroup(filled)) {
+      throw new Error("expected a sequential node");
+    }
+    expect(filled.id).toBe(preAssignedNodeId);
+    expect(filled.steps[0]!.id).toBe(preAssignedStepId);
+    expect(filled.steps[1]!.id).toBeTruthy();
+    expect(filled.steps[1]!.id).not.toBe(preAssignedStepId);
+    // The untouched lane/group still gets fresh ids.
+    const group = withIds.agents[1]!;
+    if (!isParallelGroup(group)) {
+      throw new Error("expected a parallel group");
+    }
+    expect(group.id).toBeTruthy();
+  });
+
+  it("ensureStepId preserves an existing id and mints one only when absent", () => {
+    const bare = { kind: "agent.prompt", onFail: { kind: "stop" }, prompt: "x" } as const;
+    const minted = ensureStepId(bare);
+    expect(minted.id).toBeTruthy();
+    const untouched = ensureStepId(minted);
+    expect(untouched).toEqual(minted);
   });
 });
 

@@ -24,6 +24,7 @@ import {
   type WorkflowDefinition,
   type WorkflowInputSpec,
   type WorkflowParallelGroup,
+  type WorkflowRequiredInvocation,
   type WorkflowStep,
 } from "./definition";
 import { iterReferences, validateStringReferences } from "./interpolation";
@@ -208,6 +209,34 @@ function requireText(
     : null;
 }
 
+/**
+ * A present `requiredInvocation` must name a non-empty provider + tool
+ * (mirrors the server's `_require_str`, domain/definition.py). Shared by
+ * `agent.prompt` and `agent.emit` — feature spec §7.1 allows a
+ * required-invocation step to be any agent step, so both get the same check.
+ */
+function requiredInvocationIssues(
+  inv: WorkflowRequiredInvocation,
+  stepIndex: number,
+): WorkflowIssue[] {
+  const issues: WorkflowIssue[] = [];
+  if (!inv.provider.trim()) {
+    issues.push({
+      code: "invalid_definition",
+      message: "Required-invocation provider is required.",
+      location: { scope: "step", stepIndex, field: "requiredInvocation.provider" },
+    });
+  }
+  if (!inv.tool.trim()) {
+    issues.push({
+      code: "invalid_definition",
+      message: "Required-invocation tool is required.",
+      location: { scope: "step", stepIndex, field: "requiredInvocation.tool" },
+    });
+  }
+  return issues;
+}
+
 function validateStep(
   step: WorkflowStep,
   stepIndex: number,
@@ -273,6 +302,9 @@ function validateStep(
           });
         }
       }
+      if (step.requiredInvocation) {
+        issues.push(...requiredInvocationIssues(step.requiredInvocation, stepIndex));
+      }
       break;
     }
     case "agent.emit": {
@@ -302,6 +334,9 @@ function validateStep(
       }
       // §6.2: the authored emit schema must satisfy the v1 JSON Schema profile.
       issues.push(...emitSchemaIssues(step.outputSchema, stepIndex));
+      if (step.requiredInvocation) {
+        issues.push(...requiredInvocationIssues(step.requiredInvocation, stepIndex));
+      }
       break;
     }
     case "agent.config":
