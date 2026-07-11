@@ -3,6 +3,7 @@ import {
   canShowNativeContextMenu,
   showNativeContextMenu,
   type NativeContextMenuItem,
+  type NativeContextMenuPosition,
 } from "@/lib/access/tauri/context-menu";
 
 /**
@@ -18,9 +19,7 @@ import {
  * (e.g. which tab was right-clicked) can be captured via closure.
  */
 export function useNativeContextMenu(buildItems: () => NativeContextMenuItem[]) {
-  const buildRef = useRef(buildItems);
-  const disabledRef = useRef(false);
-  buildRef.current = buildItems;
+  const { buildRef, disabledRef, showNativeMenu } = useNativeMenuController(buildItems);
 
   const onContextMenuCapture = useCallback((event: MouseEvent) => {
     if (disabledRef.current || !canShowNativeContextMenu()) {
@@ -34,15 +33,44 @@ export function useNativeContextMenu(buildItems: () => NativeContextMenuItem[]) 
     const fallbackEvent = event.nativeEvent;
     event.preventDefault();
     event.stopPropagation();
-    void showNativeContextMenu(items).then((shown) => {
+    void showNativeMenu(undefined, items).then((shown) => {
       if (!shown) {
-        disabledRef.current = true;
         dispatchFallbackContextMenu(fallbackTarget, fallbackEvent);
       }
     });
+  }, [buildRef, disabledRef, showNativeMenu]);
+
+  return { onContextMenuCapture, showNativeMenu };
+}
+
+/**
+ * Opens the same Tauri/muda menu from a normal click trigger. Callers keep
+ * their DOM menu controlled and open it only when this returns false, which
+ * preserves browser development and a graceful runtime fallback.
+ */
+export function useNativeMenu(buildItems: () => NativeContextMenuItem[]) {
+  const { showNativeMenu } = useNativeMenuController(buildItems);
+  return { showNativeMenu };
+}
+
+function useNativeMenuController(buildItems: () => NativeContextMenuItem[]) {
+  const buildRef = useRef(buildItems);
+  const disabledRef = useRef(false);
+  buildRef.current = buildItems;
+
+  const showNativeMenu = useCallback(async (
+    position?: NativeContextMenuPosition,
+    preparedItems?: NativeContextMenuItem[],
+  ): Promise<boolean> => {
+    if (disabledRef.current || !canShowNativeContextMenu()) return false;
+    const items = preparedItems ?? buildRef.current();
+    if (items.length === 0) return false;
+    const shown = await showNativeContextMenu(items, position);
+    if (!shown) disabledRef.current = true;
+    return shown;
   }, []);
 
-  return { onContextMenuCapture };
+  return { buildRef, disabledRef, showNativeMenu };
 }
 
 function dispatchFallbackContextMenu(

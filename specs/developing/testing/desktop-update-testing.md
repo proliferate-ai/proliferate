@@ -5,6 +5,13 @@ artifact there, and watch the real Tauri auto-updater converge. This is the
 tier-4 "Desktop app" mechanism from the [testing README](./README.md); read that
 first for the tier model.
 
+Read the product and UI acceptance contract in
+[`desktop-updates.md`](../../codebase/features/desktop-updates.md) alongside
+this mechanism. T4-DESKTOP-1 proves manifest fetch, semver selection, signature
+verification, and the real bundle swap headlessly. It does not render the
+packaged WebView: release-notice presentation and interaction are covered by
+focused renderer tests plus a packaged-WebView smoke when preparing a release.
+
 The shipped app is not touched. `apps/desktop/src-tauri/tauri.conf.json` keeps
 its production endpoint (`https://downloads.proliferate.com/desktop/stable/latest.json`)
 and production pubkey. A test build overrides only those two values (plus a

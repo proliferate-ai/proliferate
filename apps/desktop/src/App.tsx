@@ -118,6 +118,14 @@ const AgentsPlaygroundPage = import.meta.env.DEV
     )
   : null
 
+const SubagentsUxPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/SubagentsUxPlaygroundPage").then((m) => ({
+        default: m.SubagentsUxPlaygroundPage,
+      })),
+    )
+  : null
+
 function isTauriDesktop(): boolean {
   return typeof window !== "undefined"
     && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>)
@@ -393,6 +401,16 @@ function AppRuntime() {
                 element={
                   <Suspense fallback={null}>
                     <AgentsPlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
+            {import.meta.env.DEV && SubagentsUxPlaygroundPage && (
+              <Route
+                path="/playground/subagents"
+                element={
+                  <Suspense fallback={null}>
+                    <SubagentsUxPlaygroundPage />
                   </Suspense>
                 }
               />

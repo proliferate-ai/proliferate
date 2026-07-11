@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   UpdateToastPresenter,
@@ -11,6 +11,7 @@ import {
 const updaterMocks = vi.hoisted(() => ({
   phase: "available",
   availableVersion: "0.1.24",
+  availableTitle: "Introducing Grok" as string | null,
   errorMessage: null as string | null,
   errorSource: null as "check" | "download" | null,
   downloadProgress: null as number | null,
@@ -47,6 +48,7 @@ afterEach(() => {
   vi.clearAllMocks();
   updaterMocks.phase = "available";
   updaterMocks.availableVersion = "0.1.24";
+  updaterMocks.availableTitle = "Introducing Grok";
   updaterMocks.errorMessage = null;
   updaterMocks.errorSource = null;
   updaterMocks.downloadProgress = null;
@@ -56,7 +58,28 @@ afterEach(() => {
 });
 
 describe("UpdateToastPresenter", () => {
-  it("shows the available toast with a Download action", () => {
+  it("shows the authored release title with an UPDATE eyebrow and Download action", () => {
+    render(<UpdateToastPresenter />);
+
+    const [title, options] = sonnerMocks.toast.mock.calls[0] ?? [];
+    render(<>{title}</>);
+
+    expect(screen.getByText("UPDATE")).toBeTruthy();
+    expect(screen.getByText("Introducing Grok")).toBeTruthy();
+    expect(options).toEqual(
+      expect.objectContaining({
+        id: UPDATE_TOAST_ID,
+        description: "Proliferate 0.1.24 — downloads in the background.",
+      }),
+    );
+
+    options.action.onClick({ preventDefault: () => {} });
+    expect(updaterMocks.downloadUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the generic available copy when the manifest has no title", () => {
+    updaterMocks.availableTitle = null;
+
     render(<UpdateToastPresenter />);
 
     expect(sonnerMocks.toast).toHaveBeenCalledWith(
@@ -66,11 +89,25 @@ describe("UpdateToastPresenter", () => {
         description: "Proliferate 0.1.24 — downloads in the background.",
       }),
     );
-
-    const options = sonnerMocks.toast.mock.calls[0]?.[1];
-    options.action.onClick({ preventDefault: () => {} });
-    expect(updaterMocks.downloadUpdate).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ["downloading", "Downloading update"],
+    ["ready", "Restart to update"],
+  ] as const)(
+    "keeps the generic %s heading when the manifest has no title",
+    (phase, heading) => {
+      updaterMocks.phase = phase;
+      updaterMocks.availableTitle = null;
+
+      render(<UpdateToastPresenter />);
+
+      expect(sonnerMocks.toast).toHaveBeenCalledWith(
+        heading,
+        expect.objectContaining({ id: UPDATE_TOAST_ID }),
+      );
+    },
+  );
 
   it("supersedes the up-to-date toast when an update enters the flow", () => {
     updaterMocks.phase = "available";
@@ -79,32 +116,44 @@ describe("UpdateToastPresenter", () => {
     expect(sonnerMocks.toast.dismiss).toHaveBeenCalledWith(UP_TO_DATE_TOAST_ID);
   });
 
-  it("shows the downloading toast without actions", () => {
+  it("keeps the authored title visible while downloading", () => {
     updaterMocks.phase = "downloading";
     updaterMocks.downloadProgress = 42;
 
     render(<UpdateToastPresenter />);
 
-    expect(sonnerMocks.toast).toHaveBeenCalledWith(
-      "Downloading update",
-      expect.objectContaining({ id: UPDATE_TOAST_ID, action: undefined }),
+    const [title, options] = sonnerMocks.toast.mock.calls[0] ?? [];
+    render(<>{title}</>);
+    render(<>{options.description}</>);
+
+    expect(screen.getByText("UPDATE")).toBeTruthy();
+    expect(screen.getByText("Introducing Grok")).toBeTruthy();
+    expect(screen.getByText("Downloading Proliferate 0.1.24.")).toBeTruthy();
+    expect(options).toEqual(
+      expect.objectContaining({
+        id: UPDATE_TOAST_ID,
+        action: undefined,
+      }),
     );
   });
 
-  it("routes the ready toast's Restart action to the restart prompt", () => {
+  it("keeps the authored title visible through the Restart action", () => {
     updaterMocks.phase = "ready";
 
     render(<UpdateToastPresenter />);
 
-    expect(sonnerMocks.toast).toHaveBeenCalledWith(
-      "Restart to update",
+    const [title, options] = sonnerMocks.toast.mock.calls[0] ?? [];
+    render(<>{title}</>);
+
+    expect(screen.getByText("UPDATE")).toBeTruthy();
+    expect(screen.getByText("Introducing Grok")).toBeTruthy();
+    expect(options).toEqual(
       expect.objectContaining({
         id: UPDATE_TOAST_ID,
         description: "Proliferate 0.1.24 is ready.",
       }),
     );
 
-    const options = sonnerMocks.toast.mock.calls[0]?.[1];
     options.action.onClick({ preventDefault: () => {} });
     expect(updaterMocks.openRestartPrompt).toHaveBeenCalledTimes(1);
   });

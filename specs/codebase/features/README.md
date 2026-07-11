@@ -30,6 +30,7 @@ low-level runtime contracts.
 | Support reporting | Desktop support report uploads, sanitization, diagnostics, and support-submitted issue handoff. | [support-reporting.md](support-reporting.md) |
 | Terminals | Workspace terminal pane UX, terminal record actions, and the creation grid contract for new terminals. | [terminals.md](terminals.md) |
 | Workspace migration | Workspace migration flows, user attestation, durability, queue state, and completion/error semantics. | [workspace-migration.md](workspace-migration.md) |
+| Desktop updates | Packaged updater metadata, version-aware sidebar release notices, acknowledgment, and post-install behavior. | [desktop-updates.md](desktop-updates.md) |
 
 ## Outline Coverage
 

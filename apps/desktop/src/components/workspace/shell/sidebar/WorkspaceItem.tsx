@@ -144,22 +144,6 @@ export function WorkspaceItem({
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
-    canRename: !!onRename,
-    canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
-    copyWorkspaceLocationLabel: workspaceLocationCopyLabel ?? "Copy workspace location",
-    canCopyBranchName: !!onCopyBranchName,
-    archived,
-    canArchive: !!onArchive,
-    canUnarchive: !!onUnarchive,
-    canMarkDone: !!onMarkDone,
-    onRename: handleRenameCommand,
-    onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
-    onCopyBranchName: handleCopyBranchNameCommand,
-    onArchive: handleArchiveCommand,
-    onUnarchive: handleUnarchiveCommand,
-    onMarkDone: handleMarkDoneCommand,
-  });
   const gitGlyph = sidebarGitGlyphForStatus(gitStatus);
   const prStatusView = gitGlyph ? prStatusViewFromGitStatus(gitStatus) : null;
   const gitDetail = gitGlyph && prStatusView
@@ -185,6 +169,26 @@ export function WorkspaceItem({
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
     ? () => onOpenPullRequest(pullRequestUrl)
     : undefined;
+  const { onContextMenuCapture, showNativeMenu } = useWorkspaceSidebarNativeContextMenu({
+    canRename: !!onRename,
+    canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
+    copyWorkspaceLocationLabel: workspaceLocationCopyLabel ?? "Copy workspace location",
+    canCopyBranchName: !!onCopyBranchName,
+    branchName,
+    canOpenPullRequest: !!handleOpenPullRequestCommand,
+    pullRequestNumber,
+    archived,
+    canArchive: !!onArchive,
+    canUnarchive: !!onUnarchive,
+    canMarkDone: !!onMarkDone,
+    onRename: handleRenameCommand,
+    onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
+    onCopyBranchName: handleCopyBranchNameCommand,
+    onOpenPullRequest: () => handleOpenPullRequestCommand?.(),
+    onArchive: handleArchiveCommand,
+    onUnarchive: handleUnarchiveCommand,
+    onMarkDone: handleMarkDoneCommand,
+  });
   const hasMenuActions = hasArchiveAction
     || !!onRename
     || !!onCopyWorkspaceLocation
@@ -199,6 +203,7 @@ export function WorkspaceItem({
       branchName={branchName}
       workspaceLocationCopyLabel={workspaceLocationCopyLabel}
       pullRequestNumber={pullRequestNumber}
+      onShowNativeMenu={showNativeMenu}
       onOpenPullRequest={handleOpenPullRequestCommand}
       onRename={onRename ? handleRenameCommand : undefined}
       onArchive={onArchive ? handleArchiveCommand : undefined}

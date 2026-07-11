@@ -54,7 +54,9 @@ export function useWorkspacePublishWorkflow({
     draft: false,
   });
   const [error, setError] = useState<string | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
   const draftWorkspaceIdRef = useRef<string | null>(workspaceId);
+  const executingRef = useRef(false);
   const runtimeReadyRef = useRef(runtimeBlockedReason === null);
   const { logicalWorkspaces } = useLogicalWorkspaces();
   const refreshPrStatuses = useRefreshPrStatuses();
@@ -103,6 +105,10 @@ export function useWorkspacePublishWorkflow({
     ],
   );
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   const resetDrafts = useCallback(() => {
     setCommitDraft({ summary: "", includeUnstaged: false });
     setPullRequestDraft({
@@ -111,8 +117,8 @@ export function useWorkspacePublishWorkflow({
       baseBranch: "",
       draft: false,
     });
-    setError(null);
-  }, []);
+    clearError();
+  }, [clearError]);
 
   useEffect(() => {
     if (workspaceId && draftWorkspaceIdRef.current !== workspaceId) {
@@ -130,11 +136,17 @@ export function useWorkspacePublishWorkflow({
   }, [resetDrafts, runtimeBlockedReason]);
 
   const submit = useCallback(async () => {
+    if (executingRef.current) {
+      return false;
+    }
     if (viewState.disabledReason) {
       setError(viewState.disabledReason);
       return false;
     }
+    executingRef.current = true;
+    setIsExecuting(true);
     setError(null);
+    let didComplete = false;
     try {
       let createdPullRequest: CreatePullRequestResponse["pullRequest"] | null = null;
       await runWorkspacePublishWorkflow(viewState.workflowSteps, {
@@ -171,18 +183,24 @@ export function useWorkspacePublishWorkflow({
           }
         }
       }
-      await Promise.all([
+      didComplete = true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      await Promise.allSettled([
         gitStatusQuery.refetch(),
         currentPullRequestEnabled
           ? currentPrQuery.refetch()
           : Promise.resolve(),
       ]);
+      executingRef.current = false;
+      setIsExecuting(false);
+    }
+    if (didComplete) {
       resetDrafts();
       return true;
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-      return false;
     }
+    return false;
   }, [
     commitMutation,
     createPullRequestMutation,
@@ -210,9 +228,14 @@ export function useWorkspacePublishWorkflow({
     viewState,
     error,
     submit,
-    isLoading: gitStatusQuery.isLoading,
+    clearError,
+    resetDrafts,
+    isLoading:
+      gitStatusQuery.isLoading
+      || (initialIntent === "pull_request" && currentPrQuery.isLoading),
     isSubmitting:
-      stageMutation.isPending
+      isExecuting
+      || stageMutation.isPending
       || commitMutation.isPending
       || pushMutation.isPending
       || createPullRequestMutation.isPending,

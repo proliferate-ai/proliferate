@@ -443,10 +443,15 @@ apps/desktop/
   infra/main.tf              # updater bucket, CloudFront, GitHub OIDC release role
   src-tauri/tauri.conf.json  # updater endpoint, public key, bundle config
   src/lib/access/tauri/updater.ts
+  src/lib/access/downloads/desktop-release-manifest.ts
   src/hooks/access/tauri/use-updater.ts
+  src/hooks/access/downloads/desktop-releases/use-desktop-release-manifest.ts
+  src/hooks/updates/facade/use-release-notice.ts
   src/stores/updater/updater-store.ts
-  src/components/settings/UpdateSettings.tsx
-  src/components/feedback/UpdateBanner.tsx
+  src/components/feedback/UpdateToastPresenter.tsx
+  src/components/feedback/UpdateRestartDialog.tsx
+  src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx
+  src/components/workspace/shell/sidebar/ReleaseNoticeCard.tsx
 server/
   infra/main.tf              # ECR, ECS, RDS, and server runtime infra
   deploy/                    # self-hosted production compose + update scripts
@@ -695,11 +700,13 @@ Flow:
    - normalizes macOS updater archive names to stable arch-specific filenames
    - creates a draft GitHub release with generated release notes
 8. The updater publish job then:
-   - generates `latest.json`
+   - generates `latest.json`, including the optional validated one-line
+     `release_title` as standard Tauri `notes`
    - generates `installers.json`
    - uploads signed updater artifacts and public DMG installers to
      `s3://.../desktop/stable/`
-   - uploads `latest.json` and `installers.json`
+   - atomically creates the immutable versioned `latest.json`, then uploads the
+     same file to rolling `latest.json` and publishes `installers.json`
    - invalidates the CloudFront cache for both manifests
 
 Note:
@@ -710,6 +717,24 @@ Note:
 - `latest.json` is reserved for Tauri updater clients and intentionally points
   at `.app.tar.gz` archives plus signatures. Public download pages should use
   `installers.json`, which points at the user-facing DMG installers.
+- Named Desktop releases may provide `release_title` (plain text, one line,
+  80 characters maximum). An omitted title remains a valid release and omits
+  `notes`; direct tag-push releases have no title input and use that fallback.
+- The publisher refuses an existing immutable
+  `desktop/stable/<version>/latest.json` before changing updater assets. After
+  asset upload it creates that key atomically with `If-None-Match: *`; only a
+  successful create permits the same generated file to replace rolling
+  `latest.json`. Any authorization, precondition, or write failure stops before
+  the rolling feed changes. Release runs serialize on a normalized
+  `desktop-v<version>` concurrency key without cancelling the active run, so a
+  queued same-version run reaches the immutable preflight only after the first
+  publisher finishes. A partial first publish that creates the immutable key
+  but fails before rolling publication requires explicit operator inspection
+  and removal of the immutable object before rerunning.
+- The downloads CloudFront distribution attaches public CORS response headers
+  for `GET`, `HEAD`, and preflight requests. Updater archive signatures remain
+  the installation trust boundary; release-notice copy is rendered only as
+  inert text.
 - Agent seeds are target-specific Tauri resources under
   `apps/desktop/src-tauri/agent-seeds/`. The seed builder cleans previous generated
   seed files before writing the current target archive, and the workflow asserts
@@ -783,28 +808,45 @@ make release-desktop-draft DESKTOP_RELEASE_TAG=desktop-v0.1.28
 
 Source of truth:
 
+- `specs/codebase/features/desktop-updates.md`
 - `apps/desktop/src-tauri/tauri.conf.json`
 - `apps/desktop/src/lib/access/tauri/updater.ts`
+- `apps/desktop/src/lib/access/downloads/desktop-release-manifest.ts`
+- `apps/desktop/src/hooks/access/downloads/desktop-releases/use-desktop-release-manifest.ts`
 - `apps/desktop/src/hooks/access/tauri/use-updater.ts`
+- `apps/desktop/src/hooks/updates/facade/use-release-notice.ts`
 - `apps/desktop/src/stores/updater/updater-store.ts`
-- `apps/desktop/src/components/settings/UpdateSettings.tsx`
-- `apps/desktop/src/components/feedback/UpdateBanner.tsx`
+- `apps/desktop/src/components/feedback/UpdateToastPresenter.tsx`
+- `apps/desktop/src/components/feedback/UpdateRestartDialog.tsx`
+- `apps/desktop/src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx`
+- `apps/desktop/src/components/workspace/shell/sidebar/ReleaseNoticeCard.tsx`
 
 Flow:
 
 1. Tauri reads the updater endpoint from `apps/desktop/src-tauri/tauri.conf.json`.
 2. The packaged app checks `https://downloads.proliferate.com/desktop/stable/latest.json`.
 3. `apps/desktop/src/lib/access/tauri/updater.ts` is the only frontend wrapper around
-   `@tauri-apps/plugin-updater` and relaunch behavior.
+   `@tauri-apps/plugin-updater` and relaunch behavior. It preserves the target
+   version and optional Tauri `body` (`notes`) returned by the update check.
 4. `apps/desktop/src/hooks/access/tauri/use-updater.ts` owns the UI-facing updater flow:
    - initial delayed check
-   - six-hour polling
+   - 30-minute polling
    - download progress
    - install and relaunch
    - telemetry/error capture
-5. `apps/desktop/src/stores/updater/updater-store.ts` owns local updater UI state and
-   the persisted `lastCheckedAt` timestamp.
-6. `UpdateSettings.tsx` and `UpdateBanner.tsx` are the user-facing entrypoints.
+5. `apps/desktop/src/stores/updater/updater-store.ts` owns live updater UI state;
+   the access hook persists the last-check timestamp through the preferences
+   access boundary.
+6. The installed app fetches its immutable versioned manifest from the same
+   downloads CDN. The sidebar selects only that running version's unacknowledged
+   title and uses an exact-version cached title only when the CDN lookup is
+   pending or unavailable.
+7. `UpdateToastPresenter` owns the pre-install announcement and its authored
+   `UPDATE` title alongside Download, progress, restart, and recoverable-error
+   states. Available targets have no separate sidebar dismissal state.
+8. The sidebar release card appears only for an installed titled version. It
+   owns the `NEW` title presentation, installed-version acknowledgment, and the
+   fixed `https://proliferate.com/changelog` action.
 
 ### Runtime and SDK Release
 
@@ -1270,7 +1312,7 @@ Known failure signatures and what they mean:
 | Frontend updater platform wrapper | `apps/desktop/src/lib/access/tauri/updater.ts` |
 | Frontend updater orchestration | `apps/desktop/src/hooks/access/tauri/use-updater.ts` |
 | Frontend updater local state | `apps/desktop/src/stores/updater/updater-store.ts` |
-| Frontend updater UI surfaces | `apps/desktop/src/components/settings/UpdateSettings.tsx`, `apps/desktop/src/components/feedback/UpdateBanner.tsx` |
+| Frontend updater UI surfaces | `apps/desktop/src/components/feedback/UpdateToastPresenter.tsx`, `apps/desktop/src/components/feedback/UpdateRestartDialog.tsx`, `apps/desktop/src/components/workspace/shell/sidebar/SidebarUpdatePill.tsx`, `apps/desktop/src/components/workspace/shell/sidebar/ReleaseNoticeCard.tsx` |
 | Desktop updater infra and publish permissions | `apps/desktop/infra/main.tf` |
 | Cloud API infra | `server/infra/main.tf` |
 | Self-hosted production deploy | `server/deploy/**` |

@@ -15,6 +15,10 @@ on:
         description: Short operator-facing reason for the hotfix.
         required: true
         type: string
+      release_title:
+        description: Optional one-line Desktop changelog title.
+        required: false
+        type: string
       version_bump:
         description: Public Proliferate version bump for this hotfix. Use none only for SHA-based surfaces.
         default: patch
@@ -300,6 +304,7 @@ jobs:
       enabled: ${{ needs.prepare.outputs.desktop == 'true' }}
       dry_run: false
       publish_updater: true
+      release_title: ${{ github.event.inputs.release_title || '' }}
     secrets: inherit
 
   publish-product-release:

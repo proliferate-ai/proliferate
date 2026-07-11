@@ -198,17 +198,23 @@ describe("user preference migration", () => {
       futurePreference: true,
       onboardingCompletedVersion: 1,
       onboardingPrimaryGoalId: "build",
+      dismissedAvailableVersion: "0.3.25",
+      acknowledgedAvailableVersion: "0.3.25",
     } as unknown as UserPreferences);
 
     await bootstrapUserPreferencesForTest();
     const state = useUserPreferencesStore.getState() as unknown as Record<string, unknown>;
     expect(state.onboardingCompletedVersion).toBeUndefined();
     expect(state.onboardingPrimaryGoalId).toBeUndefined();
+    expect(state.dismissedAvailableVersion).toBeUndefined();
+    expect(state.acknowledgedAvailableVersion).toBeUndefined();
 
     const persisted = storeMocks.values.get("user_preferences") as Record<string, unknown>;
     expect(persisted.futurePreference).toBe(true);
     expect(persisted.onboardingCompletedVersion).toBeUndefined();
     expect(persisted.onboardingPrimaryGoalId).toBeUndefined();
+    expect(persisted.dismissedAvailableVersion).toBeUndefined();
+    expect(persisted.acknowledgedAvailableVersion).toBeUndefined();
   });
 
   it("preserves unrelated unknown keys while marking model visibility defaults reset", async () => {

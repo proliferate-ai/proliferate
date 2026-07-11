@@ -12,6 +12,19 @@ vi.mock("@/hooks/access/cloud/use-server-features", () => ({
   useWorkflowsEnabled: () => true,
 }));
 
+const releaseNoticeState = vi.hoisted(() => ({
+  notice: null as null | {
+    version: string;
+    title: string;
+  },
+  dismissNotice: vi.fn(),
+  openChangelog: vi.fn(),
+}));
+
+vi.mock("@/hooks/updates/facade/use-release-notice", () => ({
+  useReleaseNotice: () => releaseNoticeState,
+}));
+
 vi.mock("@/components/diagnostics/DebugProfiler", () => ({
   DebugProfiler: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -167,6 +180,7 @@ vi.mock("@/stores/sessions/session-selection-store", () => ({
 const workspaceUiState = vi.hoisted(() => ({
   archiveWorkspace: vi.fn(),
   hideRepoRoot: vi.fn(),
+  sidebarOpen: true,
   unarchiveWorkspace: vi.fn(),
   unarchiveWorkspaces: vi.fn(),
   workspaceTypes: ["local", "worktree", "cloud"],
@@ -260,6 +274,8 @@ vi.mock("@/stores/ui/repo-setup-modal-store", () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  releaseNoticeState.notice = null;
+  workspaceUiState.sidebarOpen = true;
 });
 
 function renderMainSidebar() {
@@ -280,5 +296,61 @@ describe("MainSidebar support modal", () => {
       expect(useSupportModalStore.getState().open).toBe(true);
       expect(useSupportModalStore.getState().kind).toBe("bug");
     });
+  });
+});
+
+describe("MainSidebar release notice", () => {
+  it("omits the card when the facade has no notice", () => {
+    renderMainSidebar();
+
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("keeps the card out of the tab order when the sidebar is collapsed", () => {
+    releaseNoticeState.notice = {
+      version: "0.3.25",
+      title: "Introducing Grok",
+    };
+    workspaceUiState.sidebarOpen = false;
+
+    renderMainSidebar();
+
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByRole("button", {
+      name: "Dismiss release notice for 0.3.25",
+    })).toBeNull();
+  });
+
+  it("renders the release card immediately above the account footer", () => {
+    releaseNoticeState.notice = {
+      version: "0.3.25",
+      title: "Introducing Grok",
+    };
+
+    renderMainSidebar();
+
+    const card = screen.getByRole("complementary", {
+      name: "What's new in 0.3.25: Introducing Grok",
+    });
+    const footer = screen.getByTestId("sidebar-account-footer");
+    expect(card.nextElementSibling).toBe(footer);
+  });
+
+  it("wires release notice actions through the facade", () => {
+    releaseNoticeState.notice = {
+      version: "0.3.25",
+      title: "Introducing Grok",
+    };
+
+    renderMainSidebar();
+    fireEvent.click(screen.getByRole("button", {
+      name: "Dismiss release notice for 0.3.25",
+    }));
+    fireEvent.click(screen.getByRole("button", {
+      name: "Open changelog for 0.3.25",
+    }));
+
+    expect(releaseNoticeState.dismissNotice).toHaveBeenCalledTimes(1);
+    expect(releaseNoticeState.openChangelog).toHaveBeenCalledTimes(1);
   });
 });

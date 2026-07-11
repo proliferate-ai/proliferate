@@ -115,7 +115,19 @@ export function publishPrimaryLabel(input: {
   workflowSteps: PublishWorkflowStep[];
 }): string {
   if (input.intent === "pull_request") {
-    if (input.existingPr && input.workflowSteps.length === 0) return "View pull request";
+    const hasUnpushedCommits = (input.gitStatus?.ahead ?? 0) > 0
+      || Boolean(input.gitStatus?.actions.canPush);
+    if (input.hasDirtyChanges) {
+      if (!input.existingPr) return "Commit, publish, create PR";
+      const label = input.gitStatus?.actions.pushLabel ?? "Publish";
+      return `Commit and ${label.toLowerCase()}`;
+    }
+    if (input.existingPr && !hasUnpushedCommits && input.workflowSteps.length === 0) {
+      return "View pull request";
+    }
+    if (!input.existingPr && hasUnpushedCommits && input.workflowSteps.length === 0) {
+      return "Publish and create PR";
+    }
     const hasCommitStep = input.workflowSteps.some((step) => step.kind === "commit");
     const hasPushStep = input.workflowSteps.some((step) => step.kind === "push");
     const hasCreatePrStep = input.workflowSteps.some((step) => step.kind === "create_pull_request");

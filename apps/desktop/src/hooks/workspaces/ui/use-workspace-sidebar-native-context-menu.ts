@@ -8,6 +8,9 @@ export function useWorkspaceSidebarNativeContextMenu({
   canCopyWorkspaceLocation,
   copyWorkspaceLocationLabel,
   canCopyBranchName,
+  branchName,
+  canOpenPullRequest,
+  pullRequestNumber,
   archived,
   canArchive,
   canUnarchive,
@@ -15,6 +18,7 @@ export function useWorkspaceSidebarNativeContextMenu({
   onRename,
   onCopyWorkspaceLocation,
   onCopyBranchName,
+  onOpenPullRequest,
   onArchive,
   onUnarchive,
   onMarkDone,
@@ -23,6 +27,9 @@ export function useWorkspaceSidebarNativeContextMenu({
   canCopyWorkspaceLocation: boolean;
   copyWorkspaceLocationLabel: string;
   canCopyBranchName: boolean;
+  branchName: string | null;
+  canOpenPullRequest: boolean;
+  pullRequestNumber: number | null;
   archived: boolean;
   canArchive: boolean;
   canUnarchive: boolean;
@@ -30,6 +37,7 @@ export function useWorkspaceSidebarNativeContextMenu({
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
   onCopyBranchName: () => void;
+  onOpenPullRequest: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
   onMarkDone: () => void;
@@ -40,6 +48,9 @@ export function useWorkspaceSidebarNativeContextMenu({
       canCopyWorkspaceLocation,
       copyWorkspaceLocationLabel,
       canCopyBranchName,
+      branchName,
+      canOpenPullRequest,
+      pullRequestNumber,
       archived,
       canArchive,
       canUnarchive,
@@ -47,6 +58,7 @@ export function useWorkspaceSidebarNativeContextMenu({
       onRename,
       onCopyWorkspaceLocation,
       onCopyBranchName,
+      onOpenPullRequest,
       onArchive,
       onUnarchive,
       onMarkDone,
@@ -59,6 +71,9 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   canCopyWorkspaceLocation,
   copyWorkspaceLocationLabel,
   canCopyBranchName,
+  branchName,
+  canOpenPullRequest,
+  pullRequestNumber,
   archived,
   canArchive,
   canUnarchive,
@@ -66,6 +81,7 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   onRename,
   onCopyWorkspaceLocation,
   onCopyBranchName,
+  onOpenPullRequest,
   onArchive,
   onUnarchive,
   onMarkDone,
@@ -74,6 +90,9 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   canCopyWorkspaceLocation: boolean;
   copyWorkspaceLocationLabel: string;
   canCopyBranchName: boolean;
+  branchName: string | null;
+  canOpenPullRequest: boolean;
+  pullRequestNumber: number | null;
   archived: boolean;
   canArchive: boolean;
   canUnarchive: boolean;
@@ -81,6 +100,7 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
   onRename: () => void;
   onCopyWorkspaceLocation: () => void;
   onCopyBranchName: () => void;
+  onOpenPullRequest: () => void;
   onArchive: () => void;
   onUnarchive: () => void;
   onMarkDone: () => void;
@@ -94,12 +114,51 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
     });
   }
 
+  if (!archived && canArchive) {
+    items.push({
+      id: "archive",
+      label: "Archive...",
+      onSelect: onArchive,
+    });
+  }
+
+  if (archived && canUnarchive) {
+    items.push({
+      id: "unarchive",
+      label: "Unarchive",
+      onSelect: onUnarchive,
+    });
+  }
+
   if (canCopyWorkspaceLocation) {
     items.push({
       id: "copy-workspace-location",
       label: copyWorkspaceLocationLabel,
       accelerator: getShortcutNativeAccelerator(SHORTCUTS.copyWorkspacePath) ?? undefined,
       onSelect: onCopyWorkspaceLocation,
+    });
+  }
+
+  const hasGitItems = canOpenPullRequest || !!branchName || canCopyBranchName;
+  if (hasGitItems && items.length > 0) {
+    items.push({ kind: "separator" });
+  }
+
+  if (canOpenPullRequest) {
+    items.push({
+      id: "open-pull-request",
+      label: pullRequestNumber === null
+        ? "Open pull request"
+        : `Open pull request #${pullRequestNumber}`,
+      onSelect: onOpenPullRequest,
+    });
+  }
+
+  if (branchName) {
+    items.push({
+      id: "current-branch",
+      label: branchName,
+      enabled: false,
     });
   }
 
@@ -120,22 +179,6 @@ export function buildWorkspaceSidebarNativeContextMenuItems({
       id: "mark-done",
       label: "Delete workspace...",
       onSelect: onMarkDone,
-    });
-  }
-
-  if (!archived && canArchive) {
-    items.push({
-      id: "archive",
-      label: "Archive...",
-      onSelect: onArchive,
-    });
-  }
-
-  if (archived && canUnarchive) {
-    items.push({
-      id: "unarchive",
-      label: "Unarchive",
-      onSelect: onUnarchive,
     });
   }
 

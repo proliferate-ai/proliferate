@@ -24,6 +24,13 @@ Changes is changed-file workflow:
 - review the latest completed turn as a transcript-backed file filter over
   current git diffs
 
+Commit, publish, and pull-request dialogs may summarize change counts and
+staging state, but they do not duplicate the changed-file roster. Detailed
+paths and diff review remain in Changes, reached through Review changes.
+They share one compact source-control modal with an internal Commit, Publish,
+and Pull request switcher. Switching intent keeps the current drafts while the
+modal is open; closing and reopening starts with clean drafts.
+
 Scratch is local workspace notes:
 
 - store one plain Markdown scratch pad per workspace in Proliferate app data

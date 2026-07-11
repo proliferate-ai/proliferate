@@ -98,6 +98,18 @@ describe("buildPublishViewState", () => {
     expect(result.workflowSteps).toEqual([]);
   });
 
+  it("previews the full dirty PR operation while validation blocks submit", () => {
+    const result = view({
+      intent: "pull_request",
+      prTitle: "Update app",
+      gitStatus: status({ files: [file("src/app.ts", "excluded")] }),
+      includeUnstaged: false,
+    });
+    expect(result.disabledReason).toBe("Stage changes or include unstaged changes before committing.");
+    expect(result.primaryLabel).toBe("Commit, publish, create PR");
+    expect(result.workflowSteps).toEqual([]);
+  });
+
   it("stages unstaged paths before commit when includeUnstaged is on", () => {
     const result = view({
       gitStatus: status({ files: [file("src/app.ts", "excluded")] }),
@@ -315,5 +327,24 @@ describe("buildPublishViewState", () => {
       { kind: "push" },
     ]);
     expect(result.workflowSteps.some((step) => step.kind === "create_pull_request")).toBe(false);
+  });
+
+  it("previews an existing PR branch update while validation blocks commit", () => {
+    const result = view({
+      intent: "pull_request",
+      summary: "",
+      existingPr: {
+        title: "Existing",
+        url: "https://github.test/pr/1",
+        state: "open",
+        number: 1,
+        headBranch: "feature/demo",
+        baseBranch: "main",
+        draft: false,
+      },
+    });
+    expect(result.disabledReason).toBe("Enter a commit message.");
+    expect(result.primaryLabel).toBe("Commit and push");
+    expect(result.workflowSteps).toEqual([]);
   });
 });
