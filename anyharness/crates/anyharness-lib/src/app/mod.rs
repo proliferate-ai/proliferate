@@ -61,6 +61,7 @@ use crate::domains::sessions::service::SessionService;
 use crate::domains::sessions::store::SessionStore;
 use crate::domains::sessions::subagents::hooks::SubagentSessionHooks;
 use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
+use crate::domains::sessions::subagents::runtime::SubagentRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::domains::terminals::store::TerminalStore;
@@ -131,6 +132,7 @@ pub struct AppState {
     pub cowork_session_hooks: Arc<CoworkSessionHooks>,
     pub cowork_runtime: Arc<CoworkRuntime>,
     pub subagent_service: Arc<SubagentService>,
+    pub subagent_runtime: Arc<SubagentRuntime>,
     pub subagent_session_hooks: Arc<SubagentSessionHooks>,
     pub review_service: Arc<ReviewService>,
     pub review_session_hooks: Arc<ReviewSessionHooks>,
@@ -413,6 +415,10 @@ impl AppState {
             loop_service.clone(),
             activity_service.clone(),
         ));
+        let subagent_runtime = Arc::new(SubagentRuntime::new(
+            subagent_service.clone(),
+            session_runtime.clone(),
+        ));
         // Workflow run engine (W3): the durable service + the live run manager
         // (its own actors, spawned on delivery and on startup-resume).
         let workflow_service = Arc::new(WorkflowService::new(WorkflowStore::new(db.clone())));
@@ -551,6 +557,7 @@ impl AppState {
             cowork_session_hooks,
             cowork_runtime,
             subagent_service,
+            subagent_runtime,
             subagent_session_hooks,
             review_service,
             review_session_hooks,

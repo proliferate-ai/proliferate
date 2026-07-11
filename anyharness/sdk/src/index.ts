@@ -230,6 +230,8 @@ export type {
   SessionSubagentsResponse,
   ScheduleSubagentWakeRequest,
   ScheduleSubagentWakeResponse,
+  CloseSubagentResponse,
+  SubagentActiveWorkCloseMode,
   ParentSubagentLinkSummary,
   ChildSubagentSummary,
   SubagentCompletionSummary,

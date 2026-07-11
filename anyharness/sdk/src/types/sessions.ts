@@ -142,6 +142,10 @@ export type ScheduleSubagentWakeRequest =
   components["schemas"]["ScheduleSubagentWakeRequest"];
 export type ScheduleSubagentWakeResponse =
   components["schemas"]["ScheduleSubagentWakeResponse"];
+export type CloseSubagentResponse =
+  components["schemas"]["CloseSubagentResponse"];
+export type SubagentActiveWorkCloseMode =
+  components["schemas"]["SubagentActiveWorkCloseMode"];
 export type ParentSubagentLinkSummary =
   components["schemas"]["ParentSubagentLinkSummary"];
 export type ChildSubagentSummary =

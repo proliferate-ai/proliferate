@@ -106,3 +106,20 @@ pub struct SubagentTranscriptSearchMatch {
     pub item_id: Option<String>,
     pub snippet: String,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SubagentActiveWorkCloseMode {
+    FinishCurrentTurn,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloseSubagentOutcome {
+    pub parent_session_id: String,
+    pub subagent_id: String,
+    pub session_link_id: String,
+    pub child_session_id: String,
+    pub label: Option<String>,
+    pub closed_at: String,
+    pub already_closed: bool,
+    pub active_work_close_mode: SubagentActiveWorkCloseMode,
+}

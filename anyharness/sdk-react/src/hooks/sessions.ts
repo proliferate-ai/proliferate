@@ -229,6 +229,52 @@ export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string
   });
 }
 
+export function useCloseSubagentMutation(options?: { workspaceId?: string | null }) {
+  const workspace = useAnyHarnessWorkspaceContext();
+  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (
+      input: WorkspaceMutationInput & {
+        parentSessionId: string;
+        subagentId: string;
+        requestOptions?: AnyHarnessRequestOptions;
+      },
+    ) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
+      const client = getAnyHarnessClient(resolved.connection);
+      return client.sessions.closeSubagent(
+        input.parentSessionId,
+        input.subagentId,
+        input.requestOptions,
+      );
+    },
+    onSuccess: async (response, input) => {
+      const workspaceId = input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionSubagentsKey(
+            runtimeUrl,
+            workspaceId,
+            input.parentSessionId,
+          ),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, input.parentSessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, response.childSessionId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+        }),
+      ]);
+    },
+  });
+}
+
 export function useCreateSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const runtimeUrl = useWorkspaceRuntimeUrl();

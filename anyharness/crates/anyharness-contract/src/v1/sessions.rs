@@ -295,6 +295,28 @@ pub struct ScheduleSubagentWakeResponse {
     pub already_scheduled: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentActiveWorkCloseMode {
+    /// A currently running turn is allowed to finish. This is not force cancellation.
+    FinishCurrentTurn,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CloseSubagentResponse {
+    pub parent_session_id: String,
+    pub subagent_id: String,
+    pub child_session_id: String,
+    pub session_link_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub closed: bool,
+    pub already_closed: bool,
+    pub closed_at: String,
+    pub active_work_close_mode: SubagentActiveWorkCloseMode,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ParentSubagentLinkSummary {
@@ -754,6 +776,26 @@ mod tests {
 
         let json = serde_json::to_value(&request).expect("serialize title update");
         assert_eq!(json, serde_json::json!({ "title": "Tighten retry logic" }));
+    }
+
+    #[test]
+    fn close_subagent_response_names_graceful_active_work_policy() {
+        let response = CloseSubagentResponse {
+            parent_session_id: "parent-1".to_string(),
+            subagent_id: "subagent_abc123".to_string(),
+            child_session_id: "child-1".to_string(),
+            session_link_id: "link-1".to_string(),
+            label: Some("API surface check".to_string()),
+            closed: true,
+            already_closed: false,
+            closed_at: "2026-05-13T18:03:42Z".to_string(),
+            active_work_close_mode: SubagentActiveWorkCloseMode::FinishCurrentTurn,
+        };
+
+        let json = serde_json::to_value(response).expect("serialize close response");
+        assert_eq!(json["activeWorkCloseMode"], "finish_current_turn");
+        assert_eq!(json["subagentId"], "subagent_abc123");
+        assert_eq!(json["closed"], true);
     }
 
     #[test]

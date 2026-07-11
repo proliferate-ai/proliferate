@@ -128,3 +128,43 @@ describe("SessionsClient.listEvents", () => {
     }]);
   });
 });
+
+describe("SessionsClient.closeSubagent", () => {
+  it("uses the stable parent-scoped subagent close path", async () => {
+    const calls: Array<{
+      body: unknown;
+      options: AnyHarnessRequestOptions | undefined;
+      path: string;
+    }> = [];
+    const transport = {
+      post: async (path: string, body: unknown, options?: AnyHarnessRequestOptions) => {
+        calls.push({ path, body, options });
+        return {
+          parentSessionId: "parent/1",
+          subagentId: "subagent/a",
+          childSessionId: "child-1",
+          sessionLinkId: "link-1",
+          label: "API surface check",
+          closed: true,
+          alreadyClosed: false,
+          closedAt: "2026-05-13T18:03:42Z",
+          activeWorkCloseMode: "finish_current_turn",
+        };
+      },
+    } as unknown as AnyHarnessTransport;
+    const client = new SessionsClient(transport);
+
+    const response = await client.closeSubagent(
+      "parent/1",
+      "subagent/a",
+      { headers: { "x-trace": "trace-close" } },
+    );
+
+    expect(calls).toEqual([{
+      path: "/v1/sessions/parent%2F1/subagents/subagent%2Fa/close",
+      body: {},
+      options: { headers: { "x-trace": "trace-close" } },
+    }]);
+    expect(response.activeWorkCloseMode).toBe("finish_current_turn");
+  });
+});

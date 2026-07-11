@@ -4,6 +4,7 @@ import type {
 } from "../types/events.js";
 import type {
   ClearSessionGoalResponse,
+  CloseSubagentResponse,
   CreateSessionRequest,
   EditPendingPromptRequest,
   ForkSessionRequest,
@@ -94,6 +95,20 @@ export class SessionsClient {
         encodeURIComponent(childSessionId)
       }/wake`,
       request,
+      options,
+    );
+  }
+
+  async closeSubagent(
+    parentSessionId: string,
+    subagentId: string,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<CloseSubagentResponse> {
+    return this.transport.post<CloseSubagentResponse>(
+      `/v1/sessions/${encodeURIComponent(parentSessionId)}/subagents/${
+        encodeURIComponent(subagentId)
+      }/close`,
+      {},
       options,
     );
   }

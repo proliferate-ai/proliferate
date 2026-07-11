@@ -547,9 +547,11 @@ debugging.
 
 ### `close_subagent`
 
-Removes a subagent from active delegated-work context. If the subagent is
-running or has queued work, the runtime ends that active work as part of the
-close operation.
+Removes a subagent from active delegated-work context. Close is graceful, not
+force cancellation: if the child is in a turn, that current turn is allowed to
+finish; pending interactions are resolved as cancelled and queued follow-up
+prompts do not start. The close response names this policy explicitly so UI
+confirmation copy does not imply that an active provider turn was interrupted.
 
 Args:
 
@@ -570,18 +572,35 @@ Returns:
     "available": true
   },
   "closed": true,
-  "activeWorkEnded": true
+  "alreadyClosed": false,
+  "closedAt": "2026-05-13T18:03:42Z",
+  "activeWorkCloseMode": "finish_current_turn"
 }
 ```
 
 Closing is not transcript deletion. The child session and historical artifacts
 remain available through history/debug surfaces according to retention policy.
 
+The parent-scoped product HTTP path is:
+
+```text
+POST /v1/sessions/{parent_session_id}/subagents/{subagent_id}/close
+```
+
+It uses the stable `subagentId`, is idempotent, and returns the same close
+identity and graceful-work policy described above. `DELETE` is not used because
+the child session and transcript are preserved.
+
 Close ordering is intentionally retryable: the runtime closes the child session
 graph first, including any delegated descendants and product close hooks, then
-marks the parent-child link closed. If closing the live session fails, the
-active link remains discoverable so a later close call can retry rather than
-orphaning hidden work.
+marks the parent-child link closed. For a busy actor, "session closed" means the
+graceful close was durably accepted while the current turn drains. If closing
+the live session fails, the active link remains discoverable so a later close
+call can retry rather than orphaning hidden work.
+
+Any pending one-shot wake schedule for the relationship is cancelled before
+the live close request. A turn that is allowed to finish after close therefore
+does not wake the parent for delegated work the user already removed.
 
 ## Prompt And Skill Contract
 
@@ -687,10 +706,12 @@ Deletion rules:
 - Closing a visible tab is distinct from deleting a delegated agent.
 - Deleting a subagent from a delegated-work popover deletes/closes that
   delegated agent relationship.
-- If the deleted subagent is active, confirm that active work will end.
+- If the deleted subagent is active, confirm that its current turn may finish,
+  while queued follow-up work will not run.
 - Deleting a completed subagent may be immediate.
 - Closing/deleting a parent session with active child sessions must confirm
-  that active child work will be ended.
+  that those relationships will close, current child turns may finish, and
+  queued follow-up work will not run.
 
 ## Cowork Compatibility
 
@@ -721,6 +742,7 @@ anyharness/crates/anyharness-lib/src/domains/sessions/subagents/
   mod.rs
   model.rs
   service.rs
+  runtime.rs
   store.rs
   hooks.rs
   summary.rs

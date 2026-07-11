@@ -900,6 +900,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/subagents/{subagent_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["close_subagent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/title": {
         parameters: {
             query?: never;
@@ -2169,6 +2185,17 @@ export interface components {
              * @description How many loops were cleared (0 when the target was already gone).
              */
             cleared: number;
+        };
+        CloseSubagentResponse: {
+            activeWorkCloseMode: components["schemas"]["SubagentActiveWorkCloseMode"];
+            alreadyClosed: boolean;
+            childSessionId: string;
+            closed: boolean;
+            closedAt: string;
+            label?: string | null;
+            parentSessionId: string;
+            sessionLinkId: string;
+            subagentId: string;
         };
         CommitRequest: {
             body?: string | null;
@@ -4462,6 +4489,8 @@ export interface components {
         };
         /** @enum {string} */
         StopReason: "end_turn" | "max_tokens" | "max_turn_requests" | "refusal" | "cancelled";
+        /** @enum {string} */
+        SubagentActiveWorkCloseMode: "finish_current_turn";
         SubagentCompletionSummary: {
             /** Format: int64 */
             childLastEventSeq: number;
@@ -7388,6 +7417,49 @@ export interface operations {
                 };
             };
             /** @description Workspace or subagent state blocks wake scheduling */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    close_subagent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent session ID */
+                session_id: string;
+                /** @description Stable subagent ID */
+                subagent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed the delegated relationship and gracefully closed the child session without deleting history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloseSubagentResponse"];
+                };
+            };
+            /** @description Parent session or subagent not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace or subagent state blocks close */
             409: {
                 headers: {
                     [name: string]: unknown;

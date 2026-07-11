@@ -1362,3 +1362,147 @@ async fn get_agent_catalog_version_succeeds_with_valid_bearer_auth() {
     let payload: Value = serde_json::from_slice(&body).expect("parse response json");
     assert_eq!(payload["catalogVersion"], json!(expected_version));
 }
+
+fn subagent_route_session_record(id: &str, title: &str) -> SessionRecord {
+    SessionRecord {
+        id: id.to_string(),
+        workspace_id: "workspace-subagent-close".to_string(),
+        agent_kind: "claude".to_string(),
+        native_session_id: None,
+        agent_auth_contexts: None,
+        requested_model_id: None,
+        current_model_id: None,
+        requested_mode_id: None,
+        current_mode_id: None,
+        title: Some(title.to_string()),
+        thinking_level_id: None,
+        thinking_budget_tokens: None,
+        status: "idle".to_string(),
+        created_at: "2026-05-13T18:00:00Z".to_string(),
+        updated_at: "2026-05-13T18:00:00Z".to_string(),
+        last_prompt_at: None,
+        closed_at: None,
+        dismissed_at: None,
+        mcp_bindings_ciphertext: None,
+        mcp_binding_summaries_json: None,
+        mcp_binding_policy:
+            crate::domains::sessions::model::SessionMcpBindingPolicy::InheritWorkspace,
+        system_prompt_append: None,
+        subagents_enabled: true,
+        action_capabilities_json: None,
+        origin: None,
+    }
+}
+
+#[tokio::test]
+async fn close_subagent_route_is_idempotent_and_preserves_child_history() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state(false);
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-subagent-close",
+        "local",
+        "/tmp/workspace-subagent-close",
+    );
+    let store = SessionStore::new(state.db.clone());
+    store
+        .insert(&subagent_route_session_record("parent-close", "Parent"))
+        .expect("insert parent session");
+    store
+        .insert(&subagent_route_session_record("child-close", "Child"))
+        .expect("insert child session");
+    store
+        .append_raw_notification(
+            "child-close",
+            "agent_message_chunk",
+            "2026-05-13T18:01:00Z",
+            r#"{"sessionId":"native-child","update":{"sessionUpdate":"agent_message_chunk"}}"#,
+        )
+        .expect("insert child transcript history");
+    let link = state
+        .subagent_service
+        .link_child(
+            "parent-close",
+            "child-close",
+            Some("API surface check".to_string()),
+            None,
+            None,
+        )
+        .expect("link child");
+    let subagent_id = link.public_id.expect("public subagent id");
+    let (_, wake_inserted) = state
+        .subagent_service
+        .schedule_wake_for_target("parent-close", Some(&subagent_id), None)
+        .expect("schedule child wake");
+    assert!(wake_inserted);
+    let app = build_router(state.clone());
+    let path = format!("/v1/sessions/parent-close/subagents/{subagent_id}/close");
+
+    let first = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(&path)
+                .body(Body::empty())
+                .expect("close request"),
+        )
+        .await
+        .expect("close response");
+
+    assert_eq!(first.status(), StatusCode::OK);
+    let body = to_bytes(first.into_body(), usize::MAX)
+        .await
+        .expect("read close response");
+    let payload: Value = serde_json::from_slice(&body).expect("parse close response");
+    assert_eq!(payload["subagentId"], subagent_id);
+    assert_eq!(payload["childSessionId"], "child-close");
+    assert_eq!(payload["closed"], true);
+    assert_eq!(payload["alreadyClosed"], false);
+    assert_eq!(payload["activeWorkCloseMode"], "finish_current_turn");
+
+    let child = store
+        .find_by_id("child-close")
+        .expect("read child session")
+        .expect("child session is preserved");
+    assert_eq!(child.status, "closed");
+    assert!(child.closed_at.is_some());
+    assert_eq!(
+        store
+            .list_raw_notifications("child-close")
+            .expect("read preserved child history")
+            .len(),
+        1
+    );
+    let historical_link = state
+        .subagent_service
+        .resolve_target_including_closed("parent-close", Some(&subagent_id), None)
+        .expect("read closed relationship");
+    assert!(historical_link.closed_at.is_some());
+    assert!(!state
+        .subagent_service
+        .delete_wake_schedule_for_link(&historical_link.id)
+        .expect("verify wake schedule was cancelled before close"));
+
+    let second = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(&path)
+                .body(Body::empty())
+                .expect("retry close request"),
+        )
+        .await
+        .expect("retry close response");
+    assert_eq!(second.status(), StatusCode::OK);
+    let body = to_bytes(second.into_body(), usize::MAX)
+        .await
+        .expect("read retry response");
+    let payload: Value = serde_json::from_slice(&body).expect("parse retry response");
+    assert_eq!(payload["alreadyClosed"], true);
+    assert_eq!(payload["closedAt"], historical_link.closed_at.unwrap());
+}

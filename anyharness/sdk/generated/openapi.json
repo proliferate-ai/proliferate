@@ -3142,6 +3142,66 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/subagents/{subagent_id}/close": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "close_subagent",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Parent session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "subagent_id",
+            "in": "path",
+            "description": "Stable subagent ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed the delegated relationship and gracefully closed the child session without deleting history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloseSubagentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Parent session or subagent not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Workspace or subagent state blocks close",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/title": {
       "patch": {
         "tags": [
@@ -7491,6 +7551,51 @@
             "format": "int32",
             "description": "How many loops were cleared (0 when the target was already gone).",
             "minimum": 0
+          }
+        }
+      },
+      "CloseSubagentResponse": {
+        "type": "object",
+        "required": [
+          "parentSessionId",
+          "subagentId",
+          "childSessionId",
+          "sessionLinkId",
+          "closed",
+          "alreadyClosed",
+          "closedAt",
+          "activeWorkCloseMode"
+        ],
+        "properties": {
+          "activeWorkCloseMode": {
+            "$ref": "#/components/schemas/SubagentActiveWorkCloseMode"
+          },
+          "alreadyClosed": {
+            "type": "boolean"
+          },
+          "childSessionId": {
+            "type": "string"
+          },
+          "closed": {
+            "type": "boolean"
+          },
+          "closedAt": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentSessionId": {
+            "type": "string"
+          },
+          "sessionLinkId": {
+            "type": "string"
+          },
+          "subagentId": {
+            "type": "string"
           }
         }
       },
@@ -17012,6 +17117,12 @@
           "max_turn_requests",
           "refusal",
           "cancelled"
+        ]
+      },
+      "SubagentActiveWorkCloseMode": {
+        "type": "string",
+        "enum": [
+          "finish_current_turn"
         ]
       },
       "SubagentCompletionSummary": {

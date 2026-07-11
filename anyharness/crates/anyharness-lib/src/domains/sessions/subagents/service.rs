@@ -186,6 +186,19 @@ impl SubagentService {
             .ok_or(SubagentError::NotOwned)
     }
 
+    pub fn assert_parent_workspace_mutable(
+        &self,
+        parent_session_id: &str,
+    ) -> Result<(), SubagentError> {
+        let parent = self
+            .session_store
+            .find_by_id(parent_session_id)?
+            .ok_or_else(|| SubagentError::ParentNotFound(parent_session_id.to_string()))?;
+        self.access_gate
+            .assert_can_mutate_for_workspace(&parent.workspace_id)
+            .map_err(map_access_error)
+    }
+
     pub fn authorize_target(
         &self,
         parent_session_id: &str,

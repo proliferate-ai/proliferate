@@ -395,6 +395,10 @@ pub fn build_router(state: AppState) -> Router {
             post(subagents::schedule_subagent_wake),
         )
         .route(
+            "/sessions/{session_id}/subagents/{subagent_id}/close",
+            post(subagents::close_subagent),
+        )
+        .route(
             "/sessions/{session_id}/reviews",
             get(reviews::get_session_reviews),
         )

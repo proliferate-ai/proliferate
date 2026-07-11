@@ -1,6 +1,7 @@
 use anyharness_contract::v1::{
-    ChildSubagentSummary, ParentSubagentLinkSummary, ProblemDetails, ScheduleSubagentWakeRequest,
-    ScheduleSubagentWakeResponse, SessionStatus, SessionSubagentsResponse,
+    ChildSubagentSummary, CloseSubagentResponse, ParentSubagentLinkSummary, ProblemDetails,
+    ScheduleSubagentWakeRequest, ScheduleSubagentWakeResponse, SessionStatus,
+    SessionSubagentsResponse, SubagentActiveWorkCloseMode,
     SubagentCompletionSummary as ContractSubagentCompletionSummary, SubagentTurnOutcome,
 };
 use axum::{
@@ -10,13 +11,16 @@ use axum::{
 
 use super::access::{assert_session_auth_scope, assert_workspace_mutable};
 use super::error::ApiError;
+use super::sessions_errors::map_session_lifecycle_error;
+use super::sessions_leases::acquire_session_operation_lease;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
 use crate::domains::sessions::subagents::model::{
-    ChildSubagentContext, ParentSubagentLinkContext, SessionSubagentsContext,
-    SubagentCompletionSummary,
+    ChildSubagentContext, CloseSubagentOutcome, ParentSubagentLinkContext, SessionSubagentsContext,
+    SubagentActiveWorkCloseMode as DomainSubagentActiveWorkCloseMode, SubagentCompletionSummary,
 };
+use crate::domains::sessions::subagents::runtime::CloseSubagentError;
 use crate::domains::sessions::subagents::service::SubagentError;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -92,6 +96,37 @@ pub async fn schedule_subagent_wake(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/subagents/{subagent_id}/close",
+    params(
+        ("session_id" = String, Path, description = "Parent session ID"),
+        ("subagent_id" = String, Path, description = "Stable subagent ID"),
+    ),
+    responses(
+        (status = 200, description = "Closed the delegated relationship and gracefully closed the child session without deleting history", body = CloseSubagentResponse),
+        (status = 404, description = "Parent session or subagent not found", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Workspace or subagent state blocks close", body = anyharness_contract::v1::ProblemDetails),
+    ),
+    tag = "sessions"
+)]
+pub async fn close_subagent(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    Path((session_id, subagent_id)): Path<(String, String)>,
+) -> Result<Json<CloseSubagentResponse>, ApiError> {
+    assert_session_auth_scope(&state, &auth, &session_id)?;
+    let _operation =
+        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SubagentWrite)
+            .await?;
+    let outcome = state
+        .subagent_runtime
+        .close_subagent(&session_id, &subagent_id)
+        .await
+        .map_err(map_close_subagent_error)?;
+    Ok(Json(close_subagent_to_contract(outcome)))
+}
+
 #[allow(dead_code)]
 fn _problem_details_reference(_: ProblemDetails) {}
 
@@ -103,6 +138,24 @@ fn session_subagents_to_contract(context: SessionSubagentsContext) -> SessionSub
             .into_iter()
             .map(child_subagent_to_contract)
             .collect(),
+    }
+}
+
+fn close_subagent_to_contract(outcome: CloseSubagentOutcome) -> CloseSubagentResponse {
+    CloseSubagentResponse {
+        parent_session_id: outcome.parent_session_id,
+        subagent_id: outcome.subagent_id,
+        child_session_id: outcome.child_session_id,
+        session_link_id: outcome.session_link_id,
+        label: outcome.label,
+        closed: true,
+        already_closed: outcome.already_closed,
+        closed_at: outcome.closed_at,
+        active_work_close_mode: match outcome.active_work_close_mode {
+            DomainSubagentActiveWorkCloseMode::FinishCurrentTurn => {
+                SubagentActiveWorkCloseMode::FinishCurrentTurn
+            }
+        },
     }
 }
 
@@ -214,5 +267,13 @@ fn map_subagent_error(error: SubagentError) -> ApiError {
             "WORKSPACE_MUTATION_BLOCKED",
         ),
         other => ApiError::internal(other.to_string()),
+    }
+}
+
+fn map_close_subagent_error(error: CloseSubagentError) -> ApiError {
+    match error {
+        CloseSubagentError::Subagent(error) => map_subagent_error(error),
+        CloseSubagentError::SessionLifecycle(error) => map_session_lifecycle_error(error),
+        CloseSubagentError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
