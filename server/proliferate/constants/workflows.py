@@ -396,6 +396,20 @@ WORKFLOW_TRIGGER_SKIP_REASON_CONCURRENCY: Final = (
 # --- Scheduler tick bounds (mirrors the automations beat; spec 3.5). -----------
 WORKFLOW_SCHEDULER_DEFAULT_INTERVAL_SECONDS: Final = 15.0
 WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE: Final = 100
+
+# --- Transactional outbox kinds (WS4a; spec §10.2, §6 WF-6). -------------------
+# A schedule/poll fire that targets a cloud runtime writes a ``cloud_delivery``
+# outbox row in the SAME transaction as the run intent, so a crash after intent
+# commit never loses the follow-up delivery. A local-ready run needs no outbox —
+# it is claimable over its HTTP API the moment it commits (§10.2).
+WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY: Final = "cloud_delivery"
+SUPPORTED_WORKFLOW_OUTBOX_KINDS: Final = frozenset({WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY})
+# Relay backoff for a claimed cloud-delivery row that could not be delivered this
+# cycle (a transient wake/transport failure, or a run deferred behind its FIFO
+# predecessor under the ``queue`` concurrency policy). The row returns to
+# ``pending`` with this delay and is re-claimed on a later relay cycle.
+WORKFLOW_OUTBOX_RELAY_BATCH_SIZE: Final = 50
+WORKFLOW_OUTBOX_RELAY_RETRY_DELAY_SECONDS: Final = 30.0
 # Each cloud delivery wakes a sandbox, so cap wakes per beat to keep it bounded
 # (the house automation loop bounds its per-tick work the same way).
 WORKFLOW_SCHEDULER_MAX_DELIVERIES_PER_TICK: Final = 25

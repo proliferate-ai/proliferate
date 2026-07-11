@@ -70,4 +70,3 @@ server/tests/unit/test_workflow_definition.py 718 v2 definition parser regressio
 server/tests/unit/test_workflow_poll.py 1397 poll-trigger regression coverage pending split, workflows v1 launch debt
 server/tests/unit/test_workflow_run_gateway.py 1313 per-run gateway token regression coverage pending split, workflows v1 launch debt (+1: worker/service.py import path, WS0B-S; +6: WS2b envelope split; +4: WS3b audience filters — a run now mints multiple tokens so token queries filter to the legacy audience-NULL row)
 server/tests/unit/test_workflow_service.py 847 workflow service regression coverage pending split, workflows v1 launch debt (+1: WS2b envelope assertion)
-server/tests/unit/test_workflow_triggers.py 1465 trigger CRUD/schedule/poll regression coverage pending split, workflows v1 launch debt

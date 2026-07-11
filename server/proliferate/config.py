@@ -41,6 +41,18 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("WORKFLOWS_ENABLED", "PROLIFERATE_WORKFLOWS_ENABLED"),
     )
+    # WS4a schedule-plane cutover flag (spec §6 WF-6, §10.2). While ``False``
+    # (the default) the legacy asyncio scheduler loop owns schedule firing; the
+    # Celery Beat ``workflow_fire_due_schedules`` task is not registered. Flip to
+    # ``True`` to move schedule firing onto Beat + the transactional outbox; the
+    # legacy loop then skips its firing half (it keeps running delivery until WS4c
+    # deletes it). WS4c flips this default to ``True`` and removes the loop.
+    workflows_beat_schedules: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "WORKFLOWS_BEAT_SCHEDULES", "PROLIFERATE_WORKFLOWS_BEAT_SCHEDULES"
+        ),
+    )
     # First-run claim (single-org mode only). While the user table is empty the
     # API mints a setup token, persists its hash in the database, and writes the
     # plaintext to this local file so deploy tooling can print it. The file is

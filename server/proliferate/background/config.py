@@ -20,11 +20,16 @@ KNOWN_QUEUE_NAMES = (
 HEALTH_NOOP_TASK = "background.health.noop"
 NOTIFICATIONS_SEND_SLACK_TASK = "notifications.send_slack"
 CUSTOMERIO_ENGAGEMENT_SYNC_TASK = "customerio.engagement_sync"
+# WS4a workflow schedule plane (spec §6 WF-6, §10.2).
+WORKFLOW_FIRE_DUE_SCHEDULES_TASK = "workflows.fire_due_schedules"
+WORKFLOW_DELIVER_OUTBOX_TASK = "workflows.deliver_outbox"
 
 TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     NOTIFICATIONS_SEND_SLACK_TASK: {"queue": NOTIFICATIONS_QUEUE},
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+    WORKFLOW_FIRE_DUE_SCHEDULES_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+    WORKFLOW_DELIVER_OUTBOX_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
 }
 
 
