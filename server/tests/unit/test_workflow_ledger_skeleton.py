@@ -36,7 +36,10 @@ from tests.unit.workflow_ledger_helpers import make_run, make_user
 pytestmark = pytest.mark.asyncio
 
 _PRE_FEATURE_HEAD = "c3f8b1d6a4e2"
-_WS2A_REVISION = "d9578c0275f3"
+# The current single head of the migration chain ("head" resolves here). Each
+# packet that appends a workflow migration moves this pin: WS2a landed
+# d9578c0275f3; WS3a appended b3d1f5a9c7e2 (function_invocation semantic_revision).
+_CHAIN_HEAD = "b3d1f5a9c7e2"
 
 
 # --- session leases (spec §8.2) ----------------------------------------------------
@@ -327,7 +330,7 @@ async def test_ws2a_migration_applies_to_populated_pre_feature_database() -> Non
 
             async with engine.connect() as conn:
                 version_num = await conn.scalar(text("SELECT version_num FROM alembic_version"))
-                assert version_num == _WS2A_REVISION
+                assert version_num == _CHAIN_HEAD
                 row = (
                     await conn.execute(
                         text(
