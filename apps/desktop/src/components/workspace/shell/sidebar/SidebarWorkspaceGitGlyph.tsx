@@ -1,23 +1,25 @@
-import { GitPullRequest } from "@proliferate/ui/icons";
+import { GitBranchIcon } from "@proliferate/ui/icons";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
 import type { SidebarGitGlyph } from "@/lib/domain/workspaces/git-status/pr-status-presentation";
+import type { PrStatusView } from "@proliferate/product-ui/workspaces/PrStatusBadge";
 
 interface SidebarWorkspaceGitGlyphProps {
   glyph: SidebarGitGlyph;
+  status: PrStatusView;
 }
 
 /**
- * Leading-well PR glyph for sidebar rows (§3.2): rendered only for rows with
- * a real PR (the glyph is null otherwise — no branch fallback), decorated
- * with the status dot by the row, and drawn in the destructive tone when the
- * worktree has merge conflicts. Wraps the icon in a tooltip when the glyph
- * carries one.
+ * Compact git/PR glyph for the sidebar detail cluster. The branch shape
+ * matches the Home target picker; status is expressed through the glyph tone
+ * instead of adding a second dot on top of it.
  */
-export function SidebarWorkspaceGitGlyph({ glyph }: SidebarWorkspaceGitGlyphProps) {
+export function SidebarWorkspaceGitGlyph({ glyph, status }: SidebarWorkspaceGitGlyphProps) {
   const icon = (
-    <GitPullRequest
-      className={`size-3.5 ${glyph.conflicted ? "text-destructive" : "text-sidebar-muted-foreground"}`}
-    />
+    <span role="img" aria-label={glyph.tooltip ?? "Pull request"}>
+      <GitBranchIcon
+        className={`size-3.5 ${glyph.conflicted ? "text-destructive" : gitStatusTone(status.kind)}`}
+      />
+    </span>
   );
 
   if (!glyph.tooltip) {
@@ -32,4 +34,22 @@ export function SidebarWorkspaceGitGlyph({ glyph }: SidebarWorkspaceGitGlyphProp
       {icon}
     </Tooltip>
   );
+}
+
+function gitStatusTone(kind: PrStatusView["kind"]): string {
+  switch (kind) {
+    case "open":
+      return "text-success";
+    case "merged":
+      return "text-pr-merged";
+    case "pending":
+    case "changes_requested":
+      return "text-warning";
+    case "checks_failing":
+    case "closed":
+      return "text-destructive";
+    case "draft":
+    default:
+      return "text-sidebar-muted-foreground";
+  }
 }
