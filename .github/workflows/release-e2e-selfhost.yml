@@ -166,6 +166,11 @@ jobs:
           # '1' only when provisioning is authorized; otherwise the box scenarios
           # report blocked (env-resolution.ts + the scenarios' own opt-in check).
           RELEASE_E2E_SELFHOST_PROVISION: ${{ steps.preflight.outputs.provision == '1' && '1' || '' }}
+          # T4-SH-1 requires an explicit pair of published server image tags.
+          # Empty/unconfigured variables intentionally leave that scenario
+          # blocked; never derive or hardcode a potentially unpublished tag.
+          RELEASE_E2E_SELFHOST_UPDATE_FROM: ${{ vars.RELEASE_E2E_SELFHOST_UPDATE_FROM }}
+          RELEASE_E2E_SELFHOST_UPDATE_TO: ${{ vars.RELEASE_E2E_SELFHOST_UPDATE_TO }}
           # Standing-box + gateway secrets for T3-SH-3 (blocked when absent).
           RELEASE_E2E_SELFHOST_URL: ${{ secrets.RELEASE_E2E_SELFHOST_URL }}
           RELEASE_E2E_SELFHOST_SSH: ${{ secrets.RELEASE_E2E_SELFHOST_SSH }}

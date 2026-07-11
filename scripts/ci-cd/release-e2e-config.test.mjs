@@ -112,6 +112,19 @@ test("self-host provisioning assumes the configured staging deployment role thro
   assert.doesNotMatch(block, /secrets\.AWS_SECRET_ACCESS_KEY/);
 });
 
+test("self-host updates require explicit published-version variables", () => {
+  const block = jobBlock(selfHost, "provisioning");
+  assert.match(
+    block,
+    /^\s+RELEASE_E2E_SELFHOST_UPDATE_FROM: \$\{\{ vars\.RELEASE_E2E_SELFHOST_UPDATE_FROM \}\}$/m,
+  );
+  assert.match(
+    block,
+    /^\s+RELEASE_E2E_SELFHOST_UPDATE_TO: \$\{\{ vars\.RELEASE_E2E_SELFHOST_UPDATE_TO \}\}$/m,
+  );
+  assert.doesNotMatch(block, /RELEASE_E2E_SELFHOST_UPDATE_(?:FROM|TO):\s+[0-9]+\.[0-9]+\.[0-9]+/);
+});
+
 test("self-host artifact workflow is an honest nightly/manual published diagnostic", () => {
   assert.doesNotMatch(selfHost, /\n  workflow_call:/);
   assert.match(selfHost, /release_desktop_version:/);
