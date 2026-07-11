@@ -228,6 +228,11 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0057_workflow_observations",
         include_str!("sql/0057_workflow_observations.sql"),
     ),
+    // WS5b: the per-effect durable ledger for sequential effect crash recovery.
+    (
+        "0058_workflow_effects",
+        include_str!("sql/0058_workflow_effects.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

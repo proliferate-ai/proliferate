@@ -20,10 +20,11 @@ use serde_json::json;
 
 use super::agent_turn::CurrentSession;
 use super::turn::InjectionMeta;
-use super::commands;
 use super::exec_policy::WorkflowOwnedSessions;
 use super::gateway::{fire_run_ping, RunPingSink, WorkflowGatewaySessions};
+use super::parallel::worktree_branch_for_scope;
 use crate::domains::goals::runtime::GoalRuntime;
+use crate::domains::workflows::effects::EffectKind;
 use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::service::SessionService;
 use crate::domains::workflows::engine::{StepExecContext, StepOutcome, WorkflowStepExecutor};
@@ -181,26 +182,66 @@ fn evaluate_branch(step: &BranchStep) -> StepOutcome {
 #[async_trait::async_trait]
 impl WorkflowStepExecutor for WorkflowStepExecutorImpl {
     async fn execute_step(&self, step: &PlanStep, ctx: &StepExecContext) -> StepOutcome {
+        // WS5b crash recovery (spec §6.5 / plan §7.3): if this step was left
+        // `running` by a crash, consult the effect ledger BEFORE re-running any
+        // externally meaningful action. `Some` reconciles a durable result or
+        // stops `outcome_uncertain`; `None` proceeds with a safe fresh execution.
+        if let Some(outcome) = self.recover_effect(step, ctx) {
+            return outcome;
+        }
         let slot = step.slot.as_str();
         // The worktree scope this step resolves to (D-031c): its lane for a
         // grouped step, or the run-level worktree ([`NO_LANE`]) otherwise.
         let scope = worktree_scope(&step.key);
         let meta = InjectionMeta::from_step(step);
+        let key = step.key.as_str();
+        let attempt = ctx.attempt;
         match &step.kind {
+            // Control steps perform no external effect and record no ledger row.
             StepKind::AgentConfig(cfg) => self.run_agent_config(slot, cfg).await,
-            StepKind::AgentPrompt(agent) => match &agent.goal {
-                None => self.run_prompt(slot, agent, &meta, &scope).await,
-                Some(goal) => self.run_goal(slot, agent, goal, ctx.step_index, &meta, &scope).await,
-            },
-            StepKind::AgentEmit(emit) => {
-                self.run_emit(slot, emit, ctx.step_index, &meta, &scope).await
-            }
-            StepKind::ShellRun(shell) => self.run_shell(shell, &scope).await,
-            StepKind::ScmOpenPr(pr) => self.run_scm(pr, &scope).await,
-            StepKind::Notify(notify) => {
-                commands::notify_step(&notify.message, &notify.slack_channel_id)
-            }
             StepKind::Branch(branch) => self.run_branch(branch),
+            // Effect-bearing steps WRAP the body as one seq-0 effect: `started`
+            // for the whole body, reconciled or stopped-uncertain on crash.
+            StepKind::AgentPrompt(agent) => {
+                self.begin_effect(key, attempt, 0, EffectKind::AgentTurn, None, None);
+                let outcome = match &agent.goal {
+                    None => self.run_prompt(slot, agent, &meta, &scope).await,
+                    Some(goal) => {
+                        self.run_goal(slot, agent, goal, ctx.step_index, &meta, &scope).await
+                    }
+                };
+                self.finish_effect(key, attempt, 0, EffectKind::AgentTurn, &outcome);
+                outcome
+            }
+            // `agent.emit` records its OWN per-corrective-turn effects (durable
+            // audit of the bounded loop); its crash recovery is uncertain.
+            StepKind::AgentEmit(emit) => {
+                self.run_emit(slot, emit, ctx.step_index, attempt, &meta, &scope).await
+            }
+            StepKind::ShellRun(shell) => {
+                self.begin_effect(
+                    key,
+                    attempt,
+                    0,
+                    EffectKind::Shell,
+                    None,
+                    shell.replay_key.as_deref(),
+                );
+                let outcome = self.run_shell(shell, &scope).await;
+                self.finish_effect(key, attempt, 0, EffectKind::Shell, &outcome);
+                outcome
+            }
+            StepKind::ScmOpenPr(pr) => {
+                let branch = worktree_branch_for_scope(&self.run_id, &scope);
+                self.begin_effect(key, attempt, 0, EffectKind::Scm, Some(&branch), None);
+                let outcome = self.run_scm(pr, &scope).await;
+                self.finish_effect(key, attempt, 0, EffectKind::Scm, &outcome);
+                outcome
+            }
+            StepKind::Notify(notify) => {
+                self.run_notify_action(key, attempt, &notify.message, &notify.slack_channel_id)
+                    .await
+            }
         }
     }
 

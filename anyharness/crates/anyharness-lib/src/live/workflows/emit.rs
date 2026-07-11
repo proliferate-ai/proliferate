@@ -23,11 +23,13 @@ impl WorkflowStepExecutorImpl {
     /// concrete errors, up to the plan's `max_attempts` (C12: sourced from the
     /// plan, no longer a hardcoded constant); the validated object becomes the
     /// step's entire output. Exhaustion fails `emit_invalid`.
+    #[allow(clippy::too_many_arguments)]
     pub(super) async fn run_emit(
         &self,
         slot: &str,
         step: &AgentEmitStep,
         step_index: usize,
+        attempt: i64,
         meta: &InjectionMeta,
         scope: &str,
     ) -> StepOutcome {
@@ -53,17 +55,57 @@ impl WorkflowStepExecutorImpl {
         // can be driven directly by tests without a live session.
         let max_attempts = step.max_attempts.max(1);
 
-        run_emit_loop(max_attempts, initial_prompt, |_attempt, prompt| {
+        run_emit_loop(max_attempts, initial_prompt, |seq, prompt| {
             let session_id = session_id.clone();
             let emit_path = emit_path.clone();
             async move {
                 // Subscribe BEFORE prompting so a fast TurnEnded is never missed.
                 let mut events = self.subscribe(&session_id).await?;
                 let turn_id = self.send_prompt(&session_id, &prompt, meta).await?;
+                // WS5b: record each corrective turn as its own agent_turn effect
+                // (seq = the loop index) so the bounded correction budget is
+                // durable/auditable across a restart. The turn is the effect;
+                // its terminal status is whether the turn ran, not whether the
+                // emit validated.
+                let turn_seq = i64::from(seq);
                 match await_turn_ended(&mut events, turn_id.as_deref(), TURN_BACKSTOP).await {
-                    TurnWait::Ended => {}
-                    TurnWait::SessionClosed => return Err(failed("session_closed")),
-                    TurnWait::Timeout => return Err(failed("turn_timeout")),
+                    TurnWait::Ended => self.record_emit_turn(
+                        &meta.step_key,
+                        attempt,
+                        turn_seq,
+                        turn_id.as_deref(),
+                        &StepOutcome::Completed {
+                            output: serde_json::json!({ "turn_id": turn_id }),
+                        },
+                    ),
+                    TurnWait::SessionClosed => {
+                        self.record_emit_turn(
+                            &meta.step_key,
+                            attempt,
+                            turn_seq,
+                            turn_id.as_deref(),
+                            &StepOutcome::Failed {
+                                code: "session_closed".to_string(),
+                                message: None,
+                                output: None,
+                            },
+                        );
+                        return Err(failed("session_closed"));
+                    }
+                    TurnWait::Timeout => {
+                        self.record_emit_turn(
+                            &meta.step_key,
+                            attempt,
+                            turn_seq,
+                            turn_id.as_deref(),
+                            &StepOutcome::Failed {
+                                code: "turn_timeout".to_string(),
+                                message: None,
+                                output: None,
+                            },
+                        );
+                        return Err(failed("turn_timeout"));
+                    }
                 }
                 match read_and_validate_emit(&emit_path, step.output_schema.as_ref()) {
                     EmitCheck::Valid(value) => {

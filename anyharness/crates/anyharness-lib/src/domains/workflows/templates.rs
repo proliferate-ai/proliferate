@@ -132,6 +132,7 @@ pub fn resolve_step(step: &PlanStep, outputs: &StepOutputs) -> PlanStep {
             command: resolve_string(&shell.command, outputs),
             timeout_secs: shell.timeout_secs,
             output_name: shell.output_name.clone(),
+            replay_key: shell.replay_key.clone(),
         }),
         StepKind::ScmOpenPr(pr) => StepKind::ScmOpenPr(ScmOpenPrStep {
             base: pr.base.clone(),

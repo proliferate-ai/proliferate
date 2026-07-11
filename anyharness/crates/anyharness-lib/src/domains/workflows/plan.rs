@@ -44,13 +44,10 @@ pub struct ResolvedPlan {
     /// Run isolation (wave 2b): whether the run's sessions execute directly in
     /// the pinned workspace's checkout (`workspace`, the legacy behavior) or in a
     /// fresh git worktree minted per run inside that checkout (`worktree`).
-    ///
     /// `serde(default)` → an ABSENT field parses as [`Isolation::Workspace`], so
-    /// every plan produced before this field existed keeps its old behavior
-    /// (back-compat deny-path). The field is plan-level in v1: one worktree per
-    /// RUN, shared by all the run's slots. L30 (parallel lanes) inherits this
-    /// field and will later split isolation per lane; the enum leaves room for
-    /// that without re-keying the contract.
+    /// plans produced before this field existed keep their old behavior. The
+    /// field is plan-level in v1 (one worktree per RUN, shared by all slots);
+    /// L30 inherits it and will later split isolation per lane.
     #[serde(default)]
     pub isolation: Isolation,
     /// Per-slot session provisioning, keyed by the step's `slot`.
@@ -82,15 +79,13 @@ pub struct PlanGateway {
     /// The full `Authorization` header value (verbatim), used for both the MCP
     /// server header and the completion ping.
     pub authorization: String,
-    /// The completion-ping endpoint (`POST`, empty body) the actor nudges after
-    /// each step transition (§3.7/L16).
+    /// The completion-ping endpoint the actor `POST`s after each transition (L16).
     pub ping_url: String,
     /// The namespace-level scope this run's token grants — the definition's
-    /// resolved `integrations[]` (E3: integration namespaces, no tool lists;
-    /// the gateway treats a namespace grant as "all tools of that provider" at
-    /// call time). Empty means "no integration scopes" (still legal: the token
-    /// exists only to authorize the completion ping). The runtime only reads
-    /// its emptiness (L22 local-lane fail-fast); it never inspects tools.
+    /// resolved `integrations[]` (E3: integration namespaces, no tool lists; the
+    /// gateway treats a namespace grant as "all tools of that provider"). Empty
+    /// is legal (the token exists only to authorize the completion ping). The
+    /// runtime only reads its emptiness (L22 local-lane fail-fast).
     #[serde(default)]
     pub integrations: Vec<String>,
 }
@@ -459,6 +454,11 @@ pub struct ShellRunStep {
     pub timeout_secs: Option<u64>,
     #[serde(default)]
     pub output_name: Option<String>,
+    /// Optional author-declared idempotent replay key (WS5b, plan §7.3 shell
+    /// row): its presence lets a crash-unprovable shell effect be safely replayed
+    /// instead of stopping `outcome_uncertain`. Absent = not safe to replay.
+    #[serde(default)]
+    pub replay_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
