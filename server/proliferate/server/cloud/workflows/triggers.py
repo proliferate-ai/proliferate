@@ -34,7 +34,6 @@ from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.authorization import ActorIdentity
-from proliferate.config import settings
 from proliferate.constants.workflows import (
     SUPPORTED_WORKFLOW_CONCURRENCY_POLICIES,
     SUPPORTED_WORKFLOW_MISSED_RUN_POLICIES,
@@ -56,7 +55,6 @@ from proliferate.server.automations.domain.schedule import (
     ParsedAutomationSchedule,
     normalize_schedule,
 )
-from proliferate.server.cloud import net_guard
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows.domain.definition import (
     WorkflowDefinitionError,
@@ -82,6 +80,7 @@ from proliferate.server.cloud.workflows.models import (
     WorkflowTriggerUpdateRequest,
 )
 from proliferate.server.cloud.workflows.service import visible_workflow
+from proliferate.server.cloud.workflows.worker.poll_http import guard_poll_endpoint
 from proliferate.utils.crypto import decrypt_text, encrypt_text
 from proliferate.utils.time import utcnow
 
@@ -420,30 +419,6 @@ def _validate_poll_static_inputs(
         )
     except ArgumentError as exc:
         raise CloudApiError(exc.code, exc.message, status_code=400) from exc
-
-
-def guard_poll_endpoint(url: str) -> None:
-    """SSRF pre-flight for every server-issued poll/init request (§11 risk profile).
-
-    A cloud-hosted server GETting an operator-supplied URL is an SSRF surface —
-    the same one the function-invocation dispatch faces — so it goes through the
-    SAME shared guard (``net_guard.resolve_and_pin``): private, loopback,
-    link-local (incl. 169.254.169.254 metadata), reserved, multicast, CGNAT
-    (100.64/10) and NAT64 hosts are refused before any packet leaves. Applied on
-    the PROBE path (trigger create/update re-validation + the stateless
-    ``/poll/inspect`` endpoint) AND the runtime poller's fetch.
-
-    Bypassed under ``settings.debug`` (local/self-host dev) so a developer can
-    point a poll trigger at ``http://localhost`` feeds. Tests flip ``debug`` off to
-    exercise the guard. Raises ``CloudApiError('poll_endpoint_blocked')`` — no
-    outbound request — on any denial."""
-
-    if settings.debug:
-        return
-    try:
-        net_guard.resolve_and_pin(url)
-    except net_guard.NetGuardError as exc:
-        raise CloudApiError("poll_endpoint_blocked", str(exc), status_code=400) from None
 
 
 async def _probe_poll_signature(

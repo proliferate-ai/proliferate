@@ -41,6 +41,7 @@ from proliferate.constants.workflows import (
     WORKFLOW_INPUT_TYPE_NUMBER,
     WORKFLOW_INPUT_TYPE_TEXT,
     WORKFLOW_MAX_ARGS,
+    WORKFLOW_POLL_ERROR_MAX_LENGTH,
     WORKFLOW_SHORT_TEXT_MAX_LENGTH,
 )
 
@@ -217,6 +218,51 @@ def diff_item_against_schema(data: object, schema_json: dict[str, object] | None
         if name not in data:
             mismatches.append(f"data is missing required property '{name}'.")
     return mismatches
+
+
+def overlay_item_inputs(
+    item_data: object,
+    *,
+    static_inputs: dict[str, object],
+    item_schema: dict[str, object] | None,
+) -> dict[str, object]:
+    """Static presets ⊕ the item's own fields, taken directly by name (D17).
+
+    The trigger's static ``args_json`` presets are the base; each declared input
+    the item's ``data`` carries overrides its preset. There is no dot-path
+    mapping — a field named ``issue_id`` in ``data`` fills the ``issue_id`` input,
+    nothing else. The declared input names are the ``properties`` keys of the
+    derived item schema; fields in ``data`` that are not declared inputs are
+    ignored (``start_run`` rejects unknown inputs). Item shape is validated
+    against the (derived) schema before this overlay, so this never fails.
+
+    Shared by the legacy poller loop (``poller.py``) and the WS4b beat-driven
+    poll worker (``worker/polls.py``) — the overlay rule is pure and identical
+    on both paths.
+    """
+
+    inputs: dict[str, object] = dict(static_inputs or {})
+    declared = set((item_schema or {}).get("properties", {}) or {})
+    if isinstance(item_data, dict):
+        for name in declared:
+            if name in item_data:
+                inputs[name] = item_data[name]
+    return inputs
+
+
+def bound_error_message(message: str, *, max_length: int = WORKFLOW_POLL_ERROR_MAX_LENGTH) -> str:
+    """Whitespace-normalize + truncate an error string to a bounded length.
+
+    Shared truncation rule for every poll-lane error surface (HTTP/transport
+    failure, item schema-validation failure, ``start_run`` failure): a third-party
+    endpoint or a pathological item payload must never let an unbounded string
+    land on the trigger/inbox row.
+    """
+
+    normalized = " ".join(message.split())
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 1] + "…"
 
 
 def init_probe_url(feed_url: str) -> str:

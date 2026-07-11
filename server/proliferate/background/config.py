@@ -23,6 +23,9 @@ CUSTOMERIO_ENGAGEMENT_SYNC_TASK = "customerio.engagement_sync"
 # WS4a workflow schedule plane (spec §6 WF-6, §10.2).
 WORKFLOW_FIRE_DUE_SCHEDULES_TASK = "workflows.fire_due_schedules"
 WORKFLOW_DELIVER_OUTBOX_TASK = "workflows.deliver_outbox"
+# WS4b workflow poll plane (spec §10.3).
+WORKFLOW_FIRE_DUE_POLLS_TASK = "workflows.fire_due_polls"
+WORKFLOW_POLL_NEXT_PAGE_TASK = "workflows.poll_next_page"
 
 TASK_ROUTES: dict[str, dict[str, str]] = {
     HEALTH_NOOP_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
@@ -30,6 +33,8 @@ TASK_ROUTES: dict[str, dict[str, str]] = {
     CUSTOMERIO_ENGAGEMENT_SYNC_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     WORKFLOW_FIRE_DUE_SCHEDULES_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
     WORKFLOW_DELIVER_OUTBOX_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+    WORKFLOW_FIRE_DUE_POLLS_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
+    WORKFLOW_POLL_NEXT_PAGE_TASK: {"queue": PERIODIC_DEFAULT_QUEUE},
 }
 
 

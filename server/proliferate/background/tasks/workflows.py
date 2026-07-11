@@ -1,7 +1,9 @@
-"""Thin Celery task wrappers for the workflow schedule plane (WS4a, spec §10.2).
+"""Thin Celery task wrappers for the workflow schedule + poll planes (WS4a/WS4b,
+spec §10.2/§10.3).
 
-Two Beat-fired tasks, both gated by ``settings.workflows_beat_schedules`` at the
-schedule-registry level (``background/beat_schedule.py``):
+Four Beat-fired tasks, gated at the schedule-registry level
+(``background/beat_schedule.py``) by ``settings.workflows_beat_schedules``
+(schedule pair) or the sibling ``settings.workflows_beat_polls`` (poll pair):
 
 - ``workflow_fire_due_schedules``: opens ONE short transaction, calls the
   commit-free ``fire_due_schedule_triggers`` service (which creates run intents +
@@ -10,6 +12,11 @@ schedule-registry level (``background/beat_schedule.py``):
   ``cloud_delivery`` outbox rows (pending -> delivering), then per row opens a
   fresh session and hands the run to the existing ``deliver_cloud_run`` before
   finalising the row. Multi-phase so no transaction spans the sandbox wake.
+- ``workflow_fire_due_polls``: per due poll trigger, runs the WS4b prepare ->
+  close-DB -> HTTP -> new-DB -> apply sequence (``worker/polls.py``) for page 1.
+- ``workflow_poll_next_page``: the poll continuation relay — claims due
+  ``poll_next_page`` outbox rows, then per row fetches + applies page N>1 in a
+  fresh session (no transaction spans the fetch here either).
 
 These wrappers hold no business logic: transaction boundaries + failure->retry
 mapping only (``specs/codebase/structures/server/guides/background.md``).
@@ -23,19 +30,27 @@ import logging
 from proliferate.background.celery_app import celery_app
 from proliferate.background.config import (
     WORKFLOW_DELIVER_OUTBOX_TASK,
+    WORKFLOW_FIRE_DUE_POLLS_TASK,
     WORKFLOW_FIRE_DUE_SCHEDULES_TASK,
+    WORKFLOW_POLL_NEXT_PAGE_TASK,
 )
 from proliferate.constants.workflows import (
+    WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY,
+    WORKFLOW_OUTBOX_KIND_POLL_NEXT_PAGE,
     WORKFLOW_OUTBOX_RELAY_BATCH_SIZE,
     WORKFLOW_OUTBOX_RELAY_RETRY_DELAY_SECONDS,
+    WORKFLOW_POLL_NEXT_PAGE_BATCH_SIZE,
+    WORKFLOW_POLLER_DEFAULT_BATCH_SIZE,
     WORKFLOW_SCHEDULER_DEFAULT_BATCH_SIZE,
 )
 from proliferate.db.engine import async_session_factory
+from proliferate.db.store import cloud_workflow_triggers as trigger_store
 from proliferate.db.store.workflow_ledger import (
     OutboxRecord,
     claim_due_outbox_rows,
     complete_outbox_row,
 )
+from proliferate.server.cloud.workflows.worker import polls as worker_polls
 from proliferate.server.cloud.workflows.worker.schedules import (
     deliver_cloud_delivery_outbox_row,
     fire_due_schedule_triggers,
@@ -67,8 +82,12 @@ def workflow_deliver_outbox(batch_size: int = WORKFLOW_OUTBOX_RELAY_BATCH_SIZE) 
     async def _run() -> tuple[int, int]:
         now = utcnow()
         # Phase 1: claim due rows (pending -> delivering) in one short transaction.
+        # kind-scoped: ``poll_next_page`` rows (WS4b) live in the SAME outbox
+        # table and must never be claimed by this cloud-delivery relay.
         async with async_session_factory() as db, db.begin():
-            claimed = await claim_due_outbox_rows(db, now=now, limit=batch_size)
+            claimed = await claim_due_outbox_rows(
+                db, now=now, limit=batch_size, kind=WORKFLOW_OUTBOX_KIND_CLOUD_DELIVERY
+            )
         # Phase 2: deliver each claimed row in its own fresh session (the sandbox
         # wake happens here, never under a held transaction).
         delivered = 0
@@ -110,3 +129,79 @@ async def _deliver_one_outbox_row(row: OutboxRecord) -> bool:
             ),
         )
         return False
+
+
+# --- WS4b poll plane (spec §10.3) -----------------------------------------------
+
+
+@celery_app.task(name=WORKFLOW_FIRE_DUE_POLLS_TASK)
+def workflow_fire_due_polls(batch_size: int = WORKFLOW_POLLER_DEFAULT_BATCH_SIZE) -> str:
+    async def _run() -> int:
+        now = utcnow()
+        async with async_session_factory() as db:
+            due_ids = await trigger_store.list_due_poll_trigger_ids(db, now=now, limit=batch_size)
+        processed = 0
+        for trigger_id in due_ids:
+            try:
+                outcome = await worker_polls.run_one_poll_attempt(
+                    async_session_factory, trigger_id=trigger_id, now=now
+                )
+            except Exception:
+                logger.exception(
+                    "workflow_fire_due_polls attempt failed trigger_id=%s", trigger_id
+                )
+                continue
+            if outcome is not None:
+                processed += 1
+        return processed
+
+    processed = asyncio.run(_run())
+    if processed:
+        logger.info("workflow_fire_due_polls processed=%s", processed)
+    return f"processed={processed}"
+
+
+@celery_app.task(name=WORKFLOW_POLL_NEXT_PAGE_TASK)
+def workflow_poll_next_page(batch_size: int = WORKFLOW_POLL_NEXT_PAGE_BATCH_SIZE) -> str:
+    async def _run() -> tuple[int, int]:
+        now = utcnow()
+        # Phase 1: claim due poll_next_page rows in one short transaction.
+        async with async_session_factory() as db, db.begin():
+            claimed = await claim_due_outbox_rows(
+                db, now=now, limit=batch_size, kind=WORKFLOW_OUTBOX_KIND_POLL_NEXT_PAGE
+            )
+        # Phase 2: fetch + apply each claimed page in its own fresh session (the
+        # HTTP fetch happens here, never under a held transaction).
+        advanced = 0
+        for row in claimed:
+            try:
+                if await _process_poll_next_page_row(row):
+                    advanced += 1
+            except Exception:
+                logger.exception("workflow_poll_next_page row failed outbox_id=%s", row.id)
+                async with async_session_factory() as db, db.begin():
+                    await complete_outbox_row(db, outbox_id=row.id, status="delivered")
+        return len(claimed), advanced
+
+    n_claimed, n_advanced = asyncio.run(_run())
+    if n_claimed:
+        logger.info("workflow_poll_next_page claimed=%s advanced=%s", n_claimed, n_advanced)
+    return f"claimed={n_claimed} advanced={n_advanced}"
+
+
+async def _process_poll_next_page_row(row: OutboxRecord) -> bool:
+    """Fetch + apply the page this row names, then finalise the row.
+
+    Always resolves ``delivered`` (this row's ONE job — fetch page N — is done
+    regardless of outcome): a durable failure/contract-error/budget-exhaustion
+    or a still-pending item ends the chain here, and the next scheduled
+    occurrence continues from the last durably-CAS'd cursor (spec §10.3). A
+    chained next page (``has_more`` + durable) got its OWN new outbox row
+    written inside ``apply_poll_page``'s transaction, so nothing is lost by
+    finalising this one unconditionally.
+    """
+
+    outcome = await worker_polls.run_next_page_attempt(async_session_factory, row, now=utcnow())
+    async with async_session_factory() as db, db.begin():
+        await complete_outbox_row(db, outbox_id=row.id, status="delivered")
+    return outcome is not None and outcome.cursor_advanced

@@ -118,6 +118,9 @@ class DuePollTrigger:
     poll_interval_secs: int
     poll_item_schema_json: dict[str, object] | None
     poll_cursor: str | None
+    # WS4b CAS fence (§10.3) — frozen at claim time. The apply-transaction's
+    # cursor CAS (``cas_advance_poll_cursor``) accepts only this exact value.
+    poll_cursor_generation: int | None
     args_json: dict[str, object]
 
 
@@ -551,8 +554,14 @@ async def claim_due_poll_trigger(
 
     ``SKIP LOCKED`` means a beat racing another poller simply moves on. Returns
     ``None`` if the trigger was taken, disabled, or is no longer due. The interval
-    gate is re-checked under the lock (the id list may be stale by the time we
-    claim), so a just-polled trigger is not polled again the same beat.
+    gate is re-checked under the lock, so a just-polled trigger isn't re-polled
+    the same beat.
+
+    Stamps ``last_poll_at = now`` before returning (WS4b, spec §10.3): the WS4b
+    poll worker's phase-1 transaction commits this claim (releasing the row lock)
+    BEFORE the HTTP fetch, so the stamp — not the lock — keeps a concurrent beat
+    from re-claiming while the fetch is in flight. Behavior-preserving for the
+    legacy poller, which overwrites it with the identical value at close.
     """
 
     row = (
@@ -573,6 +582,10 @@ async def claim_due_poll_trigger(
     if workflow is None:
         return None
     organization_id = await _organization_id_for_owner(db, owner_user_id=workflow.owner_user_id)
+    frozen_cursor = row.poll_cursor
+    frozen_generation = row.poll_cursor_generation
+    row.last_poll_at = now
+    await db.flush()
     return DuePollTrigger(
         id=row.id,
         workflow_id=row.workflow_id,
@@ -588,7 +601,8 @@ async def claim_due_poll_trigger(
         poll_item_schema_json=(
             dict(row.poll_item_schema_json) if row.poll_item_schema_json is not None else None
         ),
-        poll_cursor=row.poll_cursor,
+        poll_cursor=frozen_cursor,
+        poll_cursor_generation=frozen_generation,
         args_json=dict(row.args_json or {}),
     )
 
