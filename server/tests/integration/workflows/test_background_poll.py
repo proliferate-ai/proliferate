@@ -84,6 +84,19 @@ def session_factory(test_engine):  # type: ignore[no-untyped-def]
     return async_sessionmaker(test_engine, expire_on_commit=False)
 
 
+@pytest.fixture(autouse=True)
+def _allow_seeded_loopback_poll_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep these persistence tests at the mocked HTTP seam.
+
+    The production SSRF guard and its loopback denial are covered in
+    ``test_workflow_poll.py``. This module intentionally seeds a loopback URL
+    while replacing the HTTP fetch so it can exercise cursor/transaction
+    behavior without making a network request.
+    """
+
+    monkeypatch.setattr(worker_polls, "guard_poll_endpoint", lambda _url: None)
+
+
 # --- seeding ---------------------------------------------------------------------
 
 
@@ -400,9 +413,7 @@ async def test_page_budget_exhaustion_stops_the_chain(session_factory) -> None: 
 
     page = _page([], cursor="cur-100", has_more=True)
     with patch.object(poller_module, "fetch_poll_page", AsyncMock(return_value=page)):
-        outcome = await worker_polls.run_next_page_attempt(
-            session_factory, seed_row, now=utcnow()
-        )
+        outcome = await worker_polls.run_next_page_attempt(session_factory, seed_row, now=utcnow())
     assert outcome is not None
     assert outcome.budget_exhausted is True
     assert outcome.next_page_queued is False

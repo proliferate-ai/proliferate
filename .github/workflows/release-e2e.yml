@@ -259,6 +259,7 @@ jobs:
         with:
           name: release-e2e-reports
           path: tests/release/.output/
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: ignore
 
@@ -396,5 +397,6 @@ jobs:
         with:
           name: release-e2e-reports-staging
           path: tests/release/.output/
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: ignore

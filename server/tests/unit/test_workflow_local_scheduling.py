@@ -243,7 +243,8 @@ async def test_local_terminal_report_expires_gateway_token_like_cloud(
                 (
                     await db.execute(
                         select(WorkflowRunGatewayToken.status).where(
-                            WorkflowRunGatewayToken.workflow_run_id == run_id
+                            WorkflowRunGatewayToken.workflow_run_id == run_id,
+                            WorkflowRunGatewayToken.audience.is_(None),
                         )
                     )
                 )
@@ -373,7 +374,10 @@ async def test_local_claim_rotates_gateway_token(
                     await db.execute(
                         select(
                             WorkflowRunGatewayToken.status, WorkflowRunGatewayToken.token_hash
-                        ).where(WorkflowRunGatewayToken.workflow_run_id == run_id)
+                        ).where(
+                            WorkflowRunGatewayToken.workflow_run_id == run_id,
+                            WorkflowRunGatewayToken.audience.is_(None),
+                        )
                     )
                 ).all()
             )

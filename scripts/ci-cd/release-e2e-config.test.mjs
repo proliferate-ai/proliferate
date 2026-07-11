@@ -43,6 +43,7 @@ for (const jobId of ["release-e2e-local", "release-e2e-staging"]) {
   test(`${jobId} uploads evidence after failure`, () => {
     const block = jobBlock(release, jobId);
     assert.match(block, /name: Upload failure reports[\s\S]*?if: always\(\)/);
+    assert.match(block, /path: tests\/release\/\.output\/[\s\S]*?include-hidden-files: true/);
   });
 }
 
@@ -66,6 +67,7 @@ test("self-host Tier 3/4 jobs preserve genuine runner failures", () => {
 test("self-host cleanup/evidence remains unconditional", () => {
   const block = jobBlock(selfHost, "provisioning");
   assert.match(block, /name: Upload failure reports[\s\S]*?if: always\(\)/);
+  assert.match(block, /path: tests\/release\/\.output\/[\s\S]*?include-hidden-files: true/);
 });
 
 test("self-host artifact workflow is an honest nightly/manual published diagnostic", () => {
