@@ -186,6 +186,7 @@ Most billing already shipped. Spec 09 closes: wire `authorize_sandbox_start` to 
 | `cloud-dispatch.md` (spec 08) | Web/Mobile/Desktop dispatch UX — live hooks, exposure-aware listing, Continue remotely, Open in web, deep links |
 | `cowork-artifacts.md` | Cowork artifact creation and delegation |
 | `delegated-work.md` | Delegated work flows |
+| `desktop-updates.md` | Packaged Desktop updater UX, version-aware release notices, and release-title metadata |
 | `mobile-cloud-client.md` | Mobile Cloud SDK cutover from fixture data |
 | `onboarding.md` | Signed-out to product-ready account handoff, readiness gates, and first workspace transition |
 | `pending-workspace-shell.md` | Shell shown while workspace is pending |
@@ -407,6 +408,7 @@ analytics systems, local dev, and deploying.
 | MCP / skills / plugins runtime config | `primitives/mcp-skills.md` + `primitives/mcp-runtime.md` |
 | Product MCP tool (add/change) | `features/agent-features/servers.md` + `definitions/README.md` |
 | Onboarding / first-run readiness | `features/onboarding.md` + `features/product-auth.md` |
+| Desktop updater / release notices | `features/desktop-updates.md` + `developing/deploying/ci-cd.md` |
 | Workspace archive / prune / lifecycle | `primitives/workspace-lifecycle.md` |
 | Billing / wake gate | `primitives/billing.md` + `primitives/cloud-commands.md` |
 | Claiming | `primitives/claiming.md` |

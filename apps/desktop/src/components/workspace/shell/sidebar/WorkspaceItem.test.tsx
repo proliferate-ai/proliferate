@@ -111,7 +111,7 @@ describe("WorkspaceItem", () => {
     expect(onCopyBranchName).toHaveBeenCalledTimes(1);
   });
 
-  it("renders the PR status dot on the leading git glyph", () => {
+  it("renders PR status as a compact git detail glyph", () => {
     render(
       <WorkspaceItem
         name="Feature worktree"
@@ -123,7 +123,7 @@ describe("WorkspaceItem", () => {
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
   });
 
-  it("renders the activity indicator in the right slot, keeping the PR glyph", () => {
+  it("renders activity and PR state together in the right-side details", () => {
     render(
       <WorkspaceItem
         name="Feature worktree"
@@ -134,11 +134,11 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.getByRole("img", { name: "Iterating" })).toBeTruthy();
-    // The status no longer evicts the PR glyph + dot from the leading well.
+    // Live activity does not evict the compact PR detail glyph.
     expect(screen.getByRole("img", { name: "PR #805 · Open" })).toBeTruthy();
   });
 
-  it("renders no leading glyph for an authoritative no-PR branch", () => {
+  it("renders no git glyph for an authoritative no-PR branch", () => {
     const { container } = render(
       <WorkspaceItem
         name="Feature worktree"
@@ -156,11 +156,11 @@ describe("WorkspaceItem", () => {
     );
 
     expect(screen.queryByRole("img")).toBeNull();
-    // No branch-glyph fallback: the leading well stays empty.
+    // No branch-glyph fallback is shown without a PR.
     expect(container.querySelector("svg")).toBeNull();
   });
 
-  it("renders no leading glyph when PR data is unknown", () => {
+  it("renders no git glyph when PR data is unknown", () => {
     const { container } = render(
       <WorkspaceItem
         name="Feature worktree"

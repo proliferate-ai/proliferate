@@ -22,6 +22,7 @@ import { type ChatSurfaceState, useChatSurfaceState } from "@/hooks/chat/derived
 import {
   useActiveSessionId,
   useActiveSessionPromptCapabilities,
+  useSelectedWorkspaceUiKey,
 } from "@/hooks/chat/derived/use-active-session-identity";
 import { useChatAvailabilityState } from "@/hooks/chat/derived/use-chat-availability-state";
 import { useChatDockInset } from "@/hooks/chat/ui/use-chat-dock-inset";
@@ -127,7 +128,11 @@ export const ChatView = memo(function ChatView({
   const suppressSessionSlots = shellRenderSurface?.kind === "chat-shell"
     || shellRenderSurface?.kind === "chat-session-pending";
   const suppressComposerActiveSessionState = shellRenderSurface?.kind === "chat-session-pending";
+  const replacementSessionId = shellRenderSurface?.kind === "chat-session-pending"
+    ? shellRenderSurface.sessionId
+    : null;
   const activeSessionId = useActiveSessionId();
+  const workspaceUiKey = useSelectedWorkspaceUiKey();
   const activePromptCapabilities = useActiveSessionPromptCapabilities();
   const availability = useChatAvailabilityState();
   const queuedPromptEditStatus = useQueuedPromptEditStatus();
@@ -150,7 +155,7 @@ export const ChatView = memo(function ChatView({
     supportsAttachments,
   });
   const promptAttachments = useChatPromptAttachments({
-    activeSessionId,
+    scopeKey: workspaceUiKey,
     promptCapabilities,
     canAttachFiles: canAcceptFileDrop,
   });
@@ -175,9 +180,15 @@ export const ChatView = memo(function ChatView({
     <ChatInput
       attachments={promptAttachments}
       suppressActiveSessionState={suppressComposerActiveSessionState}
+      replacementSessionId={replacementSessionId}
       hasSessionTurns={hasSessionTurns}
     />
-  ), [hasSessionTurns, promptAttachments, suppressComposerActiveSessionState]);
+  ), [
+    hasSessionTurns,
+    promptAttachments,
+    replacementSessionId,
+    suppressComposerActiveSessionState,
+  ]);
 
   const handleFileDrag = useCallback((event: DragEvent<HTMLDivElement>) => {
     const dragInput = readFileDragInput(event.dataTransfer);

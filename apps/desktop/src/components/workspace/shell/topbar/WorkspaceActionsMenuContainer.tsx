@@ -1,8 +1,5 @@
 import { useCallback, useMemo } from "react";
-import {
-  WorkspaceActionsMenu,
-  type WorkspaceActionsMenuGitProps,
-} from "@/components/workspace/shell/topbar/WorkspaceActionsMenu";
+import { WorkspaceActions } from "@/components/workspace/shell/topbar/WorkspaceActionsMenu";
 import {
   useOptionalWorkspaceHeaderTabsViewModelContext,
 } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
@@ -10,37 +7,18 @@ import { useChatTabVisibilityActions } from "@/hooks/workspaces/workflows/tabs/u
 import { useSessionDismissActions } from "@/hooks/sessions/workflows/use-session-dismiss-actions";
 import { useSessionForkActions } from "@/hooks/sessions/workflows/use-session-fork-actions";
 import { useManualChatGroupActions } from "@/hooks/workspaces/workflows/tabs/use-manual-chat-group-actions";
-import { useWorkspaceCopyActions } from "@/hooks/workspaces/workflows/use-workspace-copy-actions";
 import { runShortcutHandler } from "@/lib/domain/shortcuts/registry";
 import { useToastStore } from "@/stores/toast/toast-store";
 
-export interface WorkspaceActionsMenuContainerProps {
-  branchName: string | null;
-  hasExistingPr: boolean;
-  gitActionsDisabledReason: string | null;
-  onCommit: () => void;
-  onPush: () => void;
-  onCreatePr: () => void;
-  onViewPr: () => void;
-}
-
 /**
- * Wires the workspace three-dot menu to the existing session tab actions and
- * git/publish workflows. Renders nothing when the header tabs view model is
+ * Wires the workspace three-dot menu to session tab actions. Git and publish
+ * entry points live in the composer workspace-activity card. Renders nothing
+ * when the header tabs view model is
  * unavailable (no workspace shell).
  */
-export function WorkspaceActionsMenuContainer({
-  branchName,
-  hasExistingPr,
-  gitActionsDisabledReason,
-  onCommit,
-  onPush,
-  onCreatePr,
-  onViewPr,
-}: WorkspaceActionsMenuContainerProps) {
+export function WorkspaceActionsMenuContainer() {
   const viewModel = useOptionalWorkspaceHeaderTabsViewModelContext();
   const showToast = useToastStore((state) => state.show);
-  const { copyBranchName } = useWorkspaceCopyActions();
   const { dismissSession } = useSessionDismissActions();
   const {
     removeSessions: removeSessionsFromManualChatGroups,
@@ -94,27 +72,12 @@ export function WorkspaceActionsMenuContainer({
     showToast,
     viewModel,
   ]);
-  const handleCopyBranch = useCallback(() => {
-    void copyBranchName(branchName);
-  }, [branchName, copyBranchName]);
-
   if (!viewModel) {
     return null;
   }
 
-  const git: WorkspaceActionsMenuGitProps = {
-    branchName,
-    hasExistingPr,
-    gitActionsDisabledReason,
-    onCopyBranch: handleCopyBranch,
-    onCommit,
-    onPush,
-    onCreatePr,
-    onViewPr,
-  };
-
   return (
-    <WorkspaceActionsMenu
+    <WorkspaceActions
       session={{
         canRename: activeTab !== null && !activeTab.isReviewAgentChild,
         canFork: activeTab !== null
@@ -126,7 +89,6 @@ export function WorkspaceActionsMenuContainer({
         onFork: handleFork,
         onDismiss: handleDismiss,
       }}
-      git={git}
     />
   );
 }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode, TextareaHTMLAttributes } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HomeNextScreen } from "./HomeNextScreen";
 import { HOME_NEXT_TARGET_SELECTION_STORAGE_KEY } from "@/hooks/home/ui/use-home-next-target-selection-state";
@@ -158,28 +158,18 @@ vi.mock("@/components/workspace/chat/input/ChatComposerActions", () => ({
   ),
 }));
 
-vi.mock("@/components/workspace/chat/transcript/UserMessage", () => ({
-  UserMessage: ({ content }: { content: string }) => (
-    <div data-chat-user-message>{content}</div>
-  ),
-}));
-
 function installLocalStorageMock(options?: { throwOnSet?: boolean }) {
   const values = new Map<string, string>();
   Object.defineProperty(window, "localStorage", {
     configurable: true,
     value: {
-      get length() {
-        return values.size;
-      },
+      get length() { return values.size; },
       clear: () => values.clear(),
       getItem: (key: string) => values.get(key) ?? null,
       key: (index: number) => Array.from(values.keys())[index] ?? null,
       removeItem: (key: string) => values.delete(key),
       setItem: (key: string, value: string) => {
-        if (options?.throwOnSet) {
-          throw new Error("localStorage write failed");
-        }
+        if (options?.throwOnSet) throw new Error("localStorage write failed");
         values.set(key, String(value));
       },
     },
@@ -199,6 +189,14 @@ function resetHomeNext() {
   screenMocks.targetPickerProps = null;
   screenMocks.leadingControlsProps = null;
   screenMocks.trailingControlsProps = null;
+}
+
+function submitPrompt(text: string): HTMLTextAreaElement {
+  render(<HomeNextScreen />);
+  const prompt = screen.getByLabelText("Prompt") as HTMLTextAreaElement;
+  fireEvent.change(prompt, { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  return prompt;
 }
 
 describe("HomeNextScreen model availability notices", () => {
@@ -282,20 +280,21 @@ describe("HomeNextScreen model availability notices", () => {
     expect(screen.getByText("Choose a repository")).toBeTruthy();
   });
 
-  it("does not render a submitted preview below the composer for cowork launches", () => {
-    render(<HomeNextScreen />);
-
-    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "start cowork" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  it("hands cowork prompts directly to launch without rendering a Home preview", () => {
+    submitPrompt("start cowork");
 
     expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
       text: "start cowork",
       target: { kind: "cowork" },
     }));
-    expect(screen.queryByText("start cowork")).toBeNull();
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
   });
 
-  it("keeps the submitted preview for repository launches", () => {
+  it("clears and hands a repository prompt off exactly once without waiting for a paint", async () => {
+    let resolveLaunch!: (succeeded: boolean) => void;
+    screenMocks.launch.mockReturnValue(new Promise<boolean>((resolve) => {
+      resolveLaunch = resolve;
+    }));
     screenMocks.homeNext.launchTarget = {
       kind: "worktree",
       repoRootId: "repo-root-1",
@@ -303,26 +302,54 @@ describe("HomeNextScreen model availability notices", () => {
       baseBranch: "main",
       defaultBranch: "main",
     };
-    render(<HomeNextScreen />);
+    const prompt = submitPrompt("start worktree");
+    fireEvent.submit(prompt.closest("form")!);
 
-    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "start worktree" } });
-    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(prompt.value).toBe("");
+    expect(screenMocks.launch).toHaveBeenCalledTimes(1);
+    expect(screenMocks.launch).toHaveBeenCalledWith(expect.objectContaining({
+      text: "start worktree",
+      target: expect.objectContaining({ kind: "worktree" }),
+    }));
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
 
-    expect(screen.getByText("start worktree")).toBeTruthy();
+    resolveLaunch(true);
+    await waitFor(() => {
+      expect(screenMocks.launch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it.each([
+    { label: "returns false", fail: () => screenMocks.launch.mockResolvedValue(false) },
+    {
+      label: "rejects",
+      fail: () => screenMocks.launch.mockRejectedValue(new Error("unexpected launch failure")),
+    },
+  ])("restores the submitted draft when launch $label", async ({ fail }) => {
+    fail();
+    const prompt = submitPrompt("keep this draft");
+    await waitFor(() => expect(prompt.value).toBe("keep this draft"));
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
+  });
+
+  it("preserves a newer draft when the submitted launch fails", async () => {
+    let resolveLaunch!: (succeeded: boolean) => void;
+    screenMocks.launch.mockReturnValue(new Promise<boolean>((resolve) => {
+      resolveLaunch = resolve;
+    }));
+    const prompt = submitPrompt("launch this");
+    fireEvent.change(prompt, { target: { value: "newer draft" } });
+    await act(async () => {
+      resolveLaunch(false);
+    });
+    expect(prompt.value).toBe("newer draft");
+    expect(document.querySelector("[data-home-submit-preview]")).toBeNull();
   });
 
   it("renders onboarding cards as the only home onboarding actions", () => {
     screenMocks.onboardingCards.push(
-      {
-        id: "add-repository",
-        title: "Add a GitHub repo",
-        icon: "github",
-      },
-      {
-        id: "agent-defaults",
-        title: "Configure default harnesses",
-        icon: "sliders",
-      },
+      { id: "add-repository", title: "Add a GitHub repo", icon: "github" },
+      { id: "agent-defaults", title: "Configure default harnesses", icon: "sliders" },
     );
 
     render(<HomeNextScreen />);

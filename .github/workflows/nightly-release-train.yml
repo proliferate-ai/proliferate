@@ -22,6 +22,10 @@ on:
           - patch
           - minor
           - major
+      release_title:
+        description: Optional one-line Desktop changelog title (for example, Introducing Grok).
+        required: false
+        type: string
       dry_run:
         description: Plan only; do not push commits, tags, releases, or deploys.
         default: false
@@ -238,6 +242,7 @@ jobs:
     with:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       version: ${{ needs.prepare.outputs.desktop_version }}
+      release_title: ${{ github.event.inputs.release_title || '' }}
       dry_run: false
       # Zero-touch auto-prod: publish the updater/download assets so existing
       # installs auto-update on every train. release-desktop.yml is not bound to a

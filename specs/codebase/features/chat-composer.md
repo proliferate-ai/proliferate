@@ -47,7 +47,8 @@ ChatView
     ├── attachedSlot
     │     ├── WorkspaceArrivalAttachedPanel (workspace arrival/setup/pending/cloud-status)
     │     ├── CloudRuntimeAttachedPanel     (cloud runtime connecting/resuming/error)
-    │     └── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
+    │     ├── DelegatedWorkComposerControl  (one Agents trigger + popover for reviews and subagents)
+    │     └── WorkspaceActivityComposerCard (Git/PR summary and source-control actions)
     ├── ChatInput
     │   └── ChatComposerSurface
     │       └── form: ComposerCommandEditor + ModelSelector + SessionConfigControls + ChatComposerActions
@@ -68,7 +69,7 @@ Non-negotiable:
 - **No `backdrop-blur` on the dock's transcript-covering layer.** That layer sits over the scrolling transcript, and backdrop blur forces WKWebView to re-blur everything behind it on every frame. The implementation is a gradient fade into an opaque-ish `bg-background/95` sheet (`ChatComposerDock.tsx`), not a blur.
 - **`ChatInput` is the composer surface only.** It does not own any of the outer wrapping. It takes no `topSlot` prop. Everything above and below the composer surface is the dock's responsibility, and the workspace footer row is rendered via the dock's dedicated footer slot rather than ad hoc workspace logic in `ChatInput.tsx`.
 - **Do not add in-composer read-only status badges.** MCP/plugin state belongs in settings, session details, or explicit action surfaces, not as a persistent strip inside `ChatInput`.
-- **The composer surface stays unchanged and paints the seam.** There is no `flatTop` mode. Dock-region panels are narrower attached trays that sit directly above the composer: rounded top corners, side/top borders, no bottom border, and no gap. The composer surface paints after the dock regions so its own top outline remains visible at the seam.
+- **The composer surface paints the seam.** There is no `flatTop` prop or alternate composer mode. Ordinary dock-region panels remain narrower attached trays above the composer. When the full-width workspace-activity cap is present, `ChatComposerDock` squares the composer's top corners with a local `:has()` selector so the cap and input read as one card; removing the cap restores the normal composer radius. The composer still paints after the dock regions so its own top outline remains visible at the seam.
 - **Composer command overlays are composer-local, not dock-region inhabitants.** The slash-command tray renders from `ChatInput` in a small host directly above `ChatComposerSurface` while a prompt-leading `/` trigger is active. It is transient editor UI and does not participate in `useComposerDockSlots` precedence.
 
 ## 1.1 Model Selector Semantics
@@ -177,7 +178,7 @@ work. Add the precedence decision to `resolve-dock-slots.ts` and the Desktop
 node adapter to `use-composer-dock-slots.tsx` — do not compute it inline in
 `ChatView` and do not introduce a parallel arbiter elsewhere.
 
-`attachedSlot` renders one shared `DelegatedWorkComposerPanel` containing one
+`attachedSlot` preserves the shared `DelegatedWorkComposerPanel` containing one
 compact `Agents` control for review agents and linked same-workspace child
 sessions. The control opens a popover with sections in review, subagent order.
 Individual child chips should not be rendered directly above the composer.
@@ -185,15 +186,25 @@ Attached delegated work is an indicator layer for adjacent work, not a blocking
 prompt panel. `outboundSlot` must render before `activeSlot`; both stack above
 attached context/parallel work when present.
 
+The workspace-activity cap is a separate Git/PR surface. It renders last in
+the attached stack, after ambient context, delegated work, and session
+goal/activity, so it joins directly to the composer. Its collapsed trigger is
+text-only, has no disclosure arrow, and shows at most three ordered Git/PR
+facts: conflicts or failing checks first, then sync and changed-file state,
+then a healthy branch/clean fallback. It never shows filenames, diff stats, or
+PR titles. Its detail popover opens from the composer's left edge and owns
+Review changes plus the existing Commit, Publish/Push, and Open/Create pull
+request entry points.
+
 `DelegatedWorkComposerControl` uses delegated-work identity from the shared
 domain view model. The trigger stays the generic `Agents` control when there
 are zero or multiple visible delegated items. When exactly one visible item
 needs attention or is active, the trigger may use that item's colored robot and
 canonical generated display identity.
 
-The popover hides completed-success/no-action items by default. Failed,
-needs-attention, feedback-ready, and waiting-for-revision items remain visible
-until the user acts or dismisses them.
+The delegated-work popover hides completed-success/no-action items by default.
+Failed, needs-attention, feedback-ready, and waiting-for-revision items remain
+visible until the user acts or dismisses them.
 
 Dock panes share one width and one neutral tray treatment. Hierarchy comes from
 state order, copy, and control weight, not from different colors or a width
@@ -313,6 +324,12 @@ not add a `flatTop` mode, a detached gap, a full-perimeter dock card, a width
 staircase, a separate color per slot, or a `z-*` layer that lets a dock pane
 cover the composer border.
 
+The Git/PR workspace-activity cap is the deliberate exception to the inset
+width: it cancels the slot's `px-5` so its outer edges align with the composer,
+then `ChatComposerDock` squares the composer's top corners while that cap is
+present. This is one attached source-control card, not a general alternate
+dock-panel style.
+
 ### 4.2 Headers are minimalist
 
 At most **one** visual element in a header's leading position:
@@ -396,6 +413,8 @@ the `chat-composer-surface` class, whose paint lives in
   `--shadow-composer`; the `dom.css` baseline is `--shadow-subtle`) — there is
   no CSS `border`.
 - Radius: `rounded-[var(--radius-composer,1rem)]`; `--radius-composer` is 1rem.
+  `ChatComposerDock` locally overrides only the top corners to zero while the
+  full-width workspace-activity cap is present.
 
 Placeholder variants — strings live in
 `apps/desktop/src/copy/chat/chat-copy.ts` (`CHAT_COMPOSER_LABELS`):
@@ -421,7 +440,7 @@ These are patterns that were tried and rejected. Reintroducing them reopens know
 - **Detached dock-region cards (`rounded-2xl border` plus a dock gap).** Panels above the composer are attached trays, not separate floating cards. Keep `ComposerAttachedPanel` on the rounded-top hairline tray shell (§4.1) and keep dock-region wrappers gapless.
 - **Positive z-index on dock-region wrappers.** The composer must paint after attached trays so its top outline remains visible at the seam.
 - **Ad hoc `first:*` stacking rounded-corner tricks.** Dock-region order is explicit in `ChatComposerDock`; do not fake region-specific corner behavior with selector tricks.
-- **`flatTop` on `ChatComposerSurface`.** The prop was deleted. The composer surface keeps its normal styling. Panels above are attached trays, not a replacement shell for the composer.
+- **`flatTop` on `ChatComposerSurface`.** The prop was deleted. The one allowed squared-top state is owned by `ChatComposerDock`'s workspace-activity selector; do not add a composer API or reuse that state for ordinary attached trays.
 - **Regex classifier on `toolCallId` in `permission-prompt.ts`.** Dead code. Read `pendingApproval.toolKind` directly.
 - **`embeddedInComposer` permission variant that replaces the textarea.** Dead code. Approvals always sit above the composer; the textarea stays usable.
 - **Merging generic tool approval buttons into `ProposedPlanCard`.** Generic
@@ -454,6 +473,10 @@ Scenarios (selectable via `?s=<key>`):
 - `mobility-local-actionable`, `mobility-local-blocked`, `mobility-unpublished-branch`, `mobility-unpushed-commits`, `mobility-out-of-sync-branch`, `mobility-cloud-active`, `mobility-in-flight`, `mobility-failed` — composer footer row + mobility states
 
 The playground is **dev-only**. It is lazy-loaded via `React.lazy()` gated on `import.meta.env.DEV` in `App.tsx`, so neither the page nor its fixtures land in production bundles.
+
+`/playground/subagents` is a separate fixture-only UX lab for Subagents receipts,
+navigation, panes, transcripts, and close/archive behavior. It is DEV-gated and
+does not read or mutate production sessions.
 
 When you change any composer-area component, **load the playground and verify every scenario still looks right** before opening a PR. The playground exists to catch drift — if it stops looking like the real app, either fix the real app or fix the playground (and add a regression scenario).
 

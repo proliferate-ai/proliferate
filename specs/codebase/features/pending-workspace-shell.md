@@ -282,6 +282,63 @@ This fast-open placeholder is only shell scaffolding. It must not invent
 transcript content, runtime activity, or action capabilities. The real session
 summary and stream replace it as soon as AnyHarness session data is available.
 
+Changing harnesses in an unused chat is a transactional replacement, not a
+second visible tab:
+
+```text
+user selects a different harness
+  -> create and activate the replacement's projected session shell
+  -> hide the old unused session locally and pause any in-flight materializer
+  -> materialize the replacement session
+  -> on success, durably retire or confirm the absence of the old session
+  -> on failure, move any acquired prompts into workspace recovery state,
+     remove the replacement, and restore the exact old shell
+```
+
+Replaceability is based on user work, not raw runtime event count. Startup,
+status, and config acknowledgement events do not make an otherwise unused chat
+non-empty. Transcript turns, attempted/queued/optimistic prompts, goals,
+pending interactions, or active runtime work do. A superseded materializer must
+never reinsert its session after replacement, and composer drafts and
+attachments remain owned by the workspace across the swap.
+
+Prompts submitted after the replacement shell becomes active but before it
+materializes are part of the transaction. If materialization fails, each
+acquired prompt moves into a visible, workspace-scoped recovery surface before
+the replacement shell is removed. Recovery retains the complete prompt payload,
+including structured blocks, attachment snapshots, content parts, and resolved
+agent/model/mode configuration. It must not overwrite a newer workspace draft.
+Retry and dismissal act only on the explicitly selected recovered prompt, so
+multiple failed submissions remain independently identifiable and recoverable.
+
+Replacement suppression has two phases. While the new session is still
+materializing, the old runtime id and its client-session alias are staged only
+in memory: UI/query projections hide them, but bootstrap reconciliation must
+not dismiss them, and an app restart naturally restores the old runtime. Once
+the replacement succeeds, the old session may remain suppressed only after its
+tombstone is persisted or its runtime absence is confirmed by dismissal. If
+both persistence and dismissal fail, the old session is restored to the visible
+session model rather than being left as a hidden runtime. A persisted tombstone
+remains in force until a later authoritative session
+list omits the retired runtime id; mutation success alone is not sufficient,
+because a list request that began before dismissal can still refill cache.
+Only a list request that began after the tombstone commit may clear it; an
+older request can omit a runtime that had not been created when it started.
+After that authoritative omission removes persisted cleanup state, the current
+renderer keeps an in-memory retired-id fence until reload so any older response
+that arrives out of order is still filtered. Every session-list owner must
+filter both cache hits and fetched results through the staged, committed, and
+retired suppression set. An explicit user restore is the sole inverse: it
+first fences the workspace against new replacement cleanup, waits for any
+already-started replacement dismissals to settle, then restores and releases
+the restored runtime id and its client aliases before cache upsert. Restore must
+first prove that the cleanup-state update is durable; if that preflight fails,
+it must not republish the runtime. Replacement
+dismissals are deduplicated per workspace and runtime id. Cleanup requested
+during a restore is queued until the final same-workspace restore fence closes;
+the runtime id actually restored is removed from that queue, while unrelated
+queued cleanup drains immediately in the background.
+
 ## 7. Begin Flow
 
 All workspace creation entrypoints should converge on this shape:

@@ -81,6 +81,7 @@ describe("useUpdater", () => {
     tauriUpdaterMocks.checkForUpdate.mockResolvedValue({
       kind: "available",
       version: "0.2.0",
+      title: "  Introducing Grok  ",
       update: {},
     });
 
@@ -91,6 +92,8 @@ describe("useUpdater", () => {
 
     expect(useUpdaterStore.getState().phase).toBe("available");
     expect(useUpdaterStore.getState().manualCheckCompletedAt).toBeNull();
+    expect(useUpdaterStore.getState().availableTitle).toBe("Introducing Grok");
+    expect(result.current.availableTitle).toBe("Introducing Grok");
   });
 
   it("attributes a failed check to the check step", async () => {

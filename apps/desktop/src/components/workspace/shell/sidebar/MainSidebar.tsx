@@ -5,6 +5,7 @@ import { useRepositories } from "@proliferate/cloud-sdk-react";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SidebarAccountFooter } from "@/components/app/sidebar/SidebarAccountFooter";
+import { ReleaseNoticeCard } from "./ReleaseNoticeCard";
 import { SidebarPrimaryNavigation } from "./SidebarPrimaryNavigation";
 import { SidebarRepositoriesHeader } from "./SidebarRepositoriesHeader";
 import { SidebarWorkspaceContent } from "./SidebarWorkspaceContent";
@@ -48,6 +49,7 @@ import { buildShortcutRangeLabelById } from "@/lib/domain/shortcuts/presentation
 import { startMeasurementOperation } from "@/lib/infra/measurement/debug-measurement";
 import { useShortcutRevealVisible } from "@/providers/ShortcutRevealProvider";
 import { useToastStore } from "@/stores/toast/toast-store";
+import { useReleaseNotice } from "@/hooks/updates/facade/use-release-notice";
 
 interface ArchiveConfirmationState {
   workspaceId: string;
@@ -58,6 +60,7 @@ interface ArchiveConfirmationState {
 export const MainSidebar = memo(function MainSidebar() {
   useDebugRenderCount("workspace-sidebar");
   useSessionActivityReconciler();
+  const { notice, dismissNotice, openChangelog } = useReleaseNotice();
   const actions = useWorkspaceSidebarActions();
   const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "sidebar" });
   const shortcutRevealVisible = useShortcutRevealVisible();
@@ -74,9 +77,11 @@ export const MainSidebar = memo(function MainSidebar() {
   const showToast = useToastStore((state) => state.show);
   const pendingWorkspaceEntry = useSessionSelectionStore((state) => state.pendingWorkspaceEntry);
   const {
+    sidebarOpen,
     workspaceTypes,
     toggleSidebarWorkspaceType,
   } = useWorkspaceUiStore(useShallow((state) => ({
+    sidebarOpen: state.sidebarOpen,
     workspaceTypes: state.workspaceTypes,
     toggleSidebarWorkspaceType: state.toggleSidebarWorkspaceType,
   })));
@@ -265,6 +270,13 @@ export const MainSidebar = memo(function MainSidebar() {
     <DebugProfiler id="workspace-sidebar">
       <ProductSidebarFrame footer={(
         <DebugProfiler id="workspace-sidebar-footer">
+          {sidebarOpen && notice ? (
+            <ReleaseNoticeCard
+              notice={notice}
+              onDismiss={dismissNotice}
+              onOpenChangelog={openChangelog}
+            />
+          ) : null}
           <SidebarAccountFooter />
         </DebugProfiler>
       )}>

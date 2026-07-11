@@ -7,6 +7,9 @@ import { bootstrapHarnessRuntime } from "@/lib/access/anyharness/runtime-bootstr
 import { fetchWorkspaceSessionSummaries } from "@/lib/access/anyharness/session-runtime";
 import type { WorkspaceSession } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  filterReplacedSessionTombstones,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function buildLatencyRequestOptions(latencyFlowId?: string | null) {
   const headers = getLatencyFlowRequestHeaders(latencyFlowId);
@@ -44,7 +47,8 @@ export async function fetchWorkspaceSessions(
       headers: options?.requestHeaders,
     }),
   );
-  return sessions.map((session) => ({
+  const visibleSessions = filterReplacedSessionTombstones(workspaceId, sessions) ?? [];
+  return visibleSessions.map((session) => ({
     ...session,
     workspaceId,
   }));

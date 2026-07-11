@@ -42,6 +42,20 @@ describe("updater store", () => {
     expect(useUpdaterStore.getState().manualCheckCompletedAt).toBeNull();
   });
 
+  it("keeps the authored title with its available version", () => {
+    useUpdaterStore.getState().setAvailable(
+      "0.3.25",
+      {},
+      "Introducing Grok",
+    );
+
+    expect(useUpdaterStore.getState().availableVersion).toBe("0.3.25");
+    expect(useUpdaterStore.getState().availableTitle).toBe("Introducing Grok");
+
+    useUpdaterStore.getState().reset();
+    expect(useUpdaterStore.getState().availableTitle).toBeNull();
+  });
+
   it("arms and disarms restart-when-idle", () => {
     useUpdaterStore.getState().setRestartWhenIdle(true);
     expect(useUpdaterStore.getState().restartWhenIdle).toBe(true);

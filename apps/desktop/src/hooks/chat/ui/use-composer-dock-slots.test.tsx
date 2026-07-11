@@ -21,6 +21,18 @@ const pendingPromptsState = vi.hoisted(() => ({
   value: [] as unknown[],
 }));
 
+const promptRecoveryState = vi.hoisted(() => ({
+  value: [] as unknown[],
+}));
+
+const delegatedWorkState = vi.hoisted(() => ({
+  value: null as Record<string, never> | null,
+}));
+
+const selectedWorkspaceState = vi.hoisted(() => ({
+  value: null as string | null,
+}));
+
 vi.mock("@/hooks/chat/derived/use-active-pending-session-interactions", () => ({
   useActivePendingInteractionState: () => ({
     primaryPendingInteraction: primaryPendingInteractionState.value,
@@ -32,8 +44,21 @@ vi.mock("@/hooks/chat/derived/use-active-todo-tracker", () => ({
   useActiveTodoTracker: () => activeTodoTrackerState.value,
 }));
 
+vi.mock("@/hooks/chat/derived/use-chat-prompt-recoveries", () => ({
+  useChatPromptRecoveries: () => ({
+    recoveries: promptRecoveryState.value,
+    workspaceUiKey: "workspace-1",
+  }),
+}));
+
 vi.mock("@/hooks/chat/facade/use-delegated-work-composer", () => ({
-  useDelegatedWorkComposer: () => null,
+  useDelegatedWorkComposer: () => delegatedWorkState.value,
+}));
+
+vi.mock("@/stores/sessions/session-selection-store", () => ({
+  useSessionSelectionStore: (
+    selector: (state: { selectedWorkspaceId: string | null }) => unknown,
+  ) => selector({ selectedWorkspaceId: selectedWorkspaceState.value }),
 }));
 
 vi.mock("@/hooks/workspaces/facade/use-selected-cloud-runtime-state", () => ({
@@ -65,16 +90,23 @@ vi.mock("@/components/workspace/chat/input/McpElicitationCard", () => ({
   ConnectedMcpElicitationCard: () => <div data-testid="mcp-elicitation-card" />,
 }));
 
-vi.mock("@/components/workspace/chat/input/PendingPromptList", () => ({
-  ConnectedPendingPromptList: () => <div data-testid="pending-prompt-list" />,
+vi.mock("@/components/workspace/chat/input/PromptRecoveryPanel", () => ({
+  ConnectedPromptRecoveryPanel: () => <div data-testid="prompt-recovery-panel" />,
 }));
-
 vi.mock("@/components/workspace/chat/input/DelegatedWorkComposerPanel", () => ({
   DelegatedWorkComposerPanel: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock("@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl", () => ({
   DelegatedWorkComposerControl: () => <div data-testid="delegated-work-control" />,
+}));
+
+vi.mock("@/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard", () => ({
+  ConnectedWorkspaceActivityComposerCard: () => <div data-testid="workspace-activity-card" />,
+}));
+
+vi.mock("@/components/workspace/chat/input/PendingPromptList", () => ({
+  ConnectedPendingPromptList: () => <div data-testid="pending-prompt-list" />,
 }));
 
 vi.mock("@/components/workspace/chat/input/UserInputCard", () => ({
@@ -87,6 +119,9 @@ afterEach(() => {
   primaryPendingInteractionState.value = null;
   activeTodoTrackerState.value = null;
   pendingPromptsState.value = [];
+  promptRecoveryState.value = [];
+  delegatedWorkState.value = null;
+  selectedWorkspaceState.value = null;
 });
 
 describe("useComposerDockSlots", () => {
@@ -137,5 +172,25 @@ describe("useComposerDockSlots", () => {
 
     expect(screen.getByTestId("todo-tracker-panel")).not.toBeNull();
     expect(screen.queryByTestId("todo-tracker-strip")).toBeNull();
+  });
+
+  it("renders workspace-scoped prompt recoveries in the outbound slot", () => {
+    promptRecoveryState.value = [{}];
+    const { result } = renderHook(() => useComposerDockSlots());
+
+    render(<>{result.current.outboundSlot}</>);
+
+    expect(screen.getByTestId("prompt-recovery-panel")).not.toBeNull();
+  });
+
+  it("keeps delegated work and the workspace activity cap in the same stack", () => {
+    delegatedWorkState.value = {};
+    selectedWorkspaceState.value = "workspace-1";
+    const { result } = renderHook(() => useComposerDockSlots());
+
+    render(<>{result.current.attachedSlot}</>);
+
+    expect(screen.getByTestId("delegated-work-control")).not.toBeNull();
+    expect(screen.getByTestId("workspace-activity-card")).not.toBeNull();
   });
 });

@@ -1,4 +1,6 @@
 import { createContext, useContext, type ReactNode } from "react";
+import type { PublishIntent } from "@/lib/domain/workspaces/creation/publish-workflow-model";
+import type { RightPanelTool } from "@/lib/domain/workspaces/shell/right-panel-model";
 
 export interface WorkspaceWebActions {
   disabled: boolean;
@@ -21,6 +23,9 @@ export interface WorkspaceRemoteAccessActions {
 
 interface WorkspaceShellActions {
   openTerminalPanel: (terminalId?: string) => boolean;
+  openRightPanelTool: (tool: RightPanelTool) => void;
+  openPublishDialog: (intent: PublishIntent) => void;
+  openPullRequest: () => void;
   workspaceWebActions: WorkspaceWebActions;
   workspaceRemoteAccessActions: WorkspaceRemoteAccessActions;
 }

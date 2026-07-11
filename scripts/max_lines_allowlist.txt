@@ -35,7 +35,7 @@ apps/desktop/src/components/content/ui/diff/SplitDiffViewer.tsx 540 existing des
 apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 900 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
-apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 631 existing desktop oversized test file
+apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 630 existing desktop oversized test file
 apps/web/src/hooks/chat/workflows/use-web-cloud-prompt-actions.ts 434 managed sandbox web prompt flow awaiting chat action split
 server/proliferate/auth/identity/store.py 686 managed sandbox GitHub grant read path extends existing identity store
 server/proliferate/db/models/cloud/agent_gateway.py 504 agent_auth_harness_settings model added for catalog-driven per-harness settings

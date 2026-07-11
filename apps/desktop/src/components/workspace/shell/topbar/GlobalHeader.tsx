@@ -7,10 +7,7 @@ import {
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { resolvePreferredOpenTarget } from "@/lib/domain/chat/composer/preference-resolvers";
 import { HeaderTabs } from "@/components/workspace/shell/topbar/HeaderTabs";
-import {
-  WorkspaceActionsMenuContainer,
-  type WorkspaceActionsMenuContainerProps,
-} from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
+import { WorkspaceActionsMenuContainer } from "@/components/workspace/shell/topbar/WorkspaceActionsMenuContainer";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { DebugProfiler } from "@/components/diagnostics/DebugProfiler";
 import { SplitButton } from "@/components/workspace/open-target/SplitButton";
@@ -38,7 +35,6 @@ interface GlobalHeaderProps {
   runLoading?: boolean;
   runLabel?: string;
   runTitle?: string;
-  workspaceActions: WorkspaceActionsMenuContainerProps;
   onRun: () => void;
   onTogglePanel: () => void;
 }
@@ -51,7 +47,6 @@ export const GlobalHeader = memo(function GlobalHeader({
   runLoading = false,
   runLabel = "Run",
   runTitle = "Run workspace command",
-  workspaceActions,
   onRun,
   onTogglePanel,
 }: GlobalHeaderProps) {
@@ -95,7 +90,7 @@ export const GlobalHeader = memo(function GlobalHeader({
           {title}
         </div>
 
-        <WorkspaceActionsMenuContainer {...workspaceActions} />
+        <WorkspaceActionsMenuContainer />
 
         <div className="flex min-w-0 flex-1 items-center overflow-hidden">
           <HeaderTabs />

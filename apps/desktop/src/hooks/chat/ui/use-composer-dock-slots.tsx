@@ -8,7 +8,9 @@ import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/M
 import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
+import { ConnectedWorkspaceActivityComposerCard } from "@/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
+import { ConnectedPromptRecoveryPanel } from "@/components/workspace/chat/input/PromptRecoveryPanel";
 import { SessionActivityBar } from "@/components/workspace/activity/SessionActivityBar";
 import { useSessionGoalBarModel } from "@/hooks/activity/derived/use-session-goal";
 import { useSessionActivityChips } from "@/hooks/activity/derived/use-session-activity-chips";
@@ -21,6 +23,8 @@ import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-track
 import { useComposerDockCardPresence } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
+import { useChatPromptRecoveries } from "@/hooks/chat/derived/use-chat-prompt-recoveries";
+import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 
 export interface ComposerDockSlots {
   outboundSlot: ReactNode | null;
@@ -36,8 +40,10 @@ export function useComposerDockSlots(options?: {
   const suppressWorkspaceStatusPanels = options?.suppressWorkspaceStatusPanels ?? false;
   const { primaryPendingInteraction } = useActivePendingInteractionState();
   const pendingPrompts = useActivePendingPrompts();
+  const promptRecoveries = useChatPromptRecoveries().recoveries;
   const activeTodoTracker = useActiveTodoTracker();
   const delegatedWorkComposer = useDelegatedWorkComposer();
+  const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const sessionGoalBarModel = useSessionGoalBarModel();
   const sessionActivityChips = useSessionActivityChips();
   const workspaceStatusPanel = useWorkspaceStatusPanelState();
@@ -48,9 +54,11 @@ export function useComposerDockSlots(options?: {
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
     pendingPromptCount: pendingPrompts.length,
+    recoveredPromptCount: promptRecoveries.length,
     primaryPendingInteractionKind: primaryPendingInteraction?.kind ?? null,
     hasActiveTodoTracker: !!activeTodoTracker,
     hasDelegatedWork: !!delegatedWorkComposer,
+    hasWorkspaceActivity: !!selectedWorkspaceId,
     hasSessionGoal: !!sessionGoalBarModel,
     hasSessionActivity: sessionActivityChips.length > 0,
     hasWorkspaceStatusPanel: !!workspaceStatusPanel,
@@ -60,11 +68,13 @@ export function useComposerDockSlots(options?: {
     delegatedWorkComposer,
     hasCloudRuntimePanel,
     pendingPrompts.length,
+    promptRecoveries.length,
     primaryPendingInteraction?.kind,
     sessionActivityChips.length,
     sessionGoalBarModel,
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
+    selectedWorkspaceId,
     workspaceStatusPanel,
   ]);
 
@@ -124,30 +134,40 @@ export function useComposerDockSlots(options?: {
       )
       : null
   ), [delegatedWorkComposer, dockSlotResolution.attachedSlot?.delegatedWork]);
-  // The activity bar (goal + chips) renders last so it docks directly
-  // against the composer surface — it is the ever-present element while
-  // goal or activity state is live.
+  const workspaceActivitySlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.attachedSlot?.workspaceActivity
+      ? <ConnectedWorkspaceActivityComposerCard />
+      : null
+  ), [dockSlotResolution.attachedSlot?.workspaceActivity]);
+  // The workspace cap renders last in the attached stack so it docks against
+  // the composer surface. Existing session-scoped trays keep their order.
   const sessionActivitySlot = useMemo<ReactNode | null>(() => (
     dockSlotResolution.attachedSlot?.sessionGoal || dockSlotResolution.attachedSlot?.sessionActivity
       ? <SessionActivityBar />
       : null
   ), [dockSlotResolution.attachedSlot?.sessionGoal, dockSlotResolution.attachedSlot?.sessionActivity]);
   const attachedSlot = useMemo<ReactNode | null>(() => (
-    ambientContextSlot || delegatedWorkSlot || sessionActivitySlot
+    ambientContextSlot || delegatedWorkSlot || sessionActivitySlot || workspaceActivitySlot
       ? (
       <>
         {ambientContextSlot}
         {delegatedWorkSlot}
         {sessionActivitySlot}
+        {workspaceActivitySlot}
       </>
       )
       : null
-  ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot]);
+  ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot, workspaceActivitySlot]);
 
+  // Queue-placed prompts have one owner: the dock's outbound list. A rollback
+  // recovery is workspace-scoped rather than session-scoped and outranks the
+  // queue (resolver priority), owning the slot until retried or dismissed.
   const outboundSlot = useMemo<ReactNode | null>(() => (
-    dockSlotResolution.outboundSlot?.kind === "pending_prompts"
-      ? <ConnectedPendingPromptList />
-      : null
+    dockSlotResolution.outboundSlot?.kind === "prompt_recoveries"
+      ? <ConnectedPromptRecoveryPanel />
+      : dockSlotResolution.outboundSlot?.kind === "pending_prompts"
+        ? <ConnectedPendingPromptList />
+        : null
   ), [dockSlotResolution.outboundSlot?.kind]);
 
   return useMemo(() => ({

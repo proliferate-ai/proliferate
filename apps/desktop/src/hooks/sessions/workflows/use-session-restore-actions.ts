@@ -1,5 +1,8 @@
 import { useCallback } from "react";
-import { useRestoreDismissedSessionMutation } from "@anyharness/sdk-react";
+import {
+  useDismissSessionMutation,
+  useRestoreDismissedSessionMutation,
+} from "@anyharness/sdk-react";
 import { useWorkspaceSessionCache } from "@/hooks/access/anyharness/sessions/use-workspace-session-cache";
 import type { SessionLatencyFlowOptions } from "@/hooks/sessions/workflows/session-selection-options";
 import {
@@ -19,11 +22,20 @@ import {
 import { getWorkspaceClientAndId } from "@/lib/access/anyharness/session-runtime";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useToastStore } from "@/stores/toast/toast-store";
+import {
+  canPersistReplacedSessionTombstones,
+  releaseReplacedSessionSuppression,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import {
+  cancelQueuedReplacementDismissal,
+  withWorkspaceReplacementRestoreFence,
+} from "@/hooks/sessions/workflows/session-replacement-dismissals";
 
 export function useSessionRestoreActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
   const showToast = useToastStore((state) => state.show);
   const { upsertWorkspaceSessionRecord } = useWorkspaceSessionCache();
+  const dismissSessionMutation = useDismissSessionMutation();
   const restoreDismissedSessionMutation = useRestoreDismissedSessionMutation();
 
   const restoreLastDismissedSession = useCallback(async (
@@ -85,9 +97,36 @@ export function useSessionRestoreActions() {
 
       const requestOptions = buildLatencyRequestOptions(options?.latencyFlowId);
       const restoreRequestStartedAt = startLatencyTimer();
-      const restored = await restoreDismissedSessionMutation.mutateAsync({
-        workspaceId,
-        requestOptions,
+      const restored = await withWorkspaceReplacementRestoreFence(workspaceId, async () => {
+        if (!canPersistReplacedSessionTombstones()) {
+          throw new Error("Could not save session cleanup state. Try restoring again.");
+        }
+        const restoredSession = await restoreDismissedSessionMutation.mutateAsync({
+          workspaceId,
+          requestOptions,
+        });
+        if (!restoredSession) {
+          return null;
+        }
+
+        // Explicit restore is the user-authorized inverse of background cleanup.
+        // Cancel stale cleanup queued while the restore mutation invalidated
+        // session lists, then release runtime and client aliases before the
+        // summary reaches cache so selectors can observe it in this renderer.
+        if (!releaseReplacedSessionSuppression(workspaceId, restoredSession.id)) {
+          // Storage changed after the preflight. Put runtime truth back into
+          // the dismissed state covered by the still-durable tombstone.
+          await dismissSessionMutation.mutateAsync({
+            workspaceId,
+            sessionId: restoredSession.id,
+          }).catch(() => undefined);
+          throw new Error("Could not save restored session state. Try again.");
+        }
+        cancelQueuedReplacementDismissal(workspaceId, restoredSession.id);
+        upsertWorkspaceSessionRecord(workspaceId, restoredSession, {
+          runtimeUrl: target.baseUrl,
+        });
+        return restoredSession;
       });
       logLatency("session.restore.request_completed", {
         workspaceId,
@@ -110,9 +149,6 @@ export function useSessionRestoreActions() {
         targetSessionId: restored.id,
       });
 
-      upsertWorkspaceSessionRecord(workspaceId, restored, {
-        runtimeUrl: target.baseUrl,
-      });
       logLatency("session.restore.cache_upserted", {
         workspaceId,
         sessionId: restored.id,
@@ -138,6 +174,7 @@ export function useSessionRestoreActions() {
     }
   }, [
     getWorkspaceRuntimeBlockReason,
+    dismissSessionMutation,
     restoreDismissedSessionMutation,
     showToast,
     upsertWorkspaceSessionRecord,

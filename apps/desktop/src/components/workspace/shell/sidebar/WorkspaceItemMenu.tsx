@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import {
   Archive,
@@ -34,6 +35,7 @@ interface WorkspaceItemMenuProps {
   onCopyWorkspaceLocation?: () => void;
   onCopyBranchName?: () => void;
   onMarkDone?: () => void;
+  onShowNativeMenu?: (position?: { x: number; y: number }) => Promise<boolean>;
 }
 
 /**
@@ -54,11 +56,29 @@ export function WorkspaceItemMenu({
   onCopyWorkspaceLocation,
   onCopyBranchName,
   onMarkDone,
+  onShowNativeMenu,
 }: WorkspaceItemMenuProps) {
+  const [fallbackOpen, setFallbackOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setFallbackOpen(false);
+      return;
+    }
+    if (!onShowNativeMenu) {
+      setFallbackOpen(true);
+      return;
+    }
+    const rect = triggerRef.current?.getBoundingClientRect();
+    void onShowNativeMenu(rect ? { x: rect.left, y: rect.bottom } : undefined).then((shown) => {
+      if (!shown) setFallbackOpen(true);
+    });
+  }, [onShowNativeMenu]);
   return (
-    <DropdownMenu>
+    <DropdownMenu open={fallbackOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <IconButton
+          ref={triggerRef}
           tone="sidebar"
           size="xs"
           onClick={(e) => e.stopPropagation()}

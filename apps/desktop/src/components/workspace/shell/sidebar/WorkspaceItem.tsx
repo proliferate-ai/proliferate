@@ -72,10 +72,9 @@ interface WorkspaceItemProps {
    */
   lastInteracted?: string | null;
   /**
-   * Composed git/PR status (§3.2/§3.3). Drives the leading PR glyph, the PR
-   * status dot, tooltips, and the "Open pull request" menu item. The well is
-   * empty whenever the row has no real PR (pr null/unknown or state "none"),
-   * so no-git-data rows degrade gracefully.
+   * Composed git/PR status. Drives the compact right-side git glyph and tone,
+   * its tooltip, and the "Open pull request" menu item. Rows without a real
+   * PR omit the glyph, so missing git data degrades gracefully.
    */
   gitStatus?: WorkspaceGitStatus | null;
   /** Renders the trailing unseen-activity dot (§3.4, codex pattern). */
@@ -145,23 +144,12 @@ export function WorkspaceItem({
   const handleArchiveCommand = () => onArchive?.();
   const handleUnarchiveCommand = () => onUnarchive?.();
   const handleMarkDoneCommand = () => setDoneConfirmOpen(true);
-  const { onContextMenuCapture } = useWorkspaceSidebarNativeContextMenu({
-    canRename: !!onRename,
-    canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
-    copyWorkspaceLocationLabel: workspaceLocationCopyLabel ?? "Copy workspace location",
-    canCopyBranchName: !!onCopyBranchName,
-    archived,
-    canArchive: !!onArchive,
-    canUnarchive: !!onUnarchive,
-    canMarkDone: !!onMarkDone,
-    onRename: handleRenameCommand,
-    onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
-    onCopyBranchName: handleCopyBranchNameCommand,
-    onArchive: handleArchiveCommand,
-    onUnarchive: handleUnarchiveCommand,
-    onMarkDone: handleMarkDoneCommand,
-  });
-  const detail = detailIndicators.length > 0 || cloudStatusDefinition ? (
+  const gitGlyph = sidebarGitGlyphForStatus(gitStatus);
+  const prStatusView = gitGlyph ? prStatusViewFromGitStatus(gitStatus) : null;
+  const gitDetail = gitGlyph && prStatusView
+    ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} status={prStatusView} />
+    : null;
+  const detail = detailIndicators.length > 0 || cloudStatusDefinition || gitDetail ? (
     <>
       <SidebarDetailIndicatorsView
         indicators={detailIndicators}
@@ -173,6 +161,7 @@ export function WorkspaceItem({
           {cloudStatusDefinition.label}
         </span>
       )}
+      {gitDetail}
     </>
   ) : null;
   const pullRequestUrl = gitStatus?.pr?.url ?? null;
@@ -180,6 +169,26 @@ export function WorkspaceItem({
   const handleOpenPullRequestCommand = pullRequestUrl && onOpenPullRequest
     ? () => onOpenPullRequest(pullRequestUrl)
     : undefined;
+  const { onContextMenuCapture, showNativeMenu } = useWorkspaceSidebarNativeContextMenu({
+    canRename: !!onRename,
+    canCopyWorkspaceLocation: !!onCopyWorkspaceLocation,
+    copyWorkspaceLocationLabel: workspaceLocationCopyLabel ?? "Copy workspace location",
+    canCopyBranchName: !!onCopyBranchName,
+    branchName,
+    canOpenPullRequest: !!handleOpenPullRequestCommand,
+    pullRequestNumber,
+    archived,
+    canArchive: !!onArchive,
+    canUnarchive: !!onUnarchive,
+    canMarkDone: !!onMarkDone,
+    onRename: handleRenameCommand,
+    onCopyWorkspaceLocation: handleCopyWorkspaceLocationCommand,
+    onCopyBranchName: handleCopyBranchNameCommand,
+    onOpenPullRequest: () => handleOpenPullRequestCommand?.(),
+    onArchive: handleArchiveCommand,
+    onUnarchive: handleUnarchiveCommand,
+    onMarkDone: handleMarkDoneCommand,
+  });
   const hasMenuActions = hasArchiveAction
     || !!onRename
     || !!onCopyWorkspaceLocation
@@ -194,6 +203,7 @@ export function WorkspaceItem({
       branchName={branchName}
       workspaceLocationCopyLabel={workspaceLocationCopyLabel}
       pullRequestNumber={pullRequestNumber}
+      onShowNativeMenu={showNativeMenu}
       onOpenPullRequest={handleOpenPullRequestCommand}
       onRename={onRename ? handleRenameCommand : undefined}
       onArchive={onArchive ? handleArchiveCommand : undefined}
@@ -206,15 +216,11 @@ export function WorkspaceItem({
     />
   ) : null;
 
-  // Leading well (§3.2): PR glyph + dot for real PR states only — rows with
-  // no PR (null/unknown or authoritative "none") leave the well empty.
+  // Git/PR state lives in the right-side detail cluster, matching the compact
+  // Codex row treatment and keeping the left edge free of stacked glyphs.
   // Activity indicators live in the row's RIGHT slot (trailingStatus).
   // Relative timestamp (trailingLabel) is also in the RIGHT slot, with lower
   // precedence than trailingStatus and unreadDot.
-  const gitGlyph = sidebarGitGlyphForStatus(gitStatus);
-  const prStatusView = gitGlyph ? prStatusViewFromGitStatus(gitStatus) : null;
-  const leadingGlyph = gitGlyph ? <SidebarWorkspaceGitGlyph glyph={gitGlyph} /> : null;
-
   const timestampLabel = lastInteracted ? formatSidebarRelativeTime(lastInteracted) : null;
 
   const row = (
@@ -228,10 +234,8 @@ export function WorkspaceItem({
         />
       ) : null}
       trailingLabel={timestampLabel}
-      leadingGlyph={leadingGlyph}
       label={name}
       detail={detail}
-      prStatus={prStatusView}
       unreadDot={needsReview}
       shortcutLabel={shortcutLabel}
       shortcutRevealVisible={shortcutRevealVisible}

@@ -9,13 +9,6 @@ import type {
   HomeNextModelSelection,
   ModelAvailabilityState,
 } from "@/lib/domain/home/home-next-launch";
-import { scheduleAfterNextPaint } from "@/lib/infra/scheduling/schedule-after-next-paint";
-
-function waitForNextPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    scheduleAfterNextPaint(resolve);
-  });
-}
 
 interface UseHomeNextComposerStateArgs {
   targetDisabledReason: string | null;
@@ -37,11 +30,8 @@ export function useHomeNextComposerState({
   launchTarget,
 }: UseHomeNextComposerStateArgs) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const submitInFlightRef = useRef(false);
   const [draft, setDraft] = useState("");
-  const [submittedPreview, setSubmittedPreview] = useState<{
-    id: string;
-    text: string;
-  } | null>(null);
   const restoredDraftText = useHomeDraftHandoffStore((state) => state.draftText);
   const clearRestoredDraftText = useHomeDraftHandoffStore((state) => state.clearDraftText);
   const { isLaunching, launch } = useHomeNextLaunch();
@@ -62,7 +52,6 @@ export function useHomeNextComposerState({
     && canLaunchTarget
     && !!modelSelection
     && !!launchTarget
-    && submittedPreview === null
     && !isLaunching;
 
   // PERF: `getComputedStyle` twice per keystroke is avoidable work in the hot
@@ -102,33 +91,41 @@ export function useHomeNextComposerState({
   }, [draft]);
 
   const submit = useCallback(async () => {
-    if (!canSubmit || !modelSelection || !launchTarget) return;
+    if (
+      !canSubmit
+      || !modelSelection
+      || !launchTarget
+      || submitInFlightRef.current
+    ) return;
 
+    submitInFlightRef.current = true;
     const submittedDraft = draft;
-    const submittedText = submittedDraft.trim();
-    const shouldShowHomeSubmittedPreview = launchTarget.kind !== "cowork";
+    const restoreSubmittedDraft = () => {
+      setDraft((currentDraft) => (
+        currentDraft.length === 0 ? submittedDraft : currentDraft
+      ));
+    };
     flushSync(() => {
-      if (shouldShowHomeSubmittedPreview) {
-        setSubmittedPreview({
-          id: crypto.randomUUID(),
-          text: submittedText,
-        });
-      }
       setDraft("");
     });
-    if (shouldShowHomeSubmittedPreview) {
-      await waitForNextPaint();
-    }
-    const succeeded = await launch({
-      text: submittedDraft,
-      modelSelection,
-      modeId,
-      launchControlValues,
-      target: launchTarget,
-    });
-    if (!succeeded) {
-      setSubmittedPreview(null);
-      setDraft(submittedDraft);
+
+    try {
+      const succeeded = await launch({
+        text: submittedDraft,
+        modelSelection,
+        modeId,
+        launchControlValues,
+        target: launchTarget,
+      });
+      if (!succeeded) {
+        restoreSubmittedDraft();
+      }
+    } catch {
+      // `launch` normally converts workflow failures to `false`. Keep the
+      // composer rollback invariant even if an unexpected error escapes it.
+      restoreSubmittedDraft();
+    } finally {
+      submitInFlightRef.current = false;
     }
   }, [
     canSubmit,
@@ -142,7 +139,6 @@ export function useHomeNextComposerState({
 
   const cancel = useCallback(() => {
     if (!isLaunching) {
-      setSubmittedPreview(null);
       setDraft("");
     }
   }, [isLaunching]);
@@ -175,7 +171,6 @@ export function useHomeNextComposerState({
     textareaRef,
     draft,
     setDraft,
-    submittedPreview,
     submitDisabledReason,
     canSubmit,
     isLaunching,

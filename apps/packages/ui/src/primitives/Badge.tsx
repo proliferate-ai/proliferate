@@ -1,7 +1,14 @@
 import { forwardRef, type HTMLAttributes } from "react";
 import { twMerge } from "../utils/tw-merge";
 
-export type BadgeTone = "neutral" | "accent" | "success" | "info" | "warning" | "destructive";
+export type BadgeTone =
+  | "neutral"
+  | "accent"
+  | "success"
+  | "info"
+  | "warning"
+  | "destructive"
+  | "sidebar";
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: BadgeTone;
@@ -14,6 +21,7 @@ const toneClasses: Record<BadgeTone, string> = {
   info: "border-info/25 bg-info/10 text-info",
   warning: "border-warning/30 bg-warning/10 text-warning",
   destructive: "border-destructive/30 bg-destructive/10 text-destructive",
+  sidebar: "border-sidebar-border bg-sidebar-accent text-sidebar-muted-foreground",
 };
 
 export const Badge = forwardRef<HTMLSpanElement, BadgeProps>(
