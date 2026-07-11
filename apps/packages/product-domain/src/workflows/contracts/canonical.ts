@@ -1,12 +1,20 @@
 /**
- * RFC 8785 (JCS) canonical JSON + SHA-256 content hashing (WS1 contract spine).
+ * RFC 8785 (JCS) canonical JSON + SHA-256 content hashing (WS1 contract spine,
+ * float fix WS1-follow-up).
  *
  * Produces byte-identical output to the Python implementation in
  * `server/.../workflows/contracts/canonical.py`. The JCS subset the workflow
- * contracts use: objects, arrays, strings, booleans, null, and finite integers.
- * A non-integer float is rejected on purpose (no hashed contract surface carries
- * one; permitting platform float formatting would break cross-language byte
- * agreement).
+ * contracts use: objects, arrays, strings, booleans, null, and numbers (finite
+ * integers and finite non-integer floats). NaN/Infinity remain rejected — RFC
+ * 8785 has no representation for them.
+ *
+ * Number serialization (RFC 8785 §3.2.2.3) is exactly the ECMAScript
+ * `Number::toString` algorithm — which is precisely what JS's own `String()`
+ * (equivalently `` `${value}` ``) computes for a finite number, including the
+ * `-0 -> "0"` special case. So unlike the Python leg (which has to correct
+ * `repr(float)`'s different placement rules to match ES), the TS leg gets RFC
+ * 8785-correct float formatting for free — it only needs the NaN/Infinity
+ * guard and to stop rejecting non-integer floats.
  */
 
 import { sha256Hex, utf8Bytes } from "./hashing";
@@ -25,10 +33,10 @@ function canon(value: unknown): string {
     if (!Number.isFinite(value)) {
       throw new Error("non-finite number is not canonicalizable");
     }
-    if (Number.isInteger(value)) {
-      return String(value);
-    }
-    throw new Error("non-integer float is not permitted in canonical contract content");
+    // ES `String()` on a finite number IS the ECMA-262 `Number::toString`
+    // algorithm RFC 8785 §3.2.2.3 mandates — including `-0 -> "0"`. No
+    // reimplementation needed (contrast the Python leg's `repr()` correction).
+    return String(value);
   }
   if (Array.isArray(value)) {
     return `[${value.map(canon).join(",")}]`;

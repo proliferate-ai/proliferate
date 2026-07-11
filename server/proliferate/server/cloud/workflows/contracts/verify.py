@@ -222,6 +222,26 @@ def _check_legacy_upgrade() -> None:
         )
 
 
+def _check_canonical_number_vectors() -> None:
+    """RFC 8785 §3.2.2.3 float serialization (WS1-follow-up float fix).
+
+    Cross-language shared vectors: every {value, canonical} pair must
+    canonicalize to exactly the fixture's expected byte string. The TypeScript
+    leg (`contracts.test.ts`) runs the identical fixture; drift between the two
+    fails this check group (or the TS one), which is what makes it a
+    cross-language guard rather than just a Python unit test.
+    """
+
+    data = fixtures.load("canonical-number-vectors-v1.json")
+    for vector in data["vectors"]:
+        got = canonicalize(vector["value"]).decode("utf-8")
+        _require(
+            got == vector["canonical"],
+            f"canonical-number-vectors: value={vector['value']!r} canonicalized to "
+            f"{got!r}, expected {vector['canonical']!r} ({vector.get('note', '')})",
+        )
+
+
 def _check_credential_canary() -> None:
     canary = fixtures.load("credential-canary.json")
     _require(canary["marker"] == CANARY_MARKER, "canary marker drift")
@@ -248,6 +268,7 @@ CHECKS = (
     _check_observed_receipt_command,
     _check_schema_profile,
     _check_legacy_upgrade,
+    _check_canonical_number_vectors,
     _check_credential_canary,
 )
 
