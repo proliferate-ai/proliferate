@@ -157,6 +157,21 @@ describe("workflow contract fixtures", () => {
     }
   });
 
+  it("canonicalizes every RFC 8785 float vector to the exact shared byte string", () => {
+    // WS1-follow-up float fix: cross-language shared vectors, also consumed by
+    // the Python leg (`verify.py`'s `_check_canonical_number_vectors`). Any
+    // drift between the TS and Python canonicalizers fails one side or the
+    // other, which is what makes this a cross-language guard.
+    const data = fixture<{ vectors: { value: number; canonical: string; note?: string }[] }>(
+      "canonical-number-vectors-v1.json",
+    );
+    for (const vector of data.vectors) {
+      expect(canonicalize(vector.value), vector.note ?? String(vector.value)).toBe(
+        vector.canonical,
+      );
+    }
+  });
+
   it("keeps the credential canary out of every non-envelope fixture", () => {
     const canary = fixture<{ marker: string; fixturesThatMustNotContainMarker: string[] }>(
       "credential-canary.json",

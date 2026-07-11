@@ -21,7 +21,7 @@ from proliferate.db.models.auth import User
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store.cloud_workflows import WorkflowLedgerImmutableError
 from proliferate.server.cloud.workflows import compiler
-from proliferate.server.cloud.workflows.contracts import content_hash
+from proliferate.server.cloud.workflows.contracts import canonicalize, content_hash
 from proliferate.server.cloud.workflows.contracts.verify import CANARY_MARKER
 from proliferate.server.cloud.workflows.domain.definition import parse_definition
 from proliferate.server.cloud.workflows.models import build_delivered_plan, run_payload
@@ -164,6 +164,96 @@ async def test_v2_step_keys_ride_alongside_legacy(db_session: AsyncSession) -> N
         # node-id and step-id are lowercase UUIDv5s.
         uuid.UUID(parts[1])
         uuid.UUID(parts[3])
+
+
+# --- fractional number inputs (WS1-follow-up float fix) -------------------------
+#
+# WS2b discovered that a workflow `number` input with a fractional value (e.g.
+# 1.5) would fail StartRun: the canonicalizer rejected any non-integer float,
+# and `plan_hash = content_hash(resolved_plan)` hashes `resolved_plan["inputs"]`
+# verbatim. The captain ruling was to fix the canonicalizers (RFC 8785 §3.2.2.3
+# ECMAScript Number::toString) rather than ban fractional inputs — these prove
+# that fix end-to-end through the real StartRun path, not just the canonical.py
+# unit.
+
+
+def _definition_with_number_input(*, default: float) -> dict:
+    return {
+        "version": 1,
+        "inputs": [{"name": "quantity", "type": "number", "default": default}],
+        "integrations": [],
+        "agents": [
+            {
+                "slot": "main",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [{"kind": "agent.prompt", "prompt": "process {{inputs.quantity}}"}],
+            }
+        ],
+    }
+
+
+async def _start_local_run_with_number_input(
+    db: AsyncSession, *, default: float, inputs: dict[str, object]
+):
+    user = await _make_user(db)
+    canonical, _specs = parse_definition(
+        _definition_with_number_input(default=default), require_steps=False
+    )
+    workflow, _version = await store.create_workflow_with_version(
+        db,
+        owner_user_id=user.id,
+        created_by_user_id=user.id,
+        name=f"wf-{uuid.uuid4().hex[:6]}",
+        description=None,
+        definition_json=canonical,
+    )
+    run = await compiler.start_run(
+        db, user, workflow.id, inputs=inputs, target_mode=WORKFLOW_TARGET_MODE_LOCAL
+    )
+    return user, run
+
+
+async def test_startrun_hashes_a_fractional_number_input_default(
+    db_session: AsyncSession,
+) -> None:
+    """A workflow whose `number` input's *default* is fractional (1.5, not
+    overridden at StartRun) must compile and hash successfully — this is the
+    exact shape WS2b found broken before the float canonicalization fix."""
+    _user, run = await _start_local_run_with_number_input(db_session, default=1.5, inputs={})
+    assert run.resolved_plan_json["inputs"]["quantity"] == 1.5
+    # The plan hash must round-trip: recomputing content_hash over the stored
+    # plan reproduces the persisted plan_hash exactly.
+    assert run.plan_hash == content_hash(run.resolved_plan_json)
+    assert run.plan_hash.startswith("sha256:")
+
+
+async def test_startrun_hashes_a_fractional_startrun_input_override(
+    db_session: AsyncSession,
+) -> None:
+    """A fractional value supplied at StartRun (overriding an integral default)
+    must also compile and hash successfully."""
+    _user, run = await _start_local_run_with_number_input(
+        db_session, default=1, inputs={"quantity": 2.75}
+    )
+    assert run.resolved_plan_json["inputs"]["quantity"] == 2.75
+    assert run.plan_hash == content_hash(run.resolved_plan_json)
+    assert run.plan_hash.startswith("sha256:")
+
+
+async def test_startrun_hashes_an_integral_number_input_without_trailing_zero(
+    db_session: AsyncSession,
+) -> None:
+    """An integral float input (e.g. 2.0) must canonicalize as "2", not "2.0" —
+    the RFC 8785 / ECMA-262 Number::toString rule the fix implements."""
+    _user, run = await _start_local_run_with_number_input(
+        db_session, default=1, inputs={"quantity": 2.0}
+    )
+    assert run.resolved_plan_json["inputs"]["quantity"] == 2.0
+    canonical_bytes = canonicalize(run.resolved_plan_json)
+    assert b'"quantity":2' in canonical_bytes
+    assert b'"quantity":2.0' not in canonical_bytes
+    assert run.plan_hash == content_hash(run.resolved_plan_json)
 
 
 # --- immutable ledger guard -----------------------------------------------------
