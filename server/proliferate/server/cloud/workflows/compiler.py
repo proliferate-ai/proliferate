@@ -40,8 +40,10 @@ from proliferate.constants.workflows import (
 )
 from proliferate.db.store import cloud_workflows as store
 from proliferate.db.store import cloud_workspaces as cloud_workspace_store
+from proliferate.db.store import organizations as organizations_store
 from proliferate.db.store.cloud_workflows import WorkflowRunRecord, WorkflowVersionRecord
 from proliferate.server.cloud.errors import CloudApiError
+from proliferate.server.cloud.workflows.capability_resolution import freeze_capability_leases
 from proliferate.server.cloud.workflows.composition import resolve_included_agents
 from proliferate.server.cloud.workflows.domain.composition import WorkflowCompositionError
 from proliferate.server.cloud.workflows.domain.definition import (
@@ -563,4 +565,18 @@ async def start_run(
     )
     resolved_plan["gateway"] = gateway_block
     updated = await store.update_run(db, run_id=run_id, resolved_plan_json=resolved_plan)
+
+    # WS3a: freeze the run's EXACT per-slot capability leases — the new frozen
+    # truth alongside the namespace token above. This runs in parallel with the
+    # namespace grant (the runtime still consumes namespaces until WS3b/WS5c);
+    # enforcement cutover is WS3b/WS3c. A resolution failure must not create a
+    # dangling run, so it happens in the same transaction as the run row.
+    membership = await organizations_store.get_current_membership_for_user(db, effective_owner)
+    await freeze_capability_leases(
+        db,
+        run_id=run_id,
+        owner_user_id=effective_owner,
+        organization_id=membership.organization.id if membership is not None else None,
+        run_scope=run_scope,
+    )
     return updated if updated is not None else run

@@ -39,6 +39,8 @@ class FunctionInvocationRecord:
     args_schema_json: dict[str, object]
     chat_scope_enabled: bool
     has_headers: bool
+    # §7.2 semantic revision — the exact meaning a workflow run freezes (WS3a).
+    semantic_revision: int
     archived_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -57,6 +59,7 @@ def _record(row: FunctionInvocationDefinition) -> FunctionInvocationRecord:
         args_schema_json=dict(row.args_schema_json or {}),
         chat_scope_enabled=row.chat_scope_enabled,
         has_headers=bool(row.headers_ciphertext),
+        semantic_revision=row.semantic_revision,
         archived_at=row.archived_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -84,6 +87,18 @@ async def get_by_name(
     db: AsyncSession, *, owner_user_id: UUID, name: str
 ) -> FunctionInvocationRecord | None:
     row = await _row_by_name(db, owner_user_id=owner_user_id, name=name)
+    return _record(row) if row is not None else None
+
+
+async def get_by_id(db: AsyncSession, definition_id: UUID) -> FunctionInvocationRecord | None:
+    """Load a definition by id INCLUDING archived rows.
+
+    The live-authorization seam (WS3a ``capability_authz``) needs to distinguish
+    "archived after StartRun" (deny) from "gone", so this deliberately does NOT
+    filter ``archived_at`` — the returned record carries ``archived_at`` and
+    ``semantic_revision`` for the revalidation decision.
+    """
+    row = await db.get(FunctionInvocationDefinition, definition_id)
     return _record(row) if row is not None else None
 
 
@@ -166,16 +181,27 @@ async def update(
     row = await _row_by_name(db, owner_user_id=owner_user_id, name=name)
     if row is None:
         return None
+    # Display metadata (display_name/description) is NOT part of the semantic
+    # revision (§7.2 bump list excludes it). Only endpoint/method/mapping-schema
+    # edits bump — and only when the value actually changes.
     if display_name is not UNSET:
         row.display_name = display_name
     if description is not UNSET:
         row.description = description
-    if endpoint_url is not None:
+    semantic_changed = False
+    if endpoint_url is not None and endpoint_url != row.endpoint_url:
         row.endpoint_url = endpoint_url
-    if method is not None:
+        semantic_changed = True
+    if method is not None and method != row.method:
         row.method = method
-    if args_schema_json is not None:
+        semantic_changed = True
+    if args_schema_json is not None and args_schema_json != (row.args_schema_json or {}):
         row.args_schema_json = args_schema_json
+        semantic_changed = True
+    if semantic_changed:
+        # §7.2: any endpoint/method/mapping/schema edit creates a new semantic
+        # revision and cannot mutate a running workflow's frozen meaning.
+        row.semantic_revision = (row.semantic_revision or 1) + 1
     await db.flush()
     return _record(row)
 

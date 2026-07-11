@@ -33,6 +33,7 @@ from proliferate.server.cloud.integration_gateway.domain.tool_args import (
 from proliferate.server.cloud.integration_gateway.models import GatewayProviderAccount
 from proliferate.server.cloud.integrations.access import resolve_launch
 from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cache
+from proliferate.server.cloud.workflows import capability_authz
 
 _PROTOCOL_VERSION = "2025-06-18"
 
@@ -283,6 +284,30 @@ async def call_provider_tool(
             decision.detail or "This tool is out of scope for the caller.",
             status_code=403,
         )
+    # WS3a live-narrowing seam: for a workflow run token, the frozen per-run
+    # capability leases are ALSO enforced (both layers must pass). A run with no
+    # leases is legacy and keeps namespace-only behavior; a capability created or
+    # edited after StartRun has no matching frozen lease and is denied here even
+    # though the namespace layer above allowed the provider. No positive cache —
+    # revalidated live on every call (archive/revoke/membership deny next call).
+    if grant.run_id is not None:
+        capability_decision = await capability_authz.authorize_dispatch(
+            db,
+            run=capability_authz.CapabilityRunContext(
+                run_id=grant.run_id,
+                owner_user_id=grant.owner_user_id,
+                organization_id=grant.organization_id,
+            ),
+            provider=provider,
+            tool=tool,
+        )
+        if not capability_decision.allowed:
+            raise CloudApiError(
+                "integration_gateway_capability_denied",
+                capability_decision.detail
+                or "This capability is not part of the run's frozen authority.",
+                status_code=403,
+            )
     # Function invocations are a NON-MCP branch: a raw-httpx request our server
     # makes (Part II §11), not an upstream MCP tools/call. Scope was authorized
     # above by the same two-layer machinery (``functions`` provider, tool = name).

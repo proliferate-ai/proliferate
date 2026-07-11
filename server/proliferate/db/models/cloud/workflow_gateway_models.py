@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     text,
@@ -90,6 +91,14 @@ class FunctionInvocationDefinition(Base):
     # JSON Schema the agent's call arguments are validated against at the gateway
     # (jsonschema), then merged into the request body/query.
     args_schema_json: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    # §7.2 semantic revision: bumps on any SEMANTIC edit (endpoint, method,
+    # mapping/schema, header names/templates, status/redirect/idempotency), but
+    # NOT on a secret-value-only rotation behind the same binding identity. A
+    # workflow run freezes the exact ``(id, semantic_revision)`` it resolved, so a
+    # later edit produces a new revision and cannot mutate a running run's meaning.
+    semantic_revision: Mapped[int] = mapped_column(
+        Integer, default=1, server_default=text("1")
+    )
     # §2 default access modes: WORKFLOW-ONLY until explicitly enabled for chat.
     chat_scope_enabled: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=text("false")

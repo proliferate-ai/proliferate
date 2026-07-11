@@ -3,6 +3,21 @@
 WS3a freezes exact ``CapabilityRef``s per run+slot at StartRun; WS3c records
 activation-keyed receipts. This module owns only the mechanical inserts/reads;
 authorization and gate satisfaction are gateway/runtime logic.
+
+``capability_key`` canonical format (WS3a-defined; the codec lives in
+``server.cloud.workflows.domain.capabilities`` — ``build``/``parse``):
+
+    integration_tool:<providerDefinitionId>:<providerRevision>:<toolName>
+    function:<definitionId>:<semanticRevision>
+    product_mcp:<definition>:<policyRevision>
+
+Every non-``kind`` component is percent-quoted (``safe=""``) before joining on
+``:`` so a colon inside a component (e.g. a timestamp-shaped ``providerRevision``,
+which reuses the definition's ``updated_at``) round-trips unambiguously.
+``inputSchemaHash`` is intentionally NOT in the key (it may be the explicit
+``"unknown"`` sentinel until the tool-schema cache is warm); it is stored in its
+own column for audit. The key makes ``(run_id, slot_id, capability_key)`` a single
+clean uniqueness constraint regardless of which union arm is populated.
 """
 
 from __future__ import annotations
