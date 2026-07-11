@@ -1,157 +1,48 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  createEmptyDefinition,
-  isParallelGroup,
-  parseWorkflowDefinition,
-  serializeWorkflowDefinition,
   spineAgentNodes,
-  type WorkflowAgentNode,
   type WorkflowDefinition,
 } from "@proliferate/product-domain/workflows/definition";
-import { getWorkflow } from "@/lib/access/cloud/workflows";
 import {
   freePlanWorkflowLimit,
   workflowCreateAllowed,
-  workflowTriggerLabel,
   type WorkflowTargetMode,
 } from "@proliferate/product-domain/workflows/model";
-import {
-  coerceRunStatus,
-  formatRunDuration,
-  runDotKind,
-  workflowRunStatusLabel,
-  type WorkflowRunStatus,
-} from "@proliferate/product-domain/workflows/run-status";
 import {
   deriveLastUsedTarget,
   type WorkflowRunTargetRecord,
 } from "@proliferate/product-domain/workflows/run-launch";
-import type { WorkflowTemplate } from "@proliferate/product-domain/workflows/templates";
-import { deriveWorkflowInputsFromPollSample } from "@proliferate/product-domain/workflows/poll-setup";
 import { ProliferateClientError } from "@proliferate/cloud-sdk";
 import { useWorkflowRunPillStore } from "@/stores/workflows/workflow-run-pill-store";
 import { MainSidebarPageShell } from "@/components/workspace/shell/screen/MainSidebarPageShell";
 import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
 import { EmptyState } from "@proliferate/ui/layout/EmptyState";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Input } from "@proliferate/ui/primitives/Input";
-import { SegmentedControl } from "@proliferate/ui/primitives/SegmentedControl";
-import { ArrowLeft, Play, Pencil, Plus, RefreshCw, Search } from "@proliferate/ui/icons";
-import { useCloudAgentCatalog } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
+import { ArrowLeft, Play, Pencil, Plus, RefreshCw } from "@proliferate/ui/icons";
 import { useWorkflows, useWorkflowRuns } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
 import { useLaunchWorkflowRun } from "@/hooks/access/cloud/workflows/use-launch-workflow-run";
-import { useInspectPollEndpoint } from "@/hooks/access/cloud/workflows/use-inspect-poll-endpoint";
+import { useWorkflowDefinitionFetch } from "@/hooks/access/cloud/workflows/use-workflow-definition-fetch";
 import { useCloudRunTargetWorkspaces } from "@/hooks/access/cloud/workspaces/use-cloud-run-target-workspaces";
 import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
+import { useWorkflowCreateFlows } from "@/hooks/workflows/workflows/use-workflow-create-flows";
 import type { WorkflowResponse, WorkflowRunResponse } from "@/hooks/access/cloud/workflows/types";
-import { WorkflowListRowContainer } from "../home/WorkflowListRowContainer";
-import { WorkflowRunRow, Chip, TargetGlyph, type WorkflowRunRowView } from "../home/WorkflowListRow";
+import type { RunStatusFilter, TargetFilter } from "@/hooks/workflows/derived/workflow-run-row-view";
+import { WorkflowListView } from "../home/WorkflowListView";
+import { WorkflowRunsDrillIn } from "../home/WorkflowRunsDrillIn";
 import {
   WorkflowRunArgsModal,
   type WorkflowRunSubmit,
   type WorkflowRunTargetOption,
 } from "../home/WorkflowRunArgsModal";
 import { WorkflowTemplatesGallery } from "../home/WorkflowTemplatesGallery";
-import {
-  WorkflowPollInspectModal,
-  type WorkflowPollInspectSubmit,
-} from "../home/WorkflowPollInspectModal";
-import type { PollInspectResponse } from "@/hooks/access/cloud/workflows/types";
+import { WorkflowPollInspectModal } from "../home/WorkflowPollInspectModal";
 
 // Mirrors gateway_grants.py's L22 fail-fast code — a declared function
 // provider with no ready account for the owner. StartRun never silently
 // narrows the grant, so this always means "connect the named provider".
 const FUNCTION_PROVIDER_NOT_READY_CODE = "workflow_function_provider_not_ready";
-
-type TargetFilter = "all" | "cloud" | "local";
-type RunStatusFilter = "all" | "running" | "success" | "failed";
-
-interface DesktopCatalogAgent {
-  kind: string;
-  defaultModelId: string | null;
-  models: { id: string }[];
-}
-
-function defaultNodeFromCatalog(agents: readonly DesktopCatalogAgent[] | undefined): WorkflowAgentNode {
-  const agent = agents?.[0];
-  return {
-    slot: "main",
-    harness: agent?.kind ?? "claude",
-    model: agent?.defaultModelId ?? agent?.models[0]?.id ?? "sonnet",
-    steps: [],
-  };
-}
-
-/** Re-default the template's first agent node to the owner's first catalog agent. */
-function withDefaultAgent(
-  definition: WorkflowDefinition,
-  agents: readonly DesktopCatalogAgent[] | undefined,
-): WorkflowDefinition {
-  const agent = agents?.[0];
-  const [first, ...rest] = definition.agents;
-  // Seed templates are single-node; a parallel-group first entry is left as-is
-  // (re-defaulting a group's harness/model is the editor phase's concern).
-  if (!agent || !first || isParallelGroup(first)) {
-    return definition;
-  }
-  return {
-    ...definition,
-    agents: [
-      { ...first, harness: agent.kind, model: agent.defaultModelId ?? agent.models[0]?.id ?? first.model },
-      ...rest,
-    ],
-  };
-}
-
-function relativeTime(iso: string | null): string {
-  if (!iso) {
-    return "";
-  }
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) {
-    return "";
-  }
-  const deltaSec = Math.round((Date.now() - ms) / 1000);
-  if (deltaSec < 60) {
-    return "just now";
-  }
-  if (deltaSec < 3600) {
-    return `${Math.floor(deltaSec / 60)}m ago`;
-  }
-  if (deltaSec < 86_400) {
-    return `${Math.floor(deltaSec / 3600)}h ago`;
-  }
-  return `${Math.floor(deltaSec / 86_400)}d ago`;
-}
-
-function runFilterMatches(filter: RunStatusFilter, status: WorkflowRunStatus): boolean {
-  switch (filter) {
-    case "all":
-      return true;
-    case "running":
-      return !["completed", "failed", "cancelled", "missed"].includes(status);
-    case "success":
-      return status === "completed";
-    case "failed":
-      return status === "failed" || status === "cancelled" || status === "missed";
-  }
-}
-
-function buildRunRowView(run: WorkflowRunResponse): WorkflowRunRowView {
-  const status = coerceRunStatus(run.status);
-  const originKind = workflowTriggerLabel(run.triggerKind);
-  const ago = relativeTime(run.startedAt ?? run.createdAt);
-  return {
-    id: run.id,
-    dotKind: runDotKind(status),
-    statusLabel: workflowRunStatusLabel(status, status === "unknown" ? run.status : run.errorCode),
-    originLabel: ago ? `${originKind} · ${ago}` : originKind,
-    durationLabel: formatRunDuration(run.startedAt, run.finishedAt),
-    target: run.targetMode === "personal_cloud" ? "cloud" : run.targetMode === "local" ? "local" : null,
-  };
-}
 
 export function WorkflowsHomeScreen() {
   const navigate = useNavigate();
@@ -167,23 +58,19 @@ export function WorkflowsHomeScreen() {
   } | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [runErrorCode, setRunErrorCode] = useState<string | null>(null);
-  const [pollModalOpen, setPollModalOpen] = useState(false);
-  const [pollError, setPollError] = useState<string | null>(null);
-  const [pollResult, setPollResult] = useState<PollInspectResponse | null>(null);
 
   const workflowsQuery = useWorkflows();
   const runsQuery = useWorkflowRuns(null);
-  const catalogQuery = useCloudAgentCatalog();
   const workspacesQuery = useWorkspaces();
   const cloudTargetsQuery = useCloudRunTargetWorkspaces();
-  const { createMutation, archiveMutation } = useWorkflowMutations();
+  const { archiveMutation } = useWorkflowMutations();
   const launchMutation = useLaunchWorkflowRun();
   const showRunPill = useWorkflowRunPillStore((state) => state.show);
-  const inspectPollMutation = useInspectPollEndpoint();
+  const { fetchDefinition } = useWorkflowDefinitionFetch();
+  const createFlows = useWorkflowCreateFlows();
 
   const workflows = workflowsQuery.data?.workflows ?? [];
   const runs = runsQuery.data?.runs ?? [];
-  const agents = catalogQuery.data?.agents as DesktopCatalogAgent[] | undefined;
 
   const open = openId ? workflows.find((wf) => wf.id === openId) ?? null : null;
 
@@ -244,15 +131,6 @@ export function WorkflowsHomeScreen() {
     });
   }, [workflows, query, targetFilter, lastRunByWorkflow]);
 
-  const openRuns = useMemo(() => {
-    if (!open) {
-      return [];
-    }
-    return runs
-      .filter((run) => run.workflowId === open.id)
-      .filter((run) => runFilterMatches(runFilter, coerceRunStatus(run.status)));
-  }, [runs, open, runFilter]);
-
   // R6: run rows already store the target they ran in — derive the last-used
   // workspace per workflow to pre-fill the modal (no new stored shape).
   const runTargetRecords = useMemo<WorkflowRunTargetRecord[]>(
@@ -299,75 +177,23 @@ export function WorkflowsHomeScreen() {
     setArgsModal({ workflow, definition });
   };
 
-  const createAndEdit = (name: string, description: string | null, definition: WorkflowDefinition) => {
+  /** Drill-in Run button: fetch the workflow's current definition (cached by
+   * the row container's detail query in the common path) and open the shared
+   * launch modal — same modal, same submit path as the row Run buttons. */
+  const navigateToRunModal = async (workflow: WorkflowResponse) => {
     setRunError(null);
-    createMutation.mutate(
-      {
-        name,
-        description: description ?? undefined,
-        definition: serializeWorkflowDefinition(definition),
-      },
-      {
-        onSuccess: (detail) => navigate(`/workflows/${detail.workflow.id}/edit`),
-        // Surfaced through the same banner as run errors — a silent create
-        // failure otherwise just stops the spinner with no explanation.
-        onError: (error) => setRunError(error.message),
-      },
-    );
-  };
-
-  const startFromScratch = () =>
-    createAndEdit("Untitled workflow", null, createEmptyDefinition(defaultNodeFromCatalog(agents)));
-
-  const useTemplate = (template: WorkflowTemplate) =>
-    createAndEdit(template.name, template.description, withDefaultAgent(template.definition, agents));
-
-  // Flow 1 (workflow-from-poll, mental-model §5): probe /init, derive a starting
-  // `inputs` skeleton from the sample, then hand off into the editor exactly like
-  // any other creation path (`createAndEdit`) — a bad /init is a hard error shown
-  // in the modal, nothing is created.
-  const openPollModal = () => {
-    setPollError(null);
-    setPollResult(null);
-    setPollModalOpen(true);
-  };
-
-  const closePollModal = () => {
-    setPollModalOpen(false);
-    setPollError(null);
-    setPollResult(null);
-  };
-
-  // Phase 1: probe /init and hold the result so the modal can review it (derived
-  // inputs + any sample fields that couldn't become inputs) before hand-off.
-  const startFromPoll = (submit: WorkflowPollInspectSubmit) => {
-    setPollError(null);
-    inspectPollMutation.mutate(
-      { url: submit.url, authHeader: submit.authHeader, authValue: submit.authValue },
-      {
-        onSuccess: (result) => setPollResult(result),
-        onError: (error) => setPollError(error.message),
-      },
-    );
-  };
-
-  // Phase 2: seed a new definition with the derived inputs and hand off into the
-  // editor exactly like any other creation path (`createAndEdit`).
-  const confirmFromPoll = () => {
-    if (!pollResult) return;
-    const inputs = deriveWorkflowInputsFromPollSample(pollResult.derivedInputs);
-    const definition = {
-      ...createEmptyDefinition(defaultNodeFromCatalog(agents)),
-      inputs,
-    };
-    closePollModal();
-    createAndEdit("Untitled workflow", null, definition);
+    setRunErrorCode(null);
+    try {
+      const definition = await fetchDefinition(workflow.id);
+      if (definition) {
+        handleRun(workflow, definition);
+      }
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : String(error));
+    }
   };
 
   const showEmptyGallery = !open && !workflowsQuery.isLoading && workflows.length === 0;
-
-  const openLastRun = open ? lastRunByWorkflow.get(open.id) : null;
-  const openScheduleChipLabel = null; // schedule facts render per-row; the drill-in header keeps target only.
 
   return (
     <MainSidebarPageShell>
@@ -413,13 +239,13 @@ export function WorkflowsHomeScreen() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={openPollModal}
-                      disabled={!canCreate || createMutation.isPending}
+                      onClick={createFlows.openPollModal}
+                      disabled={!canCreate || createFlows.isCreating}
                     >
                       <RefreshCw className="size-3.5" />
                       From a poll feed
                     </Button>
-                    <Button size="sm" onClick={startFromScratch} disabled={!canCreate || createMutation.isPending}>
+                    <Button size="sm" onClick={createFlows.startFromScratch} disabled={!canCreate || createFlows.isCreating}>
                       <Plus className="size-3.5" />
                       New
                     </Button>
@@ -432,6 +258,11 @@ export function WorkflowsHomeScreen() {
           {runError ? (
             <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui-sm text-destructive">
               {runError}
+            </p>
+          ) : null}
+          {createFlows.createError ? (
+            <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-ui-sm text-destructive">
+              {createFlows.createError}
             </p>
           ) : null}
 
@@ -447,99 +278,33 @@ export function WorkflowsHomeScreen() {
             />
           ) : showEmptyGallery ? (
             <WorkflowTemplatesGallery
-              busy={createMutation.isPending}
-              onUseTemplate={useTemplate}
-              onStartFromScratch={startFromScratch}
-              onStartFromPoll={openPollModal}
+              busy={createFlows.isCreating}
+              onUseTemplate={createFlows.useTemplate}
+              onStartFromScratch={createFlows.startFromScratch}
+              onStartFromPoll={createFlows.openPollModal}
             />
           ) : open ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3 pb-1">
-                <span className="min-w-0 flex-1" />
-                {openScheduleChipLabel ? <Chip>{openScheduleChipLabel}</Chip> : null}
-                {openLastRun?.targetMode ? (
-                  <Chip>
-                    <TargetGlyph
-                      target={openLastRun.targetMode === "personal_cloud" ? "cloud" : "local"}
-                      className="size-3"
-                    />
-                    {openLastRun.targetMode === "personal_cloud" ? "cloud" : "local"}
-                  </Chip>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2 pb-2">
-                <SegmentedControl
-                  ariaLabel="Filter runs by status"
-                  value={runFilter}
-                  onChange={setRunFilter}
-                  items={[
-                    { id: "all", label: "All" },
-                    { id: "running", label: "Running" },
-                    { id: "success", label: "Completed" },
-                    { id: "failed", label: "Failed" },
-                  ]}
-                />
-              </div>
-              {openRuns.map((run) => (
-                <WorkflowRunRow
-                  key={run.id}
-                  view={buildRunRowView(run)}
-                  onOpen={() => navigate(`/workflows/${open.id}/runs/${run.id}`)}
-                />
-              ))}
-              {openRuns.length === 0 ? (
-                <span className="px-1 py-4 text-xs text-faint">
-                  {runFilter === "all" ? "No runs yet — Run it to see history here." : "No runs match this filter."}
-                </span>
-              ) : null}
-            </div>
+            <WorkflowRunsDrillIn
+              workflow={open}
+              runs={runs}
+              runFilter={runFilter}
+              onRunFilterChange={setRunFilter}
+              onOpenRun={(runId) => navigate(`/workflows/${open.id}/runs/${runId}`)}
+            />
           ) : (
-            <div className="flex flex-col gap-2">
-              {!canCreate ? (
-                <p className="text-ui-sm text-faint">
-                  Free plan: one workflow. Archive yours to create another.
-                </p>
-              ) : null}
-              <div className="flex items-center gap-2 pb-2">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search workflows…"
-                    className="h-8 pl-8"
-                  />
-                </div>
-                <SegmentedControl
-                  ariaLabel="Filter workflows by run target"
-                  value={targetFilter}
-                  onChange={setTargetFilter}
-                  items={[
-                    { id: "all", label: "All" },
-                    { id: "cloud", label: "Cloud" },
-                    { id: "local", label: "Local" },
-                  ]}
-                />
-              </div>
-              {filteredWorkflows.map((workflow) => {
-                const last = lastRunByWorkflow.get(workflow.id) ?? null;
-                return (
-                  <WorkflowListRowContainer
-                    key={workflow.id}
-                    workflow={workflow}
-                    lastRun={last}
-                    lastRunAgoLabel={last ? relativeTime(last.startedAt ?? last.createdAt) || "recently" : null}
-                    onOpen={(workflowId) => setOpenId(workflowId)}
-                    onRun={handleRun}
-                    onEdit={(workflowId) => navigate(`/workflows/${workflowId}/edit`)}
-                    onArchive={(workflowId) => archiveMutation.mutate(workflowId)}
-                  />
-                );
-              })}
-              {filteredWorkflows.length === 0 ? (
-                <span className="px-1 py-4 text-xs text-faint">No workflows match.</span>
-              ) : null}
-            </div>
+            <WorkflowListView
+              workflows={filteredWorkflows}
+              canCreate={canCreate}
+              query={query}
+              onQueryChange={setQuery}
+              targetFilter={targetFilter}
+              onTargetFilterChange={setTargetFilter}
+              lastRunByWorkflow={lastRunByWorkflow}
+              onOpen={setOpenId}
+              onRun={handleRun}
+              onEdit={(workflowId) => navigate(`/workflows/${workflowId}/edit`)}
+              onArchive={(workflowId) => archiveMutation.mutate(workflowId)}
+            />
           )}
         </ProductPageShell>
       </div>
@@ -582,38 +347,21 @@ export function WorkflowsHomeScreen() {
       ) : null}
 
       <WorkflowPollInspectModal
-        open={pollModalOpen}
-        busy={inspectPollMutation.isPending || createMutation.isPending}
-        error={pollError}
+        open={createFlows.pollModalOpen}
+        busy={createFlows.isInspectingPoll || createFlows.isCreating}
+        error={createFlows.pollError}
         review={
-          pollResult
+          createFlows.pollResult
             ? {
-                derivedCount: pollResult.derivedInputs.length,
-                skippedFields: pollResult.skippedFields,
+                derivedCount: createFlows.pollResult.derivedInputs.length,
+                skippedFields: createFlows.pollResult.skippedFields,
               }
             : null
         }
-        onClose={closePollModal}
-        onSubmit={startFromPoll}
-        onConfirm={confirmFromPoll}
+        onClose={createFlows.closePollModal}
+        onSubmit={createFlows.startFromPoll}
+        onConfirm={createFlows.confirmFromPoll}
       />
     </MainSidebarPageShell>
   );
-
-  /** Drill-in Run button: fetch the workflow's current definition (cached by
-   * the row container's detail query in the common path) and open the shared
-   * launch modal — same modal, same submit path as the row Run buttons. */
-  async function navigateToRunModal(workflow: WorkflowResponse) {
-    setRunError(null);
-    setRunErrorCode(null);
-    try {
-      const detail = await getWorkflow(workflow.id);
-      const raw = detail.currentVersion?.definition;
-      if (raw) {
-        handleRun(workflow, parseWorkflowDefinition(raw));
-      }
-    } catch (error) {
-      setRunError(error instanceof Error ? error.message : String(error));
-    }
-  }
 }

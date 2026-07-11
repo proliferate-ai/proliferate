@@ -9,12 +9,12 @@ import {
   type WorkflowFunctionProviderOption,
 } from "@/components/workflows/editor/WorkflowFunctionsCard";
 import {
-  TriggerBadgeRow,
-  TriggerForm,
-  type TriggerDraft,
   type WorkflowTriggerRepoOption,
   type WorkflowTriggerResponse,
 } from "@/components/workflows/editor/WorkflowTriggersCard";
+import { TriggerBadgeRow } from "@/components/workflows/editor/triggers/TriggerBadgeRow";
+import { TriggerForm } from "@/components/workflows/editor/triggers/TriggerForm";
+import type { TriggerDraft } from "@/hooks/workflows/workflows/use-workflow-trigger-drafts";
 import { presetForRrule } from "@/lib/domain/automations/schedule/schedule";
 import type { EditorAgent } from "@/components/workflows/editor/WorkflowStepPanel";
 

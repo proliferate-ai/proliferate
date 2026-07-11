@@ -71,5 +71,3 @@ server/tests/unit/test_workflow_run_gateway.py 1303 per-run gateway token regres
 server/tests/unit/test_workflow_service.py 793 workflow service regression coverage pending split, workflows v1 launch debt
 server/tests/unit/test_workflow_triggers.py 1465 trigger CRUD/schedule/poll regression coverage pending split, workflows v1 launch debt
 apps/desktop/src/components/workflows/editor/WorkflowStepPanel.tsx 559 workflows v1 launch surface; split pass queued post-launch
-apps/desktop/src/components/workflows/editor/WorkflowTriggersCard.tsx 1057 workflows v1 launch surface; split pass queued post-launch
-apps/desktop/src/components/workflows/screen/WorkflowEditorScreen.tsx 1038 workflows v1 launch surface; split pass queued post-launch
