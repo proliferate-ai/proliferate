@@ -113,7 +113,6 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
   useRefreshAgentCatalog: () => ({ mutate: refreshMutate, isPending: false }),
   useUpsertCatalogOverride: () => ({ mutate: overrideMutate, isPending: false }),
-  useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
 }));
 
 vi.mock("@/hooks/organizations/facade/use-active-organization", () => ({ useActiveOrganization: () => ({ activeOrganizationId: null }) }));
