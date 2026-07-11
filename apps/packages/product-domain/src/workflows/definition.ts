@@ -2,20 +2,14 @@
  * Pure workflow-definition model — format v2 (data-contract §1).
  *
  * Client-side mirror of the server schema (`server/.../workflows/domain/
- * definition.py` + `constants/workflows.py`). The v2 top-level shape is
- * `{version, name?, description?, inputs, integrations, agents}`: an ordered
- * spine of agent nodes (`{slot, harness, model, steps}`). There is no top-level
- * `steps` and no `setup` — slot = session affinity; `session_binding` is a
- * run-context property stamped on the resolved plan, never authored.
- *
- * The on-the-wire definition dict is snake_case (validated verbatim by the
- * control plane); the in-memory model here is camelCase for editor ergonomics.
- * `validation.ts` reproduces the server's strict checks for live feedback; the
- * server remains the authority on save.
- *
- * NOTE: the desktop editor components and sibling product-domain modules
- * (model.ts, presentation.ts, effective-config.ts, templates.ts) still consume
- * the v1 shape and are migrated in the editor phase.
+ * definition.py` + `constants/workflows.py`). Top-level shape:
+ * `{version, name?, description?, inputs, integrations, agents}` — an ordered
+ * spine of agent nodes (`{slot, harness, model, steps}`); slot = session
+ * affinity, no top-level `steps`/`setup`. The wire dict is snake_case; the model
+ * here is camelCase. `validation.ts` mirrors the server's strict checks for live
+ * feedback; the server is the authority on save. Stable UUID identities and the
+ * canonical (id-carrying) serializer/parser live in `identity.ts`; unsupported
+ * future-version handling lives in `read-only.ts`.
  */
 
 // --- Enumerations (mirror constants/workflows.py) ------------------------------
@@ -75,17 +69,12 @@ export const FREE_PLAN_MAX_WORKFLOWS_PER_USER = 1;
 export const WORKFLOW_MAX_INTEGRATIONS = 25;
 
 /**
- * The integration namespaces exposed to the editor's picker at launch (L21,
- * 2026-07-07): the issues service and Slack, the only two integrations with no
- * mid-run OAuth-refresh failure mode. OAuth-DCR providers (Linear, Notion,
- * Supabase) are deferred — see architecture doc §6.1/§6.6. E3: namespace-only —
- * no per-tool selection.
- *
- * `functions` (track 1b) is the reserved virtual provider for the owner's HTTP
- * function invocations — it has no integration-definition row (server never
- * returns it from the catalog), so the editor must synthesize its picker entry
- * itself, gated on the owner having ≥1 function invocation (mirrors the
- * server's `visible_provider_namespaces`, gateway_grants.py).
+ * Integration namespaces in the editor picker at launch (L21): issues + Slack
+ * (no mid-run OAuth-refresh failure mode); OAuth-DCR providers deferred. E3:
+ * namespace-only. `functions` (track 1b) is the reserved virtual provider for
+ * owner HTTP function invocations — no catalog row, so the editor synthesizes
+ * its picker entry, gated on ≥1 function invocation (server
+ * `visible_provider_namespaces`, gateway_grants.py).
  */
 export const WORKFLOW_INTEGRATION_LAUNCH_NAMESPACES = ["issues", "slack", "functions"] as const;
 
@@ -144,6 +133,13 @@ interface StepBase {
   onFail: WorkflowOnFail;
   /** The one-line skim register (plain English). */
   label?: string;
+  /**
+   * Stable lowercase-UUID step identity (feature spec §5.1). Business-data
+   * labels/order may change; references and React keys use this id. Absent on a
+   * bare v1 wire dict; populated by the identity layer (`identity.ts`). New
+   * objects use UUIDv7; upgraded legacy definitions use derived UUIDv5.
+   */
+  id?: string;
 }
 
 export interface AgentPromptStep extends StepBase {
@@ -194,10 +190,9 @@ export interface WorkflowNotifyFieldSpec {
 
 /**
  * Agent-filled notify fields (track 3c). The agent fills `schema`'s named scalar
- * fields (via the emit machinery) in `slot`, right before the notification sends;
- * the `message` references them as `{{fields.<name>}}`. Resolver-expanded into an
- * injected `agent.emit` + the notify with indexed refs — the runtime never sees
- * this block.
+ * fields in `slot` before the send; `message` references them as
+ * `{{fields.<name>}}`. Resolver-expanded into an injected `agent.emit` + the
+ * notify with indexed refs — the runtime never sees this block.
  */
 export interface WorkflowNotifyAgentFields {
   slot: string;
@@ -222,12 +217,10 @@ export interface BranchStep extends StepBase {
 }
 
 /**
- * Composition step (spec 3.5 / L20): inline another workflow's steps into this
- * workflow's single resolved plan. Definition-only — the server's resolver
- * splices the target's CURRENT version's steps at StartRun, before delivery, so
- * the runtime never sees a `workflow.include` step (there is no child run). `args`
- * maps the child's declared argument names to templated strings written in THIS
- * workflow's context (they may reference `{{args.*}}` / `{{steps...}}` here).
+ * Composition step (spec 3.5 / L20): inline another workflow's CURRENT-version
+ * steps into this workflow's single resolved plan at StartRun (definition-only;
+ * the runtime never sees a `workflow.include` step). `args` maps the child's
+ * declared argument names to templated strings in THIS workflow's context.
  */
 export interface WorkflowIncludeStep extends StepBase {
   kind: "workflow.include";
@@ -255,24 +248,33 @@ export interface WorkflowAgentNode {
   model: string;
   steps: WorkflowStep[];
   /**
-   * Per-slot integration narrowing (track 3c phase 2, data-contract §3
-   * "resolver-only change"). A subset of the workflow-level `integrations`
-   * list — validated by the server + this file's `validation.ts` mirror.
-   * Undefined (the default) = this slot keeps the full workflow-level list;
-   * an explicit (possibly empty) array narrows just this slot's runtime
-   * grant. Absence vs. an empty array are NOT the same thing.
+   * Stable node identity (a sequential node's `node` id, or a lane's `lane` id
+   * inside a parallel group) — feature spec §5.1. Separate from `slot`.
+   */
+  id?: string;
+  /**
+   * Stable slot identity, keyed by the slot label so repeated sequential uses of
+   * one slot share it (session affinity, §6.1). Editable slot labels are business
+   * data; bindings/keys use this id.
+   */
+  slotId?: string;
+  /**
+   * Per-slot integration narrowing (track 3c phase 2): a subset of the
+   * workflow-level `integrations`. Undefined = keep the full list; an explicit
+   * (possibly empty) array narrows this slot's grant. Absence != empty array.
    */
   integrations?: string[];
 }
 
 /**
- * A parallel group (L30 / D-031): 2+ agent nodes that run as concurrent lanes,
- * joining at the group's end. Lane name = the node's slot. Groups do not nest and
- * a lane may not contain a `workflow.include` step (v1 bounds — enforced by the
- * server; mirrored in validation.ts for editor feedback).
+ * A parallel group (L30 / D-031): 2+ agent nodes run as concurrent lanes joining
+ * at the group end. Lane name = node slot. Groups do not nest and a lane may not
+ * contain `workflow.include` (v1 bounds; mirrored in validation.ts).
  */
 export interface WorkflowParallelGroup {
   parallel: WorkflowAgentNode[];
+  /** Stable `group` identity (feature spec §5.1). */
+  id?: string;
 }
 
 /** A spine entry: either a standalone agent node or a parallel group. */
@@ -296,15 +298,14 @@ export interface SpineNodeEntry {
   node: WorkflowAgentNode;
   /** Spine entry index — a whole parallel group counts as one entry. */
   spineIndex: number;
-  /** Lane name: the node's slot for a parallel-group lane, "-" for a standalone node. */
+  /** Lane name: the node's slot for a group lane, "-" for a standalone node. */
   lane: string;
 }
 
 /**
- * Every agent node across the spine, in flatten order (lane-grouped, lane order),
- * with its spine index + lane. A parallel group occupies one spine index; each of
- * its lanes yields separately. Standalone nodes yield lane "-". Mirrors the
- * server's `iter_plan_nodes`.
+ * Every agent node across the spine, in flatten order (lane-grouped, lane order).
+ * A parallel group occupies one spine index; each lane yields separately;
+ * standalone nodes yield lane "-". Mirrors the server's `iter_plan_nodes`.
  */
 export function iterSpineNodes(definition: WorkflowDefinition): SpineNodeEntry[] {
   const out: SpineNodeEntry[] = [];
@@ -838,9 +839,8 @@ export interface FlatWorkflowStep {
  * Flatten every agent node's steps into one run-ordered list (spine order,
  * parallel groups lane-grouped in lane order — matching the server resolver).
  * `nodeIndex` is the flattened node ordinal (each lane is its own node/session);
- * `stepKey` carries the spine index + lane. Consumers that need a single "step
- * index" across the whole definition (presentation, run-status, effective-config)
- * build on this.
+ * `stepKey` carries the spine index + lane. Presentation, run-status, and
+ * effective-config build their single "step index" on this.
  */
 export function flattenWorkflowSteps(definition: WorkflowDefinition): FlatWorkflowStep[] {
   const out: FlatWorkflowStep[] = [];

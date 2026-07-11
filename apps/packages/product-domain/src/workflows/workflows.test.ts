@@ -278,7 +278,10 @@ describe("editor multi-agent round-trip (track 1a′ battery line 1)", () => {
     expect(validateWorkflowDefinition(reparsed)).toEqual([]);
   });
 
-  it("flags a duplicate agent slot across top-level rail items", () => {
+  it("allows the same slot across sequential stages (session affinity, §6.1)", () => {
+    // Feature spec §6.1: a run-level sequential slot owns one session; later
+    // sequential stages reusing the slot reuse that session. This REPLACES the
+    // old `duplicate_slot` rejection, which wrongly forbade sequential reuse.
     const definition: WorkflowDefinition = {
       version: 1,
       inputs: [],
@@ -288,8 +291,9 @@ describe("editor multi-agent round-trip (track 1a′ battery line 1)", () => {
         { slot: "main", harness: "codex", model: "gpt-5", steps: [] },
       ],
     };
-    const issues = validateWorkflowDefinition(definition);
-    expect(issues.some((issue) => issue.code === "duplicate_slot")).toBe(true);
+    const codes = validateWorkflowDefinition(definition).map((i) => i.code);
+    expect(codes).not.toContain("slot_lane_reused_sequential");
+    expect(codes).not.toContain("slot_concurrent_lanes");
   });
 });
 
@@ -383,7 +387,7 @@ describe("parallel groups (L30 / D-031)", () => {
     expect(validateWorkflowDefinition(definition).map((i) => i.code)).toContain("parallel_too_few");
   });
 
-  it("flags a duplicate emit across lanes and a duplicate slot across lane+node", () => {
+  it("flags a duplicate emit across lanes and a lane slot reused as a sequential stage", () => {
     const dupEmit = parallelDefinition();
     (dupEmit.agents[1] as { parallel: { steps: unknown[] }[] }).parallel[1]!.steps[0] = {
       kind: "agent.emit",
@@ -393,9 +397,13 @@ describe("parallel groups (L30 / D-031)", () => {
     };
     expect(validateWorkflowDefinition(dupEmit).map((i) => i.code)).toContain("duplicate_emit");
 
+    // §6.1: a lane slot may not also appear in a sequential stage. This REPLACES
+    // the old blanket `duplicate_slot` code with the lineage-specific rejection.
     const dupSlot = parallelDefinition();
     (dupSlot.agents[1] as { parallel: { slot: string }[] }).parallel[0]!.slot = "plan";
-    expect(validateWorkflowDefinition(dupSlot).map((i) => i.code)).toContain("duplicate_slot");
+    expect(validateWorkflowDefinition(dupSlot).map((i) => i.code)).toContain(
+      "slot_lane_reused_sequential",
+    );
   });
 
   it("flags workflow.include inside a parallel lane", () => {

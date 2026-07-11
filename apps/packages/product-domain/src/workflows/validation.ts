@@ -1,13 +1,11 @@
 /**
  * Editor-facing validation of a workflow definition — format v2 (data-contract §1).
  *
- * Reproduces the server's strict rules (`parse_definition`) so the editor can
- * surface bad refs, missing caps, duplicate slots/emits, and uncovered branch
- * cases before a save round-trip. The server remains the authority.
- *
- * Every issue carries a `location` so the editor can attach it to the offending
- * agent node, step card, or input row. Steps are addressed by their *flattened*
- * run-order index across the whole spine.
+ * Reproduces the server's strict rules (`parse_definition`) plus the §6.1/§6.2
+ * strictness owned here (slot lineage, emit schema profile, branch grammar — see
+ * `strict-rules.ts`) so the editor can surface issues before save. The server
+ * remains the authority. Every issue carries a `location` (offending node/step/
+ * input); steps are addressed by their flattened run-order index across the spine.
  */
 
 import {
@@ -29,6 +27,8 @@ import {
   type WorkflowStep,
 } from "./definition";
 import { iterReferences, validateStringReferences } from "./interpolation";
+import { parseWorkflowDefinitionResult } from "./read-only";
+import { branchFieldTypeIssue, emitSchemaIssues, validateSlotLineage } from "./strict-rules";
 
 export interface WorkflowIssueLocation {
   scope: "inputs" | "integrations" | "agents" | "agent" | "step" | "input";
@@ -49,10 +49,9 @@ export interface WorkflowIssue {
 export interface ValidateWorkflowOptions {
   harnessSupportsGoals?: (harness: string) => boolean;
   /**
-   * The id of the workflow being edited, if it has one (spec 3.5). Used to flag a
-   * `workflow.include` that targets the workflow itself (self-include). The full
-   * include-graph CYCLE check is SERVER-ONLY: it must fetch other workflows'
-   * current versions, which the editor doesn't have — the server is the authority.
+   * The id of the workflow being edited (spec 3.5), used to flag a self-include.
+   * The full include-graph CYCLE check is server-only (needs other workflows'
+   * current versions).
    */
   workflowId?: string;
 }
@@ -96,8 +95,7 @@ function templatedFields(step: WorkflowStep): TemplatedField[] {
     case "branch":
       return [{ field: "on", value: step.on }];
     case "workflow.include":
-      // Each input-mapping value is a templated string in THIS workflow's context
-      // (spec 3.5 obl. a) — validate its refs against the parent's inputs/emits.
+      // Each arg value is a templated string in this workflow's context (3.5a).
       return Object.entries(step.args).map(([key, value]) => ({
         field: `args.${key}`,
         value,
@@ -105,21 +103,17 @@ function templatedFields(step: WorkflowStep): TemplatedField[] {
   }
 }
 
-/** Mirrors the server's `_positive_int` (definition.py): a value is a valid
- * "positive integer" field only when present, not a boolean, an actual
- * integer, and > 0. */
+/** Mirrors the server's `_positive_int`: present, not boolean, integer, > 0. */
 function isPositiveInteger(value: unknown): boolean {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
-/** Mirrors the server's `_int_field`: required, and must be an integer (any
- * sign) — used for `goal.verify.expectExit`, which has no positivity bound. */
+/** Mirrors the server's `_int_field`: an integer of any sign (goal expectExit). */
 function isIntegerValue(value: unknown): boolean {
   return typeof value === "number" && Number.isInteger(value);
 }
 
-/** Mirrors the server's number-input coercion (`_coerce_number`,
- * interpolation.py): a real number, or a string that parses as one. */
+/** Mirrors `_coerce_number`: a real number, or a string that parses as one. */
 function isNumberLikeDefault(value: unknown): boolean {
   if (typeof value === "number") {
     return Number.isFinite(value);
@@ -131,8 +125,7 @@ function isNumberLikeDefault(value: unknown): boolean {
   return false;
 }
 
-/** Mirrors the server's boolean-input coercion (`_coerce_boolean`): a real
- * boolean, or the literal string "true"/"false" (case-insensitive). */
+/** Mirrors `_coerce_boolean`: a real boolean or "true"/"false" (any case). */
 function isBooleanLikeDefault(value: unknown): boolean {
   if (typeof value === "boolean") {
     return true;
@@ -223,6 +216,7 @@ function validateStep(
   priorEmitNames: ReadonlySet<string>,
   allSlots: ReadonlySet<string>,
   laneSlot: string | null,
+  emitSchemas: ReadonlyMap<string, Record<string, unknown> | undefined>,
 ): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
   const push = (issue: WorkflowIssue | null) => {
@@ -306,6 +300,8 @@ function validateStep(
           location: { scope: "step", stepIndex, field: "maxAttempts" },
         });
       }
+      // §6.2: the authored emit schema must satisfy the v1 JSON Schema profile.
+      issues.push(...emitSchemaIssues(step.outputSchema, stepIndex));
       break;
     }
     case "agent.config":
@@ -402,6 +398,9 @@ function validateStep(
           message: "Branch references an emit not produced by an earlier step.",
           location: { scope: "step", stepIndex, field: "on" },
         });
+      } else {
+        // §6.2: the switched emit field's schema type must be string.
+        push(branchFieldTypeIssue(step, stepIndex, emitSchemas));
       }
       const caseKeys = Object.keys(step.cases);
       if (caseKeys.length === 0) {
@@ -445,7 +444,6 @@ function validateStep(
 function validateNode(
   node: WorkflowAgentNode,
   nodeIndex: number,
-  seenSlots: Set<string>,
   workflowIntegrations: readonly string[],
 ): WorkflowIssue[] {
   const issues: WorkflowIssue[] = [];
@@ -456,14 +454,7 @@ function validateNode(
       location: { scope: "agent", nodeIndex, field: "slot" },
     });
   }
-  if (seenSlots.has(node.slot)) {
-    issues.push({
-      code: "duplicate_slot",
-      message: `Duplicate agent slot '${node.slot}'.`,
-      location: { scope: "agent", nodeIndex, field: "slot" },
-    });
-  }
-  seenSlots.add(node.slot);
+  // Slot lineage is a whole-spine rule (see `validateSlotLineage`).
   if (node.harness.trim() === "") {
     issues.push({
       code: "invalid_definition",
@@ -478,11 +469,9 @@ function validateNode(
       location: { scope: "agent", nodeIndex, field: "model" },
     });
   }
-  // Per-slot integration narrowing (track 3c phase 2, deny-path a): every
-  // entry must be a member of the workflow-level `integrations` list.
+  // Per-slot integration narrowing (track 3c phase 2, deny-path a): each entry
+  // must be in the workflow-level list; present-but-non-array is a shape error.
   if (node.integrations !== undefined && !Array.isArray(node.integrations)) {
-    // Present-but-non-array (parse preserved it verbatim): a shape error, matching
-    // the server's "must be a list of namespace strings".
     issues.push({
       code: "invalid_definition",
       message: "Agent integrations must be a list of namespace strings.",
@@ -513,15 +502,14 @@ function validateNode(
 
 /** Structural checks on a parallel group (L30 / D-031): needs 2+ lanes. */
 function validateParallelStructure(group: WorkflowParallelGroup): WorkflowIssue[] {
-  const issues: WorkflowIssue[] = [];
   if (group.parallel.length < 2) {
-    issues.push({
+    return [{
       code: "parallel_too_few",
       message: `A parallel group requires at least 2 agent nodes (got ${group.parallel.length}).`,
       location: { scope: "agents" },
-    });
+    }];
   }
-  return issues;
+  return [];
 }
 
 /** Validate a full definition. Returns all issues (empty when the draft is valid). */
@@ -550,27 +538,28 @@ export function validateWorkflowDefinition(
   }
 
   const inputNames = new Set(definition.inputs.map((input) => input.name));
-  // Flatten parallel groups: a group entry has no top-level slot, so mapping
-  // `definition.agents` directly would miss lane slots (and yield undefined).
+  // Flatten groups so lane slots are included (a group entry has no top slot).
   const allSlots = new Set(allNodes.map((node) => node.slot));
-  const seenSlots = new Set<string>();
   const seenEmits = new Set<string>(); // whole-definition emit uniqueness
+  // emit name -> output schema (for the §6.2 branch string-field check).
+  const emitSchemas = new Map<string, Record<string, unknown> | undefined>();
   let totalSteps = 0;
   let flatIndex = 0;
   let nodeIndex = 0;
 
-  // Validate one node against the emits visible at its start (`baseVisible`) plus
-  // its own earlier emits; return the emits it produced. `rejectInclude` flags a
-  // `workflow.include` inside a parallel lane (v1 bound). `laneSlot` is the lane's
-  // own slot when the node is a parallel-group lane (else null) — it gates the
-  // notify `agentFields.slot` rule.
+  // Slot lineage (§6.1): sequential reuse allowed, lane slots group-scoped.
+  issues.push(...validateSlotLineage(definition));
+
+  // Validate one node against `baseVisible` + its own earlier emits; return the
+  // emits it produced. `rejectInclude` flags include-in-parallel; `laneSlot` is
+  // the lane's own slot (else null), gating the notify `agentFields.slot` rule.
   const runNode = (
     node: WorkflowAgentNode,
     baseVisible: ReadonlySet<string>,
     rejectInclude: boolean,
     laneSlot: string | null,
   ): Set<string> => {
-    issues.push(...validateNode(node, nodeIndex, seenSlots, definition.integrations));
+    issues.push(...validateNode(node, nodeIndex, definition.integrations));
     totalSteps += node.steps.length;
     const localVisible = new Set(baseVisible);
     const produced = new Set<string>();
@@ -584,7 +573,9 @@ export function validateWorkflowDefinition(
         });
       }
       issues.push(
-        ...validateStep(step, stepIndex, options, node.harness, localVisible, allSlots, laneSlot),
+        ...validateStep(
+          step, stepIndex, options, node.harness, localVisible, allSlots, laneSlot, emitSchemas,
+        ),
       );
       // {{fields.*}} is scoped to a notify message that declared agent_fields.
       const allowedFields =
@@ -593,11 +584,8 @@ export function validateWorkflowDefinition(
           : null;
       for (const { field, value } of templatedFields(step)) {
         const fieldsScope = field === "message" ? allowedFields : null;
-        for (const refIssue of validateStringReferences(value, {
-          inputNames,
-          priorEmitNames: localVisible,
-          allowedFields: fieldsScope,
-        })) {
+        const refOptions = { inputNames, priorEmitNames: localVisible, allowedFields: fieldsScope };
+        for (const refIssue of validateStringReferences(value, refOptions)) {
           issues.push({
             code: refIssue.code,
             message: refIssue.message,
@@ -605,7 +593,7 @@ export function validateWorkflowDefinition(
           });
         }
       }
-      // Register this step's emit AFTER validating its own refs.
+      // Register the emit AFTER validating its own refs.
       if (step.kind === "agent.emit" && step.name.trim() !== "") {
         if (seenEmits.has(step.name)) {
           issues.push({
@@ -617,6 +605,7 @@ export function validateWorkflowDefinition(
         seenEmits.add(step.name);
         produced.add(step.name);
         localVisible.add(step.name);
+        emitSchemas.set(step.name, step.outputSchema);
       }
       flatIndex += 1;
     });
@@ -624,9 +613,9 @@ export function validateWorkflowDefinition(
     return produced;
   };
 
-  // Emits visible at the current spine position. A parallel group's lanes each
-  // see only the pre-group snapshot + their own steps (never a sibling lane);
-  // every lane's emits join into `visible` for steps AFTER the group (§1.3).
+  // Emits visible at the current spine position. Group lanes see only the
+  // pre-group snapshot + their own steps; lane emits join `visible` after the
+  // group (§1.3).
   const visible = new Set<string>();
   definition.agents.forEach((entry) => {
     if (isParallelGroup(entry)) {
@@ -658,6 +647,15 @@ export function validateWorkflowDefinition(
   }
 
   return issues;
+}
+
+/**
+ * Whether a stored definition is editable by this client (a supported version
+ * with only known step kinds) — feature spec §5.1. An unsupported definition is
+ * rendered read-only; the editor never saves a truncated version.
+ */
+export function isEditable(rawDefinition: unknown): boolean {
+  return parseWorkflowDefinitionResult(rawDefinition).kind === "editable";
 }
 
 /** Whether a definition has no blocking issues. */
