@@ -28,7 +28,12 @@ on:
         required: false
         type: string
       release_date:
-        description: Expected UTC release day, YYYY-MM-DD (blank resolves the desktop tag commit day).
+        description: Expected UTC release day, YYYY-MM-DD (blank resolves the desktop tag creation day).
+        default: ""
+        required: false
+        type: string
+      release_sha:
+        description: Optional exact candidate SHA that desktop-v<version> must contain.
         default: ""
         required: false
         type: string
@@ -58,8 +63,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # fetch-depth 0 + tags: T4-SH-2 verifies the published desktop tag shares
-      # lineage with this mainline diagnostic checkout. This is not candidate
+      # fetch-depth 0 + tags: T4-SH-2 verifies the desktop-v<version> tag and
+      # exact-candidate ancestry when supplied, otherwise the weaker published-
+      # mainline signal. This post-publish diagnostic is not candidate
       # qualification or promotion evidence.
       - uses: actions/checkout@v6
         with:
@@ -112,6 +118,7 @@ jobs:
         env:
           RELEASE_E2E_RELEASE_DATE: ${{ steps.release.outputs.release_date }}
           RELEASE_E2E_RELEASE_DESKTOP_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_E2E_RELEASE_SHA: ${{ inputs.release_sha || '' }}
         run: make release-e2e LANE=local DESKTOP=web AGENTS=all SCENARIOS=T4-SH-2
 
   provisioning:

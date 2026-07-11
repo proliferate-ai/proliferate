@@ -3,6 +3,20 @@
 import { readFileSync, writeFileSync, readdirSync } from "fs";
 import { join, basename, relative } from "path";
 
+const platformContract = JSON.parse(
+  readFileSync(new URL("../fixtures/contracts/desktop-updater/platforms.json", import.meta.url), "utf8"),
+);
+
+if (
+  platformContract.schemaVersion !== 1 ||
+  !Array.isArray(platformContract.platforms) ||
+  platformContract.platforms.length === 0 ||
+  platformContract.platforms.some((key) => typeof key !== "string" || key.length === 0) ||
+  new Set(platformContract.platforms).size !== platformContract.platforms.length
+) {
+  throw new Error("Invalid desktop updater platform contract");
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const parsed = {};
@@ -40,10 +54,11 @@ if (!version || !artifactsDir || !baseUrl || !output) {
   process.exit(1);
 }
 
-// Platform mapping: Tauri platform key -> artifact patterns
-const platforms = [
-  {
-    key: "darwin-aarch64",
+// Artifact matching is implementation detail; the shared contract owns which
+// platform keys must be present. Adding a shipped target to the contract makes
+// manifest generation fail until its matcher and artifacts exist.
+const platformMatchers = {
+  "darwin-aarch64": {
     artifactMatcher: (relPath, name) =>
       pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.app\.tar\.gz$/i.test(name),
@@ -51,8 +66,7 @@ const platforms = [
       pathIncludes(relPath, "desktop-aarch64-apple-darwin") &&
       /(aarch64|arm64).*\.app\.tar\.gz\.sig$/i.test(name),
   },
-  {
-    key: "darwin-x86_64",
+  "darwin-x86_64": {
     artifactMatcher: (relPath, name) =>
       pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz$/i.test(name),
@@ -60,7 +74,15 @@ const platforms = [
       pathIncludes(relPath, "desktop-x86_64-apple-darwin") &&
       /(x64|x86_64).*\.app\.tar\.gz\.sig$/i.test(name),
   },
-];
+};
+
+const platforms = platformContract.platforms.map((key) => {
+  const matchers = platformMatchers[key];
+  if (!matchers) {
+    throw new Error(`No artifact matcher for required desktop updater platform ${key}`);
+  }
+  return { key, ...matchers };
+});
 
 const manifest = {
   version,

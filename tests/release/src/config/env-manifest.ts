@@ -320,11 +320,29 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
   {
     name: "RELEASE_E2E_RELEASE_DESKTOP_VERSION",
     description:
-      "The desktop version the release under test ships, used by T4-SH-2 (artifact chain) as the " +
+      "The published desktop version under inspection, used by the T4-SH-2 diagnostic as the " +
       "ground-truth version the CDN manifest, versioned manifest, artifacts, and desktop-v<version> " +
-      "tag must all agree on. Defaults to the repo VERSION file (the version of the checked-out ref, " +
-      "which IS the release under test in the release gate). Override to check a specific release.",
-    whereItLives: "The release pipeline sets it to the release being cut; otherwise the repo VERSION file.",
+      "tag must all agree on. When omitted, the diagnostic resolves the currently published CDN " +
+      "stable version; it never assumes a potentially newer/older repo VERSION is shipped.",
+    whereItLives: "Manual diagnostic input; nightly resolves it from the public stable updater manifest.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_RELEASE_DATE",
+    description:
+      "Expected UTC publication day for T4-SH-2. The manifest pub_date must match this independent " +
+      "date. When omitted locally, the scenario resolves the desktop tag creation day (tagger date for " +
+      "annotated tags, commit date for lightweight tags).",
+    whereItLives: "Manual diagnostic input; nightly resolves it from desktop-v<version>'s creation timestamp.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_RELEASE_SHA",
+    description:
+      "Optional exact candidate commit for T4-SH-2 lineage validation. When set, that SHA must be an " +
+      "ancestor of desktop-v<version>; the inverse direction never passes candidate validation. When " +
+      "unset, the scenario performs only the weaker published-tag-on-origin/main diagnostic.",
+    whereItLives: "Manual diagnostic input; a future trusted pre-publish qualification caller must bind the exact SHA.",
     secret: false,
   },
   {

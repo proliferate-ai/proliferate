@@ -79,6 +79,14 @@ test("agent catalog changes select desktop seed and runtime surfaces", () => {
   ]);
 });
 
+test("desktop updater platform contract changes select the desktop release surface", () => {
+  const selection = selectSurfaces({
+    files: ["fixtures/contracts/desktop-updater/platforms.json"],
+  });
+
+  assert.deepEqual([...selection.selected], ["desktop"]);
+});
+
 test("invalid surfaces fail fast", () => {
   assert.throws(
     () => parseSurfaceList("web,billing", "only"),

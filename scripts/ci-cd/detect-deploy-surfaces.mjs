@@ -192,6 +192,7 @@ export function classifyFile(path) {
       "pnpm-lock.yaml",
       "pnpm-workspace.yaml",
       ".github/workflows/release-desktop.yml",
+      "fixtures/contracts/desktop-updater/platforms.json",
       "scripts/build-agent-seed.mjs",
       "scripts/generate-desktop-installer-manifest.mjs",
       "scripts/generate-updater-manifest.mjs",
