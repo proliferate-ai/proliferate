@@ -6,6 +6,7 @@ import { ComposerOverflowControl } from "./ComposerOverflowControl";
 import type { ModelSelectorProps } from "@/lib/domain/chat/models/model-selector-types";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import { ComposerIntegrationsControl } from "./ComposerIntegrationsControl";
+import { ComposerWorkflowRunButton } from "./ComposerWorkflowRunButton";
 import { RuntimePressureIndicator } from "./RuntimePressureIndicator";
 import { SessionModeControl } from "./SessionModeControl";
 import {
@@ -34,6 +35,10 @@ export interface ChatInputControlRowProps {
   isEmpty: boolean;
   onSubmit: () => void;
   onCancel: () => void;
+  /** Workflow run-from-chat entry (v1): the composer workflow button needs the
+   * workspace UI key to resolve org/workspace workflows. Optional so call sites
+   * and fixtures that don't surface the button (e.g. playground) can omit it. */
+  workspaceUiKey?: string | null;
 }
 
 export interface ComposerLeadingControlsProps {
@@ -232,6 +237,7 @@ export function ChatInputControlRow({
   isEmpty,
   onSubmit,
   onCancel,
+  workspaceUiKey,
 }: ChatInputControlRowProps) {
   return (
     <ChatComposerControlRowFrame
@@ -245,18 +251,27 @@ export function ChatInputControlRow({
         />
       )}
       trailing={(
-        <ComposerTrailingControls
-          runtimeControlsDisabled={runtimeControlsDisabled}
-          agentKind={agentKind}
-          sessionConfigControls={sessionConfigControls}
-          isEditingQueuedPrompt={isEditingQueuedPrompt}
-          chatDisabled={chatDisabled}
-          isSubmitting={isSubmitting}
-          supportsAttachments={supportsAttachments}
-          canAttachFiles={canAttachFiles}
-          activeSessionId={activeSessionId}
-          onAttachFile={onAttachFile}
-        />
+        <>
+          <ComposerTrailingControls
+            runtimeControlsDisabled={runtimeControlsDisabled}
+            agentKind={agentKind}
+            sessionConfigControls={sessionConfigControls}
+            isEditingQueuedPrompt={isEditingQueuedPrompt}
+            chatDisabled={chatDisabled}
+            isSubmitting={isSubmitting}
+            supportsAttachments={supportsAttachments}
+            canAttachFiles={canAttachFiles}
+            activeSessionId={activeSessionId}
+            onAttachFile={onAttachFile}
+          />
+          {!isEditingQueuedPrompt && (
+            <ComposerWorkflowRunButton
+              activeSessionId={activeSessionId}
+              harness={agentKind}
+              workspaceUiKey={workspaceUiKey ?? null}
+            />
+          )}
+        </>
       )}
       action={(
         <ChatComposerActions

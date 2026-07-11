@@ -1,5 +1,5 @@
 import { ENV_MANIFEST, findEnvVarSpec, type EnvVarSpec } from "./env-manifest.js";
-import type { RuntimeLane } from "./types.js";
+import type { RuntimeLane, TargetLane } from "./types.js";
 
 export interface ResolvedEnvVar {
   spec: EnvVarSpec;
@@ -128,6 +128,50 @@ export function missingRequiredForLane(
     }
     return runtimeLane !== "local" && locallySeeded.has(name);
   });
+}
+
+/**
+ * Env vars the durable identity needs only on the LOCAL target lane. On
+ * `--lane staging` the durable user (proliferate-e2e-bot) is GitHub-OAuth-only
+ * and has no password, so it authenticates through the rotating product
+ * session (tests/release/src/fixtures/staging-session.ts) instead of
+ * email+password. These names are therefore dropped from a scenario's
+ * `requiredEnv` on the staging target — the staging session's own availability
+ * is checked separately (it can come from the rotating state file, not just an
+ * env var, so it cannot be expressed as a plain required env var).
+ */
+const DURABLE_PASSWORD_ENV: ReadonlySet<string> = new Set([
+  "RELEASE_E2E_DURABLE_USER_EMAIL",
+  "RELEASE_E2E_DURABLE_USER_PASSWORD",
+]);
+
+/**
+ * True when a scenario depends on the durable identity (it lists the durable
+ * user's email in `requiredEnv`). Used to decide whether the staging target
+ * must also have a live staging session (checked via
+ * `stagingSessionAvailable`) before the scenario can run for real.
+ */
+export function scenarioUsesDurableIdentity(requiredEnv: readonly string[]): boolean {
+  return requiredEnv.includes("RELEASE_E2E_DURABLE_USER_EMAIL");
+}
+
+/**
+ * The `requiredEnv` a scenario actually needs for a given TARGET lane. On the
+ * staging target the durable user's email/password are dropped (see
+ * `DURABLE_PASSWORD_ENV`); everything else — including the local-only vars a
+ * scenario genuinely cannot run without on staging (e.g.
+ * RELEASE_E2E_LOCAL_DATABASE_URL, which billing_probe.py reads from a profile
+ * DB that staging does not expose) — is kept, so those scenarios still report
+ * blocked with an accurate reason rather than silently attempting to run.
+ */
+export function requiredEnvForTargetLane(
+  requiredEnv: readonly string[],
+  targetLane: TargetLane,
+): string[] {
+  if (targetLane !== "staging") {
+    return [...requiredEnv];
+  }
+  return requiredEnv.filter((name) => !DURABLE_PASSWORD_ENV.has(name));
 }
 
 /** Human-readable blocked reason naming each unsatisfied var and where it lives. */

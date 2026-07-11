@@ -292,6 +292,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/github-app/connected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Connected Page Endpoint */
+        get: operations["github_app_connected_page_endpoint_auth_github_app_connected_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/integrations/github/callback": {
         parameters: {
             query?: never;
@@ -1589,6 +1606,359 @@ export interface paths {
         patch: operations["update_agent_run_config_endpoint_v1_cloud_agent_run_configs__config_id__patch"];
         trace?: never;
     };
+    "/v1/cloud/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflows Endpoint */
+        get: operations["list_workflows_endpoint_v1_cloud_workflows_get"];
+        put?: never;
+        /** Create Workflow Endpoint */
+        post: operations["create_workflow_endpoint_v1_cloud_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs Endpoint */
+        get: operations["list_runs_endpoint_v1_cloud_workflows_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Endpoint */
+        get: operations["get_run_endpoint_v1_cloud_workflows_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/delivered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Run Delivered Endpoint */
+        post: operations["mark_run_delivered_endpoint_v1_cloud_workflows_runs__run_id__delivered_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Report Run Status Endpoint */
+        post: operations["report_run_status_endpoint_v1_cloud_workflows_runs__run_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Run Endpoint
+         * @description Take over / cancel a run (D15). User auth, owner-scoped (a run the caller
+         *     can't see 404s). This is the single human override; the UI's take-over action
+         *     routes here, and a blocked mutating verb's 409 ``SESSION_WORKFLOW_HELD`` sends
+         *     the user to it.
+         */
+        post: operations["cancel_run_endpoint_v1_cloud_workflows_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/deliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeliver Run Endpoint
+         * @description Retry cloud delivery for a run stuck in ``pending_delivery`` (idempotent).
+         */
+        post: operations["redeliver_run_endpoint_v1_cloud_workflows_runs__run_id__deliver_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Refresh Run Endpoint
+         * @description Pull observed state for a cloud run from the sandbox and sync the ledger.
+         *
+         *     Cloud runs have no worker→server push channel in v1, so the UI polls this to
+         *     keep the run view fresh; local runs stay fresh via the desktop relay.
+         */
+        get: operations["refresh_run_endpoint_v1_cloud_workflows_runs__run_id__refresh_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/runs/{run_id}/ping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Ping Endpoint
+         * @description Completion ping (L16 / §3.7). The runtime fires this after each step
+         *     transition; ``authorize_run_ping`` validates the token and its run_id match,
+         *     then this wakes the existing refresh path for cloud-lane runs.
+         *
+         *     The body carries nothing: it is a stateless nudge. Duplicate/stale/late pings
+         *     are safe by construction — refresh is reconcile-shaped and run-status
+         *     transitions are monotonic — so no state is added here.
+         */
+        post: operations["run_ping_endpoint_v1_cloud_workflows_runs__run_id__ping_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/executor/local/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Claim Local Workflow Runs Endpoint
+         * @description Claim a batch of this owner's ``claimable`` (or stale-reclaimable) local
+         *     scheduled runs for a desktop executor (the 10s claim poll).
+         */
+        post: operations["claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/executor/local/runs/{run_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Heartbeat Local Workflow Run Endpoint
+         * @description Renew a live claim's TTL (the 30s heartbeat). ``accepted=false`` means the
+         *     claim was lost (reclaimed / terminal / expired) and the executor must stop.
+         */
+        post: operations["heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/slack/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Slack Channels Endpoint */
+        get: operations["list_slack_channels_endpoint_v1_cloud_workflows_slack_channels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/poll/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect Poll Endpoint Route
+         * @description Flow 1: probe an endpoint's reserved ``/init`` path and derive a new
+         *     workflow's starting inputs from the sample item. No workflow/DB needed — this
+         *     is a pure, bounded network probe; a bad ``/init`` raises ``poll_probe_failed``.
+         */
+        post: operations["inspect_poll_endpoint_route_v1_cloud_workflows_poll_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Endpoint */
+        get: operations["get_workflow_endpoint_v1_cloud_workflows__workflow_id__get"];
+        put?: never;
+        post?: never;
+        /** Archive Workflow Endpoint */
+        delete: operations["archive_workflow_endpoint_v1_cloud_workflows__workflow_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Workflow Endpoint */
+        patch: operations["update_workflow_endpoint_v1_cloud_workflows__workflow_id__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Runs Endpoint */
+        get: operations["list_workflow_runs_endpoint_v1_cloud_workflows__workflow_id__runs_get"];
+        put?: never;
+        /** Start Run Endpoint */
+        post: operations["start_run_endpoint_v1_cloud_workflows__workflow_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Triggers Endpoint */
+        get: operations["list_triggers_endpoint_v1_cloud_workflows__workflow_id__triggers_get"];
+        put?: never;
+        /** Create Trigger Endpoint */
+        post: operations["create_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Trigger Endpoint */
+        get: operations["get_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Trigger Endpoint */
+        delete: operations["delete_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Trigger Endpoint */
+        patch: operations["update_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trigger Items Endpoint
+         * @description A poll trigger's per-item seen-set (spawned/invalid/error), newest first.
+         */
+        get: operations["list_trigger_items_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__items_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/workers/desktop/enrollment": {
         parameters: {
             query?: never;
@@ -1673,6 +2043,30 @@ export interface paths {
          *     artifacts are public.
          */
         get: operations["worker_artifact_download_endpoint_v1_cloud_worker_download__target___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/runtime/download/{target}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Artifact Download Endpoint
+         * @description 302 to the pinned AnyHarness binary (or its ``.sha256``) on the downloads CDN.
+         *
+         *     Unauthenticated by design, like the worker artifact redirect: the sandbox
+         *     worker fetches the runtime binary over a public CDN URL behind this 302, so
+         *     the sandbox never needs GitHub egress or credentials.
+         */
+        get: operations["runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1851,6 +2245,93 @@ export interface paths {
         head?: never;
         /** Set Admin Integration Enabled Endpoint */
         patch: operations["set_admin_integration_enabled_endpoint_v1_cloud_integrations_admin_organizations__organization_id__definitions__definition_id__enabled_patch"];
+        trace?: never;
+    };
+    "/v1/cloud/integrations/admin/organizations/{organization_id}/definitions/{definition_id}/default-chat-scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Admin Integration Default Chat Scope Endpoint */
+        patch: operations["set_admin_integration_default_chat_scope_endpoint_v1_cloud_integrations_admin_organizations__organization_id__definitions__definition_id__default_chat_scope_patch"];
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Function Invocations Endpoint */
+        get: operations["list_function_invocations_endpoint_v1_cloud_integrations_functions_get"];
+        put?: never;
+        /** Create Function Invocation Endpoint */
+        post: operations["create_function_invocation_endpoint_v1_cloud_integrations_functions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Archive Function Invocation Endpoint */
+        delete: operations["archive_function_invocation_endpoint_v1_cloud_integrations_functions__name__delete"];
+        options?: never;
+        head?: never;
+        /** Update Function Invocation Endpoint */
+        patch: operations["update_function_invocation_endpoint_v1_cloud_integrations_functions__name__patch"];
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions/{name}/headers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate Function Invocation Headers Endpoint */
+        post: operations["rotate_function_invocation_headers_endpoint_v1_cloud_integrations_functions__name__headers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/cloud/integrations/functions/{name}/chat-scope-enabled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Function Invocation Chat Scope Enabled Endpoint */
+        patch: operations["set_function_invocation_chat_scope_enabled_endpoint_v1_cloud_integrations_functions__name__chat_scope_enabled_patch"];
         trace?: never;
     };
     "/v1/cloud/webhooks/e2b": {
@@ -2680,6 +3161,11 @@ export interface components {
             policyEnabled?: boolean | null;
             /** Effectiveenabled */
             effectiveEnabled: boolean;
+            /**
+             * Defaultchatincluded
+             * @default true
+             */
+            defaultChatIncluded: boolean;
             /** Authdetection */
             authDetection?: ("detected" | "none" | "unreachable" | "forced") | null;
         };
@@ -4061,6 +4547,27 @@ export interface components {
             /** Source */
             source?: ("desktop" | "web" | "mobile") | null;
         };
+        /** CreateFunctionInvocationRequest */
+        CreateFunctionInvocationRequest: {
+            /** Name */
+            name: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Endpointurl */
+            endpointUrl: string;
+            /** Method */
+            method: string;
+            /** Argsschema */
+            argsSchema?: {
+                [key: string]: unknown;
+            };
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+        };
         /** CurrentTeamCheckoutResponse */
         CurrentTeamCheckoutResponse: {
             intent?: components["schemas"]["TeamCheckoutIntentResponse"] | null;
@@ -4069,6 +4576,22 @@ export interface components {
         DeleteCloudSecretFileRequest: {
             /** Path */
             path: string;
+        };
+        /**
+         * DeploymentIdentity
+         * @description How this control plane identifies itself.
+         *
+         *     ``mode`` mirrors the desktop telemetry runtime modes. ``displayName`` is the
+         *     operator's instance name; empty means "use the connected origin" so the
+         *     desktop never mislabels a self-managed server as the vendor product.
+         */
+        DeploymentIdentity: {
+            /** Mode */
+            mode: string;
+            /** Displayname */
+            displayName: string;
+            /** Logourl */
+            logoUrl: string | null;
         };
         /** DesktopWorkerEnrollmentRequest */
         DesktopWorkerEnrollmentRequest: {
@@ -4124,6 +4647,47 @@ export interface components {
              * @default true
              */
             received: boolean;
+        };
+        /** FunctionInvocationListResponse */
+        FunctionInvocationListResponse: {
+            /** Items */
+            items: components["schemas"]["FunctionInvocationResponse"][];
+        };
+        /** FunctionInvocationResponse */
+        FunctionInvocationResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Displayname */
+            displayName?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Endpointurl */
+            endpointUrl: string;
+            /** Method */
+            method: string;
+            /** Argsschema */
+            argsSchema: {
+                [key: string]: unknown;
+            };
+            /** Chatscopeenabled */
+            chatScopeEnabled: boolean;
+            /** Hasheaders */
+            hasHeaders: boolean;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
         };
         /** GenerateSessionTitleRequest */
         GenerateSessionTitleRequest: {
@@ -4408,6 +4972,50 @@ export interface components {
             /** Remainingusd */
             remainingUsd: number;
         };
+        /**
+         * LocalWorkflowClaimActionRequest
+         * @description A per-run action (heartbeat) proving which claim the executor holds.
+         */
+        LocalWorkflowClaimActionRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Claimid
+             * Format: uuid
+             */
+            claimId: string;
+        };
+        /**
+         * LocalWorkflowClaimListResponse
+         * @description Runs the poll claimed this cycle — each carries its resolved plan + claim.
+         */
+        LocalWorkflowClaimListResponse: {
+            /** Runs */
+            runs: components["schemas"]["WorkflowRunResponse"][];
+        };
+        /**
+         * LocalWorkflowClaimMutationResponse
+         * @description A heartbeat outcome: the refreshed run, or ``accepted=false`` when the claim
+         *     is no longer live (reclaimed / terminal / expired) and the executor must stop.
+         */
+        LocalWorkflowClaimMutationResponse: {
+            run?: components["schemas"]["WorkflowRunResponse"] | null;
+            /** Accepted */
+            accepted: boolean;
+        };
+        /**
+         * LocalWorkflowClaimRequest
+         * @description A desktop executor's claim poll: identify the executor + cap the batch.
+         */
+        LocalWorkflowClaimRequest: {
+            /** Executorid */
+            executorId: string;
+            /**
+             * Limit
+             * @default 5
+             */
+            limit: number;
+        };
         /** MetaResponse */
         MetaResponse: {
             /** Serverversion */
@@ -4420,6 +5028,9 @@ export interface components {
             workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
+            /** Workflowsenabled */
+            workflowsEnabled: boolean;
+            capabilities: components["schemas"]["ServerCapabilities"];
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -5004,6 +5615,75 @@ export interface components {
             proBillingEnabled: boolean;
         };
         /**
+         * PollInputSpecResponse
+         * @description One derived v2 input spec (``{name, type, required}``) — the same canonical
+         *     shape the definition validator accepts, so the client seeds a definition's
+         *     ``inputs`` directly.
+         */
+        PollInputSpecResponse: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Required */
+            required: boolean;
+        };
+        /**
+         * PollInspectRequest
+         * @description Flow 1 (workflow-from-poll, mental-model §5): probe a poll endpoint's
+         *     reserved ``/init`` path to derive a new workflow's starting inputs. Carries no
+         *     interval — no trigger exists yet; ``auth_value`` is the header VALUE, sent once
+         *     for the probe and never stored by this call.
+         */
+        PollInspectRequest: {
+            /** Url */
+            url: string;
+            /** Authheader */
+            authHeader?: string | null;
+            /** Authvalue */
+            authValue?: string | null;
+        };
+        /**
+         * PollInspectResponse
+         * @description Flow 1 result: the /init sample item (if any), the derived inputs skeleton,
+         *     and the sample fields that couldn't become inputs. A bad /init response never
+         *     reaches here — it raises a structured ``poll_probe_failed`` error instead.
+         */
+        PollInspectResponse: {
+            /** Sampleitemid */
+            sampleItemId: string | null;
+            /** Sampledata */
+            sampleData: {
+                [key: string]: unknown;
+            } | null;
+            /** Derivedinputs */
+            derivedInputs: components["schemas"]["PollInputSpecResponse"][];
+            /** Skippedfields */
+            skippedFields: components["schemas"]["PollSkippedFieldResponse"][];
+        };
+        /**
+         * PollSkippedFieldResponse
+         * @description One sample field that could NOT become a derived input (a non-scalar
+         *     array/object/null value), with a human ``reason``. Surfaced so the flow-1 UI
+         *     can tell the author which sample fields didn't become inputs.
+         */
+        PollSkippedFieldResponse: {
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * PricingCapability
+         * @description Whether a vendor pricing page is meaningful for this deployment.
+         */
+        PricingCapability: {
+            /** Available */
+            available: boolean;
+            /** Url */
+            url: string | null;
+        };
+        /**
          * ProfileUpdateRequest
          * @description Editable fields on the authenticated user's own profile.
          *
@@ -5132,6 +5812,44 @@ export interface components {
             /** Basebranch */
             baseBranch: string;
         };
+        /**
+         * RotateFunctionInvocationHeadersRequest
+         * @description ``headers=None`` (or ``{}``) clears the stored ciphertext.
+         */
+        RotateFunctionInvocationHeadersRequest: {
+            /** Headers */
+            headers?: {
+                [key: string]: string;
+            } | null;
+        };
+        /** RunStatusRequest */
+        RunStatusRequest: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "waiting_approval" | "completed" | "failed" | "cancelled";
+            /** Stepcursor */
+            stepCursor?: number | null;
+            /** Stepoutputs */
+            stepOutputs?: {
+                [key: string]: unknown;
+            } | null;
+            /** Errorcode */
+            errorCode?: string | null;
+            /** Errormessage */
+            errorMessage?: string | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId?: string | null;
+            /** Anyharnesssessionids */
+            anyharnessSessionIds?: string[] | null;
+            /** Costusd */
+            costUsd?: number | null;
+            /** Costtokens */
+            costTokens?: number | null;
+            /** Claimid */
+            claimId?: string | null;
+        };
         /** SaveRepoEnvironmentRequest */
         SaveRepoEnvironmentRequest: {
             kind: components["schemas"]["RepoEnvironmentKind"];
@@ -5154,10 +5872,58 @@ export interface components {
              */
             runCommand: string;
         };
+        /**
+         * ServerCapabilities
+         * @description Versioned, conservative declaration of what this deployment offers.
+         *
+         *     Defaults are disabled: a capability is true only when the operator
+         *     configured the underlying feature. The desktop treats an absent contract
+         *     (older servers) as all-off + self-managed.
+         */
+        ServerCapabilities: {
+            /** Contractversion */
+            contractVersion: number;
+            deployment: components["schemas"]["DeploymentIdentity"];
+            /** Billing */
+            billing: boolean;
+            /** Usagemetering */
+            usageMetering: boolean;
+            /** Cloudworkspaces */
+            cloudWorkspaces: boolean;
+            /** Agentgateway */
+            agentGateway: boolean;
+            webApp: components["schemas"]["WebAppCapability"];
+            support: components["schemas"]["SupportCapability"];
+            pricing: components["schemas"]["PricingCapability"];
+        };
+        /** SetFunctionInvocationChatScopeEnabledRequest */
+        SetFunctionInvocationChatScopeEnabledRequest: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** SetIntegrationDefaultChatScopeRequest */
+        SetIntegrationDefaultChatScopeRequest: {
+            /** Included */
+            included: boolean;
+        };
         /** SetIntegrationEnabledRequest */
         SetIntegrationEnabledRequest: {
             /** Enabled */
             enabled: boolean;
+        };
+        /** SlackChannelResponse */
+        SlackChannelResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** SlackChannelsResponse */
+        SlackChannelsResponse: {
+            /** Channels */
+            channels: components["schemas"]["SlackChannelResponse"][];
+            /** Connected */
+            connected: boolean;
         };
         /** SsoDiscoveryResponse */
         SsoDiscoveryResponse: {
@@ -5217,6 +5983,25 @@ export interface components {
              */
             expiresAt: string;
         };
+        /** StartRunRequest */
+        StartRunRequest: {
+            /** Inputs */
+            inputs?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Targetmode
+             * @enum {string}
+             */
+            targetMode: "local" | "personal_cloud";
+            /** Versionid */
+            versionId?: string | null;
+            target: components["schemas"]["WorkflowRunTarget"];
+            /** Sessionbindings */
+            sessionBindings?: {
+                [key: string]: string;
+            };
+        };
         /** StartSsoAuthRequest */
         StartSsoAuthRequest: {
             /** Clientstate */
@@ -5273,6 +6058,23 @@ export interface components {
             /** Organizationid */
             organizationId?: string | null;
         };
+        /** StepActionResponse */
+        StepActionResponse: {
+            /** Stepkey */
+            stepKey: string;
+            /** Actionkind */
+            actionKind: string;
+            /** Status */
+            status: string;
+            /** Resultjson */
+            resultJson: {
+                [key: string]: unknown;
+            } | null;
+            /** Errormessage */
+            errorMessage: string | null;
+            /** Attemptcount */
+            attemptCount: number;
+        };
         /** StripeWebhookAck */
         StripeWebhookAck: {
             /**
@@ -5286,6 +6088,22 @@ export interface components {
             eventType: string;
             /** Livemode */
             livemode?: boolean | null;
+        };
+        /**
+         * SupportCapability
+         * @description Where a user of this deployment should go for support.
+         *
+         *     ``vendor`` is the hosted product's own support; ``operator`` is a
+         *     self-managed operator's configured destination; ``none`` means the desktop
+         *     offers no support-email affordance for this server.
+         */
+        SupportCapability: {
+            /** Kind */
+            kind: string;
+            /** Email */
+            email: string | null;
+            /** Url */
+            url: string | null;
         };
         /** SupportMessageContext */
         SupportMessageContext: {
@@ -5688,10 +6506,89 @@ export interface components {
             /** Avatar Url */
             avatar_url?: string | null;
         };
+        /**
+         * TriggerPollRequest
+         * @description Poll trigger config (spec 4.2/4.3). ``auth_value`` is the header VALUE and is
+         *     WRITE-ONLY: it is encrypted at rest (house crypto) and never echoed back on a
+         *     read. Omitting it on an update keeps the stored secret; setting ``auth_header``
+         *     to null clears the auth entirely.
+         */
+        TriggerPollRequest: {
+            /** Url */
+            url: string;
+            /** Authheader */
+            authHeader?: string | null;
+            /** Authvalue */
+            authValue?: string | null;
+            /** Intervalsecs */
+            intervalSecs: number;
+        };
+        /**
+         * TriggerPollResponse
+         * @description Poll config on a read — the secret is never echoed; ``has_auth`` reports
+         *     whether an encrypted auth value is stored, and ``auth_header`` its name.
+         */
+        TriggerPollResponse: {
+            /** Url */
+            url: string;
+            /** Authheader */
+            authHeader: string | null;
+            /** Hasauth */
+            hasAuth: boolean;
+            /** Intervalsecs */
+            intervalSecs: number;
+            /** Itemschema */
+            itemSchema: {
+                [key: string]: unknown;
+            } | null;
+            /** Lastpollat */
+            lastPollAt: string | null;
+            /** Lastpollerror */
+            lastPollError: string | null;
+        };
+        /**
+         * TriggerScheduleRequest
+         * @description The RRULE + IANA timezone a schedule trigger fires on (house RRULE rules).
+         */
+        TriggerScheduleRequest: {
+            /** Rrule */
+            rrule: string;
+            /** Timezone */
+            timezone: string;
+        };
+        /** TriggerScheduleResponse */
+        TriggerScheduleResponse: {
+            /** Rrule */
+            rrule: string;
+            /** Timezone */
+            timezone: string;
+            /** Summary */
+            summary: string | null;
+        };
         /** UpdateCloudWorkspaceDisplayNameRequest */
         UpdateCloudWorkspaceDisplayNameRequest: {
             /** Displayname */
             displayName?: string | null;
+        };
+        /**
+         * UpdateFunctionInvocationRequest
+         * @description Every field is optional; only supplied fields are changed. ``name`` and
+         *     headers are not editable here — name is immutable post-create (it's the
+         *     gateway tool address), headers go through the dedicated rotate endpoint.
+         */
+        UpdateFunctionInvocationRequest: {
+            /** Displayname */
+            displayName?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Endpointurl */
+            endpointUrl?: string | null;
+            /** Method */
+            method?: string | null;
+            /** Argsschema */
+            argsSchema?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** UsageSummary */
         UsageSummary: {
@@ -5732,10 +6629,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Email
-             * Format: email
-             */
+            /** Email */
             email: string;
             /**
              * Is Active
@@ -5782,6 +6676,19 @@ export interface components {
             ctx?: Record<string, never>;
         };
         /**
+         * WebAppCapability
+         * @description Whether a hosted web app exists for this deployment, and where it lives.
+         *
+         *     Self-managed deployments have no hosted web app (users connect the signed
+         *     desktop app), so ``available`` is false and the desktop hides web handoffs.
+         */
+        WebAppCapability: {
+            /** Available */
+            available: boolean;
+            /** Baseurl */
+            baseUrl: string | null;
+        };
+        /**
          * WorkerDesiredVersions
          * @description The component versions this server pins; workers converge onto these.
          */
@@ -5789,7 +6696,7 @@ export interface components {
             /** Worker */
             worker?: string | null;
             /** Anyharness */
-            anyharness: string;
+            anyharness?: string | null;
             /** Catalogversion */
             catalogVersion?: string | null;
         };
@@ -5837,6 +6744,307 @@ export interface components {
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
             desiredVersions: components["schemas"]["WorkerDesiredVersions"];
+        };
+        /** WorkflowCreateRequest */
+        WorkflowCreateRequest: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowDetailResponse */
+        WorkflowDetailResponse: {
+            workflow: components["schemas"]["WorkflowResponse"];
+            currentVersion: components["schemas"]["WorkflowVersionResponse"] | null;
+            /** Versions */
+            versions: components["schemas"]["WorkflowVersionResponse"][];
+        };
+        /** WorkflowListResponse */
+        WorkflowListResponse: {
+            /** Workflows */
+            workflows: components["schemas"]["WorkflowResponse"][];
+        };
+        /** WorkflowResponse */
+        WorkflowResponse: {
+            /** Id */
+            id: string;
+            /** Owneruserid */
+            ownerUserId: string | null;
+            /** Createdbyuserid */
+            createdByUserId: string | null;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Currentversionid */
+            currentVersionId: string | null;
+            /** Archivedat */
+            archivedAt: string | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /**
+             * Isseed
+             * @default false
+             */
+            isSeed: boolean;
+            /** Seedslug */
+            seedSlug?: string | null;
+        };
+        /** WorkflowRunDetailResponse */
+        WorkflowRunDetailResponse: {
+            run: components["schemas"]["WorkflowRunResponse"];
+            /** Stepactions */
+            stepActions: components["schemas"]["StepActionResponse"][];
+        };
+        /** WorkflowRunListResponse */
+        WorkflowRunListResponse: {
+            /** Runs */
+            runs: components["schemas"]["WorkflowRunResponse"][];
+        };
+        /** WorkflowRunResponse */
+        WorkflowRunResponse: {
+            /** Id */
+            id: string;
+            /** Workflowid */
+            workflowId: string;
+            /** Workflowversionid */
+            workflowVersionId: string;
+            /** Triggerkind */
+            triggerKind: string;
+            /** Triggerid */
+            triggerId: string | null;
+            /** Scheduledfor */
+            scheduledFor: string | null;
+            /** Executoruserid */
+            executorUserId: string;
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+            /** Targetmode */
+            targetMode: string;
+            /** Resolvedplan */
+            resolvedPlan: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Stepcursor */
+            stepCursor: number | null;
+            /** Stepoutputs */
+            stepOutputs: {
+                [key: string]: unknown;
+            } | null;
+            /** Anyharnessworkspaceid */
+            anyharnessWorkspaceId: string | null;
+            /** Anyharnesssessionids */
+            anyharnessSessionIds: string[] | null;
+            /** Errorcode */
+            errorCode: string | null;
+            /** Errormessage */
+            errorMessage: string | null;
+            /** Costusd */
+            costUsd: string | null;
+            /** Costtokens */
+            costTokens: number | null;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+            /** Deliveredat */
+            deliveredAt: string | null;
+            /** Startedat */
+            startedAt: string | null;
+            /** Finishedat */
+            finishedAt: string | null;
+            /** Stoppedbyuserid */
+            stoppedByUserId?: string | null;
+            /** Executorid */
+            executorId?: string | null;
+            /** Claimid */
+            claimId?: string | null;
+            /** Claimedat */
+            claimedAt?: string | null;
+            /** Claimexpiresat */
+            claimExpiresAt?: string | null;
+            /** Lastheartbeatat */
+            lastHeartbeatAt?: string | null;
+        };
+        /**
+         * WorkflowRunTarget
+         * @description Where a run works (data-contract §3): exactly one of a workspace (manual/
+         *     chat — the workspace you're in) or a trigger (schedule/poll — the server
+         *     derives the pinned workspace from the trigger row; derivation itself is PR G).
+         */
+        WorkflowRunTarget: {
+            /** Workspaceid */
+            workspaceId?: string | null;
+            /** Triggerid */
+            triggerId?: string | null;
+        };
+        /** WorkflowTriggerCreateRequest */
+        WorkflowTriggerCreateRequest: {
+            /**
+             * Kind
+             * @default schedule
+             * @enum {string}
+             */
+            kind: "schedule" | "poll";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Concurrencypolicy
+             * @enum {string}
+             */
+            concurrencyPolicy: "skip" | "queue";
+            /**
+             * Missedrunpolicy
+             * @default run_latest
+             * @enum {string}
+             */
+            missedRunPolicy: "run_latest" | "skip_all" | "replay_all";
+            /**
+             * Targetmode
+             * @enum {string}
+             */
+            targetMode: "local" | "personal_cloud";
+            /** Repofullname */
+            repoFullName?: string | null;
+            schedule?: components["schemas"]["TriggerScheduleRequest"] | null;
+            poll?: components["schemas"]["TriggerPollRequest"] | null;
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowTriggerItemListResponse */
+        WorkflowTriggerItemListResponse: {
+            /** Items */
+            items: components["schemas"]["WorkflowTriggerItemResponse"][];
+        };
+        /**
+         * WorkflowTriggerItemResponse
+         * @description One seen-set item for a poll trigger's per-item table (spec 8.2 row B).
+         */
+        WorkflowTriggerItemResponse: {
+            /** Itemid */
+            itemId: string;
+            /** Runid */
+            runId: string | null;
+            /** Status */
+            status: string;
+            /** Errormessage */
+            errorMessage: string | null;
+            /** Receivedat */
+            receivedAt: string;
+        };
+        /** WorkflowTriggerListResponse */
+        WorkflowTriggerListResponse: {
+            /** Triggers */
+            triggers: components["schemas"]["WorkflowTriggerResponse"][];
+        };
+        /** WorkflowTriggerResponse */
+        WorkflowTriggerResponse: {
+            /** Id */
+            id: string;
+            /** Workflowid */
+            workflowId: string;
+            /** Kind */
+            kind: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Concurrencypolicy */
+            concurrencyPolicy: string;
+            /** Missedrunpolicy */
+            missedRunPolicy: string;
+            /** Targetmode */
+            targetMode: string;
+            /** Repofullname */
+            repoFullName: string | null;
+            /** Targetworkspaceid */
+            targetWorkspaceId: string | null;
+            /** Inputpresets */
+            inputPresets?: {
+                [key: string]: unknown;
+            } | null;
+            schedule: components["schemas"]["TriggerScheduleResponse"] | null;
+            poll?: components["schemas"]["TriggerPollResponse"] | null;
+            /** Nextrunat */
+            nextRunAt: string | null;
+            /** Lastscheduledat */
+            lastScheduledAt: string | null;
+            /** Lastskippedat */
+            lastSkippedAt: string | null;
+            /** Lastskipreason */
+            lastSkipReason: string | null;
+            /** Args */
+            args: {
+                [key: string]: unknown;
+            };
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /**
+         * WorkflowTriggerUpdateRequest
+         * @description Partial update: only supplied fields change, then the whole trigger is
+         *     re-validated as a unit (schedule/poll ⋈ target ⋈ args are interdependent).
+         */
+        WorkflowTriggerUpdateRequest: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Concurrencypolicy */
+            concurrencyPolicy?: ("skip" | "queue") | null;
+            /** Missedrunpolicy */
+            missedRunPolicy?: ("run_latest" | "skip_all" | "replay_all") | null;
+            /** Targetmode */
+            targetMode?: ("local" | "personal_cloud") | null;
+            /** Repofullname */
+            repoFullName?: string | null;
+            schedule?: components["schemas"]["TriggerScheduleRequest"] | null;
+            poll?: components["schemas"]["TriggerPollRequest"] | null;
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** WorkflowUpdateRequest */
+        WorkflowUpdateRequest: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowVersionResponse */
+        WorkflowVersionResponse: {
+            /** Id */
+            id: string;
+            /** Workflowid */
+            workflowId: string;
+            /** Versionn */
+            versionN: number;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Createdbyuserid */
+            createdByUserId: string | null;
+            /** Createdat */
+            createdAt: string;
         };
         /** WorkspaceCloudAccessSummary */
         WorkspaceCloudAccessSummary: {
@@ -6610,10 +7818,10 @@ export interface operations {
     };
     github_app_installation_callback_endpoint_auth_github_app_installation_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -6641,12 +7849,32 @@ export interface operations {
             };
         };
     };
+    github_app_connected_page_endpoint_auth_github_app_connected_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
     github_app_setup_callback_endpoint_integrations_github_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -9439,6 +10667,805 @@ export interface operations {
             };
         };
     };
+    list_workflows_endpoint_v1_cloud_workflows_get: {
+        parameters: {
+            query?: {
+                includeArchived?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workflow_endpoint_v1_cloud_workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_runs_endpoint_v1_cloud_workflows_runs_get: {
+        parameters: {
+            query?: {
+                workflowId?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_endpoint_v1_cloud_workflows_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_run_delivered_endpoint_v1_cloud_workflows_runs__run_id__delivered_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_run_status_endpoint_v1_cloud_workflows_runs__run_id__status_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_endpoint_v1_cloud_workflows_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeliver_run_endpoint_v1_cloud_workflows_runs__run_id__deliver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_run_endpoint_v1_cloud_workflows_runs__run_id__refresh_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_ping_endpoint_v1_cloud_workflows_runs__run_id__ping_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    claim_local_workflow_runs_endpoint_v1_cloud_workflows_executor_local_claims_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalWorkflowClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalWorkflowClaimListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_local_workflow_run_endpoint_v1_cloud_workflows_executor_local_runs__run_id__heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalWorkflowClaimActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocalWorkflowClaimMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_slack_channels_endpoint_v1_cloud_workflows_slack_channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlackChannelsResponse"];
+                };
+            };
+        };
+    };
+    inspect_poll_endpoint_route_v1_cloud_workflows_poll_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PollInspectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollInspectResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_endpoint_v1_cloud_workflows__workflow_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_workflow_endpoint_v1_cloud_workflows__workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_endpoint_v1_cloud_workflows__workflow_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_runs_endpoint_v1_cloud_workflows__workflow_id__runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_run_endpoint_v1_cloud_workflows__workflow_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_triggers_endpoint_v1_cloud_workflows__workflow_id__triggers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowTriggerCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_trigger_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowTriggerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trigger_items_endpoint_v1_cloud_workflows__workflow_id__triggers__trigger_id__items_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                workflow_id: string;
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowTriggerItemListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_desktop_worker_enrollment_endpoint_v1_cloud_workers_desktop_enrollment_post: {
         parameters: {
             query?: never;
@@ -9572,6 +11599,38 @@ export interface operations {
         };
     };
     worker_artifact_download_endpoint_v1_cloud_worker_download__target___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -9958,6 +12017,229 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminIntegrationDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_admin_integration_default_chat_scope_endpoint_v1_cloud_integrations_admin_organizations__organization_id__definitions__definition_id__default_chat_scope_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetIntegrationDefaultChatScopeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminIntegrationDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_function_invocations_endpoint_v1_cloud_integrations_functions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationListResponse"];
+                };
+            };
+        };
+    };
+    create_function_invocation_endpoint_v1_cloud_integrations_functions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFunctionInvocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_function_invocation_endpoint_v1_cloud_integrations_functions__name__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_function_invocation_endpoint_v1_cloud_integrations_functions__name__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFunctionInvocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_function_invocation_headers_endpoint_v1_cloud_integrations_functions__name__headers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RotateFunctionInvocationHeadersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_function_invocation_chat_scope_enabled_endpoint_v1_cloud_integrations_functions__name__chat_scope_enabled_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetFunctionInvocationChatScopeEnabledRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunctionInvocationResponse"];
                 };
             };
             /** @description Validation Error */

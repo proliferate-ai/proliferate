@@ -12,5 +12,8 @@ from . import repositories as repositories  # noqa: F401
 from . import runtime_workers as runtime_workers  # noqa: F401
 from . import sandboxes as sandboxes  # noqa: F401
 from . import secrets as secrets  # noqa: F401
+from . import workflow_gateway_models as workflow_gateway_models  # noqa: F401
+from . import workflow_ledger as workflow_ledger  # noqa: F401
+from . import workflows as workflows  # noqa: F401
 from . import workspaces as workspaces  # noqa: F401
 from . import worktree_policy as worktree_policy  # noqa: F401

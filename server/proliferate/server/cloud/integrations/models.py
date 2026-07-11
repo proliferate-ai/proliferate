@@ -147,6 +147,12 @@ class AdminIntegrationDefinitionResponse(_CamelModel):
     enabled_by_default: bool
     policy_enabled: bool | None = None
     effective_enabled: bool
+    # §2 "default access modes" — whether this integration is in the CHAT/
+    # interactive session's default tool set. True (today's implicit behavior)
+    # unless the org authored an explicit exclusion (``scope_json=[]``).
+    # Per-tool restriction shares the same column but has no settings-UI control
+    # yet — this coarse in/out toggle is the phase-3 surface.
+    default_chat_included: bool = True
     auth_detection: AuthDetection | None = None
 
 
@@ -159,3 +165,7 @@ class CreateAdminIntegrationDefinitionRequest(_CamelModel):
 
 class SetIntegrationEnabledRequest(_CamelModel):
     enabled: bool
+
+
+class SetIntegrationDefaultChatScopeRequest(_CamelModel):
+    included: bool

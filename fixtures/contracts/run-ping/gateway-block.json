@@ -1,0 +1,7 @@
+{
+  "_comment": "Golden contract fixture (§3.7/L16, §6.4/OPEN-3(a)): the per-run gateway block as it appears at resolved_plan_json.gateway. Producing side = server StartRun mint (Python); consuming side = anyharness runtime parses it into PlanGateway. `authorization` is the FULL Authorization header value, forwarded verbatim (matches the worker dotfile convention). `integrations` is the NAMESPACE-LEVEL grant (E3): a list of integration namespaces, no tool lists — the gateway treats a namespace grant as 'all tools of that provider' at call time. Change this file to change the contract; both sides' tests then break until updated.",
+  "url": "https://cloud.test/v1/cloud/integration-gateway/mcp",
+  "authorization": "Bearer per-run-token-abc123",
+  "ping_url": "https://cloud.test/v1/cloud/workflows/runs/run-abc123/ping",
+  "integrations": ["issues", "slack"]
+}

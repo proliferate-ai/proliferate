@@ -11,6 +11,8 @@ interface SidebarPrimaryNavigationProps {
   homeActive: boolean;
   workspacesActive: boolean;
   workflowsActive: boolean;
+  /** D-003 launch flag: the Workflows entry renders only when the server advertises it. */
+  workflowsEnabled: boolean;
   supportActive: boolean;
   shortcutRevealVisible: boolean;
   shortcutLabels: {
@@ -27,6 +29,7 @@ export function SidebarPrimaryNavigation({
   homeActive,
   workspacesActive,
   workflowsActive,
+  workflowsEnabled,
   supportActive,
   shortcutRevealVisible,
   shortcutLabels,
@@ -49,17 +52,19 @@ export function SidebarPrimaryNavigation({
       icon: <LayoutGrid className="size-4" />,
       label: "Workspaces",
     },
-    {
-      id: "workflows",
-      active: workflowsActive,
-      icon: <Zap className="size-4" />,
-      label: "Workflows",
-      status: (
-        <span className="font-mono text-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
-          beta
-        </span>
-      ),
-    },
+    ...(workflowsEnabled
+      ? [{
+          id: "workflows",
+          active: workflowsActive,
+          icon: <Zap className="size-4" />,
+          label: "Workflows",
+          status: (
+            <span className="font-mono text-sm uppercase tracking-[0.06em] text-sidebar-muted-foreground">
+              beta
+            </span>
+          ),
+        } satisfies SidebarNavItemView]
+      : []),
     {
       id: "support",
       active: supportActive,

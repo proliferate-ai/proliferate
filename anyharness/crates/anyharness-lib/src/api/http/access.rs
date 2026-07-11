@@ -145,6 +145,23 @@ pub fn assert_session_mutable(state: &AppState, session_id: &str) -> Result<(), 
         .map_err(map_access_error)
 }
 
+/// L17 lockout at the HTTP layer (C13 / E8) for mutating verbs whose mutation
+/// lives in a service without the held registry (title update). Mirrors the
+/// runtime-method guard: a session held by a live workflow run returns 409
+/// `SESSION_WORKFLOW_HELD` and routes the UI to the take-over modal.
+pub fn assert_session_not_workflow_held(
+    state: &AppState,
+    session_id: &str,
+) -> Result<(), ApiError> {
+    match state.workflow_owned_sessions.held_run(session_id) {
+        Some(run_id) => Err(ApiError::conflict(
+            format!("session is driven by workflow run {run_id}; take over to regain control"),
+            "SESSION_WORKFLOW_HELD",
+        )),
+        None => Ok(()),
+    }
+}
+
 pub async fn assert_terminal_mutable(state: &AppState, terminal_id: &str) -> Result<(), ApiError> {
     state
         .workspace_access_gate

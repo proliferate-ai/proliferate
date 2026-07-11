@@ -174,8 +174,20 @@ pub(super) fn map_set_session_config_option_error(error: SetSessionConfigOptionE
         SetSessionConfigOptionError::Rejected(detail) => {
             ApiError::bad_request(detail, "SESSION_CONFIG_REJECTED")
         }
+        SetSessionConfigOptionError::Access(error) => map_access_error(error),
+        SetSessionConfigOptionError::WorkflowHeld { run_id } => workflow_held_error(&run_id),
         SetSessionConfigOptionError::Internal(error) => ApiError::internal(error.to_string()),
     }
+}
+
+/// The 409 a mutating verb returns for a session held by a live workflow run
+/// (C13 / E8). The desktop routes this code to the take-over modal — the only
+/// door — never a per-verb toast.
+fn workflow_held_error(run_id: &str) -> ApiError {
+    ApiError::conflict(
+        format!("session is driven by workflow run {run_id}; take over to regain control"),
+        "SESSION_WORKFLOW_HELD",
+    )
 }
 
 pub(super) fn map_send_prompt_error(error: SendPromptError) -> ApiError {
@@ -187,6 +199,8 @@ pub(super) fn map_send_prompt_error(error: SendPromptError) -> ApiError {
         SendPromptError::SessionClosed => ApiError::conflict("session is closed", "SESSION_CLOSED"),
         SendPromptError::EmptyPrompt => ApiError::bad_request("empty prompt", "EMPTY_PROMPT"),
         SendPromptError::InvalidPrompt(error) => ApiError::bad_request(error.detail, error.code),
+        SendPromptError::Access(error) => map_access_error(error),
+        SendPromptError::WorkflowHeld { run_id } => workflow_held_error(&run_id),
         // {error:#} keeps the anyhow cause chain; to_string() would drop it.
         SendPromptError::Internal(error) => ApiError::internal(format!("{error:#}")),
     }
@@ -203,6 +217,8 @@ pub(super) fn map_fork_session_error(error: ForkSessionError) -> ApiError {
             ApiError::conflict("session must be idle before forking", "SESSION_BUSY")
         }
         ForkSessionError::Invalid(detail) => ApiError::bad_request(detail, "FORK_INVALID_SESSION"),
+        ForkSessionError::Access(error) => map_access_error(error),
+        ForkSessionError::WorkflowHeld { run_id } => workflow_held_error(&run_id),
         ForkSessionError::MissingNativeSessionId => ApiError::conflict(
             "session must have a native agent session id before forking",
             "FORK_MISSING_NATIVE_SESSION",
@@ -229,6 +245,7 @@ pub(super) fn map_pending_prompt_mutation_error(error: PendingPromptMutationErro
         PendingPromptMutationError::InvalidPrompt(error) => {
             ApiError::bad_request(error.detail, error.code)
         }
+        PendingPromptMutationError::WorkflowHeld { run_id } => workflow_held_error(&run_id),
         PendingPromptMutationError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
@@ -266,6 +283,8 @@ pub(super) fn map_session_lifecycle_error(error: SessionLifecycleError) -> ApiEr
             format!("Session not found: {session_id}"),
             "SESSION_NOT_FOUND",
         ),
+        SessionLifecycleError::Access(error) => map_access_error(error),
+        SessionLifecycleError::WorkflowHeld { run_id } => workflow_held_error(&run_id),
         SessionLifecycleError::Internal(error) => ApiError::internal(error.to_string()),
     }
 }
@@ -277,6 +296,46 @@ mod tests {
 
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
+
+    #[test]
+    fn workflow_held_maps_to_409_session_workflow_held() {
+        use crate::domains::sessions::runtime::SendPromptError;
+        let response = super::map_send_prompt_error(SendPromptError::WorkflowHeld {
+            run_id: "run-1".to_string(),
+        })
+        .into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn pending_prompt_workflow_held_maps_to_409_not_500() {
+        use crate::domains::sessions::runtime::PendingPromptMutationError;
+        // C13/E8: editing or deleting a queued prompt on a held session must
+        // surface the typed 409 SESSION_WORKFLOW_HELD, never a collapsed 500.
+        let response = super::map_pending_prompt_mutation_error(
+            PendingPromptMutationError::WorkflowHeld {
+                run_id: "run-1".to_string(),
+            },
+        )
+        .into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn access_mutation_blocked_threads_through_as_409_not_500() {
+        use crate::domains::sessions::runtime::SendPromptError;
+        use crate::domains::workspaces::access_model::WorkspaceAccessMode;
+        // The included fix (C13): access-gate errors surface as their real 409,
+        // not a collapsed 500.
+        let response = super::map_send_prompt_error(SendPromptError::Access(
+            WorkspaceAccessError::MutationBlocked {
+                workspace_id: "ws-1".to_string(),
+                mode: WorkspaceAccessMode::FrozenForHandoff,
+            },
+        ))
+        .into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
 
     #[test]
     fn model_gated_maps_to_bad_request() {

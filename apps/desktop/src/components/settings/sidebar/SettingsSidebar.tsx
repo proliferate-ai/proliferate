@@ -1,4 +1,5 @@
 import { Fragment, useMemo, type ComponentType, type ReactNode } from "react";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 import {
   Blocks,
   Brain,
@@ -14,8 +15,10 @@ import {
   RefreshCw,
   Scissors,
   Settings2,
+  ShieldCheck,
   SlidersHorizontal,
   Users,
+  Webhook,
 } from "lucide-react";
 import { SidebarNavRow } from "@proliferate/ui/layout/SidebarNavRow";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
@@ -32,6 +35,7 @@ import {
   getHarnessKindForSettingsSection,
   getSettingsScopeNav,
   isSettingsAdminOnlySection,
+  isSettingsWorkflowsOnlySection,
   isSettingsHarnessSection,
   type SettingsNavIconId,
   type SettingsNavItem,
@@ -94,9 +98,11 @@ const SETTINGS_NAV_ICONS = {
   billing: CreditCard,
   "check-for-updates": RefreshCw,
   environments: SlidersHorizontal,
+  functions: Webhook,
   general: Settings2,
   integrations: Blocks,
   organization: Building2,
+  "organization-gateway-defaults": ShieldCheck,
   "organization-integrations": Blocks,
   "organization-limits": Gauge,
   "organization-members": Users,
@@ -198,17 +204,23 @@ export function SettingsSidebar({
   const { openBug: handleOpenSupport } = useOpenSupportReportWindow({ source: "settings" });
   const shortcutRevealVisible = useShortcutRevealVisible();
   const { agentsByKind } = useAgentCatalog();
+  const workflowsEnabled = useWorkflowsEnabled();
   const visibleNavGroups = useMemo(() =>
     getSettingsScopeNav(activeScope).groups.map((group) => ({
       ...group,
       items: group.items.filter((item) =>
         item.kind !== "section"
-        || !isSettingsAdminOnlySection(item.id)
-        || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
-        || adminAccess?.isAdmin === true
+        || (
+          (!isSettingsWorkflowsOnlySection(item.id) || workflowsEnabled)
+          && (
+            !isSettingsAdminOnlySection(item.id)
+            || TEMPORARILY_SHOW_ADMIN_SETTINGS_FOR_UI_ITERATION
+            || adminAccess?.isAdmin === true
+          )
+        )
       ),
     })).filter((group) => group.items.length > 0),
-  [activeScope, adminAccess?.isAdmin]);
+  [activeScope, adminAccess?.isAdmin, workflowsEnabled]);
   const visibleShortcutSections = useMemo(() => {
     return visibleNavGroups.flatMap((group) =>
       group.items.flatMap((item) =>

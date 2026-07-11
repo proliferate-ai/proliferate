@@ -16,8 +16,8 @@ use anyharness_contract::v1::{
 };
 use tokio::sync::broadcast;
 
-use super::model::GoalPendingOp;
-use super::service::{GoalEventContext, GoalService, MAX_GOAL_OBJECTIVE_BYTES};
+use super::model::{GoalFailReason, GoalGuardDecision, GoalPendingOp};
+use super::service::{GoalArming, GoalEventContext, GoalService, MAX_GOAL_OBJECTIVE_BYTES};
 use super::wire::{
     GoalClearedWireResult, GoalWire, GoalWireEnvelope, GOAL_CLEAR_EXT_METHOD, GOAL_GET_EXT_METHOD,
     GOAL_SET_EXT_METHOD,
@@ -187,10 +187,91 @@ impl GoalRuntime {
             let _ = self.goal_service.clear_pending(session_id);
             return Err(GoalOpError::NotConfirmed);
         }
+        // Stamp anyharness-side caps + provenance onto the freshly-mirrored row.
+        // These never went to the sidecar (caps are runtime-enforced; provenance
+        // is not a native concept); they are augmentation preserved across
+        // subsequent native updates.
+        let arming = GoalArming {
+            source_kind: request.source_kind,
+            source_run_id: request.source_run_id.clone(),
+            max_turns: request.max_turns,
+            max_wall_secs: request.max_wall_secs,
+        };
+        self.goal_service.stamp_arming(session_id, arming)?;
         self.goal_service
             .current_goal(session_id)?
             .map(|goal| goal.to_contract())
             .ok_or(GoalOpError::NotConfirmed)
+    }
+
+    /// Cap-guard entrypoint (called off [`GoalGuardExtension::on_turn_finished`]
+    /// via a spawned task): count this finished turn against the session's
+    /// active goal and, on a cap breach, fail the goal and stop the native loop.
+    pub async fn evaluate_turn_caps(&self, session_id: &str) -> anyhow::Result<()> {
+        let Some(GoalGuardDecision::Breached(reason)) = self.goal_service.record_turn(session_id)?
+        else {
+            return Ok(());
+        };
+        self.enforce_cap_breach(session_id, reason).await
+    }
+
+    /// Fails the active goal for a breached cap and best-effort clears the
+    /// native goal so the harness stops pursuing it (and burning turns/tokens).
+    /// The mirror is failed FIRST so the native clear's own `goal_cleared` echo
+    /// lands on a terminal head and no-ops — the `failed` result is sticky.
+    async fn enforce_cap_breach(
+        &self,
+        session_id: &str,
+        reason: GoalFailReason,
+    ) -> anyhow::Result<()> {
+        // The guard only fires for live sessions, but the actor can retire
+        // between the turn ending and this async hop; a missing handle means
+        // there is nothing left to enforce.
+        let Some(handle) = self.acp_manager.get_handle(session_id).await else {
+            return Ok(());
+        };
+        self.fail_goal_with_handle(&handle, reason).await?;
+        if let Some(native_session_id) = handle.native_session_id() {
+            if let Err(error) = handle
+                .call_agent_ext_method(
+                    GOAL_CLEAR_EXT_METHOD.to_string(),
+                    serde_json::json!({ "sessionId": native_session_id }),
+                )
+                .await
+            {
+                tracing::debug!(
+                    session_id,
+                    reason = reason.as_str(),
+                    error = ?error,
+                    "cap-guard native clear failed; mirror already marked failed"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    async fn fail_goal_with_handle(
+        &self,
+        handle: &Arc<LiveSessionHandle>,
+        reason: GoalFailReason,
+    ) -> anyhow::Result<()> {
+        let op = Box::new(GoalFailOp {
+            goal_service: self.goal_service.clone(),
+            reason,
+        });
+        let reply = handle.run_domain_op(op).await.map_err(|error| match error {
+            LiveSessionCommandError::ActorUnavailable => {
+                anyhow::anyhow!("session actor is not available for goal cap enforcement")
+            }
+            LiveSessionCommandError::ResponseDropped => {
+                anyhow::anyhow!("session actor dropped goal cap enforcement response")
+            }
+            LiveSessionCommandError::Rejected(infallible) => match infallible {},
+        })?;
+        let output = reply
+            .downcast::<GoalFailOpOutput>()
+            .map_err(|_| anyhow::anyhow!("goal fail op returned an unexpected reply type"))?;
+        output.result
     }
 
     /// Clear the session goal through the native mechanism
@@ -421,10 +502,15 @@ fn provisional_goal_from_wire(wire: &GoalWire) -> Goal {
         status: wire.status.to_contract(),
         native_status: wire.native_status.clone(),
         token_budget: wire.token_budget,
+        max_turns: None,
+        max_wall_secs: None,
         tokens_used: wire.tokens_used,
         time_used_seconds: wire.time_used_seconds,
         met_reason: wire.met_reason.clone(),
+        failed_reason: None,
         iterations: wire.iterations,
+        source_kind: anyharness_contract::v1::GoalSourceKind::User,
+        source_run_id: None,
         native: wire.native,
         revision: 0,
         created_at: now.clone(),
@@ -466,6 +552,37 @@ impl SessionDomainOp for GoalReconcileOp {
     }
 }
 
+/// The `Box<dyn Any + Send>` produced by [`GoalFailOp`] downcasts to this.
+struct GoalFailOpOutput {
+    result: anyhow::Result<()>,
+}
+
+/// Fails the active goal for a breached runtime cap under the sink lock, so the
+/// emitted `goal_updated(failed)` rides the session's ordered event stream with
+/// a correct seq (cf. [`GoalReconcileOp`]).
+struct GoalFailOp {
+    goal_service: Arc<GoalService>,
+    reason: GoalFailReason,
+}
+
+impl SessionDomainOp for GoalFailOp {
+    fn begin(self: Box<Self>, emitter: &mut SessionOpEmitter<'_>) -> SessionOpStep {
+        let GoalFailOp {
+            goal_service,
+            reason,
+        } = *self;
+        let context = goal_event_context(&emitter.event_ctx());
+        let result = match goal_service.fail_current_goal(context, reason) {
+            Ok(batch) => {
+                emitter.publish(batch.envelopes);
+                Ok(())
+            }
+            Err(error) => Err(error),
+        };
+        SessionOpStep::Done(Box::new(GoalFailOpOutput { result }) as Box<dyn Any + Send>)
+    }
+}
+
 fn goal_event_context(ctx: &SessionObserverContext) -> GoalEventContext {
     GoalEventContext {
         workspace_id: ctx.workspace_id.clone(),
@@ -480,7 +597,7 @@ fn goal_event_context(ctx: &SessionObserverContext) -> GoalEventContext {
 mod tests {
     use super::*;
     use crate::domains::goals::wire::GoalWireStatus;
-    use anyharness_contract::v1::{Goal, GoalStatus, GoalUpdatedPayload};
+    use anyharness_contract::v1::{Goal, GoalSourceKind, GoalStatus, GoalUpdatedPayload};
 
     const GOAL_EVENT_TYPES: &[&str] = &["goal_updated", "goal_met", "goal_cleared"];
 
@@ -497,10 +614,15 @@ mod tests {
                     status: GoalStatus::Active,
                     native_status: None,
                     token_budget: None,
+                    max_turns: None,
+                    max_wall_secs: None,
                     tokens_used: None,
                     time_used_seconds: None,
                     met_reason: None,
+                    failed_reason: None,
                     iterations: None,
+                    source_kind: GoalSourceKind::User,
+                    source_run_id: None,
                     native: true,
                     revision: 1,
                     created_at: "now".to_string(),

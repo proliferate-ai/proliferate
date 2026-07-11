@@ -11,9 +11,11 @@ export type SettingsNavIconId =
   | "billing"
   | "check-for-updates"
   | "environments"
+  | "functions"
   | "general"
   | "integrations"
   | "organization"
+  | "organization-gateway-defaults"
   | "organization-integrations"
   | "organization-limits"
   | "organization-members"
@@ -33,6 +35,8 @@ export type SettingsNavItem =
     label: string;
     iconId: SettingsNavIconId;
     adminOnly?: boolean;
+    /** D-003 launch flag: rendered only when the server advertises workflows. */
+    workflowsOnly?: boolean;
   }
   | {
     kind: "action";
@@ -81,6 +85,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "appearance", label: "Appearance", iconId: "appearance" },
           { kind: "section", id: "personal-secrets", label: "Personal secrets", iconId: "personal-secrets" },
           { kind: "section", id: "integrations", label: "Integrations", iconId: "integrations" },
+          { kind: "section", id: "functions", label: "Functions", iconId: "functions", workflowsOnly: true },
           { kind: "section", id: "worktrees", label: "Pruning", iconId: "worktrees" },
         ],
       },
@@ -99,6 +104,7 @@ export const SETTINGS_SCOPES: SettingsScopeNav[] = [
           { kind: "section", id: "organization-limits", label: "Usage & limits", iconId: "organization-limits", adminOnly: true },
           { kind: "section", id: "organization-secrets", label: "Organization secrets", iconId: "organization-secrets", adminOnly: true },
           { kind: "section", id: "organization-integrations", label: "Integrations", iconId: "organization-integrations", adminOnly: true },
+          { kind: "section", id: "organization-gateway-defaults", label: "Gateway defaults", iconId: "organization-gateway-defaults", adminOnly: true, workflowsOnly: true },
         ],
       },
       {
@@ -236,6 +242,17 @@ const SETTINGS_ADMIN_ONLY_SECTIONS = new Set<SettingsSection>(
 
 export function isSettingsAdminOnlySection(section: SettingsSection): boolean {
   return SETTINGS_ADMIN_ONLY_SECTIONS.has(section);
+}
+
+const SETTINGS_WORKFLOWS_ONLY_SECTIONS = new Set<SettingsSection>(
+  SETTINGS_SCOPES.flatMap((nav) =>
+    scopeSectionItems(nav).flatMap((item) => (item.workflowsOnly === true ? [item.id] : []))
+  ),
+);
+
+/** D-003 launch flag: sections that exist only when the server advertises workflows. */
+export function isSettingsWorkflowsOnlySection(section: SettingsSection): boolean {
+  return SETTINGS_WORKFLOWS_ONLY_SECTIONS.has(section);
 }
 
 /**

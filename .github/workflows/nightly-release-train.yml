@@ -27,6 +27,16 @@ on:
         default: false
         required: false
         type: boolean
+      promote_production:
+        description: >-
+          Also promote to production and publish the desktop stable updater feed.
+          Default (false) keeps the train staging-only; production is promoted
+          manually via Promote Production from a staging-tested SHA per
+          specs/developing/deploying/ci-cd.md. Scheduled nightly runs are always
+          staging-only.
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   actions: read
@@ -50,6 +60,7 @@ jobs:
       base_sha: ${{ steps.meta.outputs.base_sha }}
       head_sha: ${{ steps.commit.outputs.head_sha }}
       dry_run: ${{ steps.meta.outputs.dry_run }}
+      promote_production: ${{ steps.meta.outputs.promote_production }}
       product_version: ${{ steps.artifacts.outputs.product_version }}
       product_tag: ${{ steps.artifacts.outputs.product_tag }}
       selected_surfaces: ${{ steps.detect.outputs.selected_surfaces }}
@@ -82,6 +93,9 @@ jobs:
         env:
           INPUT_REF: ${{ github.event.inputs.ref || '' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          # Scheduled runs have no inputs, so this resolves to staging-only —
+          # production promotion is never unattended.
+          PROMOTE_PRODUCTION: ${{ github.event.inputs.promote_production || 'false' }}
         run: |
           set -euo pipefail
           git fetch origin main --tags --prune
@@ -101,6 +115,7 @@ jobs:
             echo "base_sha=$base_sha"
             echo "head_sha=$head_sha"
             echo "dry_run=$DRY_RUN"
+            echo "promote_production=$PROMOTE_PRODUCTION"
           } >> "$GITHUB_OUTPUT"
 
       - name: Detect release surfaces
@@ -239,10 +254,12 @@ jobs:
       git_sha: ${{ needs.prepare.outputs.head_sha }}
       version: ${{ needs.prepare.outputs.desktop_version }}
       dry_run: false
-      # Zero-touch auto-prod: publish the updater/download assets so existing
-      # installs auto-update on every train. release-desktop.yml is not bound to a
-      # GitHub Environment, so there is no approval gate on this step.
-      publish_updater: true
+      # The stable updater feed is what live desktops auto-update from, so it
+      # publishes only when this run explicitly opted into production promotion
+      # (never on the unattended nightly schedule). The default train builds and
+      # tags the desktop artifacts without touching the stable feed; Promote
+      # Production is the normal path to move users.
+      publish_updater: ${{ needs.prepare.outputs.promote_production == 'true' }}
       target_os: all
     secrets: inherit
 
@@ -298,16 +315,18 @@ jobs:
       enabled: ${{ needs.prepare.outputs.mobile == 'true' }}
     secrets: inherit
 
-  # ── Production promotion (zero-touch auto-prod) ───────────────────────────────
-  # Each prod job promotes only after its staging counterpart deploys cleanly, so
-  # the train still validates on staging first — but with no human approval step.
-  # Targets the existing `Production` GitHub Environment (prod cluster, deploy
-  # role, prod E2B template, secrets). The Environment's required-reviewer rule
-  # must be removed for these to run unattended.
+  # ── Production promotion (explicit opt-in only) ────────────────────────────────
+  # These jobs run ONLY when the dispatch set promote_production=true; the default
+  # train (and every scheduled nightly run, which has no inputs) is staging-only.
+  # The authoritative production path is the manual `Promote Production` workflow
+  # from a staging-tested SHA (specs/developing/deploying/ci-cd.md). Each prod job
+  # still requires its staging counterpart to have deployed cleanly, and targets
+  # the `Production` GitHub Environment (prod cluster, deploy role, prod E2B
+  # template, secrets), so any Environment required-reviewer rule also applies.
 
   deploy-e2b-prod:
     needs: [prepare, deploy-e2b]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-e2b.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    if: ${{ always() && needs.prepare.outputs.promote_production == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.deploy-e2b.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-e2b.yml
     with:
       environment: Production
@@ -319,7 +338,7 @@ jobs:
 
   deploy-server-prod:
     needs: [prepare, deploy-server, deploy-e2b-prod]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-server.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    if: ${{ always() && needs.prepare.outputs.promote_production == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.deploy-server.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-server.yml
     with:
       environment: Production
@@ -329,7 +348,7 @@ jobs:
 
   deploy-workers-prod:
     needs: [prepare, deploy-workers, deploy-server-prod]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-workers.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    if: ${{ always() && needs.prepare.outputs.promote_production == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.deploy-workers.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-workers.yml
     with:
       environment: Production
@@ -339,7 +358,7 @@ jobs:
 
   deploy-web-prod:
     needs: [prepare, deploy-web, deploy-server-prod]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-web.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    if: ${{ always() && needs.prepare.outputs.promote_production == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.deploy-web.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-web.yml
     with:
       environment: Production
@@ -349,7 +368,7 @@ jobs:
 
   deploy-mobile-prod:
     needs: [prepare, deploy-mobile]
-    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-mobile.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    if: ${{ always() && needs.prepare.outputs.promote_production == 'true' && needs.prepare.outputs.dry_run != 'true' && needs.deploy-mobile.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
     uses: ./.github/workflows/_deploy-mobile.yml
     with:
       environment: Production

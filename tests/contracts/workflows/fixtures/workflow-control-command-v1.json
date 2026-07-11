@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "commandId": "cmd_demo_0001",
+  "runId": "wfr_demo_0001",
+  "planHash": "sha256:24db3a9af5b6d6041b3b19641c3bb64c63e0cf6b31a1484d855783892445adea",
+  "bindingHash": "sha256:dcb8604a8ff4c3755a50eac062fa6f1e8e4d6efdd959a9a89ca6afc9e4678751",
+  "executionGeneration": 1,
+  "kind": "cancel",
+  "reason": "user_requested",
+  "cancellationFence": "DUMMY_FAKE_cancellation_fence_not_a_real_secret",
+  "issuedAt": "2026-07-10T00:06:00Z"
+}

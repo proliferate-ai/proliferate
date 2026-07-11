@@ -35,7 +35,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { AuthSessionResponse } from "./identity.js";
+import type { TargetLane } from "../config/types.js";
+import { loginDurableUser, type AuthSessionResponse } from "./identity.js";
 import { ApiClient } from "./http.js";
 
 const DEFAULT_STATE_RELATIVE = ".proliferate-local/dev/release-e2e-staging-session.json";
@@ -130,4 +131,59 @@ export async function loginDurableUserOnStaging(
   });
 
   return response;
+}
+
+/**
+ * Thrown when the staging session chain is broken — the state file / bootstrap
+ * token exists (so `stagingSessionAvailable` said yes) but the refresh itself
+ * failed (revoked/expired token, `token_generation` bumped, or a rotated token
+ * that was never persisted). Scenario code converts this to a
+ * `ScenarioBlockedError` so a broken session chain reports blocked, never a red
+ * run: the chain is re-bootstrapped out of band (staging_session_seed.py), it is
+ * not a product bug this scenario owns.
+ */
+export class StagingSessionUnavailableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "StagingSessionUnavailableError";
+  }
+}
+
+/**
+ * Logs in the durable user for a given TARGET lane, returning the same
+ * `AuthSessionResponse` shape regardless of path so scenario code never has to
+ * branch on which durable-login mechanism a lane uses:
+ * - staging: rotates the durable user's product session
+ *   (`loginDurableUserOnStaging`). Refresh failure (a broken session chain)
+ *   surfaces as `StagingSessionUnavailableError` — a blocked-reporting signal,
+ *   never a red — because the fix is re-bootstrapping the token out of band.
+ * - local: the real password-login route (`loginDurableUser`), reading the
+ *   durable email/password/org from the environment.
+ */
+export async function loginDurableUserForTargetLane(opts: {
+  targetLane: TargetLane;
+  serverUrl: string;
+  env?: NodeJS.ProcessEnv;
+}): Promise<AuthSessionResponse> {
+  const env = opts.env ?? process.env;
+  if (opts.targetLane === "staging") {
+    try {
+      return await loginDurableUserOnStaging(opts.serverUrl, env);
+    } catch (error) {
+      throw new StagingSessionUnavailableError(
+        "loginDurableUserForTargetLane: the staging durable session could not be refreshed — the token " +
+          "chain is broken (revoked/expired refresh token, a rotated token that was never persisted, or a " +
+          "bumped token_generation). Re-bootstrap it with `staging_session_seed.py mint proliferate-e2e-bot` " +
+          "(in-VPC one-off ECS task) and reseed RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN / the state file. " +
+          `Underlying error: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+  }
+  return loginDurableUser({
+    serverUrl: opts.serverUrl,
+    email: env.RELEASE_E2E_DURABLE_USER_EMAIL ?? "",
+    password: env.RELEASE_E2E_DURABLE_USER_PASSWORD ?? "",
+    organizationId: env.RELEASE_E2E_DURABLE_ORG_ID ?? "",
+  });
 }

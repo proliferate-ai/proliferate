@@ -10,17 +10,22 @@ from __future__ import annotations
 
 import json
 import time
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.workflows import FUNCTION_INVOCATION_PROVIDER_NAMESPACE
+from proliferate.db.store import function_invocations as invocations_store
 from proliferate.db.store.integrations import accounts as accounts_store
+from proliferate.db.store.integrations import policies as policies_store
 from proliferate.db.store.integrations import tool_call_events as tool_call_events_store
 from proliferate.db.store.integrations.accounts import ReadyAccountRow
 from proliferate.db.store.runtime_workers import IntegrationGatewayGrant
 from proliferate.integrations import mcp_remote
 from proliferate.integrations.mcp_remote import McpRemoteError
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.integration_gateway.domain import json_rpc, virtual_tools
+from proliferate.server.cloud.integration_gateway import functions as functions_dispatch
+from proliferate.server.cloud.integration_gateway.domain import json_rpc, scope, virtual_tools
 from proliferate.server.cloud.integration_gateway.domain.tool_args import (
     parse_call_tool_args,
     parse_list_tools_args,
@@ -28,6 +33,7 @@ from proliferate.server.cloud.integration_gateway.domain.tool_args import (
 from proliferate.server.cloud.integration_gateway.models import GatewayProviderAccount
 from proliferate.server.cloud.integrations.access import resolve_launch
 from proliferate.server.cloud.integrations.tools import get_or_refresh_tool_cache
+from proliferate.server.cloud.workflows import capability_authz
 
 _PROTOCOL_VERSION = "2025-06-18"
 
@@ -70,6 +76,85 @@ async def ready_accounts_for_grant(
     ]
 
 
+async def build_chat_default_access_scope(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+    organization_id: UUID | None,
+) -> list[dict[str, object]] | None:
+    """Compute the CHAT/interactive default-access run-scope for a per-worker grant.
+
+    Wires ``CloudIntegrationPolicy.scope_json`` (§2 "default access modes") into the
+    interactive gateway path so a chat session gets a CONFIGURABLE default set of
+    integrations instead of unconditionally ALL of the owner's ready ones.
+
+    Returns a ``run_scope``-shaped allowlist (``[{"provider": ns}, ...]`` or
+    ``{"provider": ns, "tools": [...]}`` for a per-integration tool restriction), or
+    ``None`` when the org authored no restriction — **default-all**, i.e. today's
+    unconditional behavior (all ready integrations, all tools).
+
+    Per-integration default access modes (each definition's policy ``scope_json``):
+      * NULL / absent -> integration in the default set with ALL tools
+      * ``[]``        -> integration EXCLUDED from the chat default set
+      * ``[tool]``    -> integration restricted to those tools
+
+    **default-subset** = the org authored ≥1 restriction: an allowlist is built over
+    the owner's ready integrations honoring each per-integration mode.
+
+    Workflows are unaffected: run-token grants carry their own frozen ``run_scope``
+    (E3 explicit opt-in) and never call this.
+    """
+    restrictions = (
+        await policies_store.list_authored_scope_restrictions(db, organization_id)
+        if organization_id is not None
+        else {}
+    )
+    # Function invocations default WORKFLOW-ONLY: a chat session may only reach the
+    # ones the owner explicitly enabled for chat (``chat_scope_enabled``). If the
+    # owner has any invocations at all, the chat default scope MUST be explicit so
+    # non-enabled ones are locked out — returning None (default-all) would open
+    # every invocation to every chat session (§11 ordering constraint).
+    invocations = await invocations_store.list_for_owner(db, owner_user_id)
+    chat_invocation_names = [inv.name for inv in invocations if inv.chat_scope_enabled]
+
+    if not restrictions and not invocations:
+        return None  # default-all: no integration restriction, no invocations to lock
+
+    # `list_ready_accounts_for_user` already joins the (non-archived) definition
+    # and the org-policy overlay into each row (main's ReadyAccountRow), so the
+    # definition rides the row — no separate get_definitions_by_ids fetch.
+    rows = await accounts_store.list_ready_accounts_for_user(
+        db, owner_user_id, organization_id=organization_id
+    )
+    scope_entries: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for row in rows:
+        definition = row.definition
+        if definition.archived_at is not None:
+            continue
+        if definition.namespace in seen:
+            continue
+        seen.add(definition.namespace)
+        allowed = restrictions.get(definition.id)
+        if allowed is None:
+            scope_entries.append({"provider": definition.namespace})
+        elif len(allowed) == 0:
+            continue  # excluded from the chat default set
+        else:
+            scope_entries.append({"provider": definition.namespace, "tools": list(allowed)})
+    # The reserved ``functions`` provider is added to the chat default set only if
+    # ≥1 invocation is chat-enabled, restricted to exactly those names; a non-enabled
+    # invocation is therefore absent from the scope and denied at the gateway.
+    if chat_invocation_names:
+        scope_entries.append(
+            {
+                "provider": FUNCTION_INVOCATION_PROVIDER_NAMESPACE,
+                "tools": chat_invocation_names,
+            }
+        )
+    return scope_entries
+
+
 async def account_for_provider(
     db: AsyncSession,
     *,
@@ -99,6 +184,9 @@ async def list_providers(
     *,
     grant: IntegrationGatewayGrant,
 ) -> dict[str, object]:
+    # Scope filtering (§6.3, least astonishment): a caller only *sees* the
+    # providers its grant reaches. Worker-token grants apply only the worker layer;
+    # run-token grants also hide providers outside the frozen run scope.
     providers = [
         {
             "provider": pair.definition.namespace,
@@ -107,7 +195,29 @@ async def list_providers(
             "status": pair.account.status,
         }
         for pair in await ready_accounts_for_grant(db, grant=grant)
+        if scope.provider_visible(
+            run_scope=grant.effective_run_scope,
+            worker_scope=grant.worker_scope,
+            provider=pair.definition.namespace,
+        )
     ]
+    # The reserved ``functions`` virtual provider: visible when the owner has ≥1
+    # live invocation AND the caller's scope reaches the ``functions`` namespace
+    # (chat: only if an invocation is chat-enabled; workflow: only if granted).
+    invocations = await invocations_store.list_for_owner(db, grant.owner_user_id)
+    if invocations and scope.provider_visible(
+        run_scope=grant.effective_run_scope,
+        worker_scope=grant.worker_scope,
+        provider=FUNCTION_INVOCATION_PROVIDER_NAMESPACE,
+    ):
+        providers.append(
+            {
+                "provider": FUNCTION_INVOCATION_PROVIDER_NAMESPACE,
+                "displayName": "Functions",
+                "authKind": "none",
+                "status": "ready",
+            }
+        )
     return {"providers": providers}
 
 
@@ -117,11 +227,37 @@ async def list_tools_for_provider(
     grant: IntegrationGatewayGrant,
     provider: str,
 ) -> dict[str, object]:
+    if provider == FUNCTION_INVOCATION_PROVIDER_NAMESPACE:
+        invocations = await invocations_store.list_for_owner(db, grant.owner_user_id)
+        tools = [
+            {
+                "name": inv.name,
+                "description": inv.description or inv.display_name or inv.name,
+                "inputSchema": inv.args_schema_json
+                or {"type": "object", "additionalProperties": True},
+            }
+            for inv in invocations
+        ]
+        filtered = scope.filter_tools_to_scope(
+            run_scope=grant.effective_run_scope,
+            worker_scope=grant.worker_scope,
+            provider=provider,
+            tools=tools,
+        )
+        return {"provider": provider, "tools": filtered}
     pair = await account_for_provider(db, grant=grant, provider=provider)
     tools = await get_or_refresh_tool_cache(
         db, account_record=pair.account, definition_record=pair.definition
     )
-    return {"provider": provider, "tools": tools}
+    # tools/list is filtered to the granted (provider, tools) — the agent never
+    # sees a tool it may not call (§6.3). Out-of-scope providers filter to empty.
+    filtered = scope.filter_tools_to_scope(
+        run_scope=grant.effective_run_scope,
+        worker_scope=grant.worker_scope,
+        provider=provider,
+        tools=tools if isinstance(tools, list) else [],
+    )
+    return {"provider": provider, "tools": filtered}
 
 
 async def call_provider_tool(
@@ -132,7 +268,57 @@ async def call_provider_tool(
     tool: str,
     arguments: dict[str, object],
 ) -> dict[str, object]:
-    # Audit the proxied call on every path — provider-resolution or account
+    # Defense in depth (§6.3 / L25): tools/call re-checks scope on every request,
+    # both layers, even though tools/list already hid out-of-scope tools. A denial
+    # is an enumerated, agent-readable error (surfaced as an MCP error result by the
+    # tools/call handler), never a 500.
+    decision = scope.authorize_tool_call(
+        run_scope=grant.effective_run_scope,
+        worker_scope=grant.worker_scope,
+        provider=provider,
+        tool=tool,
+    )
+    if not decision.allowed:
+        raise CloudApiError(
+            "integration_gateway_scope_denied",
+            decision.detail or "This tool is out of scope for the caller.",
+            status_code=403,
+        )
+    # WS3a live-narrowing seam: for a workflow run token, the frozen per-run
+    # capability leases are ALSO enforced (both layers must pass). A run with no
+    # leases is legacy and keeps namespace-only behavior; a capability created or
+    # edited after StartRun has no matching frozen lease and is denied here even
+    # though the namespace layer above allowed the provider. No positive cache —
+    # revalidated live on every call (archive/revoke/membership deny next call).
+    if grant.run_id is not None:
+        capability_decision = await capability_authz.authorize_dispatch(
+            db,
+            run=capability_authz.CapabilityRunContext(
+                run_id=grant.run_id,
+                owner_user_id=grant.owner_user_id,
+                organization_id=grant.organization_id,
+            ),
+            provider=provider,
+            tool=tool,
+        )
+        if not capability_decision.allowed:
+            raise CloudApiError(
+                "integration_gateway_capability_denied",
+                capability_decision.detail
+                or "This capability is not part of the run's frozen authority.",
+                status_code=403,
+            )
+    # Function invocations are a NON-MCP branch: a raw-httpx request our server
+    # makes (Part II §11), not an upstream MCP tools/call. Scope was authorized
+    # above by the same two-layer machinery (``functions`` provider, tool = name).
+    if provider == FUNCTION_INVOCATION_PROVIDER_NAMESPACE:
+        return await functions_dispatch.call_invocation(
+            db,
+            owner_user_id=grant.owner_user_id,
+            name=tool,
+            arguments=arguments,
+        )
+    # Audit the proxied MCP call on every path — provider-resolution or account
     # failures, upstream transport failures, and a returned tool-level error
     # all count as evidence the call happened. ``ok`` is only True when the
     # upstream returned a non-error result.

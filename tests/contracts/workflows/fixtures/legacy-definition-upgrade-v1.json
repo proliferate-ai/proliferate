@@ -1,0 +1,68 @@
+{
+  "description": "A legacy authored definition with no UUID identities is upgraded to a new immutable version whose slot/node/group/lane/step IDs are derived once, deterministically, via UUIDv5 over the fixed Proliferate namespace and the exact name grammar. The old version is retained for audit and never rewritten. All three languages must reproduce every expected id (Python/TS by computing UUIDv5; Rust by structural verification of the name grammar and v5 shape).",
+  "namespace": "2b5e907a-2cd8-5b8f-b5ab-5c891bb93263",
+  "newWorkflowVersionId": "018f8b00-0000-7000-8000-0000000000ee",
+  "legacyDefinition": {
+    "name": "Widgets triage (legacy)",
+    "inputs": {
+      "issue_url": { "type": "text" }
+    },
+    "agents": [
+      {
+        "slot": "Triage",
+        "steps": [
+          { "kind": "agent.prompt", "prompt": "Read {{inputs.issue_url}}." },
+          { "kind": "agent.emit", "emit": "triage" }
+        ]
+      },
+      {
+        "parallel": [
+          {
+            "slot": "Lane A worker",
+            "steps": [
+              { "kind": "agent.prompt", "prompt": "Fix the backend." }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "expectedIds": [
+    {
+      "kind": "slot",
+      "identity": "slot:Triage",
+      "name": "workflow-version=018f8b00-0000-7000-8000-0000000000ee\nkind=slot\nidentity=slot:Triage",
+      "uuid": "a2f0d914-334e-5f26-abb3-4c986cb78c6c"
+    },
+    {
+      "kind": "node",
+      "identity": "/agents/0",
+      "name": "workflow-version=018f8b00-0000-7000-8000-0000000000ee\nkind=node\nidentity=/agents/0",
+      "uuid": "f7a0175f-7f4c-5023-8c0e-7d1be716b5d9"
+    },
+    {
+      "kind": "step",
+      "identity": "/agents/0/steps/1",
+      "name": "workflow-version=018f8b00-0000-7000-8000-0000000000ee\nkind=step\nidentity=/agents/0/steps/1",
+      "uuid": "a9e43441-9fb1-56b7-ab66-414fa41f1588"
+    },
+    {
+      "kind": "group",
+      "identity": "/agents/1/parallel",
+      "name": "workflow-version=018f8b00-0000-7000-8000-0000000000ee\nkind=group\nidentity=/agents/1/parallel",
+      "uuid": "30dd4cd9-17f6-5a7d-bd2c-93e9be452cc2"
+    },
+    {
+      "kind": "lane",
+      "identity": "/agents/1/parallel/0",
+      "name": "workflow-version=018f8b00-0000-7000-8000-0000000000ee\nkind=lane\nidentity=/agents/1/parallel/0",
+      "uuid": "27904977-75df-5fda-a557-34a2280783b1"
+    },
+    {
+      "kind": "step",
+      "identity": "/agents/1/parallel/0/steps/0",
+      "name": "workflow-version=018f8b00-0000-7000-8000-0000000000ee\nkind=step\nidentity=/agents/1/parallel/0/steps/0",
+      "uuid": "0b71933a-3e84-5199-9858-38c7b1a12ef4"
+    }
+  ]
+}

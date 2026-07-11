@@ -9,7 +9,35 @@ use super::{
 };
 
 impl SessionRuntime {
+    /// User-facing config mutation. L17 lockout (C13 / E8): a session held by a
+    /// live workflow run rejects config changes — take-over is the only door.
+    /// The workflow executor is exempt: it calls
+    /// [`set_live_session_config_option_unlocked`] directly (its `agent.config`
+    /// step must switch the model of the very session it holds).
+    ///
+    /// [`set_live_session_config_option_unlocked`]: Self::set_live_session_config_option_unlocked
     pub async fn set_live_session_config_option(
+        &self,
+        session_id: &str,
+        config_id: &str,
+        value: &str,
+    ) -> Result<
+        (
+            SessionRecord,
+            Option<SessionLiveConfigSnapshot>,
+            ConfigApplyState,
+        ),
+        SetSessionConfigOptionError,
+    > {
+        if let Some(run_id) = self.workflow_held_run(session_id) {
+            return Err(SetSessionConfigOptionError::WorkflowHeld { run_id });
+        }
+        self.set_live_session_config_option_unlocked(session_id, config_id, value)
+            .await
+    }
+
+    /// The lockout-exempt config mutation the workflow executor uses.
+    pub(crate) async fn set_live_session_config_option_unlocked(
         &self,
         session_id: &str,
         config_id: &str,
@@ -24,9 +52,7 @@ impl SessionRuntime {
     > {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| {
-                SetSessionConfigOptionError::Internal(anyhow::anyhow!(error.to_string()))
-            })?;
+            .map_err(SetSessionConfigOptionError::Access)?;
         let record = self
             .get_session_or_not_found(session_id)
             .map_err(|error| match error {
@@ -35,6 +61,14 @@ impl SessionRuntime {
                 }
                 SessionLifecycleError::Internal(error) => {
                     SetSessionConfigOptionError::Internal(error)
+                }
+                // Unreachable from get_session_or_not_found (it never gates), but
+                // keep the mapping total.
+                SessionLifecycleError::Access(error) => {
+                    SetSessionConfigOptionError::Access(error)
+                }
+                SessionLifecycleError::WorkflowHeld { run_id } => {
+                    SetSessionConfigOptionError::WorkflowHeld { run_id }
                 }
             })?;
 

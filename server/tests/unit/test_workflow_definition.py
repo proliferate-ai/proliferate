@@ -1,0 +1,718 @@
+"""Strict workflow-definition validation — format v2 (data-contract §1)."""
+
+from __future__ import annotations
+
+import copy
+
+import pytest
+
+from proliferate.server.cloud.workflows.domain.definition import (
+    WorkflowDefinitionError,
+    parse_definition,
+)
+
+
+def _valid_definition() -> dict:
+    """A two-node spine covering the v2 kind union, refs, and the emit namespace."""
+    return {
+        "version": 1,
+        "name": "Sentry triage & fix",
+        "description": "…",
+        "inputs": [
+            {"name": "issue", "type": "text", "required": True},
+            {"name": "tries", "type": "number", "default": 3},
+            {
+                "name": "env",
+                "type": "choice",
+                "choices": ["prod", "staging"],
+                "default": "staging",
+            },
+        ],
+        "integrations": ["sentry", "linear", "slack"],
+        "agents": [
+            {
+                "slot": "triage",
+                "harness": "claude",
+                "model": "claude-sonnet-5",
+                "steps": [
+                    {
+                        "kind": "agent.prompt",
+                        "label": "Investigate",
+                        "prompt": "Fix {{inputs.issue}} in {{inputs.env}}",
+                        "required_invocation": {"provider": "linear", "tool": "update_status"},
+                        "goal": {
+                            "objective": "tests green for {{inputs.issue}}",
+                            "max_turns": 25,
+                            "max_wall_secs": 5400,
+                            "on_blocked": "pause_for_approval",
+                            "verify": {"shell": "make test", "expect_exit": 0},
+                        },
+                    },
+                    {
+                        "kind": "agent.emit",
+                        "name": "verdict",
+                        "prompt": "classify {{inputs.issue}}",
+                        "output_schema": {"type": "object"},
+                    },
+                ],
+            },
+            {
+                "slot": "fix",
+                "harness": "claude",
+                "model": "claude-opus-4-8",
+                "steps": [
+                    {"kind": "shell.run", "command": "make test", "output_name": "test"},
+                    {
+                        "kind": "agent.config",
+                        "model": "claude-opus-4-8",
+                    },
+                    {
+                        "kind": "notify",
+                        "slack_channel_id": "C123",
+                        "message": "root cause: {{verdict.root_cause}}",
+                        "on_fail": {"kind": "continue"},
+                    },
+                    {
+                        "kind": "branch",
+                        "on": "{{verdict.decision}}",
+                        "cases": {"ship": {"to": "continue"}, "wont_fix": {"to": "end"}},
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def _first_node(canonical: dict) -> dict:
+    return canonical["agents"][0]
+
+
+# --- shape ---------------------------------------------------------------------
+
+
+def test_parse_valid_definition_returns_canonical_and_specs() -> None:
+    canonical, specs = parse_definition(_valid_definition())
+    assert [s.name for s in specs] == ["issue", "tries", "env"]
+    assert canonical["version"] == 1
+    assert canonical["integrations"] == ["sentry", "linear", "slack"]
+    assert [n["slot"] for n in canonical["agents"]] == ["triage", "fix"]
+    # on_fail defaults to stop; the continue on the notify step survives.
+    assert _first_node(canonical)["steps"][0]["on_fail"] == {"kind": "stop"}
+    assert canonical["agents"][1]["steps"][2]["on_fail"] == {"kind": "continue"}
+
+
+# --- per-slot integration narrowing (track 3c phase 2) -------------------------
+
+
+def test_agent_integrations_narrows_and_survives_canonicalization() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = ["linear"]
+    canonical, _ = parse_definition(definition)
+    assert canonical["agents"][0]["integrations"] == ["linear"]
+    # The other node never declared the field — it keeps the workflow-level
+    # default implicitly (no "integrations" key stored, deny-path (c)).
+    assert "integrations" not in canonical["agents"][1]
+
+
+def test_agent_integrations_empty_list_narrows_to_nothing() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = []
+    canonical, _ = parse_definition(definition)
+    assert canonical["agents"][0]["integrations"] == []
+
+
+def test_agent_integrations_not_subset_rejected() -> None:
+    definition = _valid_definition()
+    # "context7" is not in the workflow-level integrations list.
+    definition["agents"][0]["integrations"] = ["context7"]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "agent_integrations_not_subset"
+
+
+def test_agent_integrations_duplicate_rejected() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = ["linear", "linear"]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_integration"
+
+
+def test_agent_integrations_must_be_a_list() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["integrations"] = "linear"
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_version_must_be_one() -> None:
+    definition = _valid_definition()
+    definition["version"] = 2
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_setup_and_top_level_steps_are_removed() -> None:
+    definition = _valid_definition()
+    definition["setup"] = {"harness": "claude", "model": "x"}
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+def test_unknown_top_level_key_rejected() -> None:
+    definition = _valid_definition()
+    definition["extra"] = 1
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+# --- agents spine (A4) ---------------------------------------------------------
+
+
+def test_at_least_one_agent_required() -> None:
+    definition = _valid_definition()
+    definition["agents"] = []
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_empty_agents_allowed_as_draft() -> None:
+    definition = _valid_definition()
+    definition["agents"] = []
+    canonical, _ = parse_definition(definition, require_steps=False)
+    assert canonical["agents"] == []
+
+
+def test_slot_must_match_grammar() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["slot"] = "Triage"  # uppercase illegal
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_duplicate_slot_rejected() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["slot"] = "triage"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_slot"
+
+
+# --- step-kind union -----------------------------------------------------------
+
+
+def test_unknown_step_kind_rejected() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][0]["kind"] = "agent.magic"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_step_kind"
+
+
+def test_human_approval_kind_is_gone() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["steps"].append(
+        {"kind": "human.approval", "message": "ship?", "on_timeout": "fail"}
+    )
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_step_kind"
+
+
+def test_notify_is_slack_only_no_channel() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][2]["channel"] = "in_app"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+def test_notify_requires_slack_channel_id() -> None:
+    definition = _valid_definition()
+    del definition["agents"][1]["steps"][2]["slack_channel_id"]
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+# --- notify agent-filled fields (track 3c) -------------------------------------
+
+
+def _with_agent_fields_notify(*, message: str, slot: str = "triage") -> dict:
+    """A definition whose notify references agent-filled fields."""
+    definition = _valid_definition()
+    notify = definition["agents"][1]["steps"][2]
+    notify["message"] = message
+    notify["agent_fields"] = {
+        "slot": slot,
+        "schema": {
+            "summary": {"type": "string", "description": "one-line summary"},
+            "risk": {"type": "number"},
+        },
+    }
+    return definition
+
+
+def test_notify_agent_fields_valid_parses() -> None:
+    definition = _with_agent_fields_notify(
+        message="Done. {{fields.summary}} (risk {{fields.risk}}) for {{inputs.issue}}"
+    )
+    canonical, _ = parse_definition(definition)
+    notify = canonical["agents"][1]["steps"][2]
+    assert notify["agent_fields"]["slot"] == "triage"
+    assert set(notify["agent_fields"]["schema"]) == {"summary", "risk"}
+    assert notify["agent_fields"]["schema"]["risk"] == {"type": "number"}
+
+
+def test_fields_ref_without_agent_fields_rejected() -> None:
+    # DENY-PATH (a): {{fields.x}} with no agent_fields on the notify.
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][2]["message"] = "value: {{fields.summary}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "fields_reference_not_allowed"
+
+
+def test_fields_ref_not_in_schema_rejected() -> None:
+    # DENY-PATH (b): the referenced field is not declared in the schema.
+    definition = _with_agent_fields_notify(message="value: {{fields.unknown}}")
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field_reference"
+
+
+def test_fields_ref_outside_notify_message_rejected() -> None:
+    # DENY-PATH (a): {{fields.*}} is illegal outside a notify's message, even when
+    # agent_fields is declared on the same step (e.g. in slack_channel_id).
+    definition = _with_agent_fields_notify(message="{{fields.summary}}")
+    definition["agents"][1]["steps"][2]["slack_channel_id"] = "{{fields.summary}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "fields_reference_not_allowed"
+
+
+def test_fields_ref_in_prompt_step_rejected() -> None:
+    # DENY-PATH (a): {{fields.*}} in a non-notify step.
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][0]["prompt"] = "use {{fields.summary}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "fields_reference_not_allowed"
+
+
+def test_agent_fields_slot_must_exist() -> None:
+    definition = _with_agent_fields_notify(message="{{fields.summary}}", slot="ghost")
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_slot"
+
+
+def test_agent_fields_schema_rejects_nonscalar_type() -> None:
+    definition = _with_agent_fields_notify(message="{{fields.summary}}")
+    definition["agents"][1]["steps"][2]["agent_fields"]["schema"]["summary"] = {"type": "object"}
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "invalid_definition"
+
+
+def test_agent_fields_schema_rejects_nested_keys() -> None:
+    definition = _with_agent_fields_notify(message="{{fields.summary}}")
+    definition["agents"][1]["steps"][2]["agent_fields"]["schema"]["summary"] = {
+        "type": "string",
+        "properties": {"nope": {"type": "string"}},
+    }
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+def test_agent_fields_schema_must_be_non_empty() -> None:
+    definition = _with_agent_fields_notify(message="hi")
+    definition["agents"][1]["steps"][2]["agent_fields"]["schema"] = {}
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_emit_name_cannot_use_reserved_notify_fields_prefix() -> None:
+    # DENY-PATH (c): a user-authored emit named with the resolver-reserved prefix.
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][1]["name"] = "__notify_fields_0"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "invalid_definition"
+
+
+def test_agent_config_narrows_to_model_only() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][1]["harness"] = "codex"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+def test_agent_config_requires_model() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][1] = {"kind": "agent.config"}
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_scm_open_pr_step_parses() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"].append(
+        {"kind": "scm.open_pr", "title": "Fix {{inputs.issue}}", "base": "main", "draft": True}
+    )
+    canonical, _ = parse_definition(definition)
+    step = canonical["agents"][1]["steps"][-1]
+    assert step["title"] == "Fix {{inputs.issue}}"
+    assert step["draft"] is True
+
+
+# --- emit + refs ---------------------------------------------------------------
+
+
+def test_emit_name_required_and_unique() -> None:
+    definition = _valid_definition()
+    # duplicate the emit name in the second node
+    definition["agents"][1]["steps"].insert(
+        0, {"kind": "agent.emit", "name": "verdict", "prompt": "again"}
+    )
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_emit"
+
+
+def test_emit_max_attempts_defaults_to_three() -> None:
+    canonical, _ = parse_definition(_valid_definition())
+    emit = _first_node(canonical)["steps"][1]
+    assert emit["name"] == "verdict"
+    assert emit["max_attempts"] == 3
+
+
+def test_emit_name_cannot_be_reserved_segment() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][1]["name"] = "inputs"
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_input_reference_to_unknown_input_rejected() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][0]["prompt"] = "hi {{inputs.nope}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_input_reference"
+
+
+def test_forward_emit_reference_rejected() -> None:
+    definition = _valid_definition()
+    # The triage prompt (before the `verdict` emit) cannot see `verdict`.
+    definition["agents"][0]["steps"][0]["prompt"] = "use {{verdict.root_cause}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "forward_emit_reference"
+
+
+def test_emit_cannot_reference_itself() -> None:
+    definition = _valid_definition()
+    definition["agents"][0]["steps"][1]["prompt"] = "self {{verdict.x}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "forward_emit_reference"
+
+
+def test_prior_emit_is_visible_across_nodes() -> None:
+    # `verdict` (triage node) is visible to the fix node's notify — the baseline
+    # definition already exercises this; assert it parses clean.
+    parse_definition(_valid_definition())
+
+
+# --- branch (C11/D3) -----------------------------------------------------------
+
+
+def test_branch_cases_must_be_continue_or_end() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][3]["cases"]["ship"] = {"to": "goto_notify"}
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_branch_on_must_be_a_single_emit_ref() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][3]["on"] = "{{inputs.env}}"
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_branch_on_forward_emit_rejected() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][3]["on"] = "{{later.x}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "forward_emit_reference"
+
+
+# --- inputs schema (E2) --------------------------------------------------------
+
+
+def test_choice_input_requires_choices_list() -> None:
+    definition = _valid_definition()
+    definition["inputs"][2] = {"name": "env", "type": "choice"}
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_choice_default_must_be_allowed() -> None:
+    definition = _valid_definition()
+    definition["inputs"][2]["default"] = "dev"
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_non_choice_input_rejects_choices_field() -> None:
+    definition = _valid_definition()
+    definition["inputs"][0]["choices"] = ["a", "b"]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "unknown_field"
+
+
+def test_duplicate_input_name_rejected() -> None:
+    definition = _valid_definition()
+    definition["inputs"].append({"name": "issue", "type": "text"})
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_arg"
+
+
+# --- on_fail + goal ------------------------------------------------------------
+
+
+def test_on_fail_retry_requires_positive_n() -> None:
+    definition = _valid_definition()
+    definition["agents"][1]["steps"][0]["on_fail"] = {"kind": "retry"}
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_goal_requires_caps_and_on_blocked() -> None:
+    definition = _valid_definition()
+    del definition["agents"][0]["steps"][0]["goal"]["max_turns"]
+    with pytest.raises(WorkflowDefinitionError):
+        parse_definition(definition)
+
+
+def test_parse_does_not_mutate_input() -> None:
+    definition = _valid_definition()
+    before = copy.deepcopy(definition)
+    parse_definition(definition)
+    assert definition == before
+
+
+# --- parallel groups (L30 / D-031) ---------------------------------------------
+
+
+def _parallel_definition() -> dict:
+    """A spine with a single node, then a 2-lane parallel group, then a joining
+    node that reads a lane emit."""
+    return {
+        "version": 1,
+        "inputs": [{"name": "issue", "type": "text", "required": True}],
+        "integrations": [],
+        "agents": [
+            {
+                "slot": "plan",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [
+                    {"kind": "agent.emit", "name": "spec", "prompt": "plan {{inputs.issue}}"}
+                ],
+            },
+            {
+                "parallel": [
+                    {
+                        "slot": "fix_a",
+                        "harness": "claude",
+                        "model": "sonnet",
+                        "steps": [
+                            {"kind": "agent.prompt", "prompt": "impl {{spec.summary}}"},
+                            {"kind": "agent.emit", "name": "result_a", "prompt": "report"},
+                        ],
+                    },
+                    {
+                        "slot": "fix_b",
+                        "harness": "codex",
+                        "model": "gpt-5",
+                        "steps": [
+                            {"kind": "agent.emit", "name": "result_b", "prompt": "other"},
+                        ],
+                    },
+                ]
+            },
+            {
+                "slot": "merge",
+                "harness": "claude",
+                "model": "sonnet",
+                "steps": [
+                    {
+                        "kind": "notify",
+                        "slack_channel_id": "C1",
+                        "message": "{{result_a.ok}} {{result_b.ok}}",
+                    }
+                ],
+            },
+        ],
+    }
+
+
+def test_parallel_group_round_trips() -> None:
+    canonical, _ = parse_definition(_parallel_definition())
+    group = canonical["agents"][1]
+    assert "parallel" in group
+    assert [lane["slot"] for lane in group["parallel"]] == ["fix_a", "fix_b"]
+    # Standalone entries keep their flat shape.
+    assert canonical["agents"][0]["slot"] == "plan"
+    assert canonical["agents"][2]["slot"] == "merge"
+
+
+def test_parallel_group_requires_two_nodes() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"] = [definition["agents"][1]["parallel"][0]]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "parallel_too_few"
+
+
+def test_nested_parallel_group_rejected() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0] = {
+        "parallel": [
+            {
+                "slot": "x",
+                "harness": "claude",
+                "model": "s",
+                "steps": [{"kind": "shell.run", "command": "true"}],
+            },
+            {
+                "slot": "y",
+                "harness": "claude",
+                "model": "s",
+                "steps": [{"kind": "shell.run", "command": "true"}],
+            },
+        ]
+    }
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "nested_parallel"
+
+
+def test_parallel_sibling_emit_reference_rejected() -> None:
+    # fix_b cannot see fix_a's emit (parallel sibling) — deny path.
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][1]["steps"][0]["prompt"] = "use {{result_a.ok}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "forward_emit_reference"
+
+
+def test_lane_can_reference_prior_spine_emit() -> None:
+    # fix_a references `spec` (a standalone node BEFORE the group) — accepted.
+    # The baseline _parallel_definition already exercises this; assert it parses.
+    parse_definition(_parallel_definition())
+
+
+def test_post_group_step_sees_all_lane_emits() -> None:
+    # The joining `merge` node reads both result_a and result_b — accepted.
+    # (Baseline exercises it; assert clean parse and that flipping it to a
+    # forward ref before the group fails.)
+    parse_definition(_parallel_definition())
+    definition = _parallel_definition()
+    # A step in the FIRST standalone node cannot see a lane emit that comes later.
+    definition["agents"][0]["steps"][0]["prompt"] = "{{result_a.ok}}"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "forward_emit_reference"
+
+
+def test_duplicate_emit_across_lanes_rejected() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][1]["steps"][0]["name"] = "result_a"
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_emit"
+
+
+def test_notify_agent_fields_in_lane_must_use_lane_slot() -> None:
+    # STEP 0 lane-scope ruling: a notify with agent_fields INSIDE a parallel lane
+    # must name the lane's OWN slot — the injected fields emit runs in that lane's
+    # worktree, so a sibling lane's agent can't fill it.
+    definition = _parallel_definition()
+    # Put a notify-with-agent_fields inside lane fix_a, but point the slot at fix_b.
+    definition["agents"][1]["parallel"][0]["steps"].append(
+        {
+            "kind": "notify",
+            "slack_channel_id": "C1",
+            "message": "status {{fields.summary}}",
+            "agent_fields": {"slot": "fix_b", "schema": {"summary": {"type": "string"}}},
+        }
+    )
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "agent_fields_slot_outside_lane"
+
+
+def test_notify_agent_fields_in_lane_own_slot_ok() -> None:
+    # The same notify with agent_fields.slot = the lane's own slot parses.
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0]["steps"].append(
+        {
+            "kind": "notify",
+            "slack_channel_id": "C1",
+            "message": "status {{fields.summary}}",
+            "agent_fields": {"slot": "fix_a", "schema": {"summary": {"type": "string"}}},
+        }
+    )
+    canonical, _ = parse_definition(definition)
+    notify = canonical["agents"][1]["parallel"][0]["steps"][-1]
+    assert notify["agent_fields"]["slot"] == "fix_a"
+
+
+def test_duplicate_slot_across_lane_and_node_rejected() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0]["slot"] = "plan"  # collides with node 0
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "duplicate_slot"
+
+
+def test_workflow_include_rejected_inside_parallel_lane() -> None:
+    definition = _parallel_definition()
+    definition["agents"][1]["parallel"][0]["steps"] = [
+        {"kind": "workflow.include", "workflow_id": str(__import__("uuid").uuid4()), "args": {}}
+    ]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "include_in_parallel"
+
+
+def test_parallel_lanes_count_toward_agent_cap() -> None:
+    from proliferate.constants.workflows import WORKFLOW_MAX_AGENTS
+
+    definition = _parallel_definition()
+    definition["agents"] = [
+        {
+            "parallel": [
+                {
+                    "slot": f"lane_{i}",
+                    "harness": "claude",
+                    "model": "s",
+                    "steps": [{"kind": "shell.run", "command": "true"}],
+                }
+                for i in range(WORKFLOW_MAX_AGENTS + 1)
+            ]
+        }
+    ]
+    with pytest.raises(WorkflowDefinitionError) as exc:
+        parse_definition(definition)
+    assert exc.value.code == "too_many_agents"

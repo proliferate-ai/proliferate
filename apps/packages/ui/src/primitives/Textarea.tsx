@@ -12,8 +12,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaPropsWithVariant
     const base = variant === "ghost"
       ? "w-full resize-none border-none bg-transparent px-0 py-0 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 disabled:opacity-60"
       : variant === "code"
-        ? "w-full resize-y rounded-md border border-input bg-surface-editor px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
-        : "w-full resize-none rounded-md border border-input bg-surface-control px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60";
+        ? "w-full resize-y rounded-md border border-border bg-surface-editor px-3 py-2 font-mono text-[length:var(--readable-code-font-size)] leading-[var(--readable-code-line-height)] text-foreground placeholder:text-muted-foreground transition-colors focus:outline-none focus:border-border-heavy focus:ring-1 focus:ring-ring disabled:opacity-60"
+        : "w-full resize-none rounded-md border border-border bg-surface-elevated-secondary px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-border-heavy focus:outline-none focus:border-border-heavy focus:ring-1 focus:ring-ring disabled:opacity-60";
 
     return (
       <textarea ref={ref} className={twMerge(base, className)} {...props} />

@@ -22,6 +22,7 @@ use crate::domains::sessions::extensions::SessionExtension;
 use crate::domains::workspaces::access_gate::{WorkspaceAccessError, WorkspaceAccessGate};
 use crate::domains::workspaces::runtime::WorkspaceRuntime;
 use crate::live::sessions::LiveSessionManager;
+use crate::live::workflows::WorkflowOwnedSessions;
 
 mod config;
 mod creation;
@@ -54,6 +55,13 @@ pub struct SessionRuntime {
     /// plane's [`GatewayModelPlan`] and schedules launch-time lazy probes.
     gateway_model_resolver: Arc<dyn GatewayModelResolve>,
     active_goal_resolver: Arc<dyn ActiveGoalResolver>,
+    /// L17 lockout (C13 / E8): a session held by a non-terminal workflow run
+    /// rejects every mutating verb with 409 `SESSION_WORKFLOW_HELD`; take-over is
+    /// the only door. This is the same in-memory registry the workflow executor
+    /// marks its sessions in (the run row is the durable lock — this is its
+    /// cache). The executor is exempt by construction: it drives sessions through
+    /// the internal provenance path, never these public methods.
+    workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
     loops_resolver: Arc<dyn LoopsResolver>,
     activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
 }
@@ -61,6 +69,14 @@ pub struct SessionRuntime {
 impl SessionRuntime {
     pub(crate) fn runtime_home(&self) -> &Path {
         &self.runtime_home
+    }
+
+    /// The lockout guard shared by every public mutating verb (C13 / E8). Returns
+    /// the holding run id when the session is engine-locked, so the caller can
+    /// surface a typed `WorkflowHeld` error that maps to 409
+    /// `SESSION_WORKFLOW_HELD` and routes the UI to the take-over modal.
+    fn workflow_held_run(&self, session_id: &str) -> Option<String> {
+        self.workflow_owned_sessions.held_run(session_id)
     }
 }
 
@@ -117,6 +133,12 @@ pub struct SessionMcpRefresh {
 pub enum SetSessionConfigOptionError {
     SessionNotFound(String),
     Rejected(String),
+    /// Workspace runtime state blocks mutation (threaded typed so it surfaces as
+    /// 409 `WORKSPACE_MUTATION_BLOCKED`, not a 500 — the access-gate 500-collapse
+    /// fix, C13).
+    Access(WorkspaceAccessError),
+    /// The session is held by a non-terminal workflow run (C13 / E8).
+    WorkflowHeld { run_id: String },
     Internal(anyhow::Error),
 }
 
@@ -126,6 +148,10 @@ pub enum SendPromptError {
     SessionClosed,
     EmptyPrompt,
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
+    /// See [`SetSessionConfigOptionError::Access`].
+    Access(WorkspaceAccessError),
+    /// The session is held by a non-terminal workflow run (C13 / E8).
+    WorkflowHeld { run_id: String },
     Internal(anyhow::Error),
 }
 
@@ -147,6 +173,10 @@ pub enum ForkSessionError {
     Unsupported(String),
     Busy,
     Invalid(String),
+    /// See [`SetSessionConfigOptionError::Access`].
+    Access(WorkspaceAccessError),
+    /// The session is held by a non-terminal workflow run (C13 / E8).
+    WorkflowHeld { run_id: String },
     MissingNativeSessionId,
     MissingDataKey,
     StartFailed {
@@ -169,12 +199,22 @@ pub enum PendingPromptMutationError {
     SessionNotFound(String),
     NotFound,
     InvalidPrompt(crate::domains::sessions::prompt::PromptValidationError),
+    /// The session is held by a non-terminal workflow run (C13 / E8). Editing or
+    /// deleting a queued prompt on a workflow-driven session is blocked —
+    /// take-over is the only door (E8).
+    WorkflowHeld { run_id: String },
     Internal(anyhow::Error),
 }
 
 #[derive(Debug)]
 pub enum SessionLifecycleError {
     SessionNotFound(String),
+    /// See [`SetSessionConfigOptionError::Access`].
+    Access(WorkspaceAccessError),
+    /// The session is held by a non-terminal workflow run (C13 / E8). Blocks
+    /// user-initiated cancel/close on a workflow-driven session — take-over is
+    /// the only door (E8).
+    WorkflowHeld { run_id: String },
     Internal(anyhow::Error),
 }
 
@@ -286,6 +326,7 @@ impl SessionRuntime {
         plan_interaction_link_resolver: Arc<dyn PlanInteractionLinkResolver>,
         gateway_model_resolver: Arc<dyn GatewayModelResolve>,
         active_goal_resolver: Arc<dyn ActiveGoalResolver>,
+        workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
         loops_resolver: Arc<dyn LoopsResolver>,
         activity_roster_resolver: Arc<dyn ActivityRosterResolver>,
     ) -> Self {
@@ -303,6 +344,7 @@ impl SessionRuntime {
             plan_interaction_link_resolver,
             gateway_model_resolver,
             active_goal_resolver,
+            workflow_owned_sessions,
             loops_resolver,
             activity_roster_resolver,
         }

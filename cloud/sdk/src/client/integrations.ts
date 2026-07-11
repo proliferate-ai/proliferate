@@ -149,6 +149,9 @@ export interface AdminIntegrationDefinition {
   enabledByDefault: boolean;
   policyEnabled: boolean | null;
   effectiveEnabled: boolean;
+  /** Gateway "default access modes" (§2): is this integration in the CHAT
+   * session's default tool set? True unless the org authored an exclusion. */
+  defaultChatIncluded: boolean;
   authDetection?: AdminIntegrationAuthDetection | null;
 }
 
@@ -273,5 +276,133 @@ export async function setAdminIntegrationEnabled(
     path: "/v1/cloud/integrations/admin/organizations/{organization_id}/definitions/{definition_id}/enabled",
     pathParams: { organization_id: organizationId, definition_id: definitionId },
     body: { enabled },
+  });
+}
+
+export async function setAdminIntegrationDefaultChatScope(
+  organizationId: string,
+  definitionId: string,
+  included: boolean,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<AdminIntegrationDefinition> {
+  return client.requestJson<AdminIntegrationDefinition>({
+    method: "PATCH",
+    path: "/v1/cloud/integrations/admin/organizations/{organization_id}/definitions/{definition_id}/default-chat-scope",
+    pathParams: { organization_id: organizationId, definition_id: definitionId },
+    body: { included },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Function invocations (person-scoped; Part II mental-model §1)
+// ---------------------------------------------------------------------------
+
+export type FunctionInvocationMethod = "get" | "post" | "patch" | "put" | "delete";
+
+export interface FunctionInvocation {
+  id: string;
+  name: string;
+  displayName: string | null;
+  description: string | null;
+  endpointUrl: string;
+  method: FunctionInvocationMethod;
+  argsSchema: Record<string, unknown>;
+  /** §2 "default access modes" for invocations — workflow-only until enabled. */
+  chatScopeEnabled: boolean;
+  /** Headers are WRITE-ONLY: this is presence only, never the header values. */
+  hasHeaders: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FunctionInvocationListResponse {
+  items: FunctionInvocation[];
+}
+
+export interface CreateFunctionInvocationRequest {
+  name: string;
+  displayName?: string | null;
+  description?: string | null;
+  endpointUrl: string;
+  method: FunctionInvocationMethod;
+  argsSchema?: Record<string, unknown>;
+  headers?: Record<string, string> | null;
+}
+
+export interface UpdateFunctionInvocationRequest {
+  displayName?: string | null;
+  description?: string | null;
+  endpointUrl?: string;
+  method?: FunctionInvocationMethod;
+  argsSchema?: Record<string, unknown>;
+}
+
+export async function listFunctionInvocations(
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<FunctionInvocationListResponse> {
+  return client.requestJson<FunctionInvocationListResponse>({
+    method: "GET",
+    path: "/v1/cloud/integrations/functions",
+  });
+}
+
+export async function createFunctionInvocation(
+  body: CreateFunctionInvocationRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<FunctionInvocation> {
+  return client.requestJson<FunctionInvocation>({
+    method: "POST",
+    path: "/v1/cloud/integrations/functions",
+    body,
+  });
+}
+
+export async function updateFunctionInvocation(
+  name: string,
+  body: UpdateFunctionInvocationRequest,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<FunctionInvocation> {
+  return client.requestJson<FunctionInvocation>({
+    method: "PATCH",
+    path: "/v1/cloud/integrations/functions/{name}",
+    pathParams: { name },
+    body,
+  });
+}
+
+export async function rotateFunctionInvocationHeaders(
+  name: string,
+  headers: Record<string, string> | null,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<FunctionInvocation> {
+  return client.requestJson<FunctionInvocation>({
+    method: "POST",
+    path: "/v1/cloud/integrations/functions/{name}/headers",
+    pathParams: { name },
+    body: { headers },
+  });
+}
+
+export async function setFunctionInvocationChatScopeEnabled(
+  name: string,
+  enabled: boolean,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<FunctionInvocation> {
+  return client.requestJson<FunctionInvocation>({
+    method: "PATCH",
+    path: "/v1/cloud/integrations/functions/{name}/chat-scope-enabled",
+    pathParams: { name },
+    body: { enabled },
+  });
+}
+
+export async function archiveFunctionInvocation(
+  name: string,
+  client: ProliferateCloudClient = getProliferateClient(),
+): Promise<void> {
+  await client.requestJson<unknown>({
+    method: "DELETE",
+    path: "/v1/cloud/integrations/functions/{name}",
+    pathParams: { name },
   });
 }

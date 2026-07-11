@@ -22,12 +22,14 @@ from proliferate.constants.cloud import (
     CLOUD_RUNTIME_WORKER_ENROLLMENT_TOKEN_DOMAIN,
     CLOUD_RUNTIME_WORKER_OFFLINE_THRESHOLD_SECONDS,
     CLOUD_RUNTIME_WORKER_TOKEN_DOMAIN,
+    CLOUD_WORKFLOW_RUN_GATEWAY_TOKEN_DOMAIN,
 )
 from proliferate.db.models.cloud.runtime_workers import (
     CloudIntegrationGatewayToken,
     CloudRuntimeWorker,
     CloudRuntimeWorkerEnrollment,
 )
+from proliferate.db.models.cloud.sandboxes import CloudSandbox
 from proliferate.utils.time import utcnow
 
 
@@ -54,6 +56,15 @@ def hash_worker_token(token: str) -> str:
 def hash_gateway_token(token: str) -> str:
     return hash_runtime_token(
         domain=CLOUD_INTEGRATION_GATEWAY_TOKEN_DOMAIN,
+        token=token,
+    )
+
+
+def hash_workflow_run_gateway_token(token: str) -> str:
+    """Hash a per-run workflow gateway token — worker-token hashing exactly, under
+    its own HMAC domain so a run token can never resolve a per-worker row."""
+    return hash_runtime_token(
+        domain=CLOUD_WORKFLOW_RUN_GATEWAY_TOKEN_DOMAIN,
         token=token,
     )
 
@@ -97,10 +108,36 @@ class RuntimeWorkerValue:
 
 @dataclass(frozen=True)
 class IntegrationGatewayGrant:
-    runtime_worker_id: UUID
-    runtime_kind: str
     owner_user_id: UUID
     organization_id: UUID | None
+    # Per-worker grant fields (None on a per-run grant).
+    runtime_worker_id: UUID | None = None
+    runtime_kind: str | None = None
+    # L25 layer 1: the resolved worker-level provider allowlist for this request.
+    # None = unscoped (today's behavior / no worker known). Re-resolved per request.
+    worker_scope: list[str] | None = None
+    # Per-run grant fields (PR E / OPEN-3a). Present only when the bearer resolved a
+    # ``cloud_workflow_run_gateway_token`` row; the credential itself proves the run.
+    run_id: UUID | None = None
+    workflow_id: UUID | None = None
+    # L25 layer 2: the run's frozen function grant (``[{provider, tools}]``). None on
+    # a per-worker grant (no per-run function restriction).
+    run_scope: list[dict[str, object]] | None = None
+    # §2 "default access modes" layer 2 for CHAT/interactive (per-worker) grants: the
+    # CONFIGURABLE default run-scope computed from the org's
+    # ``CloudIntegrationPolicy.scope_json``. None = unscoped (default-all — today's
+    # unconditional behavior). Never set on a per-run (workflow) grant: those carry
+    # their own frozen ``run_scope`` (E3 explicit opt-in), so the chat default policy
+    # never narrows a workflow.
+    default_scope: list[dict[str, object]] | None = None
+
+    @property
+    def effective_run_scope(self) -> list[dict[str, object]] | None:
+        """The layer-2 scope the gateway enforces: a workflow run token's frozen
+        ``run_scope`` when present, otherwise the chat/interactive default-access
+        scope. Mutually exclusive by construction (a per-run grant leaves
+        ``default_scope`` None; a per-worker grant leaves ``run_scope`` None)."""
+        return self.run_scope if self.run_scope is not None else self.default_scope
 
 
 def _enrollment_value(row: CloudRuntimeWorkerEnrollment) -> RuntimeWorkerEnrollmentValue:
@@ -392,4 +429,42 @@ async def get_grant_by_gateway_token_hash(
         runtime_kind=worker.runtime_kind,
         owner_user_id=worker.owner_user_id,
         organization_id=worker.organization_id,
+        # Layer-1 allowlist for this worker (NULL = unscoped, today's behavior).
+        worker_scope=list(token.scope_json) if token.scope_json is not None else None,
     )
+
+
+async def get_active_worker_gateway_scope_for_owner(
+    db: AsyncSession,
+    *,
+    owner_user_id: UUID,
+) -> list[str] | None:
+    """The layer-1 provider allowlist of the owner's active cloud-sandbox worker.
+
+    Used both at workflow delivery (L25 intersection) and per gateway request for a
+    run token (L25 asymmetric re-check): the delivering worker is the owner's
+    active worker on their personal cloud sandbox. Returns the worker token's
+    ``scope_json`` (a provider-namespace list) or ``None`` when the worker is
+    unscoped OR no worker exists yet — both mean "unscoped passthrough", never an
+    empty allowlist.
+    """
+
+    scope = (
+        await db.execute(
+            select(CloudIntegrationGatewayToken.scope_json)
+            .join(
+                CloudRuntimeWorker,
+                CloudRuntimeWorker.id == CloudIntegrationGatewayToken.runtime_worker_id,
+            )
+            .join(CloudSandbox, CloudSandbox.id == CloudRuntimeWorker.cloud_sandbox_id)
+            .where(
+                CloudSandbox.owner_user_id == owner_user_id,
+                CloudSandbox.destroyed_at.is_(None),
+                CloudRuntimeWorker.status != "revoked",
+                CloudIntegrationGatewayToken.status == "active",
+            )
+            .order_by(CloudIntegrationGatewayToken.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return list(scope) if scope is not None else None

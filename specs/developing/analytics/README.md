@@ -41,6 +41,9 @@ Use this folder to answer three analytics questions:
      project/alert setup
    - [anonymous-telemetry.md](anonymous-telemetry.md): first-party anonymous
      telemetry workflows and current usage
+   - [workflows-dashboards.md](workflows-dashboards.md): workflow-run
+     success/failure and scheduling-latency dashboard query definitions
+     (Metabase + Grafana), sourced from `workflow_run` columns
 3. Keeping surfaces fresh:
    - update the owning doc in the same PR as event, dashboard, alert, replay,
      lifecycle-message, or privacy changes

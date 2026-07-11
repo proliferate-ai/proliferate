@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "name": "T3-WF-4 parallel review",
+  "description": "A sequential intake slot, a 2-lane parallel review block, then a sequential summarize slot whose emit references BOTH lanes' outputs (referenceable only after the join). Version-pinned tier-3 fixture (specs/developing/testing/scenarios.md#T3-WF-4) — the Sentry-triage mock shape. Parallel forces worktree isolation + cloud target (has_parallel_groups gate rejects local + session bindings).",
+  "inputs": [
+    { "name": "change", "type": "text", "required": true }
+  ],
+  "integrations": [],
+  "agents": [
+    {
+      "slot": "intake",
+      "harness": "claude",
+      "model": "haiku",
+      "steps": [
+        {
+          "kind": "agent.emit",
+          "label": "Plan the review",
+          "name": "plan",
+          "prompt": "Read the change {{inputs.change}} and produce a short plan naming two review angles.",
+          "output_schema": {
+            "type": "object",
+            "properties": {
+              "angle_a": { "type": "string" },
+              "angle_b": { "type": "string" }
+            },
+            "required": ["angle_a", "angle_b"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    {
+      "parallel": [
+        {
+          "slot": "review_a",
+          "harness": "claude",
+          "model": "haiku",
+          "steps": [
+            {
+              "kind": "agent.emit",
+              "label": "Review angle A",
+              "name": "review_a_out",
+              "prompt": "Review the change {{inputs.change}} along angle {{plan.angle_a}}. Give a verdict.",
+              "output_schema": {
+                "type": "object",
+                "properties": { "verdict": { "type": "string" } },
+                "required": ["verdict"],
+                "additionalProperties": false
+              }
+            }
+          ]
+        },
+        {
+          "slot": "review_b",
+          "harness": "claude",
+          "model": "haiku",
+          "steps": [
+            {
+              "kind": "agent.emit",
+              "label": "Review angle B",
+              "name": "review_b_out",
+              "prompt": "Review the change {{inputs.change}} along angle {{plan.angle_b}}. Give a verdict.",
+              "output_schema": {
+                "type": "object",
+                "properties": { "verdict": { "type": "string" } },
+                "required": ["verdict"],
+                "additionalProperties": false
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slot": "summarize",
+      "harness": "claude",
+      "model": "haiku",
+      "steps": [
+        {
+          "kind": "agent.emit",
+          "label": "Merge both lane verdicts",
+          "name": "summary",
+          "prompt": "Combine the two reviews: A said {{review_a_out.verdict}}, B said {{review_b_out.verdict}}. Produce a single merged verdict.",
+          "output_schema": {
+            "type": "object",
+            "properties": { "merged": { "type": "string" } },
+            "required": ["merged"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  ]
+}

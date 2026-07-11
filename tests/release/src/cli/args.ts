@@ -1,10 +1,18 @@
 import { parseDesktopMode, parseTargetLane, type DesktopMode, type TargetLane } from "../config/types.js";
+import { RELEASE_POLICY_ENV, parseReleasePolicy, type ReleasePolicy } from "../runner/workflow-policy.js";
 
 export interface CliArgs {
   lane: TargetLane;
   desktop: DesktopMode;
   agents: string[] | "all";
   scenarios: string[] | "all";
+  /**
+   * Release policy (WS10a). `signal` (default) is the informational nightly
+   * mode — unchanged behavior. `release` is strict: the required-scenario
+   * manifest gates the run and a summary artifact is emitted. Selected by
+   * `--policy` or the `RELEASE_POLICY` env var, the flag winning.
+   */
+  policy: ReleasePolicy;
   dryRun: boolean;
   fileIssues: boolean;
   outputDir: string;
@@ -16,6 +24,9 @@ const DEFAULTS: Omit<CliArgs, "help"> = {
   desktop: "web",
   agents: "all",
   scenarios: "all",
+  // Default resolved from RELEASE_POLICY (falls back to signal) so an
+  // un-flagged run behaves exactly as it does today.
+  policy: parseReleasePolicy(process.env[RELEASE_POLICY_ENV]),
   dryRun: false,
   fileIssues: false,
   // Relative to this package's own cwd (`tests/release/`), which is what
@@ -54,6 +65,10 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         // --only is sugar for --scenarios (per the tier-3 build task: "runner
         // should support --only <id>"); both set the same field.
         args.scenarios = parseListFlag(requireValue(argv, i, arg));
+        i += 1;
+        break;
+      case "--policy":
+        args.policy = parseReleasePolicy(requireValue(argv, i, arg));
         i += 1;
         break;
       case "--dry-run":
@@ -106,6 +121,8 @@ Flags:
   --agents <list|all>        Comma-separated harness kinds, or "all" (default: all)
   --scenarios <list|all>     Comma-separated scenario ids, or "all" (default: all)
   --only <id>                Alias for --scenarios with a single id (e.g. --only T3-WT-1)
+  --policy <signal|release>  Release policy (default: RELEASE_POLICY env, else signal). release = strict:
+                             the required-scenario manifest gates the run and a summary artifact is written.
   --dry-run                  Report the plan + env manifest; never call a real provider/LLM
   --file-issues              File one GitHub issue per distinct failure via \`gh\` (default: off)
   --output-dir <path>        Where failure reports are written, relative to tests/release/ (default: .output)

@@ -193,12 +193,45 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0051_gateway_model_probe",
         include_str!("sql/0051_gateway_model_probe.sql"),
     ),
+    // Goals base table (main's 0052_goals is byte-identical to v1's former
+    // 0051_goals) followed immediately by v1's additive caps/provenance columns.
     ("0052_goals", include_str!("sql/0052_goals.sql")),
+    (
+        "0052_goal_caps_provenance",
+        include_str!("sql/0052_goal_caps_provenance.sql"),
+    ),
     ("0053_loops", include_str!("sql/0053_loops.sql")),
     ("0054_activity", include_str!("sql/0054_activity.sql")),
     (
         "0055_loops_scheduler",
         include_str!("sql/0055_loops_scheduler.sql"),
+    ),
+    // Workflows v2 tables (name-keyed; no collision with loops/activity).
+    (
+        "0053_workflow_runs",
+        include_str!("sql/0053_workflow_runs.sql"),
+    ),
+    (
+        "0054_workflow_injections",
+        include_str!("sql/0054_workflow_injections.sql"),
+    ),
+    (
+        "0055_workflow_lane_cursors",
+        include_str!("sql/0055_workflow_lane_cursors.sql"),
+    ),
+    // WS5a: strict delivery identity columns + the durable observation outbox.
+    (
+        "0056_workflow_delivery_identity",
+        include_str!("sql/0056_workflow_delivery_identity.sql"),
+    ),
+    (
+        "0057_workflow_observations",
+        include_str!("sql/0057_workflow_observations.sql"),
+    ),
+    // WS5b: the per-effect durable ledger for sequential effect crash recovery.
+    (
+        "0058_workflow_effects",
+        include_str!("sql/0058_workflow_effects.sql"),
     ),
 ];
 
@@ -366,6 +399,10 @@ fn migration_aliases(name: &str) -> &'static [&'static str] {
         // 0033_workspace_creator_context. Local dev profiles may have applied
         // that old name already; do not rerun the same schema changes as 0034.
         "0034_review_agent_loops" => &["0033_review_agent_loops"],
+        // The goals base table was 0051_goals on workflows/v1 before main took
+        // 0052_goals (byte-identical SQL). Dev profiles that ran the v1 branch
+        // already applied the old name; do not re-run CREATE TABLE goals.
+        "0052_goals" => &["0051_goals"],
         _ => &[],
     }
 }

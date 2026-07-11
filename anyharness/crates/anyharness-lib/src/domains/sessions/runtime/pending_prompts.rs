@@ -15,6 +15,13 @@ impl SessionRuntime {
         seq: i64,
         blocks: Vec<PromptInputBlock>,
     ) -> Result<SessionRecord, PendingPromptMutationError> {
+        // L17 lockout (C13 / E8): editing a queued prompt is a mutating verb, so a
+        // session held by a live workflow run rejects it — take-over is the only
+        // door. The executor never edits pending prompts, so it is exempt by
+        // construction (this path is purely user-facing).
+        if let Some(run_id) = self.workflow_held_run(session_id) {
+            return Err(PendingPromptMutationError::WorkflowHeld { run_id });
+        }
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| {
@@ -28,6 +35,12 @@ impl SessionRuntime {
                 }
                 SessionLifecycleError::Internal(error) => {
                     PendingPromptMutationError::Internal(error)
+                }
+                SessionLifecycleError::Access(error) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string()))
+                }
+                SessionLifecycleError::WorkflowHeld { run_id } => {
+                    PendingPromptMutationError::WorkflowHeld { run_id }
                 }
             })?;
         let handle = self
@@ -100,6 +113,13 @@ impl SessionRuntime {
         session_id: &str,
         seq: i64,
     ) -> Result<SessionRecord, PendingPromptMutationError> {
+        // L17 lockout (C13 / E8): deleting a queued prompt is a mutating verb, so a
+        // session held by a live workflow run rejects it — take-over is the only
+        // door. The executor never deletes pending prompts, so it is exempt by
+        // construction (this path is purely user-facing).
+        if let Some(run_id) = self.workflow_held_run(session_id) {
+            return Err(PendingPromptMutationError::WorkflowHeld { run_id });
+        }
         self.access_gate
             .assert_can_mutate_for_session(session_id)
             .map_err(|error| {
@@ -113,6 +133,12 @@ impl SessionRuntime {
                 }
                 SessionLifecycleError::Internal(error) => {
                     PendingPromptMutationError::Internal(error)
+                }
+                SessionLifecycleError::Access(error) => {
+                    PendingPromptMutationError::Internal(anyhow::anyhow!(error.to_string()))
+                }
+                SessionLifecycleError::WorkflowHeld { run_id } => {
+                    PendingPromptMutationError::WorkflowHeld { run_id }
                 }
             })?;
         let handle = self

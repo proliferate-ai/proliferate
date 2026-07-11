@@ -24,6 +24,29 @@ async def _cancel_test_background_tasks() -> None:
 
 
 @pytest.fixture(autouse=True)
+def _cloud_worker_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure a cloud base URL for the suite.
+
+    Every workflow StartRun now mints a per-run gateway token and composes its
+    gateway + ping URLs from this base (PR E / L16), exactly as worker enrollment
+    already does. Real deployments always set it; tests default it to a stable
+    value so StartRun-exercising suites don't need to. Tests that assert on a
+    specific base monkeypatch it themselves within the test.
+    """
+    monkeypatch.setattr(settings, "cloud_worker_base_url", "http://cloud.test")
+
+
+@pytest.fixture(autouse=True)
+def _billing_mode_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin billing to off so a developer's .env.local (e.g. CLOUD_BILLING_MODE=
+    enforce from the billing stack) can't flip enforcement gates mid-suite —
+    the workflow delivery budget gate blocks every test user in enforce mode.
+    Tests that exercise enforcement monkeypatch it themselves (_force_budget).
+    """
+    monkeypatch.setattr(settings, "cloud_billing_mode", "off")
+
+
+@pytest.fixture(autouse=True)
 def _hosted_membership_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pin the membership policy to hosted (personal org per user) by default.
 

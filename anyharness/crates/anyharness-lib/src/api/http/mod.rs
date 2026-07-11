@@ -41,6 +41,7 @@ pub mod sessions_prompt;
 pub mod sessions_resume;
 pub mod subagents;
 pub mod terminals;
+pub mod workflow_runs;
 pub mod workspaces;
 pub(crate) mod workspaces_contract;
 pub mod workspaces_lifecycle;

@@ -333,26 +333,125 @@ Usage & Limits pane render those numbers (Playwright).
 
 ## Tier 2 — workflows (to the seam)
 
-**PARKED (ruled 2026-07-08): the workflows surface is being reworked in a
-large in-flight PR arc; these scenarios are not built now. The workflows
-branches rebase on top of the test harness when they land and add their own
-tests per the PR obligation in `README.md`. Definitions below are kept as the
-starting contract for that work, not as current to-dos.**
+> Current-state registry notice (2026-07-10): this section describes the
+> as-built workflow tests, including behaviors that the target architecture
+> replaces. Canonical target behavior is
+> [`../../codebase/features/workflows.md`](../../codebase/features/workflows.md),
+> and the atomic migration/test replacement is owned by
+> [`../../tbd/workflows-v1-completion-plan.md`](../../tbd/workflows-v1-completion-plan.md).
+> Do not use a current green T2 row as proof that the target contract is met.
+
+Implemented 2026-07-10 (the T2-WF program). Lives in three sibling specs:
+`tests/intent/specs/workflows.spec.ts` (T2-WF-1, T2-WF-5),
+`tests/intent/specs/workflows-invocations.spec.ts` (T2-WF-3, T2-WF-4),
+`tests/intent/specs/workflows-triggers.spec.ts` (T2-WF-2, T2-WF-6, T2-WF-7).
+Seed helpers live in `tests/intent/stack/seed-workflows.ts`; the intent stub
+(`tests/intent/stack/invocation-stub.ts`) serves the poll feed + reserved
+`/poll-feed/init` sample. Everything drives the product's own HTTP surface
+except three documented direct-DB helpers (a GitHub-gated cloud repo
+environment + materialized workspace, poll seen-set/cursor READS) and the
+poller-tick driver.
+
+Two environment facts shape the seams these hit:
+- **Cloud runs stop earlier than the delivery attempt in tier-2.** A
+  `personal_cloud` StartRun/poll run mints a per-run gateway token whose config
+  needs `worker_cloud_base_url` (satisfied by `API_BASE_URL`); the local-lane
+  run's seam is `pending_delivery` → owner-relay `/delivered` → `delivered`
+  (no sandbox wake). The server-wakes-sandbox cloud delivery is tier-3.
+- **Poll (and cloud-target schedule) triggers derive a server-owned cloud
+  workspace from their repo pin (D16)**, which needs a cloud repo environment;
+  the product create path is GitHub-App-gated and unreachable in tier-2, so the
+  repo environment + a materialized workspace are seeded directly (the same
+  direct-DB exception cloud-workspace.spec.ts documents).
 
 ### T2-WF-1: definition lifecycle + run-to-delivery-seam
-Steps: create workflow in editor (steps incl. one invalid ref to assert live
-validation) → save version → trigger manually with args.
+Steps: create a workflow via the API (valid v2 definition, one declared input);
+GET round-trips the canonical definition and pins version 1; update appends an
+immutable version 2. Drive the EDITOR UI (desktop web build): open
+`/workflows/{id}/edit`, select the step, edit its prompt to reference an
+undeclared input → the header issue counter appears and Save is disabled (live
+client-side validation, `@proliferate/product-domain/workflows/validation`); fix
+the reference → issues clear, Save re-enables, click Save → the API reflects the
+fixed prompt. Manual LOCAL StartRun with args.
 Assert: `workflow_run` row created, status `pending_delivery`,
-`resolved_plan_json` populated with interpolated args; local-lane delivery
-attempt recorded. **Stop at the seam** — no runtime execution.
+`resolved_plan_json` populated with the interpolated args (`{{inputs.*}}`
+resolved into the step prompt); a missing required input is rejected at the
+coercion seam (`missing_argument`, no dangling run row); the local-lane relay
+`POST /runs/{id}/delivered` transitions `pending_delivery` → `delivered` (and is
+idempotent). **Stop at the seam** — no runtime execution, no sandbox.
 
 ### T2-WF-2: poll trigger against stub feed
-The PR-B validation script (workflows-architecture §10) productionized:
-replaying stub feed with one schema-invalid item.
-Assert: exactly one `workflow_trigger_item` per unique id (`spawned`), the
-invalid item recorded `invalid` with the schema error, cursor persisted,
-`last_poll_error` null; stub killed → `last_poll_error` populated, trigger
-stays enabled.
+Against the intent stub's `/poll-feed` (replays the same three items: two valid
++ one schema-invalid `count`), driven by invoking the real poller tick
+(`run_workflow_poller_tick`) in a server-venv process (the honest driving seam —
+the poll loop's automations worker is not booted by the tier-2 stack, and there
+is no HTTP endpoint for a single tick).
+Assert: exactly one `workflow_trigger_item` per unique id — two `spawned`
+(each with a `run_id`), the invalid item recorded `invalid` with the schema
+error (`count`) and never spawned; the opaque cursor persists and advances
+exactly once (NULL → `cursor-1`); a replay (trigger made due again via a
+`last_poll_at` time-shift — the poll it drives is fully real) produces no
+duplicate rows and no new runs (seen-set PK dedup) and leaves the cursor put;
+`last_poll_error` is null through the healthy polls. Then the feed 503s → the
+next tick records `last_poll_error`, keeps the cursor, spawns nothing, and the
+trigger **stays enabled**.
+
+### T2-WF-3: function-invocation CRUD
+Steps/Assert on `/integrations/functions`: create an invocation
+(name/endpoint_url/method/args_schema pointing at the intent stub) → workflow-only
+by default (`chatScopeEnabled=false`); a malformed args_schema is rejected
+(`invalid_payload`, the same jsonschema the gateway validates call args with); an
+invalid name is rejected (`invalid_payload` — the name is the gateway tool
+address). Headers are WRITE-ONLY: set on create → `hasHeaders=true` and no header
+value ever rides create/list/rotate responses (a property of the response
+schema — there is no `headers` field); rotating headers keeps them write-only;
+rotating to null clears them. The reserved `functions` namespace: creating an
+org-custom integration definition under it is rejected (`invalid_payload`, the
+reservation check in the admin definition create path).
+
+### T2-WF-4: organization / chat default-access enforcement
+The default-access authoring seams that FEED the composed chat run-scope. Assert:
+a new invocation defaults workflow-only, and `PATCH /{name}/chat-scope-enabled`
+round-trips (enable for chat → visible on the list surface → disable); the
+per-integration default-access mode round-trips via the admin
+`default-chat-scope` endpoint (`defaultChatIncluded` true by default → author the
+exclusion → restore). The COMPOSED run scope
+(`build_chat_default_access_scope`: defaults → exclusions → chat-enabled
+invocations → the frozen allowlist a worker grant carries) is enforced at the
+integration gateway for a real worker grant — tier-3, named as not-covered here.
+
+### T2-WF-5: StartRun binding validation + all-mutations lockout + take-over
+Assert (LOCAL target, so no cloud workspace needed): binding a slot not in the
+workflow is rejected (`unknown_session_binding_slot`); a run that binds a session
+is a LIVE run that holds it (the run row is the durable lock), so a second
+StartRun binding the same session is locked out (409 `session_binding_held`);
+taking over / cancelling the first run (`POST /runs/{id}/cancel`) lands it
+terminal `cancelled` with `stopped_by_user_id` stamped, and that terminal write
+IS the release — a subsequent StartRun binding the same session is accepted.
+Named not-covered (needs a materialized cloud workspace / runtime, tier-3):
+`session_binding_wrong_workspace` (foreign-session) and the harness-mismatch
+reject (by design a runtime bind-boundary error, not a server seam).
+
+### T2-WF-6: both /init setup flows
+Flow 1 (workflow-from-poll): `POST /workflows/poll/inspect` against the stub's
+reserved `/init` → derived inputs returned (scalar sample fields → typed
+inputs), non-scalar sample fields (an array) reported as `skippedFields`; a dead
+endpoint at inspect time returns the enumerated `poll_probe_failed`. Flow 2
+(poll-trigger-from-workflow field-diff): creating a poll trigger on a workflow
+whose declared inputs don't match the `/init` sample is rejected
+(`poll_signature_mismatch`) carrying the full field-by-field diff in
+`detail.mismatches`. Also: trigger create does the first network call — a dead
+endpoint at create time returns `poll_probe_failed`; fragment (`#...`) and
+userinfo (`user:pass@host`) poll URLs are rejected at save (`invalid_poll_config`).
+
+### T2-WF-7: schedule + poll trigger CRUD incl. missedRunPolicy
+Assert: schedule triggers (LOCAL target — no cloud workspace needed, 2a) accept
+each `missedRunPolicy` value `{run_latest, skip_all, replay_all}`, default
+`run_latest` when omitted, and a PATCH of `missedRunPolicy` round-trips; an
+invalid `missedRunPolicy` value is rejected at the request-model Literal (422,
+before the service's defense-in-depth `invalid_missed_run_policy`). Poll trigger
+1d fix: with the endpoint down, `PATCH {enabled:false}` succeeds (disabling a
+broken poll trigger must never reprobe — `enabled:false` never reprobes).
 
 ---
 
@@ -706,6 +805,97 @@ Against the durable org's exhausted subject, assert:
 The funded half (fund → consume → refill/reactivate → meter overage) is
 deferred to T3-BILL-3 above, blocked by the same staging Stripe live-mode /
 E2B-webhook findings. Test: `tests/release/src/scenarios/t3-bill-4.ts`.
+
+---
+
+## Tier 3 — workflows (T3-WF lane)
+
+> Current-state registry notice (2026-07-10): the WF1-WF7 entries and the CUT
+> WF8 statement below document the existing runner only. They are not the target
+> release manifest. WS10 in
+> [`../../tbd/workflows-v1-completion-plan.md`](../../tbd/workflows-v1-completion-plan.md)
+> replaces this section atomically with strict T3-WF-1 through T3-WF-10, where
+> missing, blocked, skipped, expected-fail, cancelled, duplicate, or failed rows
+> all fail the release run.
+
+Added 2026-07-10 (workflows build program, "Testing track"). Each scenario is a
+version-pinned fixture WORKFLOW DEFINITION
+(`tests/release/fixtures/workflows/*.json`, test data — same rule as the golden
+contract fixtures) exercising exactly one capability through the real workflow
+API + gateway. Assertions read the run row + step-action ledger (`GET
+/v1/cloud/workflows/runs/{id}` returns both), the trigger + trigger-item
+surfaces, the run gateway-token scope DB seam
+(`tests/release/scripts/workflow_probe.py`), and emitted `step_outputs` — never
+transcript text. Deny-path scenarios assert at the GATEWAY (audit row + absence
+of an upstream call), never the agent's prose. Tests under
+`tests/release/src/scenarios/workflows/`.
+
+The staging target is deferred for every T3-WF scenario (they create workflows/
+triggers/runs against the SHARED durable user/org — same posture as
+T3-INT-1/staging), and agent-executing halves report expected-fail where the
+runner cannot yet drive a runnable target (in-sandbox delivery path #1042, or the
+desktop executor). T3-WF-8 (agent comms) is CUT — dropped from program scope
+(2026-07-09).
+
+### T3-WF-1: structured output + required tools (`wf-emit-gate`)
+One agent: a `required_invocation` prompt gate + a strict-schema `agent.emit`.
+Assert: the first emit attempt may fail the schema → a corrective reprompt
+occurs → the validated output persists to `step_outputs`; the gate step advances
+only after the required tool call; `step_actions[].attemptCount` is the re-ask
+evidence. Surfaces the same functions-grant gap as T3-WF-2 (the fixture's
+`required_invocation` uses the reserved `functions` namespace).
+
+### T3-WF-2: function invocations + denial (`wf-invoke-allowed` / `wf-invoke-denied`)
+Allowed → the agent's outbound HTTP hits a scenario-local capture endpoint
+(request recorded, args schema-validated); denied → gateway scope 403 in the
+audit, ZERO outbound requests, run still completes with the agent's emitted
+failure report. The invocation-def CRUD + the capture endpoint run for real as
+setup. (Building this scenario surfaced that a workflow could not grant the
+reserved `functions` namespace — save rejected it and L22 required a ready
+integration ACCOUNT; fixed in the same PR: `visible_provider_namespaces` and
+`assert_declared_providers_ready` accept the virtual `functions` provider when
+the owner has ≥1 live invocation, unit-tested in
+`test_workflow_service.py::test_functions_*`. The scenario treats a
+reappearance of `workflow_function_provider_unknown` as a real red.)
+
+### T3-WF-3: integration scoping (`wf-integration-denied`)
+The workflow grants NO integrations, yet the agent is told to use a
+connected-but-ungranted provider (default exa, connected for real via
+`RELEASE_E2E_INTEGRATION_API_KEY`). Assert: `list_providers` omits it; a forced
+`call_tool` returns `integration_gateway_scope_denied`; zero upstream calls. The
+connected-but-ungranted precondition runs for real; the scope-403 proof reuses
+T3-INT-1's LLM-free gateway-token gate once a runnable target exists.
+
+### T3-WF-4: parallel + sequential lanes (L30) (`wf-parallel-review`)
+Intake slot → a 2-lane parallel review block → summarize slot whose emit
+references both lanes (referenceable only after the join). Sandbox lane only
+(parallel forces worktree isolation + a cloud target). Assert: the parallel
+definition round-trips through create + read (runs for real); per-lane
+independent advance, lane-qualified `<node>.<lane>.<step>` keys, and join gating
+need a real E2B sandbox.
+
+### T3-WF-5: polls end-to-end (`wf-poll-feed`)
+Against a scenario-local stub feed (poll contract §4.2). Assert: `/init`
+inference derives `{item_id, title}` from the sample item — a stateless server
+probe (`POST /poll/inspect`), NO workflow/agent, **runs LIVE locally** (the SSRF
+guard is bypassed under server debug, so a 127.0.0.1 stub is reachable). The
+item→inputs delivery + cursor-advance-once-per-item + replay-spawns-no-second-run
+half needs a poll trigger (derives a cloud workspace from a repo pin, D16) + the
+running poller loop.
+
+### T3-WF-6: automations (cloud) (`wf-schedule-cloud`)
+A 1-minute schedule trigger, `personal_cloud`, `concurrency=queue`,
+`run_latest`. Assert: the trigger's `next_run_at` is stamped (runs for real);
+fire-within-budget (`scheduled_for`/`started_at`), queue FIFO drain, and
+missed-run `run_latest` (suspend the beat one tick) need the scheduler beat + a
+real cloud sandbox.
+
+### T3-WF-7: automations (desktop) (`wf-schedule-cloud`, `target_mode` local)
+Same fixture, `target_mode=local` at trigger time. LOCAL dev-profile lane only:
+a real desktop executor (track-2a claim poll + heartbeat + relay) drives it.
+Guarded to report blocked under CI/sandbox (recorded limitation: no headless
+desktop lane). Assert: `next_run_at` stamped (runs for real); claim → execute →
+relay → terminal needs a running desktop executor.
 
 ---
 

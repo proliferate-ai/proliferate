@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "name": "T3-WF-1 emit gate",
+  "description": "One agent that must call a required invocation, then emit a strict-schema output. Version-pinned tier-3 fixture (specs/developing/testing/scenarios.md#T3-WF-1) — proves structured-output re-ask + required-tool gate.",
+  "inputs": [
+    { "name": "topic", "type": "text", "required": true }
+  ],
+  "integrations": ["functions"],
+  "agents": [
+    {
+      "slot": "analyst",
+      "harness": "claude",
+      "model": "haiku",
+      "steps": [
+        {
+          "kind": "agent.prompt",
+          "label": "Gather via the required tool",
+          "prompt": "Research {{inputs.topic}}. You MUST call the record_lookup function invocation exactly once before you continue — the step will not advance until you do.",
+          "required_invocation": { "provider": "functions", "tool": "record_lookup" }
+        },
+        {
+          "kind": "agent.emit",
+          "label": "Emit the strict verdict",
+          "name": "verdict",
+          "max_attempts": 3,
+          "prompt": "Return your verdict for {{inputs.topic}}. It MUST validate against the schema: a category enum, a confidence number between 0 and 1, and a one-sentence summary.",
+          "output_schema": {
+            "type": "object",
+            "properties": {
+              "category": { "type": "string", "enum": ["low", "medium", "high"] },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "summary": { "type": "string", "minLength": 1 }
+            },
+            "required": ["category", "confidence", "summary"],
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  ]
+}

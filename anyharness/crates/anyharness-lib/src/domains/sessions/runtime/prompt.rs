@@ -24,7 +24,12 @@ impl SessionRuntime {
     ) -> Result<SendPromptOutcome, SendPromptError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| SendPromptError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(SendPromptError::Access)?;
+        // L17 lockout (C13 / E8): a session held by a live workflow run rejects
+        // every mutating verb; take-over is the only door.
+        if let Some(run_id) = self.workflow_held_run(session_id) {
+            return Err(SendPromptError::WorkflowHeld { run_id });
+        }
         if blocks.is_empty() {
             return Err(SendPromptError::EmptyPrompt);
         }
@@ -179,6 +184,10 @@ fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptErro
     match error {
         SessionLifecycleError::SessionNotFound(session_id) => {
             SendPromptError::SessionNotFound(session_id)
+        }
+        SessionLifecycleError::Access(error) => SendPromptError::Access(error),
+        SessionLifecycleError::WorkflowHeld { run_id } => {
+            SendPromptError::WorkflowHeld { run_id }
         }
         SessionLifecycleError::Internal(error) => SendPromptError::Internal(error),
     }

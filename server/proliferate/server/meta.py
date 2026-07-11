@@ -190,6 +190,11 @@ class MetaResponse(BaseModel):
     runtimeVersion: str
     workerVersion: str
     minDesktopVersion: str
+    # D-003 workflows launch flag: the desktop hides its workflows entry
+    # points (sidebar, routes, composer door) when the server holds the
+    # surface dark. Appended after the golden five so existing readers of
+    # the wire order stay valid.
+    workflowsEnabled: bool
     capabilities: ServerCapabilities
 
 
@@ -201,6 +206,7 @@ async def meta() -> MetaResponse:
         runtimeVersion=runtime_version(),
         workerVersion=worker_version(),
         minDesktopVersion=min_desktop_version(),
+        workflowsEnabled=settings.workflows_enabled,
         capabilities=build_server_capabilities(settings),
     )
 

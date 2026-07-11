@@ -49,6 +49,15 @@ export interface ScenarioRunContext {
   agents: readonly string[];
   dryRun: boolean;
   env: EnvResolution;
+  /**
+   * Unique correlation ID for this scenario/lane run (WS10a live-scenario
+   * policy). Injected by the runner; scenarios may thread it into product
+   * requests so a live run is traceable. Optional so existing scenarios that
+   * ignore it are unaffected.
+   */
+  correlationId?: string;
+  /** Fixed per-scenario deadline in ms the runner enforces around `run`. */
+  deadlineMs?: number;
 }
 
 export interface ScenarioPlanContext {

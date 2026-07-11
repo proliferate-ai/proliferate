@@ -34,6 +34,7 @@ import { useSessionSelectionStore } from "@/stores/sessions/session-selection-st
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
 import { TelemetryProvider } from "./TelemetryProvider";
+import { WorkflowRelayProvider } from "./WorkflowRelayProvider";
 
 async function resolveWorkspaceConnectionWithCache(
   runtimeUrl: string,
@@ -67,6 +68,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <CloudClientProvider client={cloudClient}>
         <WorkspaceProviders>
           <TelemetryProvider>{children}</TelemetryProvider>
+          <WorkflowRelayProvider />
         </WorkspaceProviders>
       </CloudClientProvider>
     </QueryClientProvider>

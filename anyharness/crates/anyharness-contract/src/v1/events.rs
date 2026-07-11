@@ -249,6 +249,20 @@ pub enum PromptProvenance {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// A workflow step injected this prompt/command into the session (contract
+    /// §5.2 / C10 / E9): the desktop renders the machine-driven bubble
+    /// ("Workflow · <label>") from this stamp, never inference. Written at send
+    /// time; rides the live stream and the persisted event payload.
+    Workflow {
+        #[serde(rename = "runId")]
+        run_id: String,
+        #[serde(rename = "stepKey")]
+        step_key: String,
+        /// The step-kind slug (`agent.prompt`, `agent.emit`, `shell.run`, …).
+        kind: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
     System {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,

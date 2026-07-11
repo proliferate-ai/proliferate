@@ -6,6 +6,11 @@ import { HarnessPane } from "@/components/settings/panes/agents/harness/HarnessP
 import { AppearancePane } from "@/components/settings/panes/AppearancePane";
 import { CloudGuard, type CloudGateFlags } from "@/components/cloud/CloudGuard";
 import { GeneralPane } from "@/components/settings/panes/GeneralPane";
+import { FunctionInvocationsPane } from "@/components/settings/panes/FunctionInvocationsPane";
+import { OrganizationGatewayDefaultsPane } from "@/components/settings/panes/OrganizationGatewayDefaultsPane";
+import { CloudAuthUnavailablePane } from "@/components/settings/panes/CloudAuthUnavailablePane";
+import { CloudSignInRequiredPane } from "@/components/settings/panes/CloudSignInRequiredPane";
+import { CloudUnavailablePane } from "@/components/settings/panes/CloudUnavailablePane";
 import { OrganizationBudgetsPane } from "@/components/settings/panes/OrganizationBudgetsPane";
 import { OrganizationIntegrationsPane } from "@/components/settings/panes/OrganizationIntegrationsPane";
 import { OrganizationMembersPane } from "@/components/settings/panes/OrganizationMembersPane";
@@ -77,6 +82,21 @@ export function renderSettingsSection(
   if (activeSection === "integrations") {
     return renderCloudGatedPane(cloudGate, () => <UserIntegrationsPane focus={focus} />);
   }
+  if (activeSection === "functions") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <FunctionInvocationsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
+  }
   if (activeSection === "billing") {
     return <BillingPane />;
   }
@@ -94,6 +114,21 @@ export function renderSettingsSection(
   }
   if (activeSection === "organization-limits") {
     return <OrganizationBudgetsPane />;
+  }
+  if (activeSection === "organization-gateway-defaults") {
+    if (!cloudEnabled) {
+      return <CloudUnavailablePane />;
+    }
+
+    if (cloudActive) {
+      return <OrganizationGatewayDefaultsPane />;
+    }
+
+    if (cloudSignInChecking) {
+      return <CloudSignInRequiredPane />;
+    }
+
+    return cloudSignInAvailable ? <CloudSignInRequiredPane /> : <CloudAuthUnavailablePane />;
   }
   if (activeSection === "organization-sso") {
     return renderCloudGatedPane(cloudGate, () => <OrganizationSsoPane />);

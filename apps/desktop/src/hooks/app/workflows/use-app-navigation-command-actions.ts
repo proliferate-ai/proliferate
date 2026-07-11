@@ -9,6 +9,7 @@ import { useSupportMenuAction } from "@/hooks/support/derived/use-support-menu-a
 import { useKeyboardShortcutsDialogStore } from "@/stores/shortcuts/keyboard-shortcuts-dialog-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import type { AppCommandAction, AppCommandActions } from "./app-command-action-types";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 
 export type AppNavigationCommandActions = Pick<
   AppCommandActions,
@@ -38,6 +39,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const goHome = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.home);
   }, [goToTopLevelRoute]);
+  const workflowsEnabled = useWorkflowsEnabled();
   const goWorkflows = useCallback(() => {
     goToTopLevelRoute(APP_ROUTES.workflows);
   }, [goToTopLevelRoute]);
@@ -103,6 +105,9 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
     goWorkflows: {
       execute: goWorkflows,
       disabledReason: null,
+      // D-003 launch flag: hidden entirely (palette entry unregistered,
+      // shortcut inert) when the server holds workflows dark.
+      hidden: !workflowsEnabled,
     },
     openWebApp: {
       execute: openWebApp,
@@ -114,6 +119,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   }), [
     goHome,
     goWorkflows,
+    workflowsEnabled,
     openSettings,
     openSupportAction,
     openWebApp,

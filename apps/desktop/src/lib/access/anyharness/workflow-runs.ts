@@ -1,0 +1,200 @@
+/**
+ * Local AnyHarness workflow-run access (spec 3.2 desktop lane).
+ *
+ * The desktop hands a resolved plan to its *local* runtime itself and then
+ * relays observed state back to the server. The `@anyharness/sdk` client has no
+ * workflow-run surface yet, so this is a thin typed `fetch` against the local
+ * runtime — kept behind the AnyHarness access boundary like every other runtime
+ * call.
+ */
+
+import { getAnyHarnessClient, type AnyHarnessClientConnection } from "@anyharness/sdk-react";
+
+/** Local (or SSH-tunnelled) runtime connection. Local runs carry no auth token. */
+export interface LocalRuntimeConnection {
+  runtimeUrl: string;
+  authToken?: string;
+}
+
+/** Mirrors anyharness `WorkflowRunStatus` (observed vocabulary). */
+export type LocalWorkflowRunStatus =
+  | "running"
+  | "waiting_approval"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface LocalWorkflowStepRunView {
+  stepIndex: number;
+  kind: string;
+  status: string;
+  output?: unknown;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}
+
+/** Mirrors anyharness `WorkflowRunView` (the shape POST echoes / GET returns). */
+export interface LocalWorkflowRunView {
+  runId: string;
+  workspaceId: string;
+  status: LocalWorkflowRunStatus;
+  stepCursor: number;
+  sessionIds?: string[];
+  steps?: LocalWorkflowStepRunView[];
+  errorCode?: string | null;
+  errorMessage?: string | null;
+}
+
+const WORKFLOW_RUNS_PATH = "/v1/workflow-runs";
+
+function headers(connection: LocalRuntimeConnection): HeadersInit {
+  const base: Record<string, string> = { "content-type": "application/json" };
+  if (connection.authToken) {
+    base.authorization = `Bearer ${connection.authToken}`;
+  }
+  return base;
+}
+
+function runtimeBase(connection: LocalRuntimeConnection): string {
+  return connection.runtimeUrl.replace(/\/+$/, "");
+}
+
+/**
+ * Normalize a raw runtime workflow-run payload into {@link LocalWorkflowRunView}.
+ *
+ * The anyharness runtime serializes `sessionIds` as a MAP keyed by agent slot
+ * (`{ "<slot>": "<session-id>" }`), but the desktop relay forwards this field to
+ * the server as `anyharnessSessionIds`, whose contract is `list[str]`. Passing the
+ * map straight through makes the server reject every report for a run whose
+ * session actually started (422 `list_type` on `anyharnessSessionIds`), so the run
+ * is stranded `claimed` and never reaches a terminal status. Flatten the map's
+ * values to a list here — the single access-boundary seam both `create` and `get`
+ * go through — so downstream relay code sees the `string[]` its type promises.
+ */
+function normalizeRunView(raw: unknown): LocalWorkflowRunView {
+  const view = raw as LocalWorkflowRunView & { sessionIds?: unknown };
+  const rawSessionIds = view.sessionIds;
+  let sessionIds: string[] | undefined;
+  if (Array.isArray(rawSessionIds)) {
+    sessionIds = rawSessionIds.filter((id): id is string => typeof id === "string");
+  } else if (rawSessionIds && typeof rawSessionIds === "object") {
+    sessionIds = Object.values(rawSessionIds as Record<string, unknown>).filter(
+      (id): id is string => typeof id === "string",
+    );
+  }
+  return { ...view, sessionIds };
+}
+
+async function parseError(response: Response, action: string): Promise<Error> {
+  let detail = "";
+  try {
+    const body = (await response.json()) as { detail?: string; title?: string };
+    detail = body.detail ?? body.title ?? "";
+  } catch {
+    detail = "";
+  }
+  return new Error(
+    detail
+      ? `Failed to ${action}: ${detail}`
+      : `Failed to ${action} (status ${response.status}).`,
+  );
+}
+
+/**
+ * Deliver the resolved plan to the local runtime. Idempotent on the plan's
+ * `run_id`: a re-POST echoes the existing run (202).
+ */
+export async function createLocalWorkflowRun(
+  connection: LocalRuntimeConnection,
+  request: { plan: unknown; workspaceId: string },
+  options?: { signal?: AbortSignal },
+): Promise<LocalWorkflowRunView> {
+  const response = await fetch(`${runtimeBase(connection)}${WORKFLOW_RUNS_PATH}`, {
+    method: "POST",
+    headers: headers(connection),
+    body: JSON.stringify(request),
+    signal: options?.signal,
+  });
+  if (!response.ok) {
+    throw await parseError(response, "deliver the workflow run");
+  }
+  return normalizeRunView(await response.json());
+}
+
+export async function getLocalWorkflowRun(
+  connection: LocalRuntimeConnection,
+  runId: string,
+  options?: { signal?: AbortSignal },
+): Promise<LocalWorkflowRunView> {
+  const response = await fetch(
+    `${runtimeBase(connection)}${WORKFLOW_RUNS_PATH}/${encodeURIComponent(runId)}`,
+    { method: "GET", headers: headers(connection), signal: options?.signal },
+  );
+  if (!response.ok) {
+    throw await parseError(response, "read the workflow run");
+  }
+  return normalizeRunView(await response.json());
+}
+
+export async function resolveLocalWorkflowApproval(
+  connection: LocalRuntimeConnection,
+  runId: string,
+  approve: boolean,
+): Promise<LocalWorkflowRunView> {
+  const response = await fetch(
+    `${runtimeBase(connection)}${WORKFLOW_RUNS_PATH}/${encodeURIComponent(runId)}/approval`,
+    {
+      method: "POST",
+      headers: headers(connection),
+      body: JSON.stringify({ approve }),
+    },
+  );
+  if (!response.ok) {
+    throw await parseError(response, approve ? "approve the step" : "deny the step");
+  }
+  return normalizeRunView(await response.json());
+}
+
+/**
+ * Cancel a run on the local runtime. Terminal + idempotent: cancelling an
+ * already-terminal run echoes its current view. The desktop cancel flow calls
+ * this best-effort BEFORE the server terminal write, so the local agent is
+ * actually stopped rather than orphaned behind a cancelled row.
+ */
+export async function cancelLocalWorkflowRun(
+  connection: LocalRuntimeConnection,
+  runId: string,
+  options?: { signal?: AbortSignal },
+): Promise<LocalWorkflowRunView> {
+  const response = await fetch(
+    `${runtimeBase(connection)}${WORKFLOW_RUNS_PATH}/${encodeURIComponent(runId)}/cancel`,
+    { method: "POST", headers: headers(connection), signal: options?.signal },
+  );
+  if (!response.ok) {
+    throw await parseError(response, "cancel the workflow run");
+  }
+  return normalizeRunView(await response.json());
+}
+
+/**
+ * The local workflow executor's runtime deps (`WorkflowExecutorDeps` in
+ * `lib/workflows/local-workflow-executor.ts`), wired to the local runtime's
+ * AnyHarness client. Kept behind the AnyHarness access boundary — the claim
+ * poller hook passes a `runtimeUrl` and gets back typed callbacks, never the
+ * raw client.
+ */
+export function buildLocalWorkflowExecutorDeps(runtimeUrl: string) {
+  const connection: AnyHarnessClientConnection = { runtimeUrl };
+  const client = getAnyHarnessClient(connection);
+  return {
+    createWorktree: (input: Parameters<typeof client.workspaces.createWorktree>[0]) =>
+      client.workspaces.createWorktree(input),
+    getSetupStatus: (workspaceId: string) => client.workspaces.getSetupStatus(workspaceId),
+    startSetup: (
+      workspaceId: string,
+      setupInput: Parameters<typeof client.workspaces.startSetup>[1],
+    ) => client.workspaces.startSetup(workspaceId, setupInput),
+    deliverPlan: (payload: { plan: unknown; workspaceId: string }) =>
+      createLocalWorkflowRun({ runtimeUrl }, { plan: payload.plan, workspaceId: payload.workspaceId }),
+  };
+}

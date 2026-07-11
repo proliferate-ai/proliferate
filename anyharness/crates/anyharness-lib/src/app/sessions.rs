@@ -22,6 +22,7 @@ use crate::domains::sessions::live_ports::SessionAttachmentSource;
 use crate::domains::sessions::store::SessionStore;
 use crate::live::sessions::model::{ActorCapabilities, PermissionAdvisor, SessionEventObserver};
 use crate::live::sessions::LiveSessionManager;
+use crate::live::workflows::{WorkflowAutoApproveAdvisor, WorkflowOwnedSessions};
 use crate::persistence::Db;
 
 pub(super) struct LiveSessionsWiringDeps {
@@ -30,6 +31,9 @@ pub(super) struct LiveSessionsWiringDeps {
     pub plan_service: Arc<PlanService>,
     pub review_service: Arc<ReviewService>,
     pub goal_service: Arc<GoalService>,
+    /// Shared with the workflow executor: sessions a workflow run opened, which
+    /// the permission advisor auto-approves for (always-bypass safety net).
+    pub workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
     pub loop_service: Arc<LoopService>,
     pub activity_service: Arc<ActivityService>,
 }
@@ -52,9 +56,13 @@ pub(super) fn wire_live_sessions(deps: &LiveSessionsWiringDeps) -> LiveSessionMa
         Arc::new(LoopSessionObserver::new(deps.loop_service.clone())),
         Arc::new(ActivitySessionObserver::new(deps.activity_service.clone())),
     ];
-    let permission_advisor: Option<Arc<dyn PermissionAdvisor>> = Some(Arc::new(
-        PlanPermissionAdvisor::new(deps.plan_service.clone()),
-    ));
+    // Compose the permission advisor: auto-approve for workflow-owned sessions
+    // (always-bypass safety net), otherwise the plan advisor's behavior.
+    let permission_advisor: Option<Arc<dyn PermissionAdvisor>> =
+        Some(Arc::new(WorkflowAutoApproveAdvisor::new(
+            deps.workflow_owned_sessions.clone(),
+            Arc::new(PlanPermissionAdvisor::new(deps.plan_service.clone())),
+        )));
 
     let store = SessionStore::new(deps.db.clone());
     let attachment_storage = PromptAttachmentStorage::new(deps.runtime_home.clone());

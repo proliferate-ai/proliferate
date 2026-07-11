@@ -133,7 +133,7 @@ CREATE TABLE goals (
     native_state_json TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
-);
+, source_kind TEXT NOT NULL DEFAULT 'user', source_run_id TEXT, max_turns INTEGER, max_wall_secs INTEGER, failed_reason TEXT, guard_turns_used INTEGER NOT NULL DEFAULT 0, guard_started_at TEXT);
 
 -- table: loops
 CREATE TABLE loops (
@@ -566,6 +566,97 @@ CREATE TABLE terminal_command_runs (
     updated_at TEXT NOT NULL
 );
 
+-- table: workflow_effects
+CREATE TABLE workflow_effects (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    step_key TEXT NOT NULL,
+    attempt INTEGER NOT NULL,
+    effect_seq INTEGER NOT NULL DEFAULT 0,
+    effect_kind TEXT NOT NULL,
+    external_identity TEXT,
+    status TEXT NOT NULL,
+    result_json TEXT,
+    replay_key TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, step_key, attempt, effect_seq, effect_kind)
+);
+
+-- table: workflow_lane_cursors
+CREATE TABLE workflow_lane_cursors (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    node_index INTEGER NOT NULL,
+    lane TEXT NOT NULL,
+    cursor INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'running',
+    error_code TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, node_index, lane)
+);
+
+-- table: workflow_observations
+CREATE TABLE workflow_observations (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    canonical_snapshot_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    acked INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (run_id, revision),
+    UNIQUE (run_id, revision)
+);
+
+-- table: workflow_runs
+CREATE TABLE workflow_runs (
+    run_id TEXT PRIMARY KEY,
+    workflow_id TEXT,
+    workflow_version_id TEXT,
+    version_n INTEGER,
+    trigger_kind TEXT,
+    target_mode TEXT,
+    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    plan_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    step_cursor INTEGER NOT NULL DEFAULT 0,
+    session_ids_json TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+, plan_hash TEXT, binding_hash TEXT, execution_generation INTEGER);
+
+-- table: workflow_session_injections
+CREATE TABLE workflow_session_injections (
+    session_id TEXT NOT NULL,
+    turn_id TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    step_key TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    label TEXT NOT NULL,
+    injected_text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, turn_id)
+);
+
+-- table: workflow_step_runs
+CREATE TABLE workflow_step_runs (
+    run_id TEXT NOT NULL REFERENCES workflow_runs(run_id) ON DELETE CASCADE,
+    step_index INTEGER NOT NULL,
+    step_key TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 0,
+    output_json TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    started_at TEXT,
+    ended_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (run_id, step_index)
+);
+
 -- table: workspace_access_modes
 CREATE TABLE workspace_access_modes (
     workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -809,6 +900,34 @@ CREATE INDEX idx_terminal_command_runs_workspace_activity
 -- index: idx_terminal_command_runs_workspace_created
 CREATE INDEX idx_terminal_command_runs_workspace_created
     ON terminal_command_runs(workspace_id, created_at DESC);
+
+-- index: idx_workflow_effects_step_attempt
+CREATE INDEX idx_workflow_effects_step_attempt
+    ON workflow_effects(run_id, step_key, attempt, effect_seq);
+
+-- index: idx_workflow_injections_run
+CREATE INDEX idx_workflow_injections_run
+    ON workflow_session_injections(run_id, step_key);
+
+-- index: idx_workflow_lane_cursors_run
+CREATE INDEX idx_workflow_lane_cursors_run
+    ON workflow_lane_cursors(run_id);
+
+-- index: idx_workflow_observations_unacked
+CREATE INDEX idx_workflow_observations_unacked
+    ON workflow_observations(run_id, acked, revision);
+
+-- index: idx_workflow_runs_status
+CREATE INDEX idx_workflow_runs_status
+    ON workflow_runs(status);
+
+-- index: idx_workflow_runs_workspace_created
+CREATE INDEX idx_workflow_runs_workspace_created
+    ON workflow_runs(workspace_id, created_at DESC);
+
+-- index: idx_workflow_step_runs_key
+CREATE UNIQUE INDEX idx_workflow_step_runs_key
+    ON workflow_step_runs(run_id, step_key);
 
 -- index: idx_workspaces_path
 CREATE INDEX idx_workspaces_path ON workspaces(path);

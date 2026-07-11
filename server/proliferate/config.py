@@ -32,6 +32,15 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices("SINGLE_ORG_MODE", "PROLIFERATE_SINGLE_ORG_MODE"),
     )
+    # Workflows launch flag (D-003): the workflows surface ships dark on hosted
+    # production until the T3-WF battery is green there. The default is derived
+    # (hosted production holds; every other deployment posture — self-hosted,
+    # local dev — gets workflows on); an explicit env value wins, which is how
+    # staging (also hosted_product) enables it and how production is flipped on.
+    workflows_enabled_override: bool | None = Field(
+        default=None,
+        validation_alias=AliasChoices("WORKFLOWS_ENABLED", "PROLIFERATE_WORKFLOWS_ENABLED"),
+    )
     # First-run claim (single-org mode only). While the user table is empty the
     # API mints a setup token, persists its hash in the database, and writes the
     # plaintext to this local file so deploy tooling can print it. The file is
@@ -436,6 +445,18 @@ class Settings(BaseSettings):
     def single_org_mode(self) -> bool:
         if self.single_org_mode_override is not None:
             return self.single_org_mode_override
+        return self.telemetry_mode != "hosted_product"
+
+    @property
+    def workflows_enabled(self) -> bool:
+        """D-003 launch posture: workflows dark on hosted production by default.
+
+        Same derivation shape as ``single_org_mode``: hosted production holds
+        until explicitly flipped; self-hosted and local dev get workflows on.
+        Staging (also ``hosted_product``) sets ``WORKFLOWS_ENABLED=true``.
+        """
+        if self.workflows_enabled_override is not None:
+            return self.workflows_enabled_override
         return self.telemetry_mode != "hosted_product"
 
     @property

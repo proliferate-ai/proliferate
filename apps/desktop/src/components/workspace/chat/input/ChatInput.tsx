@@ -379,6 +379,7 @@ export function ChatInput({
               isEmpty={effectiveIsEmpty}
               onSubmit={onSubmit}
               onCancel={onCancel}
+              workspaceUiKey={workspaceUiKey}
             />
           </form>
         </ChatComposerSurface>

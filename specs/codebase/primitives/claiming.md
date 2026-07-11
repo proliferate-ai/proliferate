@@ -15,6 +15,12 @@ scoped token. There is no release. There is no admin revoke. The
 only way to make a claimed workspace inert is to archive the
 workspace itself.
 
+Workflow executor claims and session leases are different primitives. A local
+executor claim is a renewable right to deliver one run; a workflow session
+lease temporarily fences interactive mutations. Neither changes, releases, or
+reassigns `cloud_workspace_claim`. If a Workflow uses a shared workspace, this
+spec's irreversible ownership transition still applies first.
+
 ## 1. Purpose & Scope
 
 In scope:

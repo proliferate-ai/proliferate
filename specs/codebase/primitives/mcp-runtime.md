@@ -161,6 +161,18 @@ SessionRuntime::start_live_session
 The actor receives the final launch payload. It should not decide which product
 MCP servers to inject.
 
+### Reconfiguration of a live session
+
+The MCP list is fixed for one live actor generation. A product such as
+Workflows that must replace interactive bindings does not inject an MCP server
+into the running actor. It first closes admission and quiesces/checkpoints the
+session, stops the actor, calls the same central
+`assemble_session_mcp_launch(...)` boundary with the new policy, and restarts
+the same durable session ID/transcript under a new actor generation. Releasing
+the temporary policy uses the same reverse restart with newly minted bindings.
+If quiescence or restart acknowledgment fails, the session remains fenced; it
+does not run with a partially changed MCP list.
+
 ### Product MCP Extension Pattern
 
 Every product MCP feature should follow the same two-part pattern.

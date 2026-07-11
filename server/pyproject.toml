@@ -12,6 +12,7 @@ dependencies = [
     "fastapi-users[sqlalchemy,oauth]>=15.0.5",
     "httpx-oauth>=0.17.0",
     "httpx>=0.28.0",
+    "jsonschema>=4.23.0",
     "websockets>=15.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
@@ -114,6 +115,8 @@ module = [
     "proliferate.server.cloud.live.models",
     "proliferate.server.cloud.managed_sandboxes.models",
     "proliferate.server.cloud.repos.models",
+    "proliferate.server.cloud.workflows.models",
+    "proliferate.server.cloud.workflows.domain.poll_contract",
     "proliferate.server.support.models",
     "proliferate.config",
 ]

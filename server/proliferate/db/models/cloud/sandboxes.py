@@ -36,6 +36,12 @@ class CloudSandbox(Base):
             "sandbox_type IN ('e2b')",
             name="ck_cloud_sandbox_type",
         ),
+        # L26: purpose is stamped once at creation, never inferred from later
+        # callers. Existing rows default to 'interactive' (they were interactive).
+        CheckConstraint(
+            "purpose IN ('interactive', 'workflow-run')",
+            name="ck_cloud_sandbox_purpose",
+        ),
         Index(
             "ux_cloud_sandbox_personal_active",
             "owner_user_id",
@@ -65,6 +71,13 @@ class CloudSandbox(Base):
         nullable=True,
     )
     status: Mapped[CloudSandboxStatus] = mapped_column(_SANDBOX_STATUS_ENUM)
+    # L26: 'interactive' | 'workflow-run', stamped at creation. NOT NULL with a
+    # server default of 'interactive' so existing rows and every non-workflow
+    # create keep today's identity; workflow-driven cloud delivery stamps
+    # 'workflow-run' at the create call, never after.
+    purpose: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=text("'interactive'")
+    )
     anyharness_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     runtime_token_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     anyharness_data_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)

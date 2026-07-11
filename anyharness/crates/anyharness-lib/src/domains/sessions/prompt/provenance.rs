@@ -12,9 +12,17 @@ pub(crate) enum PromptProvenance {
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// A workflow step injected this prompt/command (C10 / E9). Replaces the
+    /// dead `Automation` variant; surfaces faithfully via [`to_public`] (the old
+    /// variant lossily collapsed to `System` and dropped the ids — that bug dies
+    /// here).
     #[serde(rename_all = "camelCase")]
-    Automation {
-        automation_run_id: String,
+    Workflow {
+        run_id: String,
+        step_key: String,
+        // NB: the enum's serde tag is `kind`, so the step-kind slug is stored
+        // under `step_kind` here; it surfaces as the public `kind` field.
+        step_kind: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
@@ -91,11 +99,17 @@ impl PromptProvenance {
                 feedback_job_id: feedback_job_id.clone(),
                 label: label.clone(),
             }),
-            PromptProvenance::Automation { label, .. } => {
-                label.as_ref().map(|label| PublicPromptProvenance::System {
-                    label: Some(label.clone()),
-                })
-            }
+            PromptProvenance::Workflow {
+                run_id,
+                step_key,
+                step_kind,
+                label,
+            } => Some(PublicPromptProvenance::Workflow {
+                run_id: run_id.clone(),
+                step_key: step_key.clone(),
+                kind: step_kind.clone(),
+                label: label.clone(),
+            }),
             PromptProvenance::System { label } => {
                 if label.as_deref() == Some("subagent_wake") {
                     return None;
@@ -105,6 +119,52 @@ impl PromptProvenance {
                 })
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workflow_provenance_surfaces_faithfully_to_public() {
+        let internal = PromptProvenance::Workflow {
+            run_id: "run-1".to_string(),
+            step_key: "0.-.2".to_string(),
+            step_kind: "agent.prompt".to_string(),
+            label: Some("Investigate the issue".to_string()),
+        };
+        match internal.to_public() {
+            Some(PublicPromptProvenance::Workflow {
+                run_id,
+                step_key,
+                kind,
+                label,
+            }) => {
+                assert_eq!(run_id, "run-1");
+                assert_eq!(step_key, "0.-.2");
+                // The step-kind slug surfaces as the public `kind` field.
+                assert_eq!(kind, "agent.prompt");
+                assert_eq!(label.as_deref(), Some("Investigate the issue"));
+            }
+            other => panic!("expected faithful Workflow provenance, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn workflow_provenance_round_trips_through_json_with_kind_tag() {
+        // The enum's serde tag is `kind`; the slug is carried under `stepKind`.
+        let internal = PromptProvenance::Workflow {
+            run_id: "run-9".to_string(),
+            step_key: "1.-.0".to_string(),
+            step_kind: "agent.emit".to_string(),
+            label: None,
+        };
+        let json = serde_json::to_string(&internal).unwrap();
+        assert!(json.contains("\"kind\":\"workflow\""), "json was {json}");
+        assert!(json.contains("\"stepKind\":\"agent.emit\""), "json was {json}");
+        let back: PromptProvenance = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, internal);
     }
 }
 

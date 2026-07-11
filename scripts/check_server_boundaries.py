@@ -237,6 +237,11 @@ def is_product_domain_folder(folder: Path) -> bool:
     return _starts_with(parts, ("server", "proliferate", "server")) and folder.name == "domain"
 
 
+def is_product_worker_folder(folder: Path) -> bool:
+    parts = logical_parts(folder)
+    return _starts_with(parts, ("server", "proliferate", "server")) and folder.name == "worker"
+
+
 def is_meaningful_domain_module(path: Path) -> bool:
     return (
         path.suffix == ".py"
@@ -251,12 +256,17 @@ def is_allowed_single_file_domain_folder(
     source_files: list[Path],
     child_folders: list[Path],
 ) -> bool:
-    return (
-        is_product_domain_folder(folder)
-        and len(source_files) == 1
-        and not child_folders
-        and is_meaningful_domain_module(source_files[0])
-    )
+    if len(source_files) != 1 or child_folders:
+        return False
+    if is_product_domain_folder(folder):
+        return is_meaningful_domain_module(source_files[0])
+    if is_product_worker_folder(folder):
+        # A domain promotes worker/ only when its worker-facing orchestration is
+        # substantial; it owns at most a worker/service.py and an optional
+        # worker/effects.py (guides/background.md), so a lone worker/service.py
+        # is the expected shape, not launch debt.
+        return source_files[0].name in {"service.py", "effects.py"}
+    return False
 
 
 def is_background_tasks_folder(folder: Path) -> bool:

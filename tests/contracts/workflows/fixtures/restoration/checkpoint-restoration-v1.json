@@ -1,0 +1,55 @@
+{
+  "description": "Restoration/normalization equivalence: the same checkpoint presented with entries in a non-canonical (unsorted) order must normalize (sort by raw path bytes) to the identical canonical manifest and therefore the identical checkpointContentHash as checkpoint-manifest-v1.json. Implementations may not substitute git status text or a commit-tip hash.",
+  "expectedContentHash": "sha256:50bc3300a6a3ffecda15a4c3e663c660e7f6b744eca292d3d902642cc7e9720e",
+  "unsortedManifest": {
+    "schemaVersion": 1,
+    "repositoryObjectFormat": "sha256",
+    "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+    "indexEntries": [
+      {
+        "path": "c3JjL2FwcC5ycw",
+        "origin": "tracked",
+        "mode": "100644",
+        "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      },
+      {
+        "path": "UkVBRE1FLm1k",
+        "origin": "tracked",
+        "mode": "100644",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    ],
+    "worktreeEntries": [
+      {
+        "path": "dmVuZG9yL2xpYg",
+        "origin": "tracked",
+        "mode": "160000",
+        "submoduleOid": "7777777777777777777777777777777777777777777777777777777777777777"
+      },
+      {
+        "path": "c2NyaXB0cy9idWlsZC5zaA",
+        "origin": "tracked",
+        "mode": "100755",
+        "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      {
+        "path": "UkVBRE1FLm1k",
+        "origin": "tracked",
+        "mode": "100644",
+        "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      {
+        "path": "c3JjL2FwcC5ycw",
+        "origin": "tracked",
+        "mode": "100644",
+        "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      {
+        "path": "bGluaw",
+        "origin": "untracked",
+        "mode": "120000",
+        "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+      }
+    ]
+  }
+}

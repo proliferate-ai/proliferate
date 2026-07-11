@@ -5,6 +5,7 @@ import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
 import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
 import { ToastContainer } from "@/components/feedback/Toast"
+import { WorkflowRunPillHost } from "@/components/workflows/run/WorkflowRunPillHost"
 import { UpdateRestartDialog } from "@/components/feedback/UpdateRestartDialog"
 import { UpdateToastPresenter } from "@/components/feedback/UpdateToastPresenter"
 import { Toaster } from "@proliferate/ui/kit/Sonner"
@@ -25,6 +26,7 @@ import { useFirstRunAuthAdoption } from "@/hooks/agents/lifecycle/use-first-run-
 import { useGatewayCatalogMirrorSync } from "@/hooks/agents/lifecycle/use-gateway-catalog-mirror-sync"
 import { useLocalAuthStateSync } from "@/hooks/agents/lifecycle/use-local-auth-state-sync"
 import { useLocalAutomationExecutor } from "@/hooks/automations/lifecycle/use-local-automation-executor"
+import { useLocalWorkflowExecutor } from "@/hooks/workflows/lifecycle/use-local-workflow-executor"
 import { useHomeDeferredLaunchRunner } from "@/hooks/home/lifecycle/use-home-deferred-launch-runner"
 import { useAppearancePreferenceLifecycle } from "@/hooks/preferences/lifecycle/use-appearance-preference-lifecycle"
 import { useRepoPreferencesLifecycle } from "@/hooks/preferences/lifecycle/use-repo-preferences-lifecycle"
@@ -96,6 +98,14 @@ const AuthPlaygroundPage = import.meta.env.DEV
   ? lazy(() =>
       import("@/pages/AuthPlaygroundPage").then((m) => ({
         default: m.AuthPlaygroundPage,
+      })),
+    )
+  : null
+
+const WorkflowsPlaygroundPage = import.meta.env.DEV
+  ? lazy(() =>
+      import("@/pages/WorkflowsPlaygroundPage").then((m) => ({
+        default: m.WorkflowsPlaygroundPage,
       })),
     )
   : null
@@ -234,6 +244,9 @@ function AppRuntime() {
   recordBootDiagnosticOnce("app_runtime.render.before.use_local_automation_executor")
   useLocalAutomationExecutor()
   recordBootDiagnosticOnce("app_runtime.render.after.use_local_automation_executor")
+  recordBootDiagnosticOnce("app_runtime.render.before.use_local_workflow_executor")
+  useLocalWorkflowExecutor()
+  recordBootDiagnosticOnce("app_runtime.render.after.use_local_workflow_executor")
   recordBootDiagnosticOnce("app_runtime.render.before.use_home_deferred_launch_runner")
   useHomeDeferredLaunchRunner()
   recordBootDiagnosticOnce("app_runtime.render.after.use_home_deferred_launch_runner")
@@ -364,6 +377,16 @@ function AppRuntime() {
                 }
               />
             )}
+            {import.meta.env.DEV && WorkflowsPlaygroundPage && (
+              <Route
+                path="/playground/workflows"
+                element={
+                  <Suspense fallback={null}>
+                    <WorkflowsPlaygroundPage />
+                  </Suspense>
+                }
+              />
+            )}
             {import.meta.env.DEV && AgentsPlaygroundPage && (
               <Route
                 path="/playground/agents"
@@ -382,6 +405,8 @@ function AppRuntime() {
           {/* Legacy toast store container (non-update toasts) — kept until all
               toast call sites migrate to Sonner. */}
           <ToastContainer />
+          {/* Post-launch workflow run pills (spec run-from-chat R2: stay put). */}
+          <WorkflowRunPillHost />
           {/* Kit Sonner toaster + update lifecycle toasts (UX spec §12). */}
           <Toaster />
           <UpdateToastPresenter />

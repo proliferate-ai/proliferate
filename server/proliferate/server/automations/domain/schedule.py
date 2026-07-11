@@ -178,3 +178,31 @@ def due_and_next_occurrences(
         _previous_occurrence(rule, now=now, timezone=zone),
         _next_occurrence(rule, now=now, timezone=zone),
     )
+
+
+def due_occurrences_since(
+    *,
+    rrule_text: str,
+    timezone: str,
+    since: datetime,
+    now: datetime,
+) -> tuple[list[datetime], datetime]:
+    """Every occurrence in the missed window ``[since, now]`` (ascending), plus the
+    next future occurrence (> now).
+
+    ``since`` is the trigger's stored cursor — the earliest slot that had not yet
+    fired. When the scheduler was healthy this window holds a single slot; when it
+    was down, it holds every RRULE occurrence that came due meanwhile. The
+    missed-run policy (mental-model §4) decides which of these fire and which are
+    recorded as ``missed`` history rows. The list is empty only when ``since`` is
+    itself in the future (nothing is due yet).
+    """
+
+    zone = _timezone(timezone)
+    normalized_rrule = _reject_unsupported_raw_features(rrule_text)
+    rule = _parse_rule(normalized_rrule, zone)
+    local_since = since.astimezone(zone)
+    local_now = now.astimezone(zone)
+    occurrences = [o.astimezone(UTC) for o in rule.between(local_since, local_now, inc=True)]
+    next_run_at = _next_occurrence(rule, now=now, timezone=zone)
+    return occurrences, next_run_at

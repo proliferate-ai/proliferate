@@ -1,0 +1,167 @@
+# Workflows v1 completion — acceptance traceability manifest.
+#
+# WS1 creates this schema and the initial planned rows (completion plan §7.4);
+# the merge captain then owns this file under a writer lock and appends
+# planned -> executable -> green transitions one packet at a time.
+#
+# Row schema:
+#   id:        stable test id (unique)
+#   packet:    exact owning workstream packet(s)
+#   file:      intended test file / fixture tree
+#   command:   the exact focused command that runs it
+#   tier:      1 | 2 | 3
+#   assertion: the required durable assertion(s)
+#   status:    planned | executable | green
+#
+# Only T1-WF-CONTRACT-01 is green at Gate A0 (owned and delivered by WS1). Every
+# other row is planned until its owning packet converts it.
+
+schema:
+  fields: [id, packet, file, command, tier, assertion, status]
+  statuses: [planned, executable, green]
+
+rows:
+  - id: T1-WF-CONTRACT-01
+    packet: WS1
+    file: tests/contracts/workflows/**
+    command: python3 scripts/check_workflow_contract_fixtures.py
+    tier: 1
+    assertion: >-
+      All three languages parse/serialize identical plan, offer, binding/checkpoint
+      manifest, envelope, observation, receipt, and command fixtures; canonical
+      plan/binding/checkpoint hashes agree; the emit schema profile and its invalid
+      cases behave identically; the deterministic legacy UUIDv5 upgrade reproduces;
+      redaction snapshots contain no credential marker.
+    status: green
+
+  - id: T1-WF-LEDGER-01
+    packet: WS2c
+    file: server/tests/integration/workflows/test_run_ledger.py
+    command: cd server && uv run pytest -q tests/integration/workflows/test_run_ledger.py
+    tier: 1
+    assertion: >-
+      No delivery before commit; ordered observation ACK/CAS; pre-acceptance cancel
+      proves no claim or waits for rollback/runtime proof.
+    status: planned
+
+  - id: T1-WF-GATEWAY-01
+    packet: WS3b+WS3c
+    file: server/tests/integration/workflows/test_gateway_receipts.py
+    command: cd server && uv run pytest -q tests/integration/workflows/test_gateway_receipts.py
+    tier: 1
+    assertion: >-
+      Issuance lost-response retry returns one generation; trusted activation
+      succeeds; wrong context fails; one upstream call; no secret in public/audit
+      surfaces.
+    status: planned
+
+  - id: T1-WF-BG-01
+    packet: WS4a+WS4b
+    file: server/tests/integration/workflows/test_background.py
+    command: cd server && uv run pytest -q tests/integration/workflows/test_background.py
+    tier: 1
+    assertion: >-
+      Occurrence dedup, no lock over HTTP, poison/dead-letter, atomic next page,
+      cursor stationary until every durable decision.
+    status: planned
+
+  - id: T1-WF-RUNTIME-01
+    packet: WS5a+WS5b
+    file: anyharness/crates/anyharness-lib/src/domains/workflows/fault_tests.rs
+    command: cargo test -p anyharness-lib workflow_fault_local_effect
+    tier: 1
+    assertion: >-
+      Agent/shell/SCM/action recovery reaches its specified outcome; credential
+      canaries are absent from workflow SQLite/events/transcript/log/checkpoints.
+    status: planned
+
+  - id: T1-WF-RUNTIME-02
+    packet: WS5c
+    file: anyharness/crates/anyharness-lib/src/domains/workflows/report_tests.rs
+    command: cargo test -p anyharness-lib workflow_receipt_report_fault
+    tier: 1
+    assertion: >-
+      Activation/receipt/report failures recover through authoritative IDs and
+      ordered observation ACK without duplicated effects or skipped revisions.
+    status: planned
+
+  - id: T1-WF-ISOLATION-01
+    packet: WS4c+WS5a+WS9c
+    file: scripts/test-workflow-agent-isolation.sh plus target tests
+    command: scripts/test-workflow-agent-isolation.sh
+    tier: 1
+    assertion: >-
+      Local/cloud agent shells cannot read/write runtime home/SQLite/vault/sockets
+      or call/signal/inspect control-plane surfaces, while workspace and brokered
+      tools remain usable.
+    status: planned
+
+  - id: T1-WF-PAR-01
+    packet: WS6
+    file: anyharness/crates/anyharness-lib/src/domains/workflows/parallel_tests.rs
+    command: cargo test -p anyharness-lib workflow_parallel
+    tier: 1
+    assertion: >-
+      Dirty deltas survive; atomic adoption and conflict/end semantics preserve
+      artifacts without partial merge/emits.
+    status: planned
+
+  - id: T1-WF-LEASE-01
+    packet: WS7a+WS7c
+    file: scripts/test-workflow-leases.sh plus owned Rust/server tests
+    command: scripts/test-workflow-leases.sh
+    tier: 1
+    assertion: >-
+      Multi-session prepare/commit/rollback is all-or-nothing; mutation denial and
+      expiry never create two owners.
+    status: planned
+
+  - id: T1-WF-PEER-01
+    packet: WS8
+    file: anyharness/crates/anyharness-lib/src/domains/product_mcp/workflow_peer_tests.rs
+    command: cargo test -p anyharness-lib workflow_peer
+    tier: 1
+    assertion: >-
+      Same-run send reaches a future turn; cross-run/future-peer/no-future-turn/
+      autonomous-wake and cross-audience tokens fail.
+    status: planned
+
+  - id: T2-WF-EDITOR-01
+    packet: WS9a+WS9b
+    file: product-domain/Desktop focused tests
+    command: pnpm --filter @proliferate/product-domain test && pnpm -C apps/desktop test
+    tier: 2
+    assertion: >-
+      Blank editor round-trips all ten definitions and rejects invalid slot lineage
+      / future schema loss.
+    status: planned
+
+  - id: T2-WF-INTENT-01
+    packet: WS10b
+    file: tests/intent/specs/workflows*.spec.ts
+    command: pnpm -C tests/intent test -- workflows
+    tier: 2
+    assertion: >-
+      Accepted WS2-WS9 interfaces compose through the product HTTP/UI seams with the
+      strict target behavior.
+    status: planned
+
+  - id: T3-WF-MANIFEST-01
+    packet: WS10a
+    file: tests/release/src/runner/workflow-policy.test.ts
+    command: pnpm -C tests/release test -- workflow-policy
+    tier: 3
+    assertion: >-
+      Missing, duplicate, blocked, skipped, expected-fail, cancelled, or failed
+      required rows exit nonzero.
+    status: planned
+
+  - id: T3-WF-PROVENANCE-01
+    packet: WS10c
+    file: scripts/ci-cd/workflow-evidence.test.mjs
+    command: node --test scripts/ci-cd/workflow-evidence.test.mjs
+    tier: 3
+    assertion: >-
+      Pre-squash SHA, user JSON, digest mismatch, bypass, or alternate path without
+      signed exact-main evidence is rejected.
+    status: planned

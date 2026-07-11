@@ -1,0 +1,707 @@
+/**
+ * Editor-facing validation of a workflow definition — format v2 (data-contract §1).
+ *
+ * Reproduces the server's strict rules (`parse_definition`) plus the §6.1/§6.2
+ * strictness owned here (slot lineage, emit schema profile, branch grammar — see
+ * `strict-rules.ts`) so the editor can surface issues before save. The server
+ * remains the authority. Every issue carries a `location` (offending node/step/
+ * input); steps are addressed by their flattened run-order index across the spine.
+ */
+
+import {
+  isParallelGroup,
+  isWorkflowIdentifier,
+  isWorkflowNotifyFieldType,
+  isWorkflowSlot,
+  spineAgentNodes,
+  WORKFLOW_BRANCH_TARGETS,
+  WORKFLOW_MAX_AGENTS,
+  WORKFLOW_MAX_ARGS,
+  WORKFLOW_MAX_STEPS,
+  WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX,
+  WORKFLOW_RESERVED_REF_SEGMENTS,
+  type WorkflowAgentNode,
+  type WorkflowDefinition,
+  type WorkflowInputSpec,
+  type WorkflowParallelGroup,
+  type WorkflowRequiredInvocation,
+  type WorkflowStep,
+} from "./definition";
+import { iterReferences, validateStringReferences } from "./interpolation";
+import { parseWorkflowDefinitionResult } from "./read-only";
+import { branchFieldTypeIssue, emitSchemaIssues, validateSlotLineage } from "./strict-rules";
+
+export interface WorkflowIssueLocation {
+  scope: "inputs" | "integrations" | "agents" | "agent" | "step" | "input";
+  /** Flattened run-order step index (across the whole spine). */
+  stepIndex?: number;
+  /** Agent node index. */
+  nodeIndex?: number;
+  inputIndex?: number;
+  field?: string;
+}
+
+export interface WorkflowIssue {
+  code: string;
+  message: string;
+  location: WorkflowIssueLocation;
+}
+
+export interface ValidateWorkflowOptions {
+  harnessSupportsGoals?: (harness: string) => boolean;
+  /**
+   * The id of the workflow being edited (spec 3.5), used to flag a self-include.
+   * The full include-graph CYCLE check is server-only (needs other workflows'
+   * current versions).
+   */
+  workflowId?: string;
+}
+
+interface TemplatedField {
+  field: string;
+  value: string;
+}
+
+/** The user-templated string fields of a step, with their panel field paths. */
+function templatedFields(step: WorkflowStep): TemplatedField[] {
+  switch (step.kind) {
+    case "agent.prompt": {
+      const fields: TemplatedField[] = [{ field: "prompt", value: step.prompt }];
+      if (step.goal) {
+        fields.push({ field: "goal.objective", value: step.goal.objective });
+        if (step.goal.verify) {
+          fields.push({ field: "goal.verify.shell", value: step.goal.verify.shell });
+        }
+      }
+      return fields;
+    }
+    case "agent.emit":
+      return [{ field: "prompt", value: step.prompt }];
+    case "agent.config":
+      return [];
+    case "shell.run":
+      return [{ field: "command", value: step.command }];
+    case "scm.open_pr": {
+      const fields: TemplatedField[] = [{ field: "title", value: step.title }];
+      if (step.base !== undefined) {
+        fields.push({ field: "base", value: step.base });
+      }
+      if (step.body !== undefined) {
+        fields.push({ field: "body", value: step.body });
+      }
+      return fields;
+    }
+    case "notify":
+      return [{ field: "message", value: step.message }];
+    case "branch":
+      return [{ field: "on", value: step.on }];
+    case "workflow.include":
+      // Each arg value is a templated string in this workflow's context (3.5a).
+      return Object.entries(step.args).map(([key, value]) => ({
+        field: `args.${key}`,
+        value,
+      }));
+  }
+}
+
+/** Mirrors the server's `_positive_int`: present, not boolean, integer, > 0. */
+function isPositiveInteger(value: unknown): boolean {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+/** Mirrors the server's `_int_field`: an integer of any sign (goal expectExit). */
+function isIntegerValue(value: unknown): boolean {
+  return typeof value === "number" && Number.isInteger(value);
+}
+
+/** Mirrors `_coerce_number`: a real number, or a string that parses as one. */
+function isNumberLikeDefault(value: unknown): boolean {
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed !== "" && Number.isFinite(Number(trimmed));
+  }
+  return false;
+}
+
+/** Mirrors `_coerce_boolean`: a real boolean or "true"/"false" (any case). */
+function isBooleanLikeDefault(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return true;
+  }
+  if (typeof value === "string") {
+    return value.trim().toLowerCase() === "true" || value.trim().toLowerCase() === "false";
+  }
+  return false;
+}
+
+function validateInputs(inputs: WorkflowInputSpec[]): WorkflowIssue[] {
+  const issues: WorkflowIssue[] = [];
+  if (inputs.length > WORKFLOW_MAX_ARGS) {
+    issues.push({
+      code: "too_many_args",
+      message: `A workflow may declare at most ${WORKFLOW_MAX_ARGS} inputs.`,
+      location: { scope: "inputs" },
+    });
+  }
+  const seen = new Set<string>();
+  inputs.forEach((input, inputIndex) => {
+    if (input.name.trim() === "" || !isWorkflowIdentifier(input.name)) {
+      issues.push({
+        code: "invalid_definition",
+        message: `Input name '${input.name}' must be an identifier.`,
+        location: { scope: "input", inputIndex, field: "name" },
+      });
+    }
+    if (seen.has(input.name)) {
+      issues.push({
+        code: "duplicate_arg",
+        message: `Duplicate input name '${input.name}'.`,
+        location: { scope: "input", inputIndex, field: "name" },
+      });
+    }
+    seen.add(input.name);
+    if (input.type === "choice") {
+      const values = input.choices ?? [];
+      if (values.length === 0) {
+        issues.push({
+          code: "invalid_definition",
+          message: `Choice input '${input.name}' requires at least one value.`,
+          location: { scope: "input", inputIndex, field: "choices" },
+        });
+      } else if (typeof input.default === "string" && !values.includes(input.default)) {
+        issues.push({
+          code: "invalid_definition",
+          message: `Default for choice input '${input.name}' is not an allowed value.`,
+          location: { scope: "input", inputIndex, field: "default" },
+        });
+      }
+    }
+    if (input.default !== undefined) {
+      if (input.type === "number" && !isNumberLikeDefault(input.default)) {
+        issues.push({
+          code: "invalid_definition",
+          message: `Default for input '${input.name}' must be a number.`,
+          location: { scope: "input", inputIndex, field: "default" },
+        });
+      } else if (input.type === "boolean" && !isBooleanLikeDefault(input.default)) {
+        issues.push({
+          code: "invalid_definition",
+          message: `Default for input '${input.name}' must be a boolean.`,
+          location: { scope: "input", inputIndex, field: "default" },
+        });
+      }
+    }
+  });
+  return issues;
+}
+
+function requireText(
+  value: string,
+  message: string,
+  stepIndex: number,
+  field: string,
+): WorkflowIssue | null {
+  return value.trim() === ""
+    ? { code: "invalid_definition", message, location: { scope: "step", stepIndex, field } }
+    : null;
+}
+
+/**
+ * A present `requiredInvocation` must name a non-empty provider + tool
+ * (mirrors the server's `_require_str`, domain/definition.py). Shared by
+ * `agent.prompt` and `agent.emit` — feature spec §7.1 allows a
+ * required-invocation step to be any agent step, so both get the same check.
+ */
+function requiredInvocationIssues(
+  inv: WorkflowRequiredInvocation,
+  stepIndex: number,
+): WorkflowIssue[] {
+  const issues: WorkflowIssue[] = [];
+  if (!inv.provider.trim()) {
+    issues.push({
+      code: "invalid_definition",
+      message: "Required-invocation provider is required.",
+      location: { scope: "step", stepIndex, field: "requiredInvocation.provider" },
+    });
+  }
+  if (!inv.tool.trim()) {
+    issues.push({
+      code: "invalid_definition",
+      message: "Required-invocation tool is required.",
+      location: { scope: "step", stepIndex, field: "requiredInvocation.tool" },
+    });
+  }
+  return issues;
+}
+
+function validateStep(
+  step: WorkflowStep,
+  stepIndex: number,
+  options: ValidateWorkflowOptions,
+  harness: string,
+  priorEmitNames: ReadonlySet<string>,
+  allSlots: ReadonlySet<string>,
+  laneSlot: string | null,
+  emitSchemas: ReadonlyMap<string, Record<string, unknown> | undefined>,
+): WorkflowIssue[] {
+  const issues: WorkflowIssue[] = [];
+  const push = (issue: WorkflowIssue | null) => {
+    if (issue) {
+      issues.push(issue);
+    }
+  };
+
+  switch (step.kind) {
+    case "agent.prompt": {
+      push(requireText(step.prompt, "Prompt text is required.", stepIndex, "prompt"));
+      if (step.goal) {
+        push(requireText(step.goal.objective, "Goal objective is required.", stepIndex, "goal.objective"));
+        if (!(step.goal.maxTurns > 0)) {
+          push({
+            code: "invalid_definition",
+            message: "Goal max turns is required.",
+            location: { scope: "step", stepIndex, field: "goal.maxTurns" },
+          });
+        }
+        if (!(step.goal.maxWallSecs > 0)) {
+          push({
+            code: "invalid_definition",
+            message: "Goal max time is required.",
+            location: { scope: "step", stepIndex, field: "goal.maxWallSecs" },
+          });
+        }
+        if (step.goal.tokenBudget !== undefined && !isPositiveInteger(step.goal.tokenBudget)) {
+          push({
+            code: "invalid_definition",
+            message: "Goal token budget must be a positive integer.",
+            location: { scope: "step", stepIndex, field: "goal.tokenBudget" },
+          });
+        }
+        if (step.goal.verify) {
+          push(requireText(step.goal.verify.shell, "Verify command is required.", stepIndex, "goal.verify.shell"));
+          if (!isIntegerValue(step.goal.verify.expectExit)) {
+            push({
+              code: "invalid_definition",
+              message: "Verify expected exit code must be an integer.",
+              location: { scope: "step", stepIndex, field: "goal.verify.expectExit" },
+            });
+          }
+        }
+        if (
+          options.harnessSupportsGoals
+          && harness.trim() !== ""
+          && !options.harnessSupportsGoals(harness)
+        ) {
+          push({
+            code: "goal_unsupported_harness",
+            message: `Goal iteration is not supported by ${harness}.`,
+            location: { scope: "step", stepIndex, field: "goal" },
+          });
+        }
+      }
+      if (step.requiredInvocation) {
+        issues.push(...requiredInvocationIssues(step.requiredInvocation, stepIndex));
+      }
+      break;
+    }
+    case "agent.emit": {
+      push(requireText(step.prompt, "Prompt text is required.", stepIndex, "prompt"));
+      if (step.name.trim() === "" || !isWorkflowIdentifier(step.name)) {
+        push({
+          code: "invalid_definition",
+          message: "Emit name must be an identifier.",
+          location: { scope: "step", stepIndex, field: "name" },
+        });
+      } else if (
+        (WORKFLOW_RESERVED_REF_SEGMENTS as readonly string[]).includes(step.name)
+        || step.name.startsWith(WORKFLOW_NOTIFY_FIELDS_EMIT_PREFIX)
+      ) {
+        push({
+          code: "invalid_definition",
+          message: `Emit name '${step.name}' is reserved.`,
+          location: { scope: "step", stepIndex, field: "name" },
+        });
+      }
+      if (step.maxAttempts !== undefined && !isPositiveInteger(step.maxAttempts)) {
+        push({
+          code: "invalid_definition",
+          message: "Max attempts must be a positive integer.",
+          location: { scope: "step", stepIndex, field: "maxAttempts" },
+        });
+      }
+      // §6.2: the authored emit schema must satisfy the v1 JSON Schema profile.
+      issues.push(...emitSchemaIssues(step.outputSchema, stepIndex));
+      if (step.requiredInvocation) {
+        issues.push(...requiredInvocationIssues(step.requiredInvocation, stepIndex));
+      }
+      break;
+    }
+    case "agent.config":
+      push(requireText(step.model, "A model is required.", stepIndex, "model"));
+      break;
+    case "shell.run": {
+      push(requireText(step.command, "A command is required.", stepIndex, "command"));
+      if (step.timeoutSecs !== undefined && !isPositiveInteger(step.timeoutSecs)) {
+        push({
+          code: "invalid_definition",
+          message: "Timeout must be a positive integer.",
+          location: { scope: "step", stepIndex, field: "timeoutSecs" },
+        });
+      }
+      if (step.outputName !== undefined && !isWorkflowIdentifier(step.outputName)) {
+        push({
+          code: "invalid_definition",
+          message: "Output name must be an identifier.",
+          location: { scope: "step", stepIndex, field: "outputName" },
+        });
+      }
+      break;
+    }
+    case "scm.open_pr":
+      push(requireText(step.title, "A PR title is required.", stepIndex, "title"));
+      break;
+    case "notify": {
+      push(requireText(step.message, "A message is required.", stepIndex, "message"));
+      if (!step.slackChannelId.trim()) {
+        push({
+          code: "invalid_definition",
+          message: "Choose a Slack channel.",
+          location: { scope: "step", stepIndex, field: "slackChannelId" },
+        });
+      }
+      if (step.agentFields) {
+        if (laneSlot !== null) {
+          // Inside a parallel lane the fields emit runs in this lane, so it must
+          // be filled by this lane's own agent — never a sibling lane's slot.
+          if (step.agentFields.slot !== laneSlot) {
+            push({
+              code: "agent_fields_slot_outside_lane",
+              message: `Agent-fields slot '${step.agentFields.slot}' must be the lane's own slot '${laneSlot}' when the notify is inside a parallel group.`,
+              location: { scope: "step", stepIndex, field: "agentFields.slot" },
+            });
+          }
+        } else if (!allSlots.has(step.agentFields.slot)) {
+          push({
+            code: "unknown_slot",
+            message: `Agent-fields slot '${step.agentFields.slot}' is not an agent in this workflow.`,
+            location: { scope: "step", stepIndex, field: "agentFields.slot" },
+          });
+        }
+        const fieldNames = Object.keys(step.agentFields.schema);
+        if (fieldNames.length === 0) {
+          push({
+            code: "invalid_definition",
+            message: "Agent-fields needs at least one field.",
+            location: { scope: "step", stepIndex, field: "agentFields.schema" },
+          });
+        }
+        for (const [name, spec] of Object.entries(step.agentFields.schema)) {
+          if (!isWorkflowIdentifier(name)) {
+            push({
+              code: "invalid_definition",
+              message: `Agent-field name '${name}' must be an identifier.`,
+              location: { scope: "step", stepIndex, field: "agentFields.schema" },
+            });
+          }
+          if (!isWorkflowNotifyFieldType(spec.type)) {
+            push({
+              code: "invalid_definition",
+              message: `Agent-field '${name}' must be a string, number, or boolean.`,
+              location: { scope: "step", stepIndex, field: "agentFields.schema" },
+            });
+          }
+        }
+      }
+      break;
+    }
+    case "branch": {
+      // `on` must be exactly one emit ref, visible strictly earlier.
+      const refs = iterReferences(step.on);
+      const emitRefs = refs.filter((r) => r.kind === "emit");
+      if (refs.length !== 1 || emitRefs.length !== 1) {
+        push({
+          code: "invalid_definition",
+          message: "Branch must switch on exactly one {{EMIT.FIELD}} reference.",
+          location: { scope: "step", stepIndex, field: "on" },
+        });
+      } else if (!priorEmitNames.has((emitRefs[0] as { emit: string }).emit)) {
+        push({
+          code: "forward_emit_reference",
+          message: "Branch references an emit not produced by an earlier step.",
+          location: { scope: "step", stepIndex, field: "on" },
+        });
+      } else {
+        // §6.2: the switched emit field's schema type must be string.
+        push(branchFieldTypeIssue(step, stepIndex, emitSchemas));
+      }
+      const caseKeys = Object.keys(step.cases);
+      if (caseKeys.length === 0) {
+        push({
+          code: "invalid_definition",
+          message: "A branch needs at least one case.",
+          location: { scope: "step", stepIndex, field: "cases" },
+        });
+      }
+      for (const [value, target] of Object.entries(step.cases)) {
+        if (!(WORKFLOW_BRANCH_TARGETS as readonly string[]).includes(target.to)) {
+          push({
+            code: "invalid_definition",
+            message: `Branch case '${value}' must route to continue or end.`,
+            location: { scope: "step", stepIndex, field: "cases" },
+          });
+        }
+      }
+      break;
+    }
+    case "workflow.include": {
+      if (step.workflowId.trim() === "") {
+        push({
+          code: "invalid_definition",
+          message: "Choose a workflow to include.",
+          location: { scope: "step", stepIndex, field: "workflowId" },
+        });
+      } else if (options.workflowId && step.workflowId === options.workflowId) {
+        push({
+          code: "self_include",
+          message: "A workflow cannot include itself.",
+          location: { scope: "step", stepIndex, field: "workflowId" },
+        });
+      }
+      break;
+    }
+  }
+  return issues;
+}
+
+function validateNode(
+  node: WorkflowAgentNode,
+  nodeIndex: number,
+  workflowIntegrations: readonly string[],
+): WorkflowIssue[] {
+  const issues: WorkflowIssue[] = [];
+  if (node.slot.trim() === "" || !isWorkflowSlot(node.slot)) {
+    issues.push({
+      code: "invalid_definition",
+      message: `Slot '${node.slot}' must match ^[a-z][a-z0-9_]*$.`,
+      location: { scope: "agent", nodeIndex, field: "slot" },
+    });
+  }
+  // Slot lineage is a whole-spine rule (see `validateSlotLineage`).
+  if (node.harness.trim() === "") {
+    issues.push({
+      code: "invalid_definition",
+      message: "An agent (harness) is required.",
+      location: { scope: "agent", nodeIndex, field: "harness" },
+    });
+  }
+  if (node.model.trim() === "") {
+    issues.push({
+      code: "invalid_definition",
+      message: "A model is required.",
+      location: { scope: "agent", nodeIndex, field: "model" },
+    });
+  }
+  // Per-slot integration narrowing (track 3c phase 2, deny-path a): each entry
+  // must be in the workflow-level list; present-but-non-array is a shape error.
+  if (node.integrations !== undefined && !Array.isArray(node.integrations)) {
+    issues.push({
+      code: "invalid_definition",
+      message: "Agent integrations must be a list of namespace strings.",
+      location: { scope: "agent", nodeIndex, field: "integrations" },
+    });
+  } else if (node.integrations !== undefined) {
+    const allowed = new Set(workflowIntegrations);
+    const seenNarrowed = new Set<string>();
+    for (const namespace of node.integrations) {
+      if (!allowed.has(namespace)) {
+        issues.push({
+          code: "agent_integrations_not_subset",
+          message: `Integration '${namespace}' is not in this workflow's integrations list.`,
+          location: { scope: "agent", nodeIndex, field: "integrations" },
+        });
+      } else if (seenNarrowed.has(namespace)) {
+        issues.push({
+          code: "duplicate_integration",
+          message: `Duplicate integration '${namespace}' on this agent.`,
+          location: { scope: "agent", nodeIndex, field: "integrations" },
+        });
+      }
+      seenNarrowed.add(namespace);
+    }
+  }
+  return issues;
+}
+
+/** Structural checks on a parallel group (L30 / D-031): needs 2+ lanes. */
+function validateParallelStructure(group: WorkflowParallelGroup): WorkflowIssue[] {
+  if (group.parallel.length < 2) {
+    return [{
+      code: "parallel_too_few",
+      message: `A parallel group requires at least 2 agent nodes (got ${group.parallel.length}).`,
+      location: { scope: "agents" },
+    }];
+  }
+  return [];
+}
+
+/** Validate a full definition. Returns all issues (empty when the draft is valid). */
+export function validateWorkflowDefinition(
+  definition: WorkflowDefinition,
+  options: ValidateWorkflowOptions = {},
+): WorkflowIssue[] {
+  const issues: WorkflowIssue[] = [];
+
+  issues.push(...validateInputs(definition.inputs));
+
+  const allNodes = spineAgentNodes(definition);
+  if (allNodes.length === 0) {
+    issues.push({
+      code: "invalid_definition",
+      message: "A workflow needs at least one agent node.",
+      location: { scope: "agents" },
+    });
+  }
+  if (allNodes.length > WORKFLOW_MAX_AGENTS) {
+    issues.push({
+      code: "too_many_agents",
+      message: `A workflow may declare at most ${WORKFLOW_MAX_AGENTS} agent nodes.`,
+      location: { scope: "agents" },
+    });
+  }
+
+  const inputNames = new Set(definition.inputs.map((input) => input.name));
+  // Flatten groups so lane slots are included (a group entry has no top slot).
+  const allSlots = new Set(allNodes.map((node) => node.slot));
+  const seenEmits = new Set<string>(); // whole-definition emit uniqueness
+  // emit name -> output schema (for the §6.2 branch string-field check).
+  const emitSchemas = new Map<string, Record<string, unknown> | undefined>();
+  let totalSteps = 0;
+  let flatIndex = 0;
+  let nodeIndex = 0;
+
+  // Slot lineage (§6.1): sequential reuse allowed, lane slots group-scoped.
+  issues.push(...validateSlotLineage(definition));
+
+  // Validate one node against `baseVisible` + its own earlier emits; return the
+  // emits it produced. `rejectInclude` flags include-in-parallel; `laneSlot` is
+  // the lane's own slot (else null), gating the notify `agentFields.slot` rule.
+  const runNode = (
+    node: WorkflowAgentNode,
+    baseVisible: ReadonlySet<string>,
+    rejectInclude: boolean,
+    laneSlot: string | null,
+  ): Set<string> => {
+    issues.push(...validateNode(node, nodeIndex, definition.integrations));
+    totalSteps += node.steps.length;
+    const localVisible = new Set(baseVisible);
+    const produced = new Set<string>();
+    node.steps.forEach((step) => {
+      const stepIndex = flatIndex;
+      if (rejectInclude && step.kind === "workflow.include") {
+        issues.push({
+          code: "include_in_parallel",
+          message: "workflow.include is not supported inside a parallel group.",
+          location: { scope: "step", stepIndex, field: "workflowId" },
+        });
+      }
+      issues.push(
+        ...validateStep(
+          step, stepIndex, options, node.harness, localVisible, allSlots, laneSlot, emitSchemas,
+        ),
+      );
+      // {{fields.*}} is scoped to a notify message that declared agent_fields.
+      const allowedFields =
+        step.kind === "notify" && step.agentFields
+          ? new Set(Object.keys(step.agentFields.schema))
+          : null;
+      for (const { field, value } of templatedFields(step)) {
+        const fieldsScope = field === "message" ? allowedFields : null;
+        const refOptions = { inputNames, priorEmitNames: localVisible, allowedFields: fieldsScope };
+        for (const refIssue of validateStringReferences(value, refOptions)) {
+          issues.push({
+            code: refIssue.code,
+            message: refIssue.message,
+            location: { scope: "step", stepIndex, field },
+          });
+        }
+      }
+      // Register the emit AFTER validating its own refs.
+      if (step.kind === "agent.emit" && step.name.trim() !== "") {
+        if (seenEmits.has(step.name)) {
+          issues.push({
+            code: "duplicate_emit",
+            message: `Duplicate emit name '${step.name}'.`,
+            location: { scope: "step", stepIndex, field: "name" },
+          });
+        }
+        seenEmits.add(step.name);
+        produced.add(step.name);
+        localVisible.add(step.name);
+        emitSchemas.set(step.name, step.outputSchema);
+      }
+      flatIndex += 1;
+    });
+    nodeIndex += 1;
+    return produced;
+  };
+
+  // Emits visible at the current spine position. Group lanes see only the
+  // pre-group snapshot + their own steps; lane emits join `visible` after the
+  // group (§1.3).
+  const visible = new Set<string>();
+  definition.agents.forEach((entry) => {
+    if (isParallelGroup(entry)) {
+      issues.push(...validateParallelStructure(entry));
+      const snapshot = new Set(visible);
+      const groupProduced = new Set<string>();
+      for (const lane of entry.parallel) {
+        // A lane's notify agentFields.slot must be the lane's own slot.
+        for (const emit of runNode(lane, snapshot, true, lane.slot)) {
+          groupProduced.add(emit);
+        }
+      }
+      for (const emit of groupProduced) {
+        visible.add(emit);
+      }
+    } else {
+      for (const emit of runNode(entry, visible, false, null)) {
+        visible.add(emit);
+      }
+    }
+  });
+
+  if (totalSteps > WORKFLOW_MAX_STEPS) {
+    issues.push({
+      code: "too_many_steps",
+      message: `A workflow may declare at most ${WORKFLOW_MAX_STEPS} steps.`,
+      location: { scope: "agents" },
+    });
+  }
+
+  return issues;
+}
+
+/**
+ * Whether a stored definition is editable by this client (a supported version
+ * with only known step kinds) — feature spec §5.1. An unsupported definition is
+ * rendered read-only; the editor never saves a truncated version.
+ */
+export function isEditable(rawDefinition: unknown): boolean {
+  return parseWorkflowDefinitionResult(rawDefinition).kind === "editable";
+}
+
+/** Whether a definition has no blocking issues. */
+export function isWorkflowDefinitionValid(
+  definition: WorkflowDefinition,
+  options: ValidateWorkflowOptions = {},
+): boolean {
+  return validateWorkflowDefinition(definition, options).length === 0;
+}
+
+/** First issue attached to a given flattened step index (card error affordance). */
+export function stepIssues(issues: readonly WorkflowIssue[], stepIndex: number): WorkflowIssue[] {
+  return issues.filter((issue) => issue.location.stepIndex === stepIndex);
+}

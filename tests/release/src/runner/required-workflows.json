@@ -1,0 +1,18 @@
+{
+  "$ownership": "CONTENT of this manifest (which (id, lane) rows are required) is owned by WS10b going forward per specs/tbd/workflows-v1-completion-plan.md §4.2 (\"the final required scenario manifest owner is WS10b\"). WS10a owns only the MACHINERY that loads, validates (uniqueness), and compares results against it (src/runner/workflow-policy.ts). Seeded here with the 12 rows from §6 WS10's strict summary artifact example so the release-mode runner and its tests have a real manifest to gate against; WS10b replaces/extends the rows when the full T3-WF battery lands.",
+  "version": 1,
+  "required": [
+    { "id": "T3-WF-1", "lane": "cloud" },
+    { "id": "T3-WF-2", "lane": "cloud" },
+    { "id": "T3-WF-3", "lane": "cloud" },
+    { "id": "T3-WF-4", "lane": "cloud" },
+    { "id": "T3-WF-4", "lane": "desktop" },
+    { "id": "T3-WF-5", "lane": "cloud" },
+    { "id": "T3-WF-5", "lane": "desktop" },
+    { "id": "T3-WF-6", "lane": "cloud" },
+    { "id": "T3-WF-7", "lane": "desktop" },
+    { "id": "T3-WF-8", "lane": "cloud" },
+    { "id": "T3-WF-9", "lane": "desktop" },
+    { "id": "T3-WF-10", "lane": "cloud" }
+  ]
+}

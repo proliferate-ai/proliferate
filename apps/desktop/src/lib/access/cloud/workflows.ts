@@ -1,0 +1,291 @@
+/**
+ * Cloud workflows access layer (spec 3.6 / W2 API surface).
+ *
+ * Thin typed wrappers over the auth-aware desktop cloud client. Importing
+ * `getProliferateClient` from `./client` also registers the desktop client
+ * factory as a side effect (auth/refresh middleware), so hooks that re-export
+ * these get an authenticated client. The workflow paths are already typed in
+ * the generated OpenAPI, so response shapes come straight from `components`.
+ */
+
+import type { components } from "@proliferate/cloud-sdk/generated/openapi";
+import { getProliferateClient } from "@/lib/access/cloud/client";
+
+type Schemas = components["schemas"];
+
+export type WorkflowResponse = Schemas["WorkflowResponse"];
+export type WorkflowVersionResponse = Schemas["WorkflowVersionResponse"];
+export type WorkflowDetailResponse = Schemas["WorkflowDetailResponse"];
+export type WorkflowListResponse = Schemas["WorkflowListResponse"];
+export type WorkflowRunResponse = Schemas["WorkflowRunResponse"];
+export type WorkflowRunListResponse = Schemas["WorkflowRunListResponse"];
+export type WorkflowRunDetailResponse = Schemas["WorkflowRunDetailResponse"];
+export type StepActionResponse = Schemas["StepActionResponse"];
+export type WorkflowCreateRequest = Schemas["WorkflowCreateRequest"];
+export type WorkflowUpdateRequest = Schemas["WorkflowUpdateRequest"];
+export type StartRunRequest = Schemas["StartRunRequest"];
+export type RunStatusRequest = Schemas["RunStatusRequest"];
+export type WorkflowTriggerResponse = Schemas["WorkflowTriggerResponse"];
+export type WorkflowTriggerListResponse = Schemas["WorkflowTriggerListResponse"];
+export type WorkflowTriggerCreateRequest = Schemas["WorkflowTriggerCreateRequest"];
+export type WorkflowTriggerUpdateRequest = Schemas["WorkflowTriggerUpdateRequest"];
+export type WorkflowTriggerItemResponse = Schemas["WorkflowTriggerItemResponse"];
+export type WorkflowTriggerItemListResponse = Schemas["WorkflowTriggerItemListResponse"];
+export type SlackChannelResponse = Schemas["SlackChannelResponse"];
+export type SlackChannelsResponse = Schemas["SlackChannelsResponse"];
+export type PollInspectRequest = Schemas["PollInspectRequest"];
+export type PollInspectResponse = Schemas["PollInspectResponse"];
+export type LocalWorkflowClaimRequest = Schemas["LocalWorkflowClaimRequest"];
+export type LocalWorkflowClaimActionRequest = Schemas["LocalWorkflowClaimActionRequest"];
+export type LocalWorkflowClaimListResponse = Schemas["LocalWorkflowClaimListResponse"];
+export type LocalWorkflowClaimMutationResponse = Schemas["LocalWorkflowClaimMutationResponse"];
+
+export async function listWorkflows(includeArchived = false): Promise<WorkflowListResponse> {
+  return getProliferateClient().requestJson<WorkflowListResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows",
+    query: { includeArchived },
+  });
+}
+
+export async function createWorkflow(
+  body: WorkflowCreateRequest,
+): Promise<WorkflowDetailResponse> {
+  return getProliferateClient().requestJson<WorkflowDetailResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows",
+    body,
+  });
+}
+
+export async function getWorkflow(workflowId: string): Promise<WorkflowDetailResponse> {
+  return getProliferateClient().requestJson<WorkflowDetailResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/{workflow_id}",
+    pathParams: { workflow_id: workflowId },
+  });
+}
+
+export async function updateWorkflow(
+  workflowId: string,
+  body: WorkflowUpdateRequest,
+): Promise<WorkflowDetailResponse> {
+  return getProliferateClient().requestJson<WorkflowDetailResponse>({
+    method: "PATCH",
+    path: "/v1/cloud/workflows/{workflow_id}",
+    pathParams: { workflow_id: workflowId },
+    body,
+  });
+}
+
+export async function archiveWorkflow(workflowId: string): Promise<WorkflowResponse> {
+  return getProliferateClient().requestJson<WorkflowResponse>({
+    method: "DELETE",
+    path: "/v1/cloud/workflows/{workflow_id}",
+    pathParams: { workflow_id: workflowId },
+  });
+}
+
+export async function listWorkflowRuns(
+  workflowId?: string,
+): Promise<WorkflowRunListResponse> {
+  return getProliferateClient().requestJson<WorkflowRunListResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/runs",
+    query: workflowId ? { workflowId } : undefined,
+  });
+}
+
+export async function getWorkflowRun(runId: string): Promise<WorkflowRunDetailResponse> {
+  return getProliferateClient().requestJson<WorkflowRunDetailResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/runs/{run_id}",
+    pathParams: { run_id: runId },
+  });
+}
+
+export async function startWorkflowRun(
+  workflowId: string,
+  body: StartRunRequest,
+): Promise<WorkflowRunResponse> {
+  return getProliferateClient().requestJson<WorkflowRunResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/{workflow_id}/runs",
+    pathParams: { workflow_id: workflowId },
+    body,
+  });
+}
+
+/** Desktop lane: tell the server the local runtime accepted the plan. */
+export async function markWorkflowRunDelivered(runId: string): Promise<WorkflowRunResponse> {
+  return getProliferateClient().requestJson<WorkflowRunResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/runs/{run_id}/delivered",
+    pathParams: { run_id: runId },
+  });
+}
+
+/** Desktop lane: relay an observed transition from the local runtime to the server. */
+export async function reportWorkflowRunStatus(
+  runId: string,
+  body: RunStatusRequest,
+): Promise<WorkflowRunResponse> {
+  return getProliferateClient().requestJson<WorkflowRunResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/runs/{run_id}/status",
+    pathParams: { run_id: runId },
+    body,
+  });
+}
+
+/**
+ * Take over / cancel a run (spec 3.6, server D15): the single human override.
+ * Owner-scoped; works for both target modes — the server performs the
+ * terminal write directly and best-effort nudges the cloud runtime, while a
+ * local run's own desktop relay picks up the now-terminal status on its next
+ * report.
+ */
+export async function cancelWorkflowRun(runId: string): Promise<WorkflowRunResponse> {
+  return getProliferateClient().requestJson<WorkflowRunResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/runs/{run_id}/cancel",
+    pathParams: { run_id: runId },
+  });
+}
+
+/** Cloud lane: retry a stuck (pending_delivery) cloud delivery. */
+export async function redeliverWorkflowRun(runId: string): Promise<WorkflowRunResponse> {
+  return getProliferateClient().requestJson<WorkflowRunResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/runs/{run_id}/deliver",
+    pathParams: { run_id: runId },
+  });
+}
+
+/** Cloud lane: pull observed state from the sandbox and sync it into the ledger. */
+export async function refreshWorkflowRun(runId: string): Promise<WorkflowRunResponse> {
+  return getProliferateClient().requestJson<WorkflowRunResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/runs/{run_id}/refresh",
+    pathParams: { run_id: runId },
+  });
+}
+
+// --- desktop executor claim plane (track 2a; lifts L15) ------------------------
+
+/**
+ * Claim a batch of this owner's `claimable` (or stale-reclaimable) local
+ * scheduled runs for the desktop executor (the 10s claim poll). Owner-scoped by
+ * the caller's session on the server — a claim only ever touches your own runs.
+ */
+export async function claimLocalWorkflowRuns(
+  body: LocalWorkflowClaimRequest,
+): Promise<LocalWorkflowClaimListResponse> {
+  return getProliferateClient().requestJson<LocalWorkflowClaimListResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/executor/local/claims",
+    body,
+  });
+}
+
+/**
+ * Renew a live claim's TTL (the 30s heartbeat). `accepted=false` means the claim
+ * is gone (reclaimed / terminal / expired) and the executor must stop.
+ */
+export async function heartbeatLocalWorkflowRun(
+  runId: string,
+  body: LocalWorkflowClaimActionRequest,
+): Promise<LocalWorkflowClaimMutationResponse> {
+  return getProliferateClient().requestJson<LocalWorkflowClaimMutationResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/executor/local/runs/{run_id}/heartbeat",
+    pathParams: { run_id: runId },
+    body,
+  });
+}
+
+/** The Slack channels the connected account can post to (spec 8.2, PR A). */
+export async function listSlackChannels(): Promise<SlackChannelsResponse> {
+  return getProliferateClient().requestJson<SlackChannelsResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/slack/channels",
+  });
+}
+
+/**
+ * Flow 1 (workflow-from-poll, mental-model §5): probe an endpoint's reserved
+ * `/init` path and derive a new workflow's starting inputs from the sample
+ * item. No workflow/trigger exists yet — a bad `/init` response throws a
+ * structured `poll_probe_failed` `ProliferateClientError`.
+ */
+export async function inspectPollEndpoint(
+  body: PollInspectRequest,
+): Promise<PollInspectResponse> {
+  return getProliferateClient().requestJson<PollInspectResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/poll/inspect",
+    body,
+  });
+}
+
+// --- triggers (spec 3.5) -------------------------------------------------------
+
+export async function listWorkflowTriggers(
+  workflowId: string,
+): Promise<WorkflowTriggerListResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerListResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers",
+    pathParams: { workflow_id: workflowId },
+  });
+}
+
+export async function createWorkflowTrigger(
+  workflowId: string,
+  body: WorkflowTriggerCreateRequest,
+): Promise<WorkflowTriggerResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerResponse>({
+    method: "POST",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers",
+    pathParams: { workflow_id: workflowId },
+    body,
+  });
+}
+
+export async function updateWorkflowTrigger(
+  workflowId: string,
+  triggerId: string,
+  body: WorkflowTriggerUpdateRequest,
+): Promise<WorkflowTriggerResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerResponse>({
+    method: "PATCH",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}",
+    pathParams: { workflow_id: workflowId, trigger_id: triggerId },
+    body,
+  });
+}
+
+export async function deleteWorkflowTrigger(
+  workflowId: string,
+  triggerId: string,
+): Promise<void> {
+  await getProliferateClient().requestJson<void>({
+    method: "DELETE",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}",
+    pathParams: { workflow_id: workflowId, trigger_id: triggerId },
+  });
+}
+
+/** A poll trigger's per-item seen-set (spec 8.2 row B) — newest first. */
+export async function listWorkflowTriggerItems(
+  workflowId: string,
+  triggerId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<WorkflowTriggerItemListResponse> {
+  return getProliferateClient().requestJson<WorkflowTriggerItemListResponse>({
+    method: "GET",
+    path: "/v1/cloud/workflows/{workflow_id}/triggers/{trigger_id}/items",
+    pathParams: { workflow_id: workflowId, trigger_id: triggerId },
+    query: { limit: params?.limit, offset: params?.offset },
+  });
+}

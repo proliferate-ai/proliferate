@@ -59,6 +59,86 @@
       "types": "./dist/automations/schedule.d.ts",
       "import": "./dist/automations/schedule.js"
     },
+    "./workflows/definition": {
+      "types": "./dist/workflows/definition.d.ts",
+      "import": "./dist/workflows/definition.js"
+    },
+    "./workflows/interpolation": {
+      "types": "./dist/workflows/interpolation.d.ts",
+      "import": "./dist/workflows/interpolation.js"
+    },
+    "./workflows/validation": {
+      "types": "./dist/workflows/validation.d.ts",
+      "import": "./dist/workflows/validation.js"
+    },
+    "./workflows/presentation": {
+      "types": "./dist/workflows/presentation.d.ts",
+      "import": "./dist/workflows/presentation.js"
+    },
+    "./workflows/run-status": {
+      "types": "./dist/workflows/run-status.d.ts",
+      "import": "./dist/workflows/run-status.js"
+    },
+    "./workflows/run-launch": {
+      "types": "./dist/workflows/run-launch.d.ts",
+      "import": "./dist/workflows/run-launch.js"
+    },
+    "./workflows/templates": {
+      "types": "./dist/workflows/templates.d.ts",
+      "import": "./dist/workflows/templates.js"
+    },
+    "./workflows/model": {
+      "types": "./dist/workflows/model.d.ts",
+      "import": "./dist/workflows/model.js"
+    },
+    "./workflows/effective-config": {
+      "types": "./dist/workflows/effective-config.d.ts",
+      "import": "./dist/workflows/effective-config.js"
+    },
+    "./workflows/poll-setup": {
+      "types": "./dist/workflows/poll-setup.d.ts",
+      "import": "./dist/workflows/poll-setup.js"
+    },
+    "./workflows/spine-editing": {
+      "types": "./dist/workflows/spine-editing.d.ts",
+      "import": "./dist/workflows/spine-editing.js"
+    },
+    "./workflows/identity": {
+      "types": "./dist/workflows/identity.d.ts",
+      "import": "./dist/workflows/identity.js"
+    },
+    "./workflows/read-only": {
+      "types": "./dist/workflows/read-only.d.ts",
+      "import": "./dist/workflows/read-only.js"
+    },
+    "./workflows/strict-rules": {
+      "types": "./dist/workflows/strict-rules.d.ts",
+      "import": "./dist/workflows/strict-rules.js"
+    },
+    "./workflows/contracts/canonical": {
+      "types": "./dist/workflows/contracts/canonical.d.ts",
+      "import": "./dist/workflows/contracts/canonical.js"
+    },
+    "./workflows/contracts/hashing": {
+      "types": "./dist/workflows/contracts/hashing.d.ts",
+      "import": "./dist/workflows/contracts/hashing.js"
+    },
+    "./workflows/contracts/schema-profile": {
+      "types": "./dist/workflows/contracts/schema-profile.d.ts",
+      "import": "./dist/workflows/contracts/schema-profile.js"
+    },
+    "./workflows/contracts/legacy-upgrade": {
+      "types": "./dist/workflows/contracts/legacy-upgrade.d.ts",
+      "import": "./dist/workflows/contracts/legacy-upgrade.js"
+    },
+    "./workflows/contracts/types": {
+      "types": "./dist/workflows/contracts/types.d.ts",
+      "import": "./dist/workflows/contracts/types.js"
+    },
+    "./workflows/contracts/adapters": {
+      "types": "./dist/workflows/contracts/adapters.d.ts",
+      "import": "./dist/workflows/contracts/adapters.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

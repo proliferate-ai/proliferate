@@ -23,6 +23,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startInvocationStub, type InvocationStubServer } from "./invocation-stub.ts";
 
 export const PROFILE = "t2intent";
 export const BILLING_PROFILE = "t2billing";
@@ -71,6 +72,8 @@ export interface BootedStack {
   anyharnessBaseUrl: string;
   databaseUrl: string;
   setupTokenFile: string;
+  invocationStubBaseUrl: string;
+  invocationStubApiKey: string;
   /** Kill every process this boot spawned. Safe to call more than once. */
   teardown: () => Promise<void>;
 }
@@ -311,6 +314,8 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   mkdirSync(instance.anyharnessRuntimeHome, { recursive: true });
 
   const children: ChildProcess[] = [];
+  const invocationStub = await startInvocationStub();
+  log(`invocation stub ready: ${invocationStub.baseUrl}`);
 
   // ── Server (FastAPI/uvicorn) ──
   const serverEnv: NodeJS.ProcessEnv = {
@@ -462,6 +467,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     for (const child of children) {
       killTracked(child);
     }
+    await closeInvocationStub(invocationStub);
     // Release the profile run lock the `ensure --lock` call above took, same
     // as `make run`'s exit trap — otherwise the next boot within the lock's
     // 2-minute staleness window refuses to start.
@@ -469,5 +475,23 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     await new Promise((resolve) => setTimeout(resolve, 500));
   };
 
-  return { profile, apiBaseUrl, webBaseUrl, anyharnessBaseUrl, databaseUrl, setupTokenFile, teardown };
+  return {
+    profile,
+    apiBaseUrl,
+    webBaseUrl,
+    anyharnessBaseUrl,
+    databaseUrl,
+    setupTokenFile,
+    invocationStubBaseUrl: invocationStub.baseUrl,
+    invocationStubApiKey: invocationStub.apiKey,
+    teardown,
+  };
+}
+
+async function closeInvocationStub(invocationStub: InvocationStubServer): Promise<void> {
+  try {
+    await invocationStub.close();
+  } catch (error) {
+    log(`warning: could not close invocation stub (${String(error)})`);
+  }
 }

@@ -1,4 +1,4 @@
-use anyharness_contract::v1::GoalStatus;
+use anyharness_contract::v1::{GoalSourceKind, GoalStatus};
 use rusqlite::{params, types::Type, Connection, OptionalExtension, Row};
 
 use super::model::{GoalPendingOp, GoalRecord};
@@ -85,10 +85,13 @@ impl GoalStore {
         tx.execute(
             "INSERT INTO goals (
                 id, workspace_id, session_id, objective, status, native_status,
-                token_budget, tokens_used, time_used_seconds, met_reason, iterations,
-                native, pending_op, revision, native_state_json, created_at, updated_at
+                token_budget, max_turns, max_wall_secs, tokens_used, time_used_seconds,
+                met_reason, failed_reason, iterations, source_kind, source_run_id,
+                native, pending_op, revision, native_state_json, guard_turns_used,
+                guard_started_at, created_at, updated_at
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15,
+                     ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
             params![
                 goal.id,
                 goal.workspace_id,
@@ -97,14 +100,21 @@ impl GoalStore {
                 status_to_db(goal.status),
                 goal.native_status,
                 goal.token_budget,
+                goal.max_turns,
+                goal.max_wall_secs.map(|value| value as i64),
                 goal.tokens_used,
                 goal.time_used_seconds,
                 goal.met_reason,
+                goal.failed_reason,
                 goal.iterations,
+                source_kind_to_db(goal.source_kind),
+                goal.source_run_id,
                 goal.native,
                 goal.pending_op.map(GoalPendingOp::as_str),
                 goal.revision,
                 goal.native_state_json,
+                goal.guard_turns_used,
+                goal.guard_started_at,
                 goal.created_at,
                 goal.updated_at,
             ],
@@ -119,15 +129,22 @@ impl GoalStore {
                  status = ?3,
                  native_status = ?4,
                  token_budget = ?5,
-                 tokens_used = ?6,
-                 time_used_seconds = ?7,
-                 met_reason = ?8,
-                 iterations = ?9,
-                 native = ?10,
-                 pending_op = ?11,
-                 revision = ?12,
-                 native_state_json = ?13,
-                 updated_at = ?14
+                 max_turns = ?6,
+                 max_wall_secs = ?7,
+                 tokens_used = ?8,
+                 time_used_seconds = ?9,
+                 met_reason = ?10,
+                 failed_reason = ?11,
+                 iterations = ?12,
+                 source_kind = ?13,
+                 source_run_id = ?14,
+                 native = ?15,
+                 pending_op = ?16,
+                 revision = ?17,
+                 native_state_json = ?18,
+                 guard_turns_used = ?19,
+                 guard_started_at = ?20,
+                 updated_at = ?21
              WHERE id = ?1",
             params![
                 goal.id,
@@ -135,14 +152,21 @@ impl GoalStore {
                 status_to_db(goal.status),
                 goal.native_status,
                 goal.token_budget,
+                goal.max_turns,
+                goal.max_wall_secs.map(|value| value as i64),
                 goal.tokens_used,
                 goal.time_used_seconds,
                 goal.met_reason,
+                goal.failed_reason,
                 goal.iterations,
+                source_kind_to_db(goal.source_kind),
+                goal.source_run_id,
                 goal.native,
                 goal.pending_op.map(GoalPendingOp::as_str),
                 goal.revision,
                 goal.native_state_json,
+                goal.guard_turns_used,
+                goal.guard_started_at,
                 goal.updated_at,
             ],
         )?;
@@ -176,6 +200,21 @@ impl GoalStore {
             )?;
             Ok(())
         })
+    }
+
+    /// Persists the cap guard's turn counter for a goal row. Deliberately
+    /// touches nothing else — the counter is internal bookkeeping, not a
+    /// mirror-state edit, so it never bumps `revision` nor emits an event.
+    pub fn update_guard_turns(
+        tx: &Connection,
+        goal_id: &str,
+        guard_turns_used: i64,
+    ) -> rusqlite::Result<()> {
+        tx.execute(
+            "UPDATE goals SET guard_turns_used = ?2 WHERE id = ?1",
+            params![goal_id, guard_turns_used],
+        )?;
+        Ok(())
     }
 
     /// Clear pending_op on a goal row within an existing transaction, without
@@ -234,6 +273,27 @@ fn status_from_db(value: &str) -> rusqlite::Result<GoalStatus> {
     }
 }
 
+pub fn source_kind_to_db(source_kind: GoalSourceKind) -> &'static str {
+    match source_kind {
+        GoalSourceKind::User => "user",
+        GoalSourceKind::Workflow => "workflow",
+        GoalSourceKind::Agent => "agent",
+    }
+}
+
+fn source_kind_from_db(value: &str) -> rusqlite::Result<GoalSourceKind> {
+    match value {
+        "user" => Ok(GoalSourceKind::User),
+        "workflow" => Ok(GoalSourceKind::Workflow),
+        "agent" => Ok(GoalSourceKind::Agent),
+        other => Err(rusqlite::Error::FromSqlConversionFailure(
+            0,
+            Type::Text,
+            format!("unknown goal source kind: {other}").into(),
+        )),
+    }
+}
+
 pub(crate) fn map_goal(row: &Row<'_>) -> rusqlite::Result<GoalRecord> {
     Ok(GoalRecord {
         id: row.get("id")?,
@@ -243,10 +303,17 @@ pub(crate) fn map_goal(row: &Row<'_>) -> rusqlite::Result<GoalRecord> {
         status: status_from_db(row.get::<_, String>("status")?.as_str())?,
         native_status: row.get("native_status")?,
         token_budget: row.get("token_budget")?,
+        max_turns: row.get("max_turns")?,
+        max_wall_secs: row
+            .get::<_, Option<i64>>("max_wall_secs")?
+            .map(|value| value as u64),
         tokens_used: row.get("tokens_used")?,
         time_used_seconds: row.get("time_used_seconds")?,
         met_reason: row.get("met_reason")?,
+        failed_reason: row.get("failed_reason")?,
         iterations: row.get("iterations")?,
+        source_kind: source_kind_from_db(row.get::<_, String>("source_kind")?.as_str())?,
+        source_run_id: row.get("source_run_id")?,
         native: row.get("native")?,
         pending_op: row
             .get::<_, Option<String>>("pending_op")?
@@ -254,6 +321,8 @@ pub(crate) fn map_goal(row: &Row<'_>) -> rusqlite::Result<GoalRecord> {
             .and_then(GoalPendingOp::parse),
         revision: row.get("revision")?,
         native_state_json: row.get("native_state_json")?,
+        guard_turns_used: row.get("guard_turns_used")?,
+        guard_started_at: row.get("guard_started_at")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
     })

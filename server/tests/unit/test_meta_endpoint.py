@@ -65,6 +65,8 @@ def test_meta_reports_stamped_pins(monkeypatch) -> None:  # type: ignore[no-unty
         "workerVersion": "0.3.4",
         "minDesktopVersion": "0.3.0",
     }
+    # D-003: local_dev derives workflows-on.
+    assert body["workflowsEnabled"] is True
     # The capability contract rides alongside the version pins.
     assert isinstance(body["capabilities"], dict)
 
@@ -74,9 +76,10 @@ def test_meta_shape_and_types_without_env(monkeypatch) -> None:  # type: ignore[
 
     body = _client().get("/meta").json()
 
-    assert set(body) == set(_VERSION_FIELDS) | {"capabilities"}
+    assert set(body) == set(_VERSION_FIELDS) | {"workflowsEnabled", "capabilities"}
     for field in _VERSION_FIELDS:
         assert isinstance(body[field], str) and body[field]
+    assert isinstance(body["workflowsEnabled"], bool)
     assert isinstance(body["capabilities"], dict)
 
 
@@ -94,6 +97,7 @@ _META_GOLDEN_FIELDS = [
     "runtimeVersion",
     "workerVersion",
     "minDesktopVersion",
+    "workflowsEnabled",
     "capabilities",
 ]
 

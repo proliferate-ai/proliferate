@@ -1,0 +1,178 @@
+{
+  "planVersion": 2,
+  "planHash": "sha256:24db3a9af5b6d6041b3b19641c3bb64c63e0cf6b31a1484d855783892445adea",
+  "runId": "wfr_demo_0001",
+  "workflowId": "wf_widgets_triage",
+  "workflowVersionId": "018f8a00-0000-7000-8000-0000000000ff",
+  "versionN": 4,
+  "target": "local",
+  "isolation": "fresh_worktree",
+  "sourceIntent": {
+    "kind": "remote_commit",
+    "repo": "github.com/acme/widgets",
+    "ref": "refs/heads/main",
+    "resolvedCommit": "0a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728"
+  },
+  "inputs": {
+    "dry_run": { "type": "boolean", "value": false },
+    "issue_url": { "type": "text", "value": "https://example.invalid/issue/42" },
+    "max_files": { "type": "number", "value": 10 },
+    "severity_hint": { "type": "choice", "value": "normal" }
+  },
+  "capabilities": [
+    {
+      "kind": "integration_tool",
+      "providerDefinitionId": "prov_github",
+      "providerRevision": "rev_2",
+      "toolName": "create_issue",
+      "inputSchemaHash": "sha256:3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b"
+    },
+    {
+      "kind": "function",
+      "definitionId": "fn_notify",
+      "semanticRevision": 3
+    },
+    {
+      "kind": "product_mcp",
+      "definition": "workflow_peer",
+      "policyRevision": 1
+    }
+  ],
+  "slots": [
+    {
+      "slotId": "018f8a10-0000-7000-8000-000000000001",
+      "label": "Triage",
+      "requestedConfig": { "harness": "claude-code", "model": "claude-sonnet-4-5", "mode": "bypass" },
+      "effectiveConfig": { "harness": "claude-code", "model": "claude-sonnet-4-5", "mode": "bypass" },
+      "capabilitySubset": [
+        {
+          "kind": "function",
+          "definitionId": "fn_notify",
+          "semanticRevision": 3
+        },
+        {
+          "kind": "product_mcp",
+          "definition": "workflow_peer",
+          "policyRevision": 1
+        }
+      ]
+    },
+    {
+      "slotId": "018f8a10-0000-7000-8000-00000000000a",
+      "label": "Lane A worker",
+      "requestedConfig": { "harness": "claude-code", "model": "claude-sonnet-4-5", "mode": "bypass" },
+      "effectiveConfig": { "harness": "claude-code", "model": "claude-sonnet-4-5", "mode": "bypass" },
+      "capabilitySubset": [
+        {
+          "kind": "integration_tool",
+          "providerDefinitionId": "prov_github",
+          "providerRevision": "rev_2",
+          "toolName": "create_issue",
+          "inputSchemaHash": "sha256:3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b"
+        }
+      ]
+    },
+    {
+      "slotId": "018f8a10-0000-7000-8000-00000000000b",
+      "label": "Lane B worker",
+      "requestedConfig": { "harness": "claude-code", "model": "claude-sonnet-4-5", "mode": "bypass" },
+      "effectiveConfig": { "harness": "claude-code", "model": "claude-sonnet-4-5", "mode": "bypass" },
+      "capabilitySubset": []
+    }
+  ],
+  "spine": [
+    {
+      "kind": "sequential",
+      "nodeId": "018f8a10-0001-7000-8000-000000000001",
+      "slotId": "018f8a10-0000-7000-8000-000000000001",
+      "steps": [
+        {
+          "stepId": "018f8a10-0004-7000-8000-000000000001",
+          "stepKey": "root::018f8a10-0001-7000-8000-000000000001::-::018f8a10-0004-7000-8000-000000000001",
+          "kind": "agent.prompt",
+          "onFail": "fail",
+          "prompt": "Read {{inputs.issue_url}} and investigate the reported defect."
+        },
+        {
+          "stepId": "018f8a10-0004-7000-8000-000000000002",
+          "stepKey": "root::018f8a10-0001-7000-8000-000000000001::-::018f8a10-0004-7000-8000-000000000002",
+          "kind": "agent.emit",
+          "onFail": "fail",
+          "emitName": "triage",
+          "prompt": "Emit a triage verdict for the issue.",
+          "correctionBudget": 2,
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "severity": { "type": "string", "enum": ["high", "low"] },
+              "summary": { "type": "string", "minLength": 1, "maxLength": 280 }
+            },
+            "required": ["severity", "summary"]
+          }
+        },
+        {
+          "stepId": "018f8a10-0004-7000-8000-000000000003",
+          "stepKey": "root::018f8a10-0001-7000-8000-000000000001::-::018f8a10-0004-7000-8000-000000000003",
+          "kind": "branch",
+          "onFail": "fail",
+          "on": "{{triage.severity}}",
+          "cases": { "high": "continue", "low": "end" }
+        }
+      ]
+    },
+    {
+      "kind": "sequential",
+      "nodeId": "018f8a10-0001-7000-8000-000000000002",
+      "slotId": "018f8a10-0000-7000-8000-000000000001",
+      "steps": [
+        {
+          "stepId": "018f8a10-0004-7000-8000-000000000004",
+          "stepKey": "root::018f8a10-0001-7000-8000-000000000002::-::018f8a10-0004-7000-8000-000000000004",
+          "kind": "required_invocation",
+          "onFail": "fail",
+          "correctionBudget": 3,
+          "prompt": "Notify the on-call channel that the high-severity issue is confirmed.",
+          "capability": {
+            "kind": "function",
+            "definitionId": "fn_notify",
+            "semanticRevision": 3
+          }
+        }
+      ]
+    },
+    {
+      "kind": "parallel",
+      "groupId": "018f8a10-0002-7000-8000-000000000001",
+      "lanes": [
+        {
+          "laneId": "018f8a10-0003-7000-8000-00000000000a",
+          "slotId": "018f8a10-0000-7000-8000-00000000000a",
+          "steps": [
+            {
+              "stepId": "018f8a10-0004-7000-8000-00000000000a",
+              "stepKey": "root::018f8a10-0002-7000-8000-000000000001::018f8a10-0003-7000-8000-00000000000a::018f8a10-0004-7000-8000-00000000000a",
+              "kind": "agent.prompt",
+              "onFail": "fail",
+              "prompt": "Apply the fix to the backend module."
+            }
+          ]
+        },
+        {
+          "laneId": "018f8a10-0003-7000-8000-00000000000b",
+          "slotId": "018f8a10-0000-7000-8000-00000000000b",
+          "steps": [
+            {
+              "stepId": "018f8a10-0004-7000-8000-00000000000b",
+              "stepKey": "root::018f8a10-0002-7000-8000-000000000001::018f8a10-0003-7000-8000-00000000000b::018f8a10-0004-7000-8000-00000000000b",
+              "kind": "agent.prompt",
+              "onFail": "fail",
+              "prompt": "Apply the fix to the frontend module."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

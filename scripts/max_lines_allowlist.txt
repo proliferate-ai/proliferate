@@ -7,9 +7,9 @@
 # grows, the check fails. If it shrinks, update the count or remove the entry
 # when the file is under its threshold.
 
-anyharness/crates/anyharness-contract/src/v1/events.rs 1129 existing AnyHarness contract oversized file
+anyharness/crates/anyharness-contract/src/v1/events.rs 1143 existing AnyHarness contract oversized file, +workflows v1 event variants (launch debt)
 anyharness/crates/anyharness-contract/src/v1/sessions.rs 787 existing AnyHarness contract oversized file
-anyharness/crates/anyharness-lib/src/api/openapi.rs 875 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1)
+anyharness/crates/anyharness-lib/src/api/openapi.rs 893 existing AnyHarness oversized file (+hosting schema registration, +agent-auth state response, +gateway catalog endpoints) + enriched gateway-models schema fields (model-table §1) + workflows v1 invocation/gateway schema (launch debt)
 anyharness/crates/anyharness-lib/src/api/router_tests.rs 1364 existing AnyHarness oversized test file (+hosting PR-status route tests, +catalog version + enrichment tests)
 anyharness/crates/anyharness-lib/src/api/http/agent_gateway_catalog.rs 632 gateway model enrichment (own vs foreign match) + catalog version endpoint
 anyharness/crates/anyharness-lib/src/domains/agents/catalog/gateway_resolver.rs 704 provider filtering + family normalizer (bedrock/date/version forms) with tests
@@ -18,7 +18,7 @@ anyharness/crates/anyharness-lib/src/domains/agents/auth/context_tests.rs 645 cl
 anyharness/crates/anyharness-lib/src/domains/cowork/runtime.rs 1895 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/mobility/service.rs 1520 existing AnyHarness oversized file
 anyharness/crates/anyharness-lib/src/domains/plans/service.rs 628 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/domains/goals/service_tests.rs 682 goal service regression tests for pending_op idempotency
+anyharness/crates/anyharness-lib/src/domains/goals/service_tests.rs 988 goal service regression tests for pending_op idempotency + workflows v1 goal-runtime coverage (launch debt)
 anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 1510 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 680 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
@@ -49,8 +49,25 @@ server/tests/integration/test_billing_api.py 1918 existing server oversized inte
 server/tests/integration/test_stripe_webhooks.py 1456 existing server oversized integration test
 apps/packages/product-ui/src/chat/transcript/MarkdownBody.tsx 492 existing markdown transcript renderer pending split
 apps/packages/ui/src/icons/core.tsx 413 existing consolidated icon barrel pending split
-anyharness/crates/anyharness-lib/src/api/router.rs 610 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route)
-anyharness/crates/anyharness-lib/src/app/mod.rs 608 AnyHarness app wiring (+goal/loop/activity/feed services)
+anyharness/crates/anyharness-lib/src/api/router.rs 627 AnyHarness router (+goals/loops/activity/feed routes, +gateway catalog version route) + workflows v1 run/invocation routes (launch debt)
+anyharness/crates/anyharness-lib/src/app/mod.rs 662 AnyHarness app wiring (+goal/loop/activity/feed services) + workflows v1 executor/service wiring (launch debt)
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 861 loops runtime — native write path + emulated Codex scheduler
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 739 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
+anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 698 goal runtime pending decomposition, workflows v1 launch debt
+anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs 1074 workflow plan resolution pending decomposition, workflows v1 launch debt
+anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 1025 workflow service pending decomposition, workflows v1 launch debt (WS5b tightened; lane_visible_outputs moved to support.rs)
+anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1076 workflow service test coverage pending split, workflows v1 launch debt
+server/proliferate/db/models/cloud/workflows.py 590 workflow/run/trigger ORM models pending split, workflows v1 launch debt (+7: WS2b private_envelope_json column)
+server/proliferate/db/store/cloud_workflows.py 1138 workflow/run/gateway-token store queries pending split, workflows v1 launch debt (+54: WS2b secret-free-plan record fields, envelope param, immutable-ledger guard)
+server/proliferate/server/cloud/workflows/api.py 471 workflow HTTP routes (runs/triggers/executor claim plane/poll setup) pending split, workflows v1 launch debt (+1: compiler/triggers/worker.service import split, WS0B-S; +3: WS2b local-lane envelope-in-response)
+server/proliferate/server/cloud/workflows/compiler.py 666 StartRun compiler (resolve/hash/v2-keys/envelope) pending split, workflows v1 launch debt (WS2b secret-free plan + planHash + v2 step keys)
+server/proliferate/server/cloud/workflows/domain/definition.py 1121 v2 workflow definition parser/validator pending split, workflows v1 launch debt
+server/proliferate/server/cloud/workflows/models.py 601 workflow request/response Pydantic models pending split, workflows v1 launch debt (+48: WS2b build_delivered_plan + run_payload envelope fold)
+server/proliferate/server/cloud/workflows/triggers.py 943 trigger CRUD/schedule/poll-config validation/poll probe carved out of service.py (WS0B-S); further split TBD, workflows v1 launch debt
+server/tests/unit/test_workflow_actions.py 819 step-action (notify/emit) regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_definition.py 718 v2 definition parser regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_poll.py 1397 poll-trigger regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_run_gateway.py 1309 per-run gateway token regression coverage pending split, workflows v1 launch debt (+1: worker/service.py import path, WS0B-S; +6: WS2b envelope split)
+server/tests/unit/test_workflow_service.py 847 workflow service regression coverage pending split, workflows v1 launch debt (+1: WS2b envelope assertion)
+server/tests/unit/test_workflow_triggers.py 1465 trigger CRUD/schedule/poll regression coverage pending split, workflows v1 launch debt

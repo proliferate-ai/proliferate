@@ -4,9 +4,12 @@ import { APP_ROUTES } from "@/config/app-routes";
 import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPage";
 import { MainPage } from "@/pages/MainPage";
 import { SettingsPage } from "@/pages/SettingsPage";
-import { WorkflowsPage } from "@/pages/WorkflowsPage";
+import { WorkflowsHomePage } from "@/pages/WorkflowsHomePage";
+import { WorkflowEditorPage } from "@/pages/WorkflowEditorPage";
+import { WorkflowRunPage } from "@/pages/WorkflowRunPage";
 import { WorkspacesPage } from "@/pages/WorkspacesPage";
 import { useOrganizationSelectionLifecycle } from "@/hooks/organizations/lifecycle/use-organization-selection-lifecycle";
+import { useWorkflowsEnabled } from "@/hooks/access/cloud/use-server-features";
 
 type MainRouteComponent = ComponentType<{ workspaceVisible?: boolean }>;
 type SettingsRouteComponent = ComponentType<{ returnTo?: string }>;
@@ -21,6 +24,7 @@ export function AuthenticatedAppHost({
   SettingsComponent = SettingsPage,
 }: AuthenticatedAppHostProps = {}) {
   useOrganizationSelectionLifecycle();
+  const workflowsEnabled = useWorkflowsEnabled();
   const location = useLocation();
   const isSettingsRoute = location.pathname === APP_ROUTES.settings;
   const lastNonSettingsHrefRef = useRef<string>(APP_ROUTES.home);
@@ -58,10 +62,19 @@ export function AuthenticatedAppHost({
       ) : isHomeRoute ? null : (
         <Routes>
           <Route path="setup" element={<Navigate to={APP_ROUTES.home} replace />} />
-          <Route path="workflows" element={<WorkflowsPage />} />
-          <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
-          <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
-          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} extractLastSegment />} />
+          {/* D-003 launch flag: workflows routes exist only when the server
+              advertises the surface; a held deployment falls through to the
+              home redirect below (the API 404s regardless). */}
+          {workflowsEnabled ? (
+            <>
+              <Route path="workflows" element={<WorkflowsHomePage />} />
+              <Route path="workflows/:workflowId" element={<WorkflowEditorPage />} />
+              <Route path="workflows/:workflowId/edit" element={<WorkflowEditorPage />} />
+              <Route path="workflows/:workflowId/runs/:runId" element={<WorkflowRunPage />} />
+              <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
+              <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} extractLastSegment />} />
+            </>
+          ) : null}
           <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceId" element={<DesktopWorkspaceDeepLinkPage />} />
           <Route path="*" element={<Navigate to={APP_ROUTES.home} replace />} />

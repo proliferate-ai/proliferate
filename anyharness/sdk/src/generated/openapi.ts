@@ -996,6 +996,70 @@ export interface paths {
         patch: operations["update_terminal_title"];
         trace?: never;
     };
+    "/v1/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_workflow_runs"];
+        put?: never;
+        post: operations["create_workflow_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_workflow_run"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve_workflow_approval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflow-runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel_workflow_run"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -2424,6 +2488,15 @@ export interface components {
             startupCommandTimeoutMs?: number | null;
             title?: string | null;
         };
+        /**
+         * @description Delivery request: the fully-resolved plan JSON (opaque here — the runtime's
+         *     workflow domain deserializes it strictly and rejects unknown step kinds) and
+         *     the workspace the run executes in. Idempotent on the plan's `run_id`.
+         */
+        CreateWorkflowRunRequest: {
+            plan: unknown;
+            workspaceId: string;
+        };
         /** @enum {string} */
         CreateWorkspaceFileEntryKind: "file" | "directory";
         CreateWorkspaceFileEntryRequest: {
@@ -2731,10 +2804,28 @@ export interface components {
         Goal: {
             createdAt: string;
             /**
+             * @description Typed reason a goal transitioned to `failed`. Cap breaches set
+             *     `max_turns_exhausted` | `max_wall_secs_exhausted`; native failures leave
+             *     this absent (detail rides `native_status`).
+             */
+            failedReason?: string | null;
+            /**
              * Format: int64
              * @description Claude only.
              */
             iterations?: number | null;
+            /**
+             * Format: int32
+             * @description Runtime-enforced cap: max turns the active goal may run before the
+             *     anyharness goal-cap guard fails it. NEVER forwarded to the sidecar.
+             */
+            maxTurns?: number | null;
+            /**
+             * Format: int64
+             * @description Runtime-enforced cap: max wall-clock seconds the active goal may run.
+             *     NEVER forwarded to the sidecar.
+             */
+            maxWallSecs?: number | null;
             /**
              * @description Claude evaluator reason; always absent for codex (terminal detail is
              *     in `native_status`).
@@ -2749,6 +2840,10 @@ export interface components {
              * @description Bumped on every mirrored edit.
              */
             revision: number;
+            /** @description Provenance: who armed this goal (defaults to `user`). */
+            sourceKind: components["schemas"]["GoalSourceKind"];
+            /** @description The workflow run that armed the goal, when `source_kind = workflow`. */
+            sourceRunId?: string | null;
             status: components["schemas"]["GoalStatus"];
             /** Format: int64 */
             timeUsedSeconds?: number | null;
@@ -2770,6 +2865,13 @@ export interface components {
         GoalMetPayload: {
             goal: components["schemas"]["Goal"];
         };
+        /**
+         * @description Provenance of a goal — who armed it. Defaults to `user`. `workflow` goals
+         *     carry the arming run in `Goal::source_run_id`; `agent` marks a goal the
+         *     harness set for itself.
+         * @enum {string}
+         */
+        GoalSourceKind: "user" | "workflow" | "agent";
         /**
          * @description Normalized goal status across harnesses (GoalPort wire contract v1).
          *     Non-terminal: `active | paused | blocked`; terminal: `met | failed |
@@ -3464,6 +3566,14 @@ export interface components {
             /** @enum {string} */
             type: "reviewFeedback";
         } | {
+            /** @description The step-kind slug (`agent.prompt`, `agent.emit`, `shell.run`, …). */
+            kind: string;
+            label?: string | null;
+            runId: string;
+            stepKey: string;
+            /** @enum {string} */
+            type: "workflow";
+        } | {
             label?: string | null;
             /** @enum {string} */
             type: "system";
@@ -3704,6 +3814,13 @@ export interface components {
         };
         ResolveRepoRootFromPathRequest: {
             path: string;
+        };
+        /**
+         * @description Resolve a durable approval (`human.approval`, or an `agent.goal` step paused
+         *     for approval on a block).
+         */
+        ResolveWorkflowApprovalRequest: {
+            approve: boolean;
         };
         ResolveWorkspaceFromPathRequest: {
             creatorContext?: null | components["schemas"]["WorkspaceCreatorContext"];
@@ -4224,8 +4341,21 @@ export interface components {
             session: components["schemas"]["Session"];
         };
         SetSessionGoalRequest: {
+            /**
+             * Format: int32
+             * @description Runtime-enforced cap (never forwarded to the sidecar).
+             */
+            maxTurns?: number | null;
+            /**
+             * Format: int64
+             * @description Runtime-enforced cap (never forwarded to the sidecar).
+             */
+            maxWallSecs?: number | null;
             /** @description Omitted = status/budget-only patch (codex semantics). */
             objective?: string | null;
+            sourceKind?: null | components["schemas"]["GoalSourceKind"];
+            /** @description The workflow run arming the goal; stamped alongside `source_kind`. */
+            sourceRunId?: string | null;
             status?: null | components["schemas"]["GoalArmState"];
             /** Format: int64 */
             tokenBudget?: number | null;
@@ -4513,6 +4643,80 @@ export interface components {
             selectedOptionLabel?: string | null;
             text?: string | null;
         };
+        WorkflowRunListResponse: {
+            runs: components["schemas"]["WorkflowRunSummaryView"][];
+        };
+        /**
+         * @description The anyharness-local run status vocabulary (mirrors the server ledger's
+         *     observed state; the server owns the desired/delivery states separately).
+         *     Non-terminal: `running | waiting_approval`; terminal: `completed | failed |
+         *     cancelled`.
+         * @enum {string}
+         */
+        WorkflowRunStatus: "running" | "waiting_approval" | "completed" | "failed" | "cancelled";
+        /** @description A run summary without step detail, for the run list. */
+        WorkflowRunSummaryView: {
+            createdAt: string;
+            runId: string;
+            status: components["schemas"]["WorkflowRunStatus"];
+            /** Format: int64 */
+            stepCursor: number;
+            triggerKind?: string | null;
+            updatedAt: string;
+            workflowId?: string | null;
+            workspaceId: string;
+        };
+        /**
+         * @description The full run view: the run record plus its step runs and the session ids the
+         *     run has opened. This is the shape `GET /v1/workflow-runs/{id}` returns and
+         *     the `POST` echoes on idempotent delivery.
+         */
+        WorkflowRunView: {
+            createdAt: string;
+            errorCode?: string | null;
+            errorMessage?: string | null;
+            runId: string;
+            /** @description Slot-keyed session map (B7): `slot -> session_id`. */
+            sessionIds?: {
+                [key: string]: string;
+            };
+            status: components["schemas"]["WorkflowRunStatus"];
+            /** Format: int64 */
+            stepCursor: number;
+            steps?: components["schemas"]["WorkflowStepRunView"][];
+            targetMode?: string | null;
+            triggerKind?: string | null;
+            updatedAt: string;
+            /** Format: int64 */
+            versionN?: number | null;
+            workflowId?: string | null;
+            workflowVersionId?: string | null;
+            workspaceId: string;
+        };
+        /**
+         * @description A single step's observed execution truth. `output` carries the typed,
+         *     step-kind-specific output the run view + downstream template late-binding
+         *     consume (e.g. `{turnId, sessionId}`, `{exitCode, outputTail}`, `{prUrl}`).
+         */
+        WorkflowStepRunView: {
+            /** Format: int64 */
+            attempt: number;
+            endedAt?: string | null;
+            errorCode?: string | null;
+            errorMessage?: string | null;
+            kind: string;
+            output?: unknown;
+            startedAt?: string | null;
+            status: components["schemas"]["WorkflowStepStatus"];
+            /** Format: int64 */
+            stepIndex: number;
+        };
+        /**
+         * @description Per-step observed status. `waiting` is a step parked on a durable approval
+         *     (human.approval, or an `agent.goal` blocked step paused for approval).
+         * @enum {string}
+         */
+        WorkflowStepStatus: "pending" | "running" | "waiting" | "completed" | "failed" | "skipped";
         Workspace: {
             cleanupAttemptedAt?: string | null;
             cleanupErrorMessage?: string | null;
@@ -7449,6 +7653,180 @@ export interface operations {
                 };
             };
             /** @description Terminal not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    list_workflow_runs: {
+        parameters: {
+            query?: {
+                /** @description Filter by workspace */
+                workspace_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List workflow runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunListResponse"];
+                };
+            };
+        };
+    };
+    create_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkflowRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Run delivered (idempotent on run_id) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunView"];
+                };
+            };
+            /** @description Invalid plan */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Workspace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    get_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Workflow run detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunView"];
+                };
+            };
+            /** @description Run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    resolve_workflow_approval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveWorkflowApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Approval resolved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunView"];
+                };
+            };
+            /** @description Run not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description No pending approval */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    cancel_workflow_run: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run cancelled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunView"];
+                };
+            };
+            /** @description Run not found */
             404: {
                 headers: {
                     [name: string]: unknown;

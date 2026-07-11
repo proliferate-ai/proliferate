@@ -1,0 +1,33 @@
+{
+  "$schema": "canonical-number-vectors-v1",
+  "description": "RFC 8785 §3.2.2.3 (ECMAScript Number::toString) serialization vectors. Every {value, canonical} pair is consumed by BOTH the Python (canonical.py) and TypeScript (canonical.ts) contract legs; scripts/check_workflow_contract_fixtures.py fails if either language drifts from these bytes. Verified against Node/V8 native String() on the exact IEEE754 double bit pattern of every value (200k-vector fuzz run, zero mismatches) — see the WS1-follow-up (float canonicalization) execution log.",
+  "vectors": [
+    { "value": 0.1, "canonical": "0.1", "note": "RFC 8785 canonical example — 0.1 has no exact binary representation; shortest round-trip repr must still be \"0.1\"." },
+    { "value": 1e+21, "canonical": "1e+21", "note": "ES Number::toString exponential threshold: n=22 > 21, forces exponential notation." },
+    { "value": 1e+20, "canonical": "100000000000000000000", "note": "One below the exponential threshold: n=21 stays in fixed (integer) notation." },
+    { "value": 9.999999999999999e+20, "canonical": "999999999999999900000", "note": "Largest double strictly below 1e21 with maximal significant digits, still fixed notation (n=21)." },
+    { "value": 1e-07, "canonical": "1e-7", "note": "ES Number::toString small-exponential threshold: n=-6 forces exponential notation." },
+    { "value": 1e-06, "canonical": "0.000001", "note": "One above the small-exponential threshold: n=-5 stays fixed (\"0.000001\")." },
+    { "value": 2.0, "canonical": "2", "note": "Integral-valued float must serialize without a decimal point (\"2\", not \"2.0\") — the WS2b StartRun bug." },
+    { "value": -0.0, "canonical": "0", "note": "IEEE754 negative zero serializes as \"0\" (no sign) per ECMA-262 Number::toString." },
+    { "value": 0.0, "canonical": "0", "note": "Positive zero serializes as \"0\"." },
+    { "value": 1.5, "canonical": "1.5", "note": "A typical fractional workflow number input default." },
+    { "value": -1.5, "canonical": "-1.5", "note": "Negative fractional input." },
+    { "value": 100.0, "canonical": "100", "note": "Integral float with trailing zeros in fixed notation." },
+    { "value": 5e-324, "canonical": "5e-324", "note": "The smallest positive subnormal double (Number.MIN_VALUE)." },
+    { "value": 1.7976931348623157e+308, "canonical": "1.7976931348623157e+308", "note": "The largest finite double (Number.MAX_VALUE)." },
+    { "value": -1.7976931348623157e+308, "canonical": "-1.7976931348623157e+308", "note": "Negative Number.MAX_VALUE." },
+    { "value": 0.3333333333333333, "canonical": "0.3333333333333333", "note": "1/3 — a long non-terminating shortest-round-trip digit string." },
+    { "value": -2.75, "canonical": "-2.75", "note": "Negative fractional value with a terminating decimal." },
+    { "value": 3.14159, "canonical": "3.14159", "note": "A common non-round fractional literal." },
+    { "value": 3.0, "canonical": "3", "note": "Small integral float." },
+    { "value": -7.0, "canonical": "-7", "note": "Small negative integral float." },
+    { "value": 2.5, "canonical": "2.5", "note": "Half-integer fractional value — a realistic StartRun number input." },
+    { "value": 6.02214076e+23, "canonical": "6.02214076e+23", "note": "A physical-constant-scale value forcing exponential notation with multiple significant digits." },
+    { "value": 0.000123, "canonical": "0.000123", "note": "A small fractional value inside the fixed-notation floor." },
+    { "value": -0.000123, "canonical": "-0.000123", "note": "Negative counterpart of the above." },
+    { "value": 1234.5678, "canonical": "1234.5678", "note": "An ordinary multi-digit fractional value." },
+    { "value": 10.0, "canonical": "10", "note": "Integral float with one trailing zero." },
+    { "value": 1234567890123456.0, "canonical": "1234567890123456", "note": "A large integral float below the 1e21 exponential threshold, exercising many trailing zeros vs. significant digits." }
+  ]
+}

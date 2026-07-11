@@ -558,8 +558,10 @@ export async function uploadPersonalSecretFile(
   filename = "upload.bin",
 ): Promise<ApiResult<CloudSecretsResponse>> {
   const form = new FormData();
+  const fileBytes = new ArrayBuffer(content.byteLength);
+  new Uint8Array(fileBytes).set(content);
   form.append("path", path);
-  form.append("file", new Blob([content]), filename);
+  form.append("file", new Blob([fileBytes]), filename);
   const response = await fetch(`${apiBaseUrl()}/v1/cloud/secrets/personal/files/upload`, {
     method: "PUT",
     headers: { Authorization: `Bearer ${token}` },

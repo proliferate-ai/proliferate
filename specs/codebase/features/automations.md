@@ -1,6 +1,16 @@
 # 06 — Automations
 
-Status: implementation-ready spec.
+Status: authoritative for the legacy single-prompt automation surface during
+its migration to workflows.
+
+> New multi-step, schedule, poll, local/cloud execution, and agent capability
+> work follows [`workflows.md`](workflows.md). In that target model a Workflow is
+> the versioned program and an automation/schedule is only a Trigger. Do not
+> extend the legacy automation interpreter or bespoke scheduler loop with new
+> workflow behavior. This file remains the contract for existing automation
+> rows and their compatibility migration until that migration is complete. The
+> body below is legacy compatibility behavior, not a pattern for Workflow
+> implementation.
 
 Date: 2026-05-20.
 
@@ -47,8 +57,12 @@ In scope:
 - Team automation requires shared cloud readiness; fail-fast at
   enqueue if `ensure_organization_sandbox_profile` cannot
   complete or the org profile is `blocked`.
-- Existing scheduler loop, RRULE cursor on `Automation.next_run_at`,
-  and idempotent missed-tick handling stay as-is.
+- For legacy `Automation` rows only, the existing scheduler loop, RRULE cursor
+  on `Automation.next_run_at`, and idempotent missed-tick handling stay as-is
+  until those rows are migrated. New Workflow triggers use Celery/Beat and the
+  transactional outbox. Workflow migration may remove bespoke workflow loops
+  and release workarounds, but must not remove this legacy loop before the
+  compatibility migration is complete.
 
 Out of scope:
 

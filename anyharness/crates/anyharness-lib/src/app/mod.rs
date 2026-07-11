@@ -27,7 +27,7 @@ use crate::domains::cowork::mcp::auth::CoworkMcpAuth;
 use crate::domains::cowork::runtime::{CoworkRuntime, CoworkSessionHooks};
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::cowork::store::{CoworkDeleteParticipant, CoworkStore};
-use crate::domains::goals::hooks::GoalSessionHooks;
+use crate::domains::goals::hooks::{GoalGuardExtension, GoalSessionHooks};
 use crate::domains::goals::runtime::GoalRuntime;
 use crate::domains::goals::service::GoalService;
 use crate::domains::goals::store::GoalStore;
@@ -64,6 +64,8 @@ use crate::domains::sessions::subagents::mcp::auth::SubagentMcpAuth;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::sessions::subagents::store::SubagentStore;
 use crate::domains::terminals::store::TerminalStore;
+use crate::domains::workflows::service::WorkflowService;
+use crate::domains::workflows::store::WorkflowStore;
 use crate::domains::workspaces::access_gate::WorkspaceAccessGate;
 use crate::domains::workspaces::access_store::WorkspaceAccessStore;
 use crate::domains::workspaces::checkout_gate::CheckoutDeletionGate;
@@ -84,6 +86,10 @@ use crate::domains::workspaces::store::WorkspaceStore;
 use crate::domains::workspaces::worktree_runtime::WorkspaceWorktreeRuntime;
 use crate::live::sessions::LiveSessionManager;
 use crate::live::terminals::{AgentLoginTerminalService, TerminalService};
+use crate::live::workflows::{
+    HttpRunPingSink, WorkflowExecDeps, WorkflowGatewaySessions, WorkflowOwnedSessions,
+    WorkflowRunGatewaySessionLaunchExtension, WorkflowRunManager,
+};
 use crate::persistence::Db;
 
 #[derive(Debug, thiserror::Error)]
@@ -145,6 +151,13 @@ pub struct AppState {
     pub plan_runtime: Arc<PlanRuntime>,
     pub goal_service: Arc<GoalService>,
     pub goal_runtime: Arc<GoalRuntime>,
+    pub workflow_service: Arc<WorkflowService>,
+    pub workflow_manager: WorkflowRunManager,
+    /// L17 lockout registry (C13 / E8): shared with the session runtime + the
+    /// permission advisor. Exposed on state so the title-update HTTP handler
+    /// (whose mutation lives in `SessionService`, not the runtime) can apply the
+    /// same held guard as the runtime verbs.
+    pub workflow_owned_sessions: Arc<WorkflowOwnedSessions>,
     pub loop_service: Arc<LoopService>,
     pub loop_runtime: Arc<LoopRuntime>,
     pub activity_service: Arc<ActivityService>,
@@ -270,12 +283,20 @@ impl AppState {
             session_link_service.clone(),
             plan_service.clone(),
         ));
+        // Shared registry of workflow-owned sessions: written by the workflow
+        // executor, read by the inbound permission advisor (always-bypass net).
+        let workflow_owned_sessions = Arc::new(WorkflowOwnedSessions::new());
+        // Per-run gateway MCP servers, keyed by session id: written by the
+        // workflow executor before launch, read by the workflow gateway launch
+        // extension (§6.4/OPEN-3(a)).
+        let workflow_gateway_sessions = Arc::new(WorkflowGatewaySessions::new());
         let acp_manager = sessions::wire_live_sessions(&sessions::LiveSessionsWiringDeps {
             db: db.clone(),
             runtime_home: runtime_home.clone(),
             plan_service: plan_service.clone(),
             review_service: review_service.clone(),
             goal_service: goal_service.clone(),
+            workflow_owned_sessions: workflow_owned_sessions.clone(),
             loop_service: loop_service.clone(),
             activity_service: activity_service.clone(),
         });
@@ -313,6 +334,13 @@ impl AppState {
         let integration_gateway_session_launch_extension = Arc::new(
             IntegrationGatewaySessionLaunchExtension::new(runtime_home.clone()),
         );
+        // Per-run workflow gateway launch extension: injects the plan's gateway
+        // block for workflow-owned sessions. Ordered BEFORE the worker-dotfile
+        // extension below so the plan block wins on dedupe (both use the same
+        // INTEGRATION_GATEWAY_ID connection/server name).
+        let workflow_run_gateway_session_launch_extension = Arc::new(
+            WorkflowRunGatewaySessionLaunchExtension::new(workflow_gateway_sessions.clone()),
+        );
         let product_mcp_launch_catalog =
             product_mcp::build_product_mcp_launch_catalog(product_mcp::LaunchCatalogDeps {
                 runtime_base_url: runtime_base_url.clone(),
@@ -329,6 +357,7 @@ impl AppState {
             workspace_access_gate.clone(),
         ));
         let goal_session_hooks = Arc::new(GoalSessionHooks::new(goal_runtime.clone()));
+        let goal_guard_extension = Arc::new(GoalGuardExtension::new(goal_runtime.clone()));
         // Loops: the emulated scheduler + its session-facing fire executor, the
         // write-path runtime, and the attach/turn-finished/closing hooks.
         let loop_fire_executor = Arc::new(SessionLoopFireExecutor::new(
@@ -357,8 +386,12 @@ impl AppState {
             cowork_session_hooks.clone(),
             subagent_session_hooks.clone(),
             review_session_hooks.clone(),
+            // Plan-block gateway must precede the worker-dotfile gateway so it
+            // wins on MCP-server dedupe for workflow-owned sessions.
+            workflow_run_gateway_session_launch_extension.clone(),
             integration_gateway_session_launch_extension.clone(),
             goal_session_hooks,
+            goal_guard_extension,
             loop_session_hooks,
             activity_session_hooks,
         ];
@@ -376,9 +409,24 @@ impl AppState {
             plan_service.clone(),
             gateway_model_resolver.clone(),
             goal_service.clone(),
+            workflow_owned_sessions.clone(),
             loop_service.clone(),
             activity_service.clone(),
         ));
+        // Workflow run engine (W3): the durable service + the live run manager
+        // (its own actors, spawned on delivery and on startup-resume).
+        let workflow_service = Arc::new(WorkflowService::new(WorkflowStore::new(db.clone())));
+        let workflow_manager = WorkflowRunManager::new(Arc::new(WorkflowExecDeps {
+            session_runtime: session_runtime.clone(),
+            goal_runtime: goal_runtime.clone(),
+            session_service: session_service.clone(),
+            workspace_runtime: workspace_runtime.clone(),
+            workflow_service: workflow_service.clone(),
+            acp_manager: acp_manager.clone(),
+            workflow_owned_sessions: workflow_owned_sessions.clone(),
+            workflow_gateway_sessions: workflow_gateway_sessions.clone(),
+            run_ping_sink: Arc::new(HttpRunPingSink::new()),
+        }));
         let retire_preflight_checker = Arc::new(RetirePreflightChecker::new(
             workspace_runtime.clone(),
             workspace_access_gate.clone(),
@@ -475,6 +523,9 @@ impl AppState {
         // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
         #[cfg(not(test))]
         agent_runtime.clone().spawn_startup_pass();
+        // Crash-resume: reload non-terminal workflow runs and respawn actors.
+        #[cfg(not(test))]
+        workflow_manager.clone().spawn_startup_pass();
         Ok(Self {
             runtime_home,
             runtime_base_url,
@@ -520,6 +571,9 @@ impl AppState {
             plan_runtime,
             goal_service,
             goal_runtime,
+            workflow_service,
+            workflow_manager,
+            workflow_owned_sessions,
             loop_service,
             loop_runtime,
             activity_service,

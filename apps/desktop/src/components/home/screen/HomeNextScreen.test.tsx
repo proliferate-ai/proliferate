@@ -57,6 +57,13 @@ vi.mock("react-router-dom", () => ({
   useNavigate: () => screenMocks.navigate,
 }));
 
+// The R5 recommended-workflows strip is a self-contained, query-backed sibling
+// (its ordering/launch logic is unit-tested in product-domain). This suite
+// exercises composer behavior, so stub the strip out.
+vi.mock("@/components/workflows/home/WorkflowRecommendedStrip", () => ({
+  WorkflowRecommendedStrip: () => null,
+}));
+
 vi.mock("@/hooks/home/derived/use-home-next-state", () => ({
   useHomeNextState: (args: any) => {
     screenMocks.homeNextStateArgs = args;

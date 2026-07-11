@@ -10,6 +10,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from proliferate.constants.cloud import CLOUD_SANDBOX_PURPOSE_INTERACTIVE
 from proliferate.server.cloud.cloud_sandboxes.service import (
     ensure_cloud_sandbox_ready,
     load_cloud_sandbox_runtime_access,
@@ -75,6 +76,8 @@ def _reset_cloud_sandbox_gateway_access_cache_for_tests() -> None:
 async def ensure_cloud_sandbox_gateway_access(
     db: AsyncSession,
     user: _UserWithId,
+    *,
+    purpose: str = CLOUD_SANDBOX_PURPOSE_INTERACTIVE,
 ) -> CloudSandboxGatewayAccess:
     cached = _cached_gateway_access(user.id)
     if cached is not None:
@@ -85,15 +88,17 @@ async def ensure_cloud_sandbox_gateway_access(
         if cached is not None:
             return cached
 
-        access = await _resolve_cloud_sandbox_gateway_access(db, user)
+        access = await _resolve_cloud_sandbox_gateway_access(db, user, purpose=purpose)
         return _remember_gateway_access(user.id, access)
 
 
 async def _resolve_cloud_sandbox_gateway_access(
     db: AsyncSession,
     user: _UserWithId,
+    *,
+    purpose: str = CLOUD_SANDBOX_PURPOSE_INTERACTIVE,
 ) -> CloudSandboxGatewayAccess:
-    sandbox = await ensure_cloud_sandbox_ready(db, user)
+    sandbox = await ensure_cloud_sandbox_ready(db, user, purpose=purpose)
     upstream_base_url, upstream_token, _data_key = await load_cloud_sandbox_runtime_access(sandbox)
     return CloudSandboxGatewayAccess(
         upstream_base_url=upstream_base_url,

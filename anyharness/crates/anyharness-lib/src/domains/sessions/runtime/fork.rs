@@ -21,7 +21,12 @@ impl SessionRuntime {
     ) -> Result<ForkSessionOutcome, ForkSessionError> {
         self.access_gate
             .assert_can_mutate_for_session(session_id)
-            .map_err(|error| ForkSessionError::Internal(anyhow::anyhow!(error.to_string())))?;
+            .map_err(ForkSessionError::Access)?;
+        // L17 lockout (C13 / E8): fork is a mutating verb; blocked on a held
+        // session.
+        if let Some(run_id) = self.workflow_held_run(session_id) {
+            return Err(ForkSessionError::WorkflowHeld { run_id });
+        }
         if target.is_some() {
             return Err(ForkSessionError::Unsupported(
                 "targeted fork is not enabled for this adapter".to_string(),
@@ -35,6 +40,10 @@ impl SessionRuntime {
                     ForkSessionError::SessionNotFound(session_id)
                 }
                 SessionLifecycleError::Internal(error) => ForkSessionError::Internal(error),
+                SessionLifecycleError::Access(error) => ForkSessionError::Access(error),
+                SessionLifecycleError::WorkflowHeld { run_id } => {
+                    ForkSessionError::WorkflowHeld { run_id }
+                }
             })?;
 
         validate_fork_parent(&parent, &self.session_link_service)?;
@@ -50,6 +59,10 @@ impl SessionRuntime {
                     ForkSessionError::SessionNotFound(session_id)
                 }
                 SessionLifecycleError::Internal(error) => ForkSessionError::Internal(error),
+                SessionLifecycleError::Access(error) => ForkSessionError::Access(error),
+                SessionLifecycleError::WorkflowHeld { run_id } => {
+                    ForkSessionError::WorkflowHeld { run_id }
+                }
             })?;
         validate_fork_parent(&parent, &self.session_link_service)?;
         let parent_native_session_id = handle
