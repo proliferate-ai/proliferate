@@ -153,7 +153,9 @@ async def test_mint_for_every_run_empty_integrations_empty_scope(db_session: Asy
     run = await compiler.start_run(
         db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
     )
-    gateway = run.resolved_plan_json["gateway"]
+    # WS2b: the gateway block lives in the PRIVATE envelope, never the logical plan.
+    assert "gateway" not in run.resolved_plan_json
+    gateway = run.private_envelope_json["gateway"]
     assert gateway["integrations"] == []
     assert gateway["url"].endswith("/v1/cloud/integration-gateway/mcp")
     assert gateway["authorization"].startswith("Bearer ")
@@ -184,8 +186,10 @@ async def test_mint_resolves_declared_scope(db_session: AsyncSession) -> None:
     run = await compiler.start_run(
         db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
     )
-    # The plan's gateway carries the flat namespace list (E3).
-    assert run.resolved_plan_json["gateway"]["integrations"] == ["context7"]
+    # The envelope's gateway carries the flat namespace list (E3); WS2b keeps it
+    # out of the secret-free logical plan.
+    assert "gateway" not in run.resolved_plan_json
+    assert run.private_envelope_json["gateway"]["integrations"] == ["context7"]
     token = (
         await db_session.execute(
             store.select(WorkflowRunGatewayToken).where(
@@ -354,7 +358,6 @@ async def _seed_run_with_token(
     plan = {
         "steps": [],
         "sessions": {"main": {"harness": "claude", "model": "sonnet"}},
-        "gateway": {"integrations": list(integrations)},
     }
     run = await store.create_run(
         db,
@@ -365,6 +368,8 @@ async def _seed_run_with_token(
         args_json={},
         target_mode=target_mode,
         resolved_plan_json=plan,
+        # WS2b: the gateway block lives in the private envelope now.
+        private_envelope_json={"gateway": {"integrations": list(integrations)}},
     )
     if status != "pending_delivery":
         await store.update_run(db, run_id=run.id, status=status)
@@ -470,7 +475,6 @@ async def test_delivery_preserves_per_slot_narrowing_under_worker_intersection(
             "triage": {"harness": "claude", "model": "sonnet"},
             "fix": {"harness": "claude", "model": "sonnet"},
         },
-        "gateway": {"integrations": ["github", "linear", "slack"]},
     }
     run = await store.create_run(
         db_session,
@@ -481,6 +485,8 @@ async def test_delivery_preserves_per_slot_narrowing_under_worker_intersection(
         args_json={},
         target_mode=WORKFLOW_TARGET_MODE_PERSONAL_CLOUD,
         resolved_plan_json=plan,
+        # WS2b: gateway block lives in the private envelope.
+        private_envelope_json={"gateway": {"integrations": ["github", "linear", "slack"]}},
     )
     await store.create_run_gateway_token(
         db_session,

@@ -73,24 +73,29 @@ async def claim_local_workflow_runs(
     # /status path. The fresh token is embedded in the resolved plan handed to THIS
     # claimant, mirroring StartRun's mint+embed exactly.
     rotated = [await _rotate_claim_gateway_token(db, run) for run in runs]
-    return LocalWorkflowClaimListResponse(runs=[run_payload(r) for r in rotated])
+    # include_private_envelope: the desktop claimant delivers this plan to its own
+    # runtime, so it must receive the (freshly-rotated) gateway block folded in.
+    return LocalWorkflowClaimListResponse(
+        runs=[run_payload(r, include_private_envelope=True) for r in rotated]
+    )
 
 
 async def _rotate_claim_gateway_token(
     db: AsyncSession, run: WorkflowRunRecord
 ) -> WorkflowRunRecord:
-    """Rotate the claimed run's gateway token and fold the fresh block into the plan
-    this claimant receives. Scope is recomputed from the pinned version's definition,
-    exactly as StartRun resolves it, so a reclaim never widens or narrows the grant."""
+    """Rotate the claimed run's gateway token and fold the fresh block into the
+    PRIVATE envelope this claimant receives (WS2b: never the logical plan). Scope is
+    recomputed from the pinned version's definition, exactly as StartRun resolves it,
+    so a reclaim never widens or narrows the grant."""
 
     version = await store.get_version(db, run.workflow_version_id)
     scope = resolve_run_scope(version.definition_json) if version is not None else {}
     _token, gateway_block = await rotate_run_gateway_token(
         db, run_id=run.id, owner_user_id=run.executor_user_id, scope=scope
     )
-    plan = dict(run.resolved_plan_json)
-    plan["gateway"] = gateway_block
-    updated = await store.update_run(db, run_id=run.id, resolved_plan_json=plan)
+    updated = await store.update_run(
+        db, run_id=run.id, private_envelope_json={"gateway": gateway_block}
+    )
     return updated if updated is not None else run
 
 
@@ -109,6 +114,6 @@ async def heartbeat_local_workflow_run(
         now=utcnow(),
     )
     return LocalWorkflowClaimMutationResponse(
-        run=run_payload(run) if run is not None else None,
+        run=run_payload(run, include_private_envelope=True) if run is not None else None,
         accepted=run is not None,
     )

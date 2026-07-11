@@ -260,7 +260,55 @@ def _decimal_str(value: Decimal | None) -> str | None:
     return None if value is None else format(value, "f")
 
 
-def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
+def build_delivered_plan(
+    logical_plan: dict[str, object],
+    *,
+    gateway: dict[str, object] | None,
+    plan_hash: str | None,
+    plan_version: int | None,
+) -> dict[str, object]:
+    """The plan shape delivered to a runtime (cloud delivery task / desktop
+    claim+deliver): the secret-free logical plan folded with the private gateway
+    block plus the pinnable ``planHash``/``planVersion`` (spec §5.2/§5.3).
+
+    The runtime keeps consuming the same combined shape it does today (logical
+    plan + a top-level ``gateway`` block), so no Rust change is needed; the
+    ``planHash``/``planVersion`` fields are additive for WS5a pinning.
+    """
+
+    plan = dict(logical_plan)
+    if gateway is not None:
+        plan["gateway"] = gateway
+    if plan_hash is not None:
+        plan["planHash"] = plan_hash
+    if plan_version is not None:
+        plan["planVersion"] = plan_version
+    return plan
+
+
+def run_payload(
+    record: WorkflowRunRecord, *, include_private_envelope: bool = False
+) -> WorkflowRunResponse:
+    """Serialize a run for the API.
+
+    ``include_private_envelope`` is set ONLY on the desktop delivery/claim paths
+    (the local-lane StartRun response + the executor claim/heartbeat responses):
+    it folds the private gateway block into the returned ``resolvedPlan`` so the
+    desktop can deliver it to its own runtime. Every ordinary run
+    list/detail/status API leaves it ``False`` — those responses carry the
+    secret-free logical plan only (spec §5.3 — the envelope is never returned by
+    ordinary run APIs).
+    """
+
+    resolved_plan = record.resolved_plan_json
+    if include_private_envelope:
+        gateway = (record.private_envelope_json or {}).get("gateway")
+        resolved_plan = build_delivered_plan(
+            record.resolved_plan_json,
+            gateway=gateway if isinstance(gateway, dict) else None,
+            plan_hash=record.plan_hash,
+            plan_version=record.plan_version,
+        )
     return WorkflowRunResponse(
         id=str(record.id),
         workflow_id=str(record.workflow_id),
@@ -271,7 +319,7 @@ def run_payload(record: WorkflowRunRecord) -> WorkflowRunResponse:
         executor_user_id=str(record.executor_user_id),
         args=record.args_json,
         target_mode=record.target_mode,
-        resolved_plan=record.resolved_plan_json,
+        resolved_plan=resolved_plan,
         status=record.status,
         step_cursor=record.step_cursor,
         step_outputs=record.step_outputs_json,

@@ -379,11 +379,14 @@ async def start_run_endpoint(
         session_bindings=body.session_bindings,
     )
     # Cloud lane: the server delivers gateway-direct to sandbox anyharness in the
-    # request (wake + POST). Local lane: the desktop client delivers to its own
-    # local runtime and calls /delivered itself.
+    # request (wake + POST), so the API caller never receives the private envelope.
+    # Local lane: the desktop client delivers to its own local runtime and calls
+    # /delivered itself, so it needs the gateway block folded into resolvedPlan
+    # (include_private_envelope) — this is a delivery path, not an ordinary read.
     if run.target_mode == WORKFLOW_TARGET_MODE_PERSONAL_CLOUD:
         run = await deliver_cloud_run(db, user, run)
-    return run_payload(run)
+        return run_payload(run)
+    return run_payload(run, include_private_envelope=True)
 
 
 @router.get("/{workflow_id}/runs", response_model=WorkflowRunListResponse)

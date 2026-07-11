@@ -45,6 +45,7 @@ from proliferate.db.store.cloud_workflows import WorkflowRunRecord, WorkflowVers
 from proliferate.server.cloud.errors import CloudApiError
 from proliferate.server.cloud.workflows.capability_resolution import freeze_capability_leases
 from proliferate.server.cloud.workflows.composition import resolve_included_agents
+from proliferate.server.cloud.workflows.contracts import content_hash, derive_legacy_id
 from proliferate.server.cloud.workflows.domain.composition import WorkflowCompositionError
 from proliferate.server.cloud.workflows.domain.definition import (
     WorkflowDefinitionError,
@@ -190,6 +191,68 @@ def _build_notify_fields_emit(
     }
 
 
+# Delivery-identity resolved-plan schema version (spec §5.2/§5.3). Distinct from
+# the legacy in-plan ``plan_version: 1`` field the runtime still reads — this is
+# the row column + delivered ``planVersion`` the runtime (WS5a) pins alongside
+# ``planHash``.
+_RESOLVED_PLAN_VERSION = 2
+
+
+def _v2_step_keys(
+    agents: list[dict[str, object]], *, workflow_version_id: str
+) -> dict[tuple[int, str, int], str]:
+    """Derive stable v2 step keys for every plan step (spec §5.1).
+
+    Grammar: ``<include-path or root>::<node-id>::<lane-id or ->::<step-id>``.
+    The server-side canonical definition carries no persisted UUID identities
+    (the v2 definition schema rejects an ``id`` field; WS9a derives ids in the
+    product domain), so the server derives them deterministically for these
+    legacy definitions via the WS1 UUIDv5 upgrade — the SAME derivation, so the
+    keys agree cross-language. The ``identity`` is the RFC 6901 JSON Pointer into
+    the (composed) agents spine. v1 has no include nesting server-side, so the
+    include path is always ``root``.
+
+    Keyed by ``(spine_index, lane, step_index)`` to match the legacy
+    ``"<node>.<lane>.<step>"`` key the runtime still consumes; the v2 key rides
+    alongside as an additive ``step["key_v2"]`` for WS2c observation mapping.
+    """
+
+    keys: dict[tuple[int, str, int], str] = {}
+    for spine_index, entry in enumerate(agents):
+        lanes = entry.get("parallel") if isinstance(entry, dict) else None
+        if isinstance(lanes, list):
+            group_id = derive_legacy_id(
+                workflow_version_id, "group", f"/agents/{spine_index}/parallel"
+            )
+            for lane_index, lane in enumerate(lanes):
+                if not isinstance(lane, dict):
+                    continue
+                lane_steps = lane.get("steps")
+                if not isinstance(lane_steps, list):
+                    continue
+                lane_ptr = f"/agents/{spine_index}/parallel/{lane_index}"
+                lane_id = derive_legacy_id(workflow_version_id, "lane", lane_ptr)
+                for step_index in range(len(lane_steps)):
+                    step_id = derive_legacy_id(
+                        workflow_version_id, "step", f"{lane_ptr}/steps/{step_index}"
+                    )
+                    keys[(spine_index, str(lane["slot"]), step_index)] = (
+                        f"root::{group_id}::{lane_id}::{step_id}"
+                    )
+        elif isinstance(entry, dict):
+            node_steps = entry.get("steps")
+            if not isinstance(node_steps, list):
+                continue
+            node_ptr = f"/agents/{spine_index}"
+            node_id = derive_legacy_id(workflow_version_id, "node", node_ptr)
+            for step_index in range(len(node_steps)):
+                step_id = derive_legacy_id(
+                    workflow_version_id, "step", f"{node_ptr}/steps/{step_index}"
+                )
+                keys[(spine_index, "-", step_index)] = f"root::{node_id}::-::{step_id}"
+    return keys
+
+
 def _resolve_plan(
     *,
     run_id: UUID,
@@ -244,6 +307,11 @@ def _resolve_plan(
                 emit_index[step["name"]] = flat_position
             flat_position += 1
 
+    # Stable v2 step keys (spec §5.1), derived once for the whole spine. Additive:
+    # the runtime keeps using the legacy ``key`` field (WS5a); ``key_v2`` rides
+    # along for WS2c observation mapping.
+    v2_keys = _v2_step_keys(agents, workflow_version_id=str(version.id))
+
     default_binding = _default_session_binding(trigger_kind)
     sessions: dict[str, object] = {}
     steps: list[dict[str, object]] = []
@@ -276,6 +344,9 @@ def _resolve_plan(
                 injected = _build_notify_fields_emit(step, agent_fields)
                 injected["key"] = f"{spine_index}.{lane}.{step_index}.notify_fields"
                 injected["slot"] = agent_fields["slot"]
+                step_key_v2 = v2_keys.get((spine_index, lane, step_index))
+                if step_key_v2 is not None:
+                    injected["key_v2"] = f"{step_key_v2}::notify_fields"
                 steps.append(injected)
 
             # Lane "-" for the flat (non-parallel) case; the slot name for a
@@ -296,6 +367,9 @@ def _resolve_plan(
             )
             assert isinstance(resolved, dict)
             resolved["key"] = key
+            step_key_v2 = v2_keys.get((spine_index, lane, step_index))
+            if step_key_v2 is not None:
+                resolved["key_v2"] = step_key_v2
             resolved["slot"] = slot
             resolved.setdefault("label", step.get("label", ""))
             steps.append(resolved)
@@ -527,6 +601,11 @@ async def start_run(
         agents=resolved_agents,
         isolation=isolation,
     )
+    # SHA-256 over RFC 8785 canonical JSON of the complete logical (secret-free)
+    # plan (spec §5.2 duty 9). The plan carries no ``planHash`` field, so the
+    # content hash over the whole plan is exactly "excluding planHash". Immutable
+    # once persisted alongside the plan.
+    plan_hash = content_hash(resolved_plan)
     # Desktop-executor lane (2a, lifts L15): a server-created LOCAL run (a schedule
     # trigger firing on a local target) is born ``claimable`` — nothing on the
     # server delivers it; it waits for a desktop executor to claim it. A local
@@ -552,19 +631,29 @@ async def start_run(
         trigger_id=trigger_id,
         scheduled_for=scheduled_for,
         status=initial_status,
+        # Immutable delivery identity (§5.2/§5.3) + the desired/delivery state
+        # axes (§8.1) begin here. ``status`` still drives all current code;
+        # public presentation derives — no consumer cutover yet.
+        plan_hash=plan_hash,
+        plan_version=_RESOLVED_PLAN_VERSION,
+        desired_state="running",
+        delivery_state="ready",
     )
 
     # Mint the per-run gateway token for EVERY run (L16), both lanes, empty scope
-    # legal. The plaintext lands in the plan's gateway block; the L25 subset
-    # intersection with the delivering worker happens later, at cloud delivery,
-    # when the worker is known (local lane ships the definition scope unchanged —
-    # the runtime errors explicitly if it can't honor it, §5.3). The token FKs the
-    # run row, so it is minted after create_run, then folded into the plan.
+    # legal. The plaintext lands in the PRIVATE envelope (spec §5.3) — NEVER the
+    # logical plan — so ordinary run APIs stay secret-free; delivery/claim paths
+    # fold it into the delivered plan. The L25 subset intersection with the
+    # delivering worker happens later, at cloud delivery, when the worker is known
+    # (local lane ships the definition scope unchanged — the runtime errors
+    # explicitly if it can't honor it, §5.3). The token FKs the run row, so it is
+    # minted after create_run, then written to the envelope.
     _token, gateway_block = await mint_run_gateway_token(
         db, run_id=run_id, owner_user_id=effective_owner, scope=run_scope
     )
-    resolved_plan["gateway"] = gateway_block
-    updated = await store.update_run(db, run_id=run_id, resolved_plan_json=resolved_plan)
+    updated = await store.update_run(
+        db, run_id=run_id, private_envelope_json={"gateway": gateway_block}
+    )
 
     # WS3a: freeze the run's EXACT per-slot capability leases — the new frozen
     # truth alongside the namespace token above. This runs in parallel with the
@@ -578,5 +667,6 @@ async def start_run(
         owner_user_id=effective_owner,
         organization_id=membership.organization.id if membership is not None else None,
         run_scope=run_scope,
+        plan_hash=plan_hash,
     )
     return updated if updated is not None else run

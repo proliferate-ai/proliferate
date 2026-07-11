@@ -312,6 +312,13 @@ class WorkflowRun(Base):
     execution_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
     plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     execution_binding_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # WS2b secret-free plan: the PRIVATE execution envelope (spec §5.3). Holds the
+    # run's gateway block (url + plaintext bearer + ping_url + granted namespaces)
+    # and any future runtime-only credentials. NEVER returned by ordinary run
+    # list/detail/status APIs — only folded into the delivered plan on the cloud
+    # delivery task and the desktop claim/deliver paths. The logical
+    # ``resolved_plan_json`` above is now secret-free and immutable after creation.
+    private_envelope_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
 
 class WorkflowTrigger(Base):

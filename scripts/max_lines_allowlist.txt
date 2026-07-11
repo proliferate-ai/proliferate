@@ -58,16 +58,17 @@ anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 698 goal runtime p
 anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs 1074 workflow plan resolution pending decomposition, workflows v1 launch debt
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 1025 workflow service pending decomposition, workflows v1 launch debt (WS5b tightened; lane_visible_outputs moved to support.rs)
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1076 workflow service test coverage pending split, workflows v1 launch debt
-server/proliferate/db/models/cloud/workflows.py 583 workflow/run/trigger ORM models pending split, workflows v1 launch debt
-server/proliferate/db/store/cloud_workflows.py 1084 workflow/run/gateway-token store queries pending split, workflows v1 launch debt
-server/proliferate/server/cloud/workflows/api.py 468 workflow HTTP routes (runs/triggers/executor claim plane/poll setup) pending split, workflows v1 launch debt (+1: compiler/triggers/worker.service import split, WS0B-S)
+server/proliferate/db/models/cloud/workflows.py 590 workflow/run/trigger ORM models pending split, workflows v1 launch debt (+7: WS2b private_envelope_json column)
+server/proliferate/db/store/cloud_workflows.py 1138 workflow/run/gateway-token store queries pending split, workflows v1 launch debt (+54: WS2b secret-free-plan record fields, envelope param, immutable-ledger guard)
+server/proliferate/server/cloud/workflows/api.py 471 workflow HTTP routes (runs/triggers/executor claim plane/poll setup) pending split, workflows v1 launch debt (+1: compiler/triggers/worker.service import split, WS0B-S; +3: WS2b local-lane envelope-in-response)
+server/proliferate/server/cloud/workflows/compiler.py 666 StartRun compiler (resolve/hash/v2-keys/envelope) pending split, workflows v1 launch debt (WS2b secret-free plan + planHash + v2 step keys)
 server/proliferate/server/cloud/workflows/domain/definition.py 1121 v2 workflow definition parser/validator pending split, workflows v1 launch debt
-server/proliferate/server/cloud/workflows/models.py 553 workflow request/response Pydantic models pending split, workflows v1 launch debt
+server/proliferate/server/cloud/workflows/models.py 601 workflow request/response Pydantic models pending split, workflows v1 launch debt (+48: WS2b build_delivered_plan + run_payload envelope fold)
 server/proliferate/server/cloud/workflows/triggers.py 943 trigger CRUD/schedule/poll-config validation/poll probe carved out of service.py (WS0B-S); further split TBD, workflows v1 launch debt
 server/tests/unit/test_workflow_actions.py 819 step-action (notify/emit) regression coverage pending split, workflows v1 launch debt
 server/tests/unit/test_workflow_definition.py 718 v2 definition parser regression coverage pending split, workflows v1 launch debt
 server/tests/unit/test_workflow_poll.py 1397 poll-trigger regression coverage pending split, workflows v1 launch debt
-server/tests/unit/test_workflow_run_gateway.py 1303 per-run gateway token regression coverage pending split, workflows v1 launch debt (+1: worker/service.py import path, WS0B-S)
-server/tests/unit/test_workflow_service.py 793 workflow service regression coverage pending split, workflows v1 launch debt
+server/tests/unit/test_workflow_run_gateway.py 1309 per-run gateway token regression coverage pending split, workflows v1 launch debt (+1: worker/service.py import path, WS0B-S; +6: WS2b envelope split)
+server/tests/unit/test_workflow_service.py 847 workflow service regression coverage pending split, workflows v1 launch debt (+1: WS2b envelope assertion)
 server/tests/unit/test_workflow_triggers.py 1465 trigger CRUD/schedule/poll regression coverage pending split, workflows v1 launch debt
 apps/desktop/src/components/workflows/editor/WorkflowStepPanel.tsx 559 workflows v1 launch surface; split pass queued post-launch
