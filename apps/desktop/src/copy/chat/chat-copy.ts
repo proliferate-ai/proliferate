@@ -1,5 +1,5 @@
 export const CHAT_COMPOSER_LABELS = {
-  placeholder: "Describe a task",
+  placeholder: "Describe a task, @mention files, run /commands",
   followUpPlaceholder: "Ask for a follow-up",
   send: "Send message",
   stop: "Stop run",

@@ -116,7 +116,9 @@ describe("session intents", () => {
     };
 
     expect(pendingConfigChangesForSessionIntents([queued, acceptedQueued])).toMatchObject({
-      effort: { rawConfigId: "effort", value: "xhigh", status: "queued" },
+      // Pre-dispatch queued surfaces as "submitting" (no clock flash);
+      // only accepted+applyState:"queued" is genuinely turn-blocked.
+      effort: { rawConfigId: "effort", value: "xhigh", status: "submitting" },
       mode: { rawConfigId: "mode", value: "plan", status: "queued" },
     });
   });

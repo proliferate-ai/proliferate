@@ -68,9 +68,8 @@
   --text-base: 0.5625rem;             /* 9px — body, buttons, tabs, sidebar */
   --text-base--line-height: 0.875rem;
   --text-chat: 10px;                  /* default chat/message text (UI_FONT_SCALES default preset) */
-  /* NOTE: --text-chat--line-height is load-bearing for the no-scroll-bump
-     streaming handoff in MessageList.tsx. TRAILING_STATUS_MIN_HEIGHT derives
-     from this token, so keep the two in sync structurally. */
+  /* Secondary transcript chrome uses this line height. Message prose and the
+     Thinking label use --text-message; their fixed frontier frame is h-6. */
   --text-chat--line-height: 18px;     /* font size + 8px */
   --text-lg: 0.75rem;                 /* 12px — emphasis, section labels */
   --text-lg--line-height: 1.125rem;
@@ -1187,6 +1186,46 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .composer-dock-card-enter,
   .composer-dock-card-exit {
+    animation: none;
+  }
+}
+
+/* ---- Reasoning-effort emphasis (LevelBarsButton) ----
+   "max": the session sits at the highest reasoning level its model offers —
+   the bars take the app accent, nothing else changes. "ultra": that top level
+   is the ultra tier (frontier model at full capacity) — accent bars breathe in
+   a staggered wave and the chip gets a faint accent fill. Compositor-only
+   (transform/opacity); color is the existing --color-special accent, no new
+   hues, no borders. */
+.composer-level-bars-max,
+.composer-level-bars-ultra {
+  color: var(--color-special);
+}
+
+.composer-level-bars-button-ultra {
+  background: color-mix(in oklab, var(--color-special) 10%, transparent);
+}
+
+.composer-level-bar-wave {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: composer-level-bar-wave 1.6s ease-in-out infinite;
+}
+
+@keyframes composer-level-bar-wave {
+  0%,
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleY(0.72);
+    opacity: 0.75;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-level-bar-wave {
     animation: none;
   }
 }

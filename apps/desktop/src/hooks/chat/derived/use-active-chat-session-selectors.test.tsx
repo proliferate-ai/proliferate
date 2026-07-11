@@ -129,7 +129,8 @@ describe("useActiveSessionConfigState", () => {
       model: {
         rawConfigId: "model",
         value: "claude-opus",
-        status: "queued",
+        // Pre-dispatch queued surfaces as "submitting" — no clock flash on switch.
+        status: "submitting",
       },
     });
 

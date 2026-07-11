@@ -302,7 +302,11 @@ function pendingConfigChangeFromIntent(
     return {
       rawConfigId: intent.configId,
       value: intent.value,
-      status: intent.status === "queued" ? "queued" : "submitting",
+      // Pre-dispatch "queued" is a transient store state, not a turn-blocked
+      // change — surfacing it as pending-"queued" flashes the clock glyph on
+      // every switch. Only accepted+applyState:"queued" below is genuinely
+      // waiting on the running turn.
+      status: "submitting",
       mutationId: Number.NaN,
     };
   }
