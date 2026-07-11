@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { WorkflowRunArgsModal, type WorkflowRunTargetOption } from "@/components/workflows/home/WorkflowRunArgsModal";
+import { WorkflowRunArgsModal } from "@/components/workflows/home/WorkflowRunArgsModal";
+import type { WorkflowRunTargetOption } from "@/lib/domain/workflows/run-args-model";
 import { WorkflowMetaCard } from "@/components/workflows/editor/WorkflowMetaCard";
 import { WorkflowSetupCard } from "@/components/workflows/editor/WorkflowSetupCard";
 import {

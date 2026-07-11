@@ -31,11 +31,11 @@ import type { WorkflowResponse, WorkflowRunResponse } from "@/hooks/access/cloud
 import type { RunStatusFilter, TargetFilter } from "@/hooks/workflows/derived/workflow-run-row-view";
 import { WorkflowListView } from "../home/WorkflowListView";
 import { WorkflowRunsDrillIn } from "../home/WorkflowRunsDrillIn";
-import {
-  WorkflowRunArgsModal,
-  type WorkflowRunSubmit,
-  type WorkflowRunTargetOption,
-} from "../home/WorkflowRunArgsModal";
+import { WorkflowRunArgsModal } from "../home/WorkflowRunArgsModal";
+import type {
+  WorkflowRunSubmit,
+  WorkflowRunTargetOption,
+} from "@/lib/domain/workflows/run-args-model";
 import { WorkflowTemplatesGallery } from "../home/WorkflowTemplatesGallery";
 import { WorkflowPollInspectModal } from "../home/WorkflowPollInspectModal";
 

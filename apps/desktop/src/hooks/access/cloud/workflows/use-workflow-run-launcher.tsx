@@ -21,11 +21,11 @@ import { useWorkspaces } from "@/hooks/workspaces/cache/use-workspaces";
 import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
 import { useWorkflowRunPillStore } from "@/stores/workflows/workflow-run-pill-store";
 import type { WorkflowResponse } from "@/hooks/access/cloud/workflows/types";
-import {
-  WorkflowRunArgsModal,
-  type WorkflowRunSubmit,
-  type WorkflowRunTargetOption,
-} from "@/components/workflows/home/WorkflowRunArgsModal";
+import { WorkflowRunArgsModal } from "@/components/workflows/home/WorkflowRunArgsModal";
+import type {
+  WorkflowRunSubmit,
+  WorkflowRunTargetOption,
+} from "@/lib/domain/workflows/run-args-model";
 
 // Mirrors gateway_grants.py's L22 fail-fast code (see WorkflowsHomeScreen).
 const FUNCTION_PROVIDER_NOT_READY_CODE = "workflow_function_provider_not_ready";

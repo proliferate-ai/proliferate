@@ -1,13 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
 import type { WorkflowInputSpec } from "@proliferate/product-domain/workflows/definition";
 import type { WorkflowTargetMode } from "@proliferate/product-domain/workflows/model";
-import {
-  FRESH_SESSION_CHOICE,
-  isBindableSessionCandidate,
-  isExistingSessionChoice,
-  type SlotSessionBinding,
-} from "@proliferate/product-domain/workflows/run-launch";
-import { cloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
+import { FRESH_SESSION_CHOICE } from "@proliferate/product-domain/workflows/run-launch";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { Input } from "@proliferate/ui/primitives/Input";
 import { Label } from "@proliferate/ui/primitives/Label";
@@ -15,49 +8,14 @@ import { ModalShell } from "@proliferate/ui/primitives/ModalShell";
 import { Switch } from "@proliferate/ui/primitives/Switch";
 import { CircleAlert } from "@proliferate/ui/icons";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { useWorkflowRunArgsForm } from "@/hooks/workflows/ui/use-workflow-run-args-form";
+import type {
+  WorkflowRunSessionCandidate,
+  WorkflowRunSlotOption,
+  WorkflowRunSubmit,
+  WorkflowRunTargetOption,
+} from "@/lib/domain/workflows/run-args-model";
 import { WorkflowSelect } from "../editor/WorkflowSelect";
-
-type TargetMode = WorkflowTargetMode;
-type ArgValue = string | number | boolean;
-
-/** A selectable run target (a local runtime workspace, or a cloud workspace). */
-export interface WorkflowRunTargetOption {
-  id: string;
-  label: string;
-}
-
-/** One agent slot from the definition — the unit a session binds to (L29). */
-export interface WorkflowRunSlotOption {
-  slot: string;
-  harness: string;
-  model: string;
-}
-
-/** A live session the launcher may bind to a same-harness slot (R3 minority
- * path). Held sessions render disabled — another run owns them (E8). */
-export interface WorkflowRunSessionCandidate {
-  id: string;
-  title: string;
-  harness: string;
-  /** The workspace the session lives on (same id space as the modal's own
-   * `localWorkspaceId`/cloud-synthetic ids) — a candidate is only offered
-   * for the slot's *currently selected* run target (B8/L29: "session
-   * belongs to the target workspace"). */
-  workspaceId?: string | null;
-  /** e.g. "3m ago" — shown when the session is free. */
-  lastActiveLabel?: string;
-  /** Non-null → held by another run; not selectable. */
-  heldByLabel?: string | null;
-}
-
-export interface WorkflowRunSubmit {
-  args: Record<string, ArgValue>;
-  targetMode: TargetMode;
-  localWorkspaceId?: string;
-  cloudWorkspaceId?: string;
-  /** One entry per slot; fresh-by-default (`sessionId` = "new"). */
-  sessionBindings: SlotSessionBinding[];
-}
 
 export interface WorkflowRunArgsModalProps {
   open: boolean;
@@ -76,7 +34,7 @@ export interface WorkflowRunArgsModalProps {
   defaultLocalWorkspaceId?: string | null;
   /** Last-used target for this workflow (R6). Pre-selects the run location and
    * cloud workspace when they still exist. */
-  defaultTargetMode?: TargetMode | null;
+  defaultTargetMode?: WorkflowTargetMode | null;
   defaultCloudWorkspaceId?: string | null;
   /** Chat-origin launches (R1 door 1): the target is implicit — the
    * workspace the composer lives in — so no picker row is rendered (spec
@@ -96,22 +54,6 @@ export interface WorkflowRunArgsModalProps {
   onOpenIntegrationsSettings?: () => void;
   onClose: () => void;
   onSubmit: (input: WorkflowRunSubmit) => void;
-}
-
-function initialValue(arg: WorkflowInputSpec): ArgValue {
-  if (arg.default !== undefined) {
-    return arg.default;
-  }
-  switch (arg.type) {
-    case "boolean":
-      return false;
-    case "number":
-      return "" as unknown as number;
-    case "choice":
-      return arg.choices?.[0] ?? "";
-    case "text":
-      return "";
-  }
 }
 
 /** One slot's binding picker: New session (default, R3) + same-harness live
@@ -179,131 +121,36 @@ export function WorkflowRunArgsModal({
   onClose,
   onSubmit,
 }: WorkflowRunArgsModalProps) {
-  const initial = useMemo(() => {
-    const map: Record<string, ArgValue> = {};
-    for (const arg of args) {
-      map[arg.name] = initialValue(arg);
-    }
-    return map;
-  }, [args]);
-
-  const cloudAvailable = cloudWorkspaces.length > 0;
-
-  const [values, setValues] = useState<Record<string, ArgValue>>(initial);
-  const [bindings, setBindings] = useState<Record<string, string>>({});
-  const [targetMode, setTargetMode] = useState<TargetMode>(() => {
-    if (defaultTargetMode === "personal_cloud" && cloudAvailable) {
-      return "personal_cloud";
-    }
-    // No last-used default and nothing local to run against — default to
-    // cloud rather than a "local" mode with an empty workspace picker.
-    if (!defaultTargetMode && localWorkspaces.length === 0 && cloudAvailable) {
-      return "personal_cloud";
-    }
-    return "local";
+  const {
+    bindableSlots,
+    bindings,
+    boundCount,
+    candidatesBySlot,
+    cloudAvailable,
+    cloudWorkspaceId,
+    localWorkspaceId,
+    missingRequired,
+    missingTarget,
+    setCloudWorkspaceId,
+    setLocalWorkspaceId,
+    setSlotBinding,
+    setTargetMode,
+    setValue,
+    submit,
+    targetMode,
+    targetOptions,
+    values,
+  } = useWorkflowRunArgsForm({
+    args,
+    localWorkspaces,
+    cloudWorkspaces,
+    slots,
+    sessionCandidates,
+    defaultLocalWorkspaceId,
+    defaultTargetMode,
+    defaultCloudWorkspaceId,
+    onSubmit,
   });
-  const [localWorkspaceId, setLocalWorkspaceId] = useState<string>(
-    () =>
-      (defaultLocalWorkspaceId
-        && localWorkspaces.some((w) => w.id === defaultLocalWorkspaceId)
-        ? defaultLocalWorkspaceId
-        : localWorkspaces[0]?.id) ?? "",
-  );
-  const [cloudWorkspaceId, setCloudWorkspaceId] = useState<string>(
-    () =>
-      (defaultCloudWorkspaceId
-        && cloudWorkspaces.some((w) => w.id === defaultCloudWorkspaceId)
-        ? defaultCloudWorkspaceId
-        : cloudWorkspaces[0]?.id) ?? "",
-  );
-
-  // The run's resolved target, in the same id space session candidates use
-  // (gap② — `workspaceId` on a candidate is the raw local id, or the cloud
-  // synthetic id; see WorkflowSessionCandidateInput/useWorkflowRunLauncher).
-  const activeWorkspaceKey =
-    targetMode === "local"
-      ? localWorkspaceId || null
-      : cloudWorkspaceId
-        ? cloudWorkspaceSyntheticId(cloudWorkspaceId)
-        : null;
-
-  // Same-harness, same-workspace bind candidates per slot (spec run-from-chat;
-  // B8/L29 eligibility mirrored client-side via isBindableSessionCandidate).
-  const candidatesBySlot = useMemo(() => {
-    const map = new Map<string, WorkflowRunSessionCandidate[]>();
-    for (const slot of slots ?? []) {
-      map.set(
-        slot.slot,
-        (sessionCandidates ?? []).filter((candidate) =>
-          isBindableSessionCandidate(candidate, { harness: slot.harness, workspaceKey: activeWorkspaceKey }),
-        ),
-      );
-    }
-    return map;
-  }, [slots, sessionCandidates, activeWorkspaceKey]);
-
-  const bindableSlots = useMemo(
-    () => (slots ?? []).filter((slot) => (candidatesBySlot.get(slot.slot)?.length ?? 0) > 0),
-    [slots, candidatesBySlot],
-  );
-
-  // A binding made against one target workspace doesn't carry over when the
-  // run location/workspace changes — drop any selection whose candidate fell
-  // out of the (now different) eligible list rather than submit a stale id.
-  useEffect(() => {
-    setBindings((prev) => {
-      let changed = false;
-      const next: Record<string, string> = {};
-      for (const [slot, sessionId] of Object.entries(prev)) {
-        const stillEligible = candidatesBySlot.get(slot)?.some((candidate) => candidate.id === sessionId);
-        if (stillEligible) {
-          next[slot] = sessionId;
-        } else {
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [candidatesBySlot]);
-
-  const setValue = (name: string, value: ArgValue) => {
-    setValues((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const missingRequired = args.some(
-    (arg) => arg.required && (values[arg.name] === "" || values[arg.name] === undefined),
-  );
-  const missingTarget =
-    targetMode === "local" ? localWorkspaceId === "" : cloudWorkspaceId === "";
-
-  const boundCount = (slots ?? []).filter((slot) =>
-    isExistingSessionChoice(bindings[slot.slot]),
-  ).length;
-
-  const handleSubmit = () => {
-    const resolved: Record<string, ArgValue> = {};
-    for (const arg of args) {
-      const value = values[arg.name];
-      if (value === "" || value === undefined) {
-        continue;
-      }
-      resolved[arg.name] = arg.type === "number" ? Number(value) : value;
-    }
-    const sessionBindings: SlotSessionBinding[] = (slots ?? []).map((slot) => ({
-      slot: slot.slot,
-      sessionId: bindings[slot.slot] ?? FRESH_SESSION_CHOICE,
-    }));
-    onSubmit({
-      args: resolved,
-      targetMode,
-      localWorkspaceId: targetMode === "local" ? localWorkspaceId : undefined,
-      cloudWorkspaceId: targetMode === "personal_cloud" ? cloudWorkspaceId : undefined,
-      sessionBindings,
-    });
-  };
-
-  const targetOptions =
-    targetMode === "local" ? localWorkspaces : cloudWorkspaces;
 
   return (
     <ModalShell
@@ -316,7 +163,7 @@ export function WorkflowRunArgsModal({
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} loading={busy} disabled={missingRequired || missingTarget}>
+          <Button onClick={submit} loading={busy} disabled={missingRequired || missingTarget}>
             Run
           </Button>
         </>
@@ -385,9 +232,7 @@ export function WorkflowRunArgsModal({
                   slot={slot}
                   candidates={candidatesBySlot.get(slot.slot) ?? []}
                   value={bindings[slot.slot] ?? FRESH_SESSION_CHOICE}
-                  onChange={(sessionId) =>
-                    setBindings((prev) => ({ ...prev, [slot.slot]: sessionId }))
-                  }
+                  onChange={(sessionId) => setSlotBinding(slot.slot, sessionId)}
                 />
               ))}
             </div>
@@ -417,7 +262,7 @@ export function WorkflowRunArgsModal({
                   { value: "local", label: "On this Mac" },
                   ...(cloudAvailable ? [{ value: "personal_cloud", label: "Cloud" }] : []),
                 ]}
-                onChange={(value) => setTargetMode(value as TargetMode)}
+                onChange={(value) => setTargetMode(value as WorkflowTargetMode)}
               />
             </div>
 
