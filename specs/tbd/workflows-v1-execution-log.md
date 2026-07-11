@@ -23,11 +23,12 @@ conversation memory.
 | 1 | WS0 Gate A0 architecture/contract freeze (docs) | `68661e27e8897a4fd8c73cd9bc58caddb58e7376` | baseline `8be1c7706` | doc link check (all feature-spec dependency paths exist); diff review of 12 cross-doc alignment edits | ACCEPTED — architecture commit; no code touched |
 | 2 | WS1 contract spine + golden fixtures | `ac704431616d4eccaf99a7d7042c097b641be8ff` (merged `1f9c73666`) | WS0 `68661e27e` | `python3 scripts/check_workflow_contract_fixtures.py` (py+rust 6/6+ts 10/10); `cargo test -p anyharness-contract` 37; product-domain build+647 tests; captain re-ran checker post-merge | ACCEPTED — T1-WF-CONTRACT-01 GREEN; OpenAPI/SDK regen deferred (models unwired); traceability.yaml now captain-owned |
 | 3 | WS0B-R executor ownership split | `c220bef741b7d9868531e7db0a52cf0b47b2140f` (merged `0c4e4284f`) | WS0 `68661e27e` | `cargo test -p anyharness-lib --lib` 1116/0 in worktree; captain: post-merge build green, max-lines violations 3 (unchanged, all server-test debt owned by WS2b/WS4) | ACCEPTED — executor.rs 2982→307; agent_turn/turn/goal/emit/effects/observation/receipts/parallel/merge modules; allowlist entry removed |
+| 4b | WS0B-U desktop screens ownership split | `e01bc8be5` (merged `0d57e8a9e`) | WS0B-S in base `3a2336720` | agent: tsc clean, boundaries pass, host/home vitest 17/17, 16 pre-existing unrelated vitest failures verified identical on base; captain post-merge: tsc clean, boundaries pass, host/home 17/17 | ACCEPTED — HomeScreen 619→367, EditorScreen 1212→366, TriggersCard 1064→131; inspector/canvas/trigger components + draft/create/trigger hooks; raw-access violation fixed; 2 max-lines + 3 structure allowlist entries removed |
 | 4 | WS0B-S service ownership split | `f11870c4e` (merged `72338fe4b`) | WS0 `68661e27e` | agent: 303 workflow unit tests, ruff, boundaries, AST byte-verification of moves; captain post-merge: test_workflow_service+delivery green | ACCEPTED — service.py 1898→327 + compiler.py/triggers.py/worker/service.py; service.py allowlist entry removed. CAVEATS: triggers.py (943) added to allowlist as carved-out debt (further split owned by WS4a/b); api.py and test_workflow_run_gateway.py allowlist +1 each (import-line necessity, inline-documented). Net violations decreased. |
 
 ## Integration HEAD
 
-`72338fe4b` (WS0, WS1, WS0B-R, WS0B-S merged)
+`0d57e8a9e` (WS0, WS1, WS0B-R, WS0B-S, WS0B-U merged — all Wave-0 scaffolding accepted)
 
 ## Gate status
 
@@ -50,7 +51,7 @@ conversation memory.
 | Workflow ORM + Alembic chain | ASSIGNED (first slot after c3f8b1d6a4e2) | WS2a |
 | `server/cloud/workflows/**` service split | RELEASED by WS0B-S; compiler/ledger next to WS2b | — |
 | `anyharness-lib/**/workflows/**` module split | RELEASED by WS0B-R; domain semantics next to WS5a | — |
-| Desktop workflow screens/hooks split | UNASSIGNED (next: WS0B-U) | — |
+| Desktop workflow screens/hooks split | RELEASED by WS0B-U; editor behavior next to WS9b | — |
 | `tests/intent/specs/workflows*.spec.ts` | RESERVED | WS10b |
 | `tests/release/**` + T3 registry + promotion | RESERVED | WS10a→b→c |
 | `.github/workflows/**` + release manifests | RESERVED | WS10c/captain |
@@ -73,8 +74,8 @@ conversation memory.
 
 | Packet | Agent | Worktree | Base SHA | Status |
 | --- | --- | --- | --- | --- |
-| WS2a persistence skeleton | agent (opus) | ~/proliferate-wt/wsc-ws2a | b74cba675 | running |
-| WS5a runtime acceptance/observations | agent (opus) | ~/proliferate-wt/wsc-ws5a | b74cba675 | running |
+| WS2a persistence skeleton | agent (opus) | ~/proliferate-wt/wsc-ws2a | b74cba675 | running (resumed after transient API crash; partial: ledger ORM module started) |
+| WS5a runtime acceptance/observations | agent (opus) | ~/proliferate-wt/wsc-ws5a | b74cba675 | running (resumed after transient API crash; partial: SQLite migrations 0056/0057 drafted) |
 
 ## Blockers
 
