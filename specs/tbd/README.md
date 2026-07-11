@@ -18,6 +18,7 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
+| [workflows-v1-completion-plan.md](workflows-v1-completion-plan.md) | Dependency-ordered multi-agent migration from the current workflow branch to the canonical workflow feature contract, including verification and release gates. |
 
 ## Promotion Rules
 

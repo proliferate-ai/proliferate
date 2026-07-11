@@ -109,6 +109,14 @@ Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md
 
 ## Workflows
 
+> Current-state registry notice (2026-07-10): this table inventories the
+> as-built WF1-WF7/CUT-WF8 suite. The canonical target and replacement manifest
+> are [`../../codebase/features/workflows.md`](../../codebase/features/workflows.md)
+> and
+> [`../../tbd/workflows-v1-completion-plan.md`](../../tbd/workflows-v1-completion-plan.md).
+> WS10 replaces these rows with strict WF1-WF10 evidence; blocked or
+> expected-fail output is not target release success.
+
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
 | Create/edit workflow (editor live ref-validation gates Save) → definition/version round-trip → manual LOCAL StartRun: run created, args interpolated into the resolved plan, delivery seam (`pending_delivery` → owner-relay `/delivered`) | 2 | tests/intent/specs/workflows.spec.ts (T2-WF-1; stops at the seam — no runtime/sandbox; cloud-lane server delivery is tier-3) |

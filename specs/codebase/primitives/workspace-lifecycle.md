@@ -22,6 +22,13 @@ keep a workspace active while its checkout is currently absent, and a user
 should be able to archive a workspace without losing history, repo identity,
 branch/ref, sessions, or cloud refs.
 
+Workflow run/lane worktrees and system checkpoints are materializations under
+the same rule. Terminal Workflow cleanup may remove a safely checkpointed
+materialization, but never the durable Workspace, Session, transcript, or run
+records. Dirty, failed, conflicted, uncertain, or orphaned Workflow
+materializations require the same generation-aware preflight and explicit
+checkpoint adoption before pruning.
+
 ## V1 Implementation Boundary
 
 The implemented V1 slice covers the first end-to-end storage-management path:

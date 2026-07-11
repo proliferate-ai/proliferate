@@ -1,5 +1,13 @@
 # Workflows — end-state architecture (after PRs A–E)
 
+> **Historical design and decision provenance.** The workflow target evolved
+> after this PR A–E design. The authoritative implementation contract is now
+> [`specs/codebase/features/workflows.md`](../specs/codebase/features/workflows.md),
+> and the dependency-ordered migration is
+> [`specs/tbd/workflows-v1-completion-plan.md`](../specs/tbd/workflows-v1-completion-plan.md).
+> Do not treat `LOCKED` or `RULED` labels below as current when they conflict
+> with that feature spec.
+
 **What this doc is.** The complete as-it-will-be picture of the workflows system
 after the five blessed build items land. It is the alignment surface: every
 design point is tagged. **All eight [OPEN-n] questions were ruled by Pablo on
@@ -21,13 +29,13 @@ inline at their owning sections and in §9.
   navigable reference (file trees, verbatim types, flow diagrams for what is
   built today on `workflows/v1` + `workflows/ui-round3`). When this doc says
   "exists today", the deep dive has the full detail.
-- [`specs/tbd/issue-autofix-system-v1.md`](../specs/tbd/issue-autofix-system-v1.md) —
+- `specs/tbd/issue-autofix-system-v1.md` (historical source no longer present) —
   the umbrella system this build serves. **Its §2 (poll contract) and §3
   (functions-as-MCP-tools) are LOCKED**; this doc restates them, never
   re-derives them, and flags loudly if code reality forces a conflict.
 - [`specs/tbd/issues-service-v1.md`](../specs/tbd/issues-service-v1.md) — the
   standalone service on the other side of the poll boundary (own repo/box).
-- [`specs/tbd/goals-and-workflows-v1.md`](../specs/tbd/goals-and-workflows-v1.md) —
+- `specs/tbd/goals-and-workflows-v1.md` (historical source no longer present) —
   the original design layer for what already shipped.
 
 **Marking convention (strictly applied):**
@@ -450,7 +458,7 @@ apps/desktop/src/
 ├── components/workflows/editor/
 │   ├── WorkflowStepPanel.tsx                           ✅ ΔA (slack channel picker) ΔC (emit editor: prompt + schema) — ΔD's workflow picker + args superseded (L20; nesting UI is undesigned)
 │   ├── WorkflowTriggersCard.tsx                        ✅ ΔB (poll config: url/header/secret/interval/schema/mapping)
-│   ├── WorkflowSetupCard.tsx                           ✅ Δ(OPEN-1) 
+│   ├── WorkflowSetupCard.tsx                           ✅ Δ(OPEN-1)
 │   └── (rest of editor/, home/, run/, screen/)         ✅ — ΔD's run view parent↔child links superseded (L20; no child run)
 ├── hooks/access/cloud/workflows/                       ✅ ΔA ΔB (new endpoints)
 └── lib/access/cloud/workflows.ts                       ✅ ΔA ΔB

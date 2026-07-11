@@ -196,6 +196,29 @@ Dry-run production promotes upload `deploy-plan-production`, not
 `deploy-summary-production`, and are excluded from future production
 deploy-base resolution.
 
+#### Workflow-enabled release overlay
+
+The general staging bypass above does not apply when production Workflows are
+enabled, or when a release moves the workflow server/runtime/Desktop/template
+stack while that production flag is enabled. In that posture:
+
+- `require_staging_success=false` is forbidden
+- the promoted SHA must be the exact squash-merged commit on `main`
+- CI, a real staging deploy, strict local Desktop T3-WF, strict staging/cloud
+  T3-WF, and the configured bake must all succeed for that same SHA
+- the workflow evidence must bind the server image digest, Desktop artifact and
+  updater-manifest digest, AnyHarness/runtime and worker versions, E2B template
+  reference, schema migration revision, staging deploy run, and trusted CI run
+- production promote, hotfix, nightly `promote_production`, stable Desktop
+  updater publishing, and runtime/worker/template promotion must consume and
+  validate the same signed CI-produced evidence rather than a user-supplied JSON
+
+Until WS10 in
+[`../../tbd/workflows-v1-completion-plan.md`](../../tbd/workflows-v1-completion-plan.md)
+lands that mechanism, the production workflow flag must remain false. This
+overlay does not block unrelated production releases while Workflows remain
+dark.
+
 ### Nightly Release Train
 
 The nightly train coordinates the public Proliferate product version, artifact

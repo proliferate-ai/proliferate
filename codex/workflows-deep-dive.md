@@ -1,5 +1,12 @@
 # Workflows — navigable deep dive
 
+> **Historical current-state snapshot, not the current contract.** This file is
+> useful for implementation provenance at the old verified SHA named below.
+> Current target behavior lives in
+> [`specs/codebase/features/workflows.md`](../specs/codebase/features/workflows.md),
+> and the audited completion sequence lives in
+> [`specs/tbd/workflows-v1-completion-plan.md`](../specs/tbd/workflows-v1-completion-plan.md).
+
 > **This doc is the map of the CURRENT state.** It is organized for someone reading
 > to *understand* the system: click a link, land on the real code. Every path below
 > was verified against the worktree `workflows/ui-round3` (tip `dfe38a81b`). Links

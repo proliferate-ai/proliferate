@@ -333,6 +333,14 @@ Usage & Limits pane render those numbers (Playwright).
 
 ## Tier 2 — workflows (to the seam)
 
+> Current-state registry notice (2026-07-10): this section describes the
+> as-built workflow tests, including behaviors that the target architecture
+> replaces. Canonical target behavior is
+> [`../../codebase/features/workflows.md`](../../codebase/features/workflows.md),
+> and the atomic migration/test replacement is owned by
+> [`../../tbd/workflows-v1-completion-plan.md`](../../tbd/workflows-v1-completion-plan.md).
+> Do not use a current green T2 row as proof that the target contract is met.
+
 Implemented 2026-07-10 (the T2-WF program). Lives in three sibling specs:
 `tests/intent/specs/workflows.spec.ts` (T2-WF-1, T2-WF-5),
 `tests/intent/specs/workflows-invocations.spec.ts` (T2-WF-3, T2-WF-4),
@@ -801,6 +809,14 @@ E2B-webhook findings. Test: `tests/release/src/scenarios/t3-bill-4.ts`.
 ---
 
 ## Tier 3 — workflows (T3-WF lane)
+
+> Current-state registry notice (2026-07-10): the WF1-WF7 entries and the CUT
+> WF8 statement below document the existing runner only. They are not the target
+> release manifest. WS10 in
+> [`../../tbd/workflows-v1-completion-plan.md`](../../tbd/workflows-v1-completion-plan.md)
+> replaces this section atomically with strict T3-WF-1 through T3-WF-10, where
+> missing, blocked, skipped, expected-fail, cancelled, duplicate, or failed rows
+> all fail the release run.
 
 Added 2026-07-10 (workflows build program, "Testing track"). Each scenario is a
 version-pinned fixture WORKFLOW DEFINITION

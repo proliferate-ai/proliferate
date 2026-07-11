@@ -20,7 +20,8 @@ low-level runtime contracts.
 | Chat transcript | Transcript streaming, replay, transcript row models, long-history behavior, optimistic/waiting rows, and reconnect semantics. | [chat-transcript.md](chat-transcript.md) |
 | Workspace files | Workspace file browsing, file viewing, diff viewing, Changes, and all-changes review. | [workspace-files.md](workspace-files.md) |
 | Mobile cloud client | Mobile auth, cloud chat, sessions, automations, settings, device/mobile-web smoke, and mobile acceptance matrix. | [mobile-cloud-client.md](mobile-cloud-client.md) |
-| Automations | Scheduled/manual automations, runs, trigger behavior, ownership, permissions, snapshots, and smoke coverage. | [automations.md](automations.md) |
+| Automations | Legacy single-prompt automations, compatibility migration, ownership, permissions, snapshots, and existing smoke coverage. New multi-step scheduling/polling belongs to Workflows. | [automations.md](automations.md) |
+| Workflows | Versioned deterministic agent programs, sequential/parallel execution, emitted-state branching, capability leases, triggers, session ownership, local/cloud parity, and release acceptance. | [workflows.md](workflows.md) |
 | Slack bot | Slack connection, bot config, event handling, commands, claim flows, and Slack-origin workspace behavior. | [slack-bot.md](slack-bot.md) |
 | Delegated work / subagents | Delegated work lifecycle, parent/subagent coordination, review agents, queued wakes, and transcript/composer integration. | [delegated-work.md](delegated-work.md), [agent-features/definitions/subagents.md](agent-features/definitions/subagents.md) |
 | Artifacts | Cowork artifacts, artifact MCP definition, artifact product behavior, and artifact transcript/workflow surfaces. | [cowork-artifacts.md](cowork-artifacts.md), [agent-features/definitions/artifacts.md](agent-features/definitions/artifacts.md) |
