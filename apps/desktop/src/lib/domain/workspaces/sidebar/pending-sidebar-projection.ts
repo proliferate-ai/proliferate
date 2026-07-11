@@ -41,9 +41,7 @@ export function buildPendingSidebarProjection(args: {
   const id = materializedSelectedLogicalId ?? pendingWorkspaceUiKey;
   const createdAt = new Date(entry.createdAt).toISOString();
   const variant = pendingSidebarVariant(entry);
-  const repoRoot = entry.request.kind === "worktree"
-    ? repoRootsById.get(entry.request.input.repoRootId) ?? null
-    : null;
+  const repoRoot = pendingSidebarRepoRoot(entry, repoRootsById);
   const repoKey = pendingSidebarRepoKey(entry, repoRoot);
   if (!repoKey) {
     return null;
@@ -100,6 +98,36 @@ export function buildPendingSidebarProjection(args: {
       displayAt: null,
     },
   };
+}
+
+function pendingSidebarRepoRoot(
+  entry: PendingWorkspaceEntry,
+  repoRootsById: Map<string, RepoRoot>,
+): RepoRoot | null {
+  if (entry.request.kind === "worktree") {
+    return repoRootsById.get(entry.request.input.repoRootId) ?? null;
+  }
+
+  if (entry.request.kind !== "local") {
+    return null;
+  }
+
+  const sourceRoot = normalizedLocalSourceRoot(entry.request.sourceRoot);
+  if (!sourceRoot) {
+    return null;
+  }
+
+  for (const repoRoot of repoRootsById.values()) {
+    if (normalizedLocalSourceRoot(repoRoot.path) === sourceRoot) {
+      return repoRoot;
+    }
+  }
+  return null;
+}
+
+function normalizedLocalSourceRoot(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.replace(/[\\/]+$/, "") || trimmed;
 }
 
 function pendingSidebarVariant(entry: PendingWorkspaceEntry): SidebarWorkspaceVariant {

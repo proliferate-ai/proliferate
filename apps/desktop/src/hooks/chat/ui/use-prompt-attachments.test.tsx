@@ -74,4 +74,55 @@ describe("usePromptAttachments", () => {
 
     expect(result.current.snapshotForSubmit()).toEqual([]);
   });
+
+  it("keeps attachments across same-workspace harness capability changes", () => {
+    const { result, rerender } = renderHook(
+      ({ capabilities }: { capabilities: PromptCapabilities | null }) =>
+        usePromptAttachments("workspace-1", capabilities),
+      { initialProps: { capabilities: promptCapabilities as PromptCapabilities | null } },
+    );
+    const image = new File(["image-bytes"], "image.png", { type: "image/png" });
+    act(() => {
+      result.current.addFiles([image]);
+    });
+
+    rerender({ capabilities: null });
+    expect(result.current.attachments).toHaveLength(1);
+    expect(result.current.hasAttachments).toBe(true);
+    expect(result.current.hasSupportedAttachments).toBe(false);
+    expect(result.current.snapshotForSubmit()).toEqual([]);
+
+    act(() => {
+      result.current.clearSubmittedAttachments(result.current.snapshotForSubmit());
+    });
+    expect(result.current.attachments).toHaveLength(1);
+
+    rerender({ capabilities: promptCapabilities });
+    expect(result.current.attachments).toHaveLength(1);
+    expect(result.current.hasAttachments).toBe(true);
+    expect(result.current.hasSupportedAttachments).toBe(true);
+    const submitted = result.current.snapshotForSubmit();
+    expect(submitted).toHaveLength(1);
+
+    act(() => {
+      result.current.clearSubmittedAttachments(submitted);
+    });
+    expect(result.current.attachments).toEqual([]);
+  });
+
+  it("clears attachments when the selected workspace changes", () => {
+    const { result, rerender } = renderHook(
+      ({ scopeKey }) => usePromptAttachments(scopeKey, promptCapabilities),
+      { initialProps: { scopeKey: "workspace-1" } },
+    );
+    const image = new File(["image-bytes"], "image.png", { type: "image/png" });
+    act(() => {
+      result.current.addFiles([image]);
+    });
+
+    rerender({ scopeKey: "workspace-2" });
+
+    expect(result.current.attachments).toEqual([]);
+    expect(result.current.snapshotForSubmit()).toEqual([]);
+  });
 });

@@ -26,8 +26,12 @@ import { withUpdatedDefaultModelIdByAgentKind } from "@/lib/domain/agents/model-
 
 const EMPTY_WORKSPACES: Workspace[] = [];
 
-export function useChatLaunchActions(options?: { suppressActiveSessionState?: boolean }) {
+export function useChatLaunchActions(options?: {
+  suppressActiveSessionState?: boolean;
+  replacementSessionId?: string | null;
+}) {
   const suppressActiveSessionState = options?.suppressActiveSessionState ?? false;
+  const replacementSessionId = options?.replacementSessionId ?? null;
   const showToast = useToastStore((store) => store.show);
   const setWorkspaceArrivalEvent = useSessionSelectionStore((state) => state.setWorkspaceArrivalEvent);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
@@ -131,13 +135,15 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
       targetWorkspaceId: selectedWorkspaceId,
     });
     // Pass the current session as replacesSessionId: the creation workflow
-    // cleans up the old empty session synchronously after activating the new
-    // optimistic record, so the tab swap is instant (no ghost tab).
+    // hides an unused old shell synchronously, then commits its cleanup only
+    // after the optimistic replacement materializes.
     void createEmptySessionWithResolvedConfig({
       agentKind: launchSelection.kind,
       modelId: launchSelection.modelId,
       latencyFlowId,
-      replacesSessionId: scopedActiveSessionId ?? null,
+      // Presentation suppression hides stale config/model state while a
+      // pending shell is projected; it must not erase the shell being replaced.
+      replacesSessionId: replacementSessionId ?? scopedActiveSessionId ?? null,
     })
       .then(() => {
         setWorkspaceArrivalEvent(null);
@@ -161,6 +167,7 @@ export function useChatLaunchActions(options?: { suppressActiveSessionState?: bo
     scopedCurrentLaunchIdentity,
     scopedCurrentModelConfigId,
     scopedModelControl,
+    replacementSessionId,
   ]);
 
   return {

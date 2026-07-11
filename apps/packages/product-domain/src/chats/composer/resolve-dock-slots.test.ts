@@ -54,6 +54,7 @@ describe("resolveComposerDockSlots", () => {
       ...BASE_INPUT,
       suppressSessionSlots: true,
       pendingPromptCount: 2,
+      recoveredPromptCount: 1,
       primaryPendingInteractionKind: "user_input",
       hasActiveTodoTracker: true,
       hasDelegatedWork: true,
@@ -70,6 +71,14 @@ describe("resolveComposerDockSlots", () => {
         sessionActivity: false,
       },
     });
+  });
+
+  it("surfaces recoverable prompts ahead of ordinary queued prompts", () => {
+    expect(resolveComposerDockSlots({
+      ...BASE_INPUT,
+      pendingPromptCount: 2,
+      recoveredPromptCount: 1,
+    }).outboundSlot).toEqual({ kind: "prompt_recoveries" });
   });
 
   it("attaches the session goal bar on its own", () => {

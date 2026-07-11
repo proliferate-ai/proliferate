@@ -23,5 +23,4 @@ apps/desktop/src/components/workspace/git/GitPanel.tsx 429 git panel pending sta
 apps/desktop/src/components/workspace/git/GitReviewFileRow.tsx 404 git review file row pending action-cluster split
 apps/desktop/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 410 workspace sidebar item pending indicator/menu split
 apps/desktop/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
-apps/desktop/src/hooks/sessions/workflows/use-session-creation-actions.ts 424 session creation actions pending action-group split
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 940 transcript row model pending row-kind module split

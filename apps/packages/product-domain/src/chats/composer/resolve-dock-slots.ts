@@ -3,9 +3,9 @@ export type ComposerDockInteractionKind =
   | "user_input"
   | "mcp_elicitation";
 
-export type ComposerDockOutboundSlot = {
-  kind: "pending_prompts";
-};
+export type ComposerDockOutboundSlot =
+  | { kind: "pending_prompts" }
+  | { kind: "prompt_recoveries" };
 
 export type ComposerDockActiveSlot =
   | { kind: "permission" }
@@ -52,6 +52,7 @@ export interface ResolveComposerDockSlotsInput {
   suppressSessionSlots?: boolean;
   suppressWorkspaceStatusPanels?: boolean;
   pendingPromptCount: number;
+  recoveredPromptCount?: number;
   primaryPendingInteractionKind: ComposerDockInteractionKind | null;
   hasActiveTodoTracker: boolean;
   hasDelegatedWork: boolean;
@@ -65,6 +66,7 @@ export function resolveComposerDockSlots({
   suppressSessionSlots = false,
   suppressWorkspaceStatusPanels = false,
   pendingPromptCount,
+  recoveredPromptCount = 0,
   primaryPendingInteractionKind,
   hasActiveTodoTracker,
   hasDelegatedWork,
@@ -73,8 +75,9 @@ export function resolveComposerDockSlots({
   hasWorkspaceStatusPanel,
   hasCloudRuntimePanel,
 }: ResolveComposerDockSlotsInput): ComposerDockSlotResolution {
-  const outboundSlot =
-    !suppressSessionSlots && pendingPromptCount > 0
+  const outboundSlot = !suppressSessionSlots && recoveredPromptCount > 0
+    ? { kind: "prompt_recoveries" as const }
+    : !suppressSessionSlots && pendingPromptCount > 0
       ? { kind: "pending_prompts" as const }
       : null;
   const activeSlot = !suppressSessionSlots

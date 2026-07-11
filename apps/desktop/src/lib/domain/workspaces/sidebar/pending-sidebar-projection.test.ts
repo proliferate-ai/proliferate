@@ -60,6 +60,93 @@ describe("pending sidebar projection", () => {
     });
   });
 
+  it("projects a first local workspace into its existing repo-root group", () => {
+    const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
+      attemptId: "attempt-local-1",
+      selectedWorkspaceId: null,
+      source: "local-created",
+      displayName: "landing",
+      request: {
+        kind: "local",
+        sourceRoot: "/tmp/landing/",
+      },
+    });
+    const pendingWorkspaceUiKey = buildPendingWorkspaceUiKey(pendingWorkspaceEntry);
+    const repoRoot = makeRepoRoot({
+      id: "landing-root",
+      repoName: "landing",
+      sourceRoot: "/tmp/landing",
+    });
+
+    const groups = buildGroups({
+      logicalWorkspaces: [],
+      repoRoots: [repoRoot],
+      pendingWorkspaceEntry,
+      selectedLogicalWorkspaceId: pendingWorkspaceUiKey,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      sourceRoot: "/tmp/landing",
+      name: "landing",
+      repoRootId: "landing-root",
+    });
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: pendingWorkspaceUiKey,
+      name: "landing",
+      active: true,
+      variant: "local",
+    });
+  });
+
+  it("keeps a materializing first local workspace in one repo group", () => {
+    const pendingWorkspaceEntry = {
+      ...buildSubmittingPendingWorkspaceEntry({
+        attemptId: "attempt-local-1",
+        selectedWorkspaceId: null,
+        source: "local-created",
+        displayName: "landing",
+        request: {
+          kind: "local" as const,
+          sourceRoot: "/tmp/landing",
+        },
+      }),
+      workspaceId: "workspace-real",
+    };
+    const repoRoot = makeRepoRoot({
+      id: "landing-root",
+      repoName: "landing",
+      sourceRoot: "/tmp/landing",
+    });
+
+    const groups = buildGroups({
+      logicalWorkspaces: [
+        makeLocalLogicalWorkspace({
+          id: "real-logical",
+          workspaceId: "workspace-real",
+          repoKey: "github:proliferate-ai:landing",
+          repoName: "landing",
+        }),
+      ],
+      repoRoots: [repoRoot],
+      pendingWorkspaceEntry,
+      selectedWorkspaceId: "workspace-real",
+      selectedLogicalWorkspaceId: "real-logical",
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.repoRootId).toBe("landing-root");
+    expect(groups[0]?.allLogicalWorkspaceIds).toEqual(["real-logical"]);
+    expect(groups[0]?.items).toHaveLength(1);
+    expect(groups[0]?.items[0]).toMatchObject({
+      id: "real-logical",
+      name: "landing",
+      active: true,
+      variant: "local",
+    });
+  });
+
   it("counts pending creation as activity in the sort recency", () => {
     const pendingWorkspaceEntry = buildSubmittingPendingWorkspaceEntry({
       attemptId: "attempt-1",

@@ -12,6 +12,9 @@ import { recordMeasurementMetric } from "@/lib/infra/measurement/debug-measureme
 import { parseTargetWorkspaceSyntheticId } from "@/lib/domain/compute/target-workspace-id";
 import { parseCloudWorkspaceSyntheticId } from "@/lib/domain/workspaces/cloud/cloud-ids";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
+import {
+  filterReplacedSessionTombstones,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
 
 export function useWorkspaceSessionLoader() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -50,14 +53,17 @@ export function useWorkspaceSessionLoader() {
       && cacheSnapshot.dataUpdatedAt
       && !cacheSnapshot.isInvalidated
     ) {
-      return cacheSnapshot.sessions;
+      return filterReplacedSessionTombstones(
+        workspaceId,
+        cacheSnapshot.sessions,
+      ) ?? [];
     }
 
     // Do not join a possibly hung automatic query for the same selected
     // workspace. Session selection is the owning workflow and must either
     // complete or fail independently so the shell cannot stay on
     // "Preparing workspace" behind an unrelated header/sidebar fetch.
-    const sessions = await fetchWorkspaceSessions(
+    const loadedSessions = await fetchWorkspaceSessions(
       runtimeUrl,
       workspaceId,
       requestHeaders || options?.measurementOperationId
@@ -67,6 +73,10 @@ export function useWorkspaceSessionLoader() {
         }
         : undefined,
     );
+    const sessions = filterReplacedSessionTombstones(
+      workspaceId,
+      loadedSessions,
+    ) ?? [];
     setWorkspaceSessions(workspaceId, () => sessions, { runtimeUrl });
     return sessions;
   }, [
