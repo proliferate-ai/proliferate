@@ -109,6 +109,8 @@ export type ForkSessionResponse = Omit<
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
 export type EditPendingPromptRequest =
   components["schemas"]["EditPendingPromptRequest"];
+export type ReorderPendingPromptsRequest =
+  components["schemas"]["ReorderPendingPromptsRequest"];
 export type Goal = components["schemas"]["Goal"];
 export type GoalStatus = components["schemas"]["GoalStatus"];
 export type GoalArmState = components["schemas"]["GoalArmState"];

@@ -282,47 +282,6 @@ describe("transcript reducer", () => {
     expect(item.promptId).toBe("prompt-1");
   });
 
-  it("does not deduplicate distinct pending prompts by prompt id", () => {
-    const state = reduceEvents(
-      [
-        pendingPromptAdded(1, 10, "prompt-1", "first"),
-        pendingPromptAdded(2, 11, "prompt-1", "second"),
-        pendingPromptUpdated(3, 11, "prompt-1", "updated"),
-      ],
-      "session-1",
-    );
-
-    expect(state.pendingPrompts).toHaveLength(2);
-    expect(state.pendingPrompts[0]).toMatchObject({
-      seq: 10,
-      promptId: "prompt-1",
-      text: "first",
-    });
-    expect(state.pendingPrompts[1]).toMatchObject({
-      seq: 11,
-      promptId: "prompt-1",
-      text: "updated",
-    });
-  });
-
-  it("removes pending prompts by seq only when prompt id collides", () => {
-    const state = reduceEvents(
-      [
-        pendingPromptAdded(1, 10, "prompt-1", "first"),
-        pendingPromptAdded(2, 11, "prompt-1", "second"),
-        pendingPromptRemoved(3, 10, "prompt-1"),
-      ],
-      "session-1",
-    );
-
-    expect(state.pendingPrompts).toHaveLength(1);
-    expect(state.pendingPrompts[0]).toMatchObject({
-      seq: 11,
-      promptId: "prompt-1",
-      text: "second",
-    });
-  });
-
   it("preserves plan reference content parts when later snapshots omit them", () => {
     const state = reduceEvents(
       [
@@ -1557,67 +1516,6 @@ function userMessageCompleted(
         promptId,
         contentParts,
       },
-    },
-  };
-}
-
-function pendingPromptAdded(
-  eventSeq: number,
-  pendingSeq: number,
-  promptId: string | null,
-  text: string,
-): SessionEventEnvelope {
-  return {
-    sessionId: "session-1",
-    seq: eventSeq,
-    timestamp: `2026-04-04T00:00:0${eventSeq}Z`,
-    event: {
-      type: "pending_prompt_added",
-      seq: pendingSeq,
-      promptId,
-      text,
-      contentParts: [{ type: "text", text }],
-      queuedAt: `2026-04-04T00:00:0${eventSeq}Z`,
-      promptProvenance: null,
-    },
-  };
-}
-
-function pendingPromptUpdated(
-  eventSeq: number,
-  pendingSeq: number,
-  promptId: string | null,
-  text: string,
-): SessionEventEnvelope {
-  return {
-    sessionId: "session-1",
-    seq: eventSeq,
-    timestamp: `2026-04-04T00:00:0${eventSeq}Z`,
-    event: {
-      type: "pending_prompt_updated",
-      seq: pendingSeq,
-      promptId,
-      text,
-      contentParts: [{ type: "text", text }],
-      promptProvenance: null,
-    },
-  };
-}
-
-function pendingPromptRemoved(
-  eventSeq: number,
-  pendingSeq: number,
-  promptId: string | null,
-): SessionEventEnvelope {
-  return {
-    sessionId: "session-1",
-    seq: eventSeq,
-    timestamp: `2026-04-04T00:00:0${eventSeq}Z`,
-    event: {
-      type: "pending_prompt_removed",
-      seq: pendingSeq,
-      promptId,
-      reason: "deleted",
     },
   };
 }

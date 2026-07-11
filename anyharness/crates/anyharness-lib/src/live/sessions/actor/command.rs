@@ -25,6 +25,10 @@ pub enum PromptAcceptance {
 #[derive(Debug)]
 pub enum QueueMutationError {
     NotFound,
+    StaleOrder { current_seqs: Vec<i64> },
+    InvalidReorder(String),
+    SteerInterruptFailed,
+    Internal(String),
 }
 
 #[derive(Debug)]
@@ -135,6 +139,15 @@ pub(in crate::live::sessions) enum SessionCommand {
         respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
     },
     DeletePendingPrompt {
+        seq: i64,
+        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
+    },
+    ReorderPendingPrompts {
+        expected_seqs: Vec<i64>,
+        desired_seqs: Vec<i64>,
+        respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
+    },
+    SteerPendingPrompt {
         seq: i64,
         respond_to: oneshot::Sender<Result<(), QueueMutationError>>,
     },

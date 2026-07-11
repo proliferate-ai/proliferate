@@ -15,6 +15,7 @@ interface UseChatComposerKeyboardArgs {
   modeControl: LiveSessionControlDescriptor | null;
   isEditingQueuedPrompt?: boolean;
   onCancelEdit?: () => void;
+  onEditLastQueued?: () => void;
 }
 
 export function useChatComposerKeyboard({
@@ -25,6 +26,7 @@ export function useChatComposerKeyboard({
   modeControl,
   isEditingQueuedPrompt = false,
   onCancelEdit,
+  onEditLastQueued,
 }: UseChatComposerKeyboardArgs) {
   const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (
@@ -43,6 +45,24 @@ export function useChatComposerKeyboard({
       if (isRunning) {
         event.preventDefault();
         handleCancel();
+        return;
+      }
+    }
+
+    if (
+      event.key === COMPOSER_SHORTCUTS.editLastQueued.key
+      && !event.shiftKey
+      && !event.altKey
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.nativeEvent.isComposing
+      && !isEditingQueuedPrompt
+      && onEditLastQueued
+    ) {
+      const textarea = event.currentTarget;
+      if (textarea.value.length === 0) {
+        event.preventDefault();
+        onEditLastQueued();
         return;
       }
     }
@@ -77,7 +97,16 @@ export function useChatComposerKeyboard({
       event.preventDefault();
       void handleSubmit();
     }
-  }, [canSubmit, handleCancel, handleSubmit, isEditingQueuedPrompt, isRunning, modeControl, onCancelEdit]);
+  }, [
+    canSubmit,
+    handleCancel,
+    handleSubmit,
+    isEditingQueuedPrompt,
+    isRunning,
+    modeControl,
+    onCancelEdit,
+    onEditLastQueued,
+  ]);
 
   return {
     handleKeyDown,

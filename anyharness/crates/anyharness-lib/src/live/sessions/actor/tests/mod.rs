@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use super::command::{Resolution, SessionCommand};
+use super::command::{QueueMutationError, Resolution, SessionCommand};
 use super::config::apply::{
     select_option_current_value_matches, should_apply_model_via_direct_setter,
 };
@@ -19,11 +19,13 @@ use super::notifications::handle::{
     handle_notification, handle_notification_with_resume_replay_filter,
 };
 use super::notifications::replay_filter::{ResumeReplayFilter, IDLE_RESUME_REPLAY_QUIET_WINDOW};
+use super::run::{select_idle_work, IdleWork, STARTUP_QUEUE_DRAIN_GRACE};
 use super::shutdown::handle::finalize_established_actor_exit;
 use super::shutdown::types::ActorExitDisposition;
 use super::state::SessionStartupState;
 use super::turn::diagnostics::PromptDiagnostics;
 use super::turn::finish::should_emit_empty_turn_error;
+use super::turn::queue::{map_steer_interrupt_result, plan_steer_order};
 use super::turn::start::first_prompt_system_prompt_append_for_codex_prompt;
 use crate::app::test_support;
 use crate::domains::agents::model::AgentKind;
@@ -50,6 +52,7 @@ mod config;
 mod domain_ops;
 mod notifications;
 mod prompt;
+mod queue;
 mod shutdown;
 
 async fn actor_exit_test_context(

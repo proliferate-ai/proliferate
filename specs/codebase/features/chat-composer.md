@@ -195,6 +195,20 @@ Dock panes share one width and one neutral tray treatment. Hierarchy comes from
 state order, copy, and control weight, not from different colors or a width
 staircase.
 
+Queued user prompts render only in `outboundSlot`; they are not transcript
+rows while they remain pending. The queue supports drag or keyboard reorder,
+steer-next, edit, and delete. A queue entry's `seq` is its immutable runtime
+identity; array order is authoritative. Reorder mutations use compare-and-swap
+semantics by sending both the expected sequence order and desired sequence
+order. UI edit and steer state retain `seq`. `promptId` is reserved for local
+outbox reconciliation and is not required or assumed unique on runtime queue
+rows. With an empty composer at the start of the input, `ArrowUp` begins editing
+the newest editable queued prompt. Steering promotes the selected prompt to the
+head and interrupts the active turn so normal durable queue drain executes it
+next. If interruption delivery fails after the promotion commits, the UI keeps
+the authoritative promoted order and surfaces the failure; retrying the same
+entry only retries interruption.
+
 ## 2.1 Composer footer semantics
 
 `WorkspaceMobilityFooterRow` is the dedicated mobility row beneath the composer surface.
@@ -366,7 +380,6 @@ Control-row tone rule — the pills are **monochrome**:
   in `--color-composer-control-foreground` / `-muted-foreground`, dim), while
   `active` brightens the whole button — including its icon — with only the
   detail span forced back to muted. Idle pills are fully dim.
-
 As-built composer surface — `ChatComposerSurface` (product-ui) tags itself with
 the `chat-composer-surface` class, whose paint lives in
 `apps/packages/design/src/css/dom.css`:

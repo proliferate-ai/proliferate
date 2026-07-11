@@ -5,6 +5,7 @@ import { WorkspaceArrivalAttachedPanel } from "@/components/workspace/chat/surfa
 import { TodoTrackerPanel, TodoTrackerStrip } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
+import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
@@ -143,17 +144,18 @@ export function useComposerDockSlots(options?: {
       : null
   ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot]);
 
+  const outboundSlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.outboundSlot?.kind === "pending_prompts"
+      ? <ConnectedPendingPromptList />
+      : null
+  ), [dockSlotResolution.outboundSlot?.kind]);
+
   return useMemo(() => ({
-    // Queued prompts now render IN THE TRANSCRIPT (renderableOutboxEntriesFor-
-    // Transcript includes queue-placed entries), so the dock's pending list is
-    // retired — rendering both would show the same message twice. NOTE: this
-    // also retires the dock's queued-prompt edit affordance (beginEdit was
-    // only reachable from that list); re-home it on the transcript pending row
-    // if we want it back.
-    outboundSlot: null,
+    outboundSlot,
     activeSlot: activeAgentSlot,
     attachedSlot,
   }), [
+    outboundSlot,
     activeAgentSlot,
     attachedSlot,
   ]);

@@ -1,12 +1,15 @@
+use agent_client_protocol as acp;
 use anyharness_contract::v1::{
     PendingPromptAddedPayload, PendingPromptRemovalReason, PendingPromptRemovedPayload,
-    PendingPromptUpdatedPayload,
+    PendingPromptUpdatedPayload, PendingPromptsReorderedPayload,
 };
 
-use crate::domains::sessions::model::{PromptAttachmentRecord, PromptAttachmentState};
+use crate::domains::sessions::model::{
+    PendingPromptReorderOutcome, PromptAttachmentRecord, PromptAttachmentState,
+};
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::live::sessions::actor::command::{
-    PromptAcceptError, PromptAcceptance, QueueMutationError,
+    PromptAcceptError, PromptAcceptance, QueueMutationError, Resolution,
 };
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::model::AttachmentSource;
@@ -224,6 +227,121 @@ impl SessionActor {
             }
         }
     }
+
+    pub(in crate::live::sessions::actor) async fn handle_reorder_pending_prompts(
+        &self,
+        expected_seqs: Vec<i64>,
+        desired_seqs: Vec<i64>,
+    ) -> Result<(), QueueMutationError> {
+        self.persist_pending_prompt_order(&expected_seqs, &desired_seqs)
+            .await
+    }
+
+    /// Promote one queued prompt to the head, then interrupt the active turn
+    /// so the existing durable queue-drain path executes it next.
+    pub(in crate::live::sessions::actor) async fn handle_steer_pending_prompt(
+        &self,
+        seq: i64,
+        is_busy: bool,
+    ) -> Result<(), QueueMutationError> {
+        let current = self
+            .caps
+            .queue
+            .list_pending_prompts(&self.session_id)
+            .map_err(|error| {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    seq,
+                    error = %error,
+                    "failed to load pending prompts before steer",
+                );
+                QueueMutationError::Internal(error.to_string())
+            })?;
+        let expected_seqs = current.iter().map(|record| record.seq).collect::<Vec<_>>();
+        if let Some(desired_seqs) = plan_steer_order(&expected_seqs, seq)? {
+            self.persist_pending_prompt_order(&expected_seqs, &desired_seqs)
+                .await?;
+        }
+
+        if is_busy {
+            // Steering has the same interaction-cleanup contract as Cancel:
+            // an interrupted permission/input rendezvous cannot remain parked
+            // after the current turn is asked to stop.
+            self.resolve_pending_interactions(Resolution::Cancelled)
+                .await;
+            let cancel_result = self
+                .conn
+                .send_notification(acp::schema::CancelNotification::new(
+                    self.native_session_id.clone(),
+                ));
+            map_steer_interrupt_result(cancel_result)?;
+        }
+        Ok(())
+    }
+
+    async fn persist_pending_prompt_order(
+        &self,
+        expected_seqs: &[i64],
+        desired_seqs: &[i64],
+    ) -> Result<(), QueueMutationError> {
+        let outcome = self
+            .caps
+            .queue
+            .reorder_pending_prompts(&self.session_id, expected_seqs, desired_seqs)
+            .map_err(|error| {
+                tracing::warn!(
+                    session_id = %self.session_id,
+                    error = %error,
+                    "failed to reorder pending prompts",
+                );
+                QueueMutationError::Internal(error.to_string())
+            })?;
+        let records = match outcome {
+            PendingPromptReorderOutcome::Reordered(records) => records,
+            PendingPromptReorderOutcome::Stale { current_seqs } => {
+                return Err(QueueMutationError::StaleOrder { current_seqs });
+            }
+            PendingPromptReorderOutcome::Invalid { reason } => {
+                return Err(QueueMutationError::InvalidReorder(reason));
+            }
+        };
+        let pending_prompts = records.iter().map(|record| record.to_contract()).collect();
+        let mut sink = self.event_sink.lock().await;
+        sink.pending_prompts_reordered(PendingPromptsReorderedPayload { pending_prompts });
+        Ok(())
+    }
+}
+
+pub(in crate::live::sessions::actor) fn plan_steer_order(
+    current_seqs: &[i64],
+    seq: i64,
+) -> Result<Option<Vec<i64>>, QueueMutationError> {
+    if !current_seqs.contains(&seq) {
+        return Err(QueueMutationError::NotFound);
+    }
+    if current_seqs.first().copied() == Some(seq) {
+        // A retry after a degraded steer must not persist or emit a second
+        // reorder. It proceeds directly to the cancellation notification.
+        return Ok(None);
+    }
+    let mut desired_seqs = Vec::with_capacity(current_seqs.len());
+    desired_seqs.push(seq);
+    desired_seqs.extend(
+        current_seqs
+            .iter()
+            .copied()
+            .filter(|current_seq| *current_seq != seq),
+    );
+    Ok(Some(desired_seqs))
+}
+
+pub(in crate::live::sessions::actor) fn map_steer_interrupt_result<T, E: std::fmt::Display>(
+    result: Result<T, E>,
+) -> Result<(), QueueMutationError> {
+    result.map(|_| ()).map_err(|error| {
+        tracing::warn!(error = %error, "pending prompt was promoted but active turn interruption failed");
+        QueueMutationError::SteerInterruptFailed
+    })
 }
 
 pub(in crate::live::sessions::actor) fn pending_attachment_records(

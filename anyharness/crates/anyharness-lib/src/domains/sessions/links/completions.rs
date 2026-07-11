@@ -113,19 +113,33 @@ impl LinkCompletionStore {
                 }));
             }
 
+            tx.execute(
+                "UPDATE sessions
+                 SET pending_prompt_seq_cursor = pending_prompt_seq_cursor + 1
+                 WHERE id = ?1",
+                [parent_session_id],
+            )?;
             let next_seq: i64 = tx.query_row(
-                "SELECT COALESCE(MAX(seq), 0) + 1 FROM session_pending_prompts WHERE session_id = ?1",
+                "SELECT pending_prompt_seq_cursor FROM sessions WHERE id = ?1",
+                [parent_session_id],
+                |row| row.get(0),
+            )?;
+            let next_position: i64 = tx.query_row(
+                "SELECT COALESCE(MAX(queue_position), 0) + 1
+                 FROM session_pending_prompts WHERE session_id = ?1",
                 [parent_session_id],
                 |row| row.get(0),
             )?;
             let queued_at = chrono::Utc::now().to_rfc3339();
             tx.execute(
                 "INSERT INTO session_pending_prompts (
-                    session_id, seq, prompt_id, text, blocks_json, provenance_json, queued_at
-                 ) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6)",
+                    session_id, seq, queue_position, prompt_id, text,
+                    blocks_json, provenance_json, queued_at
+                 ) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7)",
                 params![
                     parent_session_id,
                     next_seq,
+                    next_position,
                     wake_prompt.text_summary.as_str(),
                     blocks_json,
                     provenance_json,
@@ -143,6 +157,7 @@ impl LinkCompletionStore {
                 wake_prompt: Some(PendingPromptRecord {
                     session_id: parent_session_id.to_string(),
                     seq: next_seq,
+                    queue_position: next_position,
                     prompt_id: None,
                     text: wake_prompt.text_summary.clone(),
                     blocks_json,

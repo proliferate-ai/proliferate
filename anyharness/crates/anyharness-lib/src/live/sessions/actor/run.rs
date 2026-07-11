@@ -2,11 +2,40 @@ use agent_client_protocol as acp;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::live::sessions::actor::command::{Resolution, SessionCommand};
-use crate::live::sessions::AgentExtMethodError;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::active::ActivePromptRequest;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
+use crate::live::sessions::AgentExtMethodError;
+
+pub(in crate::live::sessions::actor) const STARTUP_QUEUE_DRAIN_GRACE: std::time::Duration =
+    std::time::Duration::from_millis(50);
+
+pub(in crate::live::sessions::actor) enum IdleWork {
+    Command(Option<SessionCommand>),
+    DrainQueuedPrompt,
+    Notification(Option<acp::schema::SessionNotification>),
+    Background(Option<BackgroundWorkUpdate>),
+}
+
+pub(in crate::live::sessions::actor) async fn select_idle_work(
+    command_rx: &mut mpsc::Receiver<SessionCommand>,
+    notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
+    background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
+    has_queued_prompt: bool,
+    queue_drain_not_before: Option<tokio::time::Instant>,
+) -> IdleWork {
+    let queue_drain_not_before = queue_drain_not_before.unwrap_or_else(tokio::time::Instant::now);
+    tokio::select! {
+        biased;
+        command = command_rx.recv() => IdleWork::Command(command),
+        _ = tokio::time::sleep_until(queue_drain_not_before), if has_queued_prompt => {
+            IdleWork::DrainQueuedPrompt
+        },
+        notification = notification_rx.recv() => IdleWork::Notification(notification),
+        background = background_work_rx.recv() => IdleWork::Background(background),
+    }
+}
 
 impl SessionActor {
     /// Drives the actor to completion: the idle loop, then the established
@@ -40,9 +69,30 @@ impl SessionActor {
         notification_rx: &mut mpsc::UnboundedReceiver<acp::schema::SessionNotification>,
         background_work_rx: &mut mpsc::UnboundedReceiver<BackgroundWorkUpdate>,
     ) -> ActorExitDisposition {
+        // The startup caller cannot enqueue its first reorder/steer command
+        // until after the actor's readiness signal returns on another thread.
+        // Give that caller one bounded mailbox window before the first durable
+        // drain. This deadline is one-shot and is never paid between turns.
+        let startup_drain_deadline = tokio::time::Instant::now() + STARTUP_QUEUE_DRAIN_GRACE;
+        let mut startup_drain_grace = true;
         loop {
-            tokio::select! {
-                cmd = command_rx.recv() => {
+            // Durable queue drain is an idle, low-priority action. A queue
+            // mutation already accepted into the actor mailbox wins this
+            // boundary, so startup and turn completion cannot capture and run
+            // an obsolete head before reorder/steer is applied.
+            let queued_prompt = self.next_pending_prompt_for_drain();
+            let has_queued_prompt = queued_prompt.is_some();
+            match select_idle_work(
+                command_rx,
+                notification_rx,
+                background_work_rx,
+                has_queued_prompt,
+                startup_drain_grace.then_some(startup_drain_deadline),
+            )
+            .await
+            {
+                IdleWork::Command(cmd) => {
+                    startup_drain_grace = false;
                     let Some(cmd) = cmd else {
                         return ActorExitDisposition::Close;
                     };
@@ -53,12 +103,34 @@ impl SessionActor {
                         return exit;
                     }
                 }
-                notification = notification_rx.recv() => {
+                IdleWork::DrainQueuedPrompt => {
+                    startup_drain_grace = false;
+                    let (payload, prompt_id, seq) =
+                        queued_prompt.expect("guarded queued prompt must exist");
+                    let (respond_to, _response_rx) = oneshot::channel();
+                    if let Some(exit) = self
+                        .run_turn(
+                            ActivePromptRequest {
+                                payload,
+                                prompt_id,
+                                from_queue_seq: Some(seq),
+                                respond_to,
+                            },
+                            command_rx,
+                            notification_rx,
+                            background_work_rx,
+                        )
+                        .await
+                    {
+                        return exit;
+                    }
+                }
+                IdleWork::Notification(notification) => {
                     if let Some(notif) = notification {
                         self.handle_notification(&notif).await;
                     }
                 }
-                background_update = background_work_rx.recv() => {
+                IdleWork::Background(background_update) => {
                     if let Some(update) = background_update {
                         self.handle_background(update).await;
                     }
@@ -83,6 +155,17 @@ impl SessionActor {
                 from_queue_seq,
                 respond_to,
             } => {
+                // A prequeued marker is only a wake-up/visibility command.
+                // The durable row may already have been selected by the idle
+                // drain, so never execute its copied payload directly here or
+                // a fast completed turn could be duplicated.
+                if from_queue_seq.is_some() || self.next_pending_prompt_for_drain().is_some() {
+                    let result = self
+                        .handle_busy_prompt_queue(payload, prompt_id, from_queue_seq)
+                        .await;
+                    let _ = respond_to.send(result);
+                    return None;
+                }
                 self.run_turn(
                     ActivePromptRequest {
                         payload,
@@ -106,6 +189,21 @@ impl SessionActor {
             }
             SessionCommand::DeletePendingPrompt { seq, respond_to } => {
                 let _ = respond_to.send(self.handle_delete_pending_prompt(seq).await);
+                None
+            }
+            SessionCommand::ReorderPendingPrompts {
+                expected_seqs,
+                desired_seqs,
+                respond_to,
+            } => {
+                let _ = respond_to.send(
+                    self.handle_reorder_pending_prompts(expected_seqs, desired_seqs)
+                        .await,
+                );
+                None
+            }
+            SessionCommand::SteerPendingPrompt { seq, respond_to } => {
+                let _ = respond_to.send(self.handle_steer_pending_prompt(seq, false).await);
                 None
             }
             SessionCommand::ResolveInteraction {

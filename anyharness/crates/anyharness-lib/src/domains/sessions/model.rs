@@ -188,15 +188,26 @@ pub struct PendingConfigChangeRecord {
     pub queued_at: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PendingPromptRecord {
     pub session_id: String,
+    /// Stable, runtime-owned identity for this queue entry. Reordering must
+    /// never change this value because events and mutations address rows by it.
     pub seq: i64,
+    /// Durable display/execution order, independent from the stable `seq`.
+    pub queue_position: i64,
     pub prompt_id: Option<String>,
     pub text: String,
     pub blocks_json: Option<String>,
     pub provenance_json: Option<String>,
     pub queued_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PendingPromptReorderOutcome {
+    Reordered(Vec<PendingPromptRecord>),
+    Stale { current_seqs: Vec<i64> },
+    Invalid { reason: String },
 }
 
 #[derive(Debug, Clone)]

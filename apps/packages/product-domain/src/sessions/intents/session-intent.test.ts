@@ -13,6 +13,7 @@ import {
   isPromptOutboxPlacementBusy,
   pendingConfigChangesForSessionIntents,
   projectPendingPromptsWithSessionIntents,
+  renderableOutboxEntriesForTranscript,
   resolvePromptOutboxPlacement,
   selectNextDispatchableSessionIntent,
 } from "./session-intent-selectors";
@@ -26,6 +27,36 @@ import {
 } from "./session-intent-reconciliation";
 
 describe("session intents", () => {
+  it("keeps queue-placed sends out of the transcript while preserving failed sends", () => {
+    const queued = {
+      ...createSendPromptIntent({
+        clientPromptId: "prompt-queued",
+        clientSessionId: "session-1",
+        text: "Run after this turn",
+        blocks: [{ type: "text" as const, text: "Run after this turn" }],
+        placement: "queue",
+      }),
+      status: "accepted" as const,
+      deliveryState: "accepted_queued" as const,
+    };
+    const failed = {
+      ...createSendPromptIntent({
+        clientPromptId: "prompt-failed",
+        clientSessionId: "session-1",
+        text: "Could not send",
+        blocks: [{ type: "text" as const, text: "Could not send" }],
+        placement: "queue",
+      }),
+      status: "failed" as const,
+      deliveryState: "failed_before_dispatch" as const,
+    };
+
+    expect(renderableOutboxEntriesForTranscript(
+      [queued, failed],
+      createTranscriptState("session-1"),
+    ).map((entry) => entry.clientPromptId)).toEqual(["prompt-failed"]);
+  });
+
   it("dispatches one ordered intent per session at a time", () => {
     let state = emptyState();
     const prompt = createSendPromptIntent({
@@ -343,6 +374,72 @@ describe("session intents", () => {
     expect(next.entriesById["interaction-1"]).toMatchObject({
       kind: "resolve_interaction",
       status: "reconciled",
+    });
+  });
+
+  it("preserves immutable queue seqs while reconciling a reorder event", () => {
+    let state = emptyState();
+    state = upsertSessionIntent(state, {
+      ...createSendPromptIntent({
+        clientPromptId: "prompt-1",
+        clientSessionId: "session-1",
+        text: "Ship it",
+        blocks: [{ type: "text", text: "Ship it" }],
+        placement: "queue",
+      }),
+      status: "accepted",
+      deliveryState: "accepted_queued",
+      queuedSeq: 7,
+    });
+    state = upsertSessionIntent(state, {
+      ...createSendPromptIntent({
+        clientPromptId: "prompt-2",
+        clientSessionId: "session-1",
+        text: "Then verify it",
+        blocks: [{ type: "text", text: "Then verify it" }],
+        placement: "queue",
+      }),
+      status: "accepted",
+      deliveryState: "accepted_queued",
+      queuedSeq: 8,
+    });
+
+    const next = reconcileOutboxFromEnvelopes(state, "session-1", [{
+      sessionId: "session-1",
+      seq: 9,
+      timestamp: "2026-05-12T00:00:09Z",
+      event: {
+        type: "pending_prompts_reordered",
+        pendingPrompts: [
+          {
+            seq: 8,
+            promptId: "prompt-2",
+            text: "Then verify it",
+            contentParts: [{ type: "text", text: "Then verify it" }],
+            queuedAt: "2026-05-12T00:00:01Z",
+            promptProvenance: null,
+          },
+          {
+            seq: 7,
+            promptId: "prompt-1",
+            text: "Ship it",
+            contentParts: [{ type: "text", text: "Ship it" }],
+            queuedAt: "2026-05-12T00:00:00Z",
+            promptProvenance: null,
+          },
+        ],
+      },
+    }]);
+
+    expect(next.entriesById["prompt-1"]).toMatchObject({
+      queuedSeq: 7,
+      placement: "queue",
+      deliveryState: "accepted_queued",
+    });
+    expect(next.entriesById["prompt-2"]).toMatchObject({
+      queuedSeq: 8,
+      placement: "queue",
+      deliveryState: "accepted_queued",
     });
   });
 

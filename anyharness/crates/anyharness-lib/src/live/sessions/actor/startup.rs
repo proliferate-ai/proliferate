@@ -3,11 +3,10 @@ use std::time::Instant;
 
 use agent_client_protocol as acp;
 use anyharness_contract::v1::{SessionActionCapabilities, SessionExecutionPhase};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{mpsc, Mutex};
 
 use crate::domains::sessions::model::serialize_action_capabilities;
 use crate::domains::sessions::prompt::capabilities::capabilities_from_acp;
-use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::config::apply::restore_persisted_live_config_if_needed;
 use crate::live::sessions::actor::config::handle::apply_requested_session_preferences;
 use crate::live::sessions::actor::config::persist::{
@@ -29,7 +28,7 @@ use crate::live::sessions::driver::session_lifecycle::initialize_connection;
 use crate::live::sessions::driver::stderr::AgentStderrTail;
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
 use crate::live::sessions::handle::LiveSessionHandle;
-use crate::live::sessions::model::{QueueDurable, SessionStateDurable};
+use crate::live::sessions::model::SessionStateDurable;
 use crate::live::sessions::sink::SessionEventSink;
 
 impl SessionActor {
@@ -351,8 +350,6 @@ impl SessionActor {
             &config.launch.session.status,
         );
 
-        dispatch_startup_drain(config.caps.queue.as_ref(), &session_id, &handle).await;
-
         let SessionActorConfig {
             launch,
             caps,
@@ -407,53 +404,6 @@ fn agent_exited_during_startup_error(
     }
 }
 
-async fn dispatch_startup_drain(
-    store: &dyn QueueDurable,
-    session_id: &str,
-    handle: &Arc<LiveSessionHandle>,
-) {
-    // Invariant 5: startup drain. If the durable queue is non-empty, self-dispatch
-    // a Prompt command for the head row carrying `from_queue_seq`. The first
-    // iteration of the outer Prompt arm treats it as a drained iteration:
-    // `begin_turn` runs, then the head row is deleted and PendingPromptRemoved
-    // is emitted. If more items exist, the turn-end drain loop picks them up
-    // naturally from there. Races: the main select loop has not started yet.
-    match store.peek_head_pending_prompt(session_id) {
-        Ok(Some(head)) => {
-            let (drain_respond_tx, _drain_respond_rx) = oneshot::channel();
-            if let Err(error) = handle
-                .command_tx
-                .send(SessionCommand::Prompt {
-                    payload: head.prompt_payload(),
-                    prompt_id: head.prompt_id,
-                    from_queue_seq: Some(head.seq),
-                    respond_to: drain_respond_tx,
-                })
-                .await
-            {
-                tracing::warn!(
-                    session_id = %session_id,
-                    error = %error,
-                    "failed to self-dispatch startup drain prompt",
-                );
-            } else {
-                tracing::info!(
-                    session_id = %session_id,
-                    seq = head.seq,
-                    "session.actor.startup_drain.dispatched",
-                );
-            }
-        }
-        Ok(None) => {}
-        Err(error) => {
-            tracing::warn!(
-                session_id = %session_id,
-                error = %error,
-                "failed to peek pending prompt queue at startup",
-            );
-        }
-    }
-}
 pub(in crate::live::sessions::actor) fn persist_session_action_capabilities(
     store: &dyn SessionStateDurable,
     session_id: &str,
@@ -501,9 +451,7 @@ pub(in crate::live::sessions::actor) fn action_capabilities_from_acp(
     // sidecar has no LoopPort — but the runtime scheduler fully drives them.
     // Advertise support so the ⟳ loops chip is reachable; `loops_native` stays
     // false, marking the emulated (non-mirror) path.
-    if !supports_loops
-        && crate::domains::loops::runtime::is_emulated_loop_agent_kind(agent_kind)
-    {
+    if !supports_loops && crate::domains::loops::runtime::is_emulated_loop_agent_kind(agent_kind) {
         supports_loops = true;
     }
     SessionActionCapabilities {
@@ -726,8 +674,7 @@ mod tests {
         // codex-acp omits `loops` from `_meta` entirely, but the runtime
         // emulates loops for it — the capability must still report supported so
         // the ⟳ loops chip is reachable, with loops_native=false.
-        let init_response =
-            acp::schema::InitializeResponse::new(acp::schema::ProtocolVersion::V1);
+        let init_response = acp::schema::InitializeResponse::new(acp::schema::ProtocolVersion::V1);
         let capabilities = action_capabilities_from_acp("codex", &init_response);
         assert!(capabilities.supports_loops);
         assert!(!capabilities.loops_native);

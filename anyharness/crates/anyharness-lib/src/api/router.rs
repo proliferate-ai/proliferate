@@ -14,9 +14,9 @@ use super::http::{
     agent_auth, agent_gateway_catalog, agents, auth as http_auth, catalogs, cowork, files, git,
     goals, health, hosting, loops, mobility, plans, processes, product_mcp, replay, repo_roots,
     reviews, sessions, sessions_config, sessions_events, sessions_fork, sessions_interactions,
-    sessions_lifecycle, sessions_pending, sessions_prompt, sessions_resume, subagents, terminals,
-    workflow_runs, workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup,
-    workspaces_worktrees, worktrees,
+    sessions_lifecycle, sessions_prompt, sessions_resume, subagents, terminals, workflow_runs,
+    workspaces, workspaces_lifecycle, workspaces_purge, workspaces_setup, workspaces_worktrees,
+    worktrees,
 };
 use super::sse::sessions as sse_sessions;
 use super::ws::activity as ws_activity;
@@ -26,6 +26,8 @@ use super::ws::terminals as ws_terminals;
 use crate::api::auth::{user_route_allowed, AuthContext, AuthError};
 use crate::api::http::error::ApiError;
 use crate::app::AppState;
+
+mod pending_prompt_routes;
 
 pub fn build_router(state: AppState) -> Router {
     let v1 = Router::new()
@@ -435,15 +437,7 @@ pub fn build_router(state: AppState) -> Router {
             "/sessions/{session_id}/fork",
             post(sessions_fork::fork_session),
         )
-        .route(
-            "/sessions/{session_id}/pending-prompts/{seq}",
-            patch(sessions_pending::edit_pending_prompt)
-                .delete(sessions_pending::delete_pending_prompt),
-        )
-        .route(
-            "/sessions/{session_id}/prompt-attachments/{attachment_id}",
-            get(sessions_pending::get_prompt_attachment),
-        )
+        .merge(pending_prompt_routes::router())
         .route(
             "/sessions/{session_id}/goal",
             put(goals::set_session_goal).delete(goals::clear_session_goal),

@@ -138,7 +138,9 @@ pub enum SetSessionConfigOptionError {
     /// fix, C13).
     Access(WorkspaceAccessError),
     /// The session is held by a non-terminal workflow run (C13 / E8).
-    WorkflowHeld { run_id: String },
+    WorkflowHeld {
+        run_id: String,
+    },
     Internal(anyhow::Error),
 }
 
@@ -151,7 +153,9 @@ pub enum SendPromptError {
     /// See [`SetSessionConfigOptionError::Access`].
     Access(WorkspaceAccessError),
     /// The session is held by a non-terminal workflow run (C13 / E8).
-    WorkflowHeld { run_id: String },
+    WorkflowHeld {
+        run_id: String,
+    },
     Internal(anyhow::Error),
 }
 
@@ -176,7 +180,9 @@ pub enum ForkSessionError {
     /// See [`SetSessionConfigOptionError::Access`].
     Access(WorkspaceAccessError),
     /// The session is held by a non-terminal workflow run (C13 / E8).
-    WorkflowHeld { run_id: String },
+    WorkflowHeld {
+        run_id: String,
+    },
     MissingNativeSessionId,
     MissingDataKey,
     StartFailed {
@@ -202,7 +208,28 @@ pub enum PendingPromptMutationError {
     /// The session is held by a non-terminal workflow run (C13 / E8). Editing or
     /// deleting a queued prompt on a workflow-driven session is blocked —
     /// take-over is the only door (E8).
-    WorkflowHeld { run_id: String },
+    WorkflowHeld {
+        run_id: String,
+    },
+    Internal(anyhow::Error),
+}
+
+#[derive(Debug)]
+pub enum PendingPromptQueueError {
+    SessionNotFound(String),
+    NotFound,
+    StaleOrder {
+        current_seqs: Vec<i64>,
+    },
+    InvalidReorder(String),
+    /// The selected prompt is durably at the queue head, but the active turn
+    /// did not receive its cancellation notification. Retrying the same steer
+    /// skips the already-applied reorder and only retries interruption.
+    SteerInterruptFailed,
+    Access(WorkspaceAccessError),
+    WorkflowHeld {
+        run_id: String,
+    },
     Internal(anyhow::Error),
 }
 
@@ -214,7 +241,9 @@ pub enum SessionLifecycleError {
     /// The session is held by a non-terminal workflow run (C13 / E8). Blocks
     /// user-initiated cancel/close on a workflow-driven session — take-over is
     /// the only door (E8).
-    WorkflowHeld { run_id: String },
+    WorkflowHeld {
+        run_id: String,
+    },
     Internal(anyhow::Error),
 }
 

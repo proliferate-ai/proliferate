@@ -4,8 +4,8 @@ use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
-    PendingPromptMutationError, ResolveInteractionError, SendPromptError, SessionLifecycleError,
-    SetSessionConfigOptionError,
+    PendingPromptMutationError, PendingPromptQueueError, ResolveInteractionError, SendPromptError,
+    SessionLifecycleError, SetSessionConfigOptionError,
 };
 use crate::domains::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 
@@ -250,6 +250,34 @@ pub(super) fn map_pending_prompt_mutation_error(error: PendingPromptMutationErro
     }
 }
 
+pub(super) fn map_pending_prompt_queue_error(error: PendingPromptQueueError) -> ApiError {
+    match error {
+        PendingPromptQueueError::SessionNotFound(session_id) => ApiError::not_found(
+            format!("Session not found: {session_id}"),
+            "SESSION_NOT_FOUND",
+        ),
+        PendingPromptQueueError::NotFound => {
+            ApiError::not_found("Pending prompt not found", "PENDING_PROMPT_NOT_FOUND")
+        }
+        PendingPromptQueueError::InvalidReorder(detail) => {
+            ApiError::bad_request(detail, "INVALID_PENDING_PROMPT_ORDER")
+        }
+        PendingPromptQueueError::StaleOrder { current_seqs } => ApiError::conflict(
+            format!(
+                "Pending prompt order changed; current ordered sequence numbers are {current_seqs:?}"
+            ),
+            "PENDING_PROMPT_ORDER_STALE",
+        ),
+        PendingPromptQueueError::SteerInterruptFailed => ApiError::service_unavailable(
+            "The queued prompt is first, but the active turn was not interrupted. Retry sending it next to retry interruption without reordering again.",
+            "PENDING_PROMPT_STEER_DEGRADED",
+        ),
+        PendingPromptQueueError::Access(error) => map_access_error(error),
+        PendingPromptQueueError::WorkflowHeld { run_id } => workflow_held_error(&run_id),
+        PendingPromptQueueError::Internal(error) => ApiError::internal(error.to_string()),
+    }
+}
+
 pub(super) fn map_get_live_config_snapshot_error(error: GetLiveConfigSnapshotError) -> ApiError {
     match error {
         GetLiveConfigSnapshotError::SessionNotFound(session_id) => ApiError::not_found(
@@ -298,6 +326,35 @@ mod tests {
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
 
     #[test]
+    fn pending_prompt_reorder_validation_maps_to_bad_request() {
+        use crate::domains::sessions::runtime::PendingPromptQueueError;
+        let response = super::map_pending_prompt_queue_error(
+            PendingPromptQueueError::InvalidReorder("duplicate sequence".to_string()),
+        )
+        .into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn stale_pending_prompt_reorder_maps_to_typed_conflict() {
+        use crate::domains::sessions::runtime::PendingPromptQueueError;
+        let response = super::map_pending_prompt_queue_error(PendingPromptQueueError::StaleOrder {
+            current_seqs: vec![2, 1],
+        })
+        .into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    #[test]
+    fn degraded_steer_maps_to_retryable_service_unavailable() {
+        use crate::domains::sessions::runtime::PendingPromptQueueError;
+        let response =
+            super::map_pending_prompt_queue_error(PendingPromptQueueError::SteerInterruptFailed)
+                .into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[test]
     fn workflow_held_maps_to_409_session_workflow_held() {
         use crate::domains::sessions::runtime::SendPromptError;
         let response = super::map_send_prompt_error(SendPromptError::WorkflowHeld {
@@ -312,12 +369,11 @@ mod tests {
         use crate::domains::sessions::runtime::PendingPromptMutationError;
         // C13/E8: editing or deleting a queued prompt on a held session must
         // surface the typed 409 SESSION_WORKFLOW_HELD, never a collapsed 500.
-        let response = super::map_pending_prompt_mutation_error(
-            PendingPromptMutationError::WorkflowHeld {
+        let response =
+            super::map_pending_prompt_mutation_error(PendingPromptMutationError::WorkflowHeld {
                 run_id: "run-1".to_string(),
-            },
-        )
-        .into_response();
+            })
+            .into_response();
         assert_eq!(response.status(), StatusCode::CONFLICT);
     }
 

@@ -13,6 +13,7 @@ import type {
   McpElicitationUrlRevealResponse,
   PromptSessionRequest,
   PromptSessionResponse,
+  ReorderPendingPromptsRequest,
   ResolveInteractionRequest,
   ResumeSessionRequest,
   ScheduleSubagentWakeRequest,
@@ -304,6 +305,34 @@ export class SessionsClient {
     return normalizeSession(
       await this.transport.deleteJson<Session>(
         `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/${encodeURIComponent(String(seq))}`,
+        options,
+      ),
+    );
+  }
+
+  async reorderPendingPrompts(
+    sessionId: string,
+    input: ReorderPendingPromptsRequest,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.put<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/order`,
+        input,
+        options,
+      ),
+    );
+  }
+
+  async steerPendingPrompt(
+    sessionId: string,
+    seq: number,
+    options?: AnyHarnessRequestOptions,
+  ): Promise<Session> {
+    return normalizeSession(
+      await this.transport.post<Session>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/pending-prompts/${encodeURIComponent(String(seq))}/steer`,
+        {},
         options,
       ),
     );

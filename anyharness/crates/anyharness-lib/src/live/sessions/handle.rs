@@ -289,6 +289,27 @@ impl LiveSessionHandle {
             .await
     }
 
+    pub async fn reorder_pending_prompts(
+        &self,
+        expected_seqs: Vec<i64>,
+        desired_seqs: Vec<i64>,
+    ) -> Result<(), LiveSessionCommandError<QueueMutationError>> {
+        self.send_request(|respond_to| SessionCommand::ReorderPendingPrompts {
+            expected_seqs,
+            desired_seqs,
+            respond_to,
+        })
+        .await
+    }
+
+    pub async fn steer_pending_prompt(
+        &self,
+        seq: i64,
+    ) -> Result<(), LiveSessionCommandError<QueueMutationError>> {
+        self.send_request(|respond_to| SessionCommand::SteerPendingPrompt { seq, respond_to })
+            .await
+    }
+
     pub async fn set_config_option(
         &self,
         config_id: String,
