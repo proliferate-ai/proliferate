@@ -168,15 +168,15 @@ describe("ChatInputControlRow", () => {
     expect(screen.queryByRole("button", { name: /Fast mode/i })).toBeNull();
   });
 
-  it("renders working mode as text with its current mode icon", () => {
+  it("renders working mode as text with a subtle disclosure chevron", () => {
     renderControlRow();
     const mode = screen.getByRole("button", { name: "Mode: Default" });
     expect(screen.getByText("Default")).toBeTruthy();
     expect(mode.querySelectorAll("svg")).toHaveLength(1);
-    expect(mode.querySelector('path[d="m6 9 6 6 6-6"]')).toBeNull();
+    expect(mode.querySelector('path[d="m6 9 6 6 6-6"]')).toBeTruthy();
   });
 
-  it("keeps the mode icon without implying disclosure for a non-settable mode", () => {
+  it("does not imply disclosure for a non-settable working mode", () => {
     const controls = createControls();
     const modeControl = controls.find((control) => control.key === "collaboration_mode")!;
     modeControl.settable = false;
@@ -184,8 +184,7 @@ describe("ChatInputControlRow", () => {
 
     const mode = screen.getByRole("button", { name: "Default" });
     expect(mode).toHaveProperty("disabled", true);
-    expect(mode.querySelectorAll("svg")).toHaveLength(1);
-    expect(mode.querySelector('path[d="m6 9 6 6 6-6"]')).toBeNull();
+    expect(mode.querySelector("svg")).toBeNull();
   });
 
   it("orders the combined intelligence control before working mode", () => {

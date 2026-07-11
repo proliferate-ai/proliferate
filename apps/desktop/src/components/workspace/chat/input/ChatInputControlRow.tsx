@@ -47,28 +47,6 @@ export interface ComposerLeadingControlsProps {
   activeSessionId: string | null;
 }
 
-function resolveModelTuningControls(controls: LiveSessionControlDescriptor[]) {
-  const reasoningControl = controls.find((control) =>
-    control.key === "effort" && control.options.length >= 2
-  ) ?? controls.find((control) =>
-    control.key === "reasoning" && control.options.length >= 2
-  ) ?? null;
-  const fastModeControl = controls.find((control) =>
-    control.key === "fast_mode" && control.kind === "toggle"
-  ) ?? null;
-  const promotedControls = new Set(
-    [reasoningControl, fastModeControl].filter(
-      (control): control is LiveSessionControlDescriptor => control !== null,
-    ),
-  );
-
-  return {
-    reasoningControl,
-    fastModeControl,
-    overflowControls: controls.filter((control) => !promotedControls.has(control)),
-  };
-}
-
 /**
  * The leading control cluster (combined model/reasoning selector, mode, goal,
  * integrations). Shared verbatim between the in-session chat composer
@@ -84,7 +62,6 @@ export function ComposerLeadingControls({
   activeSessionId,
 }: ComposerLeadingControlsProps) {
   const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
-  const modelTuning = resolveModelTuningControls(controlGroups.modelConfigControls);
 
   const sessionGoal = useSessionGoal();
   const beginComposingGoal = useGoalBarStore((state) => state.beginComposing);
@@ -106,8 +83,8 @@ export function ComposerLeadingControls({
       >
         <ComposerModelSelectorControl
           modelSelectorProps={modelSelectorProps}
-          reasoningControl={modelTuning.reasoningControl}
-          fastModeControl={modelTuning.fastModeControl}
+          reasoningControl={controlGroups.reasoningEffortControl}
+          fastModeControl={controlGroups.fastModeControl}
         />
       </div>
 
@@ -182,7 +159,6 @@ export function ComposerTrailingControls({
   const canUseUtilityActions =
     !isEditingQueuedPrompt && !chatDisabled && !runtimeControlsDisabled && !isSubmitting;
   const controlGroups = buildComposerSessionControlGroups(sessionConfigControls);
-  const modelTuning = resolveModelTuningControls(controlGroups.modelConfigControls);
   const canAttachFile = canUseUtilityActions && canAttachFiles;
   const attachFileDetail = canAttachFile
     ? "Upload image or text context."
@@ -218,7 +194,7 @@ export function ComposerTrailingControls({
       >
         <ComposerOverflowControl
           agentKind={agentKind}
-          controls={modelTuning.overflowControls}
+          controls={controlGroups.overflowControls}
         />
       </span>
     </>
