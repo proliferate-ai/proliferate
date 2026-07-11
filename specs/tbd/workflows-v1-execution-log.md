@@ -26,6 +26,7 @@ conversation memory.
 | 4b | WS0B-U desktop screens ownership split | `e01bc8be5` (merged `0d57e8a9e`) | WS0B-S in base `3a2336720` | agent: tsc clean, boundaries pass, host/home vitest 17/17, 16 pre-existing unrelated vitest failures verified identical on base; captain post-merge: tsc clean, boundaries pass, host/home 17/17 | ACCEPTED — HomeScreen 619→367, EditorScreen 1212→366, TriggersCard 1064→131; inspector/canvas/trigger components + draft/create/trigger hooks; raw-access violation fixed; 2 max-lines + 3 structure allowlist entries removed |
 | 6 | WS2a persistence skeleton | `3ac1abe46` (rebased `b72e468c4`, merged `ea4f5de5f`) | WS1+WS0B-S via rebase onto `0b25ffcc0` | agent: 77 unit + 39 gateway + 6 migration-integration + heads + populated-DB upgrade test; captain post-rebase: 77 passed + single head d9578c0275f3; post-merge heads verified | ACCEPTED — 7 new tables + run state-axis columns (NULL legacy), workflow_ledger store package, migration c3f8b1d6a4e2→d9578c0275f3. 10 downstream shape decisions recorded in agent handoff (capability_key = WS3a-defined; NULL revision ≡ 0; no fence secret in rows; acquire_session_leases needs caller rollback; workflow_trigger_item/step_action retirement → WS4b/c) |
 | 7 | WS5a runtime acceptance + observation outbox | `bf7055e57` (rebased `b7f4358cc`, merged `3619df135`) | WS1+WS0B-R; rebased onto `bb0eac10c` | agent: full crate 1128/0 (+12 new), workflows 143/0, max-lines byte-identical to base; captain post-rebase: full crate 1128/0 | ACCEPTED — SQLite 0056/0057; gapless same-tx whole-snapshot revisions; lowest_unacked/ack/replay + service seam; optional delivery-identity conflict rejection (HTTP 409), legacy unchanged. DECISION: runtime reuses plan-carried step keys (node.lane.step) — v2 root::uuid grammar activates when WS2b compiles v2 plans; WS2c owns boundary translation if needed |
+| 10 | WS5b effect ledger + recovery matrix | `a489dd1e8` (rebased `2fa577ac3`, merged `dc10a85be`) | WS5a; rebased onto `0d4c75023` | agent: lib 1157/0 (+29), workflow_fault 11/11, workspace build; captain post-rebase: lib 1157/0 | ACCEPTED — SQLite 0058_workflow_effects (intent-before-action, per-seq emit turns); recovery: agent-turn durable-else-uncertain (no harness reattach API — pure branch tested for future probe), shell durable/replay_key/uncertain, scm branch-identity reissue, action identity-poll; ActionSubmitter trait for WS4c + legacy inline adapter; OutcomeUncertain bypasses on_fail (terminal). service.rs allowlist tightened 1028→1025 |
 | 9 | WS3a exact capability grants | `8f8bec721` (rebased `ea5934e25`, merged `a76e07367`) | WS2a+WS1+WS0B-S; rebased onto `28fa29a2e` | agent: 121 focused tests, heads, ruff, boundaries; captain post-rebase: 60 tests + single head b3d1f5a9c7e2; post-merge heads verified | ACCEPTED — capability_key codec, semantic_revision migration (d9578c0275f3→b3d1f5a9c7e2), StartRun lease freezing, authorize_capability live narrowing beside legacy namespace layer. LEGACY-PARALLEL: namespace token still mints/consumed until WS3b/5c; cold tool cache defers to namespace layer until WS3c; product_mcp arm → WS8. NOTE: future migrations must move _CHAIN_HEAD pin in test_workflow_ledger_skeleton.py |
 | 8 | WS9a product-domain strict model | `4db884977` (rebased `18bf4905e`, merged `28fa29a2e`) | WS1+WS0B-U; rebased onto `96b4befa9` | agent: build + 665/665 (18 new), desktop tsc clean, structure ratchet shrank; captain post-rebase: build + 665/665 | ACCEPTED — identity.ts (UUIDv7/v5 via WS1 module, canonical serialize, §5.1 step keys), read-only unknown versions (type-narrowed serializer), §6.1 slot lineage (replaced 2 wrong duplicate_slot tests), strict emit-schema profile + branch grammar. New exports: workflows/identity, /read-only, /strict-rules |
 | 5 | WS10a strict release runner/policy | `abffe516845b036d511a449bc4c4daba0e296396` (merged `50cdfef80`) | WS1 `ac7044316` | agent: 85/85 tests/release tests, typecheck, live CLI proof both modes; captain: typecheck + 85/85 re-run in worktree | ACCEPTED — signal/release modes; required-workflows.json seeded (content ownership → WS10b); summary artifact + validateSummary for WS10c; SUMMARY_ENV interface recorded; correlation/deadline/no-retry guards. NOTE: focused command is `pnpm -C tests/release exec tsx --test src/runner/workflow-policy.test.ts` (plan's `test -- workflow-policy` does not filter) |
@@ -33,7 +34,7 @@ conversation memory.
 
 ## Integration HEAD
 
-`a76e07367` (10 packets merged: + WS3a). Server chain next: WS2b
+`dc10a85be` (11 packets merged: + WS5b). In flight: WS2b (critical path)
 
 ## Gate status
 
@@ -78,8 +79,7 @@ conversation memory.
 
 | Packet | Agent | Worktree | Base SHA | Status |
 | --- | --- | --- | --- | --- |
-| WS5b sequential effects | agent (opus) | ~/proliferate-wt/wsc-ws5b | 96b4befa9 | running |
-| WS2b compiler/ledger | agent (opus) | ~/proliferate-wt/wsc-ws2b | a76e07367 | launching |
+| WS2b compiler/ledger | agent (opus) | ~/proliferate-wt/wsc-ws2b | a76e07367 | running |
 
 ## Blockers
 
