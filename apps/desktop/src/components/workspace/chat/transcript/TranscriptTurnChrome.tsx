@@ -147,9 +147,9 @@ export function resolvePendingPromptTrailingStatus(
     // Outbox / launch dispatch — same "Thinking" voice as agent work (the
     // send/queue distinction is plumbing, not something the user tracks).
     return (
-      <TrailingStatusCrossfade statusKey="sending">
+      <div data-trailing-status="sending">
         <StreamingIndicator startedAt={queuedAt} label={CHAT_STREAMING_STATUS_LABELS.sending} />
-      </TrailingStatusCrossfade>
+      </div>
     );
   }
 
@@ -163,9 +163,9 @@ export function resolveTurnTrailingStatus(
 ): ReactNode {
   // Every variant renders inside the same fixed-height row as the reserved
   // assistant action slot, so swapping between "Thinking…", a transient status,
-  // and the needs-input marker never shifts the content above it. The three
-  // states share one crossfade container: a state change fades the new content
-  // in over 150ms (opacity only) instead of a hard swap.
+  // and the needs-input marker never shifts the content above it. Transient and
+  // blocking markers fade in; the phase-anchored working gleam renders directly
+  // so an owner handoff cannot replay a one-shot parent animation.
   if (sessionViewState === "working" && transientStatusText) {
     return (
       <TrailingStatusCrossfade
@@ -179,10 +179,13 @@ export function resolveTurnTrailingStatus(
   }
 
   if (sessionViewState === "working") {
+    // The gleam carries its own motion and is phase-anchored to startedAt.
+    // Avoid a one-shot parent fade that would visibly replay when the pending
+    // prompt hands this slot to the materialized turn.
     return (
-      <TrailingStatusCrossfade statusKey="working" className={ASSISTANT_ACTION_SLOT_HEIGHT}>
+      <div className={ASSISTANT_ACTION_SLOT_HEIGHT} data-trailing-status="working">
         <StreamingIndicator startedAt={startedAt} />
-      </TrailingStatusCrossfade>
+      </div>
     );
   }
 
@@ -197,10 +200,9 @@ export function resolveTurnTrailingStatus(
   return null;
 }
 
-// Single container for the three trailing states. `key` forces a remount on a
-// real state change (the crossfade replays), while same-state re-renders — the
-// elapsed second ticking, a transient string re-wording — reconcile in place
-// with no re-animation. Compositor-only (opacity), motion-safe.
+// One-shot container for transient and blocking trailing states. Same-state
+// re-renders reconcile in place. The working gleam deliberately bypasses this
+// wrapper so pending→turn ownership changes remain visually continuous.
 function TrailingStatusCrossfade({
   statusKey,
   className,

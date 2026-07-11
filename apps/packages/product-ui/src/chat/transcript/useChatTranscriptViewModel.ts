@@ -23,6 +23,7 @@ import type {
 import { collectVisibleTurnIds } from "./ChatTranscriptViewRules";
 import { useLatestTranscriptLiveStatus } from "./useLatestTranscriptLiveStatus";
 import { useSharedTranscriptRowModel } from "./useSharedTranscriptRowModel";
+import { useOptimisticPromptHandoff } from "./useOptimisticPromptHandoff";
 
 const noop = () => {};
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
@@ -89,8 +90,15 @@ export function useChatTranscriptViewModel({
     latestTurn,
     transcript,
   );
-  const visibleOptimisticPrompt = resolveVisibleOptimisticPrompt({
+  const optimisticPromptHandoff = useOptimisticPromptHandoff({
+    activeSessionId,
     optimisticPrompt,
+    latestTurn,
+    latestTurnHasAssistantRenderableContent,
+    sessionViewState,
+  });
+  const visibleOptimisticPrompt = resolveVisibleOptimisticPrompt({
+    optimisticPrompt: optimisticPromptHandoff,
     latestTurnStartedAt: latestTurn?.startedAt ?? null,
     latestTurnHasAssistantRenderableContent,
   });

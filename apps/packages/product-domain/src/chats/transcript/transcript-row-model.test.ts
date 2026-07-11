@@ -105,7 +105,7 @@ describe("buildTranscriptRowModel", () => {
     ]);
   });
 
-  it("keeps an in-progress latest turn when it already has renderable content", () => {
+  it("keeps the pending row stable across the echoed user message", () => {
     const transcript = createTranscriptState("session-1");
     addTurn(transcript, "turn-live", false);
     addUserItem(transcript, "turn-live", "item-user", "Previous visible content");
@@ -119,12 +119,6 @@ describe("buildTranscriptRowModel", () => {
     });
 
     expect(rows).toEqual([
-      expect.objectContaining({
-        kind: "turn",
-        key: "turn:turn-live:block:content",
-        turnId: "turn-live",
-        blockKey: "content",
-      }),
       { kind: "pending_prompt", key: "pending-prompt:session-1" },
     ]);
   });

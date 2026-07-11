@@ -304,6 +304,7 @@ body {
   will-change: transform;
   animation: thinking-band-sweep var(--thinking-text-duration, 1.8s)
     var(--thinking-text-easing, cubic-bezier(0.45, 0.05, 0.55, 0.95)) infinite;
+  animation-delay: var(--thinking-text-delay, 0ms);
 }
 
 .thinking-text-band-glyphs {
@@ -319,6 +320,7 @@ body {
   will-change: transform;
   animation: thinking-band-glyphs-sweep var(--thinking-text-duration, 1.8s)
     var(--thinking-text-easing, cubic-bezier(0.45, 0.05, 0.55, 0.95)) infinite;
+  animation-delay: var(--thinking-text-delay, 0ms);
 }
 
 @media (prefers-reduced-motion: reduce) {

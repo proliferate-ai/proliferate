@@ -10,7 +10,6 @@ import {
   type TurnDisplayBlock,
   type TurnPresentation,
 } from "./transcript-presentation";
-import { turnHasRenderableTranscriptContent } from "../pending-prompts/pending-prompts";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
 
@@ -127,7 +126,6 @@ export function buildTranscriptRowModel({
       hasVisibleLocalPrompt
       && isLatestTurnInProgress
       && !latestTurnHasAssistantRenderableContent
-      && !turnHasRenderableTranscriptContent(turn, transcript)
     ) {
       continue;
     }

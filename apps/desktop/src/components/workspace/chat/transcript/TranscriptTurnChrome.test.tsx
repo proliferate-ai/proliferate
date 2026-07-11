@@ -102,8 +102,8 @@ describe("resolveTurnTrailingStatus", () => {
 
     expect(container.querySelector("[data-trailing-status='working']")).not.toBeNull();
     expect(container.textContent).toContain("Thinking");
-    // The three states share one crossfade container.
-    expect(container.innerHTML).toContain("motion-safe:animate-status-crossfade");
+    expect(container.innerHTML).toContain("--thinking-text-delay");
+    expect(container.innerHTML).not.toContain("motion-safe:animate-status-crossfade");
   });
 
   it("renders a transient thought at text-chat, not the old 8px text-xs", () => {
@@ -136,6 +136,7 @@ describe("resolvePendingPromptTrailingStatus", () => {
 
     expect(container.querySelector("[data-trailing-status='sending']")).not.toBeNull();
     expect(container.textContent).toContain("Thinking");
+    expect(container.innerHTML).not.toContain("motion-safe:animate-status-crossfade");
   });
 
   it("shows the awaiting-response marker when the outbox is waiting on input", () => {

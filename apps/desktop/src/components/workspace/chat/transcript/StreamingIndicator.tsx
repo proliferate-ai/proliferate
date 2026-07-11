@@ -19,13 +19,15 @@ export function StreamingIndicator({
   label = CHAT_STREAMING_STATUS_LABELS.thinking,
 }: StreamingIndicatorProps) {
   useDebugRenderCount("streaming-indicator");
-  const elapsedSeconds = useStreamingElapsedSeconds(startedAt);
+  const startedMs = useMemo(() => parseStartedAtMs(startedAt), [startedAt]);
+  const elapsedSeconds = useStreamingElapsedSeconds(startedMs);
 
   return (
     <DebugProfiler id="streaming-indicator">
       <div className="flex min-h-5 items-end gap-1.5 py-1 text-muted-foreground">
         <ThinkingText
           text={label}
+          motionOriginMs={startedMs}
           className="text-[length:var(--text-message)] leading-[var(--text-message--line-height)]"
         />
         {elapsedSeconds !== null && (
@@ -41,13 +43,7 @@ export function StreamingIndicator({
 
 // Ticks once per second while mounted; returns null until the wait crosses the
 // threshold so the suffix appears — and then advances — in step with the clock.
-function useStreamingElapsedSeconds(startedAt: string | null): number | null {
-  const startedMs = useMemo(() => {
-    if (!startedAt) return null;
-    const parsed = Date.parse(startedAt);
-    return Number.isFinite(parsed) ? parsed : null;
-  }, [startedAt]);
-
+function useStreamingElapsedSeconds(startedMs: number | null): number | null {
   const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(() =>
     computeElapsedSuffixSeconds(startedMs),
   );
@@ -65,6 +61,12 @@ function useStreamingElapsedSeconds(startedAt: string | null): number | null {
   }, [startedMs]);
 
   return elapsedSeconds;
+}
+
+function parseStartedAtMs(startedAt: string | null): number | null {
+  if (!startedAt) return null;
+  const parsed = Date.parse(startedAt);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function computeElapsedSuffixSeconds(startedMs: number | null): number | null {
