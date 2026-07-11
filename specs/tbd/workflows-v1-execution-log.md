@@ -23,10 +23,11 @@ conversation memory.
 | 1 | WS0 Gate A0 architecture/contract freeze (docs) | `68661e27e8897a4fd8c73cd9bc58caddb58e7376` | baseline `8be1c7706` | doc link check (all feature-spec dependency paths exist); diff review of 12 cross-doc alignment edits | ACCEPTED — architecture commit; no code touched |
 | 2 | WS1 contract spine + golden fixtures | `ac704431616d4eccaf99a7d7042c097b641be8ff` (merged `1f9c73666`) | WS0 `68661e27e` | `python3 scripts/check_workflow_contract_fixtures.py` (py+rust 6/6+ts 10/10); `cargo test -p anyharness-contract` 37; product-domain build+647 tests; captain re-ran checker post-merge | ACCEPTED — T1-WF-CONTRACT-01 GREEN; OpenAPI/SDK regen deferred (models unwired); traceability.yaml now captain-owned |
 | 3 | WS0B-R executor ownership split | `c220bef741b7d9868531e7db0a52cf0b47b2140f` (merged `0c4e4284f`) | WS0 `68661e27e` | `cargo test -p anyharness-lib --lib` 1116/0 in worktree; captain: post-merge build green, max-lines violations 3 (unchanged, all server-test debt owned by WS2b/WS4) | ACCEPTED — executor.rs 2982→307; agent_turn/turn/goal/emit/effects/observation/receipts/parallel/merge modules; allowlist entry removed |
+| 4 | WS0B-S service ownership split | `f11870c4e` (merged `72338fe4b`) | WS0 `68661e27e` | agent: 303 workflow unit tests, ruff, boundaries, AST byte-verification of moves; captain post-merge: test_workflow_service+delivery green | ACCEPTED — service.py 1898→327 + compiler.py/triggers.py/worker/service.py; service.py allowlist entry removed. CAVEATS: triggers.py (943) added to allowlist as carved-out debt (further split owned by WS4a/b); api.py and test_workflow_run_gateway.py allowlist +1 each (import-line necessity, inline-documented). Net violations decreased. |
 
 ## Integration HEAD
 
-`0c4e4284f` (WS1 + WS0B-R merged; WS0B-S in flight)
+`72338fe4b` (WS0, WS1, WS0B-R, WS0B-S merged)
 
 ## Gate status
 
@@ -46,8 +47,8 @@ conversation memory.
 | `anyharness-contract/src/v1/workflows*.rs` + API mapping | RELEASED by WS1 | — |
 | Server contract request/response models + OpenAPI/SDK regen | captain (regen pending, models unwired) | captain |
 | `traceability.yaml` | CAPTAIN-OWNED (append-only) | captain |
-| Workflow ORM + Alembic chain | UNASSIGNED (next: WS2a) | — |
-| `server/cloud/workflows/**` service split | ASSIGNED (ownership-only) | WS0B-S |
+| Workflow ORM + Alembic chain | ASSIGNED (first slot after c3f8b1d6a4e2) | WS2a |
+| `server/cloud/workflows/**` service split | RELEASED by WS0B-S; compiler/ledger next to WS2b | — |
 | `anyharness-lib/**/workflows/**` module split | RELEASED by WS0B-R; domain semantics next to WS5a | — |
 | Desktop workflow screens/hooks split | UNASSIGNED (next: WS0B-U) | — |
 | `tests/intent/specs/workflows*.spec.ts` | RESERVED | WS10b |
@@ -72,7 +73,8 @@ conversation memory.
 
 | Packet | Agent | Worktree | Base SHA | Status |
 | --- | --- | --- | --- | --- |
-| WS0B-S server split | agent | ~/proliferate-wt/wsc-ws0bs | 68661e27e | running |
+| WS2a persistence skeleton | agent (opus) | ~/proliferate-wt/wsc-ws2a | b74cba675 | running |
+| WS5a runtime acceptance/observations | agent (opus) | ~/proliferate-wt/wsc-ws5a | b74cba675 | running |
 
 ## Blockers
 
@@ -80,10 +82,13 @@ conversation memory.
 
 ## Next runnable packets
 
-1. WS0B-U (desktop split) — when an agent slot frees.
-2. WS2a persistence skeleton — after WS1 accepted.
-3. WS5a — after WS0B-R + WS1 accepted.
-4. WS3a — after WS2a + WS1 accepted.
+1. WS0B-U (desktop split) — slot now free; launch next.
+2. WS3a exact grants — after WS2a accepted.
+3. WS2b compiler/ledger — after WS2a + WS3a resolver interface.
+4. WS5b sequential effects — after WS5a accepted.
+NOTE: WS0B-S merge means in-flight WS2a/WS5a (based on b74cba675, pre-WS0B-S)
+must rebase onto the post-WS0B-S integration tip at handoff; captain reruns
+their checks post-rebase per plan §4.3.
 
 ## Environment notes
 
