@@ -5,6 +5,7 @@ import { WorkspaceArrivalAttachedPanel } from "@/components/workspace/chat/surfa
 import { TodoTrackerPanel, TodoTrackerStrip } from "@/components/workspace/chat/input/TodoTrackerPanel";
 import { ConnectedApprovalCard } from "@/components/workspace/chat/input/ApprovalCard";
 import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/McpElicitationCard";
+import { ConnectedPendingPromptList } from "@/components/workspace/chat/input/PendingPromptList";
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
 import { ConnectedWorkspaceActivityComposerCard } from "@/components/workspace/chat/input/workspace-activity/WorkspaceActivityComposerCard";
@@ -158,18 +159,24 @@ export function useComposerDockSlots(options?: {
       : null
   ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot, workspaceActivitySlot]);
 
-  return useMemo(() => ({
-    // Ordinary queued prompts render in the transcript. A rollback recovery is
-    // workspace-scoped rather than session-scoped, so it owns the dock's
-    // outbound slot until the user retries or dismisses it.
-    outboundSlot: dockSlotResolution.outboundSlot?.kind === "prompt_recoveries"
+  // Queue-placed prompts have one owner: the dock's outbound list. A rollback
+  // recovery is workspace-scoped rather than session-scoped and outranks the
+  // queue (resolver priority), owning the slot until retried or dismissed.
+  const outboundSlot = useMemo<ReactNode | null>(() => (
+    dockSlotResolution.outboundSlot?.kind === "prompt_recoveries"
       ? <ConnectedPromptRecoveryPanel />
-      : null,
+      : dockSlotResolution.outboundSlot?.kind === "pending_prompts"
+        ? <ConnectedPendingPromptList />
+        : null
+  ), [dockSlotResolution.outboundSlot?.kind]);
+
+  return useMemo(() => ({
+    outboundSlot,
     activeSlot: activeAgentSlot,
     attachedSlot,
   }), [
+    outboundSlot,
     activeAgentSlot,
     attachedSlot,
-    dockSlotResolution.outboundSlot?.kind,
   ]);
 }

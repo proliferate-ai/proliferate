@@ -74,6 +74,26 @@ describe("FullTranscriptRowList", () => {
     expect(viewport.scrollTop).toBe(500);
   });
 
+  it("re-sticks synchronously when a row updates without changing row count", () => {
+    const props = makeProps(vi.fn(), 50);
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    Object.defineProperty(viewport, "scrollHeight", {
+      value: 700,
+      configurable: true,
+    });
+    viewport.scrollTop = 100;
+
+    rerender(
+      <FullTranscriptRowList
+        {...props}
+        rows={ROWS.map((row) => ({ ...row }))}
+      />,
+    );
+
+    expect(viewport.scrollTop).toBe(700);
+  });
+
   it("leaves the viewport alone on resize after scrolling away from the bottom", () => {
     const notifyResize = stubCapturingResizeObserver();
     const { container } = render(
@@ -89,6 +109,63 @@ describe("FullTranscriptRowList", () => {
     notifyResize();
 
     expect(viewport.scrollTop).toBe(600);
+  });
+
+  it("adds manual scroll range for composer cards without moving the transcript", () => {
+    const notifyResize = stubCapturingResizeObserver();
+    const props = makeProps(vi.fn(), 50);
+    const { container, rerender } = render(<FullTranscriptRowList {...props} />);
+    const viewport = getViewport(container);
+    let scrollHeight = 840;
+    Object.defineProperty(viewport, "scrollHeight", {
+      get: () => scrollHeight,
+      configurable: true,
+    });
+    Object.defineProperty(viewport, "clientHeight", {
+      value: 0,
+      configurable: true,
+    });
+    viewport.scrollTop = 840;
+    scrollHeight = 1_000;
+
+    rerender(
+      <FullTranscriptRowList
+        {...props}
+        bottomInsetPx={160}
+        nonDisplacingBottomInsetPx={160}
+      />,
+    );
+
+    expect(viewport.scrollTop).toBe(840);
+    expect(
+      container.querySelector<HTMLElement>("[data-transcript-bottom-overlay-inset]")?.style.height,
+    ).toBe("160px");
+    const transcript = container.querySelector<HTMLElement>("[data-transcript-virtualization-mode='full']");
+    expect(transcript?.className).toContain("mt-auto");
+    expect(transcript?.parentElement?.className).toContain("relative flex min-h-full flex-col");
+    expect(
+      container.querySelector<HTMLElement>("[data-transcript-bottom-overlay-inset]")?.className,
+    ).toContain("absolute inset-x-0 top-full");
+
+    notifyResize();
+    expect(viewport.scrollTop).toBe(840);
+  });
+
+  it("bottom-anchors a short transcript above the structural inset", () => {
+    const { container } = render(
+      <FullTranscriptRowList
+        {...makeProps(vi.fn(), 50)}
+        bottomInsetPx={120}
+      />,
+    );
+
+    const transcript = container.querySelector<HTMLElement>("[data-transcript-virtualization-mode='full']");
+    const structuralInset = container.querySelector<HTMLElement>(
+      "[data-transcript-bottom-structural-inset]",
+    );
+    expect(transcript?.className).toContain("mt-auto");
+    expect(structuralInset?.style.height).toBe("120px");
+    expect(structuralInset?.className).toContain("shrink-0");
   });
 });
 

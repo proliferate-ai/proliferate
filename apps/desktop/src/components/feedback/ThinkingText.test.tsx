@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
 import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
 
@@ -25,6 +25,10 @@ function thinkingSection(): string {
   return domCss.slice(start, end);
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("ThinkingText", () => {
   it("renders static Thinking text with the gleam class hook", () => {
     const html = renderToStaticMarkup(<ThinkingText />);
@@ -43,6 +47,23 @@ describe("ThinkingText", () => {
     expect(html.match(/>Searching</g)).toHaveLength(2);
     expect(html).toContain('aria-hidden="true"');
   });
+
+  it("resumes a remounted gleam from the shared motion epoch", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-13T12:00:02.300Z"));
+    const motionOriginMs = Date.parse("2026-04-13T12:00:00.000Z");
+
+    const firstMount = renderToStaticMarkup(
+      <ThinkingText motionOriginMs={motionOriginMs} />,
+    );
+    expect(firstMount).toContain("--thinking-text-delay:-500ms");
+
+    vi.advanceTimersByTime(400);
+    const replacementMount = renderToStaticMarkup(
+      <ThinkingText motionOriginMs={motionOriginMs} />,
+    );
+    expect(replacementMount).toContain("--thinking-text-delay:-900ms");
+  });
 });
 
 describe("thinking gleam css contract", () => {
@@ -60,6 +81,7 @@ describe("thinking gleam css contract", () => {
     const section = thinkingSection();
     expect(section).toContain("var(--thinking-text-duration");
     expect(section).toContain("var(--thinking-text-easing");
+    expect(section.match(/animation-delay: var\(--thinking-text-delay, 0ms\)/g)).toHaveLength(2);
   });
 
   it("is a light gleam, not a dark band: reaches full foreground", () => {

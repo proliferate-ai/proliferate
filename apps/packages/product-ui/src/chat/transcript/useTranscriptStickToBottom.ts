@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /** Classification of a viewport scroll event: our own snap vs the user. */
 export interface TranscriptScrollSample {
@@ -32,6 +32,12 @@ export interface UseTranscriptStickToBottomOptions {
   onScrollSample: (sample?: TranscriptScrollSample) => void;
   /** px from the bottom within which a user scroll re-pins. */
   repinThresholdPx?: number;
+  /**
+   * Manual-only scroll range created by cards overlaying the transcript. Auto
+   * follow stops before this range until the user explicitly reaches the hard
+   * bottom or clicks the scroll-to-bottom button.
+   */
+  autoFollowBottomInsetPx?: number;
 }
 
 export interface TranscriptStickToBottom {
@@ -41,7 +47,7 @@ export interface TranscriptStickToBottom {
   pinnedRef: RefObject<boolean>;
   /** Wire to AutoHideScrollArea's onViewportScroll. Owns stickiness + direction + onScrollSample. */
   onViewportScroll: (viewport: HTMLDivElement) => void;
-  /** Imperative snap to the true bottom (always snaps; callers gate on pinnedRef). */
+  /** Snap to the active follow target (soft overlay bottom or user-chosen hard bottom). */
   scrollToBottom: () => void;
   /** Snap + re-pin, for the scroll-to-bottom button. */
   handleScrollToBottomClick: () => void;
@@ -64,12 +70,15 @@ export function useTranscriptStickToBottom({
   scrollRef,
   onScrollSample,
   repinThresholdPx = REPIN_BOTTOM_THRESHOLD_PX,
+  autoFollowBottomInsetPx = 0,
 }: UseTranscriptStickToBottomOptions): TranscriptStickToBottom {
   const pinnedRef = useRef(true);
   const [isPinnedToBottom, setIsPinnedToBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
   const programmaticRef = useRef<{ expectedTop: number; frame: number } | null>(null);
   const glueFrameRef = useRef<number | null>(null);
+  const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
+  const consumedAutoFollowBottomInsetRef = useRef(0);
 
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
@@ -79,20 +88,15 @@ export function useTranscriptStickToBottom({
     setIsPinnedToBottom(next);
   }, []);
 
-  const notifyProgrammaticScroll = useCallback((write: () => void) => {
-    const viewport = scrollRef.current;
-    write();
-    if (!viewport) {
-      return;
-    }
+  const markNonUserScrollPosition = useCallback((viewport: HTMLDivElement) => {
     const expectedTop = viewport.scrollTop;
     if (programmaticRef.current?.frame != null) {
       cancelAnimationFrame(programmaticRef.current.frame);
     }
-    // Watchdog: a write that doesn't change scrollTop fires no scroll event, so
-    // clear the marker next frame to stop it leaking into the next user scroll.
-    // Identity-check the marker (not the frame id) so this is safe even when a
-    // test runs requestAnimationFrame synchronously.
+    // Watchdog: a write that changes nothing (or a browser clamp whose event
+    // never arrives) must not leak its marker into the next user scroll.
+    // Identity-check the marker so synchronous test rAF implementations stay
+    // safe even before the real frame id has been assigned.
     const marker: { expectedTop: number; frame: number } = { expectedTop, frame: 0 };
     programmaticRef.current = marker;
     marker.frame = requestAnimationFrame(() => {
@@ -101,7 +105,52 @@ export function useTranscriptStickToBottom({
       }
     });
     lastScrollTopRef.current = expectedTop;
-  }, [scrollRef]);
+  }, []);
+
+  const notifyProgrammaticScroll = useCallback((write: () => void) => {
+    const viewport = scrollRef.current;
+    write();
+    if (!viewport) {
+      return;
+    }
+    markNonUserScrollPosition(viewport);
+  }, [markNonUserScrollPosition, scrollRef]);
+
+  // Registered before consumer layout effects. Preserve however much of an
+  // existing overlay range the user deliberately consumed; if another card is
+  // stacked above the composer, only the NEW height remains manual-only.
+  useLayoutEffect(() => {
+    const previousInset = autoFollowBottomInsetRef.current;
+    const previousConsumedInset = consumedAutoFollowBottomInsetRef.current;
+    const nextInset = Math.max(0, autoFollowBottomInsetPx);
+    const viewport = scrollRef.current;
+
+    // Removing consumed overlay range can make the browser clamp scrollTop
+    // upward to the new hard bottom. Mark that queued scroll event as
+    // non-user so its negative delta cannot disable pinned auto-follow.
+    if (
+      nextInset < previousInset &&
+      previousConsumedInset > 0 &&
+      pinnedRef.current &&
+      viewport
+    ) {
+      const top = viewport.scrollTop;
+      const distanceFromHardBottom = resolveVirtualBottomDistance({
+        scrollOffset: top,
+        viewportSize: viewport.clientHeight,
+        totalVirtualSize: viewport.scrollHeight,
+      });
+      if (
+        top < lastScrollTopRef.current - DIRECTION_EPSILON_PX &&
+        distanceFromHardBottom <= PROGRAMMATIC_MATCH_TOL_PX
+      ) {
+        markNonUserScrollPosition(viewport);
+      }
+    }
+
+    consumedAutoFollowBottomInsetRef.current = Math.min(previousConsumedInset, nextInset);
+    autoFollowBottomInsetRef.current = nextInset;
+  }, [autoFollowBottomInsetPx, markNonUserScrollPosition, scrollRef]);
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollRef.current;
@@ -113,11 +162,16 @@ export function useTranscriptStickToBottom({
     // (e.g. the row appended by this very update) and visibly bounces when the
     // measurement corrects a frame later.
     notifyProgrammaticScroll(() => {
-      viewport.scrollTop = viewport.scrollHeight;
+      viewport.scrollTop = resolveAutoFollowScrollTop(
+        viewport,
+        autoFollowBottomInsetRef.current,
+        consumedAutoFollowBottomInsetRef.current,
+      );
     });
   }, [notifyProgrammaticScroll, scrollRef]);
 
   const handleScrollToBottomClick = useCallback(() => {
+    consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
     setPinned(true);
     scrollToBottom();
   }, [scrollToBottom, setPinned]);
@@ -155,12 +209,17 @@ export function useTranscriptStickToBottom({
     });
     const delta = top - previousTop;
     if (distance > repinThresholdPx) {
+      consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     } else if (delta > -DIRECTION_EPSILON_PX) {
       // Within the bottom band and not moving up — the user returned to bottom.
+      if (distance <= PROGRAMMATIC_MATCH_TOL_PX) {
+        consumedAutoFollowBottomInsetRef.current = autoFollowBottomInsetRef.current;
+      }
       setPinned(true);
     } else {
       // Within the band but still moving up — the user is leaving.
+      consumedAutoFollowBottomInsetRef.current = 0;
       setPinned(false);
     }
     onScrollSample({ programmatic: false });
@@ -184,7 +243,11 @@ export function useTranscriptStickToBottom({
         return;
       }
       notifyProgrammaticScroll(() => {
-        viewport.scrollTop = viewport.scrollHeight;
+        viewport.scrollTop = resolveAutoFollowScrollTop(
+          viewport,
+          autoFollowBottomInsetRef.current,
+          consumedAutoFollowBottomInsetRef.current,
+        );
       });
       const height = viewport.scrollHeight;
       if (height === lastHeight) {
@@ -213,6 +276,7 @@ export function useTranscriptStickToBottom({
     }
     programmaticRef.current = null;
     lastScrollTopRef.current = 0;
+    consumedAutoFollowBottomInsetRef.current = 0;
     setPinned(true);
     scrollToBottom();
     startGlueLoop();
@@ -310,4 +374,19 @@ export function useTranscriptStickToBottom({
     setPinned,
     resetForSession,
   };
+}
+
+function resolveAutoFollowScrollTop(
+  viewport: HTMLDivElement,
+  bottomInsetPx: number,
+  consumedBottomInsetPx: number,
+): number {
+  const remainingManualInsetPx = Math.max(0, bottomInsetPx - consumedBottomInsetPx);
+  if (remainingManualInsetPx <= 0) {
+    // Preserve the established write-to-scrollHeight behavior: browsers clamp
+    // this to their exact maximum scrollTop without subpixel bookkeeping.
+    return viewport.scrollHeight;
+  }
+  const hardBottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  return Math.max(0, hardBottom - remainingManualInsetPx);
 }

@@ -7,6 +7,9 @@ use super::interactions::{InteractionRequestedEvent, InteractionResolvedEvent};
 use super::loops::Loop;
 use super::SessionLiveConfigSnapshot;
 
+mod pending_prompts;
+pub use pending_prompts::*;
+
 // ---------------------------------------------------------------------------
 // Envelope
 // ---------------------------------------------------------------------------
@@ -76,6 +79,7 @@ pub enum SessionEvent {
     PendingPromptAdded(PendingPromptAddedPayload),
     PendingPromptUpdated(PendingPromptUpdatedPayload),
     PendingPromptRemoved(PendingPromptRemovedPayload),
+    PendingPromptsReordered(PendingPromptsReorderedPayload),
 
     #[serde(alias = "permission_requested")]
     InteractionRequested(InteractionRequestedEvent),
@@ -114,6 +118,7 @@ impl SessionEvent {
             Self::PendingPromptAdded(_) => "pending_prompt_added",
             Self::PendingPromptUpdated(_) => "pending_prompt_updated",
             Self::PendingPromptRemoved(_) => "pending_prompt_removed",
+            Self::PendingPromptsReordered(_) => "pending_prompts_reordered",
             Self::InteractionRequested(_) => "interaction_requested",
             Self::InteractionResolved(_) => "interaction_resolved",
             Self::Error(_) => "error",
@@ -769,53 +774,6 @@ pub struct UsageUpdatePayload {
     pub cost: Option<serde_json::Value>,
 }
 
-// ---------------------------------------------------------------------------
-// Pending prompt (queue) events
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingPromptAddedPayload {
-    pub seq: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_id: Option<String>,
-    pub text: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub content_parts: Vec<ContentPart>,
-    pub queued_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_provenance: Option<PromptProvenance>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingPromptUpdatedPayload {
-    pub seq: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_id: Option<String>,
-    pub text: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub content_parts: Vec<ContentPart>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_provenance: Option<PromptProvenance>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingPromptRemovedPayload {
-    pub seq: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_id: Option<String>,
-    pub reason: PendingPromptRemovalReason,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum PendingPromptRemovalReason {
-    Executed,
-    Deleted,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorEvent {
@@ -1069,7 +1027,10 @@ mod tests {
         });
         assert_eq!(removed.event_type(), "loop_removed");
         let json = serde_json::to_value(&removed).expect("serialize loop removed event");
-        assert_eq!(json, serde_json::json!({ "type": "loop_removed", "loopId": "cron-1" }));
+        assert_eq!(
+            json,
+            serde_json::json!({ "type": "loop_removed", "loopId": "cron-1" })
+        );
 
         let fired = SessionEvent::LoopFired(LoopFiredPayload {
             r#loop: sample_loop(),
@@ -1085,7 +1046,9 @@ mod tests {
 
     #[test]
     fn activity_events_serialize_with_wire_matching_type_tags() {
-        use super::super::activity::{ActivityProcess, ActivitySubagent, ProcessStatus, SubagentStatus};
+        use super::super::activity::{
+            ActivityProcess, ActivitySubagent, ProcessStatus, SubagentStatus,
+        };
 
         let process_event = SessionEvent::ActivityProcessUpserted(ActivityProcessUpsertedPayload {
             process: ActivityProcess {

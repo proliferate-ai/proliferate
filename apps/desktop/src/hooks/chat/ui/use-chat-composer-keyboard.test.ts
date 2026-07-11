@@ -14,6 +14,7 @@ function keyboardEvent(overrides: Partial<{
   metaKey: boolean;
   defaultPrevented: boolean;
   nativeEvent: { isComposing?: boolean };
+  currentTarget: { value: string; selectionStart: number; selectionEnd: number };
 }> = {}) {
   const event = {
     key: "Enter",
@@ -27,6 +28,11 @@ function keyboardEvent(overrides: Partial<{
     nativeEvent: {
       isComposing: false,
       ...overrides.nativeEvent,
+    },
+    currentTarget: {
+      value: "",
+      selectionStart: 0,
+      selectionEnd: 0,
     },
     preventDefault: vi.fn(() => {
       event.defaultPrevented = true;
@@ -104,5 +110,67 @@ describe("useChatComposerKeyboard", () => {
 
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(handleSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("edits the newest queued prompt on unmodified ArrowUp in an empty draft", () => {
+    const onEditLastQueued = vi.fn();
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: true,
+      canSubmit: false,
+      modeControl: null,
+      onEditLastQueued,
+    }));
+    const event = keyboardEvent({ key: "ArrowUp", code: "ArrowUp" });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(onEditLastQueued).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves ArrowUp alone when the caret is inside a non-empty draft", () => {
+    const onEditLastQueued = vi.fn();
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: true,
+      canSubmit: true,
+      modeControl: null,
+      onEditLastQueued,
+    }));
+    const event = keyboardEvent({
+      key: "ArrowUp",
+      code: "ArrowUp",
+      currentTarget: { value: "draft", selectionStart: 3, selectionEnd: 3 },
+    });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(onEditLastQueued).not.toHaveBeenCalled();
+  });
+
+  it("leaves ArrowUp alone at the start of a non-empty draft", () => {
+    const onEditLastQueued = vi.fn();
+    const { result } = renderHook(() => useChatComposerKeyboard({
+      handleSubmit: vi.fn(),
+      handleCancel: vi.fn(),
+      isRunning: true,
+      canSubmit: true,
+      modeControl: null,
+      onEditLastQueued,
+    }));
+    const event = keyboardEvent({
+      key: "ArrowUp",
+      code: "ArrowUp",
+      currentTarget: { value: "draft", selectionStart: 0, selectionEnd: 0 },
+    });
+
+    result.current.handleKeyDown(event as never);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(onEditLastQueued).not.toHaveBeenCalled();
   });
 });

@@ -4,10 +4,17 @@ import {
   Brain,
   CheckCircle2,
   Clock3,
-  SquareTerminal,
   User,
   Wrench,
 } from "lucide-react";
+import {
+  CommandWindow,
+  FilePen,
+  FolderList,
+  ReadBook,
+  Search,
+  Settings,
+} from "@proliferate/ui/icons";
 import type { CloudChatTranscriptRowView } from "./CloudChatTranscriptTypes";
 import type { CloudTranscriptActionStatus } from "./CloudChatTranscriptTypes";
 
@@ -43,16 +50,44 @@ export function userMessageStatusLabel(status: string | null | undefined): strin
 }
 
 export function iconForRow(row: CloudChatTranscriptRowView) {
+  switch (row.actionKind) {
+    case "command":
+      return CommandWindow;
+    case "read":
+    case "fetch":
+      return ReadBook;
+    case "edit":
+      return FilePen;
+    case "listing":
+      return FolderList;
+    case "search":
+      return Search;
+    case "action":
+      return Settings;
+  }
   switch (row.kind) {
     case "error":
       return AlertTriangle;
     case "system":
+    case "work_history":
       return Bot;
     case "thought":
       return Brain;
     case "tool":
-      return row.status === "completed" ? CheckCircle2 : SquareTerminal;
+      if (/\bread(?:ing)?\b/i.test(row.title ?? "")) {
+        return ReadBook;
+      }
+      if (/\b(command|running|ran)\b/i.test(row.title ?? "")) {
+        return CommandWindow;
+      }
+      return CheckCircle2;
     case "tool_group":
+      if (/\breading\b/i.test(row.title ?? "")) {
+        return ReadBook;
+      }
+      if (/\b(command|running|ran)\b/i.test(row.title ?? "")) {
+        return CommandWindow;
+      }
       return Wrench;
     case "user":
       return User;
@@ -87,6 +122,16 @@ export function resolveActionStatus(row: CloudChatTranscriptRowView): CloudTrans
   return "completed";
 }
 
+export function isActionActivelyRunning(row: CloudChatTranscriptRowView): boolean {
+  const status = row.status?.trim().toLowerCase() ?? "";
+  return Boolean(row.streaming)
+    || status === "running"
+    || status === "in_progress"
+    || status === "in progress"
+    || status === "streaming"
+    || status === "sending";
+}
+
 export function firstLine(value: string): string | null {
   const line = value.trim().split(/\r?\n/, 1)[0]?.trim();
   return line || null;
@@ -98,6 +143,8 @@ export function titleForRow(row: CloudChatTranscriptRowView): string {
       return "Error";
     case "system":
       return "System";
+    case "work_history":
+      return "Work history";
     case "thought":
       return "Reasoning";
     case "tool_group":

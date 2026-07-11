@@ -70,6 +70,7 @@ vi.mock("@/hooks/chat/cache/use-turn-current-file-diffs", () => ({
 
 vi.mock("@anyharness/sdk-react", () => ({
   useGitDiffQuery: () => gitDiffQuery.state,
+  useReadWorkspaceFileMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 describe("TurnDiffPanel", () => {

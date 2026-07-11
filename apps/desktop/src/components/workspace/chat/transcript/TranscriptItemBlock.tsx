@@ -49,12 +49,14 @@ type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 export function TranscriptItemBlock({
   item,
   transcript,
+  animateActivityEntry = false,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
 }: {
   item: TranscriptItem;
   transcript: TranscriptState;
+  animateActivityEntry?: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -175,7 +177,7 @@ export function TranscriptItemBlock({
       return (
         <div data-transcript-activity-shell className="flex justify-start relative">
           <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-            <TranscriptActivityBlock>
+            <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
               <ReasoningBlock content={item.text || undefined} />
             </TranscriptActivityBlock>
           </div>
@@ -191,7 +193,7 @@ export function TranscriptItemBlock({
         return (
           <div data-transcript-activity-shell className="flex justify-start relative">
             <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-              <TranscriptActivityBlock>
+              <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
                 <ClaudePlanCard
                   content={body}
                   isStreaming={item.status === "in_progress"}
@@ -206,7 +208,7 @@ export function TranscriptItemBlock({
         return (
           <div data-transcript-activity-shell className="flex justify-start relative">
             <div className="flex flex-col w-full max-w-full break-words">
-              <TranscriptActivityBlock>
+              <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
                 <ModeTransitionDivider label={modeSwitchDisplay.label} />
               </TranscriptActivityBlock>
             </div>
@@ -216,7 +218,7 @@ export function TranscriptItemBlock({
       return (
         <div data-transcript-activity-shell className="flex justify-start relative">
           <div className="flex flex-col w-full max-w-full space-y-1 break-words">
-            <TranscriptActivityBlock>
+            <TranscriptActivityBlock entryItemId={item.itemId} animateEntry={animateActivityEntry}>
               <TranscriptToolCallItemBlock
                 item={item}
                 workspaceId={workspaceId}

@@ -16,6 +16,7 @@ import {
   DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
   TranscriptHistoryLoadingRow,
   TranscriptScrollToBottomButton,
+  resolveTranscriptBottomInsets,
   type HistoryPrefetchDecisionReason,
   type HistoryPrefetchTrigger,
   type HistoryPrependScrollAnchor,
@@ -41,6 +42,7 @@ export function FullTranscriptRowList({
   isLoadingOlderHistory,
   olderHistoryCursor,
   bottomInsetPx,
+  nonDisplacingBottomInsetPx = 0,
   selectedWorkspaceId,
   activeSessionId,
   isSessionBusy,
@@ -56,6 +58,10 @@ export function FullTranscriptRowList({
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const pendingPrependAnchorRef = useRef<HistoryPrependScrollAnchor | null>(null);
+  const {
+    structural: structuralBottomInsetPx,
+    nonDisplacing: effectiveNonDisplacingBottomInsetPx,
+  } = resolveTranscriptBottomInsets(bottomInsetPx, nonDisplacingBottomInsetPx);
   const lastOlderHistoryCursorRequestRef = useRef<number | null>(null);
   const lastPrefetchDecisionLogRef = useRef<string | null>(null);
   const {
@@ -67,7 +73,11 @@ export function FullTranscriptRowList({
     notifyProgrammaticScroll,
     setPinned,
     resetForSession,
-  } = useTranscriptStickToBottom({ scrollRef, onScrollSample });
+  } = useTranscriptStickToBottom({
+    scrollRef,
+    onScrollSample,
+    autoFollowBottomInsetPx: effectiveNonDisplacingBottomInsetPx,
+  });
 
   const logPrefetchDecision = useCallback((
     trigger: HistoryPrefetchTrigger,
@@ -197,7 +207,7 @@ export function FullTranscriptRowList({
     }
     scrollToBottom();
   }, [
-    bottomInsetPx,
+    structuralBottomInsetPx,
     isSessionBusy,
     pendingPromptText,
     pinnedRef,
@@ -232,10 +242,11 @@ export function FullTranscriptRowList({
         className="h-full"
         ref={scrollRef}
         onViewportScroll={handleViewportScroll}
+        contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}
       >
         <div
           ref={contentRef}
-          className={`${gutterClassName} min-h-full`}
+          className="mt-auto"
           data-transcript-virtualization-mode="full"
           data-transcript-virtualization-setting={virtualizationMode}
           data-transcript-virtualization-fallback={fallbackReason ?? undefined}
@@ -258,11 +269,24 @@ export function FullTranscriptRowList({
                 renderRow={renderRow}
               />
             ))}
-            {bottomInsetPx > 0 && (
-              <div aria-hidden="true" style={{ height: bottomInsetPx }} />
-            )}
           </div>
         </div>
+        {structuralBottomInsetPx > 0 && (
+          <div
+            aria-hidden="true"
+            className="shrink-0"
+            data-transcript-bottom-structural-inset
+            style={{ height: structuralBottomInsetPx }}
+          />
+        )}
+        {effectiveNonDisplacingBottomInsetPx > 0 && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-full"
+            data-transcript-bottom-overlay-inset
+            style={{ height: effectiveNonDisplacingBottomInsetPx }}
+          />
+        )}
       </AutoHideScrollArea>
       <TranscriptScrollToBottomButton
         visible={!isPinnedToBottom}

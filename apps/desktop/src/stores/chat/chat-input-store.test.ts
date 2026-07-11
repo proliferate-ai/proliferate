@@ -75,4 +75,16 @@ describe("chat input store", () => {
       useChatInputStore.getState().draftByWorkspaceId["workspace-1"]!,
     )).toBe("hello");
   });
+
+  it("tracks queued-message edits by stable queue seq", () => {
+    useChatInputStore.getState().setEditingQueueSeq("session-1", 42);
+    expect(
+      useChatInputStore.getState().editingQueueSeqBySessionId["session-1"],
+    ).toBe(42);
+
+    useChatInputStore.getState().setEditingQueueSeq("session-1", null);
+    expect(
+      useChatInputStore.getState().editingQueueSeqBySessionId["session-1"],
+    ).toBeUndefined();
+  });
 });

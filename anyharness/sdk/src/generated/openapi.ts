@@ -772,6 +772,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/pending-prompts/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["reorder_pending_prompts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{session_id}/pending-prompts/{seq}": {
         parameters: {
             query?: never;
@@ -786,6 +802,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["edit_pending_prompt"];
+        trace?: never;
+    };
+    "/v1/sessions/{session_id}/pending-prompts/{seq}/steer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["steer_pending_prompt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/sessions/{session_id}/prompt": {
@@ -3311,7 +3343,11 @@ export interface components {
             promptId?: string | null;
             promptProvenance?: null | components["schemas"]["PromptProvenance"];
             queuedAt: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Immutable runtime-owned queue-entry identity. This is monotonic within
+             *     a session and is independent from this summary's position in the array.
+             */
             seq: number;
             text: string;
         };
@@ -3322,6 +3358,13 @@ export interface components {
             /** Format: int64 */
             seq: number;
             text: string;
+        };
+        PendingPromptsReorderedPayload: {
+            /**
+             * @description Complete authoritative queue in committed order. Entry `seq` values
+             *     retain their immutable identities across the reorder.
+             */
+            pendingPrompts: components["schemas"]["PendingPromptSummary"][];
         };
         PermissionInteractionContext: {
             agentId?: string | null;
@@ -3644,6 +3687,15 @@ export interface components {
         RenameWorkspaceFileEntryResponse: {
             entry: components["schemas"]["WorkspaceFileEntry"];
             oldPath: string;
+        };
+        ReorderPendingPromptsRequest: {
+            /** @description Exact permutation to commit when `expected_seqs` still matches. */
+            desiredSeqs: number[];
+            /**
+             * @description Queue order the caller last observed. The mutation is rejected with a
+             *     conflict if this no longer matches durable state.
+             */
+            expectedSeqs: number[];
         };
         ReplayRecordingSummary: {
             createdAt?: string | null;
@@ -4053,6 +4105,9 @@ export interface components {
         }) | (components["schemas"]["PendingPromptRemovedPayload"] & {
             /** @enum {string} */
             type: "pending_prompt_removed";
+        }) | (components["schemas"]["PendingPromptsReorderedPayload"] & {
+            /** @enum {string} */
+            type: "pending_prompts_reordered";
         }) | (components["schemas"]["InteractionRequestedEvent"] & {
             /** @enum {string} */
             type: "interaction_requested";
@@ -6854,6 +6909,60 @@ export interface operations {
             };
         };
     };
+    reorder_pending_prompts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderPendingPromptsRequest"];
+            };
+        };
+        responses: {
+            /** @description Pending prompts reordered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Invalid pending prompt order */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Session not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Pending prompt order changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     delete_pending_prompt: {
         parameters: {
             query?: never;
@@ -6861,7 +6970,7 @@ export interface operations {
             path: {
                 /** @description Session ID */
                 session_id: string;
-                /** @description Queue row sequence number */
+                /** @description Stable queue-entry sequence identity */
                 seq: number;
             };
             cookie?: never;
@@ -6895,7 +7004,7 @@ export interface operations {
             path: {
                 /** @description Session ID */
                 session_id: string;
-                /** @description Queue row sequence number */
+                /** @description Stable queue-entry sequence identity */
                 seq: number;
             };
             cookie?: never;
@@ -6907,6 +7016,40 @@ export interface operations {
         };
         responses: {
             /** @description Pending prompt updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Session or pending prompt not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    steer_pending_prompt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Session ID */
+                session_id: string;
+                /** @description Stable queue-entry sequence identity */
+                seq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending prompt promoted to run next */
             200: {
                 headers: {
                     [name: string]: unknown;

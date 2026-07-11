@@ -23,8 +23,9 @@ pub(in crate::live::sessions::actor) struct ActivePromptRequest {
 }
 
 impl SessionActor {
-    /// Runs one prompt turn (plus the queue-drain loop that follows it): the
-    /// busy window between `set_busy(true)` and `set_busy(false)`.
+    /// Runs one prompt turn: the busy window between `set_busy(true)` and
+    /// `set_busy(false)`. Further durable prompts are selected by the idle
+    /// loop, where mailbox commands have priority over automatic queue drain.
     pub(in crate::live::sessions::actor) async fn run_turn(
         &mut self,
         request: ActivePromptRequest,
@@ -35,8 +36,8 @@ impl SessionActor {
         // Invariant 2: the actor is the sole writer of `busy`.
         self.handle.set_busy(true);
 
-        let mut current_payload = request.payload;
-        let mut current_prompt_id = request.prompt_id;
+        let current_payload = request.payload;
+        let current_prompt_id = request.prompt_id;
         let mut current_queue_seq = request.from_queue_seq;
         let mut current_respond_to = Some(request.respond_to);
         let mut exit_after_prompt: Option<ActorExitDisposition> = None;
@@ -241,6 +242,20 @@ impl SessionActor {
                                     self.handle_delete_pending_prompt(seq).await,
                                 );
                             }
+                            Some(SessionCommand::ReorderPendingPrompts {
+                                expected_seqs,
+                                desired_seqs,
+                                respond_to,
+                            }) => {
+                                let _ = respond_to.send(
+                                    self.handle_reorder_pending_prompts(expected_seqs, desired_seqs).await,
+                                );
+                            }
+                            Some(SessionCommand::SteerPendingPrompt { seq, respond_to }) => {
+                                let _ = respond_to.send(
+                                    self.handle_steer_pending_prompt(seq, true).await,
+                                );
+                            }
                             Some(SessionCommand::ReplayAdvance { respond_to }) => {
                                 let _ = respond_to.send(Err(anyhow::anyhow!("session is not a replay session")));
                             }
@@ -266,18 +281,10 @@ impl SessionActor {
                 break 'drain;
             }
 
-            // Invariant 2/3: peek the head of the queue BEFORE releasing `busy`.
-            // If present, re-enter the prompt body with the new payload; begin_turn's
-            // event emission is what durably hands off the queue row.
-            match self.next_pending_prompt_for_drain() {
-                Some((next_payload, next_prompt_id, next_seq)) => {
-                    current_payload = next_payload;
-                    current_prompt_id = next_prompt_id;
-                    current_queue_seq = Some(next_seq);
-                    continue 'drain;
-                }
-                None => break 'drain,
-            }
+            // Return through the idle loop even when more durable prompts are
+            // queued. Its biased select gives accepted reorder/steer commands
+            // precedence before choosing the next head.
+            break 'drain;
         }
 
         self.handle.set_busy(false);

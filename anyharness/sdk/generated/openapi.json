@@ -2655,6 +2655,77 @@
         }
       }
     },
+    "/v1/sessions/{session_id}/pending-prompts/order": {
+      "put": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "reorder_pending_prompts",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderPendingPromptsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Pending prompts reordered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pending prompt order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Pending prompt order changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/sessions/{session_id}/pending-prompts/{seq}": {
       "delete": {
         "tags": [
@@ -2674,7 +2745,7 @@
           {
             "name": "seq",
             "in": "path",
-            "description": "Queue row sequence number",
+            "description": "Stable queue-entry sequence identity",
             "required": true,
             "schema": {
               "type": "integer",
@@ -2723,7 +2794,7 @@
           {
             "name": "seq",
             "in": "path",
-            "description": "Queue row sequence number",
+            "description": "Stable queue-entry sequence identity",
             "required": true,
             "schema": {
               "type": "integer",
@@ -2744,6 +2815,57 @@
         "responses": {
           "200": {
             "description": "Pending prompt updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or pending prompt not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/{session_id}/pending-prompts/{seq}/steer": {
+      "post": {
+        "tags": [
+          "sessions"
+        ],
+        "operationId": "steer_pending_prompt",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "in": "path",
+            "description": "Stable queue-entry sequence identity",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending prompt promoted to run next",
             "content": {
               "application/json": {
                 "schema": {
@@ -12292,7 +12414,8 @@
           },
           "seq": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Immutable runtime-owned queue-entry identity. This is monotonic within\na session and is independent from this summary's position in the array."
           },
           "text": {
             "type": "string"
@@ -12334,6 +12457,21 @@
           },
           "text": {
             "type": "string"
+          }
+        }
+      },
+      "PendingPromptsReorderedPayload": {
+        "type": "object",
+        "required": [
+          "pendingPrompts"
+        ],
+        "properties": {
+          "pendingPrompts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PendingPromptSummary"
+            },
+            "description": "Complete authoritative queue in committed order. Entry `seq` values\nretain their immutable identities across the reorder."
           }
         }
       },
@@ -13584,6 +13722,31 @@
           },
           "oldPath": {
             "type": "string"
+          }
+        }
+      },
+      "ReorderPendingPromptsRequest": {
+        "type": "object",
+        "required": [
+          "expectedSeqs",
+          "desiredSeqs"
+        ],
+        "properties": {
+          "desiredSeqs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Exact permutation to commit when `expected_seqs` still matches."
+          },
+          "expectedSeqs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Queue order the caller last observed. The mutation is rejected with a\nconflict if this no longer matches durable state."
           }
         }
       },
@@ -15562,6 +15725,27 @@
                     "type": "string",
                     "enum": [
                       "pending_prompt_removed"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PendingPromptsReorderedPayload"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "pending_prompts_reordered"
                     ]
                   }
                 }

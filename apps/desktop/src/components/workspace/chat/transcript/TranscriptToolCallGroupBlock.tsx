@@ -4,12 +4,9 @@ import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
-import { describeToolCallDisplay } from "@proliferate/product-domain/chats/tools/tool-call-display";
-import { ToolKindIcon } from "./TranscriptToolKindIcon";
 import { TranscriptAgentGroupBlock } from "./TranscriptAgentGroupBlock";
 import { TranscriptToolCallItemBlock } from "./TranscriptToolCallItemBlock";
 import {
-  buildCollapsedSummaryIcons,
   collectDescendantItems,
   formatCollapsedSummary,
   hasRenderableToolDetails,
@@ -61,22 +58,10 @@ export function TranscriptToolCallGroupBlock({
     subagents: subagentCount,
   });
   const renderableItemCount = (hasRenderableToolDetails(item) ? 1 : 0) + childIds.length;
-  const display = describeToolCallDisplay(
-    item,
-    item.title ?? item.nativeToolName ?? "Tool group",
-  );
-
   return (
     <ToolCallSummary
-      icon={<ToolKindIcon iconKey={display.iconKey} />}
-      label={display.label}
       summary={summary}
       itemCount={renderableItemCount}
-      typeIcons={buildCollapsedSummaryIcons({
-        messages: messageCount,
-        toolCalls: toolCallCount,
-        subagents: subagentCount,
-      })}
       renderChildren={() => (
         <div className="space-y-1.5">
           {hasRenderableToolDetails(item) && (

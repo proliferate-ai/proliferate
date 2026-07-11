@@ -1,12 +1,12 @@
 import { useState } from "react";
 import type { ToolCallItem } from "@anyharness/sdk";
-import { SquareTerminal } from "@proliferate/ui/icons";
+import { CommandWindow } from "@proliferate/ui/icons";
 import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
 import {
   deriveCommand,
   deriveCommandOutput,
-  formatRunningCommandLabel,
+  formatCommandExecutionLabel,
 } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
 import { ActionDisclosureRow } from "./CollapsedActionRowPrimitives";
 
@@ -14,15 +14,13 @@ export function CommandActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);
   const command = deriveCommand(item);
   const output = deriveCommandOutput(item);
-  const label = item.status === "failed"
-    ? `Command failed with ${command}`
-    : formatRunningCommandLabel(command);
+  const label = formatCommandExecutionLabel(command, item.status);
 
   return (
     <div>
       <ActionDisclosureRow
         label={label}
-        icon={<SquareTerminal />}
+        icon={<CommandWindow />}
         expanded={expanded}
         failed={item.status === "failed"}
         onToggle={() => setExpanded((value) => !value)}

@@ -28,7 +28,10 @@ import type { PromptAttachmentController } from "@/hooks/chat/ui/use-chat-prompt
 import { useComposerSubmitGate } from "@/hooks/chat/ui/use-composer-submit-gate";
 import { usePlanDraftAttachments } from "@/hooks/plans/facade/use-plan-draft-attachments";
 import { useChatSessionControls } from "@/hooks/chat/facade/use-chat-session-controls";
-import { useQueuedPromptEdit } from "@/hooks/chat/ui/use-queued-prompt-edit";
+import {
+  useEditLastQueuedPrompt,
+  useQueuedPromptEdit,
+} from "@/hooks/chat/ui/use-queued-prompt-edit";
 import { useComposerTextareaAutosize } from "@/hooks/chat/ui/use-composer-textarea-autosize";
 import { focusChatInput } from "@/lib/domain/focus-zone";
 import { serializeChatDraftToPrompt } from "@/lib/domain/chat/composer/file-mention-draft-model";
@@ -122,6 +125,7 @@ export function ChatInput({
     commitEdit,
   } = useQueuedPromptEdit();
   const effectiveIsEditingQueuedPrompt = suppressActiveSessionState ? false : isEditingQueuedPrompt;
+  const editLastQueuedPrompt = useEditLastQueuedPrompt(suppressActiveSessionState);
   const planAttachments = usePlanDraftAttachments({
     workspaceUiKey,
     sdkWorkspaceId: materializedWorkspaceId,
@@ -228,6 +232,7 @@ export function ChatInput({
     modeControl: effectiveModeControl,
     isEditingQueuedPrompt: effectiveIsEditingQueuedPrompt,
     onCancelEdit: cancelEdit,
+    onEditLastQueued: editLastQueuedPrompt,
   });
 
   const focusComposer = useCallback((): boolean => {

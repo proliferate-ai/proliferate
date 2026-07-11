@@ -1,14 +1,8 @@
-import type { ReactNode } from "react";
 import type {
   ToolCallItem,
   TranscriptItem,
   TranscriptState,
 } from "@anyharness/sdk";
-import {
-  ClipboardList,
-  FileText,
-  Settings,
-} from "@proliferate/ui/icons";
 
 export function collectDescendantItems(
   itemIds: readonly string[],
@@ -49,24 +43,6 @@ function pluralize(count: number, singular: string, plural?: string): string | n
     return null;
   }
   return `${count} ${count === 1 ? singular : (plural ?? singular + "s")}`;
-}
-
-export function buildCollapsedSummaryIcons(summary: {
-  messages: number;
-  toolCalls: number;
-  subagents: number;
-}): ReactNode[] {
-  const icons: ReactNode[] = [];
-  if (summary.messages > 0) {
-    icons.push(<FileText key="messages" className="size-3.5" />);
-  }
-  if (summary.toolCalls > 0) {
-    icons.push(<Settings key="tools" className="size-3.5" />);
-  }
-  if (summary.subagents > 0) {
-    icons.push(<ClipboardList key="subagents" className="size-3.5" />);
-  }
-  return icons;
 }
 
 export function isSubagentItem(item: ToolCallItem): boolean {

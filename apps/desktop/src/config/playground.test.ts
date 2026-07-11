@@ -136,15 +136,18 @@ describe("playground scenarios", () => {
     expect(html).not.toContain('aria-label="Edit queued message"');
   });
 
-  it("keeps queued rows single-line and hides edit on the active edit row", () => {
+  it("keeps queued rows compact and exposes steer, reorder, and edit actions", () => {
     const plainHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-multi"));
-    expect(plainHtml).toContain("truncate");
+    expect(plainHtml).toContain("line-clamp-2");
     expect(plainHtml).toContain("min-w-0");
-    expect(plainHtml).not.toContain("whitespace-pre-wrap");
-    // Head-of-queue entry is dispatching: it shows the "Sending…" shimmer
+    expect(plainHtml).toContain("whitespace-pre-wrap");
+    // Head-of-queue entry is dispatching: it shows the shared "Thinking" shimmer
     // state hint and drops the edit affordance while in flight.
-    expect(plainHtml).toContain("Sending…");
+    expect(plainHtml).toContain("Thinking");
     expect(plainHtml.match(/aria-label="Edit queued message"/g)).toHaveLength(2);
+    expect(plainHtml.match(/aria-label="Send next — interrupts the current turn"/g))
+      .toHaveLength(2);
+    expect(plainHtml.match(/aria-label="Reorder queued message"/g)).toHaveLength(2);
 
     const editingHtml = renderToStaticMarkup(renderOutboundSlot("pending-prompts-editing"));
     expect(editingHtml).toContain("Editing…");

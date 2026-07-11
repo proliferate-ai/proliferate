@@ -48,6 +48,7 @@ import { ProposedPlanToolCallIdsProvider } from "./ProposedPlanToolCallIdsContex
 import { GoalTranscriptEventRow } from "./GoalTranscriptEventRow";
 import { TranscriptPendingPromptRow } from "./TranscriptPendingPromptRow";
 import { TranscriptTurnRow } from "./TranscriptTurnRow";
+import { TranscriptEntryMotionProvider } from "./TranscriptEntryMotionContext";
 
 const EMPTY_OUTBOX_ENTRIES: readonly PromptOutboxEntry[] = [];
 const EMPTY_GOAL_EVENTS: readonly GoalTranscriptEvent[] = [];
@@ -75,6 +76,7 @@ interface MessageListProps {
   isLoadingOlderHistory?: boolean;
   olderHistoryCursor?: number | null;
   bottomInsetPx?: number;
+  nonDisplacingBottomInsetPx?: number;
   onLoadOlderHistory?: () => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
   onOpenSession?: TranscriptOpenSessionHandler;
@@ -93,6 +95,7 @@ export function MessageList({
   isLoadingOlderHistory = false,
   olderHistoryCursor = null,
   bottomInsetPx = CHAT_SCROLL_BASE_BOTTOM_PADDING_PX,
+  nonDisplacingBottomInsetPx = 0,
   onLoadOlderHistory,
   onHandOffPlanToNewSession,
   onOpenSession,
@@ -126,10 +129,12 @@ export function MessageList({
     },
     layout: {
       bottomInsetPx,
+      nonDisplacingBottomInsetPx,
     },
   }), [
     activeSessionId,
     bottomInsetPx,
+    nonDisplacingBottomInsetPx,
     goalEvents,
     hasOlderHistory,
     isLoadingOlderHistory,
@@ -274,20 +279,25 @@ export function MessageList({
           onOpenSession={onOpenSession}
           canOpenSession={canOpenSession}
         >
-          <ProposedPlanToolCallIdsProvider value={proposedPlanToolCallIds}>
-            <DebugProfiler id="transcript-row-list-router">
-              <DeferredChatTranscriptView
-                state={effectiveTranscriptViewState}
-                outboxActions={outboxActions}
-                onScrollSample={handleTranscriptScroll}
-                renderPendingPromptRow={renderPendingPromptRow}
-                renderTurnRow={renderTurnRow}
-                renderGoalEventRow={renderGoalEventRow}
-                renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
-                renderTurnTrailingStatus={renderTurnTrailingStatusRow}
-              />
-            </DebugProfiler>
-          </ProposedPlanToolCallIdsProvider>
+          <TranscriptEntryMotionProvider
+            key={`${effectiveTranscriptViewState.selectedWorkspaceId ?? "workspace"}:${effectiveTranscriptViewState.activeSessionId}`}
+            transcript={effectiveTranscriptViewState.transcript}
+          >
+            <ProposedPlanToolCallIdsProvider value={proposedPlanToolCallIds}>
+              <DebugProfiler id="transcript-row-list-router">
+                <DeferredChatTranscriptView
+                  state={effectiveTranscriptViewState}
+                  outboxActions={outboxActions}
+                  onScrollSample={handleTranscriptScroll}
+                  renderPendingPromptRow={renderPendingPromptRow}
+                  renderTurnRow={renderTurnRow}
+                  renderGoalEventRow={renderGoalEventRow}
+                  renderPendingPromptTrailingStatus={renderPendingPromptTrailingStatusRow}
+                  renderTurnTrailingStatus={renderTurnTrailingStatusRow}
+                />
+              </DebugProfiler>
+            </ProposedPlanToolCallIdsProvider>
+          </TranscriptEntryMotionProvider>
         </TranscriptContextProviders>
       </DebugProfiler>
     </DebugProfiler>

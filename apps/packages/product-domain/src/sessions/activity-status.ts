@@ -70,42 +70,10 @@ export function resolveSessionStatus(
     if (reconciledStatus === "starting") {
       return "starting";
     }
-    return !hasActionablePending && isSessionSettlingAfterFinalProse(input)
-      ? "idle"
-      : "running";
+    return "running";
   }
 
   return reconciledStatus ?? null;
-}
-
-/**
- * The settling window: the live transcript's latest turn already ends in
- * completed assistant prose, but executionSummary.phase still says "running"
- * because turn_ended / backend persistence lags the final tokens by seconds.
- * Presenting "iterating" here reads as a dead stall under a finished answer —
- * the same evidence shouldAllowTurnTrailingStatus uses to suppress the
- * trailing "Thinking…" indicator says the session should present as idle.
- *
- * Guards keep phase authoritative everywhere else: the transcript evidence
- * only counts when the session's stream is open (a live stream delivers the
- * next item or turn_ended, so a genuinely-continuing agent flips us back),
- * and never while actionable interactions are pending. Tool calls, thoughts,
- * and streaming prose all leave a non-final tail, so genuinely running states
- * are unaffected.
- */
-export function isSessionSettlingAfterFinalProse(
-  slot: Pick<
-    SessionActivitySnapshot,
-    "executionSummary" | "streamConnectionState" | "transcript"
-  > | null | undefined,
-): boolean {
-  if (!slot || slot.transcript.endsInFinalAssistantProse !== true) {
-    return false;
-  }
-  if (slot.streamConnectionState !== "open") {
-    return false;
-  }
-  return !hasActionablePendingInteractions(slot);
 }
 
 export function isSessionEffectivelyStreaming(
@@ -146,12 +114,6 @@ export function resolveSessionExecutionPhase(
     ) {
       return "idle";
     }
-    if (
-      slot.executionSummary.phase === "running"
-      && isSessionSettlingAfterFinalProse(slot)
-    ) {
-      return "idle";
-    }
     return slot.executionSummary.phase;
   }
 
@@ -170,7 +132,7 @@ export function resolveSessionExecutionPhase(
       : "starting";
   }
   if (slot.status === "running" || isSessionEffectivelyStreaming(slot)) {
-    return isSessionSettlingAfterFinalProse(slot) ? "idle" : "running";
+    return "running";
   }
   return "idle";
 }

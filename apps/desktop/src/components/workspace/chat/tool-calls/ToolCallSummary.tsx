@@ -2,28 +2,27 @@ import { useState } from "react";
 import { TurnSeparator } from "@/components/workspace/chat/transcript/TurnSeparator";
 
 interface ToolCallSummaryProps {
-  icon: React.ReactNode;
   label?: string;
   summary: string;
-  typeIcons: React.ReactNode[];
   children?: React.ReactNode;
   renderChildren?: () => React.ReactNode;
   itemCount?: number;
   defaultExpanded?: boolean;
-  /** When true, shows a "Final message" separator after the expanded content. */
-  showFinalSeparator?: boolean;
+  /** When true, renders the completed-work hairline below the disclosure. */
+  showWorkDivider?: boolean;
+  /** Always-visible completion UI that remains part of the work block. */
+  completionContent?: React.ReactNode;
 }
 
 export function ToolCallSummary({
-  icon: _icon,
   label: _label = "Work history",
   summary,
-  typeIcons: _typeIcons,
   children,
   renderChildren,
   itemCount,
   defaultExpanded = false,
-  showFinalSeparator = false,
+  showWorkDivider = false,
+  completionContent = null,
 }: ToolCallSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const renderedChildren = expanded || (itemCount !== undefined && itemCount <= 1)
@@ -35,23 +34,35 @@ export function ToolCallSummary({
   }
 
   return (
-    <div className="py-1">
+    <div className="min-w-0">
       <TurnSeparator
-        label={summary}
+        label={showWorkDivider ? _label : summary}
         interactive
         expanded={expanded}
         onClick={() => setExpanded(!expanded)}
       />
       {expanded && (
-        <>
-          <div className="mt-2 space-y-1.5">
-            {renderedChildren}
-          </div>
-          {showFinalSeparator && (
-            <TurnSeparator label="Final message" />
-          )}
-        </>
+        <div className="mt-1 space-y-1.5">
+          {renderedChildren}
+        </div>
       )}
+      {completionContent && (
+        <div className="mt-4 flex flex-col gap-4" data-completed-work-content>
+          {completionContent}
+        </div>
+      )}
+      {showWorkDivider && <ToolCallWorkDivider className="mt-1" />}
     </div>
+  );
+}
+
+export function ToolCallWorkDivider({ className = "" }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-chat-transcript-ignore
+      data-completed-work-divider
+      className={`${className} w-full border-t border-border`}
+    />
   );
 }

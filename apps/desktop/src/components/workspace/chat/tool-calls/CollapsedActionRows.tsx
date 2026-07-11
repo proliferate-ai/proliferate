@@ -16,6 +16,7 @@ import {
   formatSearchLabel,
 } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
 import { CommandActionRow } from "./CollapsedCommandActionRow";
+import { CollapsedActionIcon } from "./CollapsedActionIcon";
 import { EditRows } from "./CollapsedEditActionRows";
 import { GenericActionRow } from "./CollapsedGenericActionRow";
 import { PlainActionRow } from "./CollapsedActionRowPrimitives";
@@ -30,11 +31,29 @@ export function CollapsedActionRows({ item }: { item: ToolCallItem }) {
     case "read":
       return <ReadRows item={item} />;
     case "listing":
-      return <PlainActionRow tone={item.status === "failed" ? "failed" : "normal"} label={formatListingLabel(item)} />;
+      return (
+        <PlainActionRow
+          icon={<CollapsedActionIcon kind="listing" />}
+          tone={item.status === "failed" ? "failed" : "normal"}
+          label={formatListingLabel(item)}
+        />
+      );
     case "search":
-      return <PlainActionRow tone={item.status === "failed" ? "failed" : "normal"} label={formatSearchLabel(item)} />;
+      return (
+        <PlainActionRow
+          icon={<CollapsedActionIcon kind="search" />}
+          tone={item.status === "failed" ? "failed" : "normal"}
+          label={formatSearchLabel(item)}
+        />
+      );
     case "fetch":
-      return <PlainActionRow tone={item.status === "failed" ? "failed" : "normal"} label={formatFetchLabel(item)} />;
+      return (
+        <PlainActionRow
+          icon={<CollapsedActionIcon kind="fetch" />}
+          tone={item.status === "failed" ? "failed" : "normal"}
+          label={formatFetchLabel(item)}
+        />
+      );
     case "command":
       return <CommandActionRow item={item} />;
     case "edit":
@@ -58,6 +77,7 @@ function ReadRows({ item }: { item: ToolCallItem }) {
       {paths.map((path, idx) => (
         <PlainActionRow
           key={`${item.itemId}-read-${idx}`}
+          icon={<CollapsedActionIcon kind="read" />}
           tone={item.status === "failed" ? "failed" : "normal"}
           label={`${item.status === "in_progress" ? "Reading" : "Read"} ${path}`}
         />
@@ -78,6 +98,7 @@ function ParsedCommandRows({
       {commands.map((command, idx) => (
         <PlainActionRow
           key={`${item.itemId}-parsed-${idx}`}
+          icon={<CollapsedActionIcon kind={command.kind} />}
           tone={item.status === "failed" ? "failed" : "normal"}
           label={formatParsedCommandLabel(item, command)}
         />

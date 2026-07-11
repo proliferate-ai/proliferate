@@ -13,11 +13,13 @@ export function ScopedTranscriptBlocks({
   displayBlocks,
   transcript,
   autoFollowCollapsedActionBlockId,
+  animateActivityEntry = false,
   renderItem,
 }: {
   displayBlocks: readonly TurnDisplayBlock[];
   transcript: TranscriptState;
   autoFollowCollapsedActionBlockId?: string | null;
+  animateActivityEntry?: boolean;
   renderItem: (itemId: string) => ReactNode;
 }) {
   return (
@@ -28,6 +30,7 @@ export function ScopedTranscriptBlocks({
           block={block}
           transcript={transcript}
           autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+          animateActivityEntry={animateActivityEntry}
           renderItem={renderItem}
         />
       ))}
@@ -39,44 +42,61 @@ export function TurnDisplayBlockNode({
   block,
   transcript,
   autoFollowCollapsedActionBlockId,
+  animateActivityEntry = false,
   renderItem,
 }: {
   block: TurnDisplayBlock;
   transcript: TranscriptState;
   autoFollowCollapsedActionBlockId?: string | null;
+  animateActivityEntry?: boolean;
   renderItem: (itemId: string) => ReactNode;
 }) {
   if (block.kind === "collapsed_actions") {
+    const ownsLiveContinuation = block.blockId === autoFollowCollapsedActionBlockId;
     return (
-      <TranscriptActivityBlock>
+      <TranscriptActivityBlock
+        entryItemId={block.itemIds[0] ?? null}
+        animateEntry={animateActivityEntry}
+      >
         <CollapsedActions
           itemIds={block.itemIds}
           transcript={transcript}
-          autoFollow={block.blockId === autoFollowCollapsedActionBlockId}
+          autoFollow={ownsLiveContinuation}
+          liveContinuation={ownsLiveContinuation}
         />
       </TranscriptActivityBlock>
     );
   }
 
   if (block.kind === "inline_tool") {
+    const ownsLiveContinuation = block.itemId === autoFollowCollapsedActionBlockId;
     return (
-      <TranscriptActivityBlock>
+      <TranscriptActivityBlock
+        entryItemId={block.itemId}
+        animateEntry={animateActivityEntry}
+      >
         <CollapsedActions
           itemIds={[block.itemId]}
           transcript={transcript}
-          autoFollow={block.itemId === autoFollowCollapsedActionBlockId}
+          autoFollow={ownsLiveContinuation}
+          liveContinuation={ownsLiveContinuation}
         />
       </TranscriptActivityBlock>
     );
   }
 
   if (block.kind === "inline_tools") {
+    const ownsLiveContinuation = block.blockId === autoFollowCollapsedActionBlockId;
     return (
-      <TranscriptActivityBlock>
+      <TranscriptActivityBlock
+        entryItemId={block.itemIds[0] ?? null}
+        animateEntry={animateActivityEntry}
+      >
         <CollapsedActions
           itemIds={block.itemIds}
           transcript={transcript}
-          autoFollow={block.blockId === autoFollowCollapsedActionBlockId}
+          autoFollow={ownsLiveContinuation}
+          liveContinuation={ownsLiveContinuation}
         />
       </TranscriptActivityBlock>
     );
@@ -84,7 +104,10 @@ export function TurnDisplayBlockNode({
 
   if (block.kind === "subagent_creations") {
     return (
-      <TranscriptActivityBlock>
+      <TranscriptActivityBlock
+        entryItemId={block.itemIds[0] ?? null}
+        animateEntry={animateActivityEntry}
+      >
         <SubagentCreationGroupBlock
           itemIds={block.itemIds}
           transcript={transcript}

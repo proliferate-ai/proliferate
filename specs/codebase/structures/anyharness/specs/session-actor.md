@@ -173,6 +173,14 @@ Command categories:
 Prompt
   start immediately when idle; durably queue when busy
 
+Edit / Delete / Reorder Pending Prompt
+  mutate the durable queue through the actor; reorder compare-and-swaps an
+  expected order to an exact desired permutation and emits the complete queue
+
+Steer Pending Prompt
+  promote one queued prompt to the head; while busy, cancel parked interactions
+  and the active ACP turn so normal queue drain executes it next
+
 SetConfigOption
   apply immediately when idle; durably queue when busy
 
@@ -243,8 +251,8 @@ accept prompt
        diagnostics timer      -> diagnostics handler
   -> finish turn
   -> apply queued config
-  -> drain next pending prompt if one exists
-  -> return to idle or continue next turn
+  -> return to the idle selector
+  -> apply accepted mailbox mutations before low-priority queue drain
 ```
 
 The command response reports acceptance only:
@@ -275,6 +283,8 @@ Busy:
 
 ```text
 Prompt            -> durably queue pending prompt
+Edit/Delete/Reorder Pending Prompt -> mutate the durable pending queue
+Steer Pending Prompt -> promote it, clean up interactions, cancel active turn
 SetConfigOption   -> durably queue pending config change
 ResolveInteraction -> complete pending interaction
 Cancel            -> forward cancellation to ACP
@@ -712,6 +722,13 @@ These hold today; changes must preserve them:
 one actor owns one live ACP native session
 actor is the only owner of busy/idle phase
 prompt queue handoff is durable before executed pending prompt removal is emitted
+pending prompt reorder is atomic, exact-set validated, and followed by a full
+  authoritative queue event; immutable queue-entry seq values never change or
+  get reused
+mailbox queue mutations win the idle boundary before startup/turn-end auto-drain;
+the first durable startup drain has one bounded mailbox grace because readiness
+is signalled before the initiating caller can enqueue its mutation
+steering reuses cancellation interaction cleanup before the promoted prompt drains
 ACP notifications are persisted raw before normalized event handling
 config applies immediately only when idle; otherwise it queues
 interaction cleanup runs on cancel, dismiss, close, and error

@@ -1,9 +1,14 @@
-import type { HTMLAttributes } from "react";
+import { useMemo, type CSSProperties, type HTMLAttributes } from "react";
 import { twMerge } from "../utils/tw-merge";
 
 export interface ThinkingTextProps extends Omit<HTMLAttributes<HTMLSpanElement>, "children"> {
   text?: string;
+  /** Epoch that keeps remounted copies on the same global gleam phase. */
+  motionOriginMs?: number | null;
 }
+
+const THINKING_TEXT_DURATION_MS = 1_800;
+type ThinkingTextStyle = CSSProperties & { "--thinking-text-delay"?: string };
 
 /**
  * The product's one "agent is working" text treatment: a dim muted label with
@@ -17,11 +22,24 @@ export interface ThinkingTextProps extends Omit<HTMLAttributes<HTMLSpanElement>,
 export function ThinkingText({
   className,
   text = "Thinking",
+  motionOriginMs = null,
+  style,
   ...props
 }: ThinkingTextProps) {
+  const phaseStyle = useMemo<ThinkingTextStyle | null>(() => {
+    if (motionOriginMs === null || !Number.isFinite(motionOriginMs)) {
+      return null;
+    }
+    const elapsedMs = Math.max(0, Date.now() - motionOriginMs);
+    return {
+      "--thinking-text-delay": `${-(elapsedMs % THINKING_TEXT_DURATION_MS)}ms`,
+    };
+  }, [motionOriginMs]);
+
   return (
     <span
       {...props}
+      style={phaseStyle ? { ...style, ...phaseStyle } : style}
       className={twMerge(
         "thinking-text inline-block text-chat font-medium leading-[var(--text-chat--line-height)]",
         className,

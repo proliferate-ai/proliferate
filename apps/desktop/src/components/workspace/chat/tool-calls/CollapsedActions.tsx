@@ -1,36 +1,32 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ChevronRightActivity } from "@proliferate/ui/icons";
 import {
-  FilePen,
-  FileText,
-  FolderList,
-  Search,
-  Settings,
-  SquareTerminal,
-} from "@proliferate/ui/icons";
-import {
-  type CollapsedActionSummary,
   formatCollapsedActionsSummary,
+  resolveCurrentCollapsedAction,
+  resolveCollapsedActionsLeadingKind,
   summarizeCollapsedActions,
 } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
+import { CollapsedActionIcon } from "@/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { CollapsedActionRows } from "@/components/workspace/chat/tool-calls/CollapsedActionRows";
-
-const CHAT_BUTTON_TEXT_CLASS = "text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)]";
 
 interface CollapsedActionsProps {
   itemIds: string[];
   transcript: TranscriptState;
   autoFollow?: boolean;
+  /** Keep the trailing exploration phase visually live between tool events. */
+  liveContinuation?: boolean;
 }
 
 export function CollapsedActions({
   itemIds,
   transcript,
   autoFollow = false,
+  liveContinuation = false,
 }: CollapsedActionsProps) {
   const hasActiveAction = itemIds.some((itemId) => {
     const item = transcript.itemsById[itemId];
@@ -40,46 +36,58 @@ export function CollapsedActions({
   });
   const [expanded, setExpanded] = useState(false);
   const actionSummary = summarizeCollapsedActions(itemIds, transcript);
-  const summaryIcon = renderCollapsedActionsIcon(actionSummary);
   const containsEdits = actionSummary.edits > 0;
   const shouldAutoFollow = autoFollow || hasActiveAction;
-  const isLiveAction = autoFollow || hasActiveAction;
-  const summary = formatCollapsedActionsSummary(actionSummary, { active: isLiveAction });
+  // Active item status owns ordinary tools. The latest trailing exploration
+  // batch can additionally retain phase ownership between back-to-back
+  // search/read events; `autoFollow` remains scroll-only.
+  const isLiveAction = hasActiveAction || liveContinuation;
+  const currentAction = isLiveAction
+    ? resolveCurrentCollapsedAction(itemIds, transcript)
+    : null;
+  const summary = currentAction?.label ?? formatCollapsedActionsSummary(actionSummary);
+  const summaryIcon = currentAction
+    ? <CollapsedActionIcon kind={currentAction.kind} />
+    : <CollapsedActionIcon kind={resolveCollapsedActionsLeadingKind(actionSummary)} />;
 
   return (
-    <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
+    <div className="flex min-w-0 flex-col text-chat leading-[1.5]">
       <Button
         type="button"
-        variant="ghost"
-        size="sm"
+        variant="unstyled"
+        size="unstyled"
         data-chat-transcript-ignore
         data-active={isLiveAction ? "true" : undefined}
         aria-expanded={expanded}
-        className={`group/collapsed-actions h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline ${
-          isLiveAction ? "text-muted-foreground/75" : "text-muted-foreground/60"
-        }`}
+        className="group/collapsed-actions h-auto max-w-full self-start justify-start gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[1.5] font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:text-foreground"
         onClick={() => setExpanded((value) => !value)}
       >
-        <span
+        <span className="inline-flex min-w-0 shrink items-center gap-1.5 truncate">
+          <span
+            aria-hidden="true"
+            className="flex size-[1.143em] shrink-0 items-center justify-center text-current [&_svg]:size-[1.143em] [&_svg]:text-current"
+          >
+            {summaryIcon}
+          </span>
+          <span className="min-w-0 flex-1 truncate">
+            {isLiveAction
+              ? (
+                <ThinkingText
+                  text={summary}
+                  className="block max-w-full truncate font-normal leading-[inherit] !text-current"
+                />
+              )
+              : summary}
+          </span>
+        </span>
+        <ChevronRightActivity
           aria-hidden="true"
-          className={`flex size-3 shrink-0 items-center justify-center transition-colors [&_svg]:size-2.5 ${
+          className={`size-[1em] shrink-0 text-current transition-transform duration-300 ${
             expanded
-              ? "text-foreground/70"
-              : "text-faint group-hover/collapsed-actions:text-muted-foreground group-focus-visible/collapsed-actions:text-muted-foreground"
+              ? "rotate-90 opacity-100"
+              : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
           }`}
-        >
-          {summaryIcon}
-        </span>
-        <span className="min-w-0 truncate">
-          {isLiveAction
-            ? (
-              <ThinkingText
-                text={summary}
-                className="block max-w-full truncate font-normal leading-[inherit]"
-              />
-            )
-            : summary}
-        </span>
+        />
       </Button>
       {expanded && (
         <div className="mt-1 flex flex-col gap-1">
@@ -93,25 +101,6 @@ export function CollapsedActions({
       )}
     </div>
   );
-}
-
-function renderCollapsedActionsIcon(summary: CollapsedActionSummary): ReactNode {
-  if (summary.commands > 0) {
-    return <SquareTerminal />;
-  }
-  if (summary.edits > 0) {
-    return <FilePen />;
-  }
-  if (summary.searches > 0) {
-    return <Search />;
-  }
-  if (summary.listings > 0) {
-    return <FolderList />;
-  }
-  if (summary.reads > 0 || summary.fetches > 0) {
-    return <FileText />;
-  }
-  return <Settings />;
 }
 
 function CollapsedActionsLedger({
@@ -142,7 +131,7 @@ function CollapsedActionsLedger({
             autoFollow ? "max-h-[7.5rem]" : "max-h-80"
           }`}
       >
-        <div className={containsEdits ? "flex flex-col gap-0" : "flex flex-col gap-1"}>
+        <div className="flex flex-col gap-1">
           {itemIds.map((itemId) => {
             const item = transcript.itemsById[itemId];
             if (item?.kind !== "tool_call") return null;

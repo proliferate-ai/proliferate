@@ -8,7 +8,6 @@ import {
 import {
   buildTranscriptDisplayBlocks,
   buildTurnPresentation,
-  computeMessageBoundaryItemIds,
 } from "./transcript-presentation";
 import {
   assistantItem,
@@ -370,6 +369,29 @@ describe("buildTurnPresentation", () => {
     });
   });
 
+  it("keeps late tool receipts above final prose in a completed turn", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      user: userItem("user", "turn-1", 1),
+      final: assistantItem("final", "turn-1", 2),
+      edit: toolItem("edit", "turn-1", 3, "file_change"),
+    };
+    const turn = turnRecord(
+      ["user", "final", "edit"],
+      "2026-04-04T00:00:10Z",
+    );
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.rootIds).toEqual(["user", "final", "edit"]);
+    expect(presentation.completedHistoryRootIds).toEqual(["edit"]);
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "user" },
+      { kind: "collapsed_actions", blockId: "edit-edit", itemIds: ["edit"] },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
   it("excludes transient thoughts from transcript presentation", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
@@ -456,7 +478,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read"], transcript),
-    )).toBe("Explored 1 file");
+    )).toBe("Read files");
   });
 
   it("splits completed action groups around assistant prose", () => {
@@ -498,7 +520,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read-1", "read-2", "grep-1", "edit-1"], transcript),
-    )).toBe("Explored 2 files, 1 search, edited 1 file");
+    )).toBe("Edited a file, read files");
   });
 
   it("keeps active tools in the existing collapsed action block as they stream", () => {
@@ -591,7 +613,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["list", "find", "command"], transcript),
-    )).toBe("Explored 1 listing, 1 search, ran 1 command");
+    )).toBe("Searched files, ran a command");
   });
 
   it("keeps raw grep/read command batches with later active commands", () => {
@@ -614,7 +636,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["grep", "read", "command"], transcript),
-    )).toBe("Explored 1 file, 1 search, ran 1 command");
+    )).toBe("Read files, ran a command");
   });
 
   it("keeps active terminal calls in a subtle inline row while command details stream in", () => {
@@ -638,7 +660,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["command"], transcript),
-    )).toBe("Explored 1 search");
+    )).toBe("Searched files");
 
     transcript.itemsById.command = {
       ...transcript.itemsById.command as ToolCallItem,
@@ -650,7 +672,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["command"], transcript),
-    )).toBe("Explored 1 listing");
+    )).toBe("Listed files");
 
     transcript.itemsById.command = {
       ...transcript.itemsById.command as ToolCallItem,
@@ -685,7 +707,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read", "search", "command"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("keeps completed terminal calls without commands in collapsed command history", () => {
@@ -731,7 +753,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["scan"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("expands active Codex ops shell batches into read and search rows", () => {
@@ -757,7 +779,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["scan"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("keeps active parsed real commands in the existing block when exploration follows", () => {
@@ -801,95 +823,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["sqlite", "ps", "read"], transcript),
-    )).toBe("Explored 1 file, ran 2 commands");
-  });
-});
-
-describe("computeMessageBoundaryItemIds", () => {
-  it("marks a later top-level assistant prose block but not the first", () => {
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById = {
-      first: assistantItem("first", "turn-1", 1),
-      second: assistantItem("second", "turn-1", 2),
-    };
-    const turn = turnRecord(["first", "second"]);
-
-    const presentation = buildTurnPresentation(turn, transcript);
-
-    expect([...presentation.messageBoundaryItemIds]).toEqual(["second"]);
-  });
-
-  it("does not divide across intervening tool/reasoning within one message", () => {
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById = {
-      prose: assistantItem("prose", "turn-1", 1),
-      thought: thoughtItem("thought", "turn-1", 2, false),
-      tool: toolItem("tool", "turn-1", 3, "terminal"),
-    };
-    const turn = turnRecord(["prose", "thought", "tool"]);
-
-    const presentation = buildTurnPresentation(turn, transcript);
-
-    // Only one prose message → no boundary anywhere.
-    expect(presentation.messageBoundaryItemIds.size).toBe(0);
-  });
-
-  it("marks the second prose message when tool activity sits between two messages", () => {
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById = {
-      msg1: assistantItem("msg1", "turn-1", 1),
-      tool: toolItem("tool", "turn-1", 2, "terminal"),
-      msg2: assistantItem("msg2", "turn-1", 3),
-    };
-    const turn = turnRecord(["msg1", "tool", "msg2"]);
-
-    const presentation = buildTurnPresentation(turn, transcript);
-
-    expect([...presentation.messageBoundaryItemIds]).toEqual(["msg2"]);
-  });
-
-  it("excludes work-history-collapsed prose from boundary tracking", () => {
-    // A completed turn: msg1 → tool → final. msg1 + tool collapse into the
-    // Work history summary; only `final` is a top-level prose block, so it must
-    // NOT receive a boundary (it is the first live top-level prose).
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById = {
-      user: userItem("user", "turn-1", 1),
-      msg1: assistantItem("msg1", "turn-1", 2),
-      tool: toolItem("tool", "turn-1", 3, "terminal"),
-      final: assistantItem("final", "turn-1", 4),
-    };
-    const turn = turnRecord(
-      ["user", "msg1", "tool", "final"],
-      "2026-04-04T00:00:10Z",
-    );
-
-    const presentation = buildTurnPresentation(turn, transcript);
-
-    expect(presentation.completedHistorySummary).not.toBeNull();
-    expect(presentation.completedHistoryRootIds).toContain("msg1");
-    expect(presentation.messageBoundaryItemIds.size).toBe(0);
-  });
-
-  it("standalone helper agrees with builder output", () => {
-    const transcript = createTranscriptState("session-1");
-    transcript.itemsById = {
-      first: assistantItem("first", "turn-1", 1),
-      second: assistantItem("second", "turn-1", 2),
-      third: assistantItem("third", "turn-1", 3),
-    };
-    const turn = turnRecord(["first", "second", "third"]);
-    const presentation = buildTurnPresentation(turn, transcript);
-
-    const direct = computeMessageBoundaryItemIds({
-      displayBlocks: presentation.displayBlocks,
-      transcript,
-      completedHistoryRootIds: new Set(presentation.completedHistoryRootIds),
-      hasCompletedHistorySummary: presentation.completedHistorySummary !== null,
-    });
-
-    expect([...direct].sort()).toEqual(["second", "third"]);
-    expect([...presentation.messageBoundaryItemIds].sort()).toEqual(["second", "third"]);
+    )).toBe("Read files, ran commands");
   });
 });
 

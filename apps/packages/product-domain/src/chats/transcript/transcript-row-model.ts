@@ -6,12 +6,10 @@ import type {
 } from "@anyharness/sdk";
 import {
   buildTurnPresentation,
-  computeMessageBoundaryItemIds,
   summarizeCompletedHistory,
   type TurnDisplayBlock,
   type TurnPresentation,
 } from "./transcript-presentation";
-import { turnHasRenderableTranscriptContent } from "../pending-prompts/pending-prompts";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
 
@@ -128,7 +126,6 @@ export function buildTranscriptRowModel({
       hasVisibleLocalPrompt
       && isLatestTurnInProgress
       && !latestTurnHasAssistantRenderableContent
-      && !turnHasRenderableTranscriptContent(turn, transcript)
     ) {
       continue;
     }
@@ -751,6 +748,7 @@ function partitionBlocksBySeqBoundaries(
   interface BlockWithSeq {
     block: TurnDisplayBlock;
     seq: number;
+    partitionSeq: number;
   }
 
   // Assign each block a seq value (for multi-item blocks, use the first item's seq)
@@ -777,7 +775,29 @@ function partitionBlocksBySeqBoundaries(
       }
     }
     if (seq !== null) {
-      blocksWithSeq.push({ block, seq });
+      blocksWithSeq.push({ block, seq, partitionSeq: seq });
+    }
+  }
+
+  // Completed presentation deliberately places final prose after any late
+  // tool receipts. Assign it the latest non-final block seq for partitioning,
+  // but no later: a goal event after all turn work must remain after the turn
+  // rather than dragging the prose across an unrelated boundary.
+  const finalItemIdForPartition = presentation.finalAssistantItemId;
+  if (finalItemIdForPartition) {
+    const latestNonFinalSeq = blocksWithSeq.reduce(
+      (latest, entry) => entry.block.kind === "item"
+          && entry.block.itemId === finalItemIdForPartition
+        ? latest
+        : Math.max(latest, entry.seq),
+      Number.NEGATIVE_INFINITY,
+    );
+    if (Number.isFinite(latestNonFinalSeq)) {
+      for (const entry of blocksWithSeq) {
+        if (entry.block.kind === "item" && entry.block.itemId === finalItemIdForPartition) {
+          entry.partitionSeq = Math.max(entry.seq, latestNonFinalSeq);
+        }
+      }
     }
   }
 
@@ -804,7 +824,7 @@ function partitionBlocksBySeqBoundaries(
   for (const blockWithSeq of blocksWithSeq) {
     let sliceIndex = sortedBoundaries.length; // Default: after all boundaries
     for (let i = 0; i < sortedBoundaries.length; i += 1) {
-      if (blockWithSeq.seq < sortedBoundaries[i]) {
+      if (blockWithSeq.partitionSeq < sortedBoundaries[i]) {
         sliceIndex = i;
         break;
       }
@@ -888,33 +908,19 @@ function partitionBlocksBySeqBoundaries(
         transcript,
         presentation.childrenByParentId,
       );
-      const scopedBoundaryIds = computeMessageBoundaryItemIds({
-        displayBlocks: info.blocks,
-        transcript,
-        completedHistoryRootIds: new Set(scopedHistoryRootIds),
-        hasCompletedHistorySummary: scopedSummary !== null,
-      });
       renderPresentation = {
         ...presentation,
         displayBlocks: info.blocks,
         completedHistoryRootIds: scopedHistoryRootIds,
         completedHistorySummary: scopedSummary,
-        messageBoundaryItemIds: scopedBoundaryIds,
       };
     } else {
-      // Non-final slices: no history collapse, recompute boundaries plainly.
-      const scopedBoundaryIds = computeMessageBoundaryItemIds({
-        displayBlocks: info.blocks,
-        transcript,
-        completedHistoryRootIds: new Set<string>(),
-        hasCompletedHistorySummary: false,
-      });
+      // Non-final slices do not collapse completed work history.
       renderPresentation = {
         ...presentation,
         displayBlocks: info.blocks,
         completedHistoryRootIds: [],
         completedHistorySummary: null,
-        messageBoundaryItemIds: scopedBoundaryIds,
       };
     }
 

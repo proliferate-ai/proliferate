@@ -13,7 +13,6 @@ import type {
 import type {
   AssistantProseItem,
   ErrorItem,
-  PendingPromptEntry,
   PendingMcpElicitationInteraction,
   PendingInteraction,
   PendingApproval,
@@ -29,6 +28,7 @@ import type {
   UnknownItem,
   UserMessageItem,
 } from "../types/reducer.js";
+import { reducePendingPrompts } from "./pending-prompts.js";
 
 type KnownTranscriptItem =
   | UserMessageItem
@@ -273,34 +273,13 @@ export function reduceEvent(
       break;
 
     case "pending_prompt_added":
-      s.pendingPrompts = upsertPendingPrompt(s.pendingPrompts, {
-        seq: evt.seq,
-        promptId: evt.promptId ?? null,
-        text: evt.text,
-        contentParts: normalizeContentParts(evt.contentParts ?? []),
-        queuedAt: evt.queuedAt,
-        promptProvenance: evt.promptProvenance ?? null,
-      });
-      break;
-
     case "pending_prompt_updated":
-      s.pendingPrompts = s.pendingPrompts.map((entry) =>
-        pendingPromptMatches(entry, evt.seq)
-          ? {
-            ...entry,
-            seq: evt.seq,
-            promptId: evt.promptId ?? entry.promptId,
-            text: evt.text,
-            contentParts: normalizeContentParts(evt.contentParts ?? []),
-            promptProvenance: evt.promptProvenance ?? entry.promptProvenance,
-          }
-          : entry,
-      );
-      break;
-
     case "pending_prompt_removed":
-      s.pendingPrompts = s.pendingPrompts.filter(
-        (entry) => !pendingPromptMatches(entry, evt.seq),
+    case "pending_prompts_reordered":
+      s.pendingPrompts = reducePendingPrompts(
+        s.pendingPrompts,
+        evt,
+        normalizeContentParts,
       );
       break;
 
@@ -1529,34 +1508,6 @@ function normalizeToolNameForSemanticKind(
   }
 
   return (title ?? "").trim().toLowerCase();
-}
-
-function pendingPromptMatches(
-  entry: PendingPromptEntry,
-  seq: number,
-): boolean {
-  return entry.seq === seq;
-}
-
-function upsertPendingPrompt(
-  entries: PendingPromptEntry[],
-  nextEntry: PendingPromptEntry,
-): PendingPromptEntry[] {
-  const index = entries.findIndex((entry) =>
-    pendingPromptMatches(entry, nextEntry.seq)
-  );
-  if (index === -1) {
-    return [...entries, nextEntry];
-  }
-  return entries.map((entry, entryIndex) =>
-    entryIndex === index
-      ? {
-        ...entry,
-        ...nextEntry,
-        promptId: nextEntry.promptId ?? entry.promptId,
-      }
-      : entry
-  );
 }
 
 function collectFileBadges(s: TranscriptState, turnId: string) {

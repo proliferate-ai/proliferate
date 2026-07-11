@@ -49,6 +49,19 @@ export function reconcileOutboxFromEnvelopes(
       }
       continue;
     }
+    if (event.type === "pending_prompts_reordered") {
+      for (const prompt of event.pendingPrompts) {
+        if (!prompt.promptId) {
+          continue;
+        }
+        nextState = patchPromptOutboxEntry(nextState, prompt.promptId, {
+          placement: "queue",
+          deliveryState: "accepted_queued",
+          acceptedAt: envelope.timestamp,
+        });
+      }
+      continue;
+    }
     if (event.type === "pending_prompt_removed") {
       const clientPromptId = event.promptId ?? null;
       if (clientPromptId) {

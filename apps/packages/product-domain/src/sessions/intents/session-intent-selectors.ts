@@ -89,12 +89,11 @@ export function renderableOutboxEntriesForTranscript(
       renderableEntries.push(entry);
       continue;
     }
-    // A submitted message must NEVER be invisible: queue-placed entries
-    // (sends while the session is busy) render in the transcript exactly like
-    // transcript-placed ones, in outbox order, until the real user_message
-    // echo replaces them. Placement still controls DELIVERY semantics (when
-    // the prompt dispatches) — previously queue-placed sends vanished from
-    // the conversation until the current turn finished.
+    // Queue-placed entries have one owner: the composer dock's outbound list.
+    // Rendering them here as well duplicates the same message in two places.
+    if (entry.placement === "queue") {
+      continue;
+    }
     if (!isTerminal && !isEchoed) {
       renderableEntries.push(entry);
     }
@@ -303,7 +302,11 @@ function pendingConfigChangeFromIntent(
     return {
       rawConfigId: intent.configId,
       value: intent.value,
-      status: intent.status === "queued" ? "queued" : "submitting",
+      // Pre-dispatch "queued" is a transient store state, not a turn-blocked
+      // change — surfacing it as pending-"queued" flashes the clock glyph on
+      // every switch. Only accepted+applyState:"queued" below is genuinely
+      // waiting on the running turn.
+      status: "submitting",
       mutationId: Number.NaN,
     };
   }

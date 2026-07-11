@@ -1,5 +1,5 @@
 export const CHAT_COMPOSER_LABELS = {
-  placeholder: "Describe a task",
+  placeholder: "Describe a task, @mention files, run /commands",
   followUpPlaceholder: "Ask for a follow-up",
   send: "Send message",
   stop: "Stop run",
@@ -11,6 +11,7 @@ export const CHAT_COMPOSER_LABELS = {
 export const CHAT_STREAMING_STATUS_LABELS = {
   thinking: "Thinking",
   sending: "Thinking",
+  steering: "Steering…",
   restoringSession: "Restoring session…",
 } as const;
 

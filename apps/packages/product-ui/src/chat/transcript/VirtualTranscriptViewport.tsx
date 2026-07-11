@@ -15,6 +15,7 @@ import type { TranscriptVirtualizationMode } from "@proliferate/product-domain/c
 
 export function VirtualTranscriptViewport({
   bottomSpacerHeight,
+  nonDisplacingBottomInsetPx,
   contentRef,
   measureElement,
   onViewportScroll,
@@ -29,6 +30,7 @@ export function VirtualTranscriptViewport({
   gutterClassName = DEFAULT_CHAT_SURFACE_GUTTER_CLASSNAME,
 }: {
   bottomSpacerHeight: number;
+  nonDisplacingBottomInsetPx: number;
   columnClassName?: string;
   contentRef?: RefObject<HTMLDivElement | null>;
   gutterClassName?: string;
@@ -47,10 +49,11 @@ export function VirtualTranscriptViewport({
       className="h-full"
       ref={scrollRef}
       onViewportScroll={onViewportScroll}
+      contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}
     >
       <div
         ref={contentRef}
-        className={`${gutterClassName} min-h-full`}
+        className="mt-auto"
         data-transcript-virtualization-mode="virtual"
         data-transcript-virtualization-setting={virtualizationMode}
       >
@@ -100,6 +103,14 @@ export function VirtualTranscriptViewport({
           )}
         </div>
       </div>
+      {nonDisplacingBottomInsetPx > 0 && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-full"
+          data-transcript-bottom-overlay-inset
+          style={{ height: nonDisplacingBottomInsetPx }}
+        />
+      )}
     </AutoHideScrollArea>
   );
 }
