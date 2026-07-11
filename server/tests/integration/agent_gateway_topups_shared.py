@@ -1,8 +1,8 @@
-"""Shared stubs + helpers for the agent-gateway top-up integration tests.
+"""Shared stubs + helpers for managed-LLM hard-cap integration tests.
 
-Kept in a plain (non-``test_``) module so both top-up test files can reuse the
-LiteLLM/Stripe stubs and subject-builders without duplicating them or blowing
-the per-file line-count cap. Fixtures live in ``conftest.py``.
+Kept in a plain (non-``test_``) module so the hard-cap integration tests can
+reuse LiteLLM/Stripe stubs and subject-builders without duplicating them or
+blowing the per-file line-count cap. Fixtures live in ``conftest.py``.
 """
 
 from __future__ import annotations
@@ -22,8 +22,9 @@ from proliferate.db.store.billing_subjects import (
     set_billing_subject_overage_enabled,
 )
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMVirtualKey
+from proliferate.integrations import stripe as stripe_service
 from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
-from proliferate.server.cloud.agent_gateway import topups as topups_service
+from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
 
 
 async def create_user(db_session: AsyncSession) -> uuid.UUID:
@@ -104,12 +105,13 @@ async def overage_org_subject(
 
 
 class StubLiteLLM:
-    """Stubs the admin surfaces the enrollment + top-up services call."""
+    """Stubs the admin surfaces enrollment and hard-cap enforcement call."""
 
     def __init__(self) -> None:
         self.teams: dict[str, str] = {}
         self.users: set[str] = set()
         self.minted: list[dict[str, Any]] = []
+        self.disabled_keys: list[str] = []
         self.enabled_keys: list[str] = []
         self.team_budgets: list[tuple[str, float | None]] = []
         self.key_budgets: list[tuple[str, float | None]] = []
@@ -118,12 +120,15 @@ class StubLiteLLM:
         self.token_counter = 0
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        for target in (enrollment_service.litellm, topups_service.litellm):
+        for target in (enrollment_service.litellm, usage_import_service.litellm):
             monkeypatch.setattr(target, "ensure_team", self.ensure_team, raising=False)
             monkeypatch.setattr(target, "ensure_user", self.ensure_user, raising=False)
             monkeypatch.setattr(target, "mint_virtual_key", self.mint_virtual_key, raising=False)
             monkeypatch.setattr(
                 target, "enable_virtual_key", self.enable_virtual_key, raising=False
+            )
+            monkeypatch.setattr(
+                target, "disable_virtual_key", self.disable_virtual_key, raising=False
             )
             monkeypatch.setattr(
                 target, "rotate_virtual_key", self.rotate_virtual_key, raising=False
@@ -172,6 +177,9 @@ class StubLiteLLM:
             raise LiteLLMIntegrationError("litellm_request_failed", "unblock unsupported")
         self.enabled_keys.append(key_or_token_id)
 
+    async def disable_virtual_key(self, *, key_or_token_id: str) -> None:
+        self.disabled_keys.append(key_or_token_id)
+
     async def rotate_virtual_key(
         self,
         *,
@@ -199,7 +207,7 @@ class StubLiteLLM:
 
 
 class StubStripe:
-    """Stubs the invoice/charge trio the top-up worker drives."""
+    """Records Stripe calls so the retired path can prove zero effects."""
 
     def __init__(self) -> None:
         self.invoices: list[dict[str, Any]] = []
@@ -209,10 +217,19 @@ class StubStripe:
         self.counter = 0
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        target = topups_service.stripe_billing
-        monkeypatch.setattr(target, "create_invoice", self.create_invoice, raising=False)
-        monkeypatch.setattr(target, "create_invoice_item", self.create_invoice_item, raising=False)
-        monkeypatch.setattr(target, "finalize_invoice", self.finalize_invoice, raising=False)
+        monkeypatch.setattr(stripe_service, "create_invoice", self.create_invoice, raising=False)
+        monkeypatch.setattr(
+            stripe_service,
+            "create_invoice_item",
+            self.create_invoice_item,
+            raising=False,
+        )
+        monkeypatch.setattr(
+            stripe_service,
+            "finalize_invoice",
+            self.finalize_invoice,
+            raising=False,
+        )
 
     async def create_invoice(
         self,

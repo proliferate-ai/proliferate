@@ -227,6 +227,27 @@ export async function listGrants(subjectId: string): Promise<GrantRow[]> {
   });
 }
 
+export interface LlmCreditGrantRow {
+  id: string;
+  source: string;
+  amount_usd: string;
+  source_ref: string | null;
+}
+
+/** Managed-LLM credit rows. These are separate from compute billing grants. */
+export async function listLlmCreditGrants(subjectId: string): Promise<LlmCreditGrantRow[]> {
+  return withDb(async (db) => {
+    const result = await db.query(
+      `SELECT id, source, amount_usd::text, source_ref
+         FROM llm_credit_grant
+        WHERE billing_subject_id = $1
+        ORDER BY created_at, id`,
+      [subjectId],
+    );
+    return result.rows as LlmCreditGrantRow[];
+  });
+}
+
 export async function totalRemainingSeconds(subjectId: string): Promise<number> {
   const grants = await listGrants(subjectId);
   return grants.reduce((sum, g) => sum + Number(g.remaining_seconds), 0);
@@ -236,6 +257,7 @@ export async function totalRemainingSeconds(subjectId: string): Promise<number> 
 
 export interface SeedSegmentOptions {
   userId: string;
+  organizationId?: string;
   hours: number;
   ended?: boolean;
   startedAt?: Date;
@@ -249,11 +271,12 @@ export async function seedUsageSegment(subjectId: string, opts: SeedSegmentOptio
   await withDb((db) =>
     db.query(
       `INSERT INTO usage_segment
-         (id, user_id, billing_subject_id, workspace_id, sandbox_id, external_sandbox_id, started_at, ended_at, is_billable, opened_by, closed_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, 'provision', $9, now(), now())`,
+         (id, user_id, organization_id, billing_subject_id, workspace_id, sandbox_id, external_sandbox_id, started_at, ended_at, is_billable, opened_by, closed_by, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, 'provision', $10, now(), now())`,
       [
         id,
         opts.userId,
+        opts.organizationId ?? null,
         subjectId,
         randomUUID(),
         randomUUID(),

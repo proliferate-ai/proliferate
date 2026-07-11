@@ -220,7 +220,7 @@ function signPayload(payload: string, timestamp: number): string {
 // once on demand. Same env the booted server runs with (enforce + pro billing
 // + Stripe test keys), so behavior matches production, not a test stub.
 
-function serverPass(pyExpr: string): void {
+function serverPass(pyExpr: string, extraEnv: NodeJS.ProcessEnv = {}): void {
   const result = spawnSync(
     path.join(REPO_ROOT, "server", ".venv", "bin", "python"),
     ["-c", pyExpr],
@@ -242,6 +242,7 @@ function serverPass(pyExpr: string): void {
         STRIPE_REFILL_10H_PRICE_ID: refillPriceId(),
         STRIPE_MANAGED_CLOUD_OVERAGE_METER_ID: process.env.TIER2_BILLING_STRIPE_METER_ID ?? "",
         STRIPE_SANDBOX_METER_ID: process.env.TIER2_BILLING_STRIPE_METER_ID ?? "",
+        ...extraEnv,
       },
     },
   );
@@ -275,9 +276,15 @@ export function sendPendingUsageExports(): void {
 }
 
 export function runTopupPass(): void {
-  // run_llm_topups requires a db session; run_llm_topups_once is the worker's
-  // own session-wrapping entrypoint (the loop calls exactly this).
+  // The legacy one-shot entrypoint is an inert compatibility shim. Populate
+  // every retired setting so the test proves config drift cannot re-enable it.
   serverPass(
     "import asyncio; from proliferate.server.cloud.agent_gateway.worker import run_llm_topups_once; asyncio.run(run_llm_topups_once())",
+    {
+      AGENT_GATEWAY_ENABLED: "true",
+      AGENT_GATEWAY_LLM_TOPUP_PRICE_ID: "price_deliberately_ignored",
+      AGENT_GATEWAY_TOPUP_THRESHOLD_USD: "1000",
+      AGENT_GATEWAY_TOPUP_AMOUNT_USD: "1000",
+    },
   );
 }

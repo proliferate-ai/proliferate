@@ -1,12 +1,12 @@
 // T2-BILL-5 (compute overage: bill to cap, write off past it, hard-block;
-// disabled → immediate cutoff) and T2-BILL-6 (LLM credits: exhaustion, admin
-// caps, auto top-up incl. declined-card fail-closed).
+// disabled → immediate cutoff) and T2-BILL-6 (managed-LLM credit exhaustion
+// and independent hard caps).
 //
 // Tier boundary (T2-BILL-6): the LiteLLM virtual-key *disable* side effect is
 // a tier-3 assertion (it calls the live gateway). At tier 2 we seed the spend
 // records and assert the truthful billing surfaces + gate inputs the enforcer
 // reads (`/billing/llm-balance`, `/organizations/{id}/limits`,
-// `is_gateway_budget_available`) and the fail-closed top-up guard. No LiteLLM
+// `is_gateway_budget_available`) and the retired top-up guard. No LiteLLM
 // calls, per the tier-2 no-mock-LLM rule.
 
 import { expect } from "@playwright/test";
@@ -119,7 +119,7 @@ test.describe("T2-BILL-5: compute overage — bill to cap, write off, then block
   });
 });
 
-test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () => {
+test.describe("T2-BILL-6: LLM credits — exhaustion and independent hard caps", () => {
   test("llm-balance reflects seeded spend and goes non-positive on exhaustion", async () => {
     const { token } = await adminContext();
     const userId = await userIdFor(token);
@@ -174,20 +174,18 @@ test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () =
     expect(disabled === undefined || disabled.enabled === false).toBe(true);
   });
 
-  test("auto top-up is fail-closed when the top-up price id is unset (feature off)", async () => {
-    // agent_gateway_llm_topup_price_id is unset in the billing boot, so
-    // topups_enabled() is false: an over-balance subject gets NO `topup` grant.
-    // This is the "overage promise quietly evaporates" guard — off must mean
-    // no silent charge and no free credit.
+  test("legacy auto-topup configuration cannot grant managed credit", async () => {
     const { token } = await adminContext();
     const userId = await userIdFor(token);
     const subject = await b.ensurePersonalSubject(userId);
     await b.setOverageSettings(subject.id, { enabled: true });
     await b.seedLlmUsageEvent({ subjectId: subject.id, userId, costUsd: 50 });
+    const before = await b.listLlmCreditGrants(subject.id);
 
     b.runTopupPass();
-    const grants = await b.listGrants(subject.id);
-    expect(grants.some((g) => g.grant_type === "topup"), "no topup grant when feature is off").toBe(false);
+    const after = await b.listLlmCreditGrants(subject.id);
+    expect(after, "retired pass must not insert any LLM credit grant").toEqual(before);
+    expect(after.some((grant) => grant.source === "topup"), "no legacy topup source").toBe(false);
   });
 });
 

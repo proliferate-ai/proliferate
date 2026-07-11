@@ -19,7 +19,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCE_TOPUP
+from proliferate.constants.agent_gateway import LLM_CREDIT_SOURCES
 from proliferate.db.models.cloud.agent_gateway import (
     AgentLlmUsageEvent,
     LlmCreditGrant,
@@ -49,7 +49,13 @@ async def create_llm_credit_grant(
     When ``source_ref`` is set the insert is idempotent (unique constraint):
     a duplicate returns the existing grant untouched. This is how the
     free-signup grant is deduped alongside the ``free_cloud_allocation`` guard.
+
+    The database still accepts the historical ``topup`` source so existing
+    rows remain readable, but the application write boundary rejects it (and
+    every other retired/unknown source). Managed LLM credits are hard-capped.
     """
+    if source not in LLM_CREDIT_SOURCES:
+        raise ValueError(f"Unsupported LLM credit grant source: {source!r}")
     now = utcnow()
     if source_ref is not None:
         result = await db.execute(
@@ -91,26 +97,6 @@ async def create_llm_credit_grant(
     db.add(row)
     await db.flush()
     return llm_credit_grant_record(row)
-
-
-async def count_topup_grants(
-    db: AsyncSession,
-    billing_subject_id: UUID,
-) -> int:
-    """Number of top-up grants a subject holds.
-
-    The auto top-up worker derives its Stripe idempotency key from this count
-    (the "top-up epoch"): a tick that crashed between charging and granting
-    replays with the same key, so Stripe returns the same invoice and the
-    grant's ``source_ref`` dedupe closes the loop.
-    """
-    total = await db.scalar(
-        select(func.count()).where(
-            LlmCreditGrant.billing_subject_id == billing_subject_id,
-            LlmCreditGrant.source == LLM_CREDIT_SOURCE_TOPUP,
-        )
-    )
-    return int(total or 0)
 
 
 async def sum_active_grants_usd(

@@ -389,10 +389,11 @@ class Settings(BaseSettings):
     agent_gateway_free_credit_usd: str = "5"
     agent_gateway_usage_import_interval_seconds: float = 60.0
     agent_gateway_usage_import_overlap_seconds: float = 300.0
+    # Retained only so an old deployment env remains parseable during rollout.
+    # Managed LLM credits are hard-capped; these values are deliberately ignored.
     agent_gateway_topup_interval_seconds: float = 300.0
     agent_gateway_topup_threshold_usd: str = "2"
     agent_gateway_topup_amount_usd: str = "10"
-    # Stripe price for one auto top-up charge; empty disables auto top-ups.
     agent_gateway_llm_topup_price_id: str = ""
     # Minimum org plan required to edit the org agent policy: "free" (no
     # gate) or "pro" (org needs a healthy paid cloud subscription or an

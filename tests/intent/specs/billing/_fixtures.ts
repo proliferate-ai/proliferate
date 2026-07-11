@@ -9,7 +9,7 @@ import {
   ADMIN_ORG_NAME,
   ADMIN_PASSWORD,
   ensureInstanceClaimed,
-  passwordLogin,
+  passwordLoginAfterMutation,
 } from "../../stack/seed.ts";
 import { ensureProductReady } from "../../stack/billing-seed.ts";
 
@@ -27,7 +27,7 @@ export async function adminContext(): Promise<AdminContext> {
     return cached;
   }
   await ensureInstanceClaimed();
-  const { access_token } = await passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD);
+  const { access_token } = await passwordLoginAfterMutation(ADMIN_EMAIL, ADMIN_PASSWORD);
   // Pin the INSTANCE org (by its claimed name), not organizations[0]: the
   // team-checkout scenarios activate additional orgs for this same admin, and
   // invited self-registration (/register) only accepts invitations for the

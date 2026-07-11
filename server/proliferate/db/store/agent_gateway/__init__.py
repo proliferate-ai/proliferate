@@ -15,7 +15,6 @@ from proliferate.db.store.agent_gateway.catalog import (
     upsert_catalog_override,
 )
 from proliferate.db.store.agent_gateway.credits import (
-    count_topup_grants,
     create_llm_credit_grant,
     get_remaining_credit_usd,
     sum_active_grants_usd,
@@ -95,7 +94,6 @@ __all__ = [
     "advance_usage_import_cursor",
     "build_redacted_hint",
     "clear_auth_selections",
-    "count_topup_grants",
     "create_agent_api_key",
     "create_catalog_snapshot",
     "create_llm_credit_grant",

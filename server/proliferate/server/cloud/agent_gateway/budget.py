@@ -8,10 +8,11 @@ render (the cloud materializer and ``GET /agent-gateway/state``, which hand
 out the decrypted virtual key) — so an exhausted subject stops receiving key
 material even if the LiteLLM-side disable lagged or failed.
 
-Lives in its own leaf module (imports only config + stores) because the state
-renderer in ``materialization/materialize/agent_auth.py`` needs it and
-``usage_import`` sits behind an import cycle
-(usage_import -> topups -> materialization.service -> materialize.agent_auth).
+Lives in its own leaf module (imports only config + stores) because both the
+state renderer in ``materialization/materialize/agent_auth.py`` and the usage
+importer need the same launch-gating predicate. Keeping it independent avoids
+making either materialization or usage-import orchestration the other's public
+dependency.
 """
 
 from __future__ import annotations

@@ -40,14 +40,12 @@ from proliferate.db.store import agent_gateway as agent_gateway_store
 from proliferate.db.store import billing as billing_store
 from proliferate.db.store.agent_gateway import AgentGatewayEnrollmentRecord
 from proliferate.db.store.agent_gateway import usage as llm_usage_store
-from proliferate.db.store.billing_subjects import get_billing_subject_by_id
 from proliferate.integrations import litellm
 from proliferate.integrations.litellm import LiteLLMIntegrationError, LiteLLMSpendLogEntry
 from proliferate.server.billing.budget_limits import window_bounds
 from proliferate.server.cloud.agent_gateway.budget import is_gateway_budget_available
-from proliferate.server.cloud.agent_gateway.topups import (
-    reactivate_enrollment_if_credited,
-    topups_enabled,
+from proliferate.server.cloud.agent_gateway.enrollment import (
+    reactivate_limit_reached_enrollment_if_credited,
 )
 from proliferate.utils.time import utcnow
 
@@ -313,10 +311,9 @@ async def _enforce_subject_exhaustion(
     Only subjects that actually hold a credit grant are enforced: with no grant
     at all, the LiteLLM default budget is the guardrail (see enrollment sync),
     and a zero-grant subject would otherwise be permanently "exhausted".
-    Overage-enabled subjects are exempt while auto top-ups are configured —
-    the top-up worker funds them back above zero instead of the key
-    bouncing disabled/enabled between ticks. Reactivation on top-up lives in
-    ``topups.reactivate_subject_if_credited``; this only ever tightens.
+    Compute overage never exempts a managed-LLM subject. Managed LLM credits
+    are hard-capped, so every granted subject is disabled at exhaustion even
+    if obsolete top-up settings remain in a deployment environment.
     """
     balance = await agent_gateway_store.get_remaining_credit_usd(
         db,
@@ -325,10 +322,6 @@ async def _enforce_subject_exhaustion(
     )
     if balance.granted_usd <= _ZERO or balance.remaining_usd > _ZERO:
         return False
-    if topups_enabled():
-        subject = await get_billing_subject_by_id(db, billing_subject_id)
-        if subject is not None and subject.overage_enabled:
-            return False
 
     enforced = False
     for enrollment in enrollments:
@@ -372,7 +365,8 @@ async def _enforce_org_llm_limits(
     (e.g. a per-user $5/day cap and an org-wide $100/month cap) aren't
     comparable by raw value. Over cap disables the key and sets
     ``budget_status='limit_reached'`` (only from ``ok`` — never overriding
-    ``exhausted``); back under cap with positive credit re-enables it.
+    ``exhausted``); back under cap with positive credit re-enables it through
+    the enrollment lifecycle, without any credit refill.
     """
     limits = await billing_store.list_budget_limits(db, organization_id)
     enabled_llm_limits = [limit for limit in limits if limit.kind == "llm" and limit.enabled]
@@ -414,9 +408,8 @@ async def _enforce_org_llm_limits(
         if over_cap:
             await _apply_llm_limit_reached(db, enrollment)
         elif enrollment.budget_status == AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED:
-            await reactivate_enrollment_if_credited(
+            await reactivate_limit_reached_enrollment_if_credited(
                 db,
-                billing_subject_id,
                 enrollment,
                 now=now,
             )
@@ -428,8 +421,8 @@ async def _apply_llm_limit_reached(
 ) -> None:
     """Disable a member's key and flip it to ``limit_reached`` (idempotent).
 
-    Skips enrollments already ``limit_reached`` or ``exhausted`` — credit
-    exhaustion is the stronger signal and is cleared by top-up reactivation.
+    Skips enrollments already ``limit_reached`` or ``exhausted``. Credit
+    exhaustion is not cleared by this administrator-cap reconciliation path.
     """
     if enrollment.budget_status in (
         AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
@@ -457,5 +450,5 @@ async def _apply_llm_limit_reached(
 
 # Re-exported for existing importers; the predicate lives in the leaf
 # ``budget`` module so the agent-auth state renderer can consume it without
-# creating an import cycle through topups -> materialization.
+# creating an import cycle through enrollment -> materialization.
 __all__ = ["UsageImportResult", "is_gateway_budget_available", "run_usage_import"]

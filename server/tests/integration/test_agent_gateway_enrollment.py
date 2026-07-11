@@ -203,7 +203,7 @@ async def test_user_enrollment_marks_failed_on_litellm_error(
 
 
 @pytest.mark.asyncio
-async def test_org_enrollment_syncs_without_budget_cap(
+async def test_zero_default_org_budget_gets_fail_closed_cap(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: StubLiteLLM,
@@ -224,8 +224,8 @@ async def test_org_enrollment_syncs_without_budget_cap(
     # Per member (spec §2.3): the key is attributed to the member's litellm user.
     assert enrollment.litellm_user_id == f"user-{member_id}"
     minted = stub_litellm.minted[0]
-    # Default org budget "0" means uncapped: no budget forwarded.
-    assert minted["max_budget"] is None
+    # A zero default must not omit max_budget (which would be unbounded).
+    assert minted["max_budget"] == 0.01
     assert minted["metadata"]["proliferate_organization_id"] == str(organization.id)
     assert minted["metadata"]["proliferate_user_id"] == str(member_id)
 

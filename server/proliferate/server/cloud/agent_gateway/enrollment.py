@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -18,6 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.config import settings
 from proliferate.constants.agent_gateway import (
+    AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED,
+    AGENT_GATEWAY_BUDGET_STATUS_OK,
     AGENT_GATEWAY_SUBJECT_KIND_ORGANIZATION,
     AGENT_GATEWAY_SUBJECT_KIND_USER,
     AGENT_GATEWAY_SYNC_STATUS_SYNCED,
@@ -37,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 # When a subject with an active grant has exhausted it, LiteLLM's ``max_budget``
 # must mirror a *near-zero* cap rather than "0" — our ``_parse_budget`` reads
-# "0"/empty as "uncapped" (the org-default semantics), so flooring at exactly 0
+# "0"/empty as "uncapped", so flooring at exactly 0
 # would mint an unbounded key for an out-of-credit subject. A tiny positive
 # floor keeps the key effectively blocked (never unbounded) while the importer
 # also disables it on the next tick.
@@ -51,7 +54,7 @@ def build_sync_fingerprint(*, team_id: str, budget: str, key_alias: str) -> str:
 
 
 def _parse_budget(raw: str) -> float | None:
-    """Budget settings are strings; "0"/empty means uncapped (no budget sent)."""
+    """Budget settings are strings; non-positive/invalid means no budget sent."""
     try:
         value = float(raw)
     except (TypeError, ValueError):
@@ -172,12 +175,19 @@ async def _remaining_credit_budget_raw(
     the remaining balance, floored at a tiny positive value so an exhausted
     subject gets a near-zero (blocked) cap rather than "0" — which
     ``_parse_budget`` would read as uncapped. With no grant at all — e.g. free
-    credits disabled or no linked GitHub identity — fall back to the default
-    user budget so gateway access is not silently uncapped-to-zero.
+    credits disabled or no linked GitHub identity — use the configured default
+    when positive and the same fail-closed floor otherwise. A zero/malformed
+    default must never mint an unbounded managed-credit key.
     """
     balance = await agent_gateway_store.get_remaining_credit_usd(db, billing_subject_id)
     if balance.granted_usd <= 0:
-        return fallback
+        try:
+            fallback_budget = Decimal(fallback)
+        except (ArithmeticError, ValueError):
+            fallback_budget = _EXHAUSTED_BUDGET_FLOOR_USD
+        if not fallback_budget.is_finite() or fallback_budget <= _EXHAUSTED_BUDGET_FLOOR_USD:
+            fallback_budget = _EXHAUSTED_BUDGET_FLOOR_USD
+        return str(fallback_budget)
     remaining = balance.remaining_usd
     if remaining <= _EXHAUSTED_BUDGET_FLOOR_USD:
         remaining = _EXHAUSTED_BUDGET_FLOOR_USD
@@ -207,19 +217,13 @@ async def ensure_org_enrollment(
         return enrollment
     if enrollment.sync_status == AGENT_GATEWAY_SYNC_STATUS_SYNCED:
         return enrollment
-    # Org caps (spec section 7): overage-enabled orgs are effectively
-    # uncapped ("0" sends no LiteLLM budget) — the top-up worker keeps the
-    # ledger funded and the importer remains the reconciler. Otherwise the
-    # team budget is the remaining credit (hard cap), falling back to the
-    # default org budget when the org holds no grants.
-    if subject.overage_enabled:
-        budget_raw = "0"
-    else:
-        budget_raw = await _remaining_credit_budget_raw(
-            db,
-            billing_subject_id=subject.id,
-            fallback=settings.agent_gateway_default_org_budget_usd,
-        )
+    # Compute overage is independent from managed LLM credit. Every org key is
+    # hard-capped at its managed-credit balance even when compute overage is on.
+    budget_raw = await _remaining_credit_budget_raw(
+        db,
+        billing_subject_id=subject.id,
+        fallback=settings.agent_gateway_default_org_budget_usd,
+    )
     return await _sync_enrollment(
         db,
         enrollment=enrollment,
@@ -309,6 +313,92 @@ async def _sync_enrollment(
             error_code=error.code,
             error_message=error.message,
         )
+
+
+async def reactivate_limit_reached_enrollment_if_credited(
+    db: AsyncSession,
+    enrollment: AgentGatewayEnrollmentRecord,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Re-enable one key only after its administrator-defined cap clears.
+
+    This is deliberately not a credit-refill path. It may clear only
+    ``limit_reached`` (never ``exhausted``), requires existing positive managed
+    credit, and always restores the hard cap to the subject's total granted
+    allowance. Compute overage never turns the LLM budget into ``None``.
+    """
+    if enrollment.budget_status != AGENT_GATEWAY_BUDGET_STATUS_LIMIT_REACHED:
+        return False
+    balance = await agent_gateway_store.get_remaining_credit_usd(
+        db,
+        enrollment.billing_subject_id,
+        now=now,
+    )
+    if balance.remaining_usd <= 0:
+        return False
+
+    budget = float(balance.granted_usd)
+    virtual_key_id = enrollment.virtual_key_id
+    if virtual_key_id is not None:
+        try:
+            await litellm.enable_virtual_key(key_or_token_id=virtual_key_id)
+        except LiteLLMIntegrationError:
+            virtual_key_id = await _remint_limit_reached_virtual_key(
+                db,
+                enrollment,
+                budget=budget,
+            )
+    if enrollment.litellm_team_id:
+        await litellm.update_team_budget(
+            team_id=enrollment.litellm_team_id,
+            max_budget=budget,
+        )
+    if virtual_key_id:
+        await litellm.set_key_budget(
+            key_or_token_id=virtual_key_id,
+            max_budget=budget,
+        )
+    await agent_gateway_store.set_enrollment_budget_status(
+        db,
+        enrollment_id=enrollment.id,
+        budget_status=AGENT_GATEWAY_BUDGET_STATUS_OK,
+    )
+    return True
+
+
+async def _remint_limit_reached_virtual_key(
+    db: AsyncSession,
+    enrollment: AgentGatewayEnrollmentRecord,
+    *,
+    budget: float,
+) -> str | None:
+    if enrollment.virtual_key_id is None or enrollment.litellm_team_id is None:
+        return enrollment.virtual_key_id
+    label = enrollment_subject_label(enrollment)
+    minted = await litellm.rotate_virtual_key(
+        key_or_token_id=enrollment.virtual_key_id,
+        user_id=enrollment.litellm_user_id or label,
+        team_id=enrollment.litellm_team_id,
+        alias=enrollment_key_alias(enrollment),
+        max_budget=budget,
+        metadata=enrollment_key_metadata(enrollment),
+    )
+    await agent_gateway_store.mark_enrollment_synced(
+        db,
+        enrollment_id=enrollment.id,
+        litellm_team_id=enrollment.litellm_team_id,
+        litellm_user_id=enrollment.litellm_user_id,
+        virtual_key_id=minted.token_id or None,
+        virtual_key=minted.key,
+        sync_fingerprint=enrollment.sync_fingerprint,
+    )
+    if enrollment.user_id is not None:
+        await materialization_service.schedule_materialize_agent_auth(
+            db,
+            user_id=enrollment.user_id,
+        )
+    return minted.token_id or None
 
 
 async def backfill_enrollments(db: AsyncSession, *, limit: int = 50) -> int:

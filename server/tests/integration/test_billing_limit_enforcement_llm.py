@@ -26,7 +26,6 @@ from proliferate.db.store.billing import BudgetLimitInput
 from proliferate.db.store.billing_subjects import ensure_organization_billing_subject
 from proliferate.integrations.litellm import LiteLLMSpendLogEntry, LiteLLMVirtualKey
 from proliferate.server.cloud.agent_gateway import enrollment as enrollment_service
-from proliferate.server.cloud.agent_gateway import topups as topups_service
 from proliferate.server.cloud.agent_gateway import usage_import as usage_import_service
 from proliferate.server.cloud.agent_gateway.enrollment import ensure_org_enrollment
 from proliferate.server.cloud.agent_gateway.usage_import import run_usage_import
@@ -47,7 +46,6 @@ class _StubLiteLLM:
         for target in (
             enrollment_service.litellm,
             usage_import_service.litellm,
-            topups_service.litellm,
         ):
             monkeypatch.setattr(target, "ensure_team", self.ensure_team, raising=False)
             monkeypatch.setattr(target, "ensure_user", self.ensure_user, raising=False)
@@ -234,43 +232,32 @@ async def test_llm_over_cap_disables_key_then_cap_raise_reenables(
 
 
 @pytest.mark.asyncio
-async def test_llm_topup_reactivation_never_clears_limit_reached(
+async def test_admin_limit_reconcile_never_reactivates_credit_exhaustion(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     stub_litellm: _StubLiteLLM,
 ) -> None:
-    """A credit top-up must not unblock a key its admin capped (§4.1 confusion)."""
+    """Clearing an admin cap cannot turn exhausted managed credit back on."""
     monkeypatch.setattr(settings, "agent_gateway_enabled", True)
-    org_id, subject_id, user_id, virtual_key_id = await _enroll_member(db_session)
+    org_id, subject_id, _user_id, virtual_key_id = await _enroll_member(db_session)
     enrollment_id = (
         await store.get_enrollment_by_virtual_key_id(db_session, virtual_key_id=virtual_key_id)
     ).id
-
-    await billing_store.replace_budget_limits(
+    await store.set_enrollment_budget_status(
+        db_session,
+        enrollment_id=enrollment_id,
+        budget_status="exhausted",
+    )
+    await usage_import_service._enforce_org_llm_limits(
         db_session,
         organization_id=org_id,
-        limits=[
-            BudgetLimitInput(
-                user_id=user_id,
-                kind="llm",
-                window="month",
-                cap_value=Decimal("1.00"),
-                enabled=True,
-            )
-        ],
+        billing_subject_id=subject_id,
+        now=NOW,
     )
-    stub_litellm.spend_rows = [_spend_row(api_key=virtual_key_id, spend=5.0, occurred_at=NOW)]
-    await run_usage_import(db_session, now=NOW)
+
     row = await db_session.get(AgentGatewayEnrollment, enrollment_id)
     await db_session.refresh(row)
-    assert row.budget_status == "limit_reached"
-
-    stub_litellm.enabled_keys.clear()
-    # Simulate a top-up landing more credit and running subject reactivation.
-    await topups_service.reactivate_subject_if_credited(db_session, subject_id, now=NOW)
-
-    await db_session.refresh(row)
-    assert row.budget_status == "limit_reached"
+    assert row.budget_status == "exhausted"
     assert virtual_key_id not in stub_litellm.enabled_keys
 
 

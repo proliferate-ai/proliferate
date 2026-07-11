@@ -66,7 +66,7 @@ test.describe("T2-BILL-9: usage surfaces tell the truth", () => {
 
     await b.seedLlmUsageEvent({ subjectId: orgSubject.id, organizationId, userId, costUsd: 4.4 });
     if (ORG_COMPUTE_ATTRIBUTION_ACTIVE) {
-      await b.seedUsageSegment(orgSubject.id, { userId, hours: 0.25 });
+      await b.seedUsageSegment(orgSubject.id, { userId, organizationId, hours: 0.25 });
     }
 
     const byUser = await b.apiRequest<{ users: Array<{ userId: string; llmCostUsd: number; computeSeconds: number }> }>(

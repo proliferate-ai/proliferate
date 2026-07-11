@@ -138,6 +138,16 @@ export async function passwordLogin(email: string, password: string): Promise<De
   return body;
 }
 
+/** Login after an account-creating mutation whose request-session commit may
+ * complete just after the HTTP response is written. Persistent bad credentials
+ * still fail after the same small bounded window. */
+export async function passwordLoginAfterMutation(
+  email: string,
+  password: string,
+): Promise<DesktopTokens> {
+  return loginRightAfterMutation(() => passwordLogin(email, password));
+}
+
 export interface OrganizationSummary {
   id: string;
   name: string;
