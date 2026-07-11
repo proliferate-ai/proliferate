@@ -19,6 +19,11 @@ export function useVerticalReorder({
   const itemHeightsRef = useRef<number[]>([]);
   const startYRef = useRef(0);
   const fromIndexRef = useRef(0);
+  // Read via ref inside the drag listeners: the queue can shrink mid-drag
+  // (a queued prompt dispatches or is deleted), and a closure-captured count
+  // would clamp the drop index against the stale, larger list.
+  const itemCountRef = useRef(itemCount);
+  itemCountRef.current = itemCount;
 
   const handleDragStart = useCallback((index: number, event: React.PointerEvent) => {
     const target = event.currentTarget as HTMLElement;
@@ -65,7 +70,7 @@ export function useVerticalReorder({
         }
       }
 
-      currentDropIndex = Math.max(0, Math.min(nextIndex, itemCount - 1));
+      currentDropIndex = Math.max(0, Math.min(nextIndex, itemCountRef.current - 1));
       setDropIndex(currentDropIndex);
     };
 
@@ -79,15 +84,17 @@ export function useVerticalReorder({
       const fromIndex = fromIndexRef.current;
       setDragIndex(null);
       setDropIndex(null);
-      if (fromIndex !== currentDropIndex) {
-        onReorder(fromIndex, currentDropIndex);
+      // Re-clamp at drop time: the list may have shrunk after the last move.
+      const toIndex = Math.max(0, Math.min(currentDropIndex, itemCountRef.current - 1));
+      if (fromIndex !== toIndex) {
+        onReorder(fromIndex, toIndex);
       }
     };
 
     target.addEventListener("pointermove", handleMove);
     target.addEventListener("pointerup", handleEnd);
     target.addEventListener("pointercancel", handleEnd);
-  }, [itemCount, onReorder]);
+  }, [onReorder]);
 
   return { dragIndex, dropIndex, handleDragStart };
 }
