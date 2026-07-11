@@ -35,9 +35,7 @@ ALLOWED_KEYWORDS = frozenset(
     }
 )
 
-_JSON_TYPES = frozenset(
-    {"object", "array", "string", "number", "integer", "boolean", "null"}
-)
+_JSON_TYPES = frozenset({"object", "array", "string", "number", "integer", "boolean", "null"})
 
 _ASCII_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -50,7 +48,7 @@ class SchemaProfileError(ValueError):
         self.code = code
 
 
-def _validate_type(node_type: Any) -> None:
+def _validate_type(node_type: Any) -> None:  # noqa: ANN401 - validates untrusted JSON
     if isinstance(node_type, str):
         if node_type not in _JSON_TYPES:
             raise SchemaProfileError("invalid_type", f"unknown type {node_type!r}")
@@ -59,7 +57,7 @@ def _validate_type(node_type: Any) -> None:
         if len(node_type) != 2 or node_type[1] != "null":
             raise SchemaProfileError(
                 "invalid_type",
-                "a type union must be a two-item [TYPE, \"null\"]",
+                'a type union must be a two-item [TYPE, "null"]',
             )
         head = node_type[0]
         if not isinstance(head, str) or head not in _JSON_TYPES or head == "null":
@@ -68,7 +66,7 @@ def _validate_type(node_type: Any) -> None:
     raise SchemaProfileError("invalid_type", "type must be a string or a two-item union")
 
 
-def _validate_node(node: Any, *, is_root: bool) -> None:
+def _validate_node(node: Any, *, is_root: bool) -> None:  # noqa: ANN401 - validates untrusted JSON
     if not isinstance(node, dict):
         raise SchemaProfileError("node_not_object", "schema node must be an object")
 
@@ -123,7 +121,7 @@ def _validate_node(node: Any, *, is_root: bool) -> None:
         _validate_node(items, is_root=False)
 
 
-def validate_schema_profile(document: Any) -> None:
+def validate_schema_profile(document: Any) -> None:  # noqa: ANN401 - public JSON boundary
     """Raise ``SchemaProfileError`` if ``document`` is not a valid v1 emit schema."""
 
     _validate_node(document, is_root=True)

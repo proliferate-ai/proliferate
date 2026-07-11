@@ -26,6 +26,7 @@ from .models import (
     MaterializationOffer,
     ObservedRun,
     ResolvedPlan,
+    WfContractModel,
     WorkflowControlCommand,
     binding_hash,
     checkpoint_content_hash,
@@ -46,7 +47,7 @@ def _require(condition: bool, message: str) -> None:
         raise ContractCheckError(message)
 
 
-def _roundtrip(model_cls, raw: dict) -> None:
+def _roundtrip(model_cls: type[WfContractModel], raw: dict) -> None:
     """Strict parse + serialize; canonical bytes must be preserved exactly."""
 
     parsed = model_cls.model_validate(raw)
@@ -124,9 +125,7 @@ def _check_checkpoint_and_binding() -> None:
             CheckpointManifest.model_validate(case["document"])
         except Exception:
             continue
-        raise ContractCheckError(
-            f"invalid checkpoint manifest '{case['name']}' was accepted"
-        )
+        raise ContractCheckError(f"invalid checkpoint manifest '{case['name']}' was accepted")
 
 
 def _check_offer_and_envelope() -> None:
@@ -157,9 +156,7 @@ def _check_observed_receipt_command() -> None:
     observed = fixtures.load("observed-run-v2.json")
     _roundtrip(ObservedRun, observed)
     _require(observed["planHash"] == plan["planHash"], "observed planHash mismatch")
-    _require(
-        observed["bindingHash"] == binding["bindingHash"], "observed bindingHash mismatch"
-    )
+    _require(observed["bindingHash"] == binding["bindingHash"], "observed bindingHash mismatch")
     # Sessions are a slot map at every boundary.
     slot_ids = {slot["slotId"] for slot in plan["slots"]}
     _require(
@@ -174,9 +171,7 @@ def _check_observed_receipt_command() -> None:
     command = fixtures.load("workflow-control-command-v1.json")
     _roundtrip(WorkflowControlCommand, command)
     _require(command["planHash"] == plan["planHash"], "command planHash mismatch")
-    _require(
-        command["bindingHash"] == binding["bindingHash"], "command bindingHash mismatch"
-    )
+    _require(command["bindingHash"] == binding["bindingHash"], "command bindingHash mismatch")
 
 
 def _check_schema_profile() -> None:
@@ -201,9 +196,7 @@ def _check_schema_profile() -> None:
                 f"expected {case['reasonCode']}",
             )
         else:
-            raise ContractCheckError(
-                f"invalid emit schema '{case['name']}' was accepted"
-            )
+            raise ContractCheckError(f"invalid emit schema '{case['name']}' was accepted")
 
 
 def _check_legacy_upgrade() -> None:
@@ -252,8 +245,7 @@ def _check_credential_canary() -> None:
             f"credential canary marker leaked into {name}",
         )
     # Public (non-envelope) surfaces must carry no dummy credential either.
-    for name in ("resolved-plan-v2.json", "observed-run-v2.json",
-                 "gateway-call-receipt-v1.json"):
+    for name in ("resolved-plan-v2.json", "observed-run-v2.json", "gateway-call-receipt-v1.json"):
         text = fixtures.load_text(name)
         _require(
             "DUMMY_FAKE" not in text,

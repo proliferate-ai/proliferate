@@ -155,9 +155,7 @@ async def report_run_status(
     # delivery-state axis. Legacy ``status`` stays authoritative; this legacy
     # report path deliberately never touches ``observed_revision`` (the revisioned
     # CAS path in report_observed_run owns that).
-    delivery_state = (
-        WORKFLOW_DELIVERY_STATE_ACKNOWLEDGED if locked.started_at is None else None
-    )
+    delivery_state = WORKFLOW_DELIVERY_STATE_ACKNOWLEDGED if locked.started_at is None else None
 
     updated = await store.update_run(
         db,
@@ -287,13 +285,9 @@ async def report_observed_run(
             current_revision,
             projection.observed_state,
         )
-        return ObservedReportResult(
-            result="conflict", acked_revision=current_revision, run=None
-        )
+        return ObservedReportResult(result="conflict", acked_revision=current_revision, run=None)
     if outcome in ("stale_rejected", "retry_noop", "future_rejected"):
-        return ObservedReportResult(
-            result=outcome, acked_revision=current_revision, run=None
-        )
+        return ObservedReportResult(result=outcome, acked_revision=current_revision, run=None)
 
     # outcome == "applied": mirror the accepted snapshot into the legacy observed
     # fields so the UI keeps working, and stamp execution_health=healthy.

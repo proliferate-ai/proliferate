@@ -177,9 +177,7 @@ async def _perform_slack_notify(
     # (oauth-bundle-v1, see integrations/oauth/service._build_oauth_bundle and the
     # refresh path in integrations/access.py). Keep "bot_token"/"access_token" as
     # fallbacks for any classic-bot-token bundle shape.
-    bot_token = (
-        bundle.get("bot_token") or bundle.get("accessToken") or bundle.get("access_token")
-    )
+    bot_token = bundle.get("bot_token") or bundle.get("accessToken") or bundle.get("access_token")
     if not bot_token:
         await _mark_action_failed(db, action_id, error_message="No token in credential bundle")
         return

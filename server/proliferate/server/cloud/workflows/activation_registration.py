@@ -79,8 +79,7 @@ async def register_activation(
     if parsed.kind not in _REQUIRED_INVOCATION_KINDS:
         raise CloudApiError(
             "workflow_activation_capability_kind_invalid",
-            "A required invocation may only activate an integration_tool or "
-            "function capability.",
+            "A required invocation may only activate an integration_tool or function capability.",
             status_code=400,
         )
 

@@ -88,9 +88,7 @@ def parse_identity(snapshot: dict[str, object]) -> ObservedIdentity:
             "invalid_observation_identity", "executionGeneration must be an integer."
         )
     if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
-        raise ObservedRunError(
-            "invalid_observation_revision", "revision must be an integer >= 1."
-        )
+        raise ObservedRunError("invalid_observation_revision", "revision must be an integer >= 1.")
     return ObservedIdentity(
         plan_hash=plan_hash,
         binding_hash=binding_hash,
@@ -148,9 +146,7 @@ def project_observation(snapshot: dict[str, object]) -> ProjectedObservation:
 
     observed_state = snapshot.get("observedState")
     if not isinstance(observed_state, str):
-        raise ObservedRunError(
-            "invalid_observed_state", "observedState must be a string."
-        )
+        raise ObservedRunError("invalid_observed_state", "observedState must be a string.")
     legacy_status = legacy_status_for(observed_state)
     quiescence = snapshot.get("quiescenceState")
 

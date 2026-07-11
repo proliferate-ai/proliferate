@@ -315,9 +315,7 @@ async def list_slack_channels(db: AsyncSession, user: ActorIdentity) -> SlackCha
         return SlackChannelsResult(channels=[], connected=False)
     # oauth-bundle-v1 stores the token under camelCase "accessToken"; keep the
     # snake_case keys as fallbacks (see actions.py _perform_slack_notify).
-    bot_token = (
-        bundle.get("bot_token") or bundle.get("accessToken") or bundle.get("access_token")
-    )
+    bot_token = bundle.get("bot_token") or bundle.get("accessToken") or bundle.get("access_token")
     if not bot_token:
         return SlackChannelsResult(channels=[], connected=False)
     try:

@@ -222,9 +222,7 @@ async def deliver_cloud_run(
 
     # Delivery-state axis (§8.1): the intent is already durable (committed before
     # this network call — §10.2), so materialization here can never orphan a runtime.
-    await store.update_run(
-        db, run_id=run.id, delivery_state=WORKFLOW_DELIVERY_STATE_MATERIALIZING
-    )
+    await store.update_run(db, run_id=run.id, delivery_state=WORKFLOW_DELIVERY_STATE_MATERIALIZING)
     try:
         # L26: waking stamps 'workflow-run' iff this is the create.
         access = await ensure_cloud_sandbox_gateway_access(

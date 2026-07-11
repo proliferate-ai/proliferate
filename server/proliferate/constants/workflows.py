@@ -225,9 +225,7 @@ WORKFLOW_OBSERVED_STATE_TO_LEGACY_STATUS: Final[dict[str, str]] = {
 }
 
 # The terminal observed-run states (§5.4: once terminal the snapshot is immutable).
-WORKFLOW_OBSERVED_TERMINAL_STATES: Final = frozenset(
-    {"completed", "failed", "cancelled"}
-)
+WORKFLOW_OBSERVED_TERMINAL_STATES: Final = frozenset({"completed", "failed", "cancelled"})
 
 # --- Step kinds (definition format v2; data-contract §1.2). --------------------
 # human.approval is REMOVED (E1); agent.emit and branch are NEW (A3/C11). The

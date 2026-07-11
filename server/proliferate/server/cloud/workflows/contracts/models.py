@@ -17,7 +17,7 @@ packet.
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -60,7 +60,7 @@ class ProductMcpCapability(WfContractModel):
 
 
 CapabilityRef = Annotated[
-    Union[IntegrationToolCapability, FunctionCapability, ProductMcpCapability],
+    IntegrationToolCapability | FunctionCapability | ProductMcpCapability,
     Field(discriminator="kind"),
 ]
 
@@ -108,7 +108,7 @@ class RequiredInvocationStep(WfContractModel):
 
 
 Step = Annotated[
-    Union[PromptStep, EmitStep, BranchStep, RequiredInvocationStep],
+    PromptStep | EmitStep | BranchStep | RequiredInvocationStep,
     Field(discriminator="kind"),
 ]
 
@@ -142,7 +142,7 @@ class ParallelGroup(WfContractModel):
 
 
 SpineEntry = Annotated[
-    Union[SequentialNode, ParallelGroup],
+    SequentialNode | ParallelGroup,
     Field(discriminator="kind"),
 ]
 
@@ -227,7 +227,7 @@ class CheckpointEntry(WfContractModel):
         return value
 
     @model_validator(mode="after")
-    def _validate_object_kind(self) -> "CheckpointEntry":
+    def _validate_object_kind(self) -> CheckpointEntry:
         if self.mode == "160000":
             if not self.submodule_oid:
                 raise ValueError("gitlink (160000) requires submoduleOid")
@@ -243,9 +243,7 @@ class CheckpointEntry(WfContractModel):
 
 class CheckpointManifest(WfContractModel):
     schema_version: Literal[1] = Field(alias="schemaVersion")
-    repository_object_format: Literal["sha1", "sha256"] = Field(
-        alias="repositoryObjectFormat"
-    )
+    repository_object_format: Literal["sha1", "sha256"] = Field(alias="repositoryObjectFormat")
     base_oid: str = Field(alias="baseOid")
     index_entries: list[CheckpointEntry] = Field(alias="indexEntries")
     worktree_entries: list[CheckpointEntry] = Field(alias="worktreeEntries")
@@ -291,17 +289,13 @@ class MaterializationOffer(WfContractModel):
 class ExecutionBinding(WfContractModel):
     schema_version: Literal[1] = Field(alias="schemaVersion")
     target: Target
-    source_kind: Literal["remote_commit", "local_commit", "workspace_checkpoint"] = (
-        Field(alias="sourceKind")
+    source_kind: Literal["remote_commit", "local_commit", "workspace_checkpoint"] = Field(
+        alias="sourceKind"
     )
-    repository_object_format: Literal["sha1", "sha256"] = Field(
-        alias="repositoryObjectFormat"
-    )
+    repository_object_format: Literal["sha1", "sha256"] = Field(alias="repositoryObjectFormat")
     base_commit_oid: str = Field(alias="baseCommitOid")
     checkpoint_id: str | None = Field(default=None, alias="checkpointId")
-    checkpoint_content_hash: str | None = Field(
-        default=None, alias="checkpointContentHash"
-    )
+    checkpoint_content_hash: str | None = Field(default=None, alias="checkpointContentHash")
     workspace_id: str = Field(alias="workspaceId")
     workspace_generation: int = Field(alias="workspaceGeneration")
     materialization_id: str = Field(alias="materializationId")
@@ -310,12 +304,11 @@ class ExecutionBinding(WfContractModel):
     binding_hash: str = Field(alias="bindingHash")
 
     @model_validator(mode="after")
-    def _validate_checkpoint_fields(self) -> "ExecutionBinding":
-        if self.source_kind == "workspace_checkpoint":
-            if not self.checkpoint_id or not self.checkpoint_content_hash:
-                raise ValueError(
-                    "workspace_checkpoint requires checkpointId + checkpointContentHash"
-                )
+    def _validate_checkpoint_fields(self) -> ExecutionBinding:
+        if self.source_kind == "workspace_checkpoint" and (
+            not self.checkpoint_id or not self.checkpoint_content_hash
+        ):
+            raise ValueError("workspace_checkpoint requires checkpointId + checkpointContentHash")
         return self
 
 
@@ -352,21 +345,15 @@ class ExecutionEnvelope(WfContractModel):
 class ObservedStep(WfContractModel):
     step_key: str = Field(alias="stepKey")
     attempt: int
-    status: Literal[
-        "pending", "running", "completed", "failed", "outcome_uncertain", "skipped"
-    ]
+    status: Literal["pending", "running", "completed", "failed", "outcome_uncertain", "skipped"]
     output: dict[str, Any] | None = None
     error_code: str | None = Field(default=None, alias="errorCode")
     error_message: str | None = Field(default=None, alias="errorMessage")
 
 
 class ObservedWorktrees(WfContractModel):
-    group_base_checkpoint_id: str | None = Field(
-        default=None, alias="groupBaseCheckpointId"
-    )
-    lane_checkpoints: dict[str, str] | None = Field(
-        default=None, alias="laneCheckpoints"
-    )
+    group_base_checkpoint_id: str | None = Field(default=None, alias="groupBaseCheckpointId")
+    lane_checkpoints: dict[str, str] | None = Field(default=None, alias="laneCheckpoints")
 
 
 class ObservedCost(WfContractModel):
@@ -387,12 +374,16 @@ class ObservedRun(WfContractModel):
     execution_generation: int = Field(alias="executionGeneration")
     revision: int
     observed_state: Literal[
-        "accepted", "running", "waiting_action_result",
-        "waiting_credential_refresh", "quiescing", "completed", "failed", "cancelled",
+        "accepted",
+        "running",
+        "waiting_action_result",
+        "waiting_credential_refresh",
+        "quiescing",
+        "completed",
+        "failed",
+        "cancelled",
     ] = Field(alias="observedState")
-    quiescence_state: Literal["active", "quiescing", "quiescent"] = Field(
-        alias="quiescenceState"
-    )
+    quiescence_state: Literal["active", "quiescing", "quiescent"] = Field(alias="quiescenceState")
     global_cursor: str = Field(alias="globalCursor")
     lane_cursors: dict[str, str] = Field(alias="laneCursors")
     sessions: dict[str, str]
@@ -417,9 +408,7 @@ class GatewayCallReceipt(WfContractModel):
     turn_id: str = Field(alias="turnId")
     activation_id: str = Field(alias="activationId")
     capability: CapabilityRef
-    authorization_decision: Literal["allow", "deny"] = Field(
-        alias="authorizationDecision"
-    )
+    authorization_decision: Literal["allow", "deny"] = Field(alias="authorizationDecision")
     outcome: Literal["success", "denied", "upstream_failed", "output_invalid"]
     created_at: str = Field(alias="createdAt")
     completed_at: str = Field(alias="completedAt")

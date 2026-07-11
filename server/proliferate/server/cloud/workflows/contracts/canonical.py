@@ -109,7 +109,7 @@ def _es_number_to_string(value: float) -> str:
     return "-" + out if negative else out
 
 
-def _canon(value: Any) -> str:
+def _canon(value: Any) -> str:  # noqa: ANN401 - canonical JSON accepts any JSON value
     if value is None:
         return "null"
     if value is True:
@@ -145,7 +145,7 @@ def _canon(value: Any) -> str:
     raise CanonicalizationError(f"unsupported type in canonical JSON: {type(value)!r}")
 
 
-def canonicalize(value: Any) -> bytes:
+def canonicalize(value: Any) -> bytes:  # noqa: ANN401 - public JSON contract boundary
     """Return the RFC 8785 canonical JSON byte sequence for ``value``."""
 
     return _canon(value).encode("utf-8")
@@ -155,7 +155,7 @@ def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def content_hash(value: Any) -> str:
+def content_hash(value: Any) -> str:  # noqa: ANN401 - public JSON contract boundary
     """`sha256:<lowercase hex>` over the canonical JSON of ``value``."""
 
     return "sha256:" + sha256_hex(canonicalize(value))

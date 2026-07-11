@@ -57,9 +57,7 @@ async def insert_activation(
     return record_activation(row)
 
 
-async def get_activation_by_id(
-    db: AsyncSession, *, activation_id: str
-) -> ActivationRecord | None:
+async def get_activation_by_id(db: AsyncSession, *, activation_id: str) -> ActivationRecord | None:
     row = (
         await db.execute(
             select(WorkflowActivation).where(WorkflowActivation.activation_id == activation_id)

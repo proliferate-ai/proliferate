@@ -22,7 +22,7 @@ def fixtures_dir() -> Path:
     raise FileNotFoundError(f"could not locate {_REL} above {here}")
 
 
-def load(name: str) -> Any:
+def load(name: str) -> Any:  # noqa: ANN401 - fixture JSON has heterogeneous shape
     return json.loads((fixtures_dir() / name).read_text(encoding="utf-8"))
 
 

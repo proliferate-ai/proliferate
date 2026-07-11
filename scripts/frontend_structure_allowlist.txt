@@ -25,7 +25,7 @@ apps/desktop/src/components/workspace/shell/sidebar/WorkspaceItem.tsx 410 worksp
 apps/desktop/src/hooks/sessions/lifecycle/session-stream-flush-apply.ts 401 session stream flush/apply pending reducer split
 apps/packages/product-domain/src/chats/transcript/transcript-row-model.ts 940 transcript row model pending row-kind module split
 apps/desktop/src/components/workflows/editor/WorkflowStepPanel.tsx 559 workflows v1 launch surface; split pass queued post-launch
-apps/desktop/src/components/workflows/home/WorkflowRunArgsModal.tsx 448 workflows v1 launch surface; split pass queued post-launch
-apps/packages/product-domain/src/workflows/definition.ts 877 workflows v1 launch surface; split pass queued post-launch
-apps/packages/product-domain/src/workflows/run-status.ts 792 workflows v1 launch surface; split pass queued post-launch
-apps/packages/product-domain/src/workflows/validation.ts 593 workflows v1 launch surface; split pass queued post-launch
+apps/desktop/src/components/workflows/home/WorkflowRunArgsModal.tsx 456 workflows v1 launch surface; split pass queued post-launch
+apps/packages/product-domain/src/workflows/definition.ts 903 workflows v1 launch surface; split pass queued post-launch
+apps/packages/product-domain/src/workflows/run-status.ts 818 workflows v1 launch surface; split pass queued post-launch
+apps/packages/product-domain/src/workflows/validation.ts 707 workflows v1 launch surface; split pass queued post-launch

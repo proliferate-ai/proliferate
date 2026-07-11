@@ -384,7 +384,8 @@ async def test_missed_run_partition_is_oldest_first() -> None:
     assert run_latest.fire_slots == [window[-1]]
     assert run_latest.missed_slots == window[:-1]  # oldest-first, ascending
     replay = partition_missed_run_window(
-        occurrences=window, missed_run_policy=WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL,
+        occurrences=window,
+        missed_run_policy=WORKFLOW_MISSED_RUN_POLICY_REPLAY_ALL,
         next_run_at=_utc(2024, 1, 1, 5),
     )
     assert replay.fire_slots == window  # ascending, oldest-first

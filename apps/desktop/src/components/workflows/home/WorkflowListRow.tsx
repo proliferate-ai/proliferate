@@ -180,14 +180,16 @@ export function WorkflowListRow({ view, runDisabled = false, onOpen, onRun, onEd
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               aria-label="Workflow actions"
               onClick={(e) => e.stopPropagation()}
-              className="rounded p-1 text-faint transition-colors hover:bg-surface-elevated-secondary hover:text-muted-foreground"
+              className="size-6"
             >
               <MoreHorizontal className="size-4" />
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuItem onClick={onEdit}>
