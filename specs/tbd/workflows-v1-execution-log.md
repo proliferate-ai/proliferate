@@ -25,12 +25,13 @@ conversation memory.
 | 3 | WS0B-R executor ownership split | `c220bef741b7d9868531e7db0a52cf0b47b2140f` (merged `0c4e4284f`) | WS0 `68661e27e` | `cargo test -p anyharness-lib --lib` 1116/0 in worktree; captain: post-merge build green, max-lines violations 3 (unchanged, all server-test debt owned by WS2b/WS4) | ACCEPTED — executor.rs 2982→307; agent_turn/turn/goal/emit/effects/observation/receipts/parallel/merge modules; allowlist entry removed |
 | 4b | WS0B-U desktop screens ownership split | `e01bc8be5` (merged `0d57e8a9e`) | WS0B-S in base `3a2336720` | agent: tsc clean, boundaries pass, host/home vitest 17/17, 16 pre-existing unrelated vitest failures verified identical on base; captain post-merge: tsc clean, boundaries pass, host/home 17/17 | ACCEPTED — HomeScreen 619→367, EditorScreen 1212→366, TriggersCard 1064→131; inspector/canvas/trigger components + draft/create/trigger hooks; raw-access violation fixed; 2 max-lines + 3 structure allowlist entries removed |
 | 6 | WS2a persistence skeleton | `3ac1abe46` (rebased `b72e468c4`, merged `ea4f5de5f`) | WS1+WS0B-S via rebase onto `0b25ffcc0` | agent: 77 unit + 39 gateway + 6 migration-integration + heads + populated-DB upgrade test; captain post-rebase: 77 passed + single head d9578c0275f3; post-merge heads verified | ACCEPTED — 7 new tables + run state-axis columns (NULL legacy), workflow_ledger store package, migration c3f8b1d6a4e2→d9578c0275f3. 10 downstream shape decisions recorded in agent handoff (capability_key = WS3a-defined; NULL revision ≡ 0; no fence secret in rows; acquire_session_leases needs caller rollback; workflow_trigger_item/step_action retirement → WS4b/c) |
+| 7 | WS5a runtime acceptance + observation outbox | `bf7055e57` (rebased `b7f4358cc`, merged `3619df135`) | WS1+WS0B-R; rebased onto `bb0eac10c` | agent: full crate 1128/0 (+12 new), workflows 143/0, max-lines byte-identical to base; captain post-rebase: full crate 1128/0 | ACCEPTED — SQLite 0056/0057; gapless same-tx whole-snapshot revisions; lowest_unacked/ack/replay + service seam; optional delivery-identity conflict rejection (HTTP 409), legacy unchanged. DECISION: runtime reuses plan-carried step keys (node.lane.step) — v2 root::uuid grammar activates when WS2b compiles v2 plans; WS2c owns boundary translation if needed |
 | 5 | WS10a strict release runner/policy | `abffe516845b036d511a449bc4c4daba0e296396` (merged `50cdfef80`) | WS1 `ac7044316` | agent: 85/85 tests/release tests, typecheck, live CLI proof both modes; captain: typecheck + 85/85 re-run in worktree | ACCEPTED — signal/release modes; required-workflows.json seeded (content ownership → WS10b); summary artifact + validateSummary for WS10c; SUMMARY_ENV interface recorded; correlation/deadline/no-retry guards. NOTE: focused command is `pnpm -C tests/release exec tsx --test src/runner/workflow-policy.test.ts` (plan's `test -- workflow-policy` does not filter) |
 | 4 | WS0B-S service ownership split | `f11870c4e` (merged `72338fe4b`) | WS0 `68661e27e` | agent: 303 workflow unit tests, ruff, boundaries, AST byte-verification of moves; captain post-merge: test_workflow_service+delivery green | ACCEPTED — service.py 1898→327 + compiler.py/triggers.py/worker/service.py; service.py allowlist entry removed. CAVEATS: triggers.py (943) added to allowlist as carved-out debt (further split owned by WS4a/b); api.py and test_workflow_run_gateway.py allowlist +1 each (import-line necessity, inline-documented). Net violations decreased. |
 
 ## Integration HEAD
 
-`ea4f5de5f`+log (WS0/WS1/WS0B-R/S/U, WS10a, WS2a all merged)
+`3619df135` (8 packets merged: WS0, WS1, WS0B-R/S/U, WS10a, WS2a, WS5a)
 
 ## Gate status
 
@@ -75,8 +76,9 @@ conversation memory.
 
 | Packet | Agent | Worktree | Base SHA | Status |
 | --- | --- | --- | --- | --- |
-| WS3a exact grants | agent (opus) | ~/proliferate-wt/wsc-ws3a | ea4f5de5f | running (owns next Alembic slot after d9578c0275f3) |
-| WS5a runtime acceptance/observations | agent (opus) | ~/proliferate-wt/wsc-ws5a | b74cba675 | running (resumed after transient API crash; partial: SQLite migrations 0056/0057 drafted) |
+| WS3a exact grants | agent (opus, resumed post-restart) | ~/proliferate-wt/wsc-ws3a | ea4f5de5f | running (impl done; writing tests) |
+| WS9a product-domain strict model | agent (opus) | ~/proliferate-wt/wsc-ws9a | bb0eac10c | running |
+| WS5b sequential effects | agent (opus) | ~/proliferate-wt/wsc-ws5b | 3619df135 | launching |
 
 ## Blockers
 
