@@ -4,8 +4,8 @@ Parses a raw definition dict into a normalized, canonical dict. The v2 top-level
 shape is ``{version, name?, description?, inputs, integrations, agents}``: an
 ordered spine of *agent nodes* (``{slot, harness, model, steps}``), each running
 its steps in one session. There is no top-level ``steps`` and no ``setup`` — slot
-= session affinity, and ``session_binding`` is a run-context property stamped on
-the resolved plan (service._resolve_plan), never authored here.
+= session affinity, and ``session_binding`` is a run-context property stamped by
+``domain.resolved_plan.resolve_plan``, never authored here.
 
 Validation is **strict**: unknown kinds and unknown fields are rejected. Template
 references (``{{inputs.<name>}}`` / ``{{<emit>.<field>}}``) are validated for

@@ -16,7 +16,7 @@ harness/model are ignored: the included steps run in the *parent* node's slot.
 
 Two resolver obligations (§3.5), both operating purely on the v2 named-ref grammar
 (``{{inputs.<name>}}`` / ``{{<emit>.<field>}}``) — NOT on indices. The parent's
-flatten pass (service._resolve_plan) later assigns structured step keys and
+flatten pass (``domain.resolved_plan.resolve_plan``) later assigns structured step keys and
 rewrites every ``{{<emit>.<field>}}`` to the runtime's indexed
 ``{{steps[n].output.<field>}}`` form, so composition never touches indices:
 
