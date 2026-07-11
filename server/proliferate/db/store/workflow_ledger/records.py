@@ -13,6 +13,7 @@ from uuid import UUID
 
 from proliferate.db.models.cloud.workflow_ledger import (
     WorkflowActionEffect,
+    WorkflowActivation,
     WorkflowCapabilityLease,
     WorkflowControlCommand,
     WorkflowGatewayReceipt,
@@ -86,6 +87,23 @@ class CapabilityLeaseRecord:
     semantic_revision: int | None
     product_mcp_definition: str | None
     policy_revision: int | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
+class ActivationRecord:
+    """A runtime-registered required-invocation activation identity (§7.3)."""
+
+    id: UUID
+    run_id: UUID
+    plan_hash: str
+    slot_id: str
+    session_id: str
+    step_key: str
+    attempt: int
+    activation_id: str
+    capability_key: str
+    turn_id: str | None
     created_at: datetime
 
 
@@ -221,6 +239,22 @@ def record_capability(row: WorkflowCapabilityLease) -> CapabilityLeaseRecord:
         semantic_revision=row.semantic_revision,
         product_mcp_definition=row.product_mcp_definition,
         policy_revision=row.policy_revision,
+        created_at=row.created_at,
+    )
+
+
+def record_activation(row: WorkflowActivation) -> ActivationRecord:
+    return ActivationRecord(
+        id=row.id,
+        run_id=row.run_id,
+        plan_hash=row.plan_hash,
+        slot_id=row.slot_id,
+        session_id=row.session_id,
+        step_key=row.step_key,
+        attempt=row.attempt,
+        activation_id=row.activation_id,
+        capability_key=row.capability_key,
+        turn_id=row.turn_id,
         created_at=row.created_at,
     )
 

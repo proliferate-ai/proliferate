@@ -27,6 +27,10 @@ Concurrency-bearing operations and their guarantees:
   ``(run_id, step_key, attempt)`` deterministic action identity (§7.4).
 """
 
+from proliferate.db.store.workflow_ledger.activations import (
+    get_activation_by_id,
+    insert_activation,
+)
 from proliferate.db.store.workflow_ledger.gateway import (
     get_gateway_receipt_by_activation,
     insert_capability_lease,
@@ -66,6 +70,7 @@ from proliferate.db.store.workflow_ledger.outbox import (
 from proliferate.db.store.workflow_ledger.records import (
     SESSION_LEASE_BLOCKING_STATES,
     ActionEffectRecord,
+    ActivationRecord,
     CapabilityLeaseRecord,
     ControlCommandRecord,
     GatewayReceiptRecord,
@@ -78,6 +83,7 @@ from proliferate.db.store.workflow_ledger.records import (
 __all__ = [
     "SESSION_LEASE_BLOCKING_STATES",
     "ActionEffectRecord",
+    "ActivationRecord",
     "CapabilityLeaseRecord",
     "ControlCommandRecord",
     "GatewayReceiptRecord",
@@ -94,12 +100,14 @@ __all__ = [
     "enqueue_outbox",
     "get_action_effect",
     "get_active_session_lease",
+    "get_activation_by_id",
     "get_gateway_receipt_by_activation",
     "get_observed_snapshot",
     "get_outbox_row",
     "get_poll_inbox_item",
     "invalidate_run_outbox",
     "insert_action_effect",
+    "insert_activation",
     "insert_capability_lease",
     "insert_gateway_receipt",
     "list_capability_leases",

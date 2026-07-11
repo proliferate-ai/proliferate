@@ -2,7 +2,9 @@
 
 WS3a freezes exact ``CapabilityRef``s per run+slot at StartRun; WS3c records
 activation-keyed receipts. This module owns only the mechanical inserts/reads;
-authorization and gate satisfaction are gateway/runtime logic.
+authorization and gate satisfaction are gateway/runtime logic. The activation
+IDENTITY (registered before the receipt exists) lives in the sibling
+``activations.py`` module.
 
 ``capability_key`` canonical format (WS3a-defined; the codec lives in
 ``server.cloud.workflows.domain.capabilities`` — ``build``/``parse``):

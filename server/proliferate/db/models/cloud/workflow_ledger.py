@@ -11,6 +11,7 @@ pin, so a fixture's identity shape stores here verbatim:
 
 - ``ExecutionBinding`` / delivery identity (§5.2/§5.3) lives on ``workflow_run``.
 - ``CapabilityRef`` tagged union (§7.1) -> ``workflow_capability_lease``.
+- required-invocation activation identity (§7.3) -> ``workflow_activation``.
 - gateway-call-receipt (§7.3) -> ``workflow_gateway_receipt``.
 - workflow-control-command (§8.3) -> ``workflow_control_command``.
 - observed-run (§5.4) mirror + CAS -> ``workflow_run.observed_*``.
@@ -259,6 +260,49 @@ class WorkflowGatewayReceipt(Base):
     outcome: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WorkflowActivation(Base):
+    """Runtime-registered required-invocation activation identity (§7.3, WS3c).
+
+    Registered by the runtime over the authenticated control channel BEFORE the
+    agent turn starts, so the gateway can later authenticate an inbound tool
+    call's trusted activation context against a real, durably-recorded identity
+    instead of anything the call itself asserts (only ``activation_id`` rides
+    the call — every other field is looked up here). ``activation_id`` is
+    globally unique and non-agent-controlled; registering the same
+    ``activation_id`` twice with an IDENTICAL identity tuple is idempotent (the
+    service layer returns the existing row), and a conflicting reuse under a
+    different tuple is a typed error — this table's uniqueness is the backstop.
+    """
+
+    __tablename__ = "workflow_activation"
+    __table_args__ = (
+        UniqueConstraint("activation_id", name="uq_workflow_activation_id"),
+        Index("ix_workflow_activation_run_id", "run_id"),
+        Index(
+            "ix_workflow_activation_run_step_attempt",
+            "run_id",
+            "step_key",
+            "attempt",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workflow_run.id", ondelete="CASCADE"),
+    )
+    plan_hash: Mapped[str] = mapped_column(String(80))
+    slot_id: Mapped[str] = mapped_column(String(64))
+    session_id: Mapped[str] = mapped_column(String(255))
+    step_key: Mapped[str] = mapped_column(String(255))
+    attempt: Mapped[int] = mapped_column(Integer)
+    activation_id: Mapped[str] = mapped_column(String(255))
+    # The single capability (§7.1: "activates only that capability") this
+    # activation names — the SAME ``capability_key`` codec as the frozen lease.
+    capability_key: Mapped[str] = mapped_column(String(255))
+    turn_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class WorkflowPollInbox(Base):
