@@ -1,10 +1,9 @@
 // Seeding helpers: password accounts, orgs, invitations, and the one
-// legitimate direct-DB seed this suite needs (backdating an invitation's
-// `expires_at`, since there is no API to fast-forward time — the same spirit
-// as tier-2's Stripe test-clock convention, just without a clock object to
-// drive). Nothing here fakes a sandbox, an LLM, or any third party; it only
-// drives the product's own auth/org HTTP surface plus one raw SQL statement.
+// narrowly scoped direct-DB seeds for state the product exposes no setup API
+// for (for example invitation time travel and fixture product readiness).
+// Nothing here fakes a sandbox, an LLM, or any third party.
 
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Client } from "pg";
 
@@ -152,6 +151,29 @@ export async function getOwnOrganization(token: string): Promise<OrganizationSum
     throw new Error(`Could not resolve the caller's organization (${status}): ${JSON.stringify(body)}`);
   }
   return body.organizations[0];
+}
+
+/** Give a password fixture account the legacy `githubConnected` compatibility
+ * fact Hosted Web currently requires before mounting the product shell. This
+ * does not represent canonical GitHub App authorization or repository access.
+ * It is an idempotent gate-only seed, not an auth bypass: each surface still
+ * establishes its real Desktop bearer or Web cookie session. */
+export async function ensureProductReady(userId: string, email: string): Promise<void> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    await client.query(
+      `INSERT INTO oauth_account
+         (id, user_id, oauth_name, access_token, expires_at, refresh_token, account_id, account_email)
+       SELECT $1, $2, 'github', 'gho_t2_surface_product_ready_stub', NULL, NULL, $3, $4
+       WHERE NOT EXISTS (
+         SELECT 1 FROM oauth_account WHERE user_id = $2 AND oauth_name = 'github'
+       )`,
+      [randomUUID(), userId, `t2surface-${userId}`, email],
+    );
+  } finally {
+    await client.end();
+  }
 }
 
 // Response field names follow the API's camelCase aliases
