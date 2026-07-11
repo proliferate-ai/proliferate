@@ -14,8 +14,8 @@ import { useHomeNextTargetSelectionState } from "@/hooks/home/ui/use-home-next-t
 import { useHomeNextState } from "@/hooks/home/derived/use-home-next-state";
 import { useHomeScreen } from "@/hooks/home/facade/use-home-screen";
 import {
-  buildHomeModeControlDescriptor,
   buildHomeModelSelectorProps,
+  buildHomeSessionConfigControls,
 } from "@/lib/domain/home/home-composer-controls";
 import { type HomeNextModelSelection } from "@/lib/domain/home/home-next-launch";
 import { resolveHomeModelProbeCardState } from "@/lib/domain/home/home-screen";
@@ -69,18 +69,14 @@ export function HomeNextScreen() {
   // their own gating (goal needs activeSessionId; attachments read
   // supportsAttachments=false → chat's exact pre-session detail).
   const homeAgentKind = homeNext.effectiveModelSelection?.kind ?? null;
-  // Mode always comes from the home adapter: useHomeNextLaunchControls filters
-  // mode keys out of `controls`, so the mode descriptor must be prepended for
-  // buildComposerSessionControlGroups to pick it up (same key-based gating as
-  // chat).
-  const homeModeControl = buildHomeModeControlDescriptor({
+  const homeSessionConfigControls = buildHomeSessionConfigControls({
+    destination,
+    agentKind: homeAgentKind,
     modes: homeNext.modeOptions,
     selectedModeId: homeNext.effectiveMode?.value ?? null,
-    onSelect: setModeOverrideId,
+    launchControls: homeLaunchControls.controls,
+    onSelectMode: setModeOverrideId,
   });
-  const homeSessionConfigControls = homeModeControl
-    ? [homeModeControl, ...homeLaunchControls.controls]
-    : homeLaunchControls.controls;
   const homeModelSelectorProps = buildHomeModelSelectorProps({
     groups: homeNext.modelGroups,
     selectedModel: homeNext.selectedModel,

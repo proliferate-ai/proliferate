@@ -25,6 +25,7 @@ import {
   catalogRouteForSurface,
   normalizeCatalogModels,
   normalizeGatewayModels,
+  normalizeRuntimeLaunchModels,
 } from "@/lib/domain/settings/harness-catalog";
 
 interface HarnessAllModelsSectionProps {
@@ -45,13 +46,14 @@ export function HarnessAllModelsSection({
   const route = catalogRouteForSurface(
     harnessKind,
     surface,
-    selectionsQuery.data ?? [],
+    cloudActive ? selectionsQuery.data ?? [] : [],
   );
   // Local surface + gateway route: the RUNTIME has already resolved what its
   // harness + auth can actually reach (contract §5) — read that directly
   // instead of the cloud catalog snapshot, which never sees the runtime's own
   // gateway probes.
   const isRuntimeGateway = surface === "local" && route === "gateway";
+  const isSignedOutLocal = surface === "local" && !cloudActive;
   // native/api_key routes probe on the client (catalog.py's refresh_catalog
   // contract) — the server rejects a refresh with no uploaded payload for
   // these routes, so Refresh sources one from the local AnyHarness runtime's
@@ -66,20 +68,29 @@ export function HarnessAllModelsSection({
   const upsertOverride = useUpsertCatalogOverride();
 
   const gatewayModelsQuery = useAgentGatewayModelsQuery(harnessKind, {
-    enabled: isRuntimeGateway,
+    enabled: cloudActive && isRuntimeGateway,
   });
   const refreshGatewayModels = useRefreshAgentGatewayModelsMutation();
   const runtimeLaunchOptionsQuery = useAgentLaunchOptionsQuery({
-    enabled: isRuntimeProbedRoute,
+    enabled: isRuntimeProbedRoute || isSignedOutLocal,
   });
 
-  const models = useMemo(
-    () =>
-      isRuntimeGateway
-        ? normalizeGatewayModels(gatewayModelsQuery.data?.models ?? [])
-        : normalizeCatalogModels(catalogQuery.data?.models ?? []),
-    [isRuntimeGateway, gatewayModelsQuery.data?.models, catalogQuery.data?.models],
-  );
+  const models = useMemo(() => {
+    if (isSignedOutLocal) {
+      return normalizeRuntimeLaunchModels(harnessKind, runtimeLaunchOptionsQuery.data);
+    }
+    if (isRuntimeGateway) {
+      return normalizeGatewayModels(gatewayModelsQuery.data?.models ?? []);
+    }
+    return normalizeCatalogModels(catalogQuery.data?.models ?? []);
+  }, [
+    isSignedOutLocal,
+    harnessKind,
+    runtimeLaunchOptionsQuery.data,
+    isRuntimeGateway,
+    gatewayModelsQuery.data?.models,
+    catalogQuery.data?.models,
+  ]);
   // Each row carries its own enriched metadata (contract §1); probe-only models
   // stay sparse (Provider "—" when unmatched — no harness-name fallback).
   // Runtime-resolved gateway models have no override endpoint yet, so their
@@ -94,10 +105,10 @@ export function HarnessAllModelsSection({
     modes: model.modes,
     fastMode: model.fastMode,
     enabled: model.enabled,
-    toggleDisabled: isRuntimeGateway || upsertOverride.isPending,
+    toggleDisabled: isSignedOutLocal || isRuntimeGateway || upsertOverride.isPending,
   }));
 
-  if (!cloudActive) {
+  if (surface === "cloud" && !cloudActive) {
     return (
       <SettingsSection title={HARNESS_PANE_COPY.tabAllModels}>
         <p className="py-3 text-sm text-muted-foreground">
@@ -108,6 +119,10 @@ export function HarnessAllModelsSection({
   }
 
   function handleRefresh() {
+    if (isSignedOutLocal) {
+      void runtimeLaunchOptionsQuery.refetch();
+      return;
+    }
     if (isRuntimeGateway) {
       refreshGatewayModels.mutate(harnessKind, {
         onError: (error) => {
@@ -146,7 +161,7 @@ export function HarnessAllModelsSection({
   }
 
   function handleToggle(modelId: string, enabled: boolean) {
-    if (isRuntimeGateway) {
+    if (isSignedOutLocal || isRuntimeGateway) {
       return;
     }
     upsertOverride.mutate(
@@ -162,8 +177,16 @@ export function HarnessAllModelsSection({
     );
   }
 
-  const isLoading = isRuntimeGateway ? gatewayModelsQuery.isLoading : catalogQuery.isLoading;
-  const isRefreshing = isRuntimeGateway ? refreshGatewayModels.isPending : refreshCatalog.isPending;
+  const isLoading = isSignedOutLocal
+    ? runtimeLaunchOptionsQuery.isLoading
+    : isRuntimeGateway
+      ? gatewayModelsQuery.isLoading
+      : catalogQuery.isLoading;
+  const isRefreshing = isSignedOutLocal
+    ? runtimeLaunchOptionsQuery.isFetching
+    : isRuntimeGateway
+      ? refreshGatewayModels.isPending
+      : refreshCatalog.isPending;
 
   // Auto-probe an empty catalog: landing on a resolved-but-empty catalog kicks
   // off the same refresh the button uses, exactly once per (harnessKind, surface,
@@ -200,7 +223,9 @@ export function HarnessAllModelsSection({
   // Empty catalog with a probe in flight (auto or manual) shows the probing state
   // instead of the static empty copy.
   const isProbingEmpty = models.length === 0 && isRefreshing;
-  const freshnessLine = isRuntimeGateway
+  const freshnessLine = isSignedOutLocal
+    ? ""
+    : isRuntimeGateway
     ? gatewayModelsQuery.data
       ? gatewayModelsQuery.data.source === "probe" && gatewayModelsQuery.data.probedAt
         ? HARNESS_PANE_COPY.allModelsFreshnessProbed(

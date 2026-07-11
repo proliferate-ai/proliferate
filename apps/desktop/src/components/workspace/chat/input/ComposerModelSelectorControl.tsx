@@ -68,7 +68,9 @@ export function ComposerModelSelectorControl({
           emphasizeLabel
           icon={currentModel ? <ProviderIcon kind={currentModel.kind} className="size-4 shrink-0" /> : undefined}
           label={triggerLabel}
-          trailing={<PendingConfigIndicator pendingState={currentModel?.pendingState ?? null} />}
+          trailing={currentModel?.pendingState
+            ? <PendingConfigIndicator pendingState={currentModel.pendingState} />
+            : null}
           aria-label={`Model: ${triggerLabel}`}
           className="max-w-[15rem]"
         />

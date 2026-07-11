@@ -722,8 +722,8 @@
 - name: ANTHROPIC_API_KEY
   secret: true
   default: ""
-  description: Anthropic API key for AI session title generation
-  tags: [local-dev, self-hosted, production]
+  description: Anthropic API key for AI session title generation and catalog probe contexts
+  tags: [local-dev, self-hosted, production, ci]
 
 - name: AI_MAGIC_SESSION_TITLE_MODEL
   secret: false
@@ -736,9 +736,54 @@
 # ═══════════════════════════════════════════════════════════════════════
 # Provider credentials consumed only by the nightly catalog-probe workflow
 # (.github/workflows/catalog-probe.yml) to enumerate each harness's models.
-# NOTE: the other probe provider secrets (OPENAI_API_KEY, GEMINI_API_KEY,
-# CURSOR_API_KEY, CLAUDE_CODE_OAUTH_TOKEN) are also CI-only and not yet
-# enumerated here — a pre-existing gap, tracked separately.
+
+- name: CATALOG_PROBE_AGENTS
+  secret: false
+  default: ""
+  description: Optional comma-separated agent kinds for a focused authoritative catalog update; blank selects every non-Cursor agent
+  tags: [local-dev, ci]
+
+- name: CATALOG_PROBE_CURSOR
+  secret: false
+  default: "0"
+  description: Explicit opt-in for Cursor catalog probes; Cursor still requires a working machine-local login
+  tags: [local-dev, ci]
+
+- name: CLAUDE_CODE_OAUTH_TOKEN
+  secret: true
+  default: ""
+  description: Claude Code OAuth token used only by the catalog probe's Anthropic OAuth context
+  tags: [ci]
+
+- name: OPENAI_API_KEY
+  secret: true
+  default: ""
+  description: OpenAI API key used by the catalog probe's Codex and OpenCode contexts
+  tags: [ci]
+
+- name: CODEX_AUTH_JSON_B64
+  secret: true
+  default: ""
+  description: Base64-encoded Codex auth.json used only by the catalog probe's OpenAI OAuth context
+  tags: [ci]
+
+- name: GEMINI_API_KEY
+  secret: true
+  default: ""
+  description: Gemini API key used by the catalog probe's OpenCode Gemini context
+  tags: [ci]
+
+- name: OPENCODE_API_KEY
+  secret: true
+  default: ""
+  description: OpenCode Zen subscription key used by the catalog probe's Zen context
+  tags: [ci]
+
+- name: AWS_BEARER_TOKEN_BEDROCK
+  secret: true
+  default: ""
+  description: Bedrock bearer token used by the catalog probe's Claude and Codex Bedrock contexts
+  tags: [ci]
 
 - name: XAI_API_KEY
   secret: true
