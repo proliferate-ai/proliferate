@@ -28,13 +28,20 @@ export function ComposerFastModeToggle({ control }: ComposerFastModeToggleProps)
         iconOnly
         disabled={!control.settable || !nextValue}
         active={!!control.isEnabled}
+        className={control.isEnabled ? "bg-[var(--color-composer-control-hover)]" : ""}
         icon={
           <Zap
-            className={`size-3.5 ${control.isEnabled ? "fill-current" : "opacity-65"}`}
+            className={`size-3.5 transition-[color,fill,opacity] ${
+              control.isEnabled
+                ? "fill-current stroke-none opacity-100"
+                : "fill-none stroke-current stroke-[1.5] text-[color:var(--color-composer-control-muted-foreground)] opacity-100"
+            }`}
           />
         }
         label="Fast"
-        trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
+        trailing={control.pendingState
+          ? <PendingConfigIndicator pendingState={control.pendingState} />
+          : null}
         aria-label={tooltip}
         title={tooltip}
         onClick={() => {

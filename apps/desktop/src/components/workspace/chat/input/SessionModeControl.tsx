@@ -6,7 +6,7 @@ import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-con
 import type { ConfiguredSessionControlKey } from "@/lib/domain/chat/session-controls/presentation";
 import { SessionControlIcon } from "@/components/session-controls/SessionControlIcon";
 import { POPOVER_SURFACE_CLASS, PopoverButton } from "@proliferate/ui/primitives/PopoverButton";
-import { Check } from "@proliferate/ui/icons";
+import { Check, ChevronDown } from "@proliferate/ui/icons";
 import { PopoverMenuItem } from "@proliferate/ui/primitives/PopoverMenuItem";
 import { ComposerControlButton } from "@proliferate/ui/primitives/ComposerControlButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
@@ -36,16 +36,33 @@ export function SessionModeControl({
   const currentDetail = currentPresentation.shortLabel ?? currentOption?.label ?? control.detail;
   const triggerLabel = triggerStyle === "value" ? currentDetail ?? control.label : control.label;
   const triggerDetail = triggerStyle === "value" ? null : currentDetail;
+  const compactTrigger = triggerStyle === "value";
+  const triggerIcon = compactTrigger
+    ? undefined
+    : <SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />;
+  const triggerTrailing = control.pendingState || (compactTrigger && control.settable)
+    ? (
+      <span className="flex items-center gap-1">
+        <PendingConfigIndicator pendingState={control.pendingState} />
+        {compactTrigger && control.settable && (
+          <ChevronDown
+            className="size-3 shrink-0 text-[color:var(--color-composer-control-muted-foreground)]"
+            aria-hidden
+          />
+        )}
+      </span>
+    )
+    : null;
 
   if (!control.settable) {
     return (
       <ComposerControlButton
         disabled
         emphasizeLabel={triggerStyle === "value"}
-        icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
+        icon={triggerIcon}
         label={triggerLabel}
         detail={triggerDetail}
-        trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
+        trailing={triggerTrailing}
         className="max-w-[12rem]"
       />
     );
@@ -56,10 +73,10 @@ export function SessionModeControl({
       trigger={
         <ComposerControlButton
           emphasizeLabel={triggerStyle === "value"}
-          icon={<SessionControlIcon icon={currentPresentation.icon} className="size-3.5" />}
+          icon={triggerIcon}
           label={triggerLabel}
           detail={triggerDetail}
-          trailing={<PendingConfigIndicator pendingState={control.pendingState} />}
+          trailing={triggerTrailing}
           title={`${CHAT_MODE_CONTROL_LABELS.cycleHint} (${CHAT_MODE_CONTROL_LABELS.shortcut})`}
           aria-label={`${control.label}: ${currentOption?.label ?? currentDetail ?? ""}`}
           className="max-w-[12rem]"

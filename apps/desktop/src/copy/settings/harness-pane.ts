@@ -69,5 +69,10 @@ export const HARNESS_PANE_COPY = {
     `Local runtime unavailable — could not read ${displayName} models.`,
   catalogOverrideError: (displayName: string) =>
     `Could not update the ${displayName} model catalog.`,
+  installAction: "Install",
+  retryInstallAction: "Retry install",
+  installingAction: "Installing...",
+  installError: (displayName: string) =>
+    `Could not install ${displayName}.`,
   readyToast: (displayName: string) => `${displayName} is ready.`,
 } as const;

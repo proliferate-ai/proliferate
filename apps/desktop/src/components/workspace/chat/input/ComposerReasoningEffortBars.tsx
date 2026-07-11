@@ -24,9 +24,12 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
     currentOption?.value ?? null,
     currentOption?.label,
   );
+  const currentLevel =
+    currentPresentation.shortLabel ?? control.detail ?? control.label;
+  const ariaLabel = `Reasoning: ${currentLevel}`;
   const tooltip = resolveSessionControlTooltip(
-    control.label,
-    currentPresentation.shortLabel ?? control.detail ?? control.label,
+    "Reasoning",
+    currentLevel,
     currentOption?.description ?? null,
   ) + ". Click to step.";
 
@@ -38,9 +41,10 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
             levels={levels}
             currentIndex={effectiveIndex}
             onStep={(nextValue: string) => control.onSelect(nextValue)}
+            iconOnly
             disabled={!control.settable}
             title={tooltip}
-            aria-label={tooltip}
+            aria-label={ariaLabel}
           />
           <PendingConfigIndicator pendingState={control.pendingState} />
         </span>
@@ -54,9 +58,10 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
         levels={levels}
         currentIndex={effectiveIndex}
         onStep={(nextValue: string) => control.onSelect(nextValue)}
+        iconOnly
         disabled={!control.settable}
         title={tooltip}
-        aria-label={tooltip}
+        aria-label={ariaLabel}
       />
     </Tooltip>
   );

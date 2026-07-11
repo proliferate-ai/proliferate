@@ -35,6 +35,7 @@ import { serializeChatDraftToPrompt } from "@/lib/domain/chat/composer/file-ment
 import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-domain/chats/composer/prompt-attachment-snapshot";
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";
+import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
@@ -105,8 +106,7 @@ export function ChatInput({
     : agentKind ?? modelSelectorProps.launchAgentKind;
   const effectiveModeControl = suppressActiveSessionState
     ? null
-    : effectiveSessionConfigControls.find((control) => control.key === "collaboration_mode")
-      ?? effectiveSessionConfigControls.find((control) => control.key === "mode")
+    : buildComposerSessionControlGroups(effectiveSessionConfigControls).modeControl
       ?? modeControl
       ?? null;
   const { handleSubmit, handleCancel } = useChatPromptActions();

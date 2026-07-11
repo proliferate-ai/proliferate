@@ -50,7 +50,7 @@ export interface ComposerLeadingControlsProps {
 }
 
 /**
- * The leading control cluster (model selector, effort bars, mode, goal,
+ * The leading control cluster (model selector, reasoning bars, fast mode, mode, goal,
  * integrations). Shared verbatim between the in-session chat composer
  * (ChatInputControlRow) and the home/new-chat composer (HomeNextScreen slot):
  * home feeds it launch-time control descriptors instead of live-session
@@ -75,11 +75,6 @@ export function ComposerLeadingControls({
     && sessionGoal.capabilities.supported
     && deriveGoalBarState(sessionGoal.goal).kind !== "live";
 
-  const effortControl = controlGroups.modelConfigControls.find((c) => c.key === "effort") ?? null;
-  const fastModeControl = controlGroups.modelConfigControls.find(
-    (c) => c.key === "fast_mode" && c.kind === "toggle",
-  ) ?? null;
-
   return (
     <>
       {/* 1. Model/harness selector — leftmost */}
@@ -91,30 +86,29 @@ export function ComposerLeadingControls({
         <ComposerModelSelectorControl modelSelectorProps={modelSelectorProps} />
       </div>
 
-      {/* 2a. Fast mode toggle — sits before the reasoning bars so speed and
-          effort read as one model-tuning cluster */}
-      {fastModeControl && (
+      {/* 2. Reasoning/effort bars */}
+      {controlGroups.reasoningEffortControl && (
         <span
           className={`inline-flex shrink-0 ${
             runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
           }`}
         >
-          <ComposerFastModeToggle control={fastModeControl} />
+          <ComposerReasoningEffortBars control={controlGroups.reasoningEffortControl} />
         </span>
       )}
 
-      {/* 2. Reasoning effort bars */}
-      {effortControl && (
+      {/* 3. Fast mode toggle */}
+      {controlGroups.fastModeControl && (
         <span
           className={`inline-flex shrink-0 ${
             runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
           }`}
         >
-          <ComposerReasoningEffortBars control={effortControl} />
+          <ComposerFastModeToggle control={controlGroups.fastModeControl} />
         </span>
       )}
 
-      {/* 3. Mode control (bypass/plan/etc) */}
+      {/* 4. Primary working mode control (bypass/plan/etc) */}
       {controlGroups.modeControl && (
         <span
           className={`inline-flex min-w-0 ${
@@ -129,7 +123,7 @@ export function ComposerLeadingControls({
         </span>
       )}
 
-      {/* 4. Goal button */}
+      {/* 5. Goal button */}
       {canSetGoal && (
         <ComposerControlButton
           icon={<Target className="size-4" />}
@@ -144,7 +138,7 @@ export function ComposerLeadingControls({
         />
       )}
 
-      {/* 5. Integrations control */}
+      {/* 6. Integrations control */}
       <ComposerIntegrationsControl />
     </>
   );
@@ -196,7 +190,7 @@ export function ComposerTrailingControls({
 
   return (
     <>
-      {/* 6. Plus button — direct file attach */}
+      {/* 7. Plus button — direct file attach */}
       {!isEditingQueuedPrompt && (
         <ComposerControlButton
           iconOnly
@@ -209,10 +203,10 @@ export function ComposerTrailingControls({
         />
       )}
 
-      {/* 7. Runtime pressure */}
+      {/* 8. Runtime pressure */}
       <RuntimePressureIndicator />
 
-      {/* 8. Overflow three-dots */}
+      {/* 9. Overflow three-dots */}
       <span
         className={`inline-flex shrink-0 ${
           runtimeControlsDisabled ? "pointer-events-none opacity-55" : ""
@@ -220,7 +214,7 @@ export function ComposerTrailingControls({
       >
         <ComposerOverflowControl
           agentKind={agentKind}
-          controls={controlGroups.modelConfigControls}
+          controls={controlGroups.overflowControls}
         />
       </span>
     </>

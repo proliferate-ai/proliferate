@@ -19,11 +19,14 @@ It does not answer:
 - how to speak provider-specific CLI, ACP registry, or MCP protocols
 - how a session actor processes turns
 
-AnyHarness uses two bundled, versioned agent inputs and does not support remote
-model/launch catalog paths. `catalog.json` owns model/mode/control metadata;
-`registry.json` owns trusted runtime behavior such as install, launch, auth
-slots, and materialization policy. Credentials, readiness resolution, reconcile
-execution, install, seed, and portability code live outside `catalog/**`.
+AnyHarness starts from two bundled, versioned agent inputs and does not support
+remote model/launch URL configuration. `catalog.json` owns
+model/mode/control metadata and exact artifact pins; its validated active
+document may be replaced by control-plane catalog sync. `registry.json` owns
+trusted runtime behavior such as install, launch, auth slots, and
+materialization policy and remains compiled/bundled with the runtime.
+Credentials, readiness resolution, reconcile execution, install, seed, and
+portability code live outside `catalog/**`.
 
 ## Truth Sources
 
@@ -58,8 +61,8 @@ Consequences:
   must not mutate the bundled catalog or influence trusted executable behavior.
 - A live session's active model/config truth comes from ACP live config, not
   from the static AnyHarness catalog.
-- AnyHarness catalog endpoints, if exposed, are target capability/readiness
-  endpoints, not the primary product UI catalog.
+- Runtime catalog sync/version endpoints are control-plane convergence
+  transport, not the primary product UI catalog.
 
 ## Bundled Agent Inputs
 
@@ -99,11 +102,17 @@ old model/launch cache writers
 split launch catalog directory
 ```
 
-Runtime catalog refresh/fetch/cache behavior is not supported in the migrated
-runtime. The bundled `AgentCatalogDocument` and `AgentRegistryDocument` are the
-only runtime agent inputs. Dynamic model refresh is a separate
-`model_registry/**` concern and stores target-local snapshots in SQLite; it must
-not rewrite catalog or registry JSON.
+The runtime does not fetch arbitrary catalog URLs or accept a remotely supplied
+registry. It boots from the bundled `AgentCatalogDocument` and
+`AgentRegistryDocument`. Cloud convergence may replace only the active catalog:
+the worker compares `catalogVersion`, fetches the server-owned document, and
+submits it to the runtime's validated catalog-apply endpoint. A successful
+activation persists the active catalog and starts installed-only reconcile.
+The trusted registry remains the compiled/bundled method boundary throughout.
+
+Dynamic model refresh is a separate `model_registry/**` concern and stores
+target-local snapshots in SQLite; it must not rewrite the active agent catalog
+or bundled registry.
 
 ## Trust Boundary
 
@@ -137,6 +146,57 @@ This boundary should be visible in code. The projection that produces
 `AgentDescriptor` is sourced from trusted registry data only (method, auth,
 launch). Catalog data enriches it with the resolved, sha-anchored version pin
 and model/control display options.
+
+## Catalog Producer And Promotion
+
+New upstream versions are discovered and promoted through the repository
+pipeline, never by a runtime install:
+
+```text
+resolve exact pins for selected agents
+  -> compile AnyHarness with that candidate lockfile
+  -> reconcile/install those exact artifacts
+  -> probe every configured required auth context
+  -> collate only snapshots passed by this run
+  -> finalize exact candidate pins only for freshly probed agents
+  -> copy inactive/retained agents unchanged from the prior lockfile
+  -> make catalog.draft.json and catalog.json byte-identical
+```
+
+`make catalog-update` is the authoritative path. With no selector it updates
+Claude, Codex, OpenCode, and Grok. A focused authoritative update uses an
+explicit agent selection:
+
+```bash
+make catalog-update CATALOG_PROBE_AGENTS=codex
+# Equivalent direct-script form:
+./scripts/agent-catalog/run-probes.sh --agent codex
+```
+
+`CATALOG_PROBE_AGENTS` accepts comma-separated agent kinds, and `--agent` may
+be repeated or given a comma-separated value. Every configured auth context
+for every selected agent remains mandatory; a focused run does not turn those
+contexts into an optional subset. The complete-probe builder rebuilds only the
+selected agents from snapshots passed by that run and copies every unselected
+agent unchanged from the prior bundled lockfile.
+
+Missing credentials, install failures, probe failures, and probe timeouts stop
+promotion. Cursor is retained at its existing pin unless the run explicitly
+selects it and opts in on a machine with a working machine-local Cursor login:
+
+```bash
+make catalog-update CATALOG_PROBE_AGENTS=cursor \
+  CATALOG_PROBE_ARGS=--include-cursor
+```
+
+`--allow-partial` is diagnostic only; the same mode is available as
+`ALLOW_PARTIAL=1`. The complete-probe gate refuses to promote its output, and
+`catalog-pin` refuses an incomplete local probe state.
+
+`catalogVersion` changes with catalog content. `registryVersion` changes with
+registry content, and `probedAgainst.registryVersion` must pair the promoted
+catalog with that registry version. CI enforces those version bumps and exact
+draft/bundled equality.
 
 ## Source Shape
 
@@ -333,7 +393,13 @@ flag: full (install missing too) or installed-only (only update agents already o
 disk; skip missing ones). The runtime drives an installed-only reconcile at
 startup (`AgentRuntime::spawn_startup_pass`, after seed hydration) so installed
 agents track the catalog pins on desktop and cloud workers — non-blocking,
-best-effort, idempotent.
+best-effort, idempotent. Activating a validated synced catalog also starts an
+installed-only reconcile so already-managed artifacts converge to its pins.
+An existing executable is not proof of convergence: when a catalog pin exists
+but the durable install manifest has no comparable version, reconcile forces a
+reinstall. Binary/archive roles compare the declared version; git roles compare
+the immutable git ref while ACP attestation separately verifies the package's
+human-readable version.
 
 It should not own per-provider install mechanics.
 
@@ -439,8 +505,10 @@ After live session starts:
 
 ## Public API Behavior
 
-AnyHarness does not expose public runtime catalog endpoints in this migration.
-The remaining public target capability endpoints are:
+AnyHarness exposes transport-authenticated catalog version/apply endpoints for
+control-plane convergence. They report/replace the validated active lockfile;
+they are not product catalog browsing APIs and cannot replace the trusted
+registry. The user-facing target capability endpoints remain:
 
 - agent list/readiness endpoint: target-local support and readiness
 - install endpoint: mutate target-local managed artifacts

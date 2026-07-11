@@ -1,5 +1,6 @@
 import type { AgentSummary } from "@anyharness/sdk";
 import { ProviderIcon } from "@proliferate/ui/provider-icons";
+import { Button } from "@proliferate/ui/primitives/Button";
 import {
   configurationDetailForAgent,
 } from "@/lib/domain/agents/configuration-issues-presentation";
@@ -7,13 +8,22 @@ import { getAgentStatusDisplay } from "@/lib/domain/agents/status-presentation";
 
 interface HarnessConfigIssueBannerProps {
   agent: AgentSummary;
+  installAction?: {
+    label: string;
+    loading: boolean;
+    disabled: boolean;
+    onInstall: () => void;
+  } | null;
 }
 
 /**
  * Inline warning banner shown at the top of a harness settings page when the
  * agent has configuration issues (needs login, credentials, or install).
  */
-export function HarnessConfigIssueBanner({ agent }: HarnessConfigIssueBannerProps) {
+export function HarnessConfigIssueBanner({
+  agent,
+  installAction = null,
+}: HarnessConfigIssueBannerProps) {
   const status = getAgentStatusDisplay(agent, {});
 
   return (
@@ -29,6 +39,18 @@ export function HarnessConfigIssueBanner({ agent }: HarnessConfigIssueBannerProp
           {configurationDetailForAgent(agent)}
         </p>
       </div>
+      {installAction ? (
+        <Button
+          variant="outline"
+          size="sm"
+          loading={installAction.loading}
+          disabled={installAction.disabled}
+          onClick={installAction.onInstall}
+          className="shrink-0"
+        >
+          {installAction.label}
+        </Button>
+      ) : null}
     </div>
   );
 }

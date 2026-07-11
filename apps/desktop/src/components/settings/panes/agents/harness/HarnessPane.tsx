@@ -11,6 +11,7 @@ import { HarnessAuthSection, deriveSelectedMethod } from "./HarnessAuthSection";
 import { HarnessConfigIssueBanner } from "./HarnessConfigIssueBanner";
 import { HarnessSettingsSection } from "./HarnessSettingsSection";
 import { useHarnessAuthEditor } from "@/hooks/agents/workflows/use-harness-auth-editor";
+import { useHarnessInstallAction } from "@/hooks/agents/workflows/use-harness-install-action";
 
 interface HarnessPaneProps {
   harnessKind: string;
@@ -23,12 +24,15 @@ export function HarnessPane({ harnessKind }: HarnessPaneProps) {
   const displayName =
     agentsByKind.get(harnessKind)?.displayName ?? getProviderDisplayName(harnessKind);
   const issueAgent = agentsNeedingSetup.find((agent) => agent.kind === harnessKind);
+  const installAction = useHarnessInstallAction(issueAgent ?? null);
 
   return (
     <section className="space-y-6">
       <SettingsPageHeader title={displayName} />
 
-      {issueAgent ? <HarnessConfigIssueBanner agent={issueAgent} /> : null}
+      {issueAgent ? (
+        <HarnessConfigIssueBanner agent={issueAgent} installAction={installAction} />
+      ) : null}
 
       {surface === "cloud" ? (
         <HarnessSurfaceCloud harnessKind={harnessKind} displayName={displayName} />

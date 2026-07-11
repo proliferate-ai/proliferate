@@ -76,6 +76,11 @@ Three rules every settings page follows:
 3. Page chrome uses SettingsPageHeader + SettingsSection + SettingsRow
    (from @proliferate/product-ui/settings). New pages do not invent
    new wrappers.
+
+4. The Agents `Local` surface remains useful without a Cloud session. Its
+   model list comes directly from the local AnyHarness launch catalog; Cloud
+   sign-in gates the `Cloud` surface, gateway management, catalog overrides,
+   and other Cloud-backed mutations, not local model discovery.
 ```
 
 Ownership rule:

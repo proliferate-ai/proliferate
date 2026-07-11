@@ -979,14 +979,31 @@ catalog-view:
 # Rebuild the draft, resolve every harness into a fenced pin (per-platform
 # {url,sha256} or npm/git, reusing prior shas for unchanged URLs), and promote
 # it to the bundled lockfile the runtime loads (catalogs/agents/catalog.json).
+# This target finalizes already-committed probe snapshots; use catalog-update
+# when discovering new upstream harness versions.
 catalog-pin:
+	@state=scripts/agent-catalog/generated/.probe-logs/run.state; \
+		if [ -f "$$state" ] && ! grep -q '^complete=true$$' "$$state"; then \
+			echo "Refusing catalog promotion after an incomplete diagnostic probe run." >&2; \
+			echo "Run a complete catalog-update or remove the local probe state intentionally." >&2; \
+			exit 1; \
+		fi
 	cd scripts/agent-catalog && node build-catalog.mjs \
 		&& node resolve-pins.mjs --catalog catalog.draft.json --reuse-from ../../catalogs/agents/catalog.json \
 		&& cp catalog.draft.json ../../catalogs/agents/catalog.json \
 		&& node render-catalog.mjs
+	node scripts/validate-agent-catalog.mjs
 
-# Re-run the full probe matrix (skips contexts missing credentials; reads
-# .probe-secrets.env at the repo root), then re-pin the bundled lockfile.
+# Resolve current upstream pins, install those exact artifacts, run the complete
+# probe matrix, then promote only agents backed by fresh successful probes.
+# Set CATALOG_PROBE_AGENTS=codex (comma-separated for more than one) for a
+# focused authoritative update; agents outside that selection are retained
+# byte-for-byte. Cursor additionally requires CATALOG_PROBE_ARGS=--include-cursor
+# on a machine with a working cursor-agent login. --allow-partial is diagnostics
+# only: the completeness gate below deliberately refuses to promote it.
 catalog-update:
-	./scripts/agent-catalog/run-probes.sh
-	$(MAKE) catalog-pin
+	CATALOG_PROBE_AGENTS="$(CATALOG_PROBE_AGENTS)" ./scripts/agent-catalog/run-probes.sh $(CATALOG_PROBE_ARGS)
+	cd scripts/agent-catalog && node build-catalog.mjs --require-complete-probe \
+		&& cp catalog.draft.json ../../catalogs/agents/catalog.json \
+		&& node render-catalog.mjs
+	node scripts/validate-agent-catalog.mjs

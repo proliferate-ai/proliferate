@@ -7,6 +7,7 @@ import {
   defaultRouteForSurface,
   normalizeCatalogModels,
   normalizeGatewayModels,
+  normalizeRuntimeLaunchModels,
 } from "./harness-catalog";
 
 function selection(
@@ -197,6 +198,60 @@ describe("normalizeCatalogModels", () => {
         enabled: true,
       },
     ]);
+  });
+});
+
+describe("normalizeRuntimeLaunchModels", () => {
+  it("reads enriched models for the requested harness from the local runtime", () => {
+    const launchOptions: AgentLaunchOptionsResponse = {
+      agents: [
+        {
+          kind: "codex",
+          displayName: "Codex",
+          defaultModelId: "gpt-5.5",
+          models: [
+            {
+              id: "gpt-5.5",
+              displayName: "GPT 5.5",
+              isDefault: true,
+              description: "Latest coding model",
+              provider: "openai",
+              status: "active",
+              effort: { values: ["low", "medium", "high"], default: "medium" },
+              fastMode: true,
+              modes: ["default", "plan"],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(normalizeRuntimeLaunchModels("codex", launchOptions)).toEqual([
+      {
+        id: "gpt-5.5",
+        displayName: "GPT 5.5",
+        description: "Latest coding model",
+        provider: "openai",
+        status: "active",
+        effort: { values: ["low", "medium", "high"], default: "medium" },
+        fastMode: true,
+        modes: ["default", "plan"],
+        enabled: true,
+      },
+    ]);
+  });
+
+  it("does not leak another harness's runtime models", () => {
+    const launchOptions: AgentLaunchOptionsResponse = {
+      agents: [{
+        kind: "claude",
+        displayName: "Claude Code",
+        defaultModelId: "sonnet",
+        models: [{ id: "sonnet", displayName: "Sonnet", isDefault: true }],
+      }],
+    };
+
+    expect(normalizeRuntimeLaunchModels("codex", launchOptions)).toEqual([]);
   });
 });
 

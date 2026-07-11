@@ -1,10 +1,10 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-07-02.1",
+  "catalogVersion": "2026-07-11.1",
   "probedAgainst": {
-    "registryVersion": "2026-06-10.1"
+    "registryVersion": "2026-07-10.1"
   },
-  "generatedAt": "2026-06-18T06:23:46.960Z",
+  "generatedAt": "2026-07-11T00:36:38.653Z",
   "defaultAgentKind": "claude",
   "agents": [
     {
@@ -194,7 +194,7 @@
           {
             "id": "opus[1m]",
             "displayName": "Opus 4.8 (1M context)",
-            "description": "Opus 4.8 with 1M context \u00b7 Best for everyday, complex tasks \u00b7 $5/$25 per Mtok",
+            "description": "Opus 4.8 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
             "availability": {
               "anyOf": [
                 "anthropic-api"
@@ -244,7 +244,7 @@
           {
             "id": "sonnet",
             "displayName": "Sonnet 4.6",
-            "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks",
+            "description": "Sonnet 4.6 · Efficient for routine tasks",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -288,7 +288,7 @@
           {
             "id": "sonnet[1m]",
             "displayName": "Sonnet 4.6 (1M context)",
-            "description": "Sonnet 4.6 for long sessions \u00b7 $3/$15 per Mtok",
+            "description": "Sonnet 4.6 for long sessions · $3/$15 per Mtok",
             "availability": {
               "anyOf": [
                 "anthropic-api"
@@ -330,7 +330,7 @@
           {
             "id": "haiku",
             "displayName": "Haiku 4.5",
-            "description": "Haiku 4.5 \u00b7 Fastest for quick answers",
+            "description": "Haiku 4.5 · Fastest for quick answers",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -364,7 +364,7 @@
           {
             "id": "opus",
             "displayName": "Opus 4.6",
-            "description": "Opus 4.6 \u00b7 Legacy",
+            "description": "Opus 4.6 · Legacy",
             "availability": {
               "anyOf": [
                 "anthropic-api",
@@ -519,7 +519,7 @@
           {
             "id": "us.anthropic.claude-sonnet-4-6",
             "displayName": "Sonnet 4.6",
-            "description": "Sonnet 4.6 \u00b7 Efficient for routine tasks",
+            "description": "Sonnet 4.6 · Efficient for routine tasks",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -601,7 +601,7 @@
           {
             "id": "us.anthropic.claude-fable-5",
             "displayName": "Fable 5",
-            "description": "Fable 5 \u00b7 Most capable for your hardest and longest-running tasks",
+            "description": "Fable 5 · Most capable for your hardest and longest-running tasks",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -643,7 +643,7 @@
           {
             "id": "us.anthropic.claude-opus-4-1-20250805-v1:0",
             "displayName": "Opus 4.1",
-            "description": "Opus 4.1 \u00b7 Legacy",
+            "description": "Opus 4.1 · Legacy",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -674,7 +674,7 @@
           {
             "id": "us.anthropic.claude-opus-4-8",
             "displayName": "Opus 4.8",
-            "description": "Opus 4.8 \u00b7 Best for everyday, complex tasks",
+            "description": "Opus 4.8 · Best for everyday, complex tasks",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -758,7 +758,7 @@
           {
             "id": "us.anthropic.claude-opus-4-7",
             "displayName": "Opus 4.7",
-            "description": "Opus 4.7 \u00b7 Legacy",
+            "description": "Opus 4.7 · Legacy",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -1198,33 +1198,33 @@
       "displayName": "Codex",
       "harness": {
         "agentProcess": {
-          "version": "0.16.0-proliferate.1",
+          "version": "0.17.0-proliferate.1",
           "source": {
             "kind": "git",
             "repo": "https://github.com/proliferate-ai/codex-acp.git",
-            "gitRef": "c66f9f3b9bf4811fa8ebdfc9ad908bf37845e50f",
+            "gitRef": "8baae51210acd4912f5aab9054b124a43287030e",
             "packageSubdir": "npm",
             "executableRelpath": "node_modules/.bin/codex-acp"
           }
         },
         "native": {
-          "version": "rust-v0.141.0",
+          "version": "rust-v0.144.1",
           "source": {
             "kind": "archive",
             "targets": {
               "macos_arm64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-aarch64-apple-darwin.tar.gz",
-                "sha256": "abdead5feebc259decaaec33465423bbb7904b3049fa28e92209cb924693c0f4",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.144.1/codex-aarch64-apple-darwin.tar.gz",
+                "sha256": "88e72ac8bd30815f7d18e62dac333dc20ce3ad1cba94be1649a1977dd9bfdbb8",
                 "expectedBinary": "codex-aarch64-apple-darwin"
               },
               "macos_x64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-x86_64-apple-darwin.tar.gz",
-                "sha256": "7b7398b93dd16a3123c87286e312a7942be3c13f9619fc587dfc05563fcbc888",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.144.1/codex-x86_64-apple-darwin.tar.gz",
+                "sha256": "0ea72d21c794504342d5fe0d5d057b0221c0a42f4bdf4a48b95af243af2b0c0e",
                 "expectedBinary": "codex-x86_64-apple-darwin"
               },
               "linux_x64": {
-                "url": "https://github.com/openai/codex/releases/download/rust-v0.141.0/codex-x86_64-unknown-linux-musl.tar.gz",
-                "sha256": "f1e2bf9fa0ba6eb82119d621b6b71bc38edd33c06dc2867b31a027052358957d",
+                "url": "https://github.com/openai/codex/releases/download/rust-v0.144.1/codex-x86_64-unknown-linux-musl.tar.gz",
+                "sha256": "84091ae20c65fcc7d4120db97d1bd57d7ff8df9c7609fb781c78c2ebbd4f5a28",
                 "expectedBinary": "codex-x86_64-unknown-linux-musl"
               }
             },
@@ -1301,15 +1301,37 @@
             }
           },
           {
+            "key": "collaboration_mode",
+            "values": [
+              "default",
+              "plan"
+            ],
+            "mapping": {
+              "liveConfigId": "collaboration_mode"
+            }
+          },
+          {
             "key": "reasoning_effort",
             "values": [
               "low",
               "medium",
               "high",
-              "xhigh"
+              "xhigh",
+              "max",
+              "ultra"
             ],
             "mapping": {
               "liveConfigId": "reasoning_effort"
+            }
+          },
+          {
+            "key": "fast_mode",
+            "values": [
+              "off",
+              "on"
+            ],
+            "mapping": {
+              "liveConfigId": "fast_mode"
             }
           }
         ],
@@ -1331,6 +1353,13 @@
                   "full-access"
                 ],
                 "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
               }
             },
             "status": "active",
@@ -1360,6 +1389,13 @@
                   "full-access"
                 ],
                 "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
               },
               "reasoning_effort": {
                 "values": [
@@ -1399,6 +1435,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1413,6 +1456,311 @@
             "provenance": {
               "observedIn": [
                 "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.6-sol",
+            "displayName": "GPT-5.6 Sol",
+            "description": "Frontier model for complex coding, research, and real-world work.",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.6-terra",
+            "displayName": "GPT-5.6 Terra",
+            "description": "Frontier model for complex coding, research, and real-world work.",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "openai.gpt-5.6-luna",
+            "displayName": "GPT-5.6 Luna",
+            "description": "Frontier model for complex coding, research, and real-world work.",
+            "availability": {
+              "anyOf": [
+                "bedrock"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "medium"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.bedrock"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "gpt-5.6-sol",
+            "displayName": "GPT-5.6-Sol",
+            "description": "Latest frontier agentic coding model.",
+            "availability": {
+              "anyOf": [
+                "openai-api",
+                "openai-oauth"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max",
+                  "ultra"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.openai-api",
+                "codex.openai-oauth"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "gpt-5.6-terra",
+            "displayName": "GPT-5.6-Terra",
+            "description": "Balanced agentic coding model for everyday work.",
+            "availability": {
+              "anyOf": [
+                "openai-api",
+                "openai-oauth"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max",
+                  "ultra"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.openai-api",
+                "codex.openai-oauth"
+              ],
+              "observedInAllContexts": false,
+              "viaTrialOnly": false
+            }
+          },
+          {
+            "id": "gpt-5.6-luna",
+            "displayName": "GPT-5.6-Luna",
+            "description": "Fast and affordable agentic coding model.",
+            "availability": {
+              "anyOf": [
+                "openai-api",
+                "openai-oauth"
+              ]
+            },
+            "defaultVisible": true,
+            "controls": {
+              "mode": {
+                "values": [
+                  "read-only",
+                  "auto",
+                  "full-access"
+                ],
+                "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
+              "reasoning_effort": {
+                "values": [
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max"
+                ],
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
+              }
+            },
+            "status": "active",
+            "provenance": {
+              "observedIn": [
+                "codex.openai-api",
+                "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
               "viaTrialOnly": false
@@ -1438,6 +1786,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1445,7 +1800,14 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
               }
             },
             "status": "active",
@@ -1478,6 +1840,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1485,7 +1854,14 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
+              },
+              "fast_mode": {
+                "values": [
+                  "off",
+                  "on"
+                ],
+                "observedValue": "off"
               }
             },
             "status": "active",
@@ -1518,44 +1894,12 @@
                 ],
                 "observedValue": "read-only"
               },
-              "reasoning_effort": {
+              "collaboration_mode": {
                 "values": [
-                  "low",
-                  "medium",
-                  "high",
-                  "xhigh"
+                  "default",
+                  "plan"
                 ],
-                "observedValue": "medium"
-              }
-            },
-            "status": "active",
-            "provenance": {
-              "observedIn": [
-                "codex.openai-api",
-                "codex.openai-oauth"
-              ],
-              "observedInAllContexts": false,
-              "viaTrialOnly": false
-            }
-          },
-          {
-            "id": "gpt-5.3-codex",
-            "displayName": "GPT-5.3-Codex",
-            "description": "Coding-optimized model.",
-            "availability": {
-              "anyOf": [
-                "openai-api"
-              ]
-            },
-            "defaultVisible": true,
-            "controls": {
-              "mode": {
-                "values": [
-                  "read-only",
-                  "auto",
-                  "full-access"
-                ],
-                "observedValue": "read-only"
+                "observedValue": "default"
               },
               "reasoning_effort": {
                 "values": [
@@ -1564,13 +1908,14 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
               }
             },
             "status": "active",
             "provenance": {
               "observedIn": [
-                "codex.openai-api"
+                "codex.openai-api",
+                "codex.openai-oauth"
               ],
               "observedInAllContexts": false,
               "viaTrialOnly": false
@@ -1596,6 +1941,13 @@
                 ],
                 "observedValue": "read-only"
               },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
+              },
               "reasoning_effort": {
                 "values": [
                   "low",
@@ -1603,7 +1955,7 @@
                   "high",
                   "xhigh"
                 ],
-                "observedValue": "medium"
+                "observedValue": "low"
               }
             },
             "status": "active",
@@ -1633,6 +1985,13 @@
                   "full-access"
                 ],
                 "observedValue": "read-only"
+              },
+              "collaboration_mode": {
+                "values": [
+                  "default",
+                  "plan"
+                ],
+                "observedValue": "default"
               },
               "reasoning_effort": {
                 "values": [
@@ -1752,8 +2111,8 @@
         },
         "observedDefaults": {
           "bedrock": "openai.gpt-oss-120b",
-          "openai-api": "gpt-5.5",
-          "openai-oauth": "gpt-5.5"
+          "openai-api": "gpt-5.6-sol",
+          "openai-oauth": "gpt-5.6-sol"
         },
         "gatewayPolicy": {
           "providers": [
@@ -1768,10 +2127,10 @@
         }
       },
       "provenance": {
-        "probedAt": "2026-06-18T02:52:32.817407+00:00",
+        "probedAt": "2026-07-11T00:36:25.416008+00:00",
         "attestation": {
           "name": "codex-acp",
-          "version": "0.16.0-proliferate.1",
+          "version": "0.17.0-proliferate.1",
           "title": "Codex"
         },
         "runs": [

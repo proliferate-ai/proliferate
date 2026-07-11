@@ -94,6 +94,41 @@ Any provider-specific compatibility mapping in Desktop must be backed by a
 domain-level selector test and, when possible, a recorded AnyHarness fixture
 showing the raw session values that required the mapping.
 
+## 1.2 Session control placement
+
+The chat and Home composers use the same control partition and visible order:
+
+1. model/harness selector
+2. one reasoning-level control rendered as increasing bars (`effort` takes
+   precedence over `reasoning` when both describe the same tuning dimension)
+3. `fast_mode` rendered as the zap control
+4. the primary working mode selector
+
+Reasoning/effort renders as bars only; its level remains available through a
+`Reasoning: <level>` tooltip and accessible label. The primary working mode is
+compact text plus a subtle disclosure chevron, without a leading mode icon.
+The Fast zap remains visibly outlined when off, then fills and uses the active
+control treatment when on.
+
+Visible controls use one consistent inter-item rhythm. Compact controls must
+not reserve a trailing pending-state slot when no pending state exists; that
+empty flex child shifts icon-only controls and creates uneven visual gaps.
+
+`collaboration_mode` is the primary working mode whenever it exposes a choice.
+Otherwise a legacy fused `mode` control is primary only when its choices carry
+working-mode semantics such as plan, agent, ask, build, bypass, or chat. This
+keeps Codex's collaboration mode independent from its read-only/auto/full-access
+permissions while preserving harnesses such as Claude, Cursor, and OpenCode
+whose working and access behavior still share one mode control.
+
+Permission/access mode and every other unclaimed configuration control render
+only under the rightmost three-dot configuration menu. A reasoning-level
+control with two or more ordered values remains visible as disabled bars when
+the runtime reports it as non-settable. Cowork hides the permission/access
+`mode` because its access policy is product-defined, but retains independent
+working-mode controls such as `collaboration_mode` together with reasoning and
+fast-mode controls.
+
 ## 2. Dock Regions
 
 `resolveComposerDockSlots`

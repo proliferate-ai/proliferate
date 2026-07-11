@@ -111,6 +111,24 @@ function createControls(): LiveSessionControlDescriptor[] {
   ];
 }
 
+function createAccessModeControl(): LiveSessionControlDescriptor {
+  return {
+    key: "mode",
+    label: "Permissions",
+    detail: "Auto",
+    rawConfigId: "mode",
+    settable: true,
+    pendingState: null,
+    kind: "select",
+    options: [
+      { value: "read-only", label: "Read Only", selected: false },
+      { value: "auto", label: "Auto", selected: true },
+      { value: "full-access", label: "Full Access", selected: false },
+    ],
+    onSelect: vi.fn(),
+  };
+}
+
 function renderControlRow(overrides?: Partial<Parameters<typeof ChatInputControlRow>[0]>) {
   return render(
     <MemoryRouter>
@@ -144,13 +162,44 @@ describe("ChatInputControlRow", () => {
 
   it("renders effort bars control", () => {
     renderControlRow();
-    // The LevelBarsButton renders with the current level's label
-    expect(screen.getByText("Medium")).toBeTruthy();
+    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    expect(reasoning.getAttribute("title")?.startsWith("Reasoning: Medium")).toBe(true);
+    expect(screen.getByText("Medium").className).toContain("sr-only");
   });
 
-  it("renders mode control", () => {
+  it("renders working mode as text with a subtle disclosure chevron", () => {
     renderControlRow();
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
     expect(screen.getByText("Default")).toBeTruthy();
+    expect(mode.querySelectorAll("svg")).toHaveLength(1);
+    expect(mode.querySelector('path[d="m6 9 6 6 6-6"]')).toBeTruthy();
+  });
+
+  it("does not imply disclosure for a non-settable working mode", () => {
+    const controls = createControls();
+    const modeControl = controls.find((control) => control.key === "collaboration_mode")!;
+    modeControl.settable = false;
+    renderControlRow({ sessionConfigControls: controls });
+
+    const mode = screen.getByRole("button", { name: "Default" });
+    expect(mode).toHaveProperty("disabled", true);
+    expect(mode.querySelector("svg")).toBeNull();
+  });
+
+  it("orders model, reasoning bars, fast mode, and working mode in the visible row", () => {
+    renderControlRow();
+
+    const model = screen.getByRole("button", { name: "Model: Opus 4.1" });
+    const reasoning = screen.getByRole("button", { name: "Reasoning: Medium" });
+    const fast = screen.getByRole("button", { name: "Fast mode: Slow" });
+    const mode = screen.getByRole("button", { name: "Mode: Default" });
+
+    expect(model.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(reasoning.compareDocumentPosition(fast) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
+    expect(fast.compareDocumentPosition(mode) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
   });
 
   it("renders plus button for file attach", () => {
@@ -181,22 +230,119 @@ describe("ChatInputControlRow", () => {
     const effortControl = controls.find((c) => c.key === "effort")!;
     renderControlRow({ sessionConfigControls: controls });
 
-    // The LevelBarsButton is rendered with label "Medium"
-    const barsButton = screen.getByText("Medium").closest("button")!;
+    const barsButton = screen.getByRole("button", { name: "Reasoning: Medium" });
     fireEvent.click(barsButton);
     // Clicking should advance from index 1 (Medium) to index 2 (High)
     expect(effortControl.onSelect).toHaveBeenCalledWith("high");
   });
 
+  it("visually distinguishes Fast off and on while preserving its accessible state", () => {
+    const controls = createControls();
+    const fastControl = controls.find((control) => control.key === "fast_mode")!;
+    const { rerender } = renderControlRow({ sessionConfigControls: controls });
+
+    const offButton = screen.getByRole("button", { name: "Fast mode: Slow" });
+    expect(offButton.querySelector("svg")?.getAttribute("class")).toContain("opacity-100");
+    expect(offButton.querySelector("svg")?.getAttribute("class")).toContain("fill-none");
+    expect(offButton.querySelector("svg")?.getAttribute("class")).toContain("stroke-current");
+
+    fastControl.isEnabled = true;
+    fastControl.detail = "On";
+    fastControl.options = fastControl.options.map((option) => ({
+      ...option,
+      selected: option.value === "on",
+    }));
+    rerender(
+      <MemoryRouter>
+        <ChatInputControlRow
+          runtimeControlsDisabled={false}
+          modelSelectorProps={createModelSelectorProps()}
+          agentKind="claude"
+          sessionConfigControls={controls}
+          isEditingQueuedPrompt={false}
+          chatDisabled={false}
+          isSubmitting={false}
+          supportsAttachments
+          canAttachFiles
+          activeSessionId="test-session"
+          onAttachFile={vi.fn()}
+          isRunning={false}
+          isEmpty
+          onSubmit={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    const onButton = screen.getByRole("button", { name: "Fast mode: Fast" });
+    expect(onButton.className).toContain("bg-[var(--color-composer-control-hover)]");
+    expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("fill-current");
+    expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("stroke-none");
+    expect(onButton.querySelector("svg")?.getAttribute("class")).toContain("opacity-100");
+  });
+
   it("does not render overflow when no extra controls exist", () => {
-    // Only effort, fast_mode, and collaboration_mode — all excluded from overflow
+    // Effort, fast_mode, and collaboration_mode each own a visible slot.
     renderControlRow();
     expect(screen.queryByRole("button", { name: "More configuration options" })).toBeNull();
   });
 
+  it("keeps Codex permissions independent from working mode in overflow", () => {
+    const controls = [createAccessModeControl(), ...createControls()];
+    renderControlRow({ agentKind: "codex", sessionConfigControls: controls });
+
+    expect(screen.getByRole("button", { name: "Mode: Default" })).toBeTruthy();
+    expect(screen.queryByText("Auto")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "More configuration options" }));
+
+    expect(screen.getByText("Permissions")).toBeTruthy();
+    expect(screen.getByText("Read Only")).toBeTruthy();
+    expect(screen.getByText("Auto")).toBeTruthy();
+    expect(screen.getByText("Full Access")).toBeTruthy();
+  });
+
+  it("renders two-level reasoning with bars when effort is unavailable", () => {
+    const controls = createControls().filter((control) => control.key !== "effort");
+    const reasoningControl: LiveSessionControlDescriptor = {
+      key: "reasoning",
+      label: "Reasoning",
+      detail: "On",
+      rawConfigId: "reasoning",
+      settable: true,
+      pendingState: null,
+      kind: "toggle",
+      enabledValue: "on",
+      disabledValue: "off",
+      isEnabled: true,
+      options: [
+        { value: "off", label: "Off", selected: false },
+        { value: "on", label: "On", selected: true },
+      ],
+      onSelect: vi.fn(),
+    };
+    controls.push(reasoningControl);
+    renderControlRow({ sessionConfigControls: controls });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reasoning: On" }));
+    expect(reasoningControl.onSelect).toHaveBeenCalledWith("off");
+    expect(screen.queryByRole("button", { name: "More configuration options" })).toBeNull();
+  });
+
+  it("shows non-settable reasoning effort as disabled bars", () => {
+    const controls = createControls();
+    const effortControl = controls.find((control) => control.key === "effort")!;
+    effortControl.settable = false;
+    renderControlRow({ sessionConfigControls: controls });
+
+    expect(screen.getByRole("button", { name: "Reasoning: Medium" }))
+      .toHaveProperty("disabled", true);
+  });
+
   it("renders overflow button when extra controls exist", () => {
     const controls = createControls();
-    // "reasoning" is NOT excluded from overflow
+    // Effort owns the single reasoning-level slot, so a second reasoning
+    // control remains available as an additional option.
     controls.push({
       key: "reasoning",
       label: "Reasoning",

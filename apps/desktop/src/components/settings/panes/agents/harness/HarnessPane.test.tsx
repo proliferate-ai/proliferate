@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HarnessPane } from "./HarnessPane";
 
@@ -107,6 +108,7 @@ vi.mock("@proliferate/cloud-sdk-react", () => ({
   useAgentApiKeys: () => state.apiKeys,
   useAgentCatalog: () => state.catalog,
   useAgentAuthState: () => ({ data: undefined, isLoading: false }),
+  useOrgAgentPolicy: () => ({ data: undefined, isLoading: false }),
   usePutAuthSelections: () => ({ mutate: putMutate, isPending: false }),
   useCreateAgentApiKey: () => ({ mutate: createKeyMutate, isPending: false }),
   useRefreshAgentCatalog: () => ({ mutate: refreshMutate, isPending: false }),
@@ -211,7 +213,9 @@ vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
 vi.mock("@/hooks/agents/derived/use-agent-catalog", () => ({
   useAgentCatalog: () => ({ agentsByKind: state.agentsByKind, agentsNeedingSetup: [] }),
 }));
-
+vi.mock("@/hooks/agents/workflows/use-harness-install-action", () => ({
+  useHarnessInstallAction: () => null,
+}));
 vi.mock("@/stores/sessions/harness-connection-store", () => ({
   useHarnessConnectionStore: (selector: (s: { runtimeUrl: string }) => unknown) =>
     selector({ runtimeUrl: "http://127.0.0.1:8457" }),
@@ -250,7 +254,18 @@ vi.mock("@/stores/ui/agent-surface-store", () => ({
 }));
 
 function renderPane(harnessKind = "claude") {
-  return render(<HarnessPane harnessKind={harnessKind} />);
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <HarnessPane harnessKind={harnessKind} />
+    </QueryClientProvider>,
+  );
 }
 
 function gatewayCard() {

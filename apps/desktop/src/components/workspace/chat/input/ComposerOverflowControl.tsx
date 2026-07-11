@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import {
   resolveComposerControlOptionLabel,
 } from "@/lib/domain/chat/session-controls/composer-config-submenu-presentation";
@@ -10,8 +9,6 @@ import { Check, MoreHorizontal } from "@proliferate/ui/icons";
 import { ComposerPopoverSurface } from "@proliferate/product-ui/chat/composer/ComposerPopoverSurface";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
-const EXCLUDED_OVERFLOW_KEYS = new Set(["mode", "collaboration_mode", "effort", "fast_mode"]);
-
 interface ComposerOverflowControlProps {
   agentKind: string | null;
   controls: LiveSessionControlDescriptor[];
@@ -21,12 +18,7 @@ export function ComposerOverflowControl({
   agentKind,
   controls,
 }: ComposerOverflowControlProps) {
-  const overflowControls = useMemo(
-    () => controls.filter((control) => !EXCLUDED_OVERFLOW_KEYS.has(control.key)),
-    [controls],
-  );
-
-  if (overflowControls.length === 0) {
+  if (controls.length === 0) {
     return null;
   }
 
@@ -48,7 +40,7 @@ export function ComposerOverflowControl({
     >
       {() => (
         <ComposerPopoverSurface className="w-56 p-1">
-          {overflowControls.map((control) => (
+          {controls.map((control) => (
             <OverflowControlSection
               key={control.key}
               agentKind={agentKind}

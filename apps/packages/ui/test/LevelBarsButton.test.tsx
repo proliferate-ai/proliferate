@@ -30,6 +30,23 @@ describe("LevelBarsButton", () => {
     expect(svg?.querySelectorAll("rect").length).toBe(3);
   });
 
+  it("can render the bars without visible level text", () => {
+    const onStep = vi.fn();
+    render(
+      <LevelBarsButton
+        levels={levels}
+        currentIndex={1}
+        onStep={onStep}
+        iconOnly
+        aria-label="Reasoning: Medium"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Reasoning: Medium" }).className)
+      .toContain("w-7");
+    expect(screen.getByText("Medium").className).toContain("sr-only");
+  });
+
   it("advances to the next level on click", () => {
     const onStep = vi.fn();
     render(<LevelBarsButton levels={levels} currentIndex={0} onStep={onStep} />);

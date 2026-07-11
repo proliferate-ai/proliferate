@@ -1,9 +1,11 @@
 name: Catalog Probe
 
 # The measuring instrument on a schedule: run the harness x auth-context probe
-# matrix, rebuild the catalog draft, and open a PR with the diff. Contexts
-# whose credentials are missing are skipped (run-probes.sh), so partial runs
-# are useful. Follow-ups tracked in specs/tbd/agents-catalog-registry-
+# matrix, rebuild the catalog draft, and open a PR with the diff. Promotion is
+# fail-closed: every configured context must probe the newly resolved exact pin.
+# Cursor is retained because its ACP process requires a machine-local login;
+# run `make catalog-update CATALOG_PROBE_ARGS=--include-cursor` on such a host.
+# Follow-ups tracked in specs/tbd/agents-catalog-registry-
 # migration.md §8: bedrock/vertex contexts and deliberate precedence
 # experiments land once the probe binary grows those auth contexts.
 
@@ -32,8 +34,10 @@ jobs:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
       XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+      AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
+      CODEX_AUTH_JSON_B64: ${{ secrets.CODEX_AUTH_JSON_B64 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -52,21 +56,30 @@ jobs:
         with:
           workspaces: anyharness
 
-      - name: Run probe matrix (skips missing credentials)
-        run: ./scripts/agent-catalog/run-probes.sh
-
-      - name: Rebuild catalog draft, resolve pins, promote to bundled + viewer
-        working-directory: scripts/agent-catalog
+      - name: Materialize isolated Codex OAuth input
         run: |
-          node build-catalog.mjs
-          # Freeze the fresh draft into a fenced lockfile (resolve every harness
-          # source + sha, reusing the previously-shipped shas for unchanged
-          # URLs), then promote it to the bundled catalog the runtime loads.
-          node resolve-pins.mjs \
-            --catalog catalog.draft.json \
-            --reuse-from ../../catalogs/agents/catalog.json
-          cp catalog.draft.json ../../catalogs/agents/catalog.json
-          node render-catalog.mjs
+          if [[ -n "${CODEX_AUTH_JSON_B64:-}" ]]; then
+            auth_path="$RUNNER_TEMP/codex-auth.json"
+            printf '%s' "$CODEX_AUTH_JSON_B64" | base64 --decode > "$auth_path"
+            chmod 600 "$auth_path"
+            echo "PROBE_CODEX_OAUTH_AUTH_JSON=$auth_path" >> "$GITHUB_ENV"
+          fi
+
+      - name: Resolve, install, probe, and finalize catalog
+        run: make catalog-update
+
+      - name: Summarize probe completeness
+        if: always()
+        run: |
+          state=scripts/agent-catalog/generated/.probe-logs/run.state
+          if [[ -f "$state" ]]; then
+            {
+              echo "### Catalog probe state"
+              echo '```text'
+              cat "$state"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload viewer artifact
         uses: actions/upload-artifact@v7
@@ -92,5 +105,5 @@ jobs:
           git push -u origin "$branch"
           gh pr create \
             --title "chore(catalog): probe run $(date -u +%Y-%m-%d)" \
-            --label "release:internal-or-chore" --label "area:anyharness" \
-            --body "Automated catalog probe run. Review the per-context diffs in \`scripts/agent-catalog/generated/\` and the draft; download the catalog-viewer artifact from the workflow run for the rendered diff vs main. Skipped contexts (missing credentials) are listed in the run log."
+            --label "release:maintenance" --label "area:anyharness" \
+            --body "Automated exact-pin catalog probe run. Every promoted agent was resolved, installed, and probed in the same run. Review the per-context diffs in \`scripts/agent-catalog/generated/\` and the draft; download the catalog-viewer artifact from the workflow run for the rendered diff vs main. Cursor remains at its prior pin because scheduled runners do not have the required machine-local login."

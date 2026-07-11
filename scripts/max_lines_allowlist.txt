@@ -23,7 +23,7 @@ anyharness/crates/anyharness-lib/src/domains/reviews/service/service_tests.rs 15
 anyharness/crates/anyharness-lib/src/domains/sessions/runtime/tests.rs 680 existing AnyHarness oversized test file
 anyharness/crates/anyharness-lib/src/domains/workspaces/inventory.rs 653 runtime pressure worktree inventory joins and tests
 anyharness/crates/anyharness-lib/src/domains/workspaces/retire_preflight.rs 613 existing AnyHarness oversized file
-anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 654 catalog probe with per-harness model-source fallbacks and tests
+anyharness/crates/anyharness-lib/src/live/sessions/probe.rs 613 catalog probe with per-harness model-source fallbacks
 anyharness/crates/anyharness-lib/src/persistence/custom_migrations.rs 1112 custom migration with legacy schema coverage
 anyharness/sdk-react/src/hooks/sessions.ts 774 existing SDK React oversized file
 cloud/sdk/src/types/generated.ts 773 existing generated cloud SDK type surface (+billing budget-limit/usage types)
@@ -32,7 +32,7 @@ anyharness/sdk/src/reducer/transcript.ts 1591 existing SDK oversized file
 apps/desktop/src-tauri/src/commands/ssh_tunnel.rs 729 existing desktop native oversized file
 apps/desktop/src/components/content/ui/diff/ChatDiffViewer.tsx 622 existing desktop diff viewer component
 apps/desktop/src/components/content/ui/diff/SplitDiffViewer.tsx 540 existing desktop split diff viewer component
-apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 885 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock
+apps/desktop/src/components/settings/panes/agents/harness/HarnessPane.test.tsx 900 P3 runtime catalog extends All-Models coverage + add-key modal flow + credential refresh + switch disambiguation + surface store mock
 apps/desktop/src/lib/domain/workspaces/cloud/logical-workspaces.test.ts 690 managed sandbox cloud workspace indicators extend existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar.test.ts 691 workspace git-status threading extends existing oversized test file
 apps/desktop/src/lib/domain/workspaces/sidebar/sidebar-indicators.test.ts 631 existing desktop oversized test file

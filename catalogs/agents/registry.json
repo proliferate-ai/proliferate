@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "registryVersion": "2026-06-10.1",
+  "registryVersion": "2026-07-10.1",
   "generatedAt": "2026-05-31T00:00:00Z",
   "agents": [
     {
@@ -133,7 +133,7 @@
       "agentProcess": {
         "install": {
           "kind": "managed_npm_package",
-          "package": "git+https://github.com/proliferate-ai/codex-acp.git#c66f9f3b9bf4811fa8ebdfc9ad908bf37845e50f",
+          "package": "git+https://github.com/proliferate-ai/codex-acp.git#8baae51210acd4912f5aab9054b124a43287030e",
           "packageSubdir": "npm",
           "sourceBuildBinaryName": null,
           "executableRelpath": "node_modules/.bin/codex-acp"
