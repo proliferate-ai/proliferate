@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createTranscriptState } from "@anyharness/sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  parsedCommandItem,
   terminalItem,
   toolItem,
 } from "@proliferate/product-domain/chats/transcript/transcript-presentation-test-fixtures";
@@ -136,7 +137,7 @@ describe("CollapsedActions", () => {
     expect(button.querySelector("path")?.getAttribute("d")).toContain("16.3965 5.01128");
 
     fireEvent.click(button);
-    expect(screen.getByRole("button", { name: /Running: pnpm test/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Ran pnpm test/i })).toBeTruthy();
     expect(screen.getAllByText("Reading read.ts").length).toBeGreaterThan(0);
   });
 
@@ -290,7 +291,7 @@ describe("CollapsedActions", () => {
     expect(html).not.toContain("max-h-[7.5rem]");
     expect(html).not.toContain("overflow-y-auto overflow-x-hidden");
     expect(html).not.toContain("pl-4");
-    expect(html).toContain("flex flex-col gap-0");
+    expect(html).toContain("flex flex-col gap-1");
   });
 
   it("keeps compact scrolling for expanded non-edit action ledgers", () => {
@@ -316,7 +317,7 @@ describe("CollapsedActions", () => {
     expect(html).not.toContain("pl-4");
   });
 
-  it("renders dropdownable command rows brighter than plain ledger rows", () => {
+  it("uses the same Codex ink for command and plain ledger rows", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read"),
@@ -331,10 +332,10 @@ describe("CollapsedActions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /command/i }));
 
-    const commandRow = screen.getByRole("button", { name: /Running: pnpm test/i });
+    const commandRow = screen.getByRole("button", { name: /Ran pnpm test/i });
     const readRow = screen.getByText("Read read.ts");
-    expect(commandRow.className).toContain("text-muted-foreground");
-    expect(readRow.className).toContain("text-muted-foreground");
+    expect(commandRow.className).toContain("text-foreground/60");
+    expect(readRow.parentElement?.className).toContain("text-foreground/60");
   });
 
   it("starts grouped edit cards closed inside the expanded action batch", () => {
@@ -359,7 +360,7 @@ describe("CollapsedActions", () => {
 
     const html = document.body.innerHTML;
     const ledger = document.querySelector("[data-collapsed-actions-ledger]");
-    expect(ledger?.firstElementChild?.className).toContain("flex flex-col gap-0");
+    expect(ledger?.firstElementChild?.className).toContain("flex flex-col gap-1");
     expect(html).toContain("Edit");
     expect(html).toContain("edit-1.ts");
     expect(html).toContain("aria-expanded=\"false\"");
@@ -367,6 +368,81 @@ describe("CollapsedActions", () => {
     expect(html).not.toContain("Toggle file diff");
     expect(html).not.toContain("data-app-action-review-file-toggle");
     expect(html).not.toContain("aria-label=\"Open edit-1.ts\"");
+    const editRow = screen.getByRole("button", { name: /Edit edit-1\.ts/i });
+    const editIcon = editRow.querySelector("svg");
+    expect(editIcon?.getAttribute("viewBox")).toBe("0 0 20 21");
+    expect(editIcon?.querySelector("path")?.getAttribute("d")).toContain("11.3312 4.20472");
+    expect(editIcon?.parentElement?.className).toContain("size-[1.143em]");
+    expect(editIcon?.parentElement?.className).toContain("text-current");
+    expect(editRow.className).toContain("text-foreground/60");
+    expect(editRow.querySelector("[data-file-reference-badge='inline']")?.className)
+      .toContain("[&>span:first-child]:hidden");
+    expect(editRow.querySelector("[data-file-reference-badge='inline']")?.className)
+      .toContain("decoration-dotted");
+  });
+
+  it("repeats each parsed command's semantic icon in the expanded ledger", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      mixed: parsedCommandItem("mixed", "turn-1", 1, [
+        { type: "search", cmd: "rg anchor", query: "anchor" },
+        { type: "read", cmd: "cat README.md", path: "README.md", name: "README.md" },
+        { type: "command", cmd: "pnpm test" },
+      ], "completed"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["mixed"]}
+        transcript={transcript}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Read files, ran a command/i }));
+
+    const searchRow = screen.getByText("Searched for anchor").parentElement;
+    const readRow = screen.getByText("Read README.md").parentElement;
+    const commandRow = screen.getByText("Ran pnpm test").parentElement;
+    const searchIcon = searchRow?.querySelector("svg");
+    const readIcon = readRow?.querySelector("svg");
+    const commandIcon = commandRow?.querySelector("svg");
+
+    expect(searchIcon?.getAttribute("viewBox")).toBe("0 0 16 16");
+    expect(searchIcon?.querySelector("path")?.getAttribute("d")).toContain("7.33057 1.98535");
+    expect(readIcon?.getAttribute("viewBox")).toBe("0 0 20 20");
+    expect(readIcon?.querySelector("path")?.getAttribute("d")).toContain("16.3965 5.01128");
+    expect(commandIcon?.getAttribute("viewBox")).toBe("0 0 20 20");
+    expect(commandIcon?.querySelector("path")?.getAttribute("d")).toContain("6.19629 7.86231");
+    for (const icon of [searchIcon, readIcon, commandIcon]) {
+      expect(icon?.parentElement?.className).toContain("size-[1.143em]");
+      expect(icon?.parentElement?.className).toContain("text-current");
+    }
+  });
+
+  it("repeats the shared generic action icon in the expanded ledger", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      generic: toolItem("generic", "turn-1", 1, "other", "completed"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["generic"]}
+        transcript={transcript}
+      />,
+    );
+
+    const header = screen.getByRole("button", { name: /Ran an action/i });
+    const headerIcon = header.querySelector("svg");
+    fireEvent.click(header);
+    const ledger = document.querySelector("[data-collapsed-actions-ledger]");
+    const detailIcon = ledger?.querySelector("svg");
+
+    expect(detailIcon?.getAttribute("viewBox")).toBe(headerIcon?.getAttribute("viewBox"));
+    expect(detailIcon?.querySelector("path")?.getAttribute("d"))
+      .toBe(headerIcon?.querySelector("path")?.getAttribute("d"));
+    const genericLabels = screen.getAllByText("Tool call");
+    expect(genericLabels[genericLabels.length - 1]?.parentElement?.className)
+      .toContain("text-foreground/60");
   });
 
   it("opens grouped edit cards from the edit action row", () => {

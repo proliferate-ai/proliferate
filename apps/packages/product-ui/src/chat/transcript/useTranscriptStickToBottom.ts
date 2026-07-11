@@ -80,18 +80,6 @@ export function useTranscriptStickToBottom({
   const autoFollowBottomInsetRef = useRef(Math.max(0, autoFollowBottomInsetPx));
   const consumedAutoFollowBottomInsetRef = useRef(0);
 
-  // Registered before consumer layout effects. Preserve however much of an
-  // existing overlay range the user deliberately consumed; if another card is
-  // stacked above the composer, only the NEW height remains manual-only.
-  useLayoutEffect(() => {
-    const nextInset = Math.max(0, autoFollowBottomInsetPx);
-    consumedAutoFollowBottomInsetRef.current = Math.min(
-      consumedAutoFollowBottomInsetRef.current,
-      nextInset,
-    );
-    autoFollowBottomInsetRef.current = nextInset;
-  }, [autoFollowBottomInsetPx]);
-
   const setPinned = useCallback((next: boolean) => {
     if (pinnedRef.current === next) {
       return;
@@ -100,20 +88,15 @@ export function useTranscriptStickToBottom({
     setIsPinnedToBottom(next);
   }, []);
 
-  const notifyProgrammaticScroll = useCallback((write: () => void) => {
-    const viewport = scrollRef.current;
-    write();
-    if (!viewport) {
-      return;
-    }
+  const markNonUserScrollPosition = useCallback((viewport: HTMLDivElement) => {
     const expectedTop = viewport.scrollTop;
     if (programmaticRef.current?.frame != null) {
       cancelAnimationFrame(programmaticRef.current.frame);
     }
-    // Watchdog: a write that doesn't change scrollTop fires no scroll event, so
-    // clear the marker next frame to stop it leaking into the next user scroll.
-    // Identity-check the marker (not the frame id) so this is safe even when a
-    // test runs requestAnimationFrame synchronously.
+    // Watchdog: a write that changes nothing (or a browser clamp whose event
+    // never arrives) must not leak its marker into the next user scroll.
+    // Identity-check the marker so synchronous test rAF implementations stay
+    // safe even before the real frame id has been assigned.
     const marker: { expectedTop: number; frame: number } = { expectedTop, frame: 0 };
     programmaticRef.current = marker;
     marker.frame = requestAnimationFrame(() => {
@@ -122,7 +105,52 @@ export function useTranscriptStickToBottom({
       }
     });
     lastScrollTopRef.current = expectedTop;
-  }, [scrollRef]);
+  }, []);
+
+  const notifyProgrammaticScroll = useCallback((write: () => void) => {
+    const viewport = scrollRef.current;
+    write();
+    if (!viewport) {
+      return;
+    }
+    markNonUserScrollPosition(viewport);
+  }, [markNonUserScrollPosition, scrollRef]);
+
+  // Registered before consumer layout effects. Preserve however much of an
+  // existing overlay range the user deliberately consumed; if another card is
+  // stacked above the composer, only the NEW height remains manual-only.
+  useLayoutEffect(() => {
+    const previousInset = autoFollowBottomInsetRef.current;
+    const previousConsumedInset = consumedAutoFollowBottomInsetRef.current;
+    const nextInset = Math.max(0, autoFollowBottomInsetPx);
+    const viewport = scrollRef.current;
+
+    // Removing consumed overlay range can make the browser clamp scrollTop
+    // upward to the new hard bottom. Mark that queued scroll event as
+    // non-user so its negative delta cannot disable pinned auto-follow.
+    if (
+      nextInset < previousInset &&
+      previousConsumedInset > 0 &&
+      pinnedRef.current &&
+      viewport
+    ) {
+      const top = viewport.scrollTop;
+      const distanceFromHardBottom = resolveVirtualBottomDistance({
+        scrollOffset: top,
+        viewportSize: viewport.clientHeight,
+        totalVirtualSize: viewport.scrollHeight,
+      });
+      if (
+        top < lastScrollTopRef.current - DIRECTION_EPSILON_PX &&
+        distanceFromHardBottom <= PROGRAMMATIC_MATCH_TOL_PX
+      ) {
+        markNonUserScrollPosition(viewport);
+      }
+    }
+
+    consumedAutoFollowBottomInsetRef.current = Math.min(previousConsumedInset, nextInset);
+    autoFollowBottomInsetRef.current = nextInset;
+  }, [autoFollowBottomInsetPx, markNonUserScrollPosition, scrollRef]);
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollRef.current;

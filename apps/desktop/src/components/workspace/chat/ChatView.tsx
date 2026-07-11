@@ -45,13 +45,11 @@ import type { WorkspaceRenderSurface } from "@/lib/domain/workspaces/tabs/shell-
 function ChatContent({
   dockSafeAreaPx,
   mode,
-  scrollBottomInsetPx,
   stickyBottomInsetPx,
   stickyNonDisplacingBottomInsetPx,
 }: {
   dockSafeAreaPx: number;
   mode: ChatSurfaceState;
-  scrollBottomInsetPx: number;
   stickyBottomInsetPx: number;
   stickyNonDisplacingBottomInsetPx: number;
 }): JSX.Element | null {
@@ -59,7 +57,12 @@ function ChatContent({
     case "no-workspace":
       return <NoWorkspaceState bottomInsetPx={dockSafeAreaPx} />;
     case "launch-intent":
-      return <ChatLaunchIntentPane bottomInsetPx={scrollBottomInsetPx} />;
+      return (
+        <ChatLaunchIntentPane
+          bottomInsetPx={stickyBottomInsetPx}
+          nonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
+        />
+      );
     case "workspace-status":
     case "session-loading":
       return (
@@ -157,7 +160,6 @@ export const ChatView = memo(function ChatView({
     dockRef,
     dockSafeAreaPx,
     lowerBackdropTopPx,
-    scrollBottomInsetPx,
     stickyBottomInsetPx,
     stickyNonDisplacingBottomInsetPx,
   } = useChatDockInset();
@@ -228,7 +230,6 @@ export const ChatView = memo(function ChatView({
           <ChatContent
             dockSafeAreaPx={dockSafeAreaPx}
             mode={mode}
-            scrollBottomInsetPx={scrollBottomInsetPx}
             stickyBottomInsetPx={stickyBottomInsetPx}
             stickyNonDisplacingBottomInsetPx={stickyNonDisplacingBottomInsetPx}
           />

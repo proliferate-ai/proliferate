@@ -7,10 +7,8 @@ import { useRevertGitPatchesMutation } from "@anyharness/sdk-react";
 import { TurnDiffPanel } from "./TurnDiffPanel";
 import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
 import {
-  TRAILING_STATUS_MIN_HEIGHT,
   TurnAssistantActionRow,
   TURN_ITEM_GAP_CLASS,
-  TurnLiveTailSlot,
   TurnGoalMetMarker,
   TurnShell,
   resolveTurnTrailingStatus,
@@ -144,15 +142,16 @@ export function TranscriptTurnRow({
             sessionViewState,
           })
         : null;
-  // ANCHOR INVARIANT: while the latest turn is in progress, the turn's bottom
-  // is ALWAYS a fixed-height tail slot (same h-6 as the completed-turn action
-  // row). "Thinking…" appearing/disappearing, and the completion handoff to
-  // the copy-actions row, are content swaps inside a constant-geometry slot —
-  // the transcript's bottom line never bumps.
-  const showFixedTailSlot = row.isLastTurnRow && isLatestTurnInProgress;
-  const trailingStatusClassName = tailAssistantCopyContent
-    ? undefined
-    : TRAILING_STATUS_MIN_HEIGHT;
+  // ANCHOR INVARIANT: Thinking, a live tool, and streaming/final prose all own
+  // the same frontier position. A separate fixed-height footer stays below
+  // that frontier and swaps from empty to copy/timestamp controls on completion.
+  // Tool-only, stopped, and errored completions have no copyable prose, so
+  // their last row keeps the empty footer instead of dropping 24px at handoff.
+  const assistantFooterMode = resolveTurnAssistantFooterMode({
+    rowIsLastTurnRow: row.isLastTurnRow,
+    turnCompleted: !!turn.completedAt,
+    hasAssistantCopyContent: !!tailAssistantCopyContent,
+  });
   const revertPatchesMutation = useRevertGitPatchesMutation({ workspaceId: selectedWorkspaceId });
   const showToast = useToastStore((state) => state.show);
   const [undoneTurnIds, setUndoneTurnIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -228,47 +227,63 @@ export function TranscriptTurnRow({
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
           onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+          beforeFrontier={diffPanelKind === "current" ? (
+            <TurnDiffPanel
+              turn={turn}
+              transcript={transcript}
+              workspaceId={selectedWorkspaceId}
+              onOpenFile={onOpenFile}
+              onOpenReviewPane={onOpenTurnChanges}
+              onUndoTurnChanges={undoDisabledReason ? undefined : handleUndoTurnChanges}
+              undoDisabledReason={undoDisabledReason}
+              undoBusy={revertPatchesMutation.isPending}
+            />
+          ) : diffPanelKind === "transcript" ? (
+            <TranscriptPatchTurnDiffPanel
+              turn={turn}
+              transcript={transcript}
+              onOpenFile={onOpenFile}
+            />
+          ) : null}
         />
-        {diffPanelKind === "current" ? (
-          <TurnDiffPanel
-            turn={turn}
-            transcript={transcript}
-            workspaceId={selectedWorkspaceId}
-            onOpenFile={onOpenFile}
-            onOpenReviewPane={onOpenTurnChanges}
-            onUndoTurnChanges={undoDisabledReason ? undefined : handleUndoTurnChanges}
-            undoDisabledReason={undoDisabledReason}
-            undoBusy={revertPatchesMutation.isPending}
-          />
-        ) : diffPanelKind === "transcript" ? (
-          <TranscriptPatchTurnDiffPanel
-            turn={turn}
-            transcript={transcript}
-            onOpenFile={onOpenFile}
-          />
-        ) : null}
-        <TurnAssistantActionRow
-          content={tailAssistantCopyContent}
-          showCopyButton={row.isLastTurnRow && !!turn.completedAt}
-          reserveSlot={false}
-          timestampLabel={tailAssistantActionTime}
-          alwaysVisible={isFinalCompletedTurn}
-          metMarker={metMarker}
-        />
-        {showFixedTailSlot ? (
-          <TurnLiveTailSlot>{trailingStatus}</TurnLiveTailSlot>
-        ) : trailingStatus ? (
-          <div className={trailingStatusClassName}>{trailingStatus}</div>
-        ) : null}
+        {trailingStatus && (
+          <div data-turn-frontier-status>{trailingStatus}</div>
+        )}
         {shouldRenderStandaloneStoppedNotice(stoppedNotice, hasCompletedHistoryDisclosure) && (
           <div className="flex flex-col items-start gap-2 text-chat text-foreground/60">
             <span>{stoppedNotice}</span>
             <div className="w-full border-t border-current/20" />
           </div>
         )}
+        <TurnAssistantActionRow
+          content={tailAssistantCopyContent}
+          showCopyButton={assistantFooterMode === "copy"}
+          reserveSlot={assistantFooterMode === "reserved"}
+          timestampLabel={tailAssistantActionTime}
+          alwaysVisible={isFinalCompletedTurn}
+          metMarker={metMarker}
+        />
       </div>
     </TurnShell>
   );
+}
+
+export function resolveTurnAssistantFooterMode({
+  rowIsLastTurnRow,
+  turnCompleted,
+  hasAssistantCopyContent,
+}: {
+  rowIsLastTurnRow: boolean;
+  turnCompleted: boolean;
+  hasAssistantCopyContent: boolean;
+}): "none" | "reserved" | "copy" {
+  if (!rowIsLastTurnRow) {
+    return "none";
+  }
+  if (turnCompleted && hasAssistantCopyContent) {
+    return "copy";
+  }
+  return "reserved";
 }
 
 export function shouldRenderStandaloneStoppedNotice(

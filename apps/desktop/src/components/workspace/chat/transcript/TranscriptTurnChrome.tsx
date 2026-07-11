@@ -27,14 +27,6 @@ const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
 /** Exact Codex conversation-item rhythm shared by pending and materialized turns. */
 export const TURN_ITEM_GAP_CLASS = "gap-4";
 
-/**
- * Minimum height for a turn that has no assistant text yet. Once prose exists,
- * the trailing status should stay compact instead of creating an empty block
- * between the prose and future tool activity.
- */
-export const TRAILING_STATUS_MIN_HEIGHT =
-  "min-h-[calc(var(--text-chat--line-height)+1.5rem)]";
-
 export function TurnShell({
   children,
   isFirst = false,
@@ -75,7 +67,8 @@ export function TurnAssistantActionRow({
    */
   metMarker?: ReactNode;
 }) {
-  if (!content || (!showCopyButton && !reserveSlot)) {
+  const copyContent = showCopyButton ? content : null;
+  if (!copyContent && !reserveSlot) {
     return null;
   }
 
@@ -84,17 +77,20 @@ export function TurnAssistantActionRow({
     : "opacity-0 group-hover/turn:opacity-100";
 
   return (
-    <div className="flex justify-start relative">
-      <div className={`flex items-center gap-2 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}>
-        {showCopyButton && (
+    <div className="flex justify-start relative" data-turn-assistant-footer>
+      <div
+        className={`flex items-center gap-2 pt-0.5 ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+        data-turn-assistant-footer-slot
+      >
+        {copyContent && (
           <CopyMessageButton
-            content={content}
+            content={copyContent}
             timestampLabel={metMarker ? null : timestampLabel}
             timestampPosition="after"
             visibilityClassName={visibilityClassName}
           />
         )}
-        {metMarker && (
+        {copyContent && metMarker && (
           <>
             <span aria-hidden className="h-3 w-px bg-border/60" />
             {metMarker}
@@ -106,14 +102,6 @@ export function TurnAssistantActionRow({
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-export function TurnLiveTailSlot({ children }: { children: ReactNode }) {
-  return (
-    <div className={`flex items-center ${ASSISTANT_ACTION_SLOT_HEIGHT}`} data-turn-tail-slot>
-      {children}
     </div>
   );
 }
@@ -139,7 +127,7 @@ export function resolvePendingPromptTrailingStatus(
 ): ReactNode {
   if (sessionViewState === "needs_input") {
     return (
-      <TrailingStatusCrossfade statusKey="needs-input">
+      <TrailingStatusCrossfade statusKey="needs-input" className={ASSISTANT_ACTION_SLOT_HEIGHT}>
         <ConnectedPendingInteractionMarker />
       </TrailingStatusCrossfade>
     );
@@ -148,10 +136,10 @@ export function resolvePendingPromptTrailingStatus(
   if (forceWorking || sessionViewState === "working") {
     // Outbox / launch dispatch — same "Thinking" voice as agent work (the
     // send/queue distinction is plumbing, not something the user tracks).
-    return (
-      <div data-trailing-status="sending">
-        <StreamingIndicator startedAt={queuedAt} label={CHAT_STREAMING_STATUS_LABELS.sending} />
-      </div>
+    return renderWorkingTrailingStatus(
+      "sending",
+      queuedAt,
+      CHAT_STREAMING_STATUS_LABELS.sending,
     );
   }
 
@@ -163,11 +151,10 @@ export function resolveTurnTrailingStatus(
   sessionViewState: SessionViewState,
   transientStatusText: string | null,
 ): ReactNode {
-  // Every variant renders inside the same fixed-height row as the reserved
-  // assistant action slot, so swapping between "Thinking…", a transient status,
-  // and the needs-input marker never shifts the content above it. Transient and
-  // blocking markers fade in; the phase-anchored working gleam renders directly
-  // so an owner handoff cannot replay a one-shot parent animation.
+  // Every status variant has fixed-height frontier geometry above the separate
+  // assistant footer. Transient and blocking markers fade in; the phase-anchored
+  // working gleam renders directly so an owner handoff cannot replay a one-shot
+  // parent animation.
   if (sessionViewState === "working" && transientStatusText) {
     return (
       <TrailingStatusCrossfade
@@ -184,11 +171,7 @@ export function resolveTurnTrailingStatus(
     // The gleam carries its own motion and is phase-anchored to startedAt.
     // Avoid a one-shot parent fade that would visibly replay when the pending
     // prompt hands this slot to the materialized turn.
-    return (
-      <div className={ASSISTANT_ACTION_SLOT_HEIGHT} data-trailing-status="working">
-        <StreamingIndicator startedAt={startedAt} />
-      </div>
-    );
+    return renderWorkingTrailingStatus("working", startedAt);
   }
 
   if (sessionViewState === "needs_input") {
@@ -200,6 +183,22 @@ export function resolveTurnTrailingStatus(
   }
 
   return null;
+}
+
+function renderWorkingTrailingStatus(
+  status: "sending" | "working",
+  startedAt: string,
+  label?: string,
+): ReactNode {
+  return (
+    <div
+      className={`flex items-center ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
+      data-trailing-status={status}
+      data-working-status-frame
+    >
+      <StreamingIndicator startedAt={startedAt} label={label} />
+    </div>
+  );
 }
 
 // One-shot container for transient and blocking trailing states. Same-state

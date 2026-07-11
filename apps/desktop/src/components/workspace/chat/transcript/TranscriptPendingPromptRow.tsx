@@ -9,6 +9,7 @@ import { SubagentWakeBadge } from "./SubagentWakeBadge";
 import { UserMessage } from "./UserMessage";
 import {
   TURN_ITEM_GAP_CLASS,
+  TurnAssistantActionRow,
   TurnShell,
 } from "./TranscriptTurnChrome";
 import {
@@ -71,14 +72,16 @@ export function TranscriptPendingPromptRow({
           activeSessionId={activeSessionId}
           prompt={prompt}
         />
-        {/* ANCHOR INVARIANT: fixed-height tail slot (same h-6 as the turn
-            row's slot) so "Thinking…" appearing under a just-sent message is
-            a content swap with zero layout motion — and the pending-prompt →
-            turn handoff keeps identical bottom geometry. */}
-        <div className="flex h-6 items-center" data-pending-tail-slot>
-          {trailingStatus}
-        </div>
+        {/* Recovery controls are completion-adjacent UI. Keep them above the
+            frontier so their disappearance cannot move the frontier/footer. */}
         {outboxControls}
+        {trailingStatus && (
+          <div data-pending-frontier>{trailingStatus}</div>
+        )}
+        {/* The frontier above owns Thinking just as it later owns a live tool
+            or prose. This fixed footer remains empty until it can swap to the
+            completed copy/timestamp controls without moving the frontier. */}
+        <TurnAssistantActionRow content={null} reserveSlot />
       </div>
     </TurnShell>
   );

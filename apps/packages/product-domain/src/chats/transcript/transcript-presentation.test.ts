@@ -369,6 +369,29 @@ describe("buildTurnPresentation", () => {
     });
   });
 
+  it("keeps late tool receipts above final prose in a completed turn", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      user: userItem("user", "turn-1", 1),
+      final: assistantItem("final", "turn-1", 2),
+      edit: toolItem("edit", "turn-1", 3, "file_change"),
+    };
+    const turn = turnRecord(
+      ["user", "final", "edit"],
+      "2026-04-04T00:00:10Z",
+    );
+
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(presentation.rootIds).toEqual(["user", "final", "edit"]);
+    expect(presentation.completedHistoryRootIds).toEqual(["edit"]);
+    expect(presentation.displayBlocks).toEqual([
+      { kind: "item", itemId: "user" },
+      { kind: "collapsed_actions", blockId: "edit-edit", itemIds: ["edit"] },
+      { kind: "item", itemId: "final" },
+    ]);
+  });
+
   it("excludes transient thoughts from transcript presentation", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {

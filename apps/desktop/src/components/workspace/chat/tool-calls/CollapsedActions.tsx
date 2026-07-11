@@ -1,24 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   TranscriptState,
 } from "@anyharness/sdk";
 import { Button } from "@proliferate/ui/primitives/Button";
+import { ChevronRightActivity } from "@proliferate/ui/icons";
 import {
-  CommandWindow,
-  ChevronRightActivity,
-  FilePenActivity,
-  ReadBook,
-  SearchActivity,
-} from "@proliferate/ui/icons";
-import {
-  type CollapsedActionKind,
-  type CollapsedActionSummary,
   formatCollapsedActionsSummary,
   resolveCurrentCollapsedAction,
   resolveCollapsedActionsLeadingKind,
   summarizeCollapsedActions,
 } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
+import { CollapsedActionIcon } from "@/components/workspace/chat/tool-calls/CollapsedActionIcon";
 import { CollapsedActionRows } from "@/components/workspace/chat/tool-calls/CollapsedActionRows";
 
 interface CollapsedActionsProps {
@@ -54,8 +47,8 @@ export function CollapsedActions({
     : null;
   const summary = currentAction?.label ?? formatCollapsedActionsSummary(actionSummary);
   const summaryIcon = currentAction
-    ? renderCollapsedActionKindIcon(currentAction.kind)
-    : renderCollapsedActionsIcon(actionSummary);
+    ? <CollapsedActionIcon kind={currentAction.kind} />
+    : <CollapsedActionIcon kind={resolveCollapsedActionsLeadingKind(actionSummary)} />;
 
   return (
     <div className="flex min-w-0 flex-col text-chat leading-[1.5]">
@@ -110,28 +103,6 @@ export function CollapsedActions({
   );
 }
 
-function renderCollapsedActionsIcon(summary: CollapsedActionSummary): ReactNode {
-  return renderCollapsedActionKindIcon(resolveCollapsedActionsLeadingKind(summary));
-}
-
-function renderCollapsedActionKindIcon(kind: CollapsedActionKind): ReactNode {
-  switch (kind) {
-    case "command":
-      return <CommandWindow />;
-    case "read":
-    case "fetch":
-      return <ReadBook />;
-    case "edit":
-      return <FilePenActivity />;
-    case "listing":
-    case "search":
-      return <SearchActivity />;
-    case "action":
-    default:
-      return <CommandWindow />;
-  }
-}
-
 function CollapsedActionsLedger({
   itemIds,
   transcript,
@@ -160,7 +131,7 @@ function CollapsedActionsLedger({
             autoFollow ? "max-h-[7.5rem]" : "max-h-80"
           }`}
       >
-        <div className={containsEdits ? "flex flex-col gap-0" : "flex flex-col gap-1"}>
+        <div className="flex flex-col gap-1">
           {itemIds.map((itemId) => {
             const item = transcript.itemsById[itemId];
             if (item?.kind !== "tool_call") return null;

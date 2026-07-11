@@ -13,6 +13,7 @@ describe("ToolCallSummary", () => {
         label="Worked for 13m 25s"
         summary="2 messages, 3 tool calls"
         showWorkDivider
+        completionContent={<div>Edited files</div>}
         renderChildren={() => <div>Work ledger</div>}
       />,
     );
@@ -25,7 +26,11 @@ describe("ToolCallSummary", () => {
     fireEvent.click(disclosure);
     expect(screen.getByText("Work ledger")).toBeTruthy();
     const ledger = screen.getByText("Work ledger");
-    const divider = container.querySelector("[data-chat-transcript-ignore].border-t");
+    expect(ledger.parentElement?.className).toContain("mt-1");
+    expect(ledger.parentElement?.className).not.toContain("mt-2");
+    const completion = screen.getByText("Edited files");
+    const divider = container.querySelector("[data-completed-work-divider]");
     expect(ledger.compareDocumentPosition(divider!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(completion.compareDocumentPosition(divider!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 });

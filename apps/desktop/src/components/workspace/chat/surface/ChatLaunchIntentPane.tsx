@@ -2,19 +2,27 @@ import { AutoHideScrollArea } from "@proliferate/ui/layout/AutoHideScrollArea";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ArrowLeft, RefreshCw } from "@proliferate/ui/icons";
 import { UserMessage } from "@/components/workspace/chat/transcript/UserMessage";
-import { StreamingIndicator } from "@/components/workspace/chat/transcript/StreamingIndicator";
-import { TRAILING_STATUS_MIN_HEIGHT } from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
-import { CHAT_STREAMING_STATUS_LABELS } from "@/copy/chat/chat-copy";
+import {
+  TURN_ITEM_GAP_CLASS,
+  TurnAssistantActionRow,
+  TurnShell,
+  resolvePendingPromptTrailingStatus,
+} from "@/components/workspace/chat/transcript/TranscriptTurnChrome";
 import { CHAT_COLUMN_CLASSNAME, CHAT_SURFACE_GUTTER_CLASSNAME } from "@/config/chat-layout";
 import { useChatLaunchIntentActions } from "@/hooks/chat/workflows/use-chat-launch-intent-actions";
 import { resolveChatLaunchIntentView } from "@/lib/domain/chat/launch/launch-intent";
 import { useChatLaunchIntentStore } from "@/stores/chat/chat-launch-intent-store";
+import { formatTranscriptActionTime } from "@proliferate/product-domain/chats/transcript/transcript-action-time";
 
 interface ChatLaunchIntentPaneProps {
   bottomInsetPx: number;
+  nonDisplacingBottomInsetPx: number;
 }
 
-export function ChatLaunchIntentPane({ bottomInsetPx }: ChatLaunchIntentPaneProps) {
+export function ChatLaunchIntentPane({
+  bottomInsetPx,
+  nonDisplacingBottomInsetPx,
+}: ChatLaunchIntentPaneProps) {
   const activeIntent = useChatLaunchIntentStore((state) => state.activeIntent);
   const {
     dismiss,
@@ -29,6 +37,14 @@ export function ChatLaunchIntentPane({ bottomInsetPx }: ChatLaunchIntentPaneProp
 
   const view = resolveChatLaunchIntentView(activeIntent);
   const isPending = activeIntent.failure === null;
+  const effectiveNonDisplacingBottomInsetPx = Math.min(
+    Math.max(0, bottomInsetPx),
+    Math.max(0, nonDisplacingBottomInsetPx),
+  );
+  const structuralBottomInsetPx = Math.max(
+    0,
+    bottomInsetPx - effectiveNonDisplacingBottomInsetPx,
+  );
   const failureFooter = isPending
     ? null
     : (
@@ -81,30 +97,64 @@ export function ChatLaunchIntentPane({ bottomInsetPx }: ChatLaunchIntentPaneProp
 
   return (
     <div className="flex-1 min-h-0" data-telemetry-block>
-      <AutoHideScrollArea className="h-full">
+      <AutoHideScrollArea
+        className="h-full"
+        contentClassName={`${CHAT_SURFACE_GUTTER_CLASSNAME} relative flex min-h-full flex-col`}
+      >
         <div
-          className={`${CHAT_SURFACE_GUTTER_CLASSNAME} pt-4`}
-          style={{ paddingBottom: bottomInsetPx }}
+          className="mt-auto pt-4"
+          data-chat-launch-intent-anchor-frame
         >
-          <div className={CHAT_COLUMN_CLASSNAME}>
-            <div className="w-full max-w-full pt-0 pb-2">
-              <UserMessage
-                sessionId={null}
-                content={activeIntent.text}
-                contentParts={activeIntent.contentParts}
-                footer={failureFooter}
-              />
-              {isPending && (
-                <div className={`mt-2 ${TRAILING_STATUS_MIN_HEIGHT}`}>
-                  <StreamingIndicator
-                    startedAt={new Date(activeIntent.createdAt).toISOString()}
-                    label={CHAT_STREAMING_STATUS_LABELS.sending}
-                  />
-                </div>
-              )}
-            </div>
+          <div
+            className={`${CHAT_COLUMN_CLASSNAME} [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
+          >
+            <TurnShell isFirst>
+              <div
+                className={`flex flex-col ${TURN_ITEM_GAP_CLASS}`}
+                data-chat-launch-intent-turn
+              >
+                <UserMessage
+                  sessionId={null}
+                  content={activeIntent.text}
+                  contentParts={activeIntent.contentParts}
+                  showCopyButton
+                  timestampLabel={formatTranscriptActionTime(
+                    new Date(activeIntent.createdAt).toISOString(),
+                  )}
+                  footer={failureFooter}
+                />
+                {isPending && (
+                  <>
+                    <div data-chat-launch-intent-frontier>
+                      {resolvePendingPromptTrailingStatus(
+                        new Date(activeIntent.createdAt).toISOString(),
+                        "working",
+                        true,
+                      )}
+                    </div>
+                    <TurnAssistantActionRow content={null} reserveSlot />
+                  </>
+                )}
+              </div>
+            </TurnShell>
           </div>
         </div>
+        {structuralBottomInsetPx > 0 && (
+          <div
+            aria-hidden="true"
+            className="shrink-0"
+            data-chat-launch-intent-bottom-inset
+            style={{ height: structuralBottomInsetPx }}
+          />
+        )}
+        {effectiveNonDisplacingBottomInsetPx > 0 && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-full"
+            data-chat-launch-intent-overlay-inset
+            style={{ height: effectiveNonDisplacingBottomInsetPx }}
+          />
+        )}
       </AutoHideScrollArea>
     </div>
   );

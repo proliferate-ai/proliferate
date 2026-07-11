@@ -7,7 +7,6 @@ import {
   TURN_ITEM_GAP_CLASS,
   TurnAssistantActionRow,
   TurnGoalMetMarker,
-  TurnLiveTailSlot,
   TurnShell,
   pendingInteractionMarkerKind,
   resolvePendingPromptTrailingStatus,
@@ -76,16 +75,32 @@ describe("TurnAssistantActionRow", () => {
     expect(container.textContent).toContain("5:02pm");
   });
 
-  it("reserves identical height for live status and completed copy actions", () => {
-    const live = render(<TurnLiveTailSlot>Thinking</TurnLiveTailSlot>);
-    const liveSlot = live.container.querySelector("[data-turn-tail-slot]");
+  it("keeps an empty live footer the same height as completed copy actions", () => {
+    const live = render(<TurnAssistantActionRow content={null} reserveSlot />);
+    const liveSlot = live.container.querySelector("[data-turn-assistant-footer-slot]");
     expect(liveSlot?.className).toContain("h-6");
     live.unmount();
 
     const completed = render(
       <TurnAssistantActionRow content="reply" showCopyButton timestampLabel="5:02pm" />,
     );
-    expect(completed.container.querySelector(".h-6")).not.toBeNull();
+    const completedSlot = completed.container.querySelector("[data-turn-assistant-footer-slot]");
+    expect(completedSlot?.className).toContain("h-6");
+  });
+
+  it("keeps a prose-less completed footer empty even when a goal is met", () => {
+    const { container } = render(
+      <TurnAssistantActionRow
+        content={null}
+        reserveSlot
+        metMarker={<span>Goal achieved</span>}
+        timestampLabel="5:02pm"
+      />,
+    );
+
+    expect(container.querySelector("[data-turn-assistant-footer-slot]")?.className)
+      .toContain("h-6");
+    expect(container.textContent).toBe("");
   });
 });
 
@@ -142,7 +157,44 @@ describe("resolvePendingPromptTrailingStatus", () => {
 
     expect(container.querySelector("[data-trailing-status='sending']")).not.toBeNull();
     expect(container.textContent).toContain("Thinking");
+    expect(container.querySelector("[data-working-status-frame]")?.className).toContain("items-center");
+    expect(container.querySelector("[data-working-status-frame]")?.className).toContain("h-6");
     expect(container.innerHTML).not.toContain("motion-safe:animate-status-crossfade");
+  });
+
+  it("uses identical geometry before and after pending ownership handoff", () => {
+    const pending = render(
+      <>{resolvePendingPromptTrailingStatus(STARTED_AT, "working", true)}</>,
+    );
+    const pendingFrame = pending.container.querySelector("[data-working-status-frame]");
+    const pendingClassName = pendingFrame?.className;
+    pending.unmount();
+
+    const materialized = render(
+      <>{resolveTurnTrailingStatus(STARTED_AT, "working", null)}</>,
+    );
+    const materializedFrame = materialized.container.querySelector("[data-working-status-frame]");
+
+    expect(materializedFrame?.className).toBe(pendingClassName);
+  });
+
+  it("uses identical needs-input geometry across pending ownership handoff", () => {
+    const pending = render(
+      <>{resolvePendingPromptTrailingStatus(STARTED_AT, "needs_input", false)}</>,
+    );
+    const pendingFrame = pending.container.querySelector("[data-trailing-status='needs-input']");
+    const pendingClassName = pendingFrame?.className;
+    pending.unmount();
+
+    const materialized = render(
+      <>{resolveTurnTrailingStatus(STARTED_AT, "needs_input", null)}</>,
+    );
+    const materializedFrame = materialized.container.querySelector(
+      "[data-trailing-status='needs-input']",
+    );
+
+    expect(materializedFrame?.className).toBe(pendingClassName);
+    expect(materializedFrame?.className).toContain("h-6");
   });
 
   it("shows the awaiting-response marker when the outbox is waiting on input", () => {

@@ -3,8 +3,12 @@ import type {
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
+import { Fragment, type ReactNode } from "react";
 import { CoworkArtifactTurnCard } from "@/components/workspace/chat/tool-calls/CoworkArtifactTurnCard";
-import { ToolCallSummary } from "@/components/workspace/chat/tool-calls/ToolCallSummary";
+import {
+  ToolCallSummary,
+  ToolCallWorkDivider,
+} from "@/components/workspace/chat/tool-calls/ToolCallSummary";
 import type { PromptPlanAttachmentDescriptor } from "@proliferate/product-domain/chats/composer/prompt-plan-attachments";
 import {
   collectTurnCoworkArtifactToolCalls,
@@ -13,7 +17,10 @@ import {
   blockBelongsToCompletedHistory,
 } from "@proliferate/product-domain/chats/transcript/transcript-rendering";
 import { formatWorkedForDuration } from "@proliferate/product-domain/chats/transcript/transcript-work-duration";
-import type { TurnPresentation } from "@proliferate/product-domain/chats/transcript/transcript-presentation";
+import type {
+  TurnDisplayBlock,
+  TurnPresentation,
+} from "@proliferate/product-domain/chats/transcript/transcript-presentation";
 import {
   getTurnDisplayBlockKey,
   TurnDisplayBlockNode,
@@ -22,6 +29,7 @@ import { TranscriptTreeNode } from "./TranscriptTreeNode";
 import {
   formatCollapsedSummary,
 } from "./TranscriptToolGroupUtils";
+import { TURN_ITEM_GAP_CLASS } from "./TranscriptTurnChrome";
 
 type PlanHandoffHandler = (plan: PromptPlanAttachmentDescriptor) => void;
 
@@ -38,6 +46,7 @@ export function TurnItemSequence({
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
+  beforeFrontier = null,
 }: {
   turn: TurnRecord;
   transcript: TranscriptState;
@@ -51,12 +60,46 @@ export function TurnItemSequence({
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
+  /** Completion-only UI that must grow above, never below, the final frontier. */
+  beforeFrontier?: ReactNode;
 }) {
   const artifactToolCalls = collectTurnCoworkArtifactToolCalls(turn, transcript);
   const completedArtifactToolCalls = isTurnComplete
     ? artifactToolCalls.filter((item) => item.status === "completed")
     : [];
   const completedHistoryRootIdSet = new Set(presentation.completedHistoryRootIds);
+  const frontierBlockKey = resolveTurnItemFrontierBlockKey(presentation);
+  const shouldRenderCompletedArtifacts = shouldRenderCompletedArtifactCards({
+    completedArtifactCount: completedArtifactToolCalls.length,
+    presentation,
+    tailAssistantProseRootId,
+    showCompletedArtifactFallback,
+  });
+  const frontierPrelude = beforeFrontier || shouldRenderCompletedArtifacts
+    ? (
+      <div className="contents" data-turn-frontier-prelude>
+        {shouldRenderCompletedArtifacts && (
+          <CompletedArtifactCards
+            items={completedArtifactToolCalls}
+            workspaceId={workspaceId}
+            onOpenArtifact={onOpenArtifact}
+          />
+        )}
+        {beforeFrontier}
+      </div>
+    )
+    : null;
+  const completedHistoryOwnsPrelude = frontierPrelude !== null
+    && presentation.completedHistorySummary !== null
+    && tailAssistantProseRootId !== null;
+  const standaloneFrontierPrelude = frontierPrelude && !completedHistoryOwnsPrelude
+    ? (
+      <div className="flex flex-col gap-4" data-turn-frontier-prelude-group>
+        {frontierPrelude}
+        {tailAssistantProseRootId !== null && <ToolCallWorkDivider />}
+      </div>
+    )
+    : null;
   // The ExitPlanMode suppression index is derived transcript-wide once (see
   // MessageList → ProposedPlanToolCallIdsProvider) so a proposed_plan landing in
   // a different turn than its ExitPlanMode tool call still suppresses the
@@ -66,6 +109,8 @@ export function TurnItemSequence({
   return (
     <>
       {presentation.displayBlocks.map((block) => {
+        const blockKey = getTurnDisplayBlockKey(block);
+        let renderedBlock: ReactNode;
         if (
           presentation.completedHistorySummary
           && blockBelongsToCompletedHistory(block, completedHistoryRootIdSet)
@@ -74,14 +119,14 @@ export function TurnItemSequence({
             return null;
           }
           hasRenderedCompletedHistory = true;
-          return (
+          renderedBlock = (
             <ToolCallSummary
-              key={`${turn.turnId}-completed-history`}
               label={resolveCompletedHistoryDisclosureLabel(turn, completedHistoryLabel)}
               summary={formatCollapsedSummary(presentation.completedHistorySummary)}
               showWorkDivider={tailAssistantProseRootId !== null}
+              completionContent={completedHistoryOwnsPrelude ? frontierPrelude : null}
               renderChildren={() => (
-                <div className="space-y-1">
+                <CompletedHistorySequence>
                   {presentation.displayBlocks
                     .filter((historyBlock) =>
                       blockBelongsToCompletedHistory(historyBlock, completedHistoryRootIdSet)
@@ -94,12 +139,11 @@ export function TurnItemSequence({
                         autoFollowCollapsedActionBlockId={null}
                         animateActivityEntry={false}
                         renderItem={(itemId) => (
-                          <FragmentWithArtifacts
+                          <TranscriptFragment
                             itemId={itemId}
                             transcript={transcript}
                             childrenByParentId={presentation.childrenByParentId}
                             animateActivityEntry={false}
-                            artifactToolCalls={null}
                             workspaceId={workspaceId}
                             onOpenArtifact={onOpenArtifact}
                             onHandOffPlanToNewSession={onHandOffPlanToNewSession}
@@ -107,50 +151,97 @@ export function TurnItemSequence({
                         )}
                       />
                     ))}
-                </div>
+                </CompletedHistorySequence>
+              )}
+            />
+          );
+        } else {
+          renderedBlock = (
+            <TurnDisplayBlockNode
+              block={block}
+              transcript={transcript}
+              autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+              animateActivityEntry={animateActivityEntry}
+              renderItem={(itemId) => (
+                <TranscriptFragment
+                  itemId={itemId}
+                  transcript={transcript}
+                  childrenByParentId={presentation.childrenByParentId}
+                  animateActivityEntry={animateActivityEntry}
+                  workspaceId={workspaceId}
+                  onOpenArtifact={onOpenArtifact}
+                  onHandOffPlanToNewSession={onHandOffPlanToNewSession}
+                />
               )}
             />
           );
         }
 
         return (
-          <TurnDisplayBlockNode
-            key={getTurnDisplayBlockKey(block)}
-            block={block}
-            transcript={transcript}
-            autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
-            animateActivityEntry={animateActivityEntry}
-            renderItem={(itemId) => (
-              <FragmentWithArtifacts
-                itemId={itemId}
-                transcript={transcript}
-                childrenByParentId={presentation.childrenByParentId}
-                animateActivityEntry={animateActivityEntry}
-                artifactToolCalls={
-                  itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
-                }
-                workspaceId={workspaceId}
-                onOpenArtifact={onOpenArtifact}
-                onHandOffPlanToNewSession={onHandOffPlanToNewSession}
-              />
-            )}
-          />
+          <Fragment key={blockKey}>
+            {blockKey === frontierBlockKey ? standaloneFrontierPrelude : null}
+            {renderedBlock}
+          </Fragment>
         );
       })}
-      {showCompletedArtifactFallback && tailAssistantProseRootId === null && completedArtifactToolCalls.length > 0 && (
-        <div className="space-y-1.5">
-          {completedArtifactToolCalls.map((item) => (
-            <CoworkArtifactTurnCard
-              key={`turn-artifact-${item.itemId}`}
-              item={item}
-              onOpenArtifact={
-                workspaceId ? (artifactId) => onOpenArtifact(workspaceId, artifactId) : undefined
-              }
-            />
-          ))}
-        </div>
-      )}
+      {frontierBlockKey === null ? standaloneFrontierPrelude : null}
     </>
+  );
+}
+
+export function shouldRenderCompletedArtifactCards({
+  completedArtifactCount,
+  presentation,
+  tailAssistantProseRootId,
+  showCompletedArtifactFallback,
+}: {
+  completedArtifactCount: number;
+  presentation: TurnPresentation;
+  tailAssistantProseRootId: string | null;
+  showCompletedArtifactFallback: boolean;
+}): boolean {
+  if (completedArtifactCount <= 0) {
+    return false;
+  }
+  if (tailAssistantProseRootId === null) {
+    return showCompletedArtifactFallback;
+  }
+  return presentation.displayBlocks.some(
+    (block) => block.kind === "item" && block.itemId === tailAssistantProseRootId,
+  );
+}
+
+export function resolveTurnItemFrontierBlockKey(
+  presentation: TurnPresentation,
+): string | null {
+  const completedHistoryRootIdSet = new Set(presentation.completedHistoryRootIds);
+  let completedHistoryAdded = false;
+  let frontierBlock: TurnDisplayBlock | null = null;
+
+  for (const block of presentation.displayBlocks) {
+    if (
+      presentation.completedHistorySummary
+      && blockBelongsToCompletedHistory(block, completedHistoryRootIdSet)
+    ) {
+      if (completedHistoryAdded) {
+        continue;
+      }
+      completedHistoryAdded = true;
+    }
+    frontierBlock = block;
+  }
+
+  return frontierBlock ? getTurnDisplayBlockKey(frontierBlock) : null;
+}
+
+export function CompletedHistorySequence({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-completed-history-sequence
+      className={`flex flex-col ${TURN_ITEM_GAP_CLASS}`}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -163,12 +254,11 @@ export function resolveCompletedHistoryDisclosureLabel(
     ?? "Worked";
 }
 
-function FragmentWithArtifacts({
+function TranscriptFragment({
   itemId,
   transcript,
   childrenByParentId,
   animateActivityEntry,
-  artifactToolCalls,
   workspaceId,
   onOpenArtifact,
   onHandOffPlanToNewSession,
@@ -177,7 +267,6 @@ function FragmentWithArtifacts({
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
   animateActivityEntry: boolean;
-  artifactToolCalls: ToolCallItem[] | null;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
   onHandOffPlanToNewSession?: PlanHandoffHandler;
@@ -193,19 +282,30 @@ function FragmentWithArtifacts({
         onOpenArtifact={onOpenArtifact}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}
       />
-      {artifactToolCalls && artifactToolCalls.length > 0 && (
-        <div className="space-y-1.5">
-          {artifactToolCalls.map((item) => (
-            <CoworkArtifactTurnCard
-              key={`artifact-inline-${item.itemId}`}
-              item={item}
-              onOpenArtifact={
-                workspaceId ? (artifactId) => onOpenArtifact(workspaceId, artifactId) : undefined
-              }
-            />
-          ))}
-        </div>
-      )}
     </>
+  );
+}
+
+function CompletedArtifactCards({
+  items,
+  workspaceId,
+  onOpenArtifact,
+}: {
+  items: readonly ToolCallItem[];
+  workspaceId: string | null;
+  onOpenArtifact: (workspaceId: string, artifactId: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      {items.map((item) => (
+        <CoworkArtifactTurnCard
+          key={`turn-artifact-${item.itemId}`}
+          item={item}
+          onOpenArtifact={
+            workspaceId ? (artifactId) => onOpenArtifact(workspaceId, artifactId) : undefined
+          }
+        />
+      ))}
+    </div>
   );
 }

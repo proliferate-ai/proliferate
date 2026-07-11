@@ -138,11 +138,34 @@ describe("FullTranscriptRowList", () => {
 
     expect(viewport.scrollTop).toBe(840);
     expect(
-      container.querySelector<HTMLElement>("[data-transcript-bottom-inset]")?.style.height,
+      container.querySelector<HTMLElement>("[data-transcript-bottom-overlay-inset]")?.style.height,
     ).toBe("160px");
+    const transcript = container.querySelector<HTMLElement>("[data-transcript-virtualization-mode='full']");
+    expect(transcript?.className).toContain("mt-auto");
+    expect(transcript?.parentElement?.className).toContain("relative flex min-h-full flex-col");
+    expect(
+      container.querySelector<HTMLElement>("[data-transcript-bottom-overlay-inset]")?.className,
+    ).toContain("absolute inset-x-0 top-full");
 
     notifyResize();
     expect(viewport.scrollTop).toBe(840);
+  });
+
+  it("bottom-anchors a short transcript above the structural inset", () => {
+    const { container } = render(
+      <FullTranscriptRowList
+        {...makeProps(vi.fn(), 50)}
+        bottomInsetPx={120}
+      />,
+    );
+
+    const transcript = container.querySelector<HTMLElement>("[data-transcript-virtualization-mode='full']");
+    const structuralInset = container.querySelector<HTMLElement>(
+      "[data-transcript-bottom-structural-inset]",
+    );
+    expect(transcript?.className).toContain("mt-auto");
+    expect(structuralInset?.style.height).toBe("120px");
+    expect(structuralInset?.className).toContain("shrink-0");
   });
 });
 

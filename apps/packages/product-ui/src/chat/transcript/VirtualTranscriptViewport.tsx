@@ -49,67 +49,68 @@ export function VirtualTranscriptViewport({
       className="h-full"
       ref={scrollRef}
       onViewportScroll={onViewportScroll}
+      contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}
     >
       <div
-        className={`${gutterClassName} min-h-full`}
+        ref={contentRef}
+        className="mt-auto"
         data-transcript-virtualization-mode="virtual"
         data-transcript-virtualization-setting={virtualizationMode}
       >
-        <div ref={contentRef}>
-          <div
-            ref={selectionRootRef}
-            data-chat-transcript-root="true"
-            tabIndex={-1}
-            className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
-          >
-            {topSpacerHeight > 0 && (
-              <div aria-hidden="true" style={{ height: topSpacerHeight }} />
-            )}
-            {virtualItems.map((virtualRow) => {
-              const renderableRow = renderableRows[virtualRow.index];
-              if (renderableRow?.kind === "history_loader") {
-                return (
-                  <div
-                    key={renderableRow.key}
-                    ref={measureElement}
-                    data-transcript-virtual-row="true"
-                    data-index={virtualRow.index}
-                    className="w-full"
-                  >
-                    <TranscriptHistoryLoadingRow />
-                  </div>
-                );
-              }
-
-              const row = renderableRow?.row;
-              if (!row) {
-                return null;
-              }
-
+        <div
+          ref={selectionRootRef}
+          data-chat-transcript-root="true"
+          tabIndex={-1}
+          className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
+        >
+          {topSpacerHeight > 0 && (
+            <div aria-hidden="true" style={{ height: topSpacerHeight }} />
+          )}
+          {virtualItems.map((virtualRow) => {
+            const renderableRow = renderableRows[virtualRow.index];
+            if (renderableRow?.kind === "history_loader") {
               return (
-                <MemoizedVirtualTranscriptRow
-                  key={row.key}
-                  row={row}
-                  rowIndex={renderableRow.rowIndex}
-                  virtualIndex={virtualRow.index}
-                  renderRow={renderRow}
-                  measureElement={measureElement}
-                />
+                <div
+                  key={renderableRow.key}
+                  ref={measureElement}
+                  data-transcript-virtual-row="true"
+                  data-index={virtualRow.index}
+                  className="w-full"
+                >
+                  <TranscriptHistoryLoadingRow />
+                </div>
               );
-            })}
-            {bottomSpacerHeight > 0 && (
-              <div aria-hidden="true" style={{ height: bottomSpacerHeight }} />
-            )}
-          </div>
+            }
+
+            const row = renderableRow?.row;
+            if (!row) {
+              return null;
+            }
+
+            return (
+              <MemoizedVirtualTranscriptRow
+                key={row.key}
+                row={row}
+                rowIndex={renderableRow.rowIndex}
+                virtualIndex={virtualRow.index}
+                renderRow={renderRow}
+                measureElement={measureElement}
+              />
+            );
+          })}
+          {bottomSpacerHeight > 0 && (
+            <div aria-hidden="true" style={{ height: bottomSpacerHeight }} />
+          )}
         </div>
-        {nonDisplacingBottomInsetPx > 0 && (
-          <div
-            aria-hidden="true"
-            data-transcript-bottom-overlay-inset
-            style={{ height: nonDisplacingBottomInsetPx }}
-          />
-        )}
       </div>
+      {nonDisplacingBottomInsetPx > 0 && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 top-full"
+          data-transcript-bottom-overlay-inset
+          style={{ height: nonDisplacingBottomInsetPx }}
+        />
+      )}
     </AutoHideScrollArea>
   );
 }

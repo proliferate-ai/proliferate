@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  resolveTurnAssistantFooterMode,
   resolveTranscriptTurnDiffPanelKind,
   shouldRenderStandaloneStoppedNotice,
 } from "./TranscriptTurnRow";
@@ -41,6 +42,29 @@ describe("resolveTranscriptTurnDiffPanelKind", () => {
       latestCompletedTurnId: "turn-latest",
       hasFileBadges: false,
     })).toBeNull();
+  });
+});
+
+describe("resolveTurnAssistantFooterMode", () => {
+  it("keeps the footer reserved when a tool-only or stopped turn completes", () => {
+    expect(resolveTurnAssistantFooterMode({
+      rowIsLastTurnRow: true,
+      turnCompleted: true,
+      hasAssistantCopyContent: false,
+    })).toBe("reserved");
+  });
+
+  it("swaps the reserved footer to copy controls only when final prose exists", () => {
+    expect(resolveTurnAssistantFooterMode({
+      rowIsLastTurnRow: true,
+      turnCompleted: true,
+      hasAssistantCopyContent: true,
+    })).toBe("copy");
+    expect(resolveTurnAssistantFooterMode({
+      rowIsLastTurnRow: false,
+      turnCompleted: true,
+      hasAssistantCopyContent: true,
+    })).toBe("none");
   });
 });
 

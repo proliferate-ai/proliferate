@@ -159,6 +159,62 @@ describe("useTranscriptStickToBottom", () => {
     expect(viewport.scrollTop).toBe(800);
   });
 
+  it("stays pinned when a consumed overlay is dismissed and the browser clamps to hard bottom", () => {
+    const onScrollSample = vi.fn();
+    const handle = renderHarness(onScrollSample, 160);
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 1_160, clientHeight: 300, scrollTop: 0 });
+
+    act(() => {
+      handle.current.api.scrollToBottom();
+    });
+    expect(viewport.scrollTop).toBe(700);
+    dispatchScroll(handle);
+
+    // The user deliberately consumes the overlay range and reaches the hard
+    // bottom before the composer card disappears.
+    userScroll(handle, 860);
+    expect(handle.current.api.isPinnedToBottom).toBe(true);
+
+    // Removing the 160px overlay shrinks scrollHeight and the browser clamps
+    // scrollTop upward by the same amount before React layout effects run.
+    setMetrics(viewport, { scrollHeight: 1_000, clientHeight: 300, scrollTop: 700 });
+    handle.rerenderInset(0);
+    dispatchScroll(handle);
+
+    expect(handle.current.api.isPinnedToBottom).toBe(true);
+    expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: true });
+
+    // The natural clamp must not disable subsequent pinned auto-follow.
+    setMetrics(viewport, { scrollHeight: 1_040, clientHeight: 300, scrollTop: 700 });
+    act(() => {
+      handle.current.api.scrollToBottom();
+    });
+    expect(viewport.scrollTop).toBe(1_040);
+  });
+
+  it("still unpins when upward movement after an inset shrink leaves hard bottom", () => {
+    const onScrollSample = vi.fn();
+    const handle = renderHarness(onScrollSample, 160);
+    const { viewport } = handle.current;
+    setMetrics(viewport, { scrollHeight: 1_160, clientHeight: 300, scrollTop: 0 });
+
+    act(() => {
+      handle.current.api.scrollToBottom();
+    });
+    dispatchScroll(handle);
+    userScroll(handle, 860);
+
+    // Unlike the browser clamp above, this position is still 20px from the
+    // new hard bottom, so its upward delta remains genuine user departure.
+    setMetrics(viewport, { scrollHeight: 1_000, clientHeight: 300, scrollTop: 680 });
+    handle.rerenderInset(0);
+    dispatchScroll(handle);
+
+    expect(handle.current.api.isPinnedToBottom).toBe(false);
+    expect(onScrollSample).toHaveBeenLastCalledWith({ programmatic: false });
+  });
+
   it("starts pinned", () => {
     const handle = renderHarness();
     expect(handle.current.api.isPinnedToBottom).toBe(true);

@@ -187,7 +187,11 @@ Completed tool/reasoning history uses one left-aligned disclosure labelled
 single full-width `border-border` hairline separates the work block from the
 final answer. Do not render centered labels with rules on both sides, a
 separate `Final message` separator, or hairlines between assistant prose
-items. If the user stopped the turn, the same disclosure is labelled
+items. Top-level prose and activity blocks inside the expanded history restore
+the same `gap-4` conversation-item rhythm; the tighter `gap-1` (4px) grouped
+rhythm is reserved for detail rows within one expanded activity. The reveal
+gap between the `Worked for…` disclosure and its body is also 4px (`mt-1`). If
+the user stopped the turn, the same disclosure is labelled
 `You stopped after {duration}` instead; do not add a duplicate stopped footer
 beneath it. A stopped turn with no completed-history disclosure may use the
 standalone notice as a fallback.
@@ -211,6 +215,11 @@ search/read row may say `Read files` while using the search glyph). Semantic
 icons and labels share the same 60%-foreground ink, and the icon box scales
 with transcript text instead of using a fixed pixel size. The disclosure
 chevron remains layout-reserved but hidden until hover/focus or expansion.
+Every row revealed inside an activity ledger repeats its own semantic glyph
+(including mixed parsed shell operations), at the same text-relative size and
+inherited ink as its label. Completed command details use `Ran …`; only the
+active command uses `Running …`. An edit detail shows one pen glyph followed by
+an inherited-color, dotted-underlined filename, not a second file-type glyph.
 
 New activity blocks may use one compositor-only opacity/short horizontal
 entrance. The motion is claimed once by stable item identity in the latest
@@ -242,6 +251,12 @@ re-show while pinned, a short pre-paint rAF "glue" loop holds the viewport at th
 true bottom until row measurement settles, collapsing the resume backlog into one
 jump instead of a visible crawl.
 
+When the transcript is shorter than the viewport, both row-list paths use a
+bottom-anchored flex frame (`mt-auto` content above the structural composer
+inset). This preserves the same composer-relative frontier even when
+`scrollTop` must clamp to zero; unused viewport height belongs above the
+conversation, never between its frontier and composer.
+
 When the user is unpinned, a completing turn that splits one row into
 `completed-history` + `content` (a new, unmeasured row inserted above the anchor)
 would bump the viewport as the 360px estimate corrects. The virtualized list
@@ -253,13 +268,17 @@ Cards mounted above the composer (permission/question panels, slash-command
 trays, queued messages, goals, and similar dock slots) are overlays, not a
 reason to reposition existing transcript pixels. Their measured height is the
 `nonDisplacingBottomInsetPx` portion of the full bottom inset: it is rendered as
-extra scroll range so the user can manually bring the transcript end above the
-obstruction, but changes to that portion alone must not trigger a pinned snap
-or a content `ResizeObserver`/visibility-glue snap. Normal auto-follow targets
-the soft bottom before this range. Once the user deliberately reaches the hard
-bottom, auto-follow preserves the consumed range; if another card stacks, only
-its newly added height remains manual-only. Composer-surface height remains
-structural and continues to re-stick promptly when the input itself grows.
+absolutely positioned overflow beyond the bottom-anchor frame, adding scroll
+range without participating in its layout. The user can manually bring the
+transcript end above the obstruction, but changes to that portion alone must
+not trigger a pinned snap or a content `ResizeObserver`/visibility-glue snap.
+Normal auto-follow targets the soft bottom before this range. Once the user
+deliberately reaches the hard bottom, auto-follow preserves the consumed range;
+if another card stacks, only its newly added height remains manual-only. If a
+consumed overlay shrinks or disappears, the browser's upward clamp to the new
+hard bottom is layout movement, not user intent, and must preserve the pinned
+state. Composer-surface height remains structural and continues to re-stick
+promptly when the input itself grows.
 
 A send intent with `placement: "queue"` is represented by the composer's
 outbound queue and must not also produce a transcript row. A queued send that
@@ -271,26 +290,44 @@ numbers never change during reorder and are never reused for a later entry.
 
 ### Streaming Handoff
 
-When an assistant turn transitions from streaming state to its first line of
-prose response, the swap must be a zero-delta layout change: no content shift
-and no auto-scroll bump.
+The transcript has two distinct bottom concepts:
+
+1. The **frontier** is the final visible thing the agent is doing: `Thinking`,
+   a live tool/action row, or streaming/final prose.
+2. The **assistant footer** is a permanent `h-6` row below the last frontier.
+   It is empty while the turn is live, swaps in place to copy/timestamp/goal
+   controls when final prose exists, and stays empty for a tool-only, stopped,
+   or errored completion.
+
+The frontier must remain at one composer-relative coordinate through pending
+prompt ownership, materialization, live tool work, streamed prose, and
+completion. The footer belongs below it and must never cause final prose to
+move upward when its controls appear.
 
 | Piece | Location | Value |
 | --- | --- | --- |
-| `TRAILING_STATUS_MIN_HEIGHT` | `apps/desktop/src/components/workspace/chat/transcript/TranscriptTurnChrome.tsx` | `min-h-[calc(var(--text-chat--line-height)+1.5rem)]` |
-| Assistant copy-button slot | `apps/desktop/src/components/workspace/chat/transcript/AssistantMessage.tsx` | `h-6` (24px) |
-| Chat text line-height | `apps/packages/design/src/tokens.ts` (`typography.lineHeight.chat`) | `21px` |
-
-The derivation is:
-
-```text
-TRAILING_STATUS_MIN_HEIGHT = --text-chat--line-height + h-6
-```
+| Frontier sibling gap | `TURN_ITEM_GAP_CLASS` in `TranscriptTurnChrome.tsx` | `gap-4` (16px) |
+| Pending/materialized working-status frame | `renderWorkingTrailingStatus` in `TranscriptTurnChrome.tsx` | `flex h-6 items-center` |
+| Empty/completed assistant footer | `TurnAssistantActionRow` in `TranscriptTurnChrome.tsx` | `h-6` (24px) |
+| Message/status line-height | `--text-message--line-height` (aliases the appearance composer scale) | Dynamic; `20px` by default |
 
 Additional dependencies:
 
 - Pending `TurnShell` rows must pass `showCopyButton` to `UserMessage`, or the
   pending bubble becomes shorter than the real row that replaces it.
+- Pending and materialized working states use the exact same centered `h-6`
+  frame. Do not wrap one path in an additional non-flex `h-6`; the indicator is
+  taller than the slot and divergent overflow alignment creates a visible
+  handoff nudge.
+- The pre-workspace `ChatLaunchIntentPane` uses the same bottom-anchored
+  `TurnShell` sequence, copyable user-message geometry, `gap-4` frontier, and
+  empty footer as the projected pending row. It also uses the transcript's
+  stable structural inset and separate non-displacing overlay range, not the
+  smaller auto-scroll inset. Launch -> pending -> materialized is an ownership
+  handoff, not a layout transition.
+- Pending and materialized `needs_input` markers share the same `h-6` frame.
+- Retry/dismiss recovery controls on an uncertain pending send render above its
+  frontier. The fixed assistant footer remains the last row.
 - Prompt submit should clear the chat input before awaiting prompt delivery;
   otherwise the same message can appear in the composer and transcript at the
   same time.
@@ -303,11 +340,25 @@ Additional dependencies:
   quiet gap; the next `(itemId, lastUpdatedSeq)` revision hides it
   synchronously and re-arms the quiet timer. A completed-looking transcript
   with silent background work is never acceptable.
-  Both indicator variants render inside the same fixed-height (`h-6`) slot as
-  the reserved copy-button row so the swap is a zero-delta layout change.
-- The `h-6` copy-button slot in `AssistantMessage` is gated on content, not on
-  `showCopyButton`, so the prose-owned slot remains stable while turns stream.
+  The indicator is a frontier row above the assistant footer; it must never
+  occupy the footer itself.
+- `TurnAssistantActionRow` renders its fixed footer when `reserveSlot` is true
+  even before assistant prose exists. The latest materialized turn and pending
+  prompt both reserve it; a completion without copyable prose keeps it reserved.
+- Completion-only surfaces such as file-diff and artifact cards mount before
+  the frontier item. They may grow upward as data arrives, but must never be
+  inserted between final prose and its fixed footer. When completed-history UI
+  exists, those cards remain inside the work block and above its single
+  hairline; the hairline still directly separates all work from final prose.
+  Full-turn artifact cards render only in the split row that owns final prose.
+- A completed turn presents its final assistant prose last even when tool or
+  file-change receipts have a later runtime sequence. Those non-final roots
+  belong to completed work history above the prose; arrival order must not put
+  activity below the final frontier. Goal-boundary partitioning assigns final
+  prose the latest non-final work seq for slicing so it stays in the last turn
+  row without crossing a goal event that occurs after all turn work.
 
-If you change any pinned value, update every file in the table at the same
-time and verify by sending a message, waiting for assistant streaming to begin,
-and watching for scroll movement during the indicator-to-prose swap.
+If you change any pinned value, update every file in the table at the same time
+and verify the full sequence: submit -> immediate Thinking -> materialized
+Thinking -> live command -> streamed final prose -> copy/timestamp. The
+frontier must not move at any handoff.

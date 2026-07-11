@@ -432,6 +432,40 @@ describe("buildTranscriptRowModel", () => {
       ]);
     });
 
+    it("keeps final prose in the last turn row when a late tool receipt crosses a goal boundary", () => {
+      const transcript = createTranscriptState("session-1");
+      addTurn(transcript, "turn-1", true);
+      addUserItem(transcript, "turn-1", "item-user", "Make the change", 1);
+      addAssistantItems(transcript, "turn-1", 1, 2);
+      addCommandItem(transcript, "turn-1", "late-receipt", 3);
+
+      const rows = buildTranscriptRowModel({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: "turn-1",
+        latestTurnHasAssistantRenderableContent: true,
+        goalEvents: [goalEvent(3, "met")],
+      });
+      const turnRows = rows.filter(
+        (row): row is Extract<(typeof rows)[number], { kind: "turn" }> => row.kind === "turn",
+      );
+      const lastTurnRow = turnRows[turnRows.length - 1];
+
+      expect(rows.map((row) => row.key)).toEqual([
+        "turn:turn-1:block:content:1-1",
+        "turn:turn-1:block:content:2-3",
+        "goal-event:3",
+      ]);
+      expect(lastTurnRow.isLastTurnRow).toBe(true);
+      expect(lastTurnRow.renderPresentation.displayBlocks[
+        lastTurnRow.renderPresentation.displayBlocks.length - 1
+      ]).toEqual({
+        kind: "item",
+        itemId: "item-turn-1-0",
+      });
+    });
+
     // A goal event whose seq lands INSIDE the span of a single continuous
     // streamed assistant_message (one block, one startedSeq, with later
     // deltas) renders AFTER that whole block — the message is never

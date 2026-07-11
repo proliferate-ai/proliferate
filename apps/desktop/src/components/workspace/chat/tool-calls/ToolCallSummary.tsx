@@ -10,6 +10,8 @@ interface ToolCallSummaryProps {
   defaultExpanded?: boolean;
   /** When true, renders the completed-work hairline below the disclosure. */
   showWorkDivider?: boolean;
+  /** Always-visible completion UI that remains part of the work block. */
+  completionContent?: React.ReactNode;
 }
 
 export function ToolCallSummary({
@@ -20,6 +22,7 @@ export function ToolCallSummary({
   itemCount,
   defaultExpanded = false,
   showWorkDivider = false,
+  completionContent = null,
 }: ToolCallSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const renderedChildren = expanded || (itemCount !== undefined && itemCount <= 1)
@@ -39,17 +42,27 @@ export function ToolCallSummary({
         onClick={() => setExpanded(!expanded)}
       />
       {expanded && (
-        <div className="mt-2 space-y-1.5">
+        <div className="mt-1 space-y-1.5">
           {renderedChildren}
         </div>
       )}
-      {showWorkDivider && (
-        <div
-          aria-hidden="true"
-          data-chat-transcript-ignore
-          className="mt-1 w-full border-t border-border"
-        />
+      {completionContent && (
+        <div className="mt-4 flex flex-col gap-4" data-completed-work-content>
+          {completionContent}
+        </div>
       )}
+      {showWorkDivider && <ToolCallWorkDivider className="mt-1" />}
     </div>
+  );
+}
+
+export function ToolCallWorkDivider({ className = "" }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-chat-transcript-ignore
+      data-completed-work-divider
+      className={`${className} w-full border-t border-border`}
+    />
   );
 }

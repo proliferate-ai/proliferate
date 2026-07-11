@@ -9,9 +9,10 @@ import { FileDiffCard } from "@/components/content/ui/FileDiffCard";
 import { HighlightedCodeBlock } from "@/components/content/ui/HighlightedCodeBlock";
 import { useFileReferenceActions } from "@/hooks/workspaces/workflows/files/use-file-reference-actions";
 import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/chats/tools/tool-call-layout";
-import { ChevronRight, FilePen } from "@proliferate/ui/icons";
+import { ChevronRight } from "@proliferate/ui/icons";
 import { basename } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
-import { ActionFileLink } from "./CollapsedActionRowPrimitives";
+import { CollapsedActionIcon } from "./CollapsedActionIcon";
+import { ActionFileLink, ActionRowIcon } from "./CollapsedActionRowPrimitives";
 import { GenericActionRow } from "./CollapsedGenericActionRow";
 
 export function EditRows({ item }: { item: ToolCallItem }) {
@@ -93,16 +94,15 @@ function EditActionRow({
             onKeyDown: handleKeyDown,
           }
           : {})}
-        className={`group/action-row inline-flex min-w-0 max-w-full items-center gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground/60 outline-none transition-colors hover:text-foreground focus-visible:underline ${hasDetails ? "cursor-pointer" : ""}`}
+        className={`group/action-row inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal outline-none transition-colors focus-visible:underline ${
+          failed
+            ? "text-destructive/80 hover:text-destructive"
+            : "text-foreground/60 hover:text-foreground"
+        } ${hasDetails ? "cursor-pointer" : ""}`}
       >
-        <FilePen
-          aria-hidden="true"
-          className={`size-3 shrink-0 transition-colors ${
-            failed
-              ? "text-destructive/70"
-              : "text-faint group-hover/action-row:text-muted-foreground group-focus-visible/action-row:text-muted-foreground"
-          }`}
-        />
+        <ActionRowIcon>
+          <CollapsedActionIcon kind="edit" />
+        </ActionRowIcon>
         <span className={failed ? "shrink-0 text-destructive/80" : "shrink-0 text-inherit"}>
           {action}
         </span>

@@ -152,9 +152,18 @@ export function buildTurnPresentation(
     turn.completedAt,
     finalAssistantItemId,
   );
+  // Completion metadata and tool receipts can arrive after the final prose in
+  // runtime sequence order. Presentation still keeps the final assistant item
+  // last so all work grows above the stable transcript frontier.
+  const presentationRootIds = finalAssistantItemId
+    ? [
+      ...rootIds.filter((itemId) => itemId !== finalAssistantItemId),
+      finalAssistantItemId,
+    ]
+    : rootIds;
 
   const displayBlocks = buildTranscriptDisplayBlocks({
-    rootIds,
+    rootIds: presentationRootIds,
     transcript,
     childrenByParentId,
     isComplete: !!turn.completedAt,
@@ -225,13 +234,9 @@ function buildCompletedHistoryRootIds(
     return [];
   }
 
-  const finalAssistantIndex = rootIds.indexOf(finalAssistantItemId);
-  if (finalAssistantIndex <= 0) {
-    return [];
-  }
-
-  return rootIds.filter((itemId, index) =>
-    index < finalAssistantIndex && transcript.itemsById[itemId]?.kind !== "user_message"
+  return rootIds.filter((itemId) =>
+    itemId !== finalAssistantItemId
+    && transcript.itemsById[itemId]?.kind !== "user_message"
   );
 }
 

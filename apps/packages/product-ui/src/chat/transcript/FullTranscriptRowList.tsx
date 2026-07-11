@@ -242,42 +242,51 @@ export function FullTranscriptRowList({
         className="h-full"
         ref={scrollRef}
         onViewportScroll={handleViewportScroll}
+        contentClassName={`${gutterClassName} relative flex min-h-full flex-col`}
       >
         <div
-          className={`${gutterClassName} min-h-full`}
+          ref={contentRef}
+          className="mt-auto"
           data-transcript-virtualization-mode="full"
           data-transcript-virtualization-setting={virtualizationMode}
           data-transcript-virtualization-fallback={fallbackReason ?? undefined}
         >
-          <div ref={contentRef}>
-            <div
-              ref={selectionRootRef}
-              data-chat-transcript-root="true"
-              tabIndex={-1}
-              className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
-            >
-              {TRANSCRIPT_TOP_PADDING_PX > 0 && (
-                <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
-              )}
-              {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
-              {rows.map((row, rowIndex) => (
-                <MemoizedFullTranscriptRow
-                  key={row.key}
-                  row={row}
-                  rowIndex={rowIndex}
-                  renderRow={renderRow}
-                />
-              ))}
-            </div>
+          <div
+            ref={selectionRootRef}
+            data-chat-transcript-root="true"
+            tabIndex={-1}
+            className={`${columnClassName} select-none outline-none [--text-chat:var(--text-message)] [--text-chat--line-height:var(--text-message--line-height)] [--text-chat-meta:calc(var(--text-chat)_-_2px)]`}
+          >
+            {TRANSCRIPT_TOP_PADDING_PX > 0 && (
+              <div aria-hidden="true" style={{ height: TRANSCRIPT_TOP_PADDING_PX }} />
+            )}
+            {isLoadingOlderHistory && <TranscriptHistoryLoadingRow />}
+            {rows.map((row, rowIndex) => (
+              <MemoizedFullTranscriptRow
+                key={row.key}
+                row={row}
+                rowIndex={rowIndex}
+                renderRow={renderRow}
+              />
+            ))}
           </div>
-          {bottomInsetPx > 0 && (
-            <div
-              aria-hidden="true"
-              data-transcript-bottom-inset
-              style={{ height: bottomInsetPx }}
-            />
-          )}
         </div>
+        {structuralBottomInsetPx > 0 && (
+          <div
+            aria-hidden="true"
+            className="shrink-0"
+            data-transcript-bottom-structural-inset
+            style={{ height: structuralBottomInsetPx }}
+          />
+        )}
+        {effectiveNonDisplacingBottomInsetPx > 0 && (
+          <div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-full"
+            data-transcript-bottom-overlay-inset
+            style={{ height: effectiveNonDisplacingBottomInsetPx }}
+          />
+        )}
       </AutoHideScrollArea>
       <TranscriptScrollToBottomButton
         visible={!isPinnedToBottom}

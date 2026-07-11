@@ -6,7 +6,7 @@ import { TOOL_CALL_BODY_MAX_HEIGHT_CLASS } from "@proliferate/product-domain/cha
 import {
   deriveCommand,
   deriveCommandOutput,
-  formatRunningCommandLabel,
+  formatCommandExecutionLabel,
 } from "@proliferate/product-domain/chats/tools/collapsed-action-labels";
 import { ActionDisclosureRow } from "./CollapsedActionRowPrimitives";
 
@@ -14,9 +14,7 @@ export function CommandActionRow({ item }: { item: ToolCallItem }) {
   const [expanded, setExpanded] = useState(false);
   const command = deriveCommand(item);
   const output = deriveCommandOutput(item);
-  const label = item.status === "failed"
-    ? `Command failed with ${command}`
-    : formatRunningCommandLabel(command);
+  const label = formatCommandExecutionLabel(command, item.status);
 
   return (
     <div>
