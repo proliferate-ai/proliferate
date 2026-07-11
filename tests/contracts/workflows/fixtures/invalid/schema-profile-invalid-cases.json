@@ -1,0 +1,101 @@
+{
+  "description": "Emit schemas that the v1 JSON Schema profile MUST reject at save/compile. Each case is validated by validate_schema_profile in all three languages; every one must fail with the given reasonCode.",
+  "cases": [
+    {
+      "name": "root_not_object",
+      "reasonCode": "root_type_not_object",
+      "document": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "string" }
+    },
+    {
+      "name": "uses_ref",
+      "reasonCode": "unsupported_keyword",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "x": { "$ref": "#/$defs/foo" } }
+      }
+    },
+    {
+      "name": "uses_pattern",
+      "reasonCode": "unsupported_keyword",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "x": { "type": "string", "pattern": "^a" } }
+      }
+    },
+    {
+      "name": "uses_combinator_allof",
+      "reasonCode": "unsupported_keyword",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "x": { "allOf": [{ "type": "string" }] } }
+      }
+    },
+    {
+      "name": "uses_format",
+      "reasonCode": "unsupported_keyword",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "x": { "type": "string", "format": "email" } }
+      }
+    },
+    {
+      "name": "uses_unevaluated_properties",
+      "reasonCode": "unsupported_keyword",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "unevaluatedProperties": false,
+        "properties": { "x": { "type": "string" } }
+      }
+    },
+    {
+      "name": "type_union_not_null_terminated",
+      "reasonCode": "invalid_type",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "x": { "type": ["string", "number"] } }
+      }
+    },
+    {
+      "name": "type_union_three_items",
+      "reasonCode": "invalid_type",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "x": { "type": ["string", "number", "null"] } }
+      }
+    },
+    {
+      "name": "top_level_property_not_identifier",
+      "reasonCode": "property_name_not_ascii_identifier",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "1bad": { "type": "string" } }
+      }
+    },
+    {
+      "name": "wrong_schema_dialect",
+      "reasonCode": "wrong_dialect",
+      "document": {
+        "$schema": "https://json-schema.org/draft/2019-09/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "x": { "type": "string" } }
+      }
+    }
+  ]
+}

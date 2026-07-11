@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "runId": "wfr_demo_0001",
+  "planHash": "sha256:24db3a9af5b6d6041b3b19641c3bb64c63e0cf6b31a1484d855783892445adea",
+  "bindingHash": "sha256:dcb8604a8ff4c3755a50eac062fa6f1e8e4d6efdd959a9a89ca6afc9e4678751",
+  "executionGeneration": 1,
+  "revision": 7,
+  "observedState": "running",
+  "quiescenceState": "active",
+  "globalCursor": "root::018f8a10-0002-7000-8000-000000000001::-::-",
+  "laneCursors": {
+    "018f8a10-0003-7000-8000-00000000000a": "root::018f8a10-0002-7000-8000-000000000001::018f8a10-0003-7000-8000-00000000000a::018f8a10-0004-7000-8000-00000000000a",
+    "018f8a10-0003-7000-8000-00000000000b": "root::018f8a10-0002-7000-8000-000000000001::018f8a10-0003-7000-8000-00000000000b::018f8a10-0004-7000-8000-00000000000b"
+  },
+  "sessions": {
+    "018f8a10-0000-7000-8000-000000000001": "session_triage_0001",
+    "018f8a10-0000-7000-8000-00000000000a": "session_lane_a_0001",
+    "018f8a10-0000-7000-8000-00000000000b": "session_lane_b_0001"
+  },
+  "steps": [
+    {
+      "stepKey": "root::018f8a10-0001-7000-8000-000000000001::-::018f8a10-0004-7000-8000-000000000001",
+      "attempt": 1,
+      "status": "completed",
+      "output": { "turnId": "turn_0001", "sessionId": "session_triage_0001" }
+    },
+    {
+      "stepKey": "root::018f8a10-0001-7000-8000-000000000001::-::018f8a10-0004-7000-8000-000000000002",
+      "attempt": 1,
+      "status": "completed",
+      "output": { "emit": { "severity": "high", "summary": "Null pointer in the checkout path." } }
+    },
+    {
+      "stepKey": "root::018f8a10-0001-7000-8000-000000000001::-::018f8a10-0004-7000-8000-000000000003",
+      "attempt": 1,
+      "status": "completed",
+      "output": { "branch": "high", "decision": "continue" }
+    },
+    {
+      "stepKey": "root::018f8a10-0001-7000-8000-000000000002::-::018f8a10-0004-7000-8000-000000000004",
+      "attempt": 1,
+      "status": "completed",
+      "output": { "receiptId": "rcpt_demo_0001" }
+    },
+    {
+      "stepKey": "root::018f8a10-0002-7000-8000-000000000001::018f8a10-0003-7000-8000-00000000000a::018f8a10-0004-7000-8000-00000000000a",
+      "attempt": 1,
+      "status": "running"
+    },
+    {
+      "stepKey": "root::018f8a10-0002-7000-8000-000000000001::018f8a10-0003-7000-8000-00000000000b::018f8a10-0004-7000-8000-00000000000b",
+      "attempt": 2,
+      "status": "failed",
+      "errorCode": "outcome_uncertain",
+      "errorMessage": "shell process handle lost after restart"
+    }
+  ],
+  "worktrees": {
+    "groupBaseCheckpointId": "ckpt_group_base_0001",
+    "laneCheckpoints": {
+      "018f8a10-0003-7000-8000-00000000000a": "ckpt_lane_a_0001"
+    }
+  },
+  "cost": { "usd": "0.0123", "tokens": 4200 },
+  "timing": { "startedAt": "2026-07-10T00:00:00Z", "updatedAt": "2026-07-10T00:05:00Z" }
+}

@@ -103,6 +103,30 @@
       "types": "./dist/workflows/spine-editing.d.ts",
       "import": "./dist/workflows/spine-editing.js"
     },
+    "./workflows/contracts/canonical": {
+      "types": "./dist/workflows/contracts/canonical.d.ts",
+      "import": "./dist/workflows/contracts/canonical.js"
+    },
+    "./workflows/contracts/hashing": {
+      "types": "./dist/workflows/contracts/hashing.d.ts",
+      "import": "./dist/workflows/contracts/hashing.js"
+    },
+    "./workflows/contracts/schema-profile": {
+      "types": "./dist/workflows/contracts/schema-profile.d.ts",
+      "import": "./dist/workflows/contracts/schema-profile.js"
+    },
+    "./workflows/contracts/legacy-upgrade": {
+      "types": "./dist/workflows/contracts/legacy-upgrade.d.ts",
+      "import": "./dist/workflows/contracts/legacy-upgrade.js"
+    },
+    "./workflows/contracts/types": {
+      "types": "./dist/workflows/contracts/types.d.ts",
+      "import": "./dist/workflows/contracts/types.js"
+    },
+    "./workflows/contracts/adapters": {
+      "types": "./dist/workflows/contracts/adapters.d.ts",
+      "import": "./dist/workflows/contracts/adapters.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

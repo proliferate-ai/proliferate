@@ -1,0 +1,106 @@
+{
+  "description": "Checkpoint manifests that MUST fail strict parsing in all three languages. Each is fed to parse_checkpoint_manifest; every one must raise.",
+  "cases": [
+    {
+      "name": "invalid_mode",
+      "reasonCode": "invalid_mode",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "sha256",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": [
+          { "path": "UkVBRE1FLm1k", "origin": "tracked", "mode": "100600", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" }
+        ]
+      }
+    },
+    {
+      "name": "gitlink_missing_submodule_oid",
+      "reasonCode": "gitlink_requires_submodule_oid",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "sha256",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": [
+          { "path": "dmVuZG9yL2xpYg", "origin": "tracked", "mode": "160000", "sha256": "2222222222222222222222222222222222222222222222222222222222222222" }
+        ]
+      }
+    },
+    {
+      "name": "blob_missing_sha256",
+      "reasonCode": "blob_requires_sha256",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "sha256",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": [
+          { "path": "UkVBRE1FLm1k", "origin": "tracked", "mode": "100644" }
+        ]
+      }
+    },
+    {
+      "name": "unknown_origin",
+      "reasonCode": "invalid_origin",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "sha256",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": [
+          { "path": "UkVBRE1FLm1k", "origin": "ignored", "mode": "100644", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" }
+        ]
+      }
+    },
+    {
+      "name": "path_not_base64",
+      "reasonCode": "path_not_unpadded_base64",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "sha256",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": [
+          { "path": "not*base64!", "origin": "tracked", "mode": "100644", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" }
+        ]
+      }
+    },
+    {
+      "name": "padded_base64_path",
+      "reasonCode": "path_not_unpadded_base64",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "sha256",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": [
+          { "path": "bGluaw==", "origin": "untracked", "mode": "120000", "sha256": "1111111111111111111111111111111111111111111111111111111111111111" }
+        ]
+      }
+    },
+    {
+      "name": "unknown_object_format",
+      "reasonCode": "invalid_repository_object_format",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "md5",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": []
+      }
+    },
+    {
+      "name": "unknown_top_level_field",
+      "reasonCode": "unknown_field",
+      "document": {
+        "schemaVersion": 1,
+        "repositoryObjectFormat": "sha256",
+        "baseOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+        "indexEntries": [],
+        "worktreeEntries": [],
+        "gitStatusText": "M README.md"
+      }
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "target": "local",
+  "sourceKind": "workspace_checkpoint",
+  "repositoryObjectFormat": "sha256",
+  "baseCommitOid": "9a1f0b7c3d5e2f4a6b8c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+  "checkpointId": "ckpt_demo_0001",
+  "checkpointContentHash": "sha256:50bc3300a6a3ffecda15a4c3e663c660e7f6b744eca292d3d902642cc7e9720e",
+  "workspaceId": "ws_demo_0001",
+  "workspaceGeneration": 1,
+  "materializationId": "mat_demo_0001",
+  "executorId": "exec_desktop_0001",
+  "executorGeneration": 1,
+  "bindingHash": "sha256:dcb8604a8ff4c3755a50eac062fa6f1e8e4d6efdd959a9a89ca6afc9e4678751"
+}
