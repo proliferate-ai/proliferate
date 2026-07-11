@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { WorkspaceActionsMenu } from "@/components/workspace/shell/topbar/WorkspaceActionsMenu";
+import { WorkspaceActions } from "@/components/workspace/shell/topbar/WorkspaceActionsMenu";
 import {
   useOptionalWorkspaceHeaderTabsViewModelContext,
 } from "@/components/workspace/shell/providers/WorkspaceHeaderTabsViewModelContext";
@@ -77,7 +77,7 @@ export function WorkspaceActionsMenuContainer() {
   }
 
   return (
-    <WorkspaceActionsMenu
+    <WorkspaceActions
       session={{
         canRename: activeTab !== null && !activeTab.isReviewAgentChild,
         canFork: activeTab !== null

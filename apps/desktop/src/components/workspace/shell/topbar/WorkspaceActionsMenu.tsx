@@ -34,7 +34,7 @@ interface WorkspaceActionsMenuProps {
  * Chat-only overflow actions. In Tauri the click opens an OS-native menu;
  * Radix remains the browser/failure fallback used by tests and playgrounds.
  */
-export function WorkspaceActionsMenu({ session }: WorkspaceActionsMenuProps) {
+export function WorkspaceActions({ session }: WorkspaceActionsMenuProps) {
   const [fallbackOpen, setFallbackOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const { showNativeMenu } = useWorkspaceActionsNativeMenu(session);
