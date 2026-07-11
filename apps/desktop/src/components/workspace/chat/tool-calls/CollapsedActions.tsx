@@ -5,18 +5,17 @@ import type {
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   CommandWindow,
-  ChevronRight,
-  FilePen,
-  FolderList,
+  ChevronRightActivity,
+  FilePenActivity,
   ReadBook,
-  Search,
-  Settings,
+  SearchActivity,
 } from "@proliferate/ui/icons";
 import {
   type CollapsedActionKind,
   type CollapsedActionSummary,
   formatCollapsedActionsSummary,
   resolveCurrentCollapsedAction,
+  resolveCollapsedActionsLeadingKind,
   summarizeCollapsedActions,
 } from "@proliferate/product-domain/chats/transcript/transcript-collapsed-actions";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
@@ -59,36 +58,38 @@ export function CollapsedActions({
     : renderCollapsedActionsIcon(actionSummary);
 
   return (
-    <div className="min-w-0 text-chat leading-[var(--text-chat--line-height)]">
+    <div className="flex min-w-0 flex-col text-chat leading-[1.5]">
       <Button
         type="button"
-        variant="ghost"
-        size="sm"
+        variant="unstyled"
+        size="unstyled"
         data-chat-transcript-ignore
         data-active={isLiveAction ? "true" : undefined}
         aria-expanded={expanded}
-        className="group/collapsed-actions h-auto max-w-full justify-start gap-1.5 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:ring-0 focus-visible:underline"
+        className="group/collapsed-actions h-auto max-w-full self-start justify-start gap-1 rounded-none bg-transparent p-0 text-left text-chat leading-[1.5] font-normal text-foreground/60 hover:bg-transparent hover:text-foreground focus-visible:text-foreground"
         onClick={() => setExpanded((value) => !value)}
       >
-        <span
-          aria-hidden="true"
-          className="flex size-3.5 shrink-0 items-center justify-center text-current [&_svg]:size-3.5 [&_svg]:text-current"
-        >
-          {summaryIcon}
+        <span className="inline-flex min-w-0 shrink items-center gap-1.5 truncate">
+          <span
+            aria-hidden="true"
+            className="flex size-[1.143em] shrink-0 items-center justify-center text-current [&_svg]:size-[1.143em] [&_svg]:text-current"
+          >
+            {summaryIcon}
+          </span>
+          <span className="min-w-0 flex-1 truncate">
+            {isLiveAction
+              ? (
+                <ThinkingText
+                  text={summary}
+                  className="block max-w-full truncate font-normal leading-[inherit] !text-current"
+                />
+              )
+              : summary}
+          </span>
         </span>
-        <span className="min-w-0 truncate">
-          {isLiveAction
-            ? (
-              <ThinkingText
-                text={summary}
-                className="block max-w-full truncate font-normal leading-[inherit]"
-              />
-            )
-            : summary}
-        </span>
-        <ChevronRight
+        <ChevronRightActivity
           aria-hidden="true"
-          className={`size-3 shrink-0 text-current transition-[transform,opacity] ${
+          className={`size-[1em] shrink-0 text-current transition-transform duration-300 ${
             expanded
               ? "rotate-90 opacity-100"
               : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
@@ -110,22 +111,7 @@ export function CollapsedActions({
 }
 
 function renderCollapsedActionsIcon(summary: CollapsedActionSummary): ReactNode {
-  if (summary.commands > 0) {
-    return <CommandWindow />;
-  }
-  if (summary.edits > 0) {
-    return <FilePen />;
-  }
-  if (summary.searches > 0) {
-    return <Search />;
-  }
-  if (summary.listings > 0) {
-    return <FolderList />;
-  }
-  if (summary.reads > 0 || summary.fetches > 0) {
-    return <ReadBook />;
-  }
-  return <Settings />;
+  return renderCollapsedActionKindIcon(resolveCollapsedActionsLeadingKind(summary));
 }
 
 function renderCollapsedActionKindIcon(kind: CollapsedActionKind): ReactNode {
@@ -136,14 +122,13 @@ function renderCollapsedActionKindIcon(kind: CollapsedActionKind): ReactNode {
     case "fetch":
       return <ReadBook />;
     case "edit":
-      return <FilePen />;
+      return <FilePenActivity />;
     case "listing":
-      return <FolderList />;
     case "search":
-      return <Search />;
+      return <SearchActivity />;
     case "action":
     default:
-      return <Settings />;
+      return <CommandWindow />;
   }
 }
 

@@ -81,12 +81,22 @@ describe("CollapsedActions", () => {
     const activeLabelClasses = activeLabel?.className.split(/\s+/) ?? [];
     expect(activeLabelClasses).toContain("block");
     expect(activeLabelClasses).toContain("leading-[inherit]");
+    expect(activeLabelClasses).toContain("!text-current");
     const iconShell = activeButton.querySelector("span[aria-hidden='true']");
+    const summaryContent = iconShell?.parentElement;
     const activeSvgs = activeButton.querySelectorAll("svg");
     const disclosureChevron = activeSvgs[activeSvgs.length - 1];
-    expect(iconShell?.className).toContain("size-3.5");
+    expect(activeButton.className).toContain("gap-1");
+    expect(activeButton.className).toContain("leading-[1.5]");
+    expect(activeButton.className).toContain("text-foreground/60");
+    expect(summaryContent?.className).toContain("gap-1.5");
+    expect(iconShell?.className).toContain("size-[1.143em]");
     expect(iconShell?.className).toContain("[&_svg]:text-current");
-    expect(disclosureChevron?.getAttribute("class")).toContain("size-3");
+    expect(disclosureChevron?.getAttribute("class")).toContain("size-[1em]");
+    expect(disclosureChevron?.getAttribute("class")).toContain("transition-transform");
+    expect(disclosureChevron?.getAttribute("class")).toContain("duration-300");
+    expect(disclosureChevron?.getAttribute("viewBox")).toBe("0 0 20 20");
+    expect(disclosureChevron?.querySelector("path")?.getAttribute("d")).toContain("7.52925 3.7793");
     expect(disclosureChevron?.getAttribute("class")).toContain("opacity-0");
     expect(disclosureChevron?.getAttribute("class")).toContain("group-hover/collapsed-actions:opacity-100");
 
@@ -100,7 +110,7 @@ describe("CollapsedActions", () => {
       />,
     );
 
-    const completedButton = screen.getByRole("button", { name: /Explored 1 file/i });
+    const completedButton = screen.getByRole("button", { name: /Read files/i });
     expect(completedButton.getAttribute("data-active")).toBeNull();
     expect(completedButton.innerHTML).not.toContain("thinking-text");
     expect(completedButton.innerHTML).not.toContain("motion-safe:animate-pulse");
@@ -144,9 +154,11 @@ describe("CollapsedActions", () => {
       />,
     );
 
-    const completedButton = screen.getByRole("button", { name: /Edited 1 file/i });
+    const completedButton = screen.getByRole("button", { name: /Edited a file/i });
     expect(completedButton.getAttribute("data-active")).toBeNull();
     expect(completedButton.innerHTML).not.toContain("thinking-text");
+    expect(completedButton.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 20 21");
+    expect(completedButton.querySelector("path")?.getAttribute("d")).toContain("11.3312 4.20472");
   });
 
   it("keeps a completed trailing exploration phase live until another block takes over", () => {
@@ -166,6 +178,28 @@ describe("CollapsedActions", () => {
     const liveButton = screen.getByRole("button", { name: /Searching files/i });
     expect(liveButton.getAttribute("data-active")).toBe("true");
     expect(liveButton.querySelector("[data-thinking-text]")).not.toBeNull();
+    expect(liveButton.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 16 16");
+    expect(liveButton.querySelector("path")?.getAttribute("d")).toContain("7.33057 1.98535");
+  });
+
+  it("uses Codex's dominant completed icon instead of last-command priority", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      command: terminalItem("command", "turn-1", 1, "pnpm test", "completed"),
+      read: toolItem("read", "turn-1", 2, "file_read", "completed"),
+      search: toolItem("search", "turn-1", 3, "search", "completed"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["command", "read", "search"]}
+        transcript={transcript}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: /Read files, ran a command/i });
+    expect(button.querySelector("svg")?.getAttribute("viewBox")).toBe("0 0 16 16");
+    expect(button.querySelector("path")?.getAttribute("d")).toContain("7.33057 1.98535");
   });
 
   it("preserves the same thinking node across a completed-search gap and appended search", () => {
@@ -247,7 +281,7 @@ describe("CollapsedActions", () => {
         transcript={transcript}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Edited 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Edited a file/i }));
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
@@ -272,7 +306,7 @@ describe("CollapsedActions", () => {
         autoFollow
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Explored 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Read files/i }));
 
     const html = document.body.innerHTML;
     expect(html).toContain("data-collapsed-actions-ledger");
@@ -321,7 +355,7 @@ describe("CollapsedActions", () => {
         transcript={transcript}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Edited 2 files/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Edited files/i }));
 
     const html = document.body.innerHTML;
     const ledger = document.querySelector("[data-collapsed-actions-ledger]");
@@ -354,7 +388,7 @@ describe("CollapsedActions", () => {
     );
 
     expect(document.body.innerHTML).not.toContain("data-diff-surface=\"chat\"");
-    fireEvent.click(screen.getByRole("button", { name: /Edited 1 file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Edited a file/i }));
     fireEvent.click(screen.getByRole("button", { name: /Edit edit-1\.ts/i }));
     expect(document.body.innerHTML).toContain("data-diff-surface=\"chat\"");
   });

@@ -9,6 +9,7 @@ import { TranscriptPatchTurnDiffPanel } from "./TranscriptPatchTurnDiffPanel";
 import {
   TRAILING_STATUS_MIN_HEIGHT,
   TurnAssistantActionRow,
+  TURN_ITEM_GAP_CLASS,
   TurnLiveTailSlot,
   TurnGoalMetMarker,
   TurnShell,
@@ -211,9 +212,9 @@ export function TranscriptTurnRow({
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
-      {/* Codex parity: uniform block rhythm from --conversation-tool-assistant-gap
-          (16px at codex's 14px chat font) → 14px at our 13px chat scale. */}
-      <div className={`flex flex-col gap-3.5 ${tailAssistantCopyContent ? "group/turn" : ""}`}>
+      {/* Codex parity: every prose/activity sibling uses its exact 16px
+          conversation-item gap. Pending rows share the same class. */}
+      <div className={`flex flex-col ${TURN_ITEM_GAP_CLASS} ${tailAssistantCopyContent ? "group/turn" : ""}`}>
         <TurnItemSequence
           turn={turn}
           transcript={transcript}

@@ -173,9 +173,11 @@ reintroduce scroll/layout bumps.
 
 ### Spacing Rhythm
 
-Sibling spacing inside a turn comes solely from the turn container's `gap-2`,
-and turn rows are separated by `TurnShell`'s `pt-2 pb-2` (`pt-0` for the first
-row). Blocks must not carry external vertical padding of their own
+Sibling spacing inside a turn comes solely from the shared turn-container
+`gap-4` (16px, matching Codex's conversation-item rhythm), and turn rows are
+separated by `TurnShell`'s `pt-2 pb-2` (`pt-0` for the first row). Pending
+prompt rows use the same shared gap so materialization is layout-stable. Blocks
+must not carry external vertical padding of their own
 (`TranscriptActivityBlock` is a zero-padding marker wrapper), and spacing must
 not vary with streaming state: a turn completing is a zero-delta layout change
 for everything already rendered.
@@ -199,6 +201,16 @@ that one live header between adjacent completed search/read events while the
 turn remains in progress. Prose, a different trailing block, or turn completion
 ends the phase immediately; a generic tail status must not flash between those
 events.
+
+Completed activity headers use short, count-free verb phrases such as
+`Edited files, read files, ran a command`; exact counts stay in the expanded
+ledger. One representative phrase summarizes exploration work so mixed
+read/search/list/fetch batches stay concise. The dominant semantic icon follows
+Codex's `edit > search/list > read/fetch > command` hierarchy (so a mixed
+search/read row may say `Read files` while using the search glyph). Semantic
+icons and labels share the same 60%-foreground ink, and the icon box scales
+with transcript text instead of using a fixed pixel size. The disclosure
+chevron remains layout-reserved but hidden until hover/focus or expansion.
 
 New activity blocks may use one compositor-only opacity/short horizontal
 entrance. The motion is claimed once by stable item identity in the latest

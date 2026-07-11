@@ -4,6 +4,7 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   PendingInteractionMarkerView,
+  TURN_ITEM_GAP_CLASS,
   TurnAssistantActionRow,
   TurnGoalMetMarker,
   TurnLiveTailSlot,
@@ -18,6 +19,10 @@ afterEach(() => {
 });
 
 describe("TurnShell", () => {
+  it("shares Codex's 16px item gap across pending and materialized turns", () => {
+    expect(TURN_ITEM_GAP_CLASS).toBe("gap-4");
+  });
+
   it("uses one vertical rhythm for every row", () => {
     const { container } = render(
       <TurnShell>
@@ -114,6 +119,7 @@ describe("resolveTurnTrailingStatus", () => {
     expect(container.querySelector("[data-trailing-status='transient']")).not.toBeNull();
     expect(container.textContent).toContain("Reading workspace flow");
     expect(container.innerHTML).toContain("text-[length:var(--text-chat)]");
+    expect(container.innerHTML).toContain("size-[1.143em]");
     expect(container.innerHTML).not.toContain("text-xs");
   });
 

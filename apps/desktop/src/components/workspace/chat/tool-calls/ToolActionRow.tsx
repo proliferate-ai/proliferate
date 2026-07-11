@@ -57,7 +57,7 @@ export function ToolActionRow({
           tabIndex={0}
           data-chat-transcript-ignore
           aria-expanded={expanded}
-          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-none bg-transparent p-0 text-left text-chat leading-[var(--text-chat--line-height)] font-normal outline-none focus-visible:underline ${
+          className={`group/tool-action-row inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-none bg-transparent p-0 text-left text-chat leading-[1.5] font-normal outline-none focus-visible:underline ${
             status === "failed"
               ? "text-destructive/80 hover:text-destructive"
               : "text-muted-foreground hover:text-foreground"
@@ -74,7 +74,7 @@ export function ToolActionRow({
         </div>
       ) : (
         <div
-          className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat leading-[var(--text-chat--line-height)] ${
+          className={`inline-flex min-w-0 max-w-full items-center gap-1.5 text-chat leading-[1.5] ${
             status === "failed" ? "text-destructive/80" : "text-muted-foreground"
           }`}
         >
@@ -131,9 +131,9 @@ export function ToolActionLeadingAffordance({
   icon?: ReactNode;
 }) {
   return (
-    <span className="relative flex size-3.5 shrink-0 items-center justify-center text-current">
+    <span className="relative flex size-[1.143em] shrink-0 items-center justify-center text-current">
       <span
-        className="absolute inset-0 flex items-center justify-center text-xs leading-none text-current [&_svg]:size-3.5 [&_svg]:text-current"
+        className="absolute inset-0 flex items-center justify-center leading-none text-current [&_svg]:size-[1.143em] [&_svg]:text-current"
       >
         {icon}
       </span>

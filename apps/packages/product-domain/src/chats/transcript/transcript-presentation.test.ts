@@ -455,7 +455,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read"], transcript),
-    )).toBe("Explored 1 file");
+    )).toBe("Read files");
   });
 
   it("splits completed action groups around assistant prose", () => {
@@ -497,7 +497,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read-1", "read-2", "grep-1", "edit-1"], transcript),
-    )).toBe("Explored 2 files, 1 search, edited 1 file");
+    )).toBe("Edited a file, read files");
   });
 
   it("keeps active tools in the existing collapsed action block as they stream", () => {
@@ -590,7 +590,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["list", "find", "command"], transcript),
-    )).toBe("Explored 1 listing, 1 search, ran 1 command");
+    )).toBe("Searched files, ran a command");
   });
 
   it("keeps raw grep/read command batches with later active commands", () => {
@@ -613,7 +613,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["grep", "read", "command"], transcript),
-    )).toBe("Explored 1 file, 1 search, ran 1 command");
+    )).toBe("Read files, ran a command");
   });
 
   it("keeps active terminal calls in a subtle inline row while command details stream in", () => {
@@ -637,7 +637,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["command"], transcript),
-    )).toBe("Explored 1 search");
+    )).toBe("Searched files");
 
     transcript.itemsById.command = {
       ...transcript.itemsById.command as ToolCallItem,
@@ -649,7 +649,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["command"], transcript),
-    )).toBe("Explored 1 listing");
+    )).toBe("Listed files");
 
     transcript.itemsById.command = {
       ...transcript.itemsById.command as ToolCallItem,
@@ -684,7 +684,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["read", "search", "command"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("keeps completed terminal calls without commands in collapsed command history", () => {
@@ -730,7 +730,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["scan"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("expands active Codex ops shell batches into read and search rows", () => {
@@ -756,7 +756,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["scan"], transcript),
-    )).toBe("Explored 1 file, 2 searches");
+    )).toBe("Read files");
   });
 
   it("keeps active parsed real commands in the existing block when exploration follows", () => {
@@ -800,7 +800,7 @@ describe("buildTurnPresentation", () => {
     ]);
     expect(formatCollapsedActionsSummary(
       summarizeCollapsedActions(["sqlite", "ps", "read"], transcript),
-    )).toBe("Explored 1 file, ran 2 commands");
+    )).toBe("Read files, ran commands");
   });
 });
 

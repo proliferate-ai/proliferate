@@ -6,6 +6,7 @@ import type {
 import {
   classifyCollapsedAction,
   formatCollapsedActionsSummary,
+  resolveCollapsedActionsLeadingKind,
   resolveCurrentCollapsedAction,
   summarizeCollapsedActions,
 } from "../transcript/transcript-collapsed-actions";
@@ -140,7 +141,9 @@ function appendDisplayBlockRows(
         ? currentAction?.label ?? "Working"
         : formatCollapsedActionsSummary(summary),
       status,
-      actionKind: currentAction?.kind ?? null,
+      actionKind: status === "running"
+        ? currentAction?.kind ?? null
+        : resolveCollapsedActionsLeadingKind(summary),
       actionBaseTitle: currentChild?.actionBaseTitle ?? currentChild?.title ?? null,
       sourceToolCallId: currentChild?.sourceToolCallId ?? null,
       children,

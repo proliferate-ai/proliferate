@@ -8,6 +8,7 @@ import { Button } from "@proliferate/ui/primitives/Button";
 import { SubagentWakeBadge } from "./SubagentWakeBadge";
 import { UserMessage } from "./UserMessage";
 import {
+  TURN_ITEM_GAP_CLASS,
   TurnShell,
 } from "./TranscriptTurnChrome";
 import {
@@ -65,7 +66,7 @@ export function TranscriptPendingPromptRow({
     <TurnShell isFirst={rowIndex === 0}>
       {/* Keep in sync with TranscriptTurnRow's turn column gap so the
           pending-prompt → turn handoff does not shift content. */}
-      <div className="flex flex-col gap-3.5">
+      <div className={`flex flex-col ${TURN_ITEM_GAP_CLASS}`}>
         <PendingPromptBody
           activeSessionId={activeSessionId}
           prompt={prompt}

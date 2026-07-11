@@ -3,6 +3,7 @@ import { createTranscriptState, type ToolCallItem } from "@anyharness/sdk";
 import {
   classifyCollapsedAction,
   formatCollapsedActionsSummary,
+  resolveCollapsedActionsLeadingKind,
   resolveCurrentCollapsedAction,
   summarizeCollapsedActions,
 } from "./transcript-collapsed-actions";
@@ -222,8 +223,22 @@ describe("transcript actions", () => {
       actions: 0,
     });
     expect(formatCollapsedActionsSummary(summary)).toBe(
-      "Explored 2 files, 1 listing, 1 search, 1 fetch, ran 2 commands, edited 1 file",
+      "Edited a file, read files, ran commands",
     );
+    expect(resolveCollapsedActionsLeadingKind(summary)).toBe("edit");
+    expect(resolveCollapsedActionsLeadingKind({
+      ...summary,
+      edits: 0,
+    })).toBe("search");
+    expect(resolveCollapsedActionsLeadingKind({
+      reads: 1,
+      listings: 0,
+      searches: 0,
+      fetches: 0,
+      commands: 1,
+      edits: 0,
+      actions: 0,
+    })).toBe("read");
     expect(formatCollapsedActionsSummary({
       reads: 0,
       listings: 0,

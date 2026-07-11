@@ -24,6 +24,8 @@ export type PendingInteractionMarkerKind = "permission" | "question";
 
 const TURN_HORIZONTAL_PADDING = "px-0";
 const ASSISTANT_ACTION_SLOT_HEIGHT = "h-6";
+/** Exact Codex conversation-item rhythm shared by pending and materialized turns. */
+export const TURN_ITEM_GAP_CLASS = "gap-4";
 
 /**
  * Minimum height for a turn that has no assistant text yet. Once prose exists,
@@ -172,7 +174,7 @@ export function resolveTurnTrailingStatus(
         statusKey="transient"
         className={`gap-2 text-[length:var(--text-chat)] leading-[var(--text-chat--line-height)] text-muted-foreground ${ASSISTANT_ACTION_SLOT_HEIGHT}`}
       >
-        <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+        <Sparkles className="size-[1.143em] shrink-0 text-current" />
         <span className="min-w-0 truncate">{transientStatusText}</span>
       </TrailingStatusCrossfade>
     );

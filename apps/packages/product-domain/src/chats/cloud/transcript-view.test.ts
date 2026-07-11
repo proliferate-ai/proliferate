@@ -375,11 +375,37 @@ describe("buildCloudTranscriptView", () => {
     expect(historyRow?.children).toEqual([
       expect.objectContaining({
         kind: "tool_group",
-        title: "Explored 1 file",
+        title: "Read files",
       }),
     ]);
     expect(historyRow?.children?.[0]?.detail).toBeUndefined();
     expect(JSON.stringify(historyRow)).not.toContain("1 action");
+  });
+
+  it("keeps completed group copy and dominant icon kind aligned across surfaces", () => {
+    const events: CloudSessionEvent[] = [
+      eventEnvelope(1, "turn_started", turnStartedEnvelope(1)),
+      eventEnvelope(2, "item_completed", userEnvelope(2, "Check this.")),
+      eventEnvelope(3, "item_completed", readToolCompletedEnvelope(3, "read-1")),
+      eventEnvelope(4, "item_completed", commandToolCompletedEnvelope(4, "command-1")),
+      eventEnvelope(5, "item_completed", assistantEnvelope(5, "Done.")),
+      eventEnvelope(6, "turn_ended", turnEndedEnvelope(6)),
+    ];
+
+    const view = buildCloudTranscriptView({
+      sessionId: "session-1",
+      events,
+      fallbackItems: [],
+    });
+    const historyRow = view.rows.find((row) => row.kind === "work_history");
+
+    expect(historyRow?.children).toEqual([
+      expect.objectContaining({
+        kind: "tool_group",
+        title: "Read files, ran a command",
+        actionKind: "read",
+      }),
+    ]);
   });
 
   it("projects one animated current action with its semantic kind and ledger", () => {
@@ -965,6 +991,35 @@ function readToolCompletedEnvelope(seq: number, itemId: string): SessionEventEnv
         toolKind: "read",
         toolCallId: itemId,
         contentParts,
+      },
+    },
+  };
+}
+
+function commandToolCompletedEnvelope(seq: number, itemId: string): SessionEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq,
+    timestamp: `2026-05-22T00:00:0${seq}Z`,
+    turnId: "turn-1",
+    itemId,
+    event: {
+      type: "item_completed",
+      item: {
+        kind: "tool_invocation",
+        status: "completed",
+        sourceAgentKind: "claude",
+        title: "Terminal",
+        nativeToolName: "Bash",
+        toolKind: "execute",
+        toolCallId: itemId,
+        contentParts: [{
+          type: "tool_call",
+          nativeToolName: "Bash",
+          title: "Terminal",
+          toolCallId: itemId,
+          toolKind: "execute",
+        }],
       },
     },
   };
