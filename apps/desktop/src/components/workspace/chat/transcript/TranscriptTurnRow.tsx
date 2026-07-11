@@ -206,6 +206,8 @@ export function TranscriptTurnRow({
   ]);
 
   const stoppedNotice = row.isLastTurnRow ? resolveTurnStoppedNotice(turn) : null;
+  const hasCompletedHistoryDisclosure = row.isLastTurnRow
+    && renderPresentation.completedHistorySummary !== null;
 
   return (
     <TurnShell isFirst={rowIndex === 0}>
@@ -219,6 +221,8 @@ export function TranscriptTurnRow({
           presentation={renderPresentation}
           autoFollowCollapsedActionBlockId={liveExplorationBlock?.blockId ?? null}
           tailAssistantProseRootId={tailAssistantProseRootId}
+          completedHistoryLabel={stoppedNotice}
+          animateActivityEntry={isLatestTurnInProgress}
           showCompletedArtifactFallback={row.isLastTurnRow}
           workspaceId={selectedWorkspaceId}
           onOpenArtifact={onOpenArtifact}
@@ -255,7 +259,7 @@ export function TranscriptTurnRow({
         ) : trailingStatus ? (
           <div className={trailingStatusClassName}>{trailingStatus}</div>
         ) : null}
-        {stoppedNotice && (
+        {shouldRenderStandaloneStoppedNotice(stoppedNotice, hasCompletedHistoryDisclosure) && (
           <div className="flex flex-col items-start gap-2 text-chat text-foreground/60">
             <span>{stoppedNotice}</span>
             <div className="w-full border-t border-current/20" />
@@ -264,6 +268,13 @@ export function TranscriptTurnRow({
       </div>
     </TurnShell>
   );
+}
+
+export function shouldRenderStandaloneStoppedNotice(
+  stoppedNotice: string | null,
+  hasCompletedHistoryDisclosure: boolean,
+): boolean {
+  return stoppedNotice !== null && !hasCompletedHistoryDisclosure;
 }
 
 export function resolveTranscriptTurnDiffPanelKind({

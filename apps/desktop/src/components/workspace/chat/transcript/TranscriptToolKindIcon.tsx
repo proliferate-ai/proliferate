@@ -11,7 +11,7 @@ import { ProliferateIcon } from "@proliferate/ui/proliferate-icons";
 import type { ToolDisplayIconKey } from "@proliferate/product-domain/chats/tools/tool-call-display";
 
 export function ToolKindIcon({ iconKey }: { iconKey: ToolDisplayIconKey }) {
-  const className = "size-4 text-muted-foreground";
+  const className = "size-3.5 text-current";
 
   switch (iconKey) {
     case "terminal":

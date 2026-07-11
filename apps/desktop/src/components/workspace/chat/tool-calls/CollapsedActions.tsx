@@ -26,12 +26,15 @@ interface CollapsedActionsProps {
   itemIds: string[];
   transcript: TranscriptState;
   autoFollow?: boolean;
+  /** Keep the trailing exploration phase visually live between tool events. */
+  liveContinuation?: boolean;
 }
 
 export function CollapsedActions({
   itemIds,
   transcript,
   autoFollow = false,
+  liveContinuation = false,
 }: CollapsedActionsProps) {
   const hasActiveAction = itemIds.some((itemId) => {
     const item = transcript.itemsById[itemId];
@@ -43,9 +46,10 @@ export function CollapsedActions({
   const actionSummary = summarizeCollapsedActions(itemIds, transcript);
   const containsEdits = actionSummary.edits > 0;
   const shouldAutoFollow = autoFollow || hasActiveAction;
-  // Item status is authoritative. `autoFollow` is only a scrolling hint and
-  // must never revive a completed action as live work.
-  const isLiveAction = hasActiveAction;
+  // Active item status owns ordinary tools. The latest trailing exploration
+  // batch can additionally retain phase ownership between back-to-back
+  // search/read events; `autoFollow` remains scroll-only.
+  const isLiveAction = hasActiveAction || liveContinuation;
   const currentAction = isLiveAction
     ? resolveCurrentCollapsedAction(itemIds, transcript)
     : null;
@@ -68,11 +72,7 @@ export function CollapsedActions({
       >
         <span
           aria-hidden="true"
-          className={`flex size-4 shrink-0 items-center justify-center transition-colors [&_svg]:size-4 ${
-            expanded
-              ? "text-foreground"
-              : "text-muted-foreground group-hover/collapsed-actions:text-foreground group-focus-visible/collapsed-actions:text-foreground"
-          }`}
+          className="flex size-3.5 shrink-0 items-center justify-center text-current [&_svg]:size-3.5 [&_svg]:text-current"
         >
           {summaryIcon}
         </span>
@@ -88,9 +88,9 @@ export function CollapsedActions({
         </span>
         <ChevronRight
           aria-hidden="true"
-          className={`size-3.5 shrink-0 text-muted-foreground transition-[transform,opacity] ${
-            expanded ? "rotate-90 opacity-100" : isLiveAction
-              ? "opacity-100"
+          className={`size-3 shrink-0 text-current transition-[transform,opacity] ${
+            expanded
+              ? "rotate-90 opacity-100"
               : "opacity-0 group-hover/collapsed-actions:opacity-100 group-focus-visible/collapsed-actions:opacity-100"
           }`}
         />

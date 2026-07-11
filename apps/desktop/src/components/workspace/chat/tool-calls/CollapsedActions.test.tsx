@@ -81,6 +81,14 @@ describe("CollapsedActions", () => {
     const activeLabelClasses = activeLabel?.className.split(/\s+/) ?? [];
     expect(activeLabelClasses).toContain("block");
     expect(activeLabelClasses).toContain("leading-[inherit]");
+    const iconShell = activeButton.querySelector("span[aria-hidden='true']");
+    const activeSvgs = activeButton.querySelectorAll("svg");
+    const disclosureChevron = activeSvgs[activeSvgs.length - 1];
+    expect(iconShell?.className).toContain("size-3.5");
+    expect(iconShell?.className).toContain("[&_svg]:text-current");
+    expect(disclosureChevron?.getAttribute("class")).toContain("size-3");
+    expect(disclosureChevron?.getAttribute("class")).toContain("opacity-0");
+    expect(disclosureChevron?.getAttribute("class")).toContain("group-hover/collapsed-actions:opacity-100");
 
     cleanup();
 
@@ -139,6 +147,73 @@ describe("CollapsedActions", () => {
     const completedButton = screen.getByRole("button", { name: /Edited 1 file/i });
     expect(completedButton.getAttribute("data-active")).toBeNull();
     expect(completedButton.innerHTML).not.toContain("thinking-text");
+  });
+
+  it("keeps a completed trailing exploration phase live until another block takes over", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      search: toolItem("search", "turn-1", 1, "search", "completed"),
+    };
+
+    render(
+      <CollapsedActions
+        itemIds={["search"]}
+        transcript={transcript}
+        liveContinuation
+      />,
+    );
+
+    const liveButton = screen.getByRole("button", { name: /Searching files/i });
+    expect(liveButton.getAttribute("data-active")).toBe("true");
+    expect(liveButton.querySelector("[data-thinking-text]")).not.toBeNull();
+  });
+
+  it("preserves the same thinking node across a completed-search gap and appended search", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      "search-1": toolItem("search-1", "turn-1", 1, "search", "in_progress"),
+    };
+
+    const { rerender } = render(
+      <CollapsedActions
+        itemIds={["search-1"]}
+        transcript={transcript}
+        liveContinuation
+      />,
+    );
+    const originalThinkingNode = document.querySelector("[data-thinking-text]");
+
+    transcript.itemsById["search-1"] = toolItem(
+      "search-1",
+      "turn-1",
+      1,
+      "search",
+      "completed",
+    );
+    rerender(
+      <CollapsedActions
+        itemIds={["search-1"]}
+        transcript={transcript}
+        liveContinuation
+      />,
+    );
+    expect(document.querySelector("[data-thinking-text]")).toBe(originalThinkingNode);
+
+    transcript.itemsById["search-2"] = toolItem(
+      "search-2",
+      "turn-1",
+      2,
+      "search",
+      "in_progress",
+    );
+    rerender(
+      <CollapsedActions
+        itemIds={["search-1", "search-2"]}
+        transcript={transcript}
+        liveContinuation
+      />,
+    );
+    expect(document.querySelector("[data-thinking-text]")).toBe(originalThinkingNode);
   });
 
   it("animates live command counts with the thinking text treatment", () => {

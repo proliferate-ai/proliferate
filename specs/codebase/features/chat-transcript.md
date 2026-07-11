@@ -185,13 +185,26 @@ Completed tool/reasoning history uses one left-aligned disclosure labelled
 single full-width `border-border` hairline separates the work block from the
 final answer. Do not render centered labels with rules on both sides, a
 separate `Final message` separator, or hairlines between assistant prose
-items.
+items. If the user stopped the turn, the same disclosure is labelled
+`You stopped after {duration}` instead; do not add a duplicate stopped footer
+beneath it. A stopped turn with no completed-history disclosure may use the
+standalone notice as a fallback.
 
 While work is live, the collapsed activity header represents exactly one
 current action and its matching icon (`Reading file.ts`, `Running command`,
 `Searching files`, and so on). It must never turn completed ledger history into
 a cumulative live status such as `Running 4 commands`; prior work stays
-available only inside the disclosure.
+available only inside the disclosure. A trailing exploration batch retains
+that one live header between adjacent completed search/read events while the
+turn remains in progress. Prose, a different trailing block, or turn completion
+ends the phase immediately; a generic tail status must not flash between those
+events.
+
+New activity blocks may use one compositor-only opacity/short horizontal
+entrance. The motion is claimed once by stable item identity in the latest
+in-progress turn. Hydrated history, completed-history expansion,
+virtualization remounts, and session revisits must render statically, and
+reduced-motion preferences disable the entrance.
 
 ### Stick-to-bottom engine
 

@@ -34,7 +34,7 @@ describe("transcript rendering helpers", () => {
     )).toBeNull();
   });
 
-  it("does not keep a completed trailing exploration group live", () => {
+  it("keeps a completed trailing exploration group live between tool events", () => {
     const transcript = createTranscriptState("session-1");
     transcript.itemsById = {
       read: toolItem("read", "turn-1", 1, "file_read", "completed"),
@@ -46,7 +46,11 @@ describe("transcript rendering helpers", () => {
       presentation.displayBlocks,
       transcript,
       true,
-    )).toBeNull();
+    )).toEqual({
+      kind: "collapsed_actions",
+      blockId: "read-read",
+      itemIds: ["read"],
+    });
   });
 
   it("keeps an active trailing exploration group live", () => {
@@ -74,6 +78,22 @@ describe("transcript rendering helpers", () => {
       read: toolItem("read", "turn-1", 1, "file_read", "failed"),
     };
     const turn = turnRecord(["read"]);
+    const presentation = buildTurnPresentation(turn, transcript);
+
+    expect(findTrailingLiveExplorationBlock(
+      presentation.displayBlocks,
+      transcript,
+      true,
+    )).toBeNull();
+  });
+
+  it("does not keep a mixed group live when its trailing action is not exploration", () => {
+    const transcript = createTranscriptState("session-1");
+    transcript.itemsById = {
+      read: toolItem("read", "turn-1", 1, "file_read", "completed"),
+      command: terminalItem("command", "turn-1", 2, "cargo test", "completed"),
+    };
+    const turn = turnRecord(["read", "command"]);
     const presentation = buildTurnPresentation(turn, transcript);
 
     expect(findTrailingLiveExplorationBlock(

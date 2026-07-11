@@ -70,8 +70,6 @@ export function ToolActionRow({
             label={label}
             hint={hint}
             duration={duration}
-            expandable
-            expanded={expanded}
           />
         </div>
       ) : (
@@ -85,8 +83,6 @@ export function ToolActionRow({
             label={label}
             hint={hint}
             duration={duration}
-            expandable={false}
-            expanded={false}
           />
         </div>
       )}
@@ -104,22 +100,16 @@ function ToolActionRowContent({
   label,
   hint,
   duration,
-  expandable,
-  expanded,
 }: {
   icon?: ReactNode;
   label: ReactNode;
   hint?: ReactNode;
   duration?: string;
-  expandable: boolean;
-  expanded: boolean;
 }) {
   return (
     <>
       <ToolActionLeadingAffordance
         icon={icon}
-        expandable={expandable}
-        expanded={expanded}
       />
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <div className="min-w-0 shrink-0 text-inherit">{label}</div>
@@ -137,23 +127,13 @@ function ToolActionRowContent({
 
 export function ToolActionLeadingAffordance({
   icon,
-  expandable,
-  expanded,
 }: {
   icon?: ReactNode;
-  expandable: boolean;
-  expanded: boolean;
 }) {
   return (
-    <span className="relative flex size-4 shrink-0 items-center justify-center">
+    <span className="relative flex size-3.5 shrink-0 items-center justify-center text-current">
       <span
-        className={`absolute inset-0 flex items-center justify-center text-xs leading-none transition-colors [&_svg]:size-4 ${
-          expanded
-            ? "[&_svg]:text-foreground/75"
-            : expandable
-              ? "[&_svg]:text-muted-foreground group-hover/tool-action-row:[&_svg]:text-foreground group-focus-visible/tool-action-row:[&_svg]:text-foreground"
-              : "[&_svg]:text-muted-foreground"
-        }`}
+        className="absolute inset-0 flex items-center justify-center text-xs leading-none text-current [&_svg]:size-3.5 [&_svg]:text-current"
       >
         {icon}
       </span>

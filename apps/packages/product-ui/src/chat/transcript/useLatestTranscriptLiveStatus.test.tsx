@@ -94,7 +94,7 @@ describe("useLatestTranscriptLiveStatus — single-shimmer rule", () => {
     expect(renderTurnTrailingStatus).not.toHaveBeenCalled();
   });
 
-  it("falls back to the turn-tail status after an exploration group completes", () => {
+  it("keeps the exploration group live between completed tool events", () => {
     vi.useFakeTimers();
     const { transcript, turn } = transcriptWithReadActions(false);
     const virtualRows = buildTranscriptVirtualRows({
@@ -116,12 +116,13 @@ describe("useLatestTranscriptLiveStatus — single-shimmer rule", () => {
       renderTurnTrailingStatus,
     }));
 
-    expect(result.current.latestLiveExplorationBlock).toBeNull();
-    act(() => vi.advanceTimersByTime(150));
-    expect(result.current.latestLiveStatus).toBe("TAIL");
+    expect(result.current.latestLiveExplorationBlock).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(result.current.latestLiveStatus).toBeNull();
+    expect(renderTurnTrailingStatus).not.toHaveBeenCalled();
   });
 
-  it("hands the shimmer to active exploration and restores the tail only after the quiet grace", () => {
+  it("keeps one exploration shimmer across active-to-completed item gaps", () => {
     vi.useFakeTimers();
     let state = transcriptWithReadActions(false);
     const renderTurnTrailingStatus = vi.fn(() => "TAIL");
@@ -142,8 +143,8 @@ describe("useLatestTranscriptLiveStatus — single-shimmer rule", () => {
       renderTurnTrailingStatus,
     }));
 
-    act(() => vi.advanceTimersByTime(150));
-    expect(result.current.latestLiveStatus).toBe("TAIL");
+    expect(result.current.latestLiveExplorationBlock).not.toBeNull();
+    expect(result.current.latestLiveStatus).toBeNull();
 
     state = transcriptWithReadActions(true);
     rerender();
@@ -152,17 +153,79 @@ describe("useLatestTranscriptLiveStatus — single-shimmer rule", () => {
 
     state = transcriptWithReadActions(false);
     rerender();
-    expect(result.current.latestLiveExplorationBlock).toBeNull();
+    expect(result.current.latestLiveExplorationBlock).not.toBeNull();
     expect(result.current.latestLiveStatus).toBeNull();
 
-    act(() => vi.advanceTimersByTime(499));
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(result.current.latestLiveExplorationBlock).not.toBeNull();
     expect(result.current.latestLiveStatus).toBeNull();
-    act(() => vi.advanceTimersByTime(1));
-    expect(result.current.latestLiveStatus).toBe("TAIL");
+
+    const completedTurn = {
+      ...state.turn,
+      completedAt: "2026-04-13T12:00:03.000Z",
+    };
+    state = {
+      turn: completedTurn,
+      transcript: {
+        ...state.transcript,
+        turnsById: { [completedTurn.turnId]: completedTurn },
+      },
+    };
+    rerender();
+    expect(result.current.latestLiveExplorationBlock).toBeNull();
+    expect(result.current.latestLiveStatus).toBeNull();
+  });
+
+  it("ends completed exploration ownership when the session is idle", () => {
+    const { transcript, turn } = transcriptWithReadActions(false);
+    const renderTurnTrailingStatus = vi.fn(() => "TAIL");
+
+    const { result } = renderHook(() => useLatestTranscriptLiveStatus({
+      latestTurnId: turn.turnId,
+      latestTurn: turn,
+      transcript,
+      virtualRows: buildTranscriptVirtualRows({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: turn.turnId,
+        latestTurnHasAssistantRenderableContent: false,
+      }),
+      outboxStartedAtByPromptId: new Map(),
+      sessionViewState: "idle",
+      renderTurnTrailingStatus,
+    }));
+
+    expect(result.current.latestLiveExplorationBlock).toBeNull();
+    expect(result.current.latestLiveStatus).toBeNull();
   });
 });
 
 describe("useLatestTranscriptLiveStatus — needs-input marker", () => {
+  it("hands a completed exploration row to the blocking marker", () => {
+    const { transcript, turn } = transcriptWithReadActions(false);
+    const renderTurnTrailingStatus = vi.fn(() => "MARKER");
+
+    const { result } = renderHook(() => useLatestTranscriptLiveStatus({
+      latestTurnId: turn.turnId,
+      latestTurn: turn,
+      transcript,
+      virtualRows: buildTranscriptVirtualRows({
+        activeSessionId: "session-1",
+        transcript,
+        visibleOptimisticPrompt: null,
+        latestTurnId: turn.turnId,
+        latestTurnHasAssistantRenderableContent: false,
+      }),
+      outboxStartedAtByPromptId: new Map(),
+      sessionViewState: "needs_input",
+      renderTurnTrailingStatus,
+    }));
+
+    expect(result.current.latestLiveExplorationBlock).toBeNull();
+    expect(result.current.latestLiveStatus).toBe("MARKER");
+  });
+
   it("renders the trailing status immediately while a pending interaction blocks the turn", () => {
     // A pending permission leaves its tool call non-completed, so the turn
     // still counts as having active tool work — the marker must render anyway.

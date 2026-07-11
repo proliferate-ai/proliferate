@@ -32,6 +32,8 @@ export function TurnItemSequence({
   presentation,
   autoFollowCollapsedActionBlockId,
   tailAssistantProseRootId,
+  completedHistoryLabel,
+  animateActivityEntry,
   showCompletedArtifactFallback,
   workspaceId,
   onOpenArtifact,
@@ -43,6 +45,8 @@ export function TurnItemSequence({
   presentation: TurnPresentation;
   autoFollowCollapsedActionBlockId?: string | null;
   tailAssistantProseRootId: string | null;
+  completedHistoryLabel?: string | null;
+  animateActivityEntry: boolean;
   showCompletedArtifactFallback: boolean;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
@@ -73,7 +77,7 @@ export function TurnItemSequence({
           return (
             <ToolCallSummary
               key={`${turn.turnId}-completed-history`}
-              label={formatWorkedForDuration(turn.startedAt, turn.completedAt) ?? "Worked"}
+              label={resolveCompletedHistoryDisclosureLabel(turn, completedHistoryLabel)}
               summary={formatCollapsedSummary(presentation.completedHistorySummary)}
               showWorkDivider={tailAssistantProseRootId !== null}
               renderChildren={() => (
@@ -88,11 +92,13 @@ export function TurnItemSequence({
                         block={historyBlock}
                         transcript={transcript}
                         autoFollowCollapsedActionBlockId={null}
+                        animateActivityEntry={false}
                         renderItem={(itemId) => (
                           <FragmentWithArtifacts
                             itemId={itemId}
                             transcript={transcript}
                             childrenByParentId={presentation.childrenByParentId}
+                            animateActivityEntry={false}
                             artifactToolCalls={null}
                             workspaceId={workspaceId}
                             onOpenArtifact={onOpenArtifact}
@@ -113,11 +119,13 @@ export function TurnItemSequence({
             block={block}
             transcript={transcript}
             autoFollowCollapsedActionBlockId={autoFollowCollapsedActionBlockId}
+            animateActivityEntry={animateActivityEntry}
             renderItem={(itemId) => (
               <FragmentWithArtifacts
                 itemId={itemId}
                 transcript={transcript}
                 childrenByParentId={presentation.childrenByParentId}
+                animateActivityEntry={animateActivityEntry}
                 artifactToolCalls={
                   itemId === tailAssistantProseRootId ? completedArtifactToolCalls : null
                 }
@@ -146,10 +154,20 @@ export function TurnItemSequence({
   );
 }
 
+export function resolveCompletedHistoryDisclosureLabel(
+  turn: Pick<TurnRecord, "startedAt" | "completedAt">,
+  override: string | null | undefined,
+): string {
+  return override
+    ?? formatWorkedForDuration(turn.startedAt, turn.completedAt)
+    ?? "Worked";
+}
+
 function FragmentWithArtifacts({
   itemId,
   transcript,
   childrenByParentId,
+  animateActivityEntry,
   artifactToolCalls,
   workspaceId,
   onOpenArtifact,
@@ -158,6 +176,7 @@ function FragmentWithArtifacts({
   itemId: string;
   transcript: TranscriptState;
   childrenByParentId: Map<string, string[]>;
+  animateActivityEntry: boolean;
   artifactToolCalls: ToolCallItem[] | null;
   workspaceId: string | null;
   onOpenArtifact: (workspaceId: string, artifactId: string) => void;
@@ -169,6 +188,7 @@ function FragmentWithArtifacts({
         itemId={itemId}
         transcript={transcript}
         childrenByParentId={childrenByParentId}
+        animateActivityEntry={animateActivityEntry}
         workspaceId={workspaceId}
         onOpenArtifact={onOpenArtifact}
         onHandOffPlanToNewSession={onHandOffPlanToNewSession}

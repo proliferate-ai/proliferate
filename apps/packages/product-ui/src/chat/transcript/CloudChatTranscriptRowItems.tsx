@@ -92,7 +92,7 @@ export function CloudChatToolRow({ row }: { row: CloudChatTranscriptRowView }) {
   return (
     <article className="flex justify-start">
       <CloudTranscriptActionRow
-        icon={<Icon className="size-4" />}
+        icon={<Icon className="size-3.5 text-current" />}
         label={isActionActivelyRunning(row)
           ? (
             <ThinkingText
@@ -138,7 +138,7 @@ export function CloudChatToolGroupRow({
   return (
     <article className="flex justify-start py-0.5">
       <CloudTranscriptActionRow
-        icon={<Icon className="size-4" />}
+        icon={<Icon className="size-3.5 text-current" />}
         label={isActionActivelyRunning(row)
           ? <ThinkingText text={label} className="block max-w-full truncate font-normal" />
           : label}

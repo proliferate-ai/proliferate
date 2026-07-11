@@ -42,6 +42,7 @@ export function ActionDisclosureRow({
       variant="ghost"
       size="sm"
       data-chat-transcript-ignore
+      aria-expanded={expanded}
       className={`group/action-row h-auto max-w-full justify-start gap-1 rounded-none bg-transparent p-0 text-left ${CHAT_BUTTON_TEXT_CLASS} font-normal hover:bg-transparent focus-visible:ring-0 ${
         failed ? "text-destructive/80 hover:text-destructive" : "text-muted-foreground hover:text-foreground"
       }`}
@@ -49,13 +50,7 @@ export function ActionDisclosureRow({
     >
       <span
         aria-hidden="true"
-        className={`flex size-4 shrink-0 items-center justify-center transition-colors [&_svg]:size-4 ${
-          expanded
-            ? "text-foreground/70"
-            : failed
-              ? "text-destructive/70"
-            : "text-muted-foreground group-hover/action-row:text-foreground group-focus-visible/action-row:text-foreground"
-        }`}
+        className="flex size-3.5 shrink-0 items-center justify-center text-current [&_svg]:size-3.5 [&_svg]:text-current"
       >
         {icon}
       </span>

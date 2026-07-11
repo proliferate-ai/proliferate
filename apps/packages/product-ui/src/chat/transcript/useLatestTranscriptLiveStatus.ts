@@ -62,14 +62,14 @@ export function useLatestTranscriptLiveStatus({
     [latestTurnId, virtualRows],
   );
   const latestLiveExplorationBlock = useMemo(
-    () => latestTurnPresentation
+    () => latestTurnPresentation && sessionViewState === "working"
       ? findTrailingLiveExplorationBlock(
           latestTurnPresentation.displayBlocks,
           transcript,
           latestTurnInProgress,
         )
       : null,
-    [latestTurnInProgress, latestTurnPresentation, transcript],
+    [latestTurnInProgress, latestTurnPresentation, sessionViewState, transcript],
   );
   const latestLiveWorkBlock = useMemo(
     () => latestTurnPresentation

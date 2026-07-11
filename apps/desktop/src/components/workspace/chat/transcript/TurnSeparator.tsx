@@ -23,13 +23,17 @@ export function TurnSeparator({
         size="sm"
         data-chat-transcript-ignore
         onClick={onClick}
-        className="h-auto max-w-full justify-start gap-1 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-0 text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="group/turn-separator h-auto max-w-full justify-start gap-1 whitespace-normal rounded-md border border-transparent bg-transparent px-0 py-0 text-chat leading-[var(--text-chat--line-height)] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-expanded={expanded}
       >
         <span className="min-w-0 truncate">{label}</span>
         <ChevronRight
           aria-hidden="true"
-          className={`size-3.5 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+          className={`size-3 shrink-0 text-current transition-[transform,opacity] ${
+            expanded
+              ? "rotate-90 opacity-100"
+              : "opacity-0 group-hover/turn-separator:opacity-100 group-focus-visible/turn-separator:opacity-100"
+          }`}
         />
       </Button>
     );
