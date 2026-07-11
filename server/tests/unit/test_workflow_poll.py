@@ -428,7 +428,7 @@ async def test_start_run_failure_records_error_and_advances_cursor(test_engine) 
     with (
         patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=page)),
         patch.object(
-            poller_module.service,
+            poller_module.compiler,
             "start_run",
             new=AsyncMock(
                 side_effect=CloudApiError("target_workspace_not_ready", "nope", status_code=409)
@@ -559,7 +559,7 @@ async def test_run_poll_pass_polls_due_triggers(test_engine) -> None:  # type: i
 
 
 async def _service_create(db, user, wf_id, body):  # type: ignore[no-untyped-def]
-    from proliferate.server.cloud.workflows.service import create_trigger
+    from proliferate.server.cloud.workflows.triggers import create_trigger
 
     return await create_trigger(db, user, wf_id, body)
 
@@ -603,7 +603,7 @@ async def test_poll_trigger_rejects_local_target(test_engine) -> None:  # type: 
 
 def test_poll_config_rejects_bad_interval() -> None:
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import _validate_poll_config
+    from proliferate.server.cloud.workflows.triggers import _validate_poll_config
 
     with pytest.raises(CloudApiError) as exc:
         _validate_poll_config(
@@ -617,7 +617,7 @@ def test_poll_config_rejects_bad_interval() -> None:
 
 def test_poll_config_rejects_non_http_url() -> None:
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import _validate_poll_config
+    from proliferate.server.cloud.workflows.triggers import _validate_poll_config
 
     with pytest.raises(CloudApiError) as exc:
         _validate_poll_config(
@@ -716,7 +716,7 @@ def test_poll_config_encrypts_auth_value() -> None:
     """The header VALUE is encrypted at write and round-trips; the plaintext is
     never present in the ciphertext."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import _validate_poll_config
+    from proliferate.server.cloud.workflows.triggers import _validate_poll_config
     from proliferate.utils.crypto import decrypt_text
 
     config = _validate_poll_config(
@@ -769,7 +769,7 @@ def test_poll_config_rejects_fragment_url() -> None:
     """Finding 1: a poll url carrying a fragment is rejected at save so the stored
     feed URL is always wire-faithful."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import _validate_poll_config
+    from proliferate.server.cloud.workflows.triggers import _validate_poll_config
 
     with pytest.raises(CloudApiError) as exc:
         _validate_poll_config(
@@ -785,7 +785,7 @@ def test_poll_config_rejects_fragment_url() -> None:
 def test_poll_config_rejects_userinfo_url() -> None:
     """Finding 1: a poll url embedding credentials (user:pass@host) is rejected."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import _validate_poll_config
+    from proliferate.server.cloud.workflows.triggers import _validate_poll_config
 
     with pytest.raises(CloudApiError) as exc:
         _validate_poll_config(
@@ -1051,7 +1051,7 @@ async def test_inspect_poll_endpoint_derives_inputs(test_engine) -> None:  # typ
     """Flow 1 (workflow-from-poll): the service probes /init and returns the sample
     + a derived inputs skeleton; the probe hits ``<endpoint>/init``, not the feed."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+    from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
 
     good_page = _page([_item("seed_1", title="hello", count=3, done=True)])
     fetch_mock = AsyncMock(return_value=good_page)
@@ -1070,7 +1070,7 @@ async def test_inspect_poll_endpoint_derives_inputs(test_engine) -> None:  # typ
 async def test_inspect_poll_endpoint_bad_init_hard_errors() -> None:  # type: ignore[no-untyped-def]
     """Flow 1: a bad /init response is a hard, structured ``poll_probe_failed``."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+    from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
 
     with (
         patch.object(
@@ -1092,7 +1092,7 @@ async def test_inspect_poll_endpoint_no_items_derives_nothing() -> None:  # type
     """An /init that serves no sample derives nothing (author declares inputs by
     hand); not an error."""
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+    from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
 
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=_page([]))):
         result = await inspect_poll_endpoint(
@@ -1112,7 +1112,7 @@ async def test_update_reprobes_when_inputs_change(test_engine) -> None:  # type:
     trigger update with NO poll block still re-probes /init once the derived item
     schema drifts from the stored one (a new workflow version changed the inputs)."""
     from proliferate.server.cloud.workflows.models import WorkflowTriggerUpdateRequest
-    from proliferate.server.cloud.workflows.service import update_trigger
+    from proliferate.server.cloud.workflows.triggers import update_trigger
 
     factory = _factory(test_engine)
     async with factory() as db:
@@ -1169,7 +1169,7 @@ async def test_update_skips_reprobe_when_inputs_unchanged(test_engine) -> None: 
     """A no-poll-block update that does not change the inputs does NOT re-probe the
     endpoint (bounded — /init is a setup/re-validation-only call)."""
     from proliferate.server.cloud.workflows.models import WorkflowTriggerUpdateRequest
-    from proliferate.server.cloud.workflows.service import update_trigger
+    from proliferate.server.cloud.workflows.triggers import update_trigger
 
     factory = _factory(test_engine)
     async with factory() as db:
@@ -1287,7 +1287,7 @@ async def test_disable_poll_trigger_skips_reprobe_when_endpoint_down(test_engine
     down and the inputs have drifted (which would otherwise force a reprobe). A
     disabled trigger never polls, so its endpoint shape is irrelevant while off."""
     from proliferate.server.cloud.workflows.models import WorkflowTriggerUpdateRequest
-    from proliferate.server.cloud.workflows.service import update_trigger
+    from proliferate.server.cloud.workflows.triggers import update_trigger
 
     factory = _factory(test_engine)
     async with factory() as db:
@@ -1357,13 +1357,13 @@ async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-
     """Finding 4: the stateless probe refuses a URL whose host is a private,
     metadata, or CGNAT address — a structured error, and ZERO outbound (the guard
     raises before fetch_poll_page is ever called)."""
-    from proliferate.server.cloud.workflows import service as service_module
+    from proliferate.server.cloud.workflows import triggers as triggers_module
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+    from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
 
     # The guard is bypassed under settings.debug (local/self-host dev); flip it off
     # so the guard is active for this test.
-    monkeypatch.setattr(service_module.settings, "debug", False)
+    monkeypatch.setattr(triggers_module.settings, "debug", False)
 
     # A sentinel that FAILS the test if any outbound request is attempted.
     sentinel = AsyncMock(side_effect=AssertionError("no outbound request may be issued"))
@@ -1382,11 +1382,11 @@ async def test_inspect_poll_endpoint_blocks_private_address(  # type: ignore[no-
 async def test_inspect_poll_endpoint_guard_bypassed_in_debug(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """Under settings.debug (local/self-host dev), a localhost feed is NOT blocked —
     the guard is skipped so dev feeds keep working."""
-    from proliferate.server.cloud.workflows import service as service_module
+    from proliferate.server.cloud.workflows import triggers as triggers_module
     from proliferate.server.cloud.workflows.models import TriggerPollRequest
-    from proliferate.server.cloud.workflows.service import inspect_poll_endpoint
+    from proliferate.server.cloud.workflows.triggers import inspect_poll_endpoint
 
-    monkeypatch.setattr(service_module.settings, "debug", True)
+    monkeypatch.setattr(triggers_module.settings, "debug", True)
     good_page = _page([_item("seed_1", title="hi")])
     with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(return_value=good_page)):
         result = await inspect_poll_endpoint(

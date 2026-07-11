@@ -48,7 +48,7 @@ from proliferate.db.store.cloud_workflow_triggers import DuePollTrigger
 from proliferate.integrations.sentry import capture_server_sentry_exception
 from proliferate.middleware.request_context import with_correlation_context
 from proliferate.server.cloud.errors import CloudApiError
-from proliferate.server.cloud.workflows import service
+from proliferate.server.cloud.workflows import compiler, triggers
 from proliferate.server.cloud.workflows.domain.poll_contract import PollPage, validate_item_data
 from proliferate.utils.crypto import decrypt_text
 
@@ -187,7 +187,7 @@ async def _poll_one_trigger(
             return 0  # taken by another beat, disabled, or no longer due
 
         # Bind tenant fields for the rest of this trigger's unit of work (observability
-        # spec §8) so this beat's logs, and every log start_run/service emits below,
+        # spec §8) so this beat's logs, and every log start_run/compiler emits below,
         # carry org/user instead of running anonymously.
         with with_correlation_context(
             organization_id=trigger.workflow_organization_id,
@@ -214,7 +214,7 @@ async def _poll_one_trigger(
                 # a private/metadata address is the same SSRF as the setup probe.
                 # Bypassed under settings.debug (local/self-host dev). A block here is
                 # recorded like any poll error — cursor kept, trigger stays enabled.
-                service.guard_poll_endpoint(trigger.poll_url)
+                triggers.guard_poll_endpoint(trigger.poll_url)
                 page = await fetch_poll_page(
                     url=trigger.poll_url,
                     auth_header=auth_header,
@@ -274,7 +274,7 @@ async def _poll_one_trigger(
                 # continues; the seen-set row keeps the item from being retried.
                 try:
                     async with db.begin_nested():
-                        run = await service.start_run(
+                        run = await compiler.start_run(
                             db,
                             actor,
                             trigger.workflow_id,

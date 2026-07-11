@@ -169,7 +169,7 @@ async def test_schedule_trigger_fire_binds_org_and_user_context(test_engine) -> 
         await db.commit()
 
     captured: dict[str, str] = {}
-    real_start_run = scheduler_module.service.start_run
+    real_start_run = scheduler_module.compiler.start_run
 
     async def _spy_start_run(*args, **kwargs):  # type: ignore[no-untyped-def]
         # Snapshot the correlation context exactly as it is inside the unit of
@@ -178,7 +178,7 @@ async def test_schedule_trigger_fire_binds_org_and_user_context(test_engine) -> 
         captured.update(get_correlation_context())
         return await real_start_run(*args, **kwargs)
 
-    with patch.object(scheduler_module.service, "start_run", new=_spy_start_run):
+    with patch.object(scheduler_module.compiler, "start_run", new=_spy_start_run):
         created = await _fire_one_trigger(factory, trigger_id=trigger_id, now=utcnow())
 
     assert created == 1

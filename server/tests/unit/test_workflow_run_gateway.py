@@ -48,8 +48,9 @@ from proliferate.server.cloud.integration_gateway import dependencies as gateway
 from proliferate.server.cloud.integration_gateway import service as gateway_service
 from proliferate.server.cloud.integration_gateway.domain import scope
 from proliferate.server.cloud.integrations.seeds import sync_seed_definitions
-from proliferate.server.cloud.workflows import delivery, service
+from proliferate.server.cloud.workflows import compiler, delivery
 from proliferate.server.cloud.workflows.domain.definition import parse_definition
+from proliferate.server.cloud.workflows.worker.service import report_run_status
 from proliferate.utils.crypto import encrypt_json
 from proliferate.utils.time import utcnow
 
@@ -149,7 +150,7 @@ async def _store_workflow(db: AsyncSession, owner: User, definition: dict, *, na
 async def test_mint_for_every_run_empty_integrations_empty_scope(db_session: AsyncSession) -> None:
     user = await _make_user(db_session)
     wf = await _store_workflow(db_session, user, _definition(), name="no-integrations")
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
     )
     gateway = run.resolved_plan_json["gateway"]
@@ -180,7 +181,7 @@ async def test_mint_resolves_declared_scope(db_session: AsyncSession) -> None:
     wf = await _store_workflow(
         db_session, user, _definition(integrations=["context7"]), name="scoped"
     )
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
     )
     # The plan's gateway carries the flat namespace list (E3).
@@ -267,7 +268,7 @@ async def test_mint_stamps_narrowed_scope_per_slot(db_session: AsyncSession) -> 
         ],
     }
     wf = await _store_workflow(db_session, user, definition, name="narrowed")
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
     )
     token = (
@@ -289,7 +290,7 @@ async def test_l22_fail_fast_provider_without_ready_account(db_session: AsyncSes
         db_session, user, _definition(integrations=["context7"]), name="fail-fast"
     )
     with pytest.raises(CloudApiError) as excinfo:
-        await service.start_run(
+        await compiler.start_run(
             db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
         )
     assert excinfo.value.code == "workflow_function_provider_not_ready"
@@ -534,12 +535,12 @@ async def test_terminal_report_expires_token(db_session: AsyncSession) -> None:
 
     user = await _make_user(db_session)
     wf = await _store_workflow(db_session, user, _definition(), name="term-report")
-    run = await service.start_run(
+    run = await compiler.start_run(
         db_session, user, wf.id, inputs={}, target_mode=WORKFLOW_TARGET_MODE_LOCAL
     )
     assert await _active_token_status(db_session, run.id) == _ACTIVE
     # pending_delivery -> cancelled is a legal terminal transition.
-    await service.report_run_status(db_session, user, run.id, RunStatusRequest(status="cancelled"))
+    await report_run_status(db_session, user, run.id, RunStatusRequest(status="cancelled"))
     assert await _active_token_status(db_session, run.id) == _EXPIRED
 
 
