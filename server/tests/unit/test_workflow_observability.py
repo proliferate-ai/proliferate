@@ -29,8 +29,8 @@ from proliferate.db.models.cloud.workflows import Workflow, WorkflowTrigger, Wor
 from proliferate.middleware.request_context import get_correlation_context
 from proliferate.server.cloud.workflows import poller as poller_module
 from proliferate.server.cloud.workflows import scheduler as scheduler_module
+from proliferate.server.cloud.workflows.worker import schedules as schedules_module
 from proliferate.server.cloud.workflows.poller import _poll_one_trigger, run_workflow_poller_tick
-from proliferate.server.cloud.workflows.scheduler import _fire_one_trigger
 from proliferate.server.cloud.workflows.domain.poll_contract import PollPage
 from proliferate.server.automations.domain.schedule import latest_due_occurrence
 from proliferate.utils.time import utcnow
@@ -169,7 +169,7 @@ async def test_schedule_trigger_fire_binds_org_and_user_context(test_engine) -> 
         await db.commit()
 
     captured: dict[str, str] = {}
-    real_start_run = scheduler_module.compiler.start_run
+    real_start_run = schedules_module.compiler.start_run
 
     async def _spy_start_run(*args, **kwargs):  # type: ignore[no-untyped-def]
         # Snapshot the correlation context exactly as it is inside the unit of
@@ -178,13 +178,16 @@ async def test_schedule_trigger_fire_binds_org_and_user_context(test_engine) -> 
         captured.update(get_correlation_context())
         return await real_start_run(*args, **kwargs)
 
-    with patch.object(scheduler_module.compiler, "start_run", new=_spy_start_run):
-        created = await _fire_one_trigger(factory, trigger_id=trigger_id, now=utcnow())
+    with patch.object(schedules_module.compiler, "start_run", new=_spy_start_run):
+        async with factory() as db, db.begin():
+            created = await schedules_module.fire_one_trigger(
+                db, trigger_id=trigger_id, now=utcnow()
+            )
 
     assert created == 1
     assert captured["organization_id"] == str(org.id)
     assert captured["user_id"] == str(user.id)
-    assert captured["worker_id"] == "workflow_scheduler"
+    assert captured["worker_id"] == "workflow_schedules"
     # Context must not leak past the unit of work.
     assert get_correlation_context().get("organization_id") is None
 
@@ -205,7 +208,10 @@ async def test_poll_trigger_poll_binds_org_and_user_context(test_engine) -> None
         captured.update(get_correlation_context())
         return page
 
-    with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=_fake_fetch)):
+    with (
+        patch.object(poller_module, "guard_poll_endpoint", lambda _url: None),
+        patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=_fake_fetch)),
+    ):
         await _poll_one_trigger(factory, trigger_id=trigger_id, now=utcnow())
 
     assert captured["organization_id"] == str(org.id)
@@ -239,7 +245,10 @@ async def test_poll_beat_failure_does_not_block_schedule_delivery(test_engine) -
 
     # The schedule tick must complete normally even though polling would fail —
     # because the schedule tick doesn't touch the poller anymore.
-    with patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=_hangs_forever)):
+    with (
+        patch.object(poller_module, "guard_poll_endpoint", lambda _url: None),
+        patch.object(poller_module, "fetch_poll_page", new=AsyncMock(side_effect=_hangs_forever)),
+    ):
         result = await scheduler_module.run_workflow_scheduler_tick(session_factory=factory)
         assert result.created_runs == 0
         assert result.delivered_runs == 0

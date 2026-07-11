@@ -47,6 +47,10 @@ vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({ cloudActive: true }),
 }));
 
+vi.mock("@/hooks/access/cloud/use-server-features", () => ({
+  useWorkflowsEnabled: () => false,
+}));
+
 vi.mock("@/hooks/cloud/facade/use-cloud-billing", () => ({
   useCloudBilling: () => ({ data: null }),
 }));
