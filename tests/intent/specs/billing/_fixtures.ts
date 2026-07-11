@@ -1,6 +1,6 @@
-// Shared bootstrap for the billing specs: the skip guard (no Stripe test key
-// → whole suite skips, matching the provisional CI posture) and the admin /
-// org handles every scenario builds on.
+// Shared bootstrap for the billing specs: the admin / org handles every
+// scenario builds on. Required Stripe configuration is validated by global
+// setup before Playwright starts any test.
 
 import { test as base } from "@playwright/test";
 
@@ -12,17 +12,6 @@ import {
   passwordLogin,
 } from "../../stack/seed.ts";
 import { ensureProductReady } from "../../stack/billing-seed.ts";
-
-export const billingSkipReason = (): string | null => process.env.TIER2_BILLING_SKIP ?? null;
-
-/** Guard every billing describe-block: `test.skip(...)` in a `beforeAll` marks
- * the group skipped (not failed) when the stack was never booted. */
-export function skipIfNoStripe(test: typeof base): void {
-  test.beforeAll(() => {
-    const reason = billingSkipReason();
-    test.skip(reason !== null, `billing suite skipped: ${reason}`);
-  });
-}
 
 export interface AdminContext {
   token: string;

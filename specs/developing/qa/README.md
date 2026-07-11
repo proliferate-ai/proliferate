@@ -12,6 +12,9 @@ runbook owns how an operator plans, executes, records, and reports a QA pass.
 - [../README.md](../README.md)
   - developer process contract, required tools, permissions, and final report
     shape for process docs
+- [../testing/core-release-validation.md](../testing/core-release-validation.md)
+  - complete automated Tier 2/3/4 core-flow manifest, strict result states,
+    exact-SHA evidence, and the boundary between automated and manual proof
 - [../local/README.md](../local/README.md)
   - profile-backed full-stack local testing, local Stripe, hosted web, desktop,
     mobile web, native mobile, and verification commands

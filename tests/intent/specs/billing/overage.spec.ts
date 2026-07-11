@@ -11,7 +11,7 @@
 
 import { expect } from "@playwright/test";
 
-import { test, adminContext, skipIfNoStripe } from "./_fixtures.ts";
+import { test, adminContext } from "./_fixtures.ts";
 import * as b from "../../stack/billing.ts";
 
 async function paidOrgSubjectWithBackdatedPeriod(seats = 1) {
@@ -41,8 +41,6 @@ async function paidOrgSubjectWithBackdatedPeriod(seats = 1) {
 }
 
 test.describe("T2-BILL-5: compute overage — bill to cap, write off, then block", () => {
-  skipIfNoStripe(test);
-
   test("uncovered seconds export as billable cents up to cap, then write off; snapshot flips to cap_exhausted", async () => {
     const { subject, ownerId, token, organizationId } = await paidOrgSubjectWithBackdatedPeriod(1);
     // The effective cap is per-seat × ACTIVE org members (accounting.py:
@@ -122,8 +120,6 @@ test.describe("T2-BILL-5: compute overage — bill to cap, write off, then block
 });
 
 test.describe("T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups", () => {
-  skipIfNoStripe(test);
-
   test("llm-balance reflects seeded spend and goes non-positive on exhaustion", async () => {
     const { token } = await adminContext();
     const userId = await userIdFor(token);

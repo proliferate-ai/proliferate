@@ -9,7 +9,7 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   DATABASE_URL: postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate
-  JWT_SECRET: test-jwt-secret
+  JWT_SECRET: test-jwt-secret-at-least-32-bytes-long
   CLOUD_SECRET_KEY: test-cloud-secret
   LOCAL_PGHOST: 127.0.0.1
   LOCAL_PGPORT: 5432

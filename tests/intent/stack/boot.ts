@@ -51,6 +51,13 @@ export interface BootOptions {
    * nothing for either to serve. Cuts boot time and lets a spec run a
    * second, differently-configured server cheaply on its own profile. */
   skipFrontend?: boolean;
+  /** Keep the real desktop-web surface but omit AnyHarness for a connected
+   * settings/API journey that cannot start a runtime turn. */
+  skipRuntime?: boolean;
+  /** Reuse frontend package artifacts built by the suite's global stack.
+   * Nested browser fixtures may opt into this only when Playwright globalSetup
+   * has already completed the canonical package build in the same worktree. */
+  skipFrontendBuild?: boolean;
   /** Extra/overriding server env vars, applied last (after every other
    * default in this function, including the Stripe block) so a caller can
    * flip any posture — telemetry mode, billing mode, E2B config, debug —
@@ -65,10 +72,9 @@ export interface BootedStack {
   profile: string;
   apiBaseUrl: string;
   webBaseUrl: string;
-  /** The local AnyHarness runtime's base URL for this profile — reachable
-   * only when the runtime was actually started (not `skipFrontend`, not
-   * `TIER2_INTENT_SKIP_RUNTIME=1`). Callers that need it must probe
-   * reachability themselves and skip gracefully if it is down. */
+  /** The local AnyHarness runtime's base URL for this profile. Required runs
+   * do not return until `/v1/agents` is reachable; optional/skip runs expose
+   * the allocated address without promising reachability. */
   anyharnessBaseUrl: string;
   databaseUrl: string;
   setupTokenFile: string;
@@ -160,36 +166,34 @@ function ensureRedisReachable(): void {
   }
 }
 
-function pathHasDist(relative: string): boolean {
-  return existsSync(path.join(REPO_ROOT, relative, "dist"));
-}
-
 /** Shared frontend packages are consumed as built dist by apps/desktop; build
- * them once (skips packages that already have a dist dir) instead of relying
- * on HMR, matching apps/desktop's own `dev:built` script. */
+ * them before every boot. A directory-exists check can accept stale or
+ * partially-written output and leave Vite serving an import-error overlay. */
 function ensureFrontendBuilt(): void {
-  const packages: Array<{ filter: string; path: string }> = [
-    { filter: "@anyharness/sdk", path: "anyharness/sdk" },
-    { filter: "@anyharness/sdk-react", path: "anyharness/sdk-react" },
-    { filter: "@proliferate/cloud-sdk", path: "cloud/sdk" },
-    { filter: "@proliferate/cloud-sdk-react", path: "cloud/sdk-react" },
-    { filter: "@proliferate/design", path: "apps/packages/design" },
-    { filter: "@proliferate/product-domain", path: "apps/packages/product-domain" },
-    { filter: "@proliferate/ui", path: "apps/packages/ui" },
-    { filter: "@proliferate/product-ui", path: "apps/packages/product-ui" },
-    { filter: "@proliferate/product-surfaces", path: "apps/packages/product-surfaces" },
+  const packages = [
+    "@anyharness/sdk",
+    "@anyharness/sdk-react",
+    "@proliferate/cloud-sdk",
+    "@proliferate/cloud-sdk-react",
+    "@proliferate/design",
+    "@proliferate/product-domain",
+    "@proliferate/ui",
+    "@proliferate/product-ui",
+    "@proliferate/product-surfaces",
   ];
-  for (const pkg of packages) {
-    if (pathHasDist(pkg.path)) {
-      continue;
-    }
-    log(`building ${pkg.filter} (no dist found)...`);
-    run("pnpm", ["--filter", pkg.filter, "build"]);
+  for (const packageName of packages) {
+    log(`building ${packageName}...`);
+    run("pnpm", ["--filter", packageName, "build"]);
   }
 }
 
 function resolveAnyharnessRuntimeBin(): string {
   if (process.env.ANYHARNESS_DEV_RUNTIME_BIN) {
+    if (!existsSync(process.env.ANYHARNESS_DEV_RUNTIME_BIN)) {
+      throw new Error(
+        `ANYHARNESS_DEV_RUNTIME_BIN does not exist: ${process.env.ANYHARNESS_DEV_RUNTIME_BIN}`,
+      );
+    }
     return process.env.ANYHARNESS_DEV_RUNTIME_BIN;
   }
   // The shared prebuilt binary local dev keeps at this fixed path (built from
@@ -217,13 +221,17 @@ function resolveAnyharnessRuntimeBin(): string {
   return built;
 }
 
-async function waitForHttpOk(url: string, { timeoutMs = 120_000, intervalMs = 500 } = {}): Promise<void> {
+async function waitForHttpOk(
+  url: string,
+  { timeoutMs = 120_000, intervalMs = 500, allowNotFound = true }:
+    { timeoutMs?: number; intervalMs?: number; allowNotFound?: boolean } = {},
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
   while (Date.now() < deadline) {
     try {
       const response = await fetch(url, { method: "GET" });
-      if (response.ok || response.status === 404) {
+      if (response.ok || (allowNotFound && response.status === 404)) {
         // 404 still proves the server is up and routing (e.g. Vite root
         // during initial cold compile can 404 briefly before serving index).
         return;
@@ -282,6 +290,16 @@ function killTracked(child: ChildProcess): void {
 }
 
 export async function bootStack(options: BootOptions = {}): Promise<BootedStack> {
+  // Server-only nested fixtures deliberately have no runtime. The requirement
+  // applies to the primary full-stack boot that owns the gateway-policy seam.
+  const runtimeRequired =
+    !options.skipFrontend && !options.skipRuntime && process.env.TIER2_INTENT_REQUIRE_RUNTIME === "1";
+  if (runtimeRequired && process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
+    throw new Error(
+      "TIER2_INTENT_REQUIRE_RUNTIME=1 is incompatible with TIER2_INTENT_SKIP_RUNTIME=1",
+    );
+  }
+
   // TIER2_INTENT_PROFILE lets a local run boot the same harness on its own
   // profile so parallel worktrees don't collide on ports/DB/run-lock (this
   // branch was verified on `t2auth`). Callers that pass an explicit profile
@@ -290,32 +308,54 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   const profile = options.profile ?? process.env.TIER2_INTENT_PROFILE ?? PROFILE;
   log(`preparing profile "${profile}"...`);
   const instance = ensureProfilePorts(profile);
-  ensureDatabase(instance.databaseName);
-  ensureRedisReachable();
-
-  const databaseUrl = databaseUrlFor(instance.databaseName);
+  let databaseUrl: string;
   const apiBaseUrl = `http://127.0.0.1:${instance.ports.api}`;
   const webBaseUrl = `http://127.0.0.1:${instance.ports.desktopWeb}`;
-  // Published even when the runtime is skipped (TIER2_INTENT_SKIP_RUNTIME=1 in
-  // CI, or `skipFrontend`) so a spec can probe reachability itself and skip
-  // gracefully rather than the boot deciding for it.
+  // The allocated address is published for optional and required runs. A
+  // required run proves it reachable before returning from this function.
   const anyharnessBaseUrl = `http://127.0.0.1:${instance.ports.anyharness}`;
   const setupTokenFile = `/tmp/proliferate-${profile}-setup-token`;
   // Fresh setup token file per boot: a stale token from a prior claimed run
   // would otherwise sit there confusing the next claim attempt.
   rmSync(setupTokenFile, { force: true });
-
-  log(`running alembic migrations against ${instance.databaseName}...`);
-  run(path.join(REPO_ROOT, "server", ".venv", "bin", "alembic"), ["upgrade", "head"], {
-    cwd: path.join(REPO_ROOT, "server"),
-    env: { DATABASE_URL: databaseUrl, DEBUG: "true" },
-  });
-
-  mkdirSync(instance.anyharnessRuntimeHome, { recursive: true });
-
   const children: ChildProcess[] = [];
-  const invocationStub = await startInvocationStub();
+  let invocationStub: InvocationStubServer;
+  try {
+    ensureDatabase(instance.databaseName);
+    databaseUrl = databaseUrlFor(instance.databaseName);
+    ensureRedisReachable();
+    log(`running alembic migrations against ${instance.databaseName}...`);
+    run(path.join(REPO_ROOT, "server", ".venv", "bin", "alembic"), ["upgrade", "head"], {
+      cwd: path.join(REPO_ROOT, "server"),
+      env: { DATABASE_URL: databaseUrl, DEBUG: "true" },
+    });
+    mkdirSync(instance.anyharnessRuntimeHome, { recursive: true });
+    invocationStub = await startInvocationStub();
+  } catch (error) {
+    // `ensure --lock` happens before any child exists. Release that lock when
+    // database/migration/stub setup fails so Playwright retries can boot.
+    rmSync(path.join(path.dirname(profileInstancePath(profile)), "run.lock"), { force: true });
+    throw error;
+  }
   log(`invocation stub ready: ${invocationStub.baseUrl}`);
+
+  let torndown = false;
+  const teardown = async () => {
+    if (torndown) {
+      return;
+    }
+    torndown = true;
+    log("tearing down...");
+    for (const child of children) {
+      killTracked(child);
+    }
+    await closeInvocationStub(invocationStub);
+    // Release the profile run lock the `ensure --lock` call above took, same
+    // as `make run`'s exit trap — otherwise the next boot within the lock's
+    // 2-minute staleness window refuses to start.
+    rmSync(path.join(path.dirname(profileInstancePath(profile)), "run.lock"), { force: true });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  };
 
   // ── Server (FastAPI/uvicorn) ──
   const serverEnv: NodeJS.ProcessEnv = {
@@ -335,6 +375,10 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     // registered against a different port; see feature-worktree-auth.md).
     GITHUB_OAUTH_CLIENT_ID: "",
     GITHUB_OAUTH_CLIENT_SECRET: "",
+    // Tier 2 captures the invitation token from the API and never sends mail.
+    // Blank ambient/.env Resend credentials so a developer machine cannot
+    // turn the deterministic fixture into a real provider call.
+    RESEND_API_KEY: "",
     // T2-AUTH-3's mock IdP is a plain-HTTP loopback server (fakes/mock-idp) —
     // the server's OIDC client rejects private/HTTP provider URLs by default
     // (server/proliferate/integrations/sso/oidc.py's `_validate_oidc_url`);
@@ -407,11 +451,11 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     // Settings/auth/org/invitation surfaces (this suite's scope) don't read
     // through the runtime, but booting it keeps the app shell from showing a
     // persistent "runtime unavailable" state that could shadow assertions.
-    // TIER2_INTENT_SKIP_RUNTIME=1 (CI) skips it entirely: building the Rust
-    // binary from scratch is far too slow for a per-PR job, and no current
-    // scenario needs it.
-    if (process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
-      log("skipping AnyHarness runtime (TIER2_INTENT_SKIP_RUNTIME=1)");
+    // Optional targeted local runs may skip it. The required CI run provides
+    // a prebuilt binary and sets TIER2_INTENT_REQUIRE_RUNTIME=1, so a missing
+    // or unhealthy runtime fails stack boot.
+    if (options.skipRuntime || process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
+      log("skipping AnyHarness runtime for this profile");
     } else try {
       const runtimeBin = resolveAnyharnessRuntimeBin();
       spawnTracked(
@@ -424,11 +468,24 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
         },
       );
     } catch (error) {
+      if (runtimeRequired) {
+        await teardown();
+        throw new Error(`required AnyHarness runtime failed to start: ${String(error)}`);
+      }
       log(`warning: could not start AnyHarness runtime (${String(error)}); continuing without it`);
     }
 
     // ── Desktop web (Vite dev server, web-port mode) ──
-    ensureFrontendBuilt();
+    if (options.skipFrontendBuild) {
+      log("reusing frontend packages built by Playwright globalSetup");
+    } else {
+      try {
+        ensureFrontendBuilt();
+      } catch (error) {
+        await teardown();
+        throw error;
+      }
+    }
     const desktopEnv: NodeJS.ProcessEnv = {
       ...process.env,
       PROLIFERATE_WEB_PORT: String(instance.ports.desktopWeb),
@@ -450,30 +507,21 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     );
   }
 
-  log("waiting for server to become ready...");
-  await waitForHttpOk(`${apiBaseUrl}/health`);
-  if (!options.skipFrontend) {
-    await waitForHttpOk(webBaseUrl);
+  try {
+    log("waiting for server to become ready...");
+    await waitForHttpOk(`${apiBaseUrl}/health`);
+    if (runtimeRequired) {
+      log("waiting for required AnyHarness runtime to become ready...");
+      await waitForHttpOk(`${anyharnessBaseUrl}/v1/agents`, { allowNotFound: false });
+    }
+    if (!options.skipFrontend) {
+      await waitForHttpOk(webBaseUrl);
+    }
+  } catch (error) {
+    await teardown();
+    throw error;
   }
   log(`ready: api=${apiBaseUrl}${options.skipFrontend ? "" : ` web=${webBaseUrl}`}`);
-
-  let torndown = false;
-  const teardown = async () => {
-    if (torndown) {
-      return;
-    }
-    torndown = true;
-    log("tearing down...");
-    for (const child of children) {
-      killTracked(child);
-    }
-    await closeInvocationStub(invocationStub);
-    // Release the profile run lock the `ensure --lock` call above took, same
-    // as `make run`'s exit trap — otherwise the next boot within the lock's
-    // 2-minute staleness window refuses to start.
-    rmSync(path.join(path.dirname(profileInstancePath(profile)), "run.lock"), { force: true });
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  };
 
   return {
     profile,

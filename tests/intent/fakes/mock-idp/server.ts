@@ -2,8 +2,7 @@
 //
 // Choice: an in-process OIDC provider (`oauth2-mock-server`) over a Docker
 // container (e.g. dex). Rationale, per the task brief:
-//   - no Docker dependency for local runs or the provisional CI job (this
-//     suite already avoids Docker everywhere else — see stack/boot.ts);
+//   - no additional IdP container for local runs or the required CI job;
 //   - real cryptography (RSA-signed id_tokens verified against a real JWKS
 //     endpoint), so the server's actual OIDC client code
 //     (integrations/sso/oidc.py) is exercised unmodified, not mocked out;

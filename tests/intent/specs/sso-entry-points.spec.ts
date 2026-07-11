@@ -80,6 +80,9 @@ test.beforeAll(async () => {
   const adminToken = (await passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD)).access_token;
   organizationId = (await getOwnOrganization(adminToken)).id;
   organizationSlug = await getOrganizationSlug(organizationId);
+  // A killed prior run may not reach afterAll. Start from the promised
+  // no-connection posture so persistent-profile reruns are deterministic.
+  await deleteOrgSsoConnections(organizationId);
 });
 
 // The seeded connection must never outlive this file — sibling specs share

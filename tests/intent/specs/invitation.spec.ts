@@ -16,8 +16,7 @@
 //   admin-gated organization-members pane, unreachable for a plain invitee
 //   (product gap, issue #1013). PR #1017 (fix/invitee-accept-ui) moves that
 //   section onto the Account pane, which every signed-in user can reach.
-//   The test below targets that fixed path but self-skips until #1017
-//   merges — see ACCOUNT_PANE_INVITATIONS_LANDED.
+//   The test below exercises that fixed path end to end.
 // - Duplicate pending invite for the same (org, email): the partial unique
 //   index uq_organization_invitation_pending_email guarantees at most one
 //   pending row; the product's create path is upsert-on-conflict (rotate), so
@@ -137,22 +136,7 @@ test.describe("T2-INV-1: invitation happy path", () => {
     await expect(page.getByLabel("Password")).toHaveCount(0, { timeout: 30_000 });
   });
 
-  // Flip to true once PR #1017 (fix/invitee-accept-ui) merges: it moves
-  // CurrentUserInvitationsSection from the admin-gated organization-members
-  // pane onto AccountPane, which every signed-in user (admin or not) can
-  // reach. Until then this test is a documented skip, not a failure — the
-  // fix isn't in this branch's tree yet, so asserting the new UI would be
-  // red in this PR's own CI.
-  const ACCOUNT_PANE_INVITATIONS_LANDED = false;
-
   test("fixed: pending-invitation accept UI is reachable for a non-admin invitee via the Account pane (#1013, #1017)", async ({ page }) => {
-    test.skip(
-      !ACCOUNT_PANE_INVITATIONS_LANDED,
-      "unblocks when #1017 (fix/invitee-accept-ui) merges — Account pane doesn't render "
-        + "CurrentUserInvitationsSection yet. Flip ACCOUNT_PANE_INVITATIONS_LANDED to true "
-        + "once it does.",
-    );
-
     // Give the invitee a pending invitation to accept through the UI.
     // (Inviting an existing member is allowed; accept then simply marks the
     // invitation accepted against the live membership.)
@@ -173,7 +157,8 @@ test.describe("T2-INV-1: invitation happy path", () => {
     await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
 
     // The pending invitation is visible right on Account (CurrentUserInvitationsSection).
-    await expect(page.getByRole("heading", { name: "Pending invitations" })).toBeVisible();
+    const pendingInvitationsTitle = page.getByText("Pending invitations", { exact: true });
+    await expect(pendingInvitationsTitle).toBeVisible();
     const invitationRow = page.getByText(`member access for ${FRESH_INVITEE_EMAIL}`);
     await expect(invitationRow).toBeVisible();
 
@@ -182,7 +167,7 @@ test.describe("T2-INV-1: invitation happy path", () => {
     await page.getByRole("button", { name: "Join" }).click();
 
     // The section clears once the invitation is no longer pending.
-    await expect(page.getByRole("heading", { name: "Pending invitations" })).toHaveCount(0, {
+    await expect(pendingInvitationsTitle).toHaveCount(0, {
       timeout: 15_000,
     });
 

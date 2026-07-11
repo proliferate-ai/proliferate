@@ -12,13 +12,16 @@ export default defineConfig({
   globalSetup: "./stack/global-setup.ts",
   workers: 1,
   fullyParallel: false,
-  // Local runs and CI both get one retry: the stack is real (uvicorn + vite
-  // cold start), not mocked, so first-contact flake is possible; a green
-  // retry is meaningful, repeated red is a real failure.
+  // One retry gathers a second diagnostic sample for real uvicorn/Vite startup
+  // failures. The strict reporter still leaves the required run red when a
+  // test passes only on retry; retries never convert flakiness into a green gate.
   retries: 1,
+  forbidOnly: Boolean(process.env.CI),
   timeout: 120_000,
   expect: { timeout: 15_000 },
-  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
+  reporter: process.env.CI
+    ? [["list"], ["github"], ["./stack/strict-reporter.ts"]]
+    : [["list"], ["./stack/strict-reporter.ts"]],
   use: {
     baseURL: process.env.TIER2_INTENT_WEB_BASE_URL,
     trace: "retain-on-failure",

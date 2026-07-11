@@ -1,9 +1,11 @@
 # Scenario Definitions
 
-Status: DRAFT for Pablo's ruling. Once blessed, this is the contract the test
-agents implement against — a scenario's steps and assertions define what
-"works" means for its registry row in `flows.md`. Grounded in a code survey
-2026-07-07; endpoints/tables cited are as-built, not aspirational.
+Status: implementation notes for the current scenario runners. The complete
+normative target, required lanes, and pass/fail contract live in
+[`core-release-validation.md`](core-release-validation.md). When this file
+describes a smaller matrix, a blocked/expected-fail posture, or a deferred
+flow, the core release contract wins. Endpoints/tables cited here are as-built
+details for implementing that target.
 
 Conventions:
 - Every tier-2 scenario runs against the stack-boot fixture: seeded Postgres,
@@ -217,8 +219,9 @@ seeded usage segments.
 Assert: resume/connect blocked with the enumerated decision
 (`CloudSandboxResumeBlockedError`, 402) and the UI shows the
 credits-exhausted blocked state (`WORKSPACE_ACTION_BLOCK_KIND_CREDITS_EXHAUSTED`
-via `start_block_reason`); refill (legacy: `refill_10h` checkout; pro: top-up
-grant) → resume allowed again. Grant consumption **order** asserted: grants
+via `start_block_reason`); personal legacy `refill_10h` or Pro
+subscription/payment recovery → resume allowed again. Unsupported organization
+or Pro refill grants nothing. Grant consumption **order** asserted: grants
 drain earliest-expiring-first within type priority
 (`ordered_accounting_grants`).
 
@@ -274,20 +277,20 @@ once `cap_used_cents` ≥ cap → further usage written off
 Negative: `overage_enabled=false` → cutoff is immediate at grant exhaustion,
 zero export rows.
 
-### T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups (incl. failure)
+### T2-BILL-6: managed LLM credits — exhaustion, caps, and alternate auth
 Three distinct gate states that must not bleed into each other:
-- **exhaustion**: drive `remaining_usd` ≤ 0 on a granted subject → virtual key
-  disabled, `budget_status='exhausted'`; top-up grant → key reactivated.
+- **exhaustion**: drive `remaining_usd` ≤ 0 on a managed-credit subject → the
+  target/selection-scoped Bifrost virtual key is disabled and
+  `budget_status='exhausted'`; a supported entitlement renewal/change may
+  reactivate managed access.
 - **admin cap** (`billing_budget_limit` kind=`llm`, org-wide and per-user
   independently): over cap → `budget_status='limit_reached'`; credit refill
   does **not** clear it (deliberate); raising/disabling the cap does, even
   with zero new spend (the quiet-tick sweep).
-- **auto top-up overage**: overage-enabled subject drops below threshold →
-  one-off Stripe invoice item charged, `topup` grant issued, exactly one
-  top-up per tick. **Failure path is mandatory**: declined test card / no
-  Stripe customer / `agent_gateway_llm_topup_price_id` unset → fail-closed:
-  key disabled at zero like a capped org (the "overage promise quietly
-  evaporates" risk).
+- **alternate auth/spend**: BYOK remains separate from managed credit, while a
+  Team upgrade creates/selects an organization entitlement rather than
+  refilling the personal one. Managed credit never automatically charges or
+  grants after exhaustion.
 Also assert `is_gateway_budget_available` flips correctly for launch gating.
 
 ### T2-BILL-7: webhook robustness — idempotency, replay, ordering
@@ -546,11 +549,12 @@ a new runtime-dependent spec, respectively:
   REJECTS a bare native model selector (`"default"`) and ACCEPTS a real
   gateway-catalog id — the runtime-level half of `catalog::service_tests::
   gateway_context_gates_native_ids_and_offers_only_gateway_models`, proven
-  against the real AnyHarness HTTP API with no LLM call ever made. Needs the
-  local runtime, which the CURRENT CI profile skips
-  (`TIER2_INTENT_SKIP_RUNTIME=1`) — self-skips (not fails) when unreachable,
-  matching `workspace-entry.spec.ts`'s documented precedent for the identical
-  constraint; runs for real locally.
+  against the real AnyHarness HTTP API with no LLM call ever made. Required CI
+  builds the runtime, supplies it through `ANYHARNESS_DEV_RUNTIME_BIN`, and
+  sets `TIER2_INTENT_REQUIRE_RUNTIME=1`; a build, startup, or reachability
+  failure is red rather than skipped. The test's historical T2-SH-7 label maps
+  to the gateway-eligibility slice of normative T2-SH-4 and remains to be
+  reconciled by the machine-manifest migration.
 
 ---
 
@@ -737,12 +741,14 @@ entry we know exists and assert each is refused, not just the front door:
   the disabled-key propagation must beat it (re-materialization path);
 - start a workspace as a **different member of the same exhausted org**;
 - trigger-driven work (workflow/automation) that would start a sandbox.
-Then refill → sandbox resumable, gateway serves again, new workspaces allowed.
+Then personal legacy refill or subscription/payment recovery restores the
+compute subject; an entitlement/cap change or valid BYOK selection restores
+the applicable LLM path. The two ledgers never refill one another.
 (Tier-2 T2-BILL-1 proves this logic against Stripe test clocks per-PR; this
 scenario proves the **deployed** enforcement chain end-to-end on real
 infrastructure.)
 
-### T3-BILL-3: overage bills real money correctly (staging lane)
+### T3-BILL-3: compute overage and managed-credit hard cap (staging lane)
 Added 2026-07-08 — overage is the highest-stakes billing path (it charges
 cards) and was tier-2-only. On the staging test org with `overage_enabled`
 and a small per-seat cap:
@@ -750,10 +756,10 @@ and a small per-seat cap:
   arrive in Stripe (test mode) for the overage price, sandbox stays UP while
   under cap; cross the cap → hard block flips on (`cap_exhausted`), further
   usage written off, no more billing.
-- **LLM**: drop below the top-up threshold → exactly one auto top-up invoice
-  item charged in Stripe, `topup` grant appears, key stays live. Then disable
-  the payment method → next threshold crossing fail-closes (key disabled),
-  no silent free usage and no repeated failed charges.
+- **managed LLM**: exhaust the entitlement → the scoped Bifrost key disables,
+  no Stripe charge or grant occurs, and subsequent managed launches fail
+  closed. An entitlement/cap change may recover managed access; valid BYOK is
+  an alternate path and never debits managed credit.
 Assert amounts end-to-end: seconds consumed → cents exported → Stripe event
 totals match (the fractional-cent remainder logic is under test here too).
 
@@ -771,13 +777,14 @@ funded org + overage on/off round-trip. The **metered-overage AMOUNTS** stay
 deferred because finding #5 is still open — E2B webhooks to
 `POST /api/v1/cloud/webhooks/e2b` still all return **401
 `invalid_webhook_signature`** (zero 2xx), so `usage_segment` rows never open and
-no `proliferate_managed_cloud_overage_cents` meter event is emitted; and the LLM
-auto-top-up charge needs the org's own gateway key consumed (the standalone
-gateway test key has its own budget, per T3-BILL-4). Tier-2 T2-BILL-* proves the
+no `proliferate_managed_cloud_overage_cents` meter event is emitted; and the
+managed-credit Bifrost import path still needs a disposable scoped key and
+entitlement fixture. Tier-2 T2-BILL-* proves the
 metered arithmetic against Stripe test clocks per-PR. Note also: with
 `PRO_BILLING_ENABLED=true`, personal `refill-checkout` returns
 `refill_checkout_disabled` (refills are a non-Pro-billing feature) — the Pro
-model uses subscription + overage + LLM auto-top-up instead. Durable-org tension:
+compute model uses subscription plus overage, while managed LLM credit remains
+hard capped. Durable-org tension:
 this scenario needs the org FUNDED while T3-BILL-4 needs it EXHAUSTED; the ruling
 gives the funded half here, so while funded T3-BILL-4 reports blocked (its own
 "funded out of band" guard), not red.

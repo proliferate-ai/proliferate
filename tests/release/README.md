@@ -3,25 +3,42 @@
 The tier-3 "live end-to-end" runner (see `specs/developing/testing/README.md`
 and `specs/developing/testing/scenarios.md`). It drives real flows against a
 real target: provision/connect, chat per cataloged agent, config apply, secrets
-materialization, billing, repo settings. Cadence is the release train, never
-per-PR — it spends real money/time.
+materialization, billing, repo settings. It is designed for release/nightly
+qualification, never per-PR, because it spends real money/time. The current
+workflow is scheduled and on demand but is not yet consumed by production
+promotion; see the enforcement exception in
+`specs/developing/testing/core-release-validation.md`.
 
 ## Running it
 
 ```
-make release-e2e LANE=local|staging DESKTOP=web AGENTS=all SCENARIOS=all [DRY_RUN=1]
+make release-e2e LANE=local|staging DESKTOP=web AGENTS=all SCENARIOS=all [POLICY=signal|release] [DRY_RUN=1]
 # or, from tests/release/:
 pnpm exec tsx src/cli/run.ts --lane local --dry-run
 ```
 
 Every credential is declared in `src/config/env-manifest.ts` with where to get
-it. A missing credential does **not** fail the run: the runner reports just the
-scenarios/lanes that need it as **blocked** (`src/config/env-resolution.ts`,
-`missingRequiredForLane`), so a partially-credentialed environment still
-produces signal. Outcomes: **green** (asserted for real), **blocked** (known
-out-of-band gate/credential gap), **expected-fail** (attempted, diagnosed,
-tracked). A **red** is a genuine regression and the only thing that fails the
-gate.
+it. The runner records a missing credential only against the scenarios/lanes
+that need it as **blocked** (`src/config/env-resolution.ts`,
+`missingRequiredForLane`), so independent work still executes. Outcomes are
+**green** (asserted for real), **blocked** (known out-of-band gate/credential
+gap), **expected-fail** (attempted and diagnosed), and **failed** (a product or
+test assertion failed).
+
+Policy determines the aggregate result:
+
+- `signal` is the CLI/local default. Blocked and expected-fail rows remain
+  visible without making the process nonzero; a genuine failed scenario still
+  fails the run.
+- `release` is the manual GitHub Actions default. Every row in the provisional
+  required manifest must be present exactly once and green, and every
+  additional emitted registered result must be unique and green. Missing
+  credentials, blocked or expected-fail results, duplicate results, and missing
+  required rows therefore fail strict qualification.
+
+Neither policy proves the complete product contract yet: the provisional
+manifest and registered scenarios remain smaller than
+`specs/developing/testing/core-release-validation.md`.
 
 ## Lanes
 
@@ -54,12 +71,13 @@ The staging lane targets the real deployment
   persisted across runs via `actions/cache` (per-run-id save key + prefix
   restore-key; the workflow-level concurrency group serialises runs so no two
   rotations race).
-- **Failure mode is blocked, never red.** A broken session chain
+- **Broken-session outcome.** A broken session chain
   (revoked/expired/never-persisted token) raises
   `StagingSessionUnavailableError`, which durable-user scenarios convert to a
-  `ScenarioBlockedError`. Re-bootstrap and reseed
+  `ScenarioBlockedError`. That is non-fatal diagnostic signal under `signal`
+  and a failed qualification under `release`. Re-bootstrap and reseed
   `RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN`.
-- **First-pass scope (all non-red).** The `local` RUNTIME lane has no staging
+- **First-pass non-green inventory.** The `local` RUNTIME lane has no staging
   pairing → blocked. Sandbox scenarios that mutate/charge the SHARED durable
   user (PROV-1 mint-user, PROV-2 wake, SEC-MAT-1 secret write, INT-1 integration
   connect) are DEFERRED (blocked) until a dedicated non-shared staging fixture
@@ -67,7 +85,8 @@ The staging lane targets the real deployment
   (staging DB is VPC-only). CHAT/WT/UPDATE/REPO sandbox halves are expected-fail
   (bodies unimplemented / GitHub-App seed unavailable). **PROV-2 is the real
   end-to-end proof:** it authenticates the durable user through the rotating
-  session and reads `GET /cloud-sandbox`.
+  session and reads `GET /cloud-sandbox`. Signal policy inventories these
+  outcomes; release policy correctly rejects them as non-green.
 
 ### CI
 
@@ -76,6 +95,12 @@ nightly schedule and on non-staging dispatch. The staging job is dispatch-only
 with `lane=staging` (kept off the schedule so shared staging state is not
 exercised unattended):
 
+For diagnostic inventory, dispatch signal policy explicitly:
+
 ```
-gh workflow run release-e2e.yml -f lane=staging
+gh workflow run release-e2e.yml -f lane=staging -f policy=signal
 ```
+
+Omitting `policy` uses the strict `release` default and is expected to stay red
+until every emitted result is green and every provisional required row is
+present.

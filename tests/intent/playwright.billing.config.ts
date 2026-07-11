@@ -12,12 +12,15 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   // Real Stripe test-clock round-trips and out-of-process accounting passes
-  // are slower than the auth suite; give tests headroom. One retry for
-  // first-contact flake, same rationale as the auth config.
+  // are slower than the auth suite; give tests headroom. One retry collects a
+  // second diagnostic sample, but the strict reporter keeps a flaky run red.
   retries: 1,
+  forbidOnly: Boolean(process.env.CI),
   timeout: 240_000,
   expect: { timeout: 20_000 },
-  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
+  reporter: process.env.CI
+    ? [["list"], ["github"], ["./stack/strict-reporter.ts"]]
+    : [["list"], ["./stack/strict-reporter.ts"]],
   use: {
     baseURL: process.env.TIER2_BILLING_WEB_BASE_URL,
     trace: "retain-on-failure",
