@@ -16,6 +16,7 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
+| [proliferate-platform-architecture.md](proliferate-platform-architecture.md) | Non-authoritative cross-system thesis, target architecture, current-state snapshot, V1 boundary, roadmap, and implementation invariants. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 | [workflows-v1-completion-plan.md](workflows-v1-completion-plan.md) | Dependency-ordered multi-agent migration from the current workflow branch to the canonical workflow feature contract, including verification and release gates. |
