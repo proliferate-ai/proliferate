@@ -9,7 +9,6 @@ import {
   pickLiveDefaultLaunchControls,
 } from "@/lib/domain/sessions/creation/launch-controls";
 import { resolveSessionCreationModeId } from "@/lib/domain/sessions/creation/mode";
-import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store";
 import { useToastStore } from "@/stores/toast/toast-store";
 import {
@@ -40,12 +39,8 @@ import {
   useWorkspaceUiStore,
 } from "@/stores/preferences/workspace-ui-store";
 import {
-  removeSessionRecordAndClearSelection,
-} from "@/hooks/sessions/workflows/session-creation-local-state";
-import {
   inFlightSessionCreatesByWorkspace,
 } from "@/hooks/sessions/workflows/session-creation-in-flight";
-import { useSessionIntentStore } from "@/stores/sessions/session-intent-store";
 import { useCloudAgentCatalogCache } from "@/hooks/access/cloud/agent-catalog/use-cloud-agent-catalog";
 import type {
   CreateEmptySessionWithResolvedConfigOptions,
@@ -55,16 +50,22 @@ import {
   sessionStreamPruningDeps,
 } from "@/hooks/sessions/workflows/session-creation-runtime";
 import {
-  markProjectedSessionPromptCreateFailed,
-} from "@/hooks/sessions/workflows/session-creation-failure";
-import {
   materializeSessionCreation,
 } from "@/hooks/sessions/workflows/session-creation-materialization";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
 import {
-  performEmptySessionReplacementCleanup,
+  beginEmptySessionReplacement,
+  type EmptySessionReplacementTransaction,
 } from "@/hooks/sessions/workflows/use-empty-session-replacement-cleanup";
-import { useSessionDirectoryStore } from "@/stores/sessions/session-directory-store";
+import {
+  registerSessionCreation,
+} from "@/hooks/sessions/workflows/session-creation-supersession";
+import {
+  beginReplacementShellPreferences,
+  type ReplacementShellPreferencesTransaction,
+} from "@/hooks/sessions/workflows/session-replacement-shell-preferences";
+import { cleanupSessionCreationFailure } from "@/hooks/sessions/workflows/session-creation-failure-cleanup";
+import { resolveWorkspaceUiKey } from "@/lib/domain/workspaces/selection/workspace-ui-key";
 
 export function useSessionCreationActions() {
   const { getWorkspaceRuntimeBlockReason } = useWorkspaceRuntimeBlock();
@@ -84,6 +85,9 @@ export function useSessionCreationActions() {
     if (!workspaceId) {
       throw new Error("No workspace selected");
     }
+    const recoveryWorkspaceUiKey = resolveWorkspaceUiKey(
+      current.selectedLogicalWorkspaceId, workspaceId,
+    ) ?? workspaceId;
 
     const blockedReason = getWorkspaceRuntimeBlockReason(workspaceId);
     if (blockedReason) {
@@ -119,7 +123,7 @@ export function useSessionCreationActions() {
           });
         try {
           const resolvedClientSessionId = await inFlightCreate.promise;
-          if (pendingShellWrite) {
+          if (pendingShellWrite && getSessionRecord(resolvedClientSessionId)) {
             activateSession(resolvedClientSessionId);
           }
           return resolvedClientSessionId;
@@ -244,15 +248,24 @@ export function useSessionCreationActions() {
     writeOwnedShellIntent(pendingSessionId);
     pruneInactiveSessionStreams(sessionStreamPruningDeps);
 
-    // --- Replace-in-place: clean up the old empty session immediately so the
-    // tab swap is instant (no ghost tab until materialization completes). ---
-    let didReplaceOldSession = false;
-    if (options.replacesSessionId) {
-      didReplaceOldSession = performEmptySessionReplacementCleanup(
+    // Stage replacement after the optimistic shell is active. The old tab is
+    // hidden immediately, while destructive cleanup waits for materialization.
+    let replacementTransaction: EmptySessionReplacementTransaction | null = null;
+    let replacementShellPreferences: ReplacementShellPreferencesTransaction | null = null;
+    if (options.replacesSessionId && !hasPrompt) {
+      replacementTransaction = beginEmptySessionReplacement(
         options.replacesSessionId,
         workspaceId,
         { closeSessionSlotStream, removeWorkspaceSessionRecord, dismissSessionMutation },
       );
+      if (replacementTransaction && currentOwnedShellWorkspaceId) {
+        replacementShellPreferences = beginReplacementShellPreferences({
+          shellWorkspaceId: currentOwnedShellWorkspaceId,
+          materializedWorkspaceId: workspaceId,
+          replacedSessionId: replacementTransaction.replacedSessionId,
+          replacementSessionId: pendingSessionId,
+        });
+      }
     }
 
     if (shouldEnqueueInitialPrompt) {
@@ -274,6 +287,7 @@ export function useSessionCreationActions() {
       }
     }
 
+    const unregisterSessionCreation = registerSessionCreation(pendingSessionId);
     const createPromise = materializeSessionCreation({
       ensureCloudAgentCatalog,
       existingProjectedRecord,
@@ -283,7 +297,7 @@ export function useSessionCreationActions() {
       resolvedModeId: resolvedModeId ?? null,
       upsertWorkspaceSessionRecord,
       workspaceId,
-    });
+    }).finally(unregisterSessionCreation);
 
     if (!hasPrompt && shouldReuseInFlightEmptySession) {
       inFlightSessionCreatesByWorkspace.set(workspaceId, {
@@ -295,72 +309,25 @@ export function useSessionCreationActions() {
     }
 
     const cleanupCreateFailure = (error: unknown): void => {
-      logLatency("session.create.failed", {
-        clientSessionId: pendingSessionId,
-        workspaceId,
+      cleanupSessionCreationFailure({
         agentKind: options.agentKind,
-        modelId: options.modelId,
+        currentOwnedSessionId,
+        error,
+        hadExistingProjectedRecord: Boolean(existingProjectedRecord),
         hasPrompt,
-        hasExistingProjectedRecord: Boolean(existingProjectedRecord),
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      if (hasPrompt) {
-        markProjectedSessionPromptCreateFailed(pendingSessionId, error);
-        if (options.launchIntentId) {
-          useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
-        }
-        captureTelemetryException(error, {
-          tags: {
-            action: "create_session_with_resolved_config",
-            domain: "sessions",
-          },
-        });
-        return;
-      }
-      if (options.preserveProjectedSessionOnCreateFailure) {
-        markProjectedSessionPromptCreateFailed(pendingSessionId, error);
-        if (options.launchIntentId) {
-          useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
-        }
-        captureTelemetryException(error, {
-          tags: {
-            action: "create_projected_session_materialization",
-            domain: "sessions",
-          },
-        });
-        return;
-      }
-      const activeSessionIdBeforeRemoval = useSessionSelectionStore.getState().activeSessionId;
-      useSessionIntentStore.getState().clearSession(pendingSessionId);
-      removeSessionRecordAndClearSelection(pendingSessionId);
-      const rolledBackShellIntent = rollbackOwnedShellIntent();
-      if (rolledBackShellIntent && activeSessionIdBeforeRemoval === currentOwnedSessionId) {
-        // If the old session was already deleted (replace-in-place), fall back
-        // to the workspace's remaining sessions rather than a deleted id.
-        const canRestorePrevious = previousActiveSessionId && !didReplaceOldSession;
-        if (canRestorePrevious) {
-          activateSession(previousActiveSessionId);
-        } else {
-          // Find the first remaining session in this workspace as fallback
-          const remainingIds = useSessionDirectoryStore.getState()
-            .sessionIdsByWorkspaceId[workspaceId] ?? [];
-          const fallbackSessionId = remainingIds.find((id) => id !== pendingSessionId) ?? null;
-          if (fallbackSessionId) {
-            activateSession(fallbackSessionId);
-          } else {
-            useSessionSelectionStore.getState().setActiveSessionId(null);
-          }
-        }
-      }
-      if (options.launchIntentId) {
-        useChatLaunchIntentStore.getState().clearIfActive(options.launchIntentId);
-      }
-      captureTelemetryException(error, {
-        tags: {
-          action: "create_session_with_resolved_config",
-          domain: "sessions",
-        },
-      });
+        launchIntentId: options.launchIntentId,
+        modeId: resolvedModeId ?? null,
+        modelId: options.modelId,
+        pendingSessionId,
+        preserveProjectedSessionOnCreateFailure:
+          options.preserveProjectedSessionOnCreateFailure === true,
+        previousActiveSessionId,
+        recoveryWorkspaceUiKey,
+        replacementShellPreferences,
+        replacementTransaction,
+        rollbackOwnedShellIntent,
+        workspaceId,
+      }, { activateSession });
     };
 
     const cleanupInFlight = (): void => {
@@ -379,7 +346,15 @@ export function useSessionCreationActions() {
     }
 
     try {
-      return await createPromise;
+      const resolvedSessionId = await createPromise;
+      const replacementOutcome = await replacementTransaction?.commit();
+      if (replacementOutcome === "retained") {
+        showToast(
+          "Opened the new chat, but kept the previous chat because it could not be removed safely.",
+          "info",
+        );
+      }
+      return resolvedSessionId;
     } catch (error) {
       cleanupCreateFailure(error);
       throw toSessionCreateFailureDisplayError(error);

@@ -17,6 +17,10 @@ const activeTodoTrackerState = vi.hoisted(() => ({
   value: null as { entries: unknown[] } | null,
 }));
 
+const promptRecoveryState = vi.hoisted(() => ({
+  value: [] as unknown[],
+}));
+
 vi.mock("@/hooks/chat/derived/use-active-pending-session-interactions", () => ({
   useActivePendingInteractionState: () => ({
     primaryPendingInteraction: primaryPendingInteractionState.value,
@@ -26,6 +30,13 @@ vi.mock("@/hooks/chat/derived/use-active-pending-session-interactions", () => ({
 
 vi.mock("@/hooks/chat/derived/use-active-todo-tracker", () => ({
   useActiveTodoTracker: () => activeTodoTrackerState.value,
+}));
+
+vi.mock("@/hooks/chat/derived/use-chat-prompt-recoveries", () => ({
+  useChatPromptRecoveries: () => ({
+    recoveries: promptRecoveryState.value,
+    workspaceUiKey: "workspace-1",
+  }),
 }));
 
 vi.mock("@/hooks/chat/facade/use-delegated-work-composer", () => ({
@@ -65,6 +76,10 @@ vi.mock("@/components/workspace/chat/input/PendingPromptList", () => ({
   ConnectedPendingPromptList: () => <div data-testid="pending-prompt-list" />,
 }));
 
+vi.mock("@/components/workspace/chat/input/PromptRecoveryPanel", () => ({
+  ConnectedPromptRecoveryPanel: () => <div data-testid="prompt-recovery-panel" />,
+}));
+
 vi.mock("@/components/workspace/chat/input/DelegatedWorkComposerPanel", () => ({
   DelegatedWorkComposerPanel: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -82,6 +97,7 @@ afterEach(() => {
   workspaceStatusPanelState.value = { kind: "pending" };
   primaryPendingInteractionState.value = null;
   activeTodoTrackerState.value = null;
+  promptRecoveryState.value = [];
 });
 
 describe("useComposerDockSlots", () => {
@@ -123,5 +139,14 @@ describe("useComposerDockSlots", () => {
 
     expect(screen.getByTestId("todo-tracker-panel")).not.toBeNull();
     expect(screen.queryByTestId("todo-tracker-strip")).toBeNull();
+  });
+
+  it("renders workspace-scoped prompt recoveries in the outbound slot", () => {
+    promptRecoveryState.value = [{}];
+    const { result } = renderHook(() => useComposerDockSlots());
+
+    render(<>{result.current.outboundSlot}</>);
+
+    expect(screen.getByTestId("prompt-recovery-panel")).not.toBeNull();
   });
 });

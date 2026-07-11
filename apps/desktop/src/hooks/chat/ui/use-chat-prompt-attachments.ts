@@ -10,15 +10,15 @@ export type PromptAttachmentController = ReturnType<typeof usePromptAttachments>
 };
 
 export function useChatPromptAttachments({
-  activeSessionId,
+  scopeKey,
   promptCapabilities,
   canAttachFiles,
 }: {
-  activeSessionId: string | null;
+  scopeKey: string | null;
   promptCapabilities: PromptCapabilities | null;
   canAttachFiles: boolean;
 }): PromptAttachmentController {
-  const attachments = usePromptAttachments(activeSessionId, promptCapabilities);
+  const attachments = usePromptAttachments(scopeKey, promptCapabilities);
   const supportsAttachments = canAttachPromptContent(promptCapabilities);
   const pasteAttachmentsEnabled = useUserPreferencesStore((state) => state.pasteAttachmentsEnabled);
   const addFiles = useCallback((files: Iterable<File>) => {
@@ -40,8 +40,10 @@ export function useChatPromptAttachments({
     addTextPaste,
     removeAttachment: attachments.removeAttachment,
     clearAttachments: attachments.clearAttachments,
+    clearSubmittedAttachments: attachments.clearSubmittedAttachments,
     snapshotForSubmit: attachments.snapshotForSubmit,
     hasAttachments: attachments.hasAttachments,
+    hasSupportedAttachments: attachments.hasSupportedAttachments,
     canAttachFiles,
     supportsAttachments,
   }), [
@@ -49,7 +51,9 @@ export function useChatPromptAttachments({
     addTextPaste,
     attachments.attachments,
     attachments.clearAttachments,
+    attachments.clearSubmittedAttachments,
     attachments.hasAttachments,
+    attachments.hasSupportedAttachments,
     attachments.removeAttachment,
     attachments.snapshotForSubmit,
     canAttachFiles,

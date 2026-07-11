@@ -65,10 +65,12 @@ const CHAT_INPUT_ATTACHMENT_ACCEPT =
 export function ChatInput({
   attachments,
   suppressActiveSessionState = false,
+  replacementSessionId = null,
   hasSessionTurns = false,
 }: {
   attachments: PromptAttachmentController;
   suppressActiveSessionState?: boolean;
+  replacementSessionId?: string | null;
   /** Flips the placeholder to the follow-up variant once the transcript has turns. */
   hasSessionTurns?: boolean;
 }) {
@@ -93,6 +95,7 @@ export function ChatInput({
   });
   const modelSelectorProps = useChatModelSelectorState({
     suppressActiveSessionState,
+    replacementSessionId,
   });
   const { agentKind, controls: sessionConfigControls, modeControl } = useChatSessionControls();
   const launchConfigControls = suppressActiveSessionState ? [] : modelSelectorProps.launchControls;
@@ -124,9 +127,11 @@ export function ChatInput({
     sdkWorkspaceId: materializedWorkspaceId,
   });
   const hasDraftAttachments = attachments.hasAttachments || planAttachments.hasPlans;
+  const hasSubmittableDraftAttachments =
+    attachments.hasSupportedAttachments || planAttachments.hasPlans;
   const effectiveIsEmpty = effectiveIsEditingQueuedPrompt
     ? editDraft.trim().length === 0
-    : isEmpty && !hasDraftAttachments;
+    : isEmpty && !hasSubmittableDraftAttachments;
   const canSubmit =
     !effectiveIsEmpty && !isDisabled && !isSubmitting;
   const canAcceptPastedAttachments =
@@ -191,7 +196,10 @@ export function ChatInput({
         finishOrCancelMeasurementOperation(measurementOperationId, "aborted");
         return;
       }
-      attachments.clearAttachments();
+      // A harness switch can temporarily make an existing attachment
+      // unsupported. Clear only attachments that were eligible for this send,
+      // leaving visible incompatible drafts available for another harness.
+      attachments.clearSubmittedAttachments(attachmentSnapshots);
       planAttachments.clearPlans();
     });
   }, [

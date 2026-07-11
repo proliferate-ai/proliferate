@@ -8,6 +8,7 @@ import { ConnectedMcpElicitationCard } from "@/components/workspace/chat/input/M
 import { DelegatedWorkComposerPanel } from "@/components/workspace/chat/input/DelegatedWorkComposerPanel";
 import { DelegatedWorkComposerControl } from "@/components/workspace/chat/input/delegated-work/DelegatedWorkComposerControl";
 import { ConnectedUserInputCard } from "@/components/workspace/chat/input/UserInputCard";
+import { ConnectedPromptRecoveryPanel } from "@/components/workspace/chat/input/PromptRecoveryPanel";
 import { SessionActivityBar } from "@/components/workspace/activity/SessionActivityBar";
 import { useSessionGoalBarModel } from "@/hooks/activity/derived/use-session-goal";
 import { useSessionActivityChips } from "@/hooks/activity/derived/use-session-activity-chips";
@@ -20,6 +21,7 @@ import { useActiveTodoTracker } from "@/hooks/chat/derived/use-active-todo-track
 import { useComposerDockCardPresence } from "@/hooks/chat/ui/use-composer-dock-card-presence";
 import { useSelectedCloudRuntimeState } from "@/hooks/workspaces/facade/use-selected-cloud-runtime-state";
 import { useWorkspaceStatusPanelState } from "@/hooks/workspaces/derived/use-workspace-status-panel-state";
+import { useChatPromptRecoveries } from "@/hooks/chat/derived/use-chat-prompt-recoveries";
 
 export interface ComposerDockSlots {
   outboundSlot: ReactNode | null;
@@ -35,6 +37,7 @@ export function useComposerDockSlots(options?: {
   const suppressWorkspaceStatusPanels = options?.suppressWorkspaceStatusPanels ?? false;
   const { primaryPendingInteraction } = useActivePendingInteractionState();
   const pendingPrompts = useActivePendingPrompts();
+  const promptRecoveries = useChatPromptRecoveries().recoveries;
   const activeTodoTracker = useActiveTodoTracker();
   const delegatedWorkComposer = useDelegatedWorkComposer();
   const sessionGoalBarModel = useSessionGoalBarModel();
@@ -47,6 +50,7 @@ export function useComposerDockSlots(options?: {
     suppressSessionSlots,
     suppressWorkspaceStatusPanels,
     pendingPromptCount: pendingPrompts.length,
+    recoveredPromptCount: promptRecoveries.length,
     primaryPendingInteractionKind: primaryPendingInteraction?.kind ?? null,
     hasActiveTodoTracker: !!activeTodoTracker,
     hasDelegatedWork: !!delegatedWorkComposer,
@@ -59,6 +63,7 @@ export function useComposerDockSlots(options?: {
     delegatedWorkComposer,
     hasCloudRuntimePanel,
     pendingPrompts.length,
+    promptRecoveries.length,
     primaryPendingInteraction?.kind,
     sessionActivityChips.length,
     sessionGoalBarModel,
@@ -144,17 +149,17 @@ export function useComposerDockSlots(options?: {
   ), [ambientContextSlot, delegatedWorkSlot, sessionActivitySlot]);
 
   return useMemo(() => ({
-    // Queued prompts now render IN THE TRANSCRIPT (renderableOutboxEntriesFor-
-    // Transcript includes queue-placed entries), so the dock's pending list is
-    // retired — rendering both would show the same message twice. NOTE: this
-    // also retires the dock's queued-prompt edit affordance (beginEdit was
-    // only reachable from that list); re-home it on the transcript pending row
-    // if we want it back.
-    outboundSlot: null,
+    // Ordinary queued prompts render in the transcript. A rollback recovery is
+    // workspace-scoped rather than session-scoped, so it owns the dock's
+    // outbound slot until the user retries or dismisses it.
+    outboundSlot: dockSlotResolution.outboundSlot?.kind === "prompt_recoveries"
+      ? <ConnectedPromptRecoveryPanel />
+      : null,
     activeSlot: activeAgentSlot,
     attachedSlot,
   }), [
     activeAgentSlot,
     attachedSlot,
+    dockSlotResolution.outboundSlot?.kind,
   ]);
 }

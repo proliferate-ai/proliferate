@@ -1,8 +1,34 @@
 import { isSessionEmptyWithIntents } from "@/lib/domain/sessions/session-emptiness";
-import { getSessionRecord, removeSessionRecord } from "@/stores/sessions/session-records";
+import {
+  getSessionRecord,
+  putSessionRecord,
+  removeSessionRecord,
+} from "@/stores/sessions/session-records";
 import { useSessionIntentStore, getPromptOutboxEntriesForSession } from "@/stores/sessions/session-intent-store";
 import { clearViewedSessionErrors } from "@/stores/preferences/workspace-ui-store";
 import { useDismissSessionMutation } from "@anyharness/sdk-react";
+import { AnyHarnessError } from "@anyharness/sdk";
+import {
+  commitSupersededSessionCreation,
+  rollbackSupersededSessionCreation,
+  supersedeInFlightSessionCreation,
+} from "@/hooks/sessions/workflows/session-creation-supersession";
+import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
+import {
+  clearStagedReplacedClientSessionAlias,
+  clearStagedReplacedSessionTombstone,
+  commitReplacedSessionTombstone,
+  releaseReplacedSessionSuppression,
+  retireStagedReplacedClientSessionAlias,
+  retireStagedReplacedSessionTombstone,
+  stageReplacedClientSessionAlias,
+  stageReplacedSessionTombstone,
+} from "@/hooks/sessions/workflows/session-replacement-tombstones";
+import {
+  runTrackedReplacementDismissal,
+} from "@/hooks/sessions/workflows/session-replacement-dismissals";
+
+const DISMISS_RETRY_DELAYS_MS = [0, 100, 500] as const;
 
 export interface EmptySessionReplacementDeps {
   closeSessionSlotStream: (sessionId: string) => void;
@@ -10,70 +36,196 @@ export interface EmptySessionReplacementDeps {
   dismissSessionMutation: ReturnType<typeof useDismissSessionMutation>;
 }
 
+export interface EmptySessionReplacementTransaction {
+  replacedSessionId: string;
+  commit: () => Promise<"retired" | "retained">;
+  rollback: () => void;
+}
+
 /**
- * Performs synchronous local cleanup of a replaced empty session and fires a
- * background runtime dismiss for materialized sessions. Returns whether cleanup
- * actually ran (false if the session had user work and was left alone).
- *
- * This is the pure-logic core used by both the hook wrapper and the session
- * creation workflow (which needs to run cleanup at an exact synchronous point).
+ * Begins a replace-in-place transaction for an unused session. The old local
+ * record is removed synchronously so the newly activated shell is the only tab,
+ * but destructive cleanup and runtime dismissal wait for commit. Rollback puts
+ * back the exact captured record and releases any paused materializer.
  */
-export function performEmptySessionReplacementCleanup(
+export function beginEmptySessionReplacement(
   sessionId: string,
   workspaceId: string | null | undefined,
   deps: EmptySessionReplacementDeps,
-): boolean {
+): EmptySessionReplacementTransaction | null {
   const record = getSessionRecord(sessionId);
   if (!record) {
-    return false;
+    return null;
   }
 
   // Check emptiness including queued prompt intents
   const outboxEntries = getPromptOutboxEntriesForSession(sessionId);
   if (!isSessionEmptyWithIntents(record, outboxEntries.length)) {
-    return false;
+    return null;
   }
 
-  // Capture materialized id before local removal destroys the record
+  // Capture everything needed for exact rollback before hiding the old shell.
   const materializedSessionId = record.materializedSessionId;
   const resolvedWorkspaceId = record.workspaceId ?? workspaceId ?? null;
-
-  // --- Local cleanup (order: stream close, intents, record, errors, cache) ---
-  deps.closeSessionSlotStream(sessionId);
-  useSessionIntentStore.getState().clearSession(sessionId);
-  removeSessionRecord(sessionId);
-  clearViewedSessionErrors([sessionId]);
-
-  if (resolvedWorkspaceId) {
-    deps.removeWorkspaceSessionRecord(resolvedWorkspaceId, sessionId);
-  }
-
-  // --- Runtime dismiss (fire-and-forget for materialized sessions) ---
+  // Stage before removing the directory record. That removal is the render
+  // signal that disables session-scoped observers while the replacement is
+  // pending. Staged suppression is memory-only and cannot trigger background
+  // dismissal until the replacement materializes successfully.
   if (materializedSessionId && resolvedWorkspaceId) {
-    void dismissMaterializedSession(
-      materializedSessionId,
+    stageReplacedSessionTombstone(
       resolvedWorkspaceId,
-      deps.dismissSessionMutation,
+      materializedSessionId,
+      [sessionId],
     );
   }
+  const stagedClientAlias = !materializedSessionId && resolvedWorkspaceId
+    ? stageReplacedClientSessionAlias(resolvedWorkspaceId, sessionId)
+    : false;
+  supersedeInFlightSessionCreation(sessionId);
 
-  return true;
+  // The replacement shell is already active. Hide only the old local record;
+  // intents, errors, query cache, and runtime truth remain untouched until the
+  // replacement materializes successfully.
+  deps.closeSessionSlotStream(sessionId);
+  removeSessionRecord(sessionId);
+
+  const restoreCapturedSession = () => {
+    if (materializedSessionId && resolvedWorkspaceId) {
+      clearStagedReplacedSessionTombstone(resolvedWorkspaceId, materializedSessionId);
+    }
+    if (stagedClientAlias && resolvedWorkspaceId) {
+      clearStagedReplacedClientSessionAlias(resolvedWorkspaceId, sessionId);
+    }
+    putSessionRecord({
+      ...record,
+      // The stream handle was closed when the shell was hidden. Restoring an
+      // "open" bit would strand the rolled-back session on a dead handle.
+      streamConnectionState: "disconnected",
+    });
+    rollbackSupersededSessionCreation(sessionId);
+  };
+  const finalizeRetirement = () => {
+    useSessionIntentStore.getState().clearSession(sessionId);
+    clearViewedSessionErrors([sessionId]);
+    if (resolvedWorkspaceId) {
+      deps.removeWorkspaceSessionRecord(
+        resolvedWorkspaceId,
+        materializedSessionId ?? sessionId,
+      );
+    }
+    commitSupersededSessionCreation(sessionId);
+    if (stagedClientAlias && resolvedWorkspaceId) {
+      retireStagedReplacedClientSessionAlias(resolvedWorkspaceId, sessionId);
+    }
+  };
+
+  let state: "pending" | "committing" | "committed" | "rolled_back" | "retained" = "pending";
+  let commitPromise: Promise<"retired" | "retained"> | null = null;
+  return {
+    replacedSessionId: sessionId,
+    commit: () => {
+      if (commitPromise) {
+        return commitPromise;
+      }
+      if (state !== "pending") {
+        return Promise.resolve(state === "committed" ? "retired" : "retained");
+      }
+      state = "committing";
+      commitPromise = (async () => {
+        if (!materializedSessionId || !resolvedWorkspaceId) {
+          finalizeRetirement();
+          state = "committed";
+          return "retired";
+        }
+
+        const durablySuppressed = commitReplacedSessionTombstone(
+          resolvedWorkspaceId,
+          materializedSessionId,
+          [sessionId],
+        );
+        const dismiss = () => runTrackedReplacementDismissal({
+          workspaceId: resolvedWorkspaceId,
+          runtimeSessionId: materializedSessionId,
+          run: () => dismissMaterializedSession(
+            materializedSessionId,
+            resolvedWorkspaceId,
+            deps.dismissSessionMutation,
+          ),
+        });
+        if (!durablySuppressed) {
+          try {
+            await dismiss();
+            retireStagedReplacedSessionTombstone(
+              resolvedWorkspaceId,
+              materializedSessionId,
+            );
+          } catch {
+            releaseReplacedSessionSuppression(
+              resolvedWorkspaceId,
+              materializedSessionId,
+            );
+            restoreCapturedSession();
+            state = "retained";
+            return "retained";
+          }
+        }
+
+        finalizeRetirement();
+        state = "committed";
+        if (durablySuppressed) {
+          void dismiss().catch(() => undefined);
+        }
+        return "retired";
+      })();
+      return commitPromise;
+    },
+    rollback: () => {
+      if (state !== "pending") {
+        return;
+      }
+      state = "rolled_back";
+      restoreCapturedSession();
+    },
+  };
 }
-
 
 async function dismissMaterializedSession(
   materializedSessionId: string,
   workspaceId: string,
   dismissMutation: ReturnType<typeof useDismissSessionMutation>,
 ): Promise<void> {
-  try {
-    await dismissMutation.mutateAsync({
-      workspaceId,
-      sessionId: materializedSessionId,
+  let lastError: unknown = null;
+  for (const delayMs of DISMISS_RETRY_DELAYS_MS) {
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+    try {
+      await dismissMutation.mutateAsync({
+        workspaceId,
+        sessionId: materializedSessionId,
+      });
+      // Keep the tombstone until a subsequent authoritative session list no
+      // longer contains this id. A list request that started before dismissal
+      // can otherwise refill the cache after local removal and resurrect the
+      // retired shell as soon as this mutation resolves.
+      return;
+    } catch (error) {
+      if (error instanceof AnyHarnessError && error.problem.status === 404) {
+        // A 404 confirms runtime absence, but an older in-flight list response
+        // may still be able to repopulate client cache. The next authoritative
+        // list is the safe point to clear the persisted tombstone.
+        return;
+      }
+      lastError = error;
+    }
+  }
+  if (lastError) {
+    captureTelemetryException(lastError, {
+      tags: {
+        action: "dismiss_replaced_empty_session",
+        domain: "sessions",
+      },
     });
-  } catch {
-    // Best-effort cleanup. The session is already removed locally; if the
-    // runtime dismiss fails the session will be garbage-collected by the
-    // runtime's normal idle-session reaper.
+    throw lastError;
   }
 }
