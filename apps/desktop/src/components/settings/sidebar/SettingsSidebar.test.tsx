@@ -291,6 +291,36 @@ describe("SettingsSidebar layout and shortcuts", () => {
     expect(onSelectSection).toHaveBeenLastCalledWith("general");
   });
 
+  it("numbers Org sections in their visible sidebar order", async () => {
+    vi.stubGlobal("navigator", {
+      platform: "MacIntel",
+      userAgent: "Mac OS X",
+    });
+
+    const onSelectSection = vi.fn();
+    renderSettingsSidebar({
+      activeScope: "org",
+      activeSection: "organization",
+      onSelectSection,
+    });
+
+    await waitFor(() => {
+      expect(getShortcutHandler("settings.section-by-index")).not.toBeNull();
+    });
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 1,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization");
+
+    expect(runShortcutHandler("settings.section-by-index", {
+      source: "keyboard",
+      digit: 2,
+    })).toBe(true);
+    expect(onSelectSection).toHaveBeenLastCalledWith("organization-members");
+  });
+
   it("keeps disabled sections in numbering but declines their shortcut", async () => {
     vi.stubGlobal("navigator", {
       platform: "MacIntel",

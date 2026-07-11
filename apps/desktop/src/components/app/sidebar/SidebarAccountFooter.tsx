@@ -235,7 +235,7 @@ export function SidebarAccountFooter() {
                     icon={<CreditCard className="size-4" />}
                     trailing={<span>{planLabel}</span>}
                     onClick={() => {
-                      navigate("/settings");
+                      navigate("/settings?section=billing");
                       close();
                     }}
                   />
@@ -260,7 +260,7 @@ export function SidebarAccountFooter() {
                   icon={<Settings className="size-4" />}
                   trailing={<span>{getShortcutDisplayLabel(SHORTCUTS.openSettings)}</span>}
                   onClick={() => {
-                    navigate("/settings");
+                    navigate("/settings?section=account");
                     close();
                   }}
                 />

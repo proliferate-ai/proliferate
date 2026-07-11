@@ -29,7 +29,7 @@ export function useAppNavigationCommandActions(): AppNavigationCommandActions {
   const { goToTopLevelRoute } = useWorkspaceNavigationWorkflow();
 
   const openSettings = useCallback(() => {
-    navigate("/settings");
+    navigate("/settings?section=account");
   }, [navigate]);
   const openShortcutsDialog = useKeyboardShortcutsDialogStore((state) => state.setOpen);
   const showKeyboardShortcuts = useCallback(() => {
