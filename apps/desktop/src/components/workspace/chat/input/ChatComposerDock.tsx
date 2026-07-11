@@ -91,7 +91,13 @@ export const ChatComposerDock = memo(forwardRef<HTMLDivElement, ChatComposerDock
           </>
         )}
         <div className={twMerge("pointer-events-none relative z-10 pb-4", CHAT_SURFACE_GUTTER_CLASSNAME, className)} {...rest}>
-          <div className={twMerge("pointer-events-auto relative @container", CHAT_COLUMN_CLASSNAME)}>
+          <div
+            className={twMerge(
+              "pointer-events-auto relative @container",
+              "[&:has([data-workspace-activity-trigger])_.chat-composer-surface]:rounded-t-none",
+              CHAT_COLUMN_CLASSNAME,
+            )}
+          >
             {dockSlots.length > 0 && (
               <DebugProfiler id="chat-composer-dock-slots">
                 <>

@@ -1,37 +1,21 @@
-import { useCallback } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@proliferate/ui/kit/DropdownMenu";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
-  ArrowUp,
-  Copy,
   Fork,
-  GitBranch,
-  GitCommit,
-  GitPullRequest,
   MoreHorizontal,
   Pencil,
   Trash,
 } from "@proliferate/ui/icons";
 import { SHORTCUTS } from "@/config/shortcuts/registry";
 import { getShortcutDisplayLabel } from "@/lib/domain/shortcuts/matching";
-
-export interface WorkspaceActionsMenuGitProps {
-  branchName: string | null;
-  hasExistingPr: boolean;
-  gitActionsDisabledReason: string | null;
-  onCopyBranch: () => void;
-  onCommit: () => void;
-  onPush: () => void;
-  onCreatePr: () => void;
-  onViewPr: () => void;
-}
+import { useWorkspaceActionsNativeMenu } from "@/hooks/workspaces/ui/use-workspace-actions-native-menu";
 
 export interface WorkspaceActionsMenuSessionProps {
   canRename: boolean;
@@ -44,28 +28,32 @@ export interface WorkspaceActionsMenuSessionProps {
 
 interface WorkspaceActionsMenuProps {
   session: WorkspaceActionsMenuSessionProps;
-  git: WorkspaceActionsMenuGitProps;
 }
 
 /**
- * The workspace three-dot menu (UX_SPEC §7): chat actions on top, then a git
- * section — branch row (read-only mono, click copies), PR entry point, and
- * commit/push. This menu replaces the header git-status entry points.
+ * Chat-only overflow actions. In Tauri the click opens an OS-native menu;
+ * Radix remains the browser/failure fallback used by tests and playgrounds.
  */
-export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps) {
-  const gitDisabled = git.gitActionsDisabledReason !== null;
-  const handlePr = useCallback(() => {
-    if (git.hasExistingPr) {
-      git.onViewPr();
-    } else {
-      git.onCreatePr();
+export function WorkspaceActionsMenu({ session }: WorkspaceActionsMenuProps) {
+  const [fallbackOpen, setFallbackOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const { showNativeMenu } = useWorkspaceActionsNativeMenu(session);
+  const handleOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setFallbackOpen(false);
+      return;
     }
-  }, [git]);
+    const rect = triggerRef.current?.getBoundingClientRect();
+    void showNativeMenu(rect ? { x: rect.left, y: rect.bottom } : undefined).then((shown) => {
+      if (!shown) setFallbackOpen(true);
+    });
+  }, [showNativeMenu]);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={fallbackOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           type="button"
           variant="ghost"
           size="icon-sm"
@@ -103,45 +91,6 @@ export function WorkspaceActionsMenu({ session, git }: WorkspaceActionsMenuProps
           Archive chat
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
-
-        {git.branchName ? (
-          <DropdownMenuItem
-            onSelect={git.onCopyBranch}
-            title="Copy branch name"
-            data-telemetry-mask="true"
-          >
-            <GitBranch className="size-4" />
-            <span className="min-w-0 flex-1 truncate font-mono text-xs leading-5 text-muted-foreground">
-              {git.branchName}
-            </span>
-            <Copy className="size-3 shrink-0 text-muted-foreground/70" />
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          disabled={gitDisabled}
-          title={git.gitActionsDisabledReason ?? undefined}
-          onSelect={handlePr}
-        >
-          <GitPullRequest className="size-4" />
-          {git.hasExistingPr ? "Open PR" : "Create PR"}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={gitDisabled}
-          title={git.gitActionsDisabledReason ?? undefined}
-          onSelect={git.onCommit}
-        >
-          <GitCommit className="size-4" />
-          Commit…
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={gitDisabled}
-          title={git.gitActionsDisabledReason ?? undefined}
-          onSelect={git.onPush}
-        >
-          <ArrowUp className="size-4" />
-          Push
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
