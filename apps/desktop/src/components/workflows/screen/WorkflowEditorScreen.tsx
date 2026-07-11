@@ -127,6 +127,17 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
     [functionProviders],
   );
 
+  // The owner's function invocations — the exact-tool universe for a required
+  // invocation on the `functions` provider (WS9b item 2).
+  const functionInvocations = useMemo(
+    () =>
+      (functionInvocationsQuery.data?.items ?? []).map((invocation) => ({
+        name: invocation.name,
+        displayName: invocation.displayName,
+      })),
+    [functionInvocationsQuery.data],
+  );
+
   // Owner's other non-archived workflows — the workflow.include picker source.
   const includableWorkflows = useMemo(
     () =>
@@ -141,6 +152,25 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
       <MainSidebarPageShell>
         <div className="mx-auto max-w-3xl px-8 pt-16">
           <EmptyState title="Workflow not found" description="It may have been archived or is not accessible." />
+        </div>
+      </MainSidebarPageShell>
+    );
+  }
+
+  // An unknown definition version / step kind is read-only in this client: never
+  // drop unknown data or save a truncated definition (feature spec §5.1).
+  if (editor.unsupported) {
+    return (
+      <MainSidebarPageShell>
+        <div className="mx-auto max-w-3xl px-8 pt-16">
+          <EmptyState
+            title="This workflow needs a newer app"
+            description={
+              editor.unsupported.reason === "version"
+                ? `It was authored in workflow format version ${String(editor.unsupported.version)}, which this version of the app can't edit. Update to edit it — your data is preserved.`
+                : "It uses a step type this version of the app doesn't recognize. Update to edit it — your data is preserved."
+            }
+          />
         </div>
       </MainSidebarPageShell>
     );
@@ -288,12 +318,12 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
             selectedStep={editor.selectedStep}
             setupTarget={editor.setupTarget}
             totalAgentCount={editor.totalAgentCount}
-            dragKey={editor.dragKey}
-            onDragKeyChange={editor.setDragKey}
-            dragSpineIndex={editor.dragSpineIndex}
-            onDragSpineIndexChange={editor.setDragSpineIndex}
-            dragLane={editor.dragLane}
-            onDragLaneChange={editor.setDragLane}
+            dragStepId={editor.dragStepId}
+            onDragStepIdChange={editor.setDragStepId}
+            dragEntryId={editor.dragEntryId}
+            onDragEntryIdChange={editor.setDragEntryId}
+            dragLaneId={editor.dragLaneId}
+            onDragLaneIdChange={editor.setDragLaneId}
             onOpenSetup={openSetup}
             onSelectAgent={selectAgent}
             onSelectStep={selectStep}
@@ -339,6 +369,8 @@ export function WorkflowEditorScreen({ workflowId }: WorkflowEditorScreenProps) 
                 slackConnected={slackChannelsQuery.data?.connected ?? false}
                 slackChannels={slackChannelsQuery.data?.channels ?? []}
                 includableWorkflows={includableWorkflows}
+                integrations={definition!.integrations}
+                functionInvocations={functionInvocations}
                 supportsGoals={harnessSupportsGoals}
                 onChange={(next) => editor.updateStep(editor.selectedStep!, editor.selectedStep!.stepIndex, next)}
                 onClose={() => editor.setSelectedStep(null)}

@@ -8,7 +8,12 @@ import {
 } from "@proliferate/product-domain/workflows/definition";
 import { stepIssues, type WorkflowIssue } from "@proliferate/product-domain/workflows/validation";
 import type { SpineAddress } from "@proliferate/product-domain/workflows/spine-editing";
-import { nodeOrdinalFor } from "@/lib/domain/workflows/spine-node-ordinal";
+import { flatStepIndex, nodeOrdinalFor, routeAfter } from "@/lib/domain/workflows/spine-node-ordinal";
+import {
+  findStepById,
+  nodeIdAt,
+  spineEntryIndexById,
+} from "@/lib/domain/workflows/drag-identity";
 import { Button } from "@proliferate/ui/primitives/Button";
 import {
   POPOVER_SURFACE_CLASS,
@@ -32,11 +37,6 @@ interface DragKey extends SpineAddress {
   stepIndex: number;
 }
 
-interface DragLane {
-  spineIndex: number;
-  laneIndex: number;
-}
-
 export interface WorkflowSpineCanvasProps {
   name: string;
   description: string;
@@ -49,12 +49,14 @@ export interface WorkflowSpineCanvasProps {
   selectedStep: DragKey | null;
   setupTarget: SpineAddress | null;
   totalAgentCount: number;
-  dragKey: DragKey | null;
-  onDragKeyChange: (key: DragKey | null) => void;
-  dragSpineIndex: number | null;
-  onDragSpineIndexChange: (index: number | null) => void;
-  dragLane: DragLane | null;
-  onDragLaneChange: (lane: DragLane | null) => void;
+  /** Stable-ID drag handles (feature spec §5.1): drops resolve IDs to the
+   * CURRENT address/index, so a rename or reorder mid-drag can't mis-target. */
+  dragStepId: string | null;
+  onDragStepIdChange: (id: string | null) => void;
+  dragEntryId: string | null;
+  onDragEntryIdChange: (id: string | null) => void;
+  dragLaneId: string | null;
+  onDragLaneIdChange: (id: string | null) => void;
   onOpenSetup: () => void;
   onSelectAgent: (address: SpineAddress) => void;
   onSelectStep: (address: SpineAddress, stepIndex: number) => void;
@@ -79,49 +81,6 @@ function resolveModelLabel(agents: readonly EditorAgent[], harnessKind: string, 
   return agent?.models.find((m) => m.id === modelId)?.label ?? modelId ?? "";
 }
 
-/** The flattened run-order step index (across the whole agents spine, lanes
- * lane-grouped in lane order) for a given (spineIndex, lane, stepIndex) —
- * matches `validateWorkflowDefinition`'s indexing (L30 / D-031). */
-function flatStepIndex(definition: WorkflowDefinition, address: SpineAddress, stepIndex: number): number {
-  let flat = 0;
-  for (let i = 0; i < address.spineIndex; i += 1) {
-    const entry = definition.agents[i]!;
-    flat += isParallelGroup(entry)
-      ? entry.parallel.reduce((n, node) => n + node.steps.length, 0)
-      : entry.steps.length;
-  }
-  const entry = definition.agents[address.spineIndex];
-  if (entry && isParallelGroup(entry)) {
-    for (const node of entry.parallel) {
-      if (node.slot === address.lane) {
-        break;
-      }
-      flat += node.steps.length;
-    }
-  }
-  return flat + stepIndex;
-}
-
-/** The routed-connector summary after a standalone agent: its branch step's
- * taken (continue) case + the values that end the run, in plain English. */
-function routeAfter(node: WorkflowAgentNode): { taken: string; others?: string } | null {
-  const branch = node.steps.find((step) => step.kind === "branch");
-  if (!branch || branch.kind !== "branch" || !branch.on) {
-    return null;
-  }
-  const taken = Object.entries(branch.cases).find(([, c]) => c.to === "continue");
-  if (!taken) {
-    return null;
-  }
-  const ends = Object.entries(branch.cases)
-    .filter(([, c]) => c.to === "end")
-    .map(([value]) => `"${value}"`);
-  return {
-    taken: `${branch.on} is "${taken[0]}"`,
-    others: ends.length > 0 ? `${ends.join(", ")} ends the run` : undefined,
-  };
-}
-
 /**
  * The editor's spine canvas (WS0B-U split of `WorkflowEditorScreen.tsx`): the
  * setup summary card, the agent-block/parallel-group spine joined by
@@ -140,12 +99,12 @@ export function WorkflowSpineCanvas({
   selectedStep,
   setupTarget,
   totalAgentCount,
-  dragKey,
-  onDragKeyChange,
-  dragSpineIndex,
-  onDragSpineIndexChange,
-  dragLane,
-  onDragLaneChange,
+  dragStepId,
+  onDragStepIdChange,
+  dragEntryId,
+  onDragEntryIdChange,
+  dragLaneId,
+  onDragLaneIdChange,
   onOpenSetup,
   onSelectAgent,
   onSelectStep,
@@ -237,15 +196,29 @@ export function WorkflowSpineCanvas({
             && selectedStep.stepIndex === stepIndex;
           return (
             <div
-              key={stepIndex}
+              key={step.id ?? stepIndex}
               draggable
-              onDragStart={() => onDragKeyChange({ ...address, stepIndex })}
-              onDragOver={(event: DragEvent) => event.preventDefault()}
-              onDrop={() => {
-                if (dragKey !== null && dragKey.spineIndex === address.spineIndex && dragKey.lane === address.lane) {
-                  onReorderStep(address, dragKey.stepIndex, stepIndex);
+              onDragStart={(event: DragEvent) => {
+                // Non-bubbling: a step drag must not also start a spine-entry drag.
+                event.stopPropagation();
+                onDragStepIdChange(step.id ?? null);
+              }}
+              onDragOver={(event: DragEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onDrop={(event: DragEvent) => {
+                event.stopPropagation();
+                if (dragStepId !== null) {
+                  const source = findStepById(definition, dragStepId);
+                  const targetNodeId = nodeIdAt(definition, address);
+                  // Reorder only within the SAME node — resolved by ID, so a lane
+                  // rename mid-drag can't retarget the drop to a sibling node.
+                  if (source && source.nodeId && targetNodeId && source.nodeId === targetNodeId) {
+                    onReorderStep(address, source.stepIndex, stepIndex);
+                  }
                 }
-                onDragKeyChange(null);
+                onDragStepIdChange(null);
               }}
             >
               <WorkflowStepRow
@@ -294,27 +267,40 @@ export function WorkflowSpineCanvas({
               />
             ) : null;
 
+          const onEntryDragStart = (event: DragEvent) => {
+            event.stopPropagation();
+            onDragEntryIdChange(entry.id ?? null);
+          };
+          const onEntryDrop = (event: DragEvent) => {
+            // Inner step/lane drags stopPropagation, so this only fires for a
+            // spine-entry drag. Resolve the dragged entry's CURRENT index by ID.
+            event.stopPropagation();
+            if (dragEntryId !== null) {
+              const from = spineEntryIndexById(definition, dragEntryId);
+              if (from !== -1) {
+                onReorderSpineEntry(from, spineIndex);
+              }
+            }
+            onDragEntryIdChange(null);
+          };
+
           if (isParallelGroup(entry)) {
             return (
-              <div key={spineIndex} className="contents">
+              <div key={entry.id ?? spineIndex} className="contents">
                 {connector}
                 <div
                   draggable
-                  onDragStart={() => onDragSpineIndexChange(spineIndex)}
+                  onDragStart={onEntryDragStart}
                   onDragOver={(event) => event.preventDefault()}
-                  onDrop={() => {
-                    if (dragSpineIndex !== null) {
-                      onReorderSpineEntry(dragSpineIndex, spineIndex);
-                    }
-                    onDragSpineIndexChange(null);
-                  }}
+                  onDrop={onEntryDrop}
                 >
                   <WorkflowParallelGroupBlock
                     entry={entry}
+                    definition={definition}
                     spineIndex={spineIndex}
                     isLastSpineEntry={spineIndex >= definition.agents.length - 1}
-                    dragLane={dragLane}
-                    onDragLaneChange={onDragLaneChange}
+                    dragLaneId={dragLaneId}
+                    onDragLaneIdChange={onDragLaneIdChange}
                     onReorderSpineEntry={onReorderSpineEntry}
                     onAddLane={onAddLane}
                     onReorderLane={onReorderLane}
@@ -329,18 +315,13 @@ export function WorkflowSpineCanvas({
 
           const address: SpineAddress = { spineIndex, lane: "-" };
           return (
-            <div key={spineIndex} className="contents">
+            <div key={entry.id ?? spineIndex} className="contents">
               {connector}
               <div
                 draggable
-                onDragStart={() => onDragSpineIndexChange(spineIndex)}
+                onDragStart={onEntryDragStart}
                 onDragOver={(event) => event.preventDefault()}
-                onDrop={() => {
-                  if (dragSpineIndex !== null) {
-                    onReorderSpineEntry(dragSpineIndex, spineIndex);
-                  }
-                  onDragSpineIndexChange(null);
-                }}
+                onDrop={onEntryDrop}
               >
                 {renderAgentBlock(entry, address, agentMenu(address, {
                   canMoveUp: spineIndex > 0,

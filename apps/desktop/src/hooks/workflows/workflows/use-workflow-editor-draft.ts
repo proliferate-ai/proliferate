@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   isParallelGroup,
-  parseWorkflowDefinition,
   serializeWorkflowDefinition,
   spineAgentNodes,
   type AgentEmitStep,
@@ -12,12 +11,20 @@ import {
 } from "@proliferate/product-domain/workflows/definition";
 import { templateSuggestions } from "@proliferate/product-domain/workflows/interpolation";
 import { WORKFLOW_STEP_META } from "@proliferate/product-domain/workflows/presentation";
+import { parseWorkflowDefinitionResult } from "@proliferate/product-domain/workflows/read-only";
 import { validateWorkflowDefinition } from "@proliferate/product-domain/workflows/validation";
 import type { SpineAddress } from "@proliferate/product-domain/workflows/spine-editing";
 import { useWorkflowDetail } from "@/hooks/access/cloud/workflows/use-workflows";
 import { useWorkflowMutations } from "@/hooks/access/cloud/workflows/use-workflow-mutations";
+import { ensureDefinitionIds } from "@/lib/domain/workflows/drag-identity";
 import { harnessSupportsGoals } from "@/lib/domain/workflows/goal-capability";
 import { useWorkflowSpineEditor } from "./use-workflow-spine-editor";
+
+/** Why a stored definition can't be edited by this client (feature spec §5.1). */
+export interface WorkflowUnsupported {
+  reason: "version" | "step_kind";
+  version: unknown;
+}
 
 interface Draft {
   name: string;
@@ -63,9 +70,13 @@ export function useWorkflowEditorDraft(workflowId: string) {
   // step and agent inspectors. Open on load: naming the workflow is the first
   // edit, and the T2-WF editor spec expects the name field visible on entry.
   const [setupOpen, setSetupOpen] = useState(true);
-  const [dragKey, setDragKey] = useState<(SpineAddress & { stepIndex: number }) | null>(null);
-  const [dragSpineIndex, setDragSpineIndex] = useState<number | null>(null);
-  const [dragLane, setDragLane] = useState<{ spineIndex: number; laneIndex: number } | null>(null);
+  // Drag state is keyed by stable draft object IDs (feature spec §5.1 / §12),
+  // never by array index or editable slot label: a lane rename or concurrent
+  // reorder mid-drag can never land a drop on the wrong node. The IDs resolve to
+  // a CURRENT address/index at drop time (drag-identity.ts).
+  const [dragStepId, setDragStepId] = useState<string | null>(null);
+  const [dragEntryId, setDragEntryId] = useState<string | null>(null);
+  const [dragLaneId, setDragLaneId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   // Tracks edits made since the last load/save, independent of `saved` (which
   // only flips true right after a successful save) — drives the header's
@@ -75,22 +86,37 @@ export function useWorkflowEditorDraft(workflowId: string) {
   // 400) right next to the Save button — previously a failed mutation just
   // stopped the spinner with no feedback. Cleared on the next edit or success.
   const [saveError, setSaveError] = useState<string | null>(null);
+  // An unsupported (unknown version / unknown step kind) stored definition is
+  // rendered read-only; the editor never drops unknown data or saves a truncated
+  // definition (feature spec §5.1, WS9b item 6).
+  const [unsupported, setUnsupported] = useState<WorkflowUnsupported | null>(null);
 
   // Seed the draft once the detail loads. A brand-new / empty definition has
-  // no agent node yet — seed one so the editor always has a slot to edit.
+  // no agent node yet — seed one so the editor always has a slot to edit. Every
+  // slot/node/group/lane/step gets a stable draft ID (drag/keys use IDs, §5.1).
   useEffect(() => {
-    if (draft === null && detailQuery.data) {
-      const raw = detailQuery.data.currentVersion?.definition;
-      const parsed = parseWorkflowDefinition(raw ?? null);
-      const definition: WorkflowDefinition =
-        parsed.agents.length > 0 ? parsed : { ...parsed, agents: [{ ...EMPTY_NODE }] };
-      setDraft({
-        name: detailQuery.data.workflow.name,
-        description: detailQuery.data.workflow.description ?? "",
-        definition,
-      });
+    if (draft !== null || unsupported !== null || !detailQuery.data) {
+      return;
     }
-  }, [draft, detailQuery.data]);
+    const name = detailQuery.data.workflow.name;
+    const description = detailQuery.data.workflow.description ?? "";
+    const raw = detailQuery.data.currentVersion?.definition ?? null;
+    if (raw === null) {
+      const definition: WorkflowDefinition = { version: 1, inputs: [], integrations: [], agents: [{ ...EMPTY_NODE }] };
+      setDraft({ name, description, definition: ensureDefinitionIds(definition) });
+      return;
+    }
+    const parsed = parseWorkflowDefinitionResult(raw);
+    if (parsed.kind === "unsupported") {
+      setUnsupported({ reason: parsed.reason, version: parsed.version });
+      return;
+    }
+    const definition: WorkflowDefinition =
+      parsed.definition.agents.length > 0
+        ? parsed.definition
+        : { ...parsed.definition, agents: [{ ...EMPTY_NODE }] };
+    setDraft({ name, description, definition: ensureDefinitionIds(definition) });
+  }, [draft, unsupported, detailQuery.data]);
 
   // Seeds (track 1f starter templates) are shared, org-agnostic rows: viewable
   // and runnable, but never editable in place. The editor opens read-only and
@@ -236,6 +262,7 @@ export function useWorkflowEditorDraft(workflowId: string) {
   return {
     detailQuery,
     isSeed,
+    unsupported,
     draft,
     definition,
     totalAgentCount,
@@ -252,12 +279,12 @@ export function useWorkflowEditorDraft(workflowId: string) {
     setSetupTarget,
     setupOpen,
     setSetupOpen,
-    dragKey,
-    setDragKey,
-    dragSpineIndex,
-    setDragSpineIndex,
-    dragLane,
-    setDragLane,
+    dragStepId,
+    setDragStepId,
+    dragEntryId,
+    setDragEntryId,
+    dragLaneId,
+    setDragLaneId,
     isSaving: updateMutation.isPending,
     isDuplicating: createMutation.isPending,
     markDirty,
