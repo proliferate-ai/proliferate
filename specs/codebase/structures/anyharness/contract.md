@@ -108,6 +108,7 @@ Owns session-facing transport types:
 - optional resume request body
 - redacted MCP binding summary read models
 - prompt request and response
+- pending-prompt edit, delete, exact-order, and steer requests
 - interaction resolution request
 
 `PromptInputBlock` is the client-to-runtime prompt shape. Plan handoff uses
@@ -124,6 +125,18 @@ not accept provenance as trusted input. The public variants are deliberately
 bounded to display-safe `agentSession`, `subagentWake`, and `system` shapes;
 internal automation provenance is redacted or omitted rather than exposed
 directly.
+
+Pending-prompt sequence numbers are immutable, runtime-owned queue-entry
+identities. They come from a durable per-session monotonic cursor and are never
+reused after execution or deletion. Array order is the queue position.
+`promptId` is only local-outbox reconciliation metadata and may be absent or
+duplicated. Reorder requests carry both the exact order the caller observed and
+the desired exact permutation; a changed current order is a typed 409 conflict.
+`pending_prompts_reordered` carries the complete authoritative queue after the
+runtime commits; reducers replace their queue from that payload rather than
+applying it as a relative move. Keeping `seq` stable also makes older reducers
+safe when they ignore the newer full-order event and later receive row updates
+or removals.
 
 `Session.mcpBindingSummaries` is a non-secret launch-time read model. It may
 describe which MCP bindings were applied or not applied, but it must not carry

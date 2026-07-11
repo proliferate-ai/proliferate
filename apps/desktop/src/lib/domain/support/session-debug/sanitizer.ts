@@ -92,5 +92,18 @@ function sanitizeSessionEventEnvelope(envelope: SessionEventEnvelope): SessionEv
       },
     };
   }
+  if (event.type === "pending_prompts_reordered") {
+    return {
+      ...envelope,
+      event: {
+        ...event,
+        pendingPrompts: event.pendingPrompts.map((prompt) => ({
+          ...prompt,
+          text: `[content:${prompt.text.length}]`,
+          contentParts: sanitizeSessionDebugContentParts(prompt.contentParts ?? []),
+        })),
+      },
+    };
+  }
   return envelope;
 }

@@ -157,8 +157,6 @@ export {
   usePromptSessionTextMutation,
   useFetchPromptAttachmentMutation,
   useForkSessionMutation,
-  useEditPendingPromptMutation,
-  useDeletePendingPromptMutation,
   useResumeSessionMutation,
   useUpdateSessionTitleMutation,
   useSetSessionGoalMutation,
@@ -172,6 +170,12 @@ export {
   useResolveSessionInteractionMutation,
   useRevealMcpElicitationUrlMutation,
 } from "./hooks/sessions.js";
+export {
+  useEditPendingPromptMutation,
+  useDeletePendingPromptMutation,
+  useReorderPendingPromptsMutation,
+  useSteerPendingPromptMutation,
+} from "./hooks/session-pending-prompts.js";
 export {
   useWorkspacePlansQuery,
   usePlanDetailQuery,

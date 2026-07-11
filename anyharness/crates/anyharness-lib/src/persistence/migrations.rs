@@ -200,6 +200,10 @@ pub(super) const MIGRATIONS: &[(&str, &str)] = &[
         "0055_loops_scheduler",
         include_str!("sql/0055_loops_scheduler.sql"),
     ),
+    (
+        "0059_pending_prompt_queue_position",
+        include_str!("sql/0059_pending_prompt_queue_position.sql"),
+    ),
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {

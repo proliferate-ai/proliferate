@@ -4,8 +4,8 @@ use crate::domains::agents::route_auth::RouteAuthError;
 use crate::domains::sessions::mcp_bindings::crypto::SessionMcpBindingsError;
 use crate::domains::sessions::runtime::{
     CreateAndStartSessionError, EnsureLiveSessionError, ForkSessionError,
-    PendingPromptMutationError, ResolveInteractionError, SendPromptError, SessionLifecycleError,
-    SetSessionConfigOptionError,
+    PendingPromptMutationError, PendingPromptQueueError, ResolveInteractionError, SendPromptError,
+    SessionLifecycleError, SetSessionConfigOptionError,
 };
 use crate::domains::sessions::service::{GetLiveConfigSnapshotError, UpdateSessionTitleError};
 
@@ -233,6 +233,28 @@ pub(super) fn map_pending_prompt_mutation_error(error: PendingPromptMutationErro
     }
 }
 
+pub(super) fn map_pending_prompt_queue_error(error: PendingPromptQueueError) -> ApiError {
+    match error {
+        PendingPromptQueueError::SessionNotFound(session_id) => ApiError::not_found(
+            format!("Session not found: {session_id}"),
+            "SESSION_NOT_FOUND",
+        ),
+        PendingPromptQueueError::NotFound => {
+            ApiError::not_found("Pending prompt not found", "PENDING_PROMPT_NOT_FOUND")
+        }
+        PendingPromptQueueError::InvalidReorder(detail) => {
+            ApiError::bad_request(detail, "INVALID_PENDING_PROMPT_ORDER")
+        }
+        PendingPromptQueueError::StaleOrder { current_seqs } => ApiError::conflict(
+            format!(
+                "Pending prompt order changed; current ordered sequence numbers are {current_seqs:?}"
+            ),
+            "PENDING_PROMPT_ORDER_STALE",
+        ),
+        PendingPromptQueueError::Internal(error) => ApiError::internal(error.to_string()),
+    }
+}
+
 pub(super) fn map_get_live_config_snapshot_error(error: GetLiveConfigSnapshotError) -> ApiError {
     match error {
         GetLiveConfigSnapshotError::SessionNotFound(session_id) => ApiError::not_found(
@@ -277,6 +299,26 @@ mod tests {
 
     use crate::domains::sessions::runtime::{CreateAndStartSessionError, ResolveInteractionError};
     use crate::domains::workspaces::access_gate::WorkspaceAccessError;
+
+    #[test]
+    fn pending_prompt_reorder_validation_maps_to_bad_request() {
+        use crate::domains::sessions::runtime::PendingPromptQueueError;
+        let response = super::map_pending_prompt_queue_error(
+            PendingPromptQueueError::InvalidReorder("duplicate sequence".to_string()),
+        )
+        .into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn stale_pending_prompt_reorder_maps_to_typed_conflict() {
+        use crate::domains::sessions::runtime::PendingPromptQueueError;
+        let response = super::map_pending_prompt_queue_error(PendingPromptQueueError::StaleOrder {
+            current_seqs: vec![2, 1],
+        })
+        .into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
 
     #[test]
     fn model_gated_maps_to_bad_request() {

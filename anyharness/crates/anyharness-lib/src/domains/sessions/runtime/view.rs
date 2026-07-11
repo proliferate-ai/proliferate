@@ -113,16 +113,16 @@ impl SessionRuntime {
         let mut active_goals = self
             .active_goal_resolver
             .active_goals_for_sessions(&session_ids)?;
-        let mut loops_by_session = self.loops_resolver.active_loops_for_sessions(&session_ids)?;
+        let mut loops_by_session = self
+            .loops_resolver
+            .active_loops_for_sessions(&session_ids)?;
         let mut rosters_by_session = self
             .activity_roster_resolver
             .activity_rosters_for_sessions(&session_ids)?;
 
         let mut views = Vec::with_capacity(records.len());
         for record in records {
-            let (processes, agents) = rosters_by_session
-                .remove(&record.id)
-                .unwrap_or_default();
+            let (processes, agents) = rosters_by_session.remove(&record.id).unwrap_or_default();
             views.push(SessionView {
                 record: record.clone(),
                 live_config: live_configs.remove(&record.id),
@@ -251,6 +251,7 @@ mod tests {
         let pending_prompts = vec![PendingPromptRecord {
             session_id: record.id.clone(),
             seq: 1,
+            queue_position: 1,
             prompt_id: Some("prompt-1".to_string()),
             text: "queued prompt".to_string(),
             blocks_json: None,

@@ -45,7 +45,10 @@ export function derivePendingPromptQueueRow(
   entry: PendingPromptQueueEntry,
 ): PendingPromptQueueRow {
   const isRuntimeConfirmed = entry.seq > 0;
-  const key = entry.promptId ? `prompt:${entry.promptId}` : `seq:${entry.seq}`;
+  // Queue seq is an immutable queue-entry identity. promptId belongs to the
+  // local outbox reconciliation path and is neither required nor guaranteed
+  // unique for runtime queue rows.
+  const key = `seq:${entry.seq}`;
   const deleteAction = resolveDeleteAction(entry);
   const isSending =
     entry.localOutboxDeliveryState === "preparing"
@@ -101,11 +104,13 @@ export function derivePendingPromptQueueRow(
     entry.localOutboxDeliveryState === "waiting_for_session"
     && !!entry.promptId;
   const showEditAction =
-    (isRuntimeConfirmed || isPreRuntimeAckPrompt) && !hasStructuredAttachments;
+    (isRuntimeConfirmed || isPreRuntimeAckPrompt)
+    && !hasStructuredAttachments;
   const showDeleteAction =
     deleteAction !== null || isPreRuntimeAckPrompt;
   const canEdit =
-    (isRuntimeConfirmed || canEditLocalPrompt) && !hasStructuredAttachments;
+    (isRuntimeConfirmed || canEditLocalPrompt)
+    && !hasStructuredAttachments;
   const canDelete = deleteAction !== null;
   return {
     key,
@@ -123,6 +128,18 @@ export function derivePendingPromptQueueRow(
     deleteDisabledReason: showDeleteAction && !canDelete ? "Available once queued" : null,
     deleteAction,
   };
+}
+
+export function findNewestEditablePendingPrompt(
+  entries: readonly PendingPromptQueueEntry[],
+): PendingPromptQueueEntry | null {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry && derivePendingPromptQueueRow(entry).canEdit) {
+      return entry;
+    }
+  }
+  return null;
 }
 
 function resolveDeleteAction(

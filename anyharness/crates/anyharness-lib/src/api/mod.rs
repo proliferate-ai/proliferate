@@ -6,4 +6,6 @@ pub mod sse;
 pub mod ws;
 
 #[cfg(test)]
+mod openapi_tests;
+#[cfg(test)]
 mod router_tests;

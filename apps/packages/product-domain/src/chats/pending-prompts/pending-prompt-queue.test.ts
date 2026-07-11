@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ContentPart } from "@anyharness/sdk";
 import {
   derivePendingPromptQueueRow,
+  findNewestEditablePendingPrompt,
   type PendingPromptQueueEntry,
 } from "./pending-prompt-queue";
 
@@ -22,7 +23,7 @@ describe("derivePendingPromptQueueRow", () => {
       promptId: "prompt-1",
       text: "first line\n\nsecond line",
     }))).toMatchObject({
-      key: "prompt:prompt-1",
+      key: "seq:1",
       seq: 1,
       kind: "plain",
       label: "first line second line",
@@ -34,7 +35,7 @@ describe("derivePendingPromptQueueRow", () => {
     });
   });
 
-  it("keeps queued row identity stable when runtime seq arrives", () => {
+  it("keys rows by queue seq and reserves prompt id for local reconciliation", () => {
     const beforeAck = derivePendingPromptQueueRow(entry({
       seq: -10,
       promptId: "prompt-stable",
@@ -44,8 +45,8 @@ describe("derivePendingPromptQueueRow", () => {
       promptId: "prompt-stable",
     }));
 
-    expect(beforeAck.key).toBe("prompt:prompt-stable");
-    expect(afterAck.key).toBe(beforeAck.key);
+    expect(beforeAck.key).toBe("seq:-10");
+    expect(afterAck.key).toBe("seq:42");
     expect(beforeAck.showEditAction).toBe(true);
     expect(beforeAck.canEdit).toBe(false);
     expect(beforeAck.editDisabledReason).toBe("Available once queued");
@@ -54,6 +55,25 @@ describe("derivePendingPromptQueueRow", () => {
     expect(beforeAck.deleteDisabledReason).toBe("Available once queued");
     expect(afterAck.canDelete).toBe(true);
     expect(afterAck.deleteAction).toBe("runtime");
+  });
+
+  it("edits runtime rows by stable seq even when prompt id is null", () => {
+    expect(derivePendingPromptQueueRow(entry({ promptId: null }))).toMatchObject({
+      key: "seq:1",
+      showEditAction: true,
+      canEdit: true,
+      showDeleteAction: true,
+      canDelete: true,
+    });
+  });
+
+  it("keeps duplicate prompt ids distinct by immutable queue seq", () => {
+    const first = derivePendingPromptQueueRow(entry({ seq: 4, promptId: "duplicate" }));
+    const second = derivePendingPromptQueueRow(entry({ seq: 9, promptId: "duplicate" }));
+
+    expect(first.key).toBe("seq:4");
+    expect(second.key).toBe("seq:9");
+    expect(first.key).not.toBe(second.key);
   });
 
   it("allows local queued prompts to be cancelled before dispatch", () => {
@@ -245,5 +265,33 @@ describe("derivePendingPromptQueueRow", () => {
       kind: "review_feedback",
       label: "Review feedback ready",
     });
+  });
+});
+
+describe("findNewestEditablePendingPrompt", () => {
+  it("skips a newer non-editable system row", () => {
+    const editable = entry({ seq: 4, promptId: null, text: "Editable runtime prompt" });
+    const wake = entry({
+      seq: 9,
+      promptId: "wake-prompt",
+      text: "Hidden wake body",
+      promptProvenance: {
+        type: "subagentWake",
+        sessionLinkId: "link-1",
+        completionId: "completion-1",
+        label: "reviewer",
+      },
+    });
+
+    expect(findNewestEditablePendingPrompt([editable, wake])).toBe(editable);
+  });
+
+  it("returns null when every queued prompt is non-editable", () => {
+    const dispatching = entry({
+      seq: -2,
+      promptId: "dispatching",
+      localOutboxDeliveryState: "dispatching",
+    });
+    expect(findNewestEditablePendingPrompt([dispatching])).toBeNull();
   });
 });

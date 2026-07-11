@@ -1,160 +1,195 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
-import { Pencil, X } from "@proliferate/ui/icons";
+import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
+import { ArrowUpRight, GripVertical, Pencil, X } from "@proliferate/ui/icons";
 import { ThinkingText } from "@/components/feedback/ThinkingText";
-import { useActiveSessionId } from "@/hooks/chat/derived/use-active-session-identity";
-import { usePromptOutboxActions } from "@/hooks/chat/workflows/use-prompt-outbox-actions";
-import { useQueuedPromptEditReader } from "@/hooks/chat/ui/use-queued-prompt-edit";
-import { useDeletePendingPrompt } from "@/hooks/sessions/workflows/use-delete-pending-prompt";
 import { CHAT_STREAMING_STATUS_LABELS } from "@/copy/chat/chat-copy";
-import {
-  derivePendingPromptQueueRow,
-  type PendingPromptQueueRow,
-} from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
+import { usePendingPromptQueue } from "@/hooks/chat/ui/use-pending-prompt-queue";
+import { useVerticalReorder } from "@/hooks/chat/ui/use-vertical-reorder";
+import type { PendingPromptQueueRow } from "@proliferate/product-domain/chats/pending-prompts/pending-prompt-queue";
 
 export interface PendingPromptListProps {
   entries: PendingPromptQueueRow[];
-  onBeginEdit: (seq: number) => void;
+  steeringSeq: number | null;
+  sessionMaterialized: boolean;
+  queueMutationInFlight: boolean;
+  onBeginEdit: (entry: PendingPromptQueueRow) => void;
   onDelete: (entry: PendingPromptQueueRow) => void;
+  onSteer: (entry: PendingPromptQueueRow) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
-/**
- * Pure presentational queue list. Takes all data as props so it can be
- * rendered in isolation (e.g. from the dev playground). Production callers
- * should use `ConnectedPendingPromptList` which wires it to the chat-input
- * store and the pending-prompt projection.
- */
+/** Presentational queued-message list with reorder, steer, edit, and remove. */
 export function PendingPromptList({
   entries,
+  steeringSeq,
+  sessionMaterialized,
+  queueMutationInFlight,
   onBeginEdit,
   onDelete,
+  onSteer,
+  onReorder,
 }: PendingPromptListProps) {
+  const { dragIndex, dropIndex, handleDragStart } = useVerticalReorder({
+    itemCount: entries.length,
+    onReorder,
+  });
+
   if (entries.length === 0) {
     return null;
   }
 
+  const runtimeEntryIndexes = entries.flatMap((entry, index) => entry.seq > 0 ? [index] : []);
+
   return (
     <div
-      // Queue panel rides the shared dock-panel shell (see
-      // ComposerAttachedPanel): 13px top radius docking into the composer,
-      // 0.5px border, 2% foreground tint. No backdrop blur — the dock bans
-      // blur over the transcript (ChatComposerDock PERF note).
-      className="relative flex flex-col overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))] px-1.5 py-1.5"
+      className="relative flex flex-col overflow-clip rounded-t-[13px] border-x-[0.5px] border-t-[0.5px] border-border bg-[color:color-mix(in_oklab,var(--color-foreground)_2%,var(--color-background))]"
       data-telemetry-mask
       aria-label="Queued messages"
     >
-      {entries.map((entry) => (
-        <PendingPromptRow
-          key={entry.key}
-          entry={entry}
-          onBeginEdit={onBeginEdit}
-          onDelete={onDelete}
-        />
-      ))}
+      <div
+        className="vertical-scroll-fade-mask flex max-h-[30dvh] flex-col gap-px overflow-y-auto px-3 py-1.5 scrollbar-none [--edge-fade-distance:8px]"
+        data-reorder-container
+      >
+        {entries.map((entry, index) => {
+          const runtimeIndex = runtimeEntryIndexes.indexOf(index);
+          return (
+            <PendingPromptRow
+              key={entry.key}
+              entry={entry}
+              index={index}
+              previousReorderIndex={runtimeIndex > 0
+                ? runtimeEntryIndexes[runtimeIndex - 1] ?? null
+                : null}
+              nextReorderIndex={runtimeIndex >= 0
+                ? runtimeEntryIndexes[runtimeIndex + 1] ?? null
+                : null}
+              runtimeEntryCount={runtimeEntryIndexes.length}
+              sessionMaterialized={sessionMaterialized}
+              isSteering={steeringSeq === entry.seq}
+              isDragging={dragIndex === index}
+              isDropTarget={dropIndex === index && dragIndex !== null && dragIndex !== index}
+              queueMutationInFlight={queueMutationInFlight}
+              onBeginEdit={onBeginEdit}
+              onDelete={onDelete}
+              onSteer={onSteer}
+              onDragStart={handleDragStart}
+              onReorder={onReorder}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 export function ConnectedPendingPromptList() {
-  const activeSessionId = useActiveSessionId();
-  const { visiblePendingPrompts, beginEdit } = useQueuedPromptEditReader();
-  const deletePendingPrompt = useDeletePendingPrompt();
-  const { cancelBeforeDispatch, dismissPrompt } = usePromptOutboxActions();
-  const rows = useMemo(
-    () => visiblePendingPrompts.map(derivePendingPromptQueueRow),
-    [visiblePendingPrompts],
-  );
-
-  const handleDelete = useCallback(
-    (entry: PendingPromptQueueRow) => {
-      if (entry.deleteAction === "cancel_local" && entry.promptId) {
-        cancelBeforeDispatch(entry.promptId);
-        return;
-      }
-      if (entry.deleteAction === "dismiss_local" && entry.promptId) {
-        dismissPrompt(entry.promptId);
-        return;
-      }
-      if (!activeSessionId || entry.deleteAction !== "runtime") return;
-      void deletePendingPrompt(activeSessionId, entry.seq);
-    },
-    [activeSessionId, cancelBeforeDispatch, deletePendingPrompt, dismissPrompt],
-  );
-  const handleBeginEdit = useCallback(
-    (seq: number) => {
-      const entry = visiblePendingPrompts.find((candidate) => candidate.seq === seq);
-      if (!entry) return;
-      beginEdit({ seq: entry.seq, text: entry.text });
-    },
-    [beginEdit, visiblePendingPrompts],
-  );
-
-  if (!activeSessionId) {
+  const queue = usePendingPromptQueue();
+  if (queue.rows.length === 0) {
     return null;
   }
 
   return (
     <PendingPromptList
-      entries={rows}
-      onBeginEdit={handleBeginEdit}
-      onDelete={handleDelete}
+      entries={queue.rows}
+      steeringSeq={queue.steeringSeq}
+      sessionMaterialized={queue.sessionMaterialized}
+      queueMutationInFlight={queue.queueMutationInFlight}
+      onBeginEdit={queue.onBeginEdit}
+      onDelete={queue.onDelete}
+      onSteer={queue.onSteer}
+      onReorder={queue.onReorder}
     />
   );
 }
 
 interface PendingPromptRowProps {
   entry: PendingPromptQueueRow;
-  onBeginEdit: (seq: number) => void;
+  index: number;
+  previousReorderIndex: number | null;
+  nextReorderIndex: number | null;
+  runtimeEntryCount: number;
+  sessionMaterialized: boolean;
+  isSteering: boolean;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  queueMutationInFlight: boolean;
+  onBeginEdit: (entry: PendingPromptQueueRow) => void;
   onDelete: (entry: PendingPromptQueueRow) => void;
+  onSteer: (entry: PendingPromptQueueRow) => void;
+  onDragStart: (index: number, event: React.PointerEvent) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
-// Hover-reveal for the row's edit/remove affordances: keep the queue calm at
-// rest instead of striping every row with always-on icon buttons.
-const QUEUE_ROW_ACTION_CLASSNAME =
-  "size-6 shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/queue-row:opacity-100 group-focus-within/queue-row:opacity-100";
+const ROW_ACTION_CLASSNAME =
+  "shrink-0 rounded-full p-0.5 text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground";
 
 function PendingPromptRow({
   entry,
+  index,
+  previousReorderIndex,
+  nextReorderIndex,
+  runtimeEntryCount,
+  sessionMaterialized,
+  isSteering,
+  isDragging,
+  isDropTarget,
+  queueMutationInFlight,
   onBeginEdit,
   onDelete,
+  onSteer,
+  onDragStart,
+  onReorder,
 }: PendingPromptRowProps) {
-  const {
-    seq,
-    label,
-    isBeingEdited,
-    isSending,
-    showEditAction,
-    canEdit,
-    editDisabledReason,
-    showDeleteAction,
-    canDelete,
-    deleteDisabledReason,
-  } = entry;
-  // While the entry is in flight the edit affordance is meaningless — the
-  // "Sending…" hint owns the trailing slot. Delete stays only when it can
-  // still act (cancel while preparing); a dead disabled X is just clutter.
-  const renderEditAction = showEditAction && !isBeingEdited && !isSending;
-  const renderDeleteAction = showDeleteAction && (!isSending || canDelete);
+  const isRuntimeConfirmed = entry.seq > 0;
+  const showSteerAction =
+    isRuntimeConfirmed
+    && sessionMaterialized
+    && !entry.isSending
+    && !entry.isBeingEdited;
+  const canDragReorder =
+    isRuntimeConfirmed
+    && sessionMaterialized
+    && runtimeEntryCount > 1
+    && !queueMutationInFlight;
+  const renderEditAction = entry.showEditAction && !entry.isBeingEdited && !entry.isSending;
+  const renderDeleteAction = entry.showDeleteAction && (!entry.isSending || entry.canDelete);
 
   const handleBeginEdit = useCallback(() => {
-    if (!canEdit) return;
-    onBeginEdit(seq);
-  }, [canEdit, onBeginEdit, seq]);
-
+    if (entry.canEdit) {
+      onBeginEdit(entry);
+    }
+  }, [entry, onBeginEdit]);
   const handleDelete = useCallback(() => {
-    if (!canDelete) return;
-    onDelete(entry);
-  }, [canDelete, entry, onDelete]);
+    if (entry.canDelete) {
+      onDelete(entry);
+    }
+  }, [entry, onDelete]);
+  const handleSteer = useCallback(() => onSteer(entry), [entry, onSteer]);
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent) => onDragStart(index, event),
+    [index, onDragStart],
+  );
+  const handleReorderKeyDown = useCallback((event: React.KeyboardEvent) => {
+    if (event.key === "ArrowUp" && previousReorderIndex != null) {
+      event.preventDefault();
+      onReorder(index, previousReorderIndex);
+    } else if (event.key === "ArrowDown" && nextReorderIndex != null) {
+      event.preventDefault();
+      onReorder(index, nextReorderIndex);
+    }
+  }, [index, nextReorderIndex, onReorder, previousReorderIndex]);
 
-  // One trailing state hint per row: sending shimmer > editing note > actions.
-  const stateHint = isSending
+  const stateHint = entry.isSending || isSteering
     ? (
       <ThinkingText
-        text={CHAT_STREAMING_STATUS_LABELS.sending}
+        text={isSteering
+          ? CHAT_STREAMING_STATUS_LABELS.steering
+          : CHAT_STREAMING_STATUS_LABELS.sending}
         className="shrink-0 text-ui-sm font-normal leading-[var(--text-ui-sm--line-height)]"
       />
     )
-    : isBeingEdited
+    : entry.isBeingEdited
       ? (
         <span className="shrink-0 text-ui-sm leading-[var(--text-ui-sm--line-height)] text-faint">
           Editing…
@@ -163,43 +198,86 @@ function PendingPromptRow({
       : null;
 
   return (
-    <div className="group/queue-row flex min-h-7 items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-accent">
-      <div
-        className={`min-w-0 flex-1 truncate text-ui leading-[var(--text-ui--line-height)] transition-colors ${
-          isBeingEdited
-            ? "text-muted-foreground/60"
-            : "text-muted-foreground group-hover/queue-row:text-foreground"
-        }`}
-        title={label}
-      >
-        {label}
-      </div>
-      {stateHint}
-      {renderEditAction && (
+    <div
+      data-reorder-item
+      className={`group/queue-row relative flex items-center justify-between gap-2 py-0.5 pl-4 transition-colors ${
+        isDragging ? "opacity-50" : ""
+      } ${isDropTarget ? "border-t border-primary" : ""}`}
+    >
+      {canDragReorder && (
         <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={!canEdit}
-          onClick={handleBeginEdit}
-          className={QUEUE_ROW_ACTION_CLASSNAME}
-          aria-label="Edit queued message"
-          title={editDisabledReason ?? "Edit queued message"}
+          type="button"
+          variant="unstyled"
+          size="unstyled"
+          aria-label="Reorder queued message"
+          aria-keyshortcuts="ArrowUp ArrowDown"
+          className="absolute left-0 flex cursor-grab items-center opacity-0 transition-opacity focus-visible:opacity-70 active:cursor-grabbing group-hover/queue-row:opacity-70"
+          onPointerDown={handlePointerDown}
+          onKeyDown={handleReorderKeyDown}
         >
-          <Pencil className="size-3.5" />
+          <GripVertical className="size-3.5 text-muted-foreground" />
         </Button>
       )}
-      {renderDeleteAction && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={!canDelete}
-          onClick={handleDelete}
-          className={QUEUE_ROW_ACTION_CLASSNAME}
-          aria-label="Delete queued message"
-          title={deleteDisabledReason ?? "Delete queued message"}
-        >
-          <X className="size-3.5" />
-        </Button>
+
+      <div
+        className={`min-w-0 flex-1 whitespace-pre-wrap text-ui leading-[var(--text-ui--line-height)] transition-colors line-clamp-2 ${
+          entry.isBeingEdited ? "text-muted-foreground/60" : "text-muted-foreground"
+        }`}
+        title={entry.label}
+      >
+        {entry.label}
+      </div>
+
+      {stateHint}
+
+      {!entry.isSending && !isSteering && (
+        <div className="flex shrink-0 items-center gap-1">
+          {showSteerAction && (
+            <Tooltip content="Send next — interrupts the current turn">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={queueMutationInFlight}
+                onClick={handleSteer}
+                className={ROW_ACTION_CLASSNAME}
+                aria-label="Send next — interrupts the current turn"
+              >
+                <ArrowUpRight className="size-3.5" />
+              </Button>
+            </Tooltip>
+          )}
+          {renderEditAction && (
+            <Tooltip content={entry.editDisabledReason ?? "Edit message"}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={!entry.canEdit || queueMutationInFlight}
+                onClick={handleBeginEdit}
+                className={ROW_ACTION_CLASSNAME}
+                aria-label="Edit queued message"
+              >
+                <Pencil className="size-3.5" />
+              </Button>
+            </Tooltip>
+          )}
+          {renderDeleteAction && (
+            <Tooltip content={entry.deleteDisabledReason ?? "Remove from queue"}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={!entry.canDelete || queueMutationInFlight}
+                onClick={handleDelete}
+                className={ROW_ACTION_CLASSNAME}
+                aria-label="Delete queued message"
+              >
+                <X className="size-3.5" />
+              </Button>
+            </Tooltip>
+          )}
+        </div>
       )}
     </div>
   );

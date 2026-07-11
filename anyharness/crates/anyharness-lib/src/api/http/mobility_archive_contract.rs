@@ -126,7 +126,8 @@ fn from_contract_session_bundle(
         pending_prompts: bundle
             .pending_prompts
             .into_iter()
-            .map(from_contract_pending_prompt)
+            .enumerate()
+            .map(|(index, record)| from_contract_pending_prompt(record, index as i64 + 1))
             .collect(),
         prompt_attachments: bundle
             .prompt_attachments
@@ -279,10 +280,14 @@ fn from_contract_pending_config_change(
     }
 }
 
-fn from_contract_pending_prompt(record: MobilityPendingPromptRecord) -> PendingPromptRecord {
+fn from_contract_pending_prompt(
+    record: MobilityPendingPromptRecord,
+    fallback_position: i64,
+) -> PendingPromptRecord {
     PendingPromptRecord {
         session_id: record.session_id,
         seq: record.seq,
+        queue_position: fallback_position,
         prompt_id: record.prompt_id,
         text: record.text,
         blocks_json: record.blocks_json,

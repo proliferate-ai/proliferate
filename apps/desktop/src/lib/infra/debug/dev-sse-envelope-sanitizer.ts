@@ -45,6 +45,19 @@ export function sanitizeDevSSEEnvelope(envelope: SessionEventEnvelope): SessionE
       },
     };
   }
+  if (event.type === "pending_prompts_reordered") {
+    return {
+      ...envelope,
+      event: {
+        ...event,
+        pendingPrompts: event.pendingPrompts.map((prompt) => ({
+          ...prompt,
+          text: summarizeSanitizedContent(prompt.contentParts ?? [], prompt.text),
+          contentParts: sanitizeContentParts(prompt.contentParts ?? []),
+        })),
+      },
+    };
+  }
   return envelope;
 }
 

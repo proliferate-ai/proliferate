@@ -79,6 +79,14 @@ display labels or from one provider's raw runtime id shape.
 
 Rules:
 
+- Model and reasoning effort share one composer pill: `Model · Effort`. Its
+  popover contains the searchable grouped model catalog followed by explicit
+  reasoning-effort choices and Fast mode when the harness exposes them. Do not
+  render a separate click-to-cycle effort-bars button or a separate Fast icon
+  button. Model-only contexts such as plan handoff may omit the tuning section.
+- Preserve authored catalog effort labels (`Extra High`, `Max`, `Ultra`, and
+  so on); do not rewrite distinct values to internal spellings such as
+  `Xhigh`.
 - The current composer chip uses the active session's effective runtime model
   once AnyHarness reports one. Pending launches may show requested model intent.
 - Picker selected state, dedupe, visibility, and display labels use canonical
@@ -98,17 +106,13 @@ showing the raw session values that required the mapping.
 
 The chat and Home composers use the same control partition and visible order:
 
-1. model/harness selector
-2. one reasoning-level control rendered as increasing bars (`effort` takes
-   precedence over `reasoning` when both describe the same tuning dimension)
-3. `fast_mode` rendered as the zap control
-4. the primary working mode selector
+1. the combined model/harness, reasoning-effort, and Fast selector
+2. the primary working mode selector
 
-Reasoning/effort renders as bars only; its level remains available through a
-`Reasoning: <level>` tooltip and accessible label. The primary working mode is
-compact text plus a subtle disclosure chevron, without a leading mode icon.
-The Fast zap remains visibly outlined when off, then fills and uses the active
-control treatment when on.
+Reasoning effort and `fast_mode` live inside the model selector described in
+§1.1; they must not also render as separate composer controls. The primary
+working mode is compact text plus a subtle disclosure chevron, without a
+leading mode icon.
 
 Visible controls use one consistent inter-item rhythm. Compact controls must
 not reserve a trailing pending-state slot when no pending state exists; that
@@ -123,11 +127,11 @@ whose working and access behavior still share one mode control.
 
 Permission/access mode and every other unclaimed configuration control render
 only under the rightmost three-dot configuration menu. A reasoning-level
-control with two or more ordered values remains visible as disabled bars when
-the runtime reports it as non-settable. Cowork hides the permission/access
-`mode` because its access policy is product-defined, but retains independent
-working-mode controls such as `collaboration_mode` together with reasoning and
-fast-mode controls.
+control with two or more ordered values remains visible in the combined picker
+when the runtime reports it as non-settable, but its choices are disabled.
+Cowork hides the permission/access `mode` because its access policy is
+product-defined, but retains independent working-mode controls such as
+`collaboration_mode` together with model tuning in the combined picker.
 
 ## 2. Dock Regions
 
@@ -194,6 +198,18 @@ until the user acts or dismisses them.
 Dock panes share one width and one neutral tray treatment. Hierarchy comes from
 state order, copy, and control weight, not from different colors or a width
 staircase.
+
+Queued user prompts render only in `outboundSlot`; they are not transcript
+rows while they remain pending. The queue supports drag or keyboard reorder,
+steer-next, edit, and delete. A queue entry's `seq` is its immutable runtime
+identity; array order is authoritative. Reorder mutations use compare-and-swap
+semantics by sending both the expected sequence order and desired sequence
+order. UI edit and steer state retain `seq`. `promptId` is reserved for local
+outbox reconciliation and is not required or assumed unique on runtime queue
+rows. With an empty composer at the start of the input, `ArrowUp` begins editing
+the newest editable queued prompt. Steering promotes the selected prompt to the
+head and interrupts the active turn so normal durable queue drain executes it
+next.
 
 ## 2.1 Composer footer semantics
 
@@ -366,6 +382,9 @@ Control-row tone rule — the pills are **monochrome**:
   in `--color-composer-control-foreground` / `-muted-foreground`, dim), while
   `active` brightens the whole button — including its icon — with only the
   detail span forced back to muted. Idle pills are fully dim.
+- The intelligence selector uses `emphasizeLabel` for the model and the muted
+  detail slot for effort, with a dim chevron. Fast mode is only a small state
+  glyph inside that same pill when enabled.
 
 As-built composer surface — `ChatComposerSurface` (product-ui) tags itself with
 the `chat-composer-surface` class, whose paint lives in

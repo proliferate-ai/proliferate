@@ -17,11 +17,15 @@ const activeTodoTrackerState = vi.hoisted(() => ({
   value: null as { entries: unknown[] } | null,
 }));
 
+const pendingPromptsState = vi.hoisted(() => ({
+  value: [] as unknown[],
+}));
+
 vi.mock("@/hooks/chat/derived/use-active-pending-session-interactions", () => ({
   useActivePendingInteractionState: () => ({
     primaryPendingInteraction: primaryPendingInteractionState.value,
   }),
-  useActivePendingPrompts: () => [],
+  useActivePendingPrompts: () => pendingPromptsState.value,
 }));
 
 vi.mock("@/hooks/chat/derived/use-active-todo-tracker", () => ({
@@ -82,9 +86,19 @@ afterEach(() => {
   workspaceStatusPanelState.value = { kind: "pending" };
   primaryPendingInteractionState.value = null;
   activeTodoTrackerState.value = null;
+  pendingPromptsState.value = [];
 });
 
 describe("useComposerDockSlots", () => {
+  it("restores queued messages in the outbound dock slot", () => {
+    pendingPromptsState.value = [{ seq: 1 }];
+    const { result } = renderHook(() => useComposerDockSlots());
+
+    render(<>{result.current.outboundSlot}</>);
+
+    expect(screen.getByTestId("pending-prompt-list")).not.toBeNull();
+  });
+
   it("renders workspace status panels by default", () => {
     const { result } = renderHook(() => useComposerDockSlots());
 

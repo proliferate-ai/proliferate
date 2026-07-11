@@ -5,10 +5,13 @@ use utoipa::ToSchema;
 
 use super::OriginContext;
 use super::{
-    ContentPart, Goal, InteractionKind, McpElicitationInteractionPayload,
-    PermissionInteractionContext, PermissionInteractionOption, PromptProvenance, SessionActivity,
-    SessionLiveConfigSnapshot, SessionMcpBindingSummary, UserInputQuestion,
+    Goal, InteractionKind, McpElicitationInteractionPayload, PermissionInteractionContext,
+    PermissionInteractionOption, SessionActivity, SessionLiveConfigSnapshot,
+    SessionMcpBindingSummary, UserInputQuestion,
 };
+
+mod pending_prompts;
+pub use pending_prompts::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -152,20 +155,6 @@ pub struct SessionActionCapabilities {
     /// `supports_loops` is `false`.
     #[serde(default)]
     pub loops_native: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingPromptSummary {
-    pub seq: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_id: Option<String>,
-    pub text: String,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub content_parts: Vec<ContentPart>,
-    pub queued_at: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub prompt_provenance: Option<PromptProvenance>,
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
@@ -455,15 +444,6 @@ pub struct PromptSessionResponse {
 pub enum PromptSessionStatus {
     Running,
     Queued,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EditPendingPromptRequest {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub blocks: Option<Vec<PromptInputBlock>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]

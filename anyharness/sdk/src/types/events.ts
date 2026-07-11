@@ -42,6 +42,8 @@ type PendingPromptUpdatedPayload =
   components["schemas"]["PendingPromptUpdatedPayload"];
 type PendingPromptRemovedPayload =
   components["schemas"]["PendingPromptRemovedPayload"];
+type PendingPromptsReorderedPayload =
+  components["schemas"]["PendingPromptsReorderedPayload"];
 
 export type SessionEventEnvelope = Omit<
   components["schemas"]["SessionEventEnvelope"],
@@ -145,6 +147,9 @@ export type PendingPromptUpdatedEvent = PendingPromptUpdatedPayload & {
 export type PendingPromptRemovedEvent = PendingPromptRemovedPayload & {
   type: "pending_prompt_removed";
 };
+export type PendingPromptsReorderedEvent = PendingPromptsReorderedPayload & {
+  type: "pending_prompts_reordered";
+};
 export type PendingPromptRemovalReason =
   components["schemas"]["PendingPromptRemovalReason"];
 export type PendingPromptSummary = components["schemas"]["PendingPromptSummary"];
@@ -239,6 +244,7 @@ export type SessionEvent =
   | PendingPromptAddedEvent
   | PendingPromptUpdatedEvent
   | PendingPromptRemovedEvent
+  | PendingPromptsReorderedEvent
   | InteractionRequestedEvent
   | InteractionResolvedEvent
   | ErrorEvent;
