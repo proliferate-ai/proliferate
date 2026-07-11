@@ -16,6 +16,9 @@ use super::managed_npm::npm_package_version;
 pub enum ReinstallReason {
     /// Caller explicitly asked (the Reinstall button).
     Requested,
+    /// A catalog pin exists, but the durable manifest cannot prove which
+    /// version is installed. Existence alone is not sufficient reconciliation.
+    MissingRecordedVersion { pinned: String },
     /// The manifest's recorded version no longer matches the declared pin.
     VersionDrift { pinned: String, recorded: String },
     /// The artifact on disk no longer matches the manifest's recorded hash.
@@ -26,6 +29,9 @@ impl std::fmt::Display for ReinstallReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Requested => write!(f, "requested"),
+            Self::MissingRecordedVersion { pinned } => {
+                write!(f, "version proof missing for pinned {pinned}")
+            }
             Self::VersionDrift { pinned, recorded } => {
                 write!(f, "version drift: pinned {pinned}, recorded {recorded}")
             }
@@ -75,12 +81,20 @@ pub fn plan_artifact(facts: &ArtifactFacts, reinstall_requested: bool) -> Option
     if reinstall_requested {
         return Some(ReinstallReason::Requested);
     }
-    if let (Some(pinned), Some(recorded)) = (&facts.pinned_version, &facts.manifest_version) {
-        if pinned != recorded {
-            return Some(ReinstallReason::VersionDrift {
-                pinned: pinned.clone(),
-                recorded: recorded.clone(),
-            });
+    if let Some(pinned) = &facts.pinned_version {
+        match &facts.manifest_version {
+            Some(recorded) if pinned != recorded => {
+                return Some(ReinstallReason::VersionDrift {
+                    pinned: pinned.clone(),
+                    recorded: recorded.clone(),
+                });
+            }
+            None => {
+                return Some(ReinstallReason::MissingRecordedVersion {
+                    pinned: pinned.clone(),
+                });
+            }
+            _ => {}
         }
     }
     if facts.checksum_matches == Some(false) {
@@ -229,13 +243,17 @@ mod tests {
     }
 
     #[test]
-    fn missing_manifest_or_pin_defers_to_the_mechanism() {
-        // No manifest yet (fresh target): mechanisms decide install-vs-skip.
+    fn a_pin_without_manifest_version_forces_reinstall() {
         assert_eq!(
             plan_artifact(&facts(Some("0.25.0"), None, None), false),
-            None
+            Some(ReinstallReason::MissingRecordedVersion {
+                pinned: "0.25.0".into(),
+            })
         );
-        // No pin declared (unpinned native CLI): attested, never forced.
+    }
+
+    #[test]
+    fn an_unpinned_artifact_without_manifest_version_defers_to_the_mechanism() {
         assert_eq!(
             plan_artifact(&facts(None, Some("1.2.3"), None), false),
             None

@@ -183,6 +183,7 @@ export function classifyFile(path) {
       "apps/desktop",
       "apps/packages",
       "anyharness",
+      "catalogs/agents",
     ]) ||
     [
       "Cargo.lock",

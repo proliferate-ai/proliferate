@@ -67,9 +67,20 @@ jobs:
           node --check scripts/ci-cd/prepare-artifact-release.mjs
           node --check scripts/ci-cd/publish-product-release.mjs
           node --check scripts/ci-cd/resolve-deploy-base.mjs
+          node --check scripts/agent-catalog/build-catalog.mjs
+          node --check scripts/agent-catalog/check-version-discipline.mjs
+          node --check scripts/agent-catalog/resolve-pins.mjs
 
       - name: Test CI/CD scripts
         run: node --test scripts/ci-cd/*.test.mjs
+
+      - name: Validate agent catalog generation discipline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: |
+          node scripts/validate-agent-catalog.mjs
+          node --test scripts/agent-catalog/*.test.mjs
+          node scripts/agent-catalog/check-version-discipline.mjs --base "$BASE_SHA"
 
       - name: Check workflow YAML parses
         run: ruby -e 'require "yaml"; ARGV.each { |file| YAML.load_file(file); puts file }' .github/workflows/*.yml

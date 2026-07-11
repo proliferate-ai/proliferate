@@ -14,7 +14,10 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use crate::{app_config, sidecar::resolve_shell_path};
+use crate::{
+    app_config,
+    sidecar::{resolve_shell_path, SharedSidecar},
+};
 
 mod launcher;
 
@@ -77,17 +80,19 @@ pub fn create_cloud_worker_state() -> SharedCloudWorkerState {
 #[tauri::command]
 pub async fn ensure_desktop_dispatch_worker(
     input: EnsureDesktopDispatchWorkerInput,
-    state: State<'_, SharedCloudWorkerState>,
+    sidecar: State<'_, SharedSidecar>,
+    worker_state: State<'_, SharedCloudWorkerState>,
 ) -> Result<EnsureDesktopDispatchWorkerResult, String> {
     let target_id = non_empty("targetId", input.target_id)?;
     let cloud_base_url = configured_cloud_base_url()?;
     let integration_gateway_home = app_config::anyharness_runtime_home_path()?;
+    let runtime_base_url = sidecar.lock().await.info.url.clone();
     let enrollment_token = input
         .enrollment_token
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
 
-    let mut guard = state.process.lock().await;
+    let mut guard = worker_state.process.lock().await;
     if let Some(process) = guard.as_mut() {
         match process.child.try_wait() {
             // A fresh enrollment token is a rotation request (e.g. a different
@@ -145,6 +150,7 @@ pub async fn ensure_desktop_dispatch_worker(
         enrollment_token.as_deref(),
         &paths.database,
         &integration_gateway_home,
+        &runtime_base_url,
     )?;
     drop(mutation_lock);
 
@@ -378,6 +384,7 @@ fn write_worker_config(
     enrollment_token: Option<&str>,
     worker_db_path: &Path,
     integration_gateway_home: &Path,
+    runtime_base_url: &str,
 ) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -396,6 +403,10 @@ fn write_worker_config(
     lines.push(format!(
         "integration_gateway_home = {}",
         toml_string(&integration_gateway_home.to_string_lossy())
+    ));
+    lines.push(format!(
+        "runtime_base_url = {}",
+        toml_string(runtime_base_url)
     ));
     // The desktop app bundle owns the worker binary; the worker must never
     // self-swap here. Explicit (the worker also defaults to false) so the
@@ -478,3 +489,6 @@ fn set_private_dir_permissions(path: &Path) -> Result<(), String> {
 fn set_private_dir_permissions(_path: &Path) -> Result<(), String> {
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

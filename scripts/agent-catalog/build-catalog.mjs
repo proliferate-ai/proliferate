@@ -22,6 +22,128 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const generatedDir = join(here, "generated");
 const outPath = join(here, "catalog.draft.json");
+const bundledPath = join(here, "..", "..", "catalogs", "agents", "catalog.json");
+const probeStatePath = join(generatedDir, ".probe-logs", "run.state");
+const resolvedCandidatePath = join(generatedDir, ".probe-logs", "resolved-candidate.json");
+const allowedArgs = new Set(["--require-complete-probe"]);
+for (const arg of process.argv.slice(2)) {
+  if (!allowedArgs.has(arg)) throw new Error(`unexpected argument ${arg}`);
+}
+const requireCompleteProbe = process.argv.includes("--require-complete-probe");
+let previousCatalog = null;
+try { previousCatalog = JSON.parse(readFileSync(bundledPath, "utf8")); } catch {}
+const previousByKind = new Map((previousCatalog?.agents ?? []).map((agent) => [agent.kind, agent]));
+
+function normalizedNativeVersion(value) {
+  if (typeof value !== "string") return null;
+  return value.match(/\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?/)?.[0] ?? null;
+}
+
+function readCompleteProbeState() {
+  let text;
+  try {
+    text = readFileSync(probeStatePath, "utf8");
+  } catch (error) {
+    throw new Error(`complete probe state is required at ${probeStatePath}: ${error.message}`);
+  }
+  const state = {};
+  for (const line of text.split("\n")) {
+    const separator = line.indexOf("=");
+    if (separator === -1) continue;
+    const key = line.slice(0, separator);
+    const value = line.slice(separator + 1);
+    (state[key] ??= []).push(value);
+  }
+  if (state.complete?.at(-1) !== "true") {
+    throw new Error("probe run is partial or failed; refusing to build a promotable catalog");
+  }
+  const required = new Set(state.required ?? []);
+  const passed = new Set(state.passed ?? []);
+  const missing = [...required].filter((id) => !passed.has(id));
+  if (missing.length) {
+    throw new Error(`probe state is incomplete; missing successful contexts: ${missing.join(", ")}`);
+  }
+  const startedAt = Date.parse(state.startedAt?.at(-1) ?? "");
+  if (!Number.isFinite(startedAt)) throw new Error("probe state has no valid startedAt timestamp");
+  const snapshotsByAgent = new Map();
+  for (const id of passed) {
+    const separator = id.indexOf(".");
+    const agent = id.slice(0, separator);
+    const context = id.slice(separator + 1);
+    const snapshotPath = join(generatedDir, `${id}.probe.json`);
+    const snapshot = JSON.parse(readFileSync(snapshotPath, "utf8"));
+    if (snapshot.agentKind !== agent || snapshot.authContext !== context) {
+      throw new Error(`${id}: probe state does not match ${snapshotPath}`);
+    }
+    const probedAt = Date.parse(snapshot.probedAt);
+    if (!Number.isFinite(probedAt) || probedAt < startedAt) {
+      throw new Error(`${id}: snapshot is missing or predates the authoritative probe run`);
+    }
+    if (!snapshotsByAgent.has(agent)) snapshotsByAgent.set(agent, []);
+    snapshotsByAgent.get(agent).push(snapshot);
+  }
+  const activeAgents = new Set(state.agent ?? []);
+  const candidate = JSON.parse(readFileSync(resolvedCandidatePath, "utf8"));
+  const candidateByKind = new Map(candidate.agents.map((agent) => [agent.kind, agent]));
+  for (const agent of snapshotsByAgent.keys()) {
+    if (!activeAgents.has(agent)) {
+      throw new Error(`${agent}: passed probe snapshots are not tied to a resolved agent`);
+    }
+  }
+  for (const agent of activeAgents) {
+    const agentSnapshots = snapshotsByAgent.get(agent) ?? [];
+    if (!agentSnapshots.length) {
+      throw new Error(`${agent}: resolved agent has no fresh successful probe context`);
+    }
+    const candidateAgent = candidateByKind.get(agent);
+    if (!candidateAgent?.harness?.agentProcess?.source) {
+      throw new Error(`${agent}: resolved candidate has no fenced agent-process source`);
+    }
+    const attestationVersions = agentSnapshots.map((snapshot) => {
+      const version = snapshot.attestation?.version;
+      if (typeof version !== "string" || !version.trim()) {
+        throw new Error(
+          `${agent}.${snapshot.authContext}: successful probe is missing agent-process attestation version`,
+        );
+      }
+      return version;
+    });
+    const observedVersions = new Set(attestationVersions);
+    if (observedVersions.size > 1 || (
+      observedVersions.size === 1 &&
+      !observedVersions.has(candidateAgent.harness.agentProcess.version)
+    )) {
+      throw new Error(
+        `${agent}: probe attestation (${[...observedVersions].join(", ") || "missing"}) ` +
+        `does not match resolved candidate ${candidateAgent.harness.agentProcess.version}`,
+      );
+    }
+    const candidateNative = candidateAgent.harness.native;
+    if (candidateNative) {
+      const observedNativeVersions = agentSnapshots.map((snapshot) => {
+        const version = snapshot.nativeCli?.version;
+        if (typeof version !== "string" || !version.trim()) {
+          throw new Error(
+            `${agent}.${snapshot.authContext}: successful probe is missing native CLI version ` +
+            `required by resolved candidate ${candidateNative.version}`,
+          );
+        }
+        return version;
+      });
+      const expected = normalizedNativeVersion(candidateNative.version);
+      const observed = new Set(observedNativeVersions.map(normalizedNativeVersion));
+      if (!expected || observed.has(null) || observed.size !== 1 || !observed.has(expected)) {
+        throw new Error(
+          `${agent}: native CLI versions (${observedNativeVersions.join(", ")}) ` +
+          `do not match resolved candidate ${candidateNative.version}`,
+        );
+      }
+    }
+  }
+  return { activeAgents, candidateByKind, passed };
+}
+
+const probeState = requireCompleteProbe ? readCompleteProbeState() : null;
 
 const AGENT_DISPLAY_NAMES = { claude: "Claude", codex: "Codex", cursor: "Cursor", opencode: "OpenCode", grok: "Grok" };
 // Which registry auth slot satisfies each probe auth context (curation-owned).
@@ -258,6 +380,11 @@ const warnings = [];
 // ---- load snapshots, grouped by agent kind --------------------------------
 const snapshots = readdirSync(generatedDir)
   .filter((name) => name.endsWith(".probe.json"))
+  .filter((name) => {
+    if (!probeState) return true;
+    const id = name.slice(0, -".probe.json".length);
+    return probeState.passed.has(id);
+  })
   .map((name) => ({ name, data: JSON.parse(readFileSync(join(generatedDir, name), "utf8")) }));
 
 const byAgent = new Map();
@@ -448,6 +575,42 @@ function mergeMatrices(matrices) {
   return merged;
 }
 
+// Gateway rows and policy are curated runtime-route metadata, not probe
+// observations. Preserve that overlay from the bundled lockfile while fresh
+// probe facts are rebuilt. Inactive agents are copied wholesale below.
+function applyBundledCuration(agent) {
+  const previous = previousByKind.get(agent.kind);
+  if (!previous) return agent;
+
+  const gatewayContext = previous.authContexts?.find((context) => context.id === "gateway");
+  if (gatewayContext && !agent.authContexts.some((context) => context.id === "gateway")) {
+    agent.authContexts.push(structuredClone(gatewayContext));
+  }
+
+  for (const previousModel of previous.session?.models ?? []) {
+    if (!previousModel.availability?.anyOf?.includes("gateway")) continue;
+    const currentModel = agent.session.models.find((model) => model.id === previousModel.id);
+    if (!currentModel) {
+      agent.session.models.push(structuredClone(previousModel));
+      continue;
+    }
+    if (!currentModel.availability.anyOf.includes("gateway")) {
+      currentModel.availability.anyOf.push("gateway");
+    }
+  }
+
+  if (previous.session?.defaults?.gateway) {
+    agent.session.defaults.gateway = previous.session.defaults.gateway;
+  }
+  if (previous.session?.gatewayPolicy) {
+    agent.session.gatewayPolicy = structuredClone(previous.session.gatewayPolicy);
+  }
+  if (probeState) {
+    agent.harness = structuredClone(probeState.candidateByKind.get(agent.kind).harness);
+  }
+  return agent;
+}
+
 // ---- per-agent collation ----------------------------------------------------
 const agents = [];
 for (const [kind, runs] of byAgent) {
@@ -600,7 +763,7 @@ for (const [kind, runs] of byAgent) {
     throw new Error(`${kind}: runs used different native CLI versions: ${[...nativeVersions].join(", ")}`);
   }
   const nativeVersion = [...nativeVersions][0];
-  agents.push({
+  agents.push(applyBundledCuration({
     kind,
     displayName: AGENT_DISPLAY_NAMES[kind] ?? kind,
     harness: {
@@ -641,7 +804,15 @@ for (const [kind, runs] of byAgent) {
       attestation,
       runs: runs.map((r) => ({ id: `${kind}.${r.data.authContext}`, snapshotPath: `generated/${r.name}` })),
     },
-  });
+  }));
+}
+
+if (probeState) {
+  for (const previous of previousCatalog?.agents ?? []) {
+    if (!probeState.activeAgents.has(previous.kind)) {
+      agents.push(structuredClone(previous));
+    }
+  }
 }
 
 // Pair the catalog with the registry it was probed against (catalog owns
@@ -664,6 +835,9 @@ const catalog = {
   catalogVersion: `${today}.${revision}`,
   probedAgainst: { registryVersion },
   generatedAt: new Date().toISOString(),
+  ...(previousCatalog?.defaultAgentKind
+    ? { defaultAgentKind: previousCatalog.defaultAgentKind }
+    : {}),
   agents: agents.sort((a, b) => a.kind.localeCompare(b.kind)),
 };
 

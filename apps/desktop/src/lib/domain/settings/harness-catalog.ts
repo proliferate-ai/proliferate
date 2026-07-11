@@ -115,6 +115,31 @@ export function normalizeGatewayModels(
     }));
 }
 
+// Local Settings must be useful without a Proliferate Cloud session. The
+// AnyHarness launch catalog is already the runtime-resolved source used by the
+// composer, so normalize that response directly instead of requiring a cloud
+// catalog snapshot merely to display the models installed on this machine.
+export function normalizeRuntimeLaunchModels(
+  harnessKind: string,
+  launchOptions: AgentLaunchOptionsResponse | undefined,
+): HarnessCatalogModel[] {
+  const models = launchOptions?.agents.find(
+    (agent) => agent.kind === harnessKind,
+  )?.models ?? [];
+
+  return models.map((model) => ({
+    id: model.id,
+    displayName: model.displayName,
+    description: normalizeString(model.description),
+    provider: normalizeString(model.provider),
+    status: normalizeString(model.status),
+    effort: normalizeEffort(model.effort),
+    fastMode: typeof model.fastMode === "boolean" ? model.fastMode : null,
+    modes: normalizeModes(model.modes),
+    enabled: true,
+  }));
+}
+
 // native/api_key routes probe on the CLIENT (catalog.py's refresh_catalog
 // contract): rich live probing is deferred, so v1 sources the payload from the
 // local AnyHarness runtime's already-resolved launch catalog (the same

@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const CATALOG_PATH = path.resolve("catalogs/agents/catalog.json");
+const DRAFT_PATH = path.resolve("scripts/agent-catalog/catalog.draft.json");
 const REGISTRY_PATH = path.resolve("catalogs/agents/registry.json");
 const VALID_AGENT_KINDS = new Set(["claude", "codex", "cursor", "opencode", "grok"]);
 const VALID_STATUSES = new Set(["candidate", "active", "deprecated", "hidden"]);
@@ -233,6 +234,15 @@ function validateAgentSettings(kind, settings) {
 }
 
 function validateRegistryPairing(catalog, registry) {
+  if (typeof registry.registryVersion !== "string" || !registry.registryVersion.trim()) {
+    fail("registryVersion must be a non-empty string");
+  }
+  if (catalog.probedAgainst?.registryVersion !== registry.registryVersion) {
+    fail(
+      `catalog probedAgainst.registryVersion '${catalog.probedAgainst?.registryVersion}' ` +
+      `does not match registryVersion '${registry.registryVersion}'`,
+    );
+  }
   const registryAgents = new Map((registry.agents ?? []).map((agent) => [agent.kind, agent]));
   for (const agent of catalog.agents ?? []) {
     if (!registryAgents.has(agent.kind)) {
@@ -241,7 +251,12 @@ function validateRegistryPairing(catalog, registry) {
   }
 }
 
-const catalog = JSON.parse(fs.readFileSync(CATALOG_PATH, "utf8"));
+const catalogRaw = fs.readFileSync(CATALOG_PATH, "utf8");
+const draftRaw = fs.readFileSync(DRAFT_PATH, "utf8");
+if (catalogRaw !== draftRaw) {
+  fail("catalog.draft.json must exactly match the bundled catalog.json lockfile");
+}
+const catalog = JSON.parse(catalogRaw);
 const registry = JSON.parse(fs.readFileSync(REGISTRY_PATH, "utf8"));
 validateCatalog(catalog);
 validateRegistryPairing(catalog, registry);

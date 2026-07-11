@@ -10,6 +10,7 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   levels: Level[];
   currentIndex: number;
   onStep: (nextValue: string) => void;
+  iconOnly?: boolean;
 }
 
 function LevelBarsIcon({ levels, currentIndex }: { levels: Level[]; currentIndex: number }) {
@@ -42,7 +43,7 @@ function LevelBarsIcon({ levels, currentIndex }: { levels: Level[]; currentIndex
   return (
     <svg
       viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
-      className="size-[0.9375rem]"
+      className="size-3.5"
       aria-hidden="true"
     >
       {bars}
@@ -51,7 +52,14 @@ function LevelBarsIcon({ levels, currentIndex }: { levels: Level[]; currentIndex
 }
 
 export const LevelBarsButton = forwardRef<HTMLButtonElement, LevelBarsButtonProps>(
-  function LevelBarsButton({ levels, currentIndex, onStep, onClick, ...props }, ref) {
+  function LevelBarsButton({
+    levels,
+    currentIndex,
+    onStep,
+    onClick,
+    iconOnly = false,
+    ...props
+  }, ref) {
     const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
       const nextIndex = (currentIndex + 1) % levels.length;
       const nextValue = levels[nextIndex]?.value ?? levels[0]?.value;
@@ -67,6 +75,7 @@ export const LevelBarsButton = forwardRef<HTMLButtonElement, LevelBarsButtonProp
       <ComposerControlButton
         ref={ref}
         icon={<LevelBarsIcon levels={levels} currentIndex={currentIndex} />}
+        iconOnly={iconOnly}
         label={currentLabel}
         onClick={handleClick}
         {...props}
