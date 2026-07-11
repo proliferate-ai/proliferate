@@ -219,6 +219,9 @@ impl SessionActor {
                             }
                             Some(SessionCommand::Close { respond_to }) => {
                                 self.resolve_pending_interactions(Resolution::Cancelled).await;
+                                self.handle
+                                    .set_execution_phase(SessionExecutionPhase::Closing)
+                                    .await;
                                 let _ = respond_to.send(Ok(()));
                                 exit_after_prompt = Some(ActorExitDisposition::Close);
                             }

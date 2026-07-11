@@ -20,6 +20,7 @@ use crate::domains::sessions::runtime::SessionRuntime;
 use crate::domains::sessions::subagents::mcp::{
     auth::SubagentMcpAuth, tools as subagent_mcp_tools, SubagentProductMcpServer,
 };
+use crate::domains::sessions::subagents::runtime::SubagentRuntime;
 use crate::domains::sessions::subagents::service::SubagentService;
 use crate::domains::workspaces::model::WorkspaceSurface;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
@@ -38,6 +39,7 @@ pub(super) struct EndpointRegistryDeps {
     pub(super) review_runtime: Arc<ReviewRuntime>,
     pub(super) review_mcp_auth: Arc<ReviewMcpAuth>,
     pub(super) subagent_service: Arc<SubagentService>,
+    pub(super) subagent_runtime: Arc<SubagentRuntime>,
     pub(super) session_runtime: Arc<SessionRuntime>,
     pub(super) workspace_runtime: Arc<WorkspaceRuntime>,
     pub(super) subagent_mcp_auth: Arc<SubagentMcpAuth>,
@@ -120,6 +122,7 @@ pub(super) fn build_product_mcp_endpoint_registry(
         review_runtime,
         review_mcp_auth,
         subagent_service,
+        subagent_runtime,
         session_runtime,
         workspace_runtime,
         subagent_mcp_auth,
@@ -137,12 +140,13 @@ pub(super) fn build_product_mcp_endpoint_registry(
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
             Arc::new(SubagentProductMcpServer::new(
                 subagent_service.clone(),
+                subagent_runtime,
                 session_runtime,
                 workspace_runtime.clone(),
                 subagent_mcp_auth,
             )),
             Some(WorkspaceOperationKind::SubagentWrite),
-            subagent_mcp_tools::MUTATING_TOOL_NAMES,
+            subagent_mcp_tools::ENDPOINT_LEASED_MUTATING_TOOL_NAMES,
         ))),
         ProductMcpEndpointRegistration::new(Arc::new(ProductMcpEndpointHandlerAdapter::new(
             Arc::new(CoworkProductMcpServer::new(

@@ -160,9 +160,11 @@ fn resolved_parent_native_session_id(facts: &SessionStartupFacts) -> Option<Stri
         .filter(|value| !value.trim().is_empty())
 }
 
-/// Precondition: a closed session row never launches.
+/// Precondition: a closing or closed session row never launches. Closing is a
+/// durable intent: after a restart it must not resurrect an actor while the
+/// close recovery pass is finalizing the session.
 pub(super) fn session_is_closed(record: &SessionRecord) -> bool {
-    record.closed_at.is_some() || record.status == "closed"
+    record.closed_at.is_some() || matches!(record.status.as_str(), "closing" | "closed")
 }
 
 /// Resolved facts a launch is assembled from. Private to the runtime module:

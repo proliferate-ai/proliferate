@@ -3,11 +3,13 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use anyharness_contract::v1::SessionExecutionPhase;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 use crate::live::sessions::actor::command::SessionCommand;
 use crate::live::sessions::actor::state::{SessionActor, SessionActorConfig};
-use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
+use crate::live::sessions::handle::{
+    LiveSessionExecutionSnapshot, LiveSessionExitGuard, LiveSessionExitSignal, LiveSessionHandle,
+};
 
 pub struct ActorReadyResult {
     pub native_session_id: String,
@@ -83,6 +85,7 @@ pub fn spawn_session_actor_pending(
     let execution = Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(
         SessionExecutionPhase::Starting,
     )));
+    let exit_signal = Arc::new(LiveSessionExitSignal::new());
 
     let handle = Arc::new(LiveSessionHandle {
         session_id: session_id.clone(),
@@ -91,6 +94,9 @@ pub fn spawn_session_actor_pending(
         busy: busy.clone(),
         execution,
         native_session_id: Arc::new(std::sync::RwLock::new(None)),
+        exit_signal: exit_signal.clone(),
+        closing: Arc::new(AtomicBool::new(false)),
+        prompt_close_gate: Arc::new(Mutex::new(())),
     });
     let actor_handle = handle.clone();
 
@@ -104,6 +110,10 @@ pub fn spawn_session_actor_pending(
             &session_id[..8.min(session_id.len())]
         ))
         .spawn(move || {
+            // Level-trigger the exit signal even if actor setup or the manager
+            // exit callback panics. The guard is dropped only as this actor
+            // thread unwinds or returns.
+            let _exit_guard = LiveSessionExitGuard::new(exit_signal);
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()

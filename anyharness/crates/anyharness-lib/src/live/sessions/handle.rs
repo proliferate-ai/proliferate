@@ -5,7 +5,7 @@ use anyharness_contract::v1::{
     ConfigApplyState, PendingInteractionSummary, SessionEventEnvelope, SessionExecutionPhase,
     SessionExecutionSummary,
 };
-use tokio::sync::{broadcast, mpsc, oneshot, RwLock};
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex, Notify, RwLock};
 
 pub use crate::live::sessions::actor::command::{
     ForkSessionCommandError, ForkSessionCommandResult, PromptAcceptError, PromptAcceptance,
@@ -89,6 +89,59 @@ pub struct LiveSessionHandle {
     pub(in crate::live::sessions) busy: Arc<AtomicBool>,
     pub(in crate::live::sessions) execution: Arc<RwLock<LiveSessionExecutionSnapshot>>,
     pub(in crate::live::sessions) native_session_id: Arc<std::sync::RwLock<Option<String>>>,
+    pub(in crate::live::sessions) exit_signal: Arc<LiveSessionExitSignal>,
+    pub(in crate::live::sessions) closing: Arc<AtomicBool>,
+    pub(in crate::live::sessions) prompt_close_gate: Arc<Mutex<()>>,
+}
+
+/// A level-triggered actor-exit signal. `Notify` alone can lose a notification
+/// when the actor exits before a waiter subscribes; the atomic flag makes late
+/// waiters complete immediately. The actor thread owns the transition.
+pub(in crate::live::sessions) struct LiveSessionExitSignal {
+    exited: AtomicBool,
+    notify: Notify,
+}
+
+impl LiveSessionExitSignal {
+    pub(in crate::live::sessions) fn new() -> Self {
+        Self {
+            exited: AtomicBool::new(false),
+            notify: Notify::new(),
+        }
+    }
+
+    pub(in crate::live::sessions) fn mark_exited(&self) {
+        if !self.exited.swap(true, Ordering::AcqRel) {
+            self.notify.notify_waiters();
+        }
+    }
+
+    async fn wait(&self) {
+        loop {
+            if self.exited.load(Ordering::Acquire) {
+                return;
+            }
+            let notified = self.notify.notified();
+            if self.exited.load(Ordering::Acquire) {
+                return;
+            }
+            notified.await;
+        }
+    }
+}
+
+pub(in crate::live::sessions) struct LiveSessionExitGuard(Arc<LiveSessionExitSignal>);
+
+impl LiveSessionExitGuard {
+    pub(in crate::live::sessions) fn new(signal: Arc<LiveSessionExitSignal>) -> Self {
+        Self(signal)
+    }
+}
+
+impl Drop for LiveSessionExitGuard {
+    fn drop(&mut self) {
+        self.0.mark_exited();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -132,6 +185,9 @@ impl LiveSessionHandle {
             busy: Arc::new(AtomicBool::new(false)),
             execution: Arc::new(RwLock::new(LiveSessionExecutionSnapshot::new(phase))),
             native_session_id: Arc::new(std::sync::RwLock::new(native_session_id)),
+            exit_signal: Arc::new(LiveSessionExitSignal::new()),
+            closing: Arc::new(AtomicBool::new(false)),
+            prompt_close_gate: Arc::new(Mutex::new(())),
         }
     }
 
@@ -156,6 +212,9 @@ impl LiveSessionHandle {
         phase: SessionExecutionPhase,
     ) {
         let mut execution = self.execution.write().await;
+        if matches!(execution.phase, SessionExecutionPhase::Closing) {
+            return;
+        }
         execution.phase = phase;
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
@@ -207,7 +266,9 @@ impl LiveSessionHandle {
         phase: SessionExecutionPhase,
     ) {
         let mut execution = self.execution.write().await;
-        execution.phase = phase;
+        if !matches!(execution.phase, SessionExecutionPhase::Closing) {
+            execution.phase = phase;
+        }
         execution.pending_interactions.clear();
         execution.updated_at = chrono::Utc::now().to_rfc3339();
     }
@@ -241,6 +302,12 @@ impl LiveSessionHandle {
         prompt_id: Option<String>,
         from_queue_seq: Option<i64>,
     ) -> Result<PromptAcceptance, LiveSessionCommandError<PromptAcceptError>> {
+        let _gate = self.prompt_close_gate.lock().await;
+        if self.closing.load(Ordering::Acquire) {
+            return Err(LiveSessionCommandError::Rejected(
+                PromptAcceptError::Closing,
+            ));
+        }
         self.send_request(|respond_to| SessionCommand::Prompt {
             payload,
             prompt_id,
@@ -397,9 +464,20 @@ impl LiveSessionHandle {
     }
 
     pub async fn close(&self) -> anyhow::Result<()> {
+        let _gate = self.prompt_close_gate.lock().await;
+        self.closing.store(true, Ordering::Release);
+        self.set_execution_phase(SessionExecutionPhase::Closing)
+            .await;
         self.send_request(|respond_to| SessionCommand::Close { respond_to })
             .await
             .map_err(anyhow_command_error)
+    }
+
+    /// Waits for the actor thread itself to finish, not merely for its Close
+    /// command acknowledgement. This is the quiescence boundary used before a
+    /// session is durably reported closed.
+    pub async fn wait_for_exit(&self) {
+        self.exit_signal.wait().await;
     }
 
     pub async fn replay_advance(&self) -> Result<(), LiveSessionCommandError<anyhow::Error>> {
@@ -428,7 +506,10 @@ impl LiveSessionHandle {
 
 #[cfg(test)]
 mod ext_method_error_tests {
-    use super::AgentExtMethodError;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use super::{AgentExtMethodError, LiveSessionExitGuard, LiveSessionExitSignal};
 
     #[test]
     fn timeout_and_internal_errors_are_agent_unavailable() {
@@ -466,5 +547,19 @@ mod ext_method_error_tests {
             .downcast_ref::<AgentExtMethodError>()
             .expect("ext-method error survives anyhow round-trip");
         assert!(downcast.is_agent_unavailable());
+    }
+
+    #[tokio::test]
+    async fn actor_exit_guard_level_triggers_late_waiters_after_panic() {
+        let signal = Arc::new(LiveSessionExitSignal::new());
+        let signal_for_actor = signal.clone();
+        let _ = std::panic::catch_unwind(move || {
+            let _guard = LiveSessionExitGuard::new(signal_for_actor);
+            panic!("simulated actor crash");
+        });
+
+        tokio::time::timeout(Duration::from_millis(20), signal.wait())
+            .await
+            .expect("late exit waiter does not deadlock");
     }
 }

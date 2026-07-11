@@ -395,6 +395,7 @@ fn parse_status(s: &str) -> v1::SessionStatus {
         "starting" => v1::SessionStatus::Starting,
         "idle" => v1::SessionStatus::Idle,
         "running" => v1::SessionStatus::Running,
+        "closing" => v1::SessionStatus::Closing,
         "completed" => v1::SessionStatus::Completed,
         "errored" => v1::SessionStatus::Errored,
         "closed" => v1::SessionStatus::Closed,

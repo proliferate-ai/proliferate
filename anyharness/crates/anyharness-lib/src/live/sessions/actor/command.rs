@@ -14,6 +14,7 @@ use crate::live::sessions::rendezvous::broker::PermissionDecision;
 #[derive(Debug)]
 pub enum PromptAcceptError {
     EnqueueFailed(String),
+    Closing,
 }
 
 #[derive(Debug, Clone)]

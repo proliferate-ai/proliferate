@@ -1,12 +1,13 @@
 use agent_client_protocol as acp;
+use anyharness_contract::v1::SessionExecutionPhase;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::live::sessions::actor::command::{Resolution, SessionCommand};
-use crate::live::sessions::AgentExtMethodError;
 use crate::live::sessions::actor::shutdown::types::ActorExitDisposition;
 use crate::live::sessions::actor::state::SessionActor;
 use crate::live::sessions::actor::turn::active::ActivePromptRequest;
 use crate::live::sessions::background_work::BackgroundWorkUpdate;
+use crate::live::sessions::AgentExtMethodError;
 
 impl SessionActor {
     /// Drives the actor to completion: the idle loop, then the established
@@ -171,6 +172,9 @@ impl SessionActor {
             }
             SessionCommand::Close { respond_to } => {
                 self.resolve_pending_interactions(Resolution::Cancelled)
+                    .await;
+                self.handle
+                    .set_execution_phase(SessionExecutionPhase::Closing)
                     .await;
                 let _ = respond_to.send(Ok(()));
                 Some(ActorExitDisposition::Close)

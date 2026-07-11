@@ -10,7 +10,7 @@ use crate::domains::cowork::model::{CoworkManagedWorkspaceRecord, CoworkThreadRe
 use crate::domains::cowork::service::CoworkService;
 use crate::domains::sessions::delegation::{self, DelegatedEventSlice};
 use crate::domains::sessions::links::completions::{
-    LinkCompletionRecord, LinkCompletionStore, LinkWakeScheduleRecord,
+    LinkCompletionRecord, LinkCompletionStore, LinkWakeScheduleRecord, ScheduleLinkWakeOutcome,
 };
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
@@ -364,8 +364,14 @@ impl CoworkDelegationService {
         coding_session_id: &str,
     ) -> Result<(SessionLinkRecord, bool), CoworkDelegationError> {
         let link = self.authorize_coding_session(parent_session_id, coding_session_id)?;
-        let inserted = self.completion_store.schedule_wake(&link.id)?;
-        Ok((link, inserted))
+        let outcome = self
+            .completion_store
+            .schedule_wake(&link.id, parent_session_id)?;
+        match outcome {
+            ScheduleLinkWakeOutcome::Inserted => Ok((link, true)),
+            ScheduleLinkWakeOutcome::AlreadyScheduled => Ok((link, false)),
+            ScheduleLinkWakeOutcome::LinkUnavailable => Err(CoworkDelegationError::Closed),
+        }
     }
 
     pub fn schedule_coding_wake_for_target(
@@ -380,8 +386,14 @@ impl CoworkDelegationService {
             coding_session_id,
             false,
         )?;
-        let inserted = self.completion_store.schedule_wake(&link.id)?;
-        Ok((link, inserted))
+        let outcome = self
+            .completion_store
+            .schedule_wake(&link.id, parent_session_id)?;
+        match outcome {
+            ScheduleLinkWakeOutcome::Inserted => Ok((link, true)),
+            ScheduleLinkWakeOutcome::AlreadyScheduled => Ok((link, false)),
+            ScheduleLinkWakeOutcome::LinkUnavailable => Err(CoworkDelegationError::Closed),
+        }
     }
 
     pub fn delete_wake_schedule(&self, session_link_id: &str) -> anyhow::Result<bool> {

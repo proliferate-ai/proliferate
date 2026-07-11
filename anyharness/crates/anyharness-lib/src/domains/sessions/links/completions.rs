@@ -27,6 +27,13 @@ pub struct LinkWakeScheduleRecord {
     pub session_link_id: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleLinkWakeOutcome {
+    Inserted,
+    AlreadyScheduled,
+    LinkUnavailable,
+}
+
 #[derive(Debug, Clone)]
 pub struct LinkCompletionInsert {
     pub completion: LinkCompletionRecord,
@@ -48,6 +55,13 @@ impl LinkCompletionStore {
         record: &LinkCompletionRecord,
     ) -> anyhow::Result<Option<LinkCompletionRecord>> {
         self.db.with_tx(|tx| {
+            if !link_is_open(tx, &record.session_link_id)? {
+                tx.execute(
+                    "DELETE FROM session_link_wake_schedules WHERE session_link_id = ?1",
+                    [record.session_link_id.as_str()],
+                )?;
+                return Ok(None);
+            }
             let inserted = tx.execute(
                 "INSERT OR IGNORE INTO session_link_completions (
                     completion_id, session_link_id, child_turn_id, child_last_event_seq, outcome,
@@ -81,6 +95,13 @@ impl LinkCompletionStore {
         let blocks_json = wake_prompt.blocks_json()?;
         let provenance_json = wake_prompt.provenance_json()?;
         self.db.with_tx(|tx| {
+            if !link_is_open(tx, &record.session_link_id)? {
+                tx.execute(
+                    "DELETE FROM session_link_wake_schedules WHERE session_link_id = ?1",
+                    [record.session_link_id.as_str()],
+                )?;
+                return Ok(None);
+            }
             let inserted = tx.execute(
                 "INSERT OR IGNORE INTO session_link_completions (
                     completion_id, session_link_id, child_turn_id, child_last_event_seq, outcome,
@@ -153,14 +174,50 @@ impl LinkCompletionStore {
         })
     }
 
-    pub fn schedule_wake(&self, session_link_id: &str) -> anyhow::Result<bool> {
-        self.db.with_conn(|conn| {
-            let inserted = conn.execute(
+    /// Atomically authorizes the link against its parent, verifies it remains
+    /// open, and inserts the one-shot schedule. This prevents a wake row from
+    /// racing in after close has removed the prior schedule.
+    pub fn schedule_wake(
+        &self,
+        session_link_id: &str,
+        parent_session_id: &str,
+    ) -> anyhow::Result<ScheduleLinkWakeOutcome> {
+        self.db.with_tx(|tx| {
+            let inserted = tx.execute(
                 "INSERT OR IGNORE INTO session_link_wake_schedules (session_link_id)
-                 VALUES (?1)",
-                [session_link_id],
+                 SELECT link.id
+                 FROM session_links AS link
+                 JOIN sessions AS child ON child.id = link.child_session_id
+                 WHERE link.id = ?1
+                   AND link.parent_session_id = ?2
+                   AND link.closed_at IS NULL
+                   AND child.closed_at IS NULL
+                   AND child.status NOT IN ('closing', 'closed')",
+                params![session_link_id, parent_session_id],
             )?;
-            Ok(inserted > 0)
+            if inserted > 0 {
+                return Ok(ScheduleLinkWakeOutcome::Inserted);
+            }
+            let remains_open = tx
+                .query_row(
+                    "SELECT 1
+                     FROM session_links AS link
+                     JOIN sessions AS child ON child.id = link.child_session_id
+                     WHERE link.id = ?1
+                       AND link.parent_session_id = ?2
+                       AND link.closed_at IS NULL
+                       AND child.closed_at IS NULL
+                       AND child.status NOT IN ('closing', 'closed')",
+                    params![session_link_id, parent_session_id],
+                    |_| Ok(()),
+                )
+                .optional()?
+                .is_some();
+            Ok(if remains_open {
+                ScheduleLinkWakeOutcome::AlreadyScheduled
+            } else {
+                ScheduleLinkWakeOutcome::LinkUnavailable
+            })
         })
     }
 
@@ -305,6 +362,16 @@ impl LinkCompletionStore {
     }
 }
 
+fn link_is_open(conn: &rusqlite::Connection, session_link_id: &str) -> rusqlite::Result<bool> {
+    conn.query_row(
+        "SELECT EXISTS(
+            SELECT 1 FROM session_links WHERE id = ?1 AND closed_at IS NULL
+         )",
+        [session_link_id],
+        |row| row.get(0),
+    )
+}
+
 fn map_completion(row: &rusqlite::Row<'_>) -> rusqlite::Result<LinkCompletionRecord> {
     let outcome: String = row.get("outcome")?;
     Ok(LinkCompletionRecord {
@@ -337,8 +404,11 @@ fn parse_outcome(value: &str) -> Result<SessionTurnOutcome, LinkCompletionParseE
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Barrier};
+
     use super::*;
     use crate::app::test_support;
+    use crate::domains::sessions::links::store::SessionLinkStore;
     use crate::persistence::Db;
 
     fn seed_link(db: &Db) {
@@ -407,8 +477,18 @@ mod tests {
         seed_link(&db);
         let store = LinkCompletionStore::new(db);
 
-        assert!(store.schedule_wake("link-1").expect("schedule wake"));
-        assert!(!store.schedule_wake("link-1").expect("schedule wake again"));
+        assert_eq!(
+            store
+                .schedule_wake("link-1", "parent-1")
+                .expect("schedule wake"),
+            ScheduleLinkWakeOutcome::Inserted
+        );
+        assert_eq!(
+            store
+                .schedule_wake("link-1", "parent-1")
+                .expect("schedule wake again"),
+            ScheduleLinkWakeOutcome::AlreadyScheduled
+        );
 
         let prompt = PromptPayload::text("wake me".to_string());
         let inserted = store
@@ -434,7 +514,12 @@ mod tests {
             .insert_completion_and_consume_schedule(&completion("turn-1"), "parent-1", &prompt)
             .expect("insert old completion")
             .expect("old completion inserted");
-        assert!(store.schedule_wake("link-1").expect("schedule later wake"));
+        assert_eq!(
+            store
+                .schedule_wake("link-1", "parent-1")
+                .expect("schedule later wake"),
+            ScheduleLinkWakeOutcome::Inserted
+        );
 
         let duplicate = store
             .insert_completion_and_consume_schedule(&completion("turn-1"), "parent-1", &prompt)
@@ -445,5 +530,135 @@ mod tests {
             .list_wake_schedules(&["link-1".to_string()])
             .expect("list schedules");
         assert_eq!(schedules.len(), 1);
+    }
+
+    #[test]
+    fn concurrent_wake_and_close_never_leave_a_schedule_on_a_closed_link() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_link(&db);
+        let barrier = Arc::new(Barrier::new(3));
+
+        let schedule_db = db.clone();
+        let schedule_barrier = barrier.clone();
+        let schedule = std::thread::spawn(move || {
+            schedule_barrier.wait();
+            LinkCompletionStore::new(schedule_db)
+                .schedule_wake("link-1", "parent-1")
+                .expect("race wake scheduling")
+        });
+        let close_db = db.clone();
+        let close_barrier = barrier.clone();
+        let close = std::thread::spawn(move || {
+            close_barrier.wait();
+            SessionLinkStore::new(close_db)
+                .close_link("link-1", "2026-03-25T00:01:00Z")
+                .expect("race link close")
+        });
+
+        barrier.wait();
+        let schedule_outcome = schedule.join().expect("schedule thread");
+        assert!(matches!(
+            schedule_outcome,
+            ScheduleLinkWakeOutcome::Inserted | ScheduleLinkWakeOutcome::LinkUnavailable
+        ));
+        assert!(close.join().expect("close thread"));
+
+        let completion_store = LinkCompletionStore::new(db.clone());
+        assert!(completion_store
+            .list_wake_schedules(&["link-1".to_string()])
+            .expect("list schedules after race")
+            .is_empty());
+        assert!(SessionLinkStore::new(db)
+            .find_by_id("link-1")
+            .expect("read link")
+            .expect("link remains as history")
+            .closed_at
+            .is_some());
+    }
+
+    #[test]
+    fn concurrent_wake_and_close_intent_never_leave_a_claim_on_closing_child() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_link(&db);
+        let barrier = Arc::new(Barrier::new(3));
+
+        let schedule_db = db.clone();
+        let schedule_barrier = barrier.clone();
+        let schedule = std::thread::spawn(move || {
+            schedule_barrier.wait();
+            LinkCompletionStore::new(schedule_db)
+                .schedule_wake("link-1", "parent-1")
+                .expect("race wake scheduling")
+        });
+        let close_db = db.clone();
+        let close_barrier = barrier.clone();
+        let closing = std::thread::spawn(move || {
+            close_barrier.wait();
+            crate::domains::sessions::store::SessionStore::new(close_db)
+                .mark_closing("child-1", "2026-03-25T00:01:00Z")
+                .expect("persist close intent")
+        });
+
+        barrier.wait();
+        let schedule_outcome = schedule.join().expect("schedule thread");
+        assert!(matches!(
+            schedule_outcome,
+            ScheduleLinkWakeOutcome::Inserted | ScheduleLinkWakeOutcome::LinkUnavailable
+        ));
+        closing.join().expect("closing thread");
+
+        let store = LinkCompletionStore::new(db.clone());
+        assert!(store
+            .list_wake_schedules(&["link-1".to_string()])
+            .expect("list schedules after close intent race")
+            .is_empty());
+        assert_eq!(
+            store
+                .schedule_wake("link-1", "parent-1")
+                .expect("reject wake after close intent"),
+            ScheduleLinkWakeOutcome::LinkUnavailable
+        );
+    }
+
+    #[test]
+    fn closed_link_rejects_late_completion_and_clears_legacy_stale_wake() {
+        let db = Db::open_in_memory().expect("open db");
+        seed_link(&db);
+        let store = LinkCompletionStore::new(db.clone());
+        assert_eq!(
+            store
+                .schedule_wake("link-1", "parent-1")
+                .expect("schedule wake"),
+            ScheduleLinkWakeOutcome::Inserted
+        );
+        db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE session_links SET closed_at = ?1 WHERE id = 'link-1'",
+                ["2026-03-25T00:01:00Z"],
+            )?;
+            Ok(())
+        })
+        .expect("simulate legacy non-atomic link close");
+
+        assert!(store
+            .insert_completion_and_consume_schedule(
+                &completion("turn-after-close"),
+                "parent-1",
+                &PromptPayload::text("wake me".to_string()),
+            )
+            .expect("attempt late completion")
+            .is_none());
+        assert!(store
+            .find_completion("link-1", "turn-after-close")
+            .expect("find completion")
+            .is_none());
+        assert!(store
+            .list_wake_schedules(&["link-1".to_string()])
+            .expect("list schedules")
+            .is_empty());
+        assert!(crate::domains::sessions::store::SessionStore::new(db)
+            .list_pending_prompts("parent-1")
+            .expect("list pending prompts")
+            .is_empty());
     }
 }

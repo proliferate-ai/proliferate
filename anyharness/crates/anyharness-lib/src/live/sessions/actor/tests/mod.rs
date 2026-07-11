@@ -33,7 +33,9 @@ use crate::domains::sessions::live_config::{
 use crate::domains::sessions::{model::SessionRecord, store::SessionStore};
 use crate::live::sessions::background_work::{BackgroundWorkOptions, BackgroundWorkRegistry};
 use crate::live::sessions::driver::types::NativeSessionStartupDisposition;
-use crate::live::sessions::handle::{LiveSessionExecutionSnapshot, LiveSessionHandle};
+use crate::live::sessions::handle::{
+    LiveSessionExecutionSnapshot, LiveSessionExitSignal, LiveSessionHandle,
+};
 use crate::live::sessions::rendezvous::broker::{InteractionRendezvous, PermissionOutcome};
 use crate::live::sessions::sink::{SessionEventSink, SessionEventSinkDebugSnapshot};
 use crate::persistence::Db;
@@ -127,6 +129,9 @@ async fn actor_exit_test_context(
         busy: Arc::new(AtomicBool::new(false)),
         execution: Arc::new(RwLock::new(execution)),
         native_session_id: Arc::new(std::sync::RwLock::new(Some("native-1".to_string()))),
+        exit_signal: Arc::new(LiveSessionExitSignal::new()),
+        closing: Arc::new(AtomicBool::new(false)),
+        prompt_close_gate: Arc::new(Mutex::new(())),
     });
 
     let event_sink = Arc::new(Mutex::new(SessionEventSink::new(

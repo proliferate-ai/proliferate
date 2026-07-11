@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 
 use axum::{
@@ -1442,6 +1442,19 @@ async fn close_subagent_route_is_idempotent_and_preserves_child_history() {
     let app = build_router(state.clone());
     let path = format!("/v1/sessions/parent-close/subagents/{subagent_id}/close");
 
+    let missing = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/v1/sessions/parent-close/subagents/subagent_missing/close")
+                .body(Body::empty())
+                .expect("missing subagent close request"),
+        )
+        .await
+        .expect("missing subagent close response");
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
     let first = app
         .clone()
         .oneshot(
@@ -1505,4 +1518,314 @@ async fn close_subagent_route_is_idempotent_and_preserves_child_history() {
     let payload: Value = serde_json::from_slice(&body).expect("parse retry response");
     assert_eq!(payload["alreadyClosed"], true);
     assert_eq!(payload["closedAt"], historical_link.closed_at.unwrap());
+}
+
+#[tokio::test]
+async fn close_subagent_keeps_active_turn_visible_until_actor_exit() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state(false);
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-subagent-close",
+        "local",
+        "/tmp/workspace-subagent-close",
+    );
+    let store = SessionStore::new(state.db.clone());
+    store
+        .insert(&subagent_route_session_record("parent-drain", "Parent"))
+        .expect("insert parent session");
+    store
+        .insert(&subagent_route_session_record("child-drain", "Child"))
+        .expect("insert child session");
+    let link = state
+        .subagent_service
+        .link_child(
+            "parent-drain",
+            "child-drain",
+            Some("Busy worker".to_string()),
+            None,
+            None,
+        )
+        .expect("link child");
+    let subagent_id = link.public_id.expect("public subagent id");
+    state
+        .subagent_service
+        .schedule_wake_for_target("parent-drain", Some(&subagent_id), None)
+        .expect("schedule child wake");
+
+    let mut actor = state
+        .acp_manager
+        .install_draining_close_handle_for_test("child-drain")
+        .await;
+    let app = build_router(state.clone());
+    let close_app = app.clone();
+    let path = format!("/v1/sessions/parent-drain/subagents/{subagent_id}/close");
+    let close_request = tokio::spawn(async move {
+        close_app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(path)
+                    .body(Body::empty())
+                    .expect("close request"),
+            )
+            .await
+            .expect("close response")
+    });
+
+    tokio::time::timeout(Duration::from_secs(1), actor.wait_for_close())
+        .await
+        .expect("actor received close");
+
+    assert!(!close_request.is_finished());
+    let retry_app = app.clone();
+    let retry_path = format!("/v1/sessions/parent-drain/subagents/{subagent_id}/close");
+    let concurrent_retry = tokio::spawn(async move {
+        retry_app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(retry_path)
+                    .body(Body::empty())
+                    .expect("concurrent retry request"),
+            )
+            .await
+            .expect("concurrent retry response")
+    });
+    tokio::task::yield_now().await;
+    assert!(!concurrent_retry.is_finished());
+    let child = store
+        .find_by_id("child-drain")
+        .expect("read draining child")
+        .expect("draining child remains durable");
+    assert_eq!(child.status, "closing");
+    assert!(child.closed_at.is_none());
+    store
+        .update_status("child-drain", "idle", "2026-05-13T18:03:00Z")
+        .expect("simulate active-turn idle write after close intent");
+    assert_eq!(
+        store
+            .find_by_id("child-drain")
+            .expect("reread draining child")
+            .expect("draining child remains durable")
+            .status,
+        "closing"
+    );
+    let live_handle = state
+        .acp_manager
+        .get_handle("child-drain")
+        .await
+        .expect("draining actor remains observable");
+    assert!(live_handle.is_busy());
+    assert_eq!(
+        live_handle.execution_snapshot().await.phase,
+        anyharness_contract::v1::SessionExecutionPhase::Closing
+    );
+    let context = state
+        .subagent_service
+        .subagent_context("parent-drain")
+        .expect("read parent roster while closing");
+    assert_eq!(context.children.len(), 1);
+    assert_eq!(context.children[0].status, "closing");
+    assert!(context.children[0].link_closed_at.is_none());
+    let roster_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/v1/sessions/parent-drain/subagents")
+                .body(Body::empty())
+                .expect("roster request"),
+        )
+        .await
+        .expect("roster response");
+    assert_eq!(roster_response.status(), StatusCode::OK);
+    let roster_body = to_bytes(roster_response.into_body(), usize::MAX)
+        .await
+        .expect("read roster response");
+    let roster: Value = serde_json::from_slice(&roster_body).expect("parse roster response");
+    assert_eq!(roster["children"][0]["status"], "closing");
+    assert!(matches!(
+        state
+            .session_runtime
+            .send_prompt(
+                "child-drain",
+                vec![anyharness_contract::v1::PromptInputBlock::Text {
+                    text: "late prompt".to_string(),
+                }],
+                None,
+            )
+            .await,
+        Err(crate::domains::sessions::runtime::SendPromptError::SessionClosed)
+    ));
+    assert_eq!(
+        state
+            .workspace_operation_gate
+            .snapshot("workspace-subagent-close")
+            .await
+            .count(
+                crate::domains::workspaces::operation_gate::WorkspaceOperationKind::SubagentWrite
+            ),
+        1
+    );
+
+    close_request.abort();
+    assert!(close_request
+        .await
+        .expect_err("originating HTTP request was cancelled")
+        .is_cancelled());
+    concurrent_retry.abort();
+    assert!(concurrent_retry
+        .await
+        .expect_err("concurrent HTTP retry was cancelled")
+        .is_cancelled());
+    assert_eq!(
+        state
+            .workspace_operation_gate
+            .snapshot("workspace-subagent-close")
+            .await
+            .count(
+                crate::domains::workspaces::operation_gate::WorkspaceOperationKind::SubagentWrite
+            ),
+        1,
+        "tracked close task retains the lease after request cancellation"
+    );
+
+    actor.release();
+    tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            if store
+                .find_by_id("child-drain")
+                .expect("poll closed child")
+                .is_some_and(|child| child.status == "closed")
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("detached close task completes after actor exit");
+    let retry_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!(
+                    "/v1/sessions/parent-drain/subagents/{subagent_id}/close"
+                ))
+                .body(Body::empty())
+                .expect("post-completion retry request"),
+        )
+        .await
+        .expect("post-completion retry response");
+    assert_eq!(retry_response.status(), StatusCode::OK);
+    let child = store
+        .find_by_id("child-drain")
+        .expect("read closed child")
+        .expect("closed child history remains");
+    assert_eq!(child.status, "closed");
+    assert!(child.closed_at.is_some());
+    assert!(state
+        .subagent_service
+        .subagent_context("parent-drain")
+        .expect("read parent roster after close")
+        .children
+        .is_empty());
+    assert!(state.acp_manager.get_handle("child-drain").await.is_none());
+    assert_eq!(
+        state
+            .workspace_operation_gate
+            .snapshot("workspace-subagent-close")
+            .await
+            .count(
+                crate::domains::workspaces::operation_gate::WorkspaceOperationKind::SubagentWrite
+            ),
+        0
+    );
+}
+
+#[tokio::test]
+async fn restart_recovery_finalizes_closing_subagent_and_clears_wake() {
+    let _lock = test_support::ENV_MUTEX
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("expected env mutex");
+    let _guard = test_support::set_bearer_token_env(None);
+    let state = test_state(false);
+    test_support::seed_workspace_with_repo_root(
+        &state.db,
+        "workspace-subagent-close",
+        "local",
+        "/tmp/workspace-subagent-close",
+    );
+    let store = SessionStore::new(state.db.clone());
+    store
+        .insert(&subagent_route_session_record("parent-restart", "Parent"))
+        .expect("insert parent session");
+    store
+        .insert(&subagent_route_session_record("child-restart", "Child"))
+        .expect("insert child session");
+    let link = state
+        .subagent_service
+        .link_child(
+            "parent-restart",
+            "child-restart",
+            Some("Interrupted worker".to_string()),
+            None,
+            None,
+        )
+        .expect("link child");
+    let subagent_id = link.public_id.expect("public subagent id");
+    state
+        .subagent_service
+        .schedule_wake_for_target("parent-restart", Some(&subagent_id), None)
+        .expect("schedule child wake");
+    store
+        .mark_closing("child-restart", "2026-05-13T18:02:00Z")
+        .expect("persist interrupted close intent");
+
+    let restarted = AppState::new(
+        PathBuf::from(format!(
+            "/tmp/anyharness-router-restart-test-{}",
+            Uuid::new_v4()
+        )),
+        "http://127.0.0.1:8457".to_string(),
+        state.db.clone(),
+        false,
+        AgentSeedStore::not_configured_dev(),
+    )
+    .expect("rebuild app state over durable database");
+    assert!(restarted
+        .acp_manager
+        .get_handle("child-restart")
+        .await
+        .is_none());
+
+    assert_eq!(
+        restarted
+            .session_runtime
+            .recover_interrupted_closes()
+            .await
+            .expect("recover interrupted close"),
+        1
+    );
+    let child = store
+        .find_by_id("child-restart")
+        .expect("read recovered child")
+        .expect("child history remains");
+    assert_eq!(child.status, "closed");
+    assert!(child.closed_at.is_some());
+    let historical_link = restarted
+        .subagent_service
+        .resolve_target_including_closed("parent-restart", Some(&subagent_id), None)
+        .expect("read recovered relationship");
+    assert!(historical_link.closed_at.is_some());
+    assert!(!restarted
+        .subagent_service
+        .delete_wake_schedule_for_link(&historical_link.id)
+        .expect("wake was cleared atomically with link close"));
 }

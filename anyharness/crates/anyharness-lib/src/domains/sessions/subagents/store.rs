@@ -1,5 +1,7 @@
 use super::model::{SubagentCompletionRecord, SubagentWakeScheduleRecord};
-use crate::domains::sessions::links::completions::{LinkCompletionInsert, LinkCompletionStore};
+use crate::domains::sessions::links::completions::{
+    LinkCompletionInsert, LinkCompletionStore, ScheduleLinkWakeOutcome,
+};
 use crate::domains::sessions::model::PendingPromptRecord;
 use crate::domains::sessions::prompt::PromptPayload;
 use crate::persistence::Db;
@@ -50,8 +52,12 @@ impl SubagentStore {
             .map(SubagentCompletionInsert::from))
     }
 
-    pub fn schedule_wake(&self, session_link_id: &str) -> anyhow::Result<bool> {
-        self.inner.schedule_wake(session_link_id)
+    pub fn schedule_wake(
+        &self,
+        session_link_id: &str,
+        parent_session_id: &str,
+    ) -> anyhow::Result<ScheduleLinkWakeOutcome> {
+        self.inner.schedule_wake(session_link_id, parent_session_id)
     }
 
     pub fn delete_wake_schedule(&self, session_link_id: &str) -> anyhow::Result<bool> {

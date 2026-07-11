@@ -12,6 +12,16 @@ pub const MUTATING_TOOL_NAMES: &[&str] = &[
     "close_subagent",
 ];
 
+/// Mutations whose workspace lease is owned by the generic product-MCP
+/// endpoint adapter. `close_subagent` deliberately is not here: its tracked
+/// runtime task must own the lease so request cancellation cannot release it
+/// while an active turn drains.
+pub const ENDPOINT_LEASED_MUTATING_TOOL_NAMES: &[&str] = &[
+    "create_subagent",
+    "send_subagent_message",
+    "schedule_subagent_wake",
+];
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSubagentArgs {
@@ -207,7 +217,10 @@ pub fn build_tool_list(ctx: &SubagentMcpContext) -> Vec<Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_tool_list, SubagentMcpContext, MUTATING_TOOL_NAMES};
+    use super::{
+        build_tool_list, SubagentMcpContext, ENDPOINT_LEASED_MUTATING_TOOL_NAMES,
+        MUTATING_TOOL_NAMES,
+    };
     use serde_json::Value;
 
     fn context(can_create: bool, existing_subagent_count: usize) -> SubagentMcpContext {
@@ -318,5 +331,7 @@ mod tests {
                 "mutating tool {tool_name} is not in the available subagent tool list"
             );
         }
+        assert!(MUTATING_TOOL_NAMES.contains(&"close_subagent"));
+        assert!(!ENDPOINT_LEASED_MUTATING_TOOL_NAMES.contains(&"close_subagent"));
     }
 }

@@ -594,13 +594,20 @@ the child session and transcript are preserved.
 Close ordering is intentionally retryable: the runtime closes the child session
 graph first, including any delegated descendants and product close hooks, then
 marks the parent-child link closed. For a busy actor, "session closed" means the
-graceful close was durably accepted while the current turn drains. If closing
-the live session fails, the active link remains discoverable so a later close
-call can retry rather than orphaning hidden work.
+actor thread has actually exited after the current turn drains; acknowledging a
+close command is not sufficient. During that drain the durable session and
+execution status is `closing`, the live handle remains observable, and the open
+link keeps the child visible in the active parent roster. New prompts and wake
+schedules are rejected. The HTTP close call completes with `closed: true` only
+after actor exit and the link-close transaction. If closing the live session
+fails or times out, the row remains `closing` and the active link remains
+discoverable so a later call or restart recovery can retry rather than falsely
+reporting or orphaning hidden work.
 
-Any pending one-shot wake schedule for the relationship is cancelled before
-the live close request. A turn that is allowed to finish after close therefore
-does not wake the parent for delegated work the user already removed.
+Persisting close intent and clearing inbound wake claims is atomic with respect
+to wake insertion, and final link close also clears claims transactionally. A
+turn that is allowed to finish after close therefore does not wake the parent
+for delegated work being removed.
 
 ## Prompt And Skill Contract
 
@@ -817,6 +824,8 @@ Done when:
 - `read_subagent_latest_turns` is the normal result path
 - transcript search and raw event reads are separate tools
 - closing a subagent removes it from active delegated-work state
+- an active close remains visible as `closing`; `closed` is reported only
+  after actor exit, and then the closed link removes it from the active roster
 - close cascades through delegated descendants and only marks links closed
   after session close succeeds
 - subagent workflow guidance is delivered as a skill, not parent system text

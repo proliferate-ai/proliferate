@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::domains::sessions::extensions::SessionClosingContext;
@@ -11,6 +12,8 @@ use crate::domains::sessions::runtime_event::{
 };
 
 use super::{SessionLifecycleError, SessionMcpRefresh, SessionRuntime};
+
+const CLOSE_DRAIN_TIMEOUT: Duration = Duration::from_secs(31 * 60);
 
 impl SessionRuntime {
     /// Rebind a workflow-bound session's live MCP servers (addendum item 2): the
@@ -77,15 +80,21 @@ impl SessionRuntime {
         &self,
         session_id: &str,
     ) -> Result<SessionRecord, SessionLifecycleError> {
-        self.access_gate
-            .assert_can_mutate_for_session(session_id)
-            .map_err(SessionLifecycleError::Access)?;
-        // L17 lockout (C13 / E8): close is a mutating verb; blocked on a held
-        // session (take-over is the only door; terminal keeps sessions alive).
-        if let Some(run_id) = self.workflow_held_run(session_id) {
-            return Err(SessionLifecycleError::WorkflowHeld { run_id });
+        let record = self.get_session_or_not_found(session_id)?;
+        // A durable closing row represents an operation that already passed
+        // admission. Retries and restart recovery must finish it even if
+        // workspace state changes while the active turn drains.
+        if record.status != "closing" {
+            self.access_gate
+                .assert_can_mutate_for_session(session_id)
+                .map_err(SessionLifecycleError::Access)?;
+            // L17 lockout (C13 / E8): close is a mutating verb; blocked on a
+            // held session (take-over is the only door; terminal keeps
+            // sessions alive).
+            if let Some(run_id) = self.workflow_held_run(session_id) {
+                return Err(SessionLifecycleError::WorkflowHeld { run_id });
+            }
         }
-        let _record = self.get_session_or_not_found(session_id)?;
         let mut visited = HashSet::new();
         self.close_session_tree(session_id, &mut visited).await?;
 
@@ -131,14 +140,30 @@ impl SessionRuntime {
         session_id: &str,
     ) -> Result<(), SessionLifecycleError> {
         if let Some(handle) = self.acp_manager.get_handle(session_id).await {
-            let _ = handle.close().await;
+            // Close acknowledges intent immediately, including during an
+            // active provider turn. The actor remains observable and the row
+            // remains `closing` until the actor thread actually exits.
+            if let Err(error) = handle.close().await {
+                tracing::debug!(
+                    session_id = %session_id,
+                    error = %error,
+                    "close acknowledgement was unavailable; waiting for actor exit"
+                );
+            }
+            tokio::time::timeout(CLOSE_DRAIN_TIMEOUT, handle.wait_for_exit())
+                .await
+                .map_err(|_| {
+                    SessionLifecycleError::Internal(anyhow::anyhow!(
+                        "session {session_id} did not finish closing within {} seconds; it remains closing",
+                        CLOSE_DRAIN_TIMEOUT.as_secs()
+                    ))
+                })?;
         }
-        self.acp_manager.remove_session(session_id).await;
 
         let now = chrono::Utc::now().to_rfc3339();
         self.session_service
             .store()
-            .mark_closed(session_id, &now)
+            .mark_closed_and_close_inbound_delegated_links(session_id, &now)
             .map_err(SessionLifecycleError::Internal)
     }
 
@@ -151,20 +176,63 @@ impl SessionRuntime {
             if !visited.insert(session_id.to_string()) {
                 return Ok(());
             }
-            if self
+            let Some(record) = self
                 .session_service
                 .store()
                 .find_by_id(session_id)
                 .map_err(SessionLifecycleError::Internal)?
-                .is_none()
-            {
+            else {
+                return Ok(());
+            };
+            if record.closed_at.is_some() || record.status == "closed" {
+                let now = chrono::Utc::now().to_rfc3339();
+                self.session_service
+                    .store()
+                    .mark_closed_and_close_inbound_delegated_links(session_id, &now)
+                    .map_err(SessionLifecycleError::Internal)?;
                 return Ok(());
             }
+            let now = chrono::Utc::now().to_rfc3339();
+            self.session_service
+                .store()
+                .mark_closing(session_id, &now)
+                .map_err(SessionLifecycleError::Internal)?;
             self.close_delegated_children(session_id, visited).await?;
             self.close_session_actor_and_mark_closed(session_id).await?;
-            self.close_inbound_delegated_links(session_id)?;
             Ok(())
         })
+    }
+
+    /// Finalizes durable close intents left behind by a process restart. No
+    /// actor survives a restart, so a closing row with no live handle is
+    /// already quiescent and can safely transition to closed. The normal tree
+    /// path also closes inbound delegated links and clears their wake rows.
+    pub async fn recover_interrupted_closes(&self) -> anyhow::Result<usize> {
+        let records = self.session_service.store().list_closing()?;
+        let mut recovered = 0usize;
+        for record in records {
+            if self.acp_manager.get_handle(&record.id).await.is_some() {
+                continue;
+            }
+            let mut visited = HashSet::new();
+            self.close_session_tree(&record.id, &mut visited)
+                .await
+                .map_err(|error| {
+                    anyhow::anyhow!("failed to recover close for {}: {error:?}", record.id)
+                })?;
+            recovered += 1;
+        }
+        Ok(recovered)
+    }
+
+    pub fn spawn_closing_recovery_pass(self: Arc<Self>) {
+        tokio::spawn(async move {
+            match self.recover_interrupted_closes().await {
+                Ok(0) => {}
+                Ok(count) => tracing::info!(count, "recovered interrupted session closes"),
+                Err(error) => tracing::warn!(error = %error, "session close recovery pass failed"),
+            }
+        });
     }
 
     async fn close_delegated_children(
@@ -220,31 +288,6 @@ impl SessionRuntime {
             close_session_ids.extend(actions.close_session_ids);
         }
         Ok(close_session_ids)
-    }
-
-    fn close_inbound_delegated_links(
-        &self,
-        child_session_id: &str,
-    ) -> Result<(), SessionLifecycleError> {
-        let links = self
-            .session_link_service
-            .list_by_child(child_session_id)
-            .map_err(SessionLifecycleError::Internal)?;
-        let now = chrono::Utc::now().to_rfc3339();
-        for link in links {
-            if !matches!(
-                link.relation,
-                SessionLinkRelation::Subagent
-                    | SessionLinkRelation::CoworkCodingSession
-                    | SessionLinkRelation::ReviewAgent
-            ) {
-                continue;
-            }
-            self.session_link_service
-                .close_link(&link.id, &now)
-                .map_err(SessionLifecycleError::Internal)?;
-        }
-        Ok(())
     }
 
     pub async fn dismiss_live_session(

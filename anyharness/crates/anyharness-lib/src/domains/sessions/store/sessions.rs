@@ -180,10 +180,47 @@ impl SessionStore {
             conn.execute(
                 "UPDATE sessions
                  SET status = ?1, updated_at = ?2
-                 WHERE id = ?3 AND closed_at IS NULL",
+                 WHERE id = ?3 AND closed_at IS NULL AND status != 'closing'",
                 params![status, now, id],
             )?;
             Ok(())
+        })
+    }
+
+    /// Persists close intent and clears every inbound-link wake claim in one
+    /// transaction. Wake insertion uses the same session/link predicates, so
+    /// either a claim lands first and is deleted here, or it observes
+    /// `closing` and is rejected. This remains valid when the wake table holds
+    /// multiple explicit/dispatch claim rows for one link.
+    pub fn mark_closing(&self, id: &str, now: &str) -> anyhow::Result<()> {
+        self.db.with_tx(|tx| {
+            tx.execute(
+                "UPDATE sessions
+                 SET status = 'closing', updated_at = CASE
+                     WHEN status = 'closing' THEN updated_at ELSE ?1 END
+                 WHERE id = ?2 AND closed_at IS NULL",
+                params![now, id],
+            )?;
+            tx.execute(
+                "DELETE FROM session_link_wake_schedules
+                 WHERE session_link_id IN (
+                     SELECT id FROM session_links WHERE child_session_id = ?1
+                 )",
+                [id],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn list_closing(&self) -> anyhow::Result<Vec<SessionRecord>> {
+        self.db.with_conn(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT * FROM sessions
+                 WHERE status = 'closing' AND closed_at IS NULL
+                 ORDER BY updated_at ASC",
+            )?;
+            let rows = stmt.query_map([], map_session)?;
+            rows.collect()
         })
     }
 
@@ -288,6 +325,45 @@ impl SessionStore {
     pub fn mark_closed(&self, id: &str, now: &str) -> anyhow::Result<()> {
         self.db.with_conn(|conn| {
             conn.execute(
+                "UPDATE sessions
+                 SET status = 'closed',
+                     closed_at = COALESCE(closed_at, ?1),
+                     updated_at = CASE WHEN closed_at IS NULL THEN ?1 ELSE updated_at END
+                 WHERE id = ?2",
+                params![now, id],
+            )?;
+            Ok(())
+        })
+    }
+
+    /// Commits the terminal session state and every inbound delegated-link
+    /// closure as one crash-safe finalization step. Wake claims are removed in
+    /// the same transaction. A restart can therefore observe either durable
+    /// `closing` with an open link, or fully `closed` with closed links—never a
+    /// closed session stranded in the active parent roster.
+    pub fn mark_closed_and_close_inbound_delegated_links(
+        &self,
+        id: &str,
+        now: &str,
+    ) -> anyhow::Result<()> {
+        self.db.with_tx(|tx| {
+            tx.execute(
+                "DELETE FROM session_link_wake_schedules
+                 WHERE session_link_id IN (
+                     SELECT id FROM session_links
+                     WHERE child_session_id = ?1
+                       AND relation IN ('subagent', 'cowork_coding_session', 'review_agent')
+                 )",
+                [id],
+            )?;
+            tx.execute(
+                "UPDATE session_links
+                 SET closed_at = COALESCE(closed_at, ?1)
+                 WHERE child_session_id = ?2
+                   AND relation IN ('subagent', 'cowork_coding_session', 'review_agent')",
+                params![now, id],
+            )?;
+            tx.execute(
                 "UPDATE sessions
                  SET status = 'closed',
                      closed_at = COALESCE(closed_at, ?1),

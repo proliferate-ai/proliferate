@@ -11,8 +11,6 @@ use axum::{
 
 use super::access::{assert_session_auth_scope, assert_workspace_mutable};
 use super::error::ApiError;
-use super::sessions_errors::map_session_lifecycle_error;
-use super::sessions_leases::acquire_session_operation_lease;
 use crate::api::auth::AuthContext;
 use crate::app::AppState;
 use crate::domains::sessions::extensions::SessionTurnOutcome;
@@ -20,7 +18,7 @@ use crate::domains::sessions::subagents::model::{
     ChildSubagentContext, CloseSubagentOutcome, ParentSubagentLinkContext, SessionSubagentsContext,
     SubagentActiveWorkCloseMode as DomainSubagentActiveWorkCloseMode, SubagentCompletionSummary,
 };
-use crate::domains::sessions::subagents::runtime::CloseSubagentError;
+use crate::domains::sessions::subagents::runtime::{CloseSubagentError, CloseSubagentTaskFailure};
 use crate::domains::sessions::subagents::service::SubagentError;
 use crate::domains::workspaces::operation_gate::WorkspaceOperationKind;
 
@@ -106,7 +104,8 @@ pub async fn schedule_subagent_wake(
     responses(
         (status = 200, description = "Closed the delegated relationship and gracefully closed the child session without deleting history", body = CloseSubagentResponse),
         (status = 404, description = "Parent session or subagent not found", body = anyharness_contract::v1::ProblemDetails),
-        (status = 409, description = "Workspace or subagent state blocks close", body = anyharness_contract::v1::ProblemDetails),
+        (status = 409, description = "Workspace mutation or workflow ownership blocks close", body = anyharness_contract::v1::ProblemDetails),
+        (status = 503, description = "Close could not acquire its workspace lease or the active turn exceeded the bounded drain wait", body = anyharness_contract::v1::ProblemDetails),
     ),
     tag = "sessions"
 )]
@@ -116,9 +115,6 @@ pub async fn close_subagent(
     Path((session_id, subagent_id)): Path<(String, String)>,
 ) -> Result<Json<CloseSubagentResponse>, ApiError> {
     assert_session_auth_scope(&state, &auth, &session_id)?;
-    let _operation =
-        acquire_session_operation_lease(&state, &session_id, WorkspaceOperationKind::SubagentWrite)
-            .await?;
     let outcome = state
         .subagent_runtime
         .close_subagent(&session_id, &subagent_id)
@@ -215,6 +211,7 @@ fn session_status_to_contract(status: &str) -> SessionStatus {
         "starting" => SessionStatus::Starting,
         "idle" => SessionStatus::Idle,
         "running" => SessionStatus::Running,
+        "closing" => SessionStatus::Closing,
         "completed" => SessionStatus::Completed,
         "closed" => SessionStatus::Closed,
         _ => SessionStatus::Errored,
@@ -272,8 +269,43 @@ fn map_subagent_error(error: SubagentError) -> ApiError {
 
 fn map_close_subagent_error(error: CloseSubagentError) -> ApiError {
     match error {
+        CloseSubagentError::Subagent(SubagentError::NotOwned) => ApiError::not_found(
+            "Subagent not found for this parent session.",
+            "SUBAGENT_NOT_FOUND",
+        ),
         CloseSubagentError::Subagent(error) => map_subagent_error(error),
-        CloseSubagentError::SessionLifecycle(error) => map_session_lifecycle_error(error),
-        CloseSubagentError::Internal(error) => ApiError::internal(error.to_string()),
+        CloseSubagentError::Task(CloseSubagentTaskFailure::SessionNotFound(session_id)) => {
+            ApiError::not_found(
+                format!("Session not found: {session_id}"),
+                "SESSION_NOT_FOUND",
+            )
+        }
+        CloseSubagentError::Task(CloseSubagentTaskFailure::WorkflowHeld { run_id }) => {
+            ApiError::conflict(
+                format!("Session is held by workflow run {run_id}."),
+                "SESSION_WORKFLOW_HELD",
+            )
+        }
+        CloseSubagentError::Task(CloseSubagentTaskFailure::MutationBlocked(_)) => {
+            ApiError::conflict(
+                "Workspace is not writable right now.",
+                "WORKSPACE_MUTATION_BLOCKED",
+            )
+        }
+        CloseSubagentError::Task(CloseSubagentTaskFailure::TimedOut) => {
+            ApiError::service_unavailable(
+                "Subagent is still finishing its active turn and remains closing.",
+                "SUBAGENT_CLOSE_PENDING",
+            )
+        }
+        CloseSubagentError::Task(CloseSubagentTaskFailure::LeaseTimedOut) => {
+            ApiError::service_unavailable(
+                "Subagent close could not start because the workspace is busy; retry the request.",
+                "SUBAGENT_CLOSE_UNAVAILABLE",
+            )
+        }
+        CloseSubagentError::Task(CloseSubagentTaskFailure::Internal(detail)) => {
+            ApiError::internal(detail)
+        }
     }
 }

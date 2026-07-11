@@ -14,11 +14,13 @@ use crate::domains::sessions::delegation::{
     parent_to_child_provenance, READ_EVENTS_DEFAULT_LIMIT, READ_EVENTS_MAX_LIMIT,
 };
 use crate::domains::sessions::runtime::SessionRuntime;
+use crate::domains::sessions::subagents::runtime::SubagentRuntime;
 use crate::integrations::mcp::json_rpc::deserialize_args;
 use crate::origin::OriginContext;
 
 pub async fn call_tool(
     service: &SubagentService,
+    subagent_runtime: &SubagentRuntime,
     session_runtime: &SessionRuntime,
     ctx: &SubagentMcpContext,
     name: &str,
@@ -134,7 +136,7 @@ pub async fn call_tool(
         }
         "close_subagent" => {
             let args: ChildSessionArgs = deserialize_args(arguments)?;
-            close_subagent(service, session_runtime, &ctx.parent_session_id, args).await
+            close_subagent(service, subagent_runtime, &ctx.parent_session_id, args).await
         }
         _ => Err(anyhow::anyhow!("unknown tool: {name}")),
     }
@@ -468,7 +470,7 @@ async fn get_subagent_status(
 
 async fn close_subagent(
     service: &SubagentService,
-    session_runtime: &SessionRuntime,
+    subagent_runtime: &SubagentRuntime,
     parent_session_id: &str,
     args: ChildSessionArgs,
 ) -> anyhow::Result<Value> {
@@ -477,31 +479,20 @@ async fn close_subagent(
         args.subagent_id.as_deref(),
         None,
     )?;
-    let already_closed = link.closed_at.is_some();
-    let now = chrono::Utc::now().to_rfc3339();
-    if let Some(child) = service.session_store().find_by_id(&link.child_session_id)? {
-        if child.closed_at.is_none() {
-            session_runtime
-                .close_live_session(&link.child_session_id)
-                .await
-                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-        }
-    }
-    if !already_closed {
-        service.close_link(&link, &now)?;
-    }
-    let refreshed = service.resolve_target_including_closed(
-        parent_session_id,
-        args.subagent_id.as_deref(),
-        None,
-    )?;
+    let subagent_id = link
+        .public_id
+        .ok_or_else(|| anyhow::anyhow!("subagent relationship is missing its stable id"))?;
+    let outcome = subagent_runtime
+        .close_subagent(parent_session_id, &subagent_id)
+        .await?;
     Ok(json!({
-        "subagentId": refreshed.public_id,
-        "sessionLinkId": refreshed.id,
-        "childSessionId": refreshed.child_session_id,
-        "label": refreshed.label,
+        "subagentId": outcome.subagent_id,
+        "sessionLinkId": outcome.session_link_id,
+        "childSessionId": outcome.child_session_id,
+        "label": outcome.label,
         "closed": true,
-        "alreadyClosed": already_closed,
-        "closedAt": refreshed.closed_at.unwrap_or(now),
+        "alreadyClosed": outcome.already_closed,
+        "closedAt": outcome.closed_at,
+        "activeWorkCloseMode": "finish_current_turn",
     }))
 }

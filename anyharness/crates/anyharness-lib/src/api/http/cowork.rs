@@ -391,6 +391,7 @@ fn session_status_to_contract(status: &str) -> SessionStatus {
         "starting" => SessionStatus::Starting,
         "idle" => SessionStatus::Idle,
         "running" => SessionStatus::Running,
+        "closing" => SessionStatus::Closing,
         "completed" => SessionStatus::Completed,
         "closed" => SessionStatus::Closed,
         _ => SessionStatus::Errored,

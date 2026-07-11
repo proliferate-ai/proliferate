@@ -4217,7 +4217,7 @@ export interface components {
             turnId?: string | null;
         };
         /** @enum {string} */
-        SessionExecutionPhase: "starting" | "running" | "awaiting_interaction" | "idle" | "errored" | "closed";
+        SessionExecutionPhase: "starting" | "running" | "awaiting_interaction" | "idle" | "closing" | "errored" | "closed";
         SessionExecutionSummary: {
             hasLiveHandle: boolean;
             pendingInteractions?: components["schemas"]["PendingInteractionSummary"][];
@@ -4347,7 +4347,7 @@ export interface components {
             requestedModelId?: string | null;
         };
         /** @enum {string} */
-        SessionStatus: "starting" | "idle" | "running" | "completed" | "errored" | "closed";
+        SessionStatus: "starting" | "idle" | "running" | "closing" | "completed" | "errored" | "closed";
         SessionSubagentsResponse: {
             children: components["schemas"]["ChildSubagentSummary"][];
             parent?: null | components["schemas"]["ParentSubagentLinkSummary"];
@@ -7459,8 +7459,17 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Workspace or subagent state blocks close */
+            /** @description Workspace mutation or workflow ownership blocks close */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Close could not acquire its workspace lease or the active turn exceeded the bounded drain wait */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

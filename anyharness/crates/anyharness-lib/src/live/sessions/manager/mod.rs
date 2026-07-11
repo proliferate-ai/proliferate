@@ -106,3 +106,79 @@ impl Clone for LiveSessionManager {
         }
     }
 }
+
+#[cfg(test)]
+pub(crate) struct DrainingCloseTestControl {
+    pub close_received: tokio::sync::oneshot::Receiver<()>,
+    release: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+#[cfg(test)]
+impl DrainingCloseTestControl {
+    pub async fn wait_for_close(&mut self) {
+        let _ = (&mut self.close_received).await;
+    }
+
+    pub fn release(mut self) {
+        if let Some(release) = self.release.take() {
+            let _ = release.send(());
+        }
+    }
+}
+
+#[cfg(test)]
+impl LiveSessionManager {
+    /// Installs a deterministic busy-actor double: Close is acknowledged and
+    /// made observable, but actor exit is held until the test releases it.
+    /// This exercises the real handle/manager quiescence boundary without a
+    /// provider process.
+    pub(crate) async fn install_draining_close_handle_for_test(
+        &self,
+        session_id: &str,
+    ) -> DrainingCloseTestControl {
+        use anyharness_contract::v1::{SessionEventEnvelope, SessionExecutionPhase};
+        use tokio::sync::{broadcast, mpsc, oneshot};
+
+        use crate::live::sessions::actor::command::SessionCommand;
+
+        let (command_tx, mut command_rx) = mpsc::channel(8);
+        let (event_tx, _) = broadcast::channel::<SessionEventEnvelope>(8);
+        let handle = Arc::new(LiveSessionHandle::new_for_test(
+            session_id,
+            command_tx,
+            event_tx,
+            Some("test-native-session".to_string()),
+            SessionExecutionPhase::Running,
+        ));
+        handle.set_busy(true);
+        self.live_sessions
+            .write()
+            .await
+            .insert(session_id.to_string(), handle.clone());
+
+        let (close_received_tx, close_received) = oneshot::channel();
+        let (release, release_rx) = oneshot::channel();
+        let sessions = self.live_sessions.clone();
+        let session_id = session_id.to_string();
+        tokio::spawn(async move {
+            while let Some(command) = command_rx.recv().await {
+                if let SessionCommand::Close { respond_to } = command {
+                    handle
+                        .set_execution_phase(SessionExecutionPhase::Closing)
+                        .await;
+                    let _ = respond_to.send(Ok(()));
+                    let _ = close_received_tx.send(());
+                    let _ = release_rx.await;
+                    sessions.write().await.remove(&session_id);
+                    handle.exit_signal.mark_exited();
+                    break;
+                }
+            }
+        });
+
+        DrainingCloseTestControl {
+            close_received,
+            release: Some(release),
+        }
+    }
+}

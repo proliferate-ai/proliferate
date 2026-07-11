@@ -3190,7 +3190,17 @@
             }
           },
           "409": {
-            "description": "Workspace or subagent state blocks close",
+            "description": "Workspace mutation or workflow ownership blocks close",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Close could not acquire its workspace lease or the active turn exceeded the bounded drain wait",
             "content": {
               "application/json": {
                 "schema": {
@@ -16109,6 +16119,7 @@
           "running",
           "awaiting_interaction",
           "idle",
+          "closing",
           "errored",
           "closed"
         ]
@@ -16620,6 +16631,7 @@
           "starting",
           "idle",
           "running",
+          "closing",
           "completed",
           "errored",
           "closed"

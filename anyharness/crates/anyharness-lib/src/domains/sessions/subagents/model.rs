@@ -72,6 +72,7 @@ pub fn normalized_session_status(status: &str) -> &'static str {
         "starting" => "starting",
         "idle" => "idle",
         "running" => "running",
+        "closing" => "closing",
         "completed" => "completed",
         "closed" => "closed",
         "errored" => "errored",

@@ -12,6 +12,7 @@ use super::transcript::{
 };
 use crate::domains::sessions::delegation::read_child_events;
 use crate::domains::sessions::deletion::SessionDeleteWorkflow;
+use crate::domains::sessions::links::completions::ScheduleLinkWakeOutcome;
 use crate::domains::sessions::links::model::{
     SessionLinkRecord, SessionLinkRelation, SessionLinkWorkspaceRelation,
 };
@@ -99,7 +100,7 @@ impl SubagentService {
             .session_store
             .find_by_id(parent_session_id)?
             .ok_or_else(|| SubagentError::ParentNotFound(parent_session_id.to_string()))?;
-        if parent.closed_at.is_some() || parent.status == "closed" {
+        if parent.closed_at.is_some() || matches!(parent.status.as_str(), "closing" | "closed") {
             return Err(SubagentError::Closed);
         }
         let workspace = self
@@ -402,8 +403,14 @@ impl SubagentService {
         self.access_gate
             .assert_can_mutate_for_workspace(&child.workspace_id)
             .map_err(map_access_error)?;
-        let inserted = self.subagent_store.schedule_wake(&link.id)?;
-        Ok((link, inserted))
+        let outcome = self
+            .subagent_store
+            .schedule_wake(&link.id, parent_session_id)?;
+        match outcome {
+            ScheduleLinkWakeOutcome::Inserted => Ok((link, true)),
+            ScheduleLinkWakeOutcome::AlreadyScheduled => Ok((link, false)),
+            ScheduleLinkWakeOutcome::LinkUnavailable => Err(SubagentError::Closed),
+        }
     }
 
     pub fn schedule_wake_for_target(
@@ -420,8 +427,14 @@ impl SubagentService {
         self.access_gate
             .assert_can_mutate_for_workspace(&child.workspace_id)
             .map_err(map_access_error)?;
-        let inserted = self.subagent_store.schedule_wake(&link.id)?;
-        Ok((link, inserted))
+        let outcome = self
+            .subagent_store
+            .schedule_wake(&link.id, parent_session_id)?;
+        match outcome {
+            ScheduleLinkWakeOutcome::Inserted => Ok((link, true)),
+            ScheduleLinkWakeOutcome::AlreadyScheduled => Ok((link, false)),
+            ScheduleLinkWakeOutcome::LinkUnavailable => Err(SubagentError::Closed),
+        }
     }
 
     pub fn close_link(&self, link: &SessionLinkRecord, closed_at: &str) -> anyhow::Result<bool> {

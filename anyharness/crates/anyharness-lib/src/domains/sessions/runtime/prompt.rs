@@ -102,6 +102,9 @@ impl SessionRuntime {
                     );
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
+                LiveSessionCommandError::Rejected(PromptAcceptError::Closing) => {
+                    SendPromptError::SessionClosed
+                }
             })?;
         tracing::info!(
             session_id = %session_id,
@@ -165,6 +168,9 @@ impl SessionRuntime {
                 LiveSessionCommandError::Rejected(PromptAcceptError::EnqueueFailed(detail)) => {
                     SendPromptError::Internal(anyhow::anyhow!("failed to enqueue prompt: {detail}"))
                 }
+                LiveSessionCommandError::Rejected(PromptAcceptError::Closing) => {
+                    SendPromptError::SessionClosed
+                }
             })?;
         let session = self
             .session_service
@@ -186,9 +192,7 @@ fn map_lifecycle_error_to_prompt(error: SessionLifecycleError) -> SendPromptErro
             SendPromptError::SessionNotFound(session_id)
         }
         SessionLifecycleError::Access(error) => SendPromptError::Access(error),
-        SessionLifecycleError::WorkflowHeld { run_id } => {
-            SendPromptError::WorkflowHeld { run_id }
-        }
+        SessionLifecycleError::WorkflowHeld { run_id } => SendPromptError::WorkflowHeld { run_id },
         SessionLifecycleError::Internal(error) => SendPromptError::Internal(error),
     }
 }

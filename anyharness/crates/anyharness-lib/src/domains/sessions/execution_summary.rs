@@ -11,6 +11,14 @@ pub fn summarize_session_record(
     live_snapshot: Option<&LiveSessionExecutionSnapshot>,
 ) -> SessionExecutionSummary {
     match record.status.as_str() {
+        "closing" => live_snapshot
+            .map(|snapshot| snapshot.to_contract_summary(true))
+            .unwrap_or_else(|| SessionExecutionSummary {
+                phase: SessionExecutionPhase::Closing,
+                has_live_handle: false,
+                pending_interactions: Vec::new(),
+                updated_at: record.updated_at.clone(),
+            }),
         "closed" => SessionExecutionSummary {
             phase: SessionExecutionPhase::Closed,
             has_live_handle: false,
@@ -72,7 +80,9 @@ pub fn summarize_workspace_sessions<'a>(
                 awaiting_interaction_count += 1;
                 phase = WorkspaceExecutionPhase::AwaitingInteraction;
             }
-            SessionExecutionPhase::Starting | SessionExecutionPhase::Running => {
+            SessionExecutionPhase::Starting
+            | SessionExecutionPhase::Running
+            | SessionExecutionPhase::Closing => {
                 running_count += 1;
                 if !matches!(phase, WorkspaceExecutionPhase::AwaitingInteraction) {
                     phase = WorkspaceExecutionPhase::Running;
@@ -220,6 +230,25 @@ mod tests {
         assert!(!summary.has_live_handle);
         assert!(summary.pending_interactions.is_empty());
         assert_eq!(summary.updated_at, "2026-04-06T00:00:00Z");
+    }
+
+    #[test]
+    fn summarize_session_preserves_durable_closing_with_or_without_handle() {
+        let record = session_record("closing", "2026-04-06T00:00:00Z");
+
+        let cold = summarize_session_record(&record, None);
+        assert_eq!(cold.phase, SessionExecutionPhase::Closing);
+        assert!(!cold.has_live_handle);
+
+        let snapshot = LiveSessionExecutionSnapshot {
+            phase: SessionExecutionPhase::Closing,
+            pending_interactions: Vec::new(),
+            updated_at: "2026-04-06T00:00:01Z".to_string(),
+        };
+        let live = summarize_session_record(&record, Some(&snapshot));
+        assert_eq!(live.phase, SessionExecutionPhase::Closing);
+        assert!(live.has_live_handle);
+        assert_eq!(live.updated_at, "2026-04-06T00:00:01Z");
     }
 
     #[test]

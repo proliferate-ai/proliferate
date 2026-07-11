@@ -15,7 +15,7 @@ use crate::live::sessions::actor::command::{
     SessionCommand, SetConfigOptionCommandError,
 };
 use crate::live::sessions::actor::spawn::ActorReadyResult;
-use crate::live::sessions::handle::LiveSessionHandle;
+use crate::live::sessions::handle::{LiveSessionExitGuard, LiveSessionHandle};
 use crate::live::sessions::model::{EventPersist, SessionStateDurable};
 use crate::live::sessions::sink::publish::publish_session_event;
 
@@ -53,6 +53,7 @@ pub fn spawn_replay_actor(
         SessionExecutionPhase::Starting,
     ));
     let actor_handle = handle.clone();
+    let exit_signal = handle.exit_signal.clone();
     let (ready_tx, ready_rx) = std::sync::mpsc::channel::<anyhow::Result<String>>();
     let on_exit = config.on_exit.take();
 
@@ -62,6 +63,7 @@ pub fn spawn_replay_actor(
             &session_id[..8.min(session_id.len())]
         ))
         .spawn(move || {
+            let _exit_guard = LiveSessionExitGuard::new(exit_signal);
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()

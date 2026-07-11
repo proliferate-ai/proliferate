@@ -16,6 +16,7 @@ pub enum SessionStatus {
     Starting,
     Idle,
     Running,
+    Closing,
     Completed,
     Errored,
     Closed,
@@ -28,6 +29,7 @@ pub enum SessionExecutionPhase {
     Running,
     AwaitingInteraction,
     Idle,
+    Closing,
     Errored,
     Closed,
 }

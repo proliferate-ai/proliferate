@@ -418,6 +418,7 @@ impl AppState {
         let subagent_runtime = Arc::new(SubagentRuntime::new(
             subagent_service.clone(),
             session_runtime.clone(),
+            workspace_operation_gate.clone(),
         ));
         // Workflow run engine (W3): the durable service + the live run manager
         // (its own actors, spawned on delivery and on startup-resume).
@@ -511,6 +512,7 @@ impl AppState {
                 review_runtime: review_runtime.clone(),
                 review_mcp_auth,
                 subagent_service: subagent_service.clone(),
+                subagent_runtime: subagent_runtime.clone(),
                 session_runtime: session_runtime.clone(),
                 workspace_runtime: workspace_runtime.clone(),
                 subagent_mcp_auth,
@@ -524,6 +526,8 @@ impl AppState {
         loop_scheduler.clone().spawn();
         #[cfg(not(test))]
         workspace_retention_service.clone().spawn_startup_pass();
+        #[cfg(not(test))]
+        session_runtime.clone().spawn_closing_recovery_pass();
         // Hydrate the bundled agent seed (if pending) and run an installed-only
         // reconcile against the catalog pins — desktop sidecar AND cloud workers,
         // non-blocking + best-effort. See AgentRuntime::spawn_startup_pass.
