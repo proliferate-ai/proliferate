@@ -58,7 +58,7 @@ anyharness/crates/anyharness-lib/src/domains/goals/runtime.rs 698 goal runtime p
 anyharness/crates/anyharness-lib/src/domains/workflows/plan.rs 1074 workflow plan resolution pending decomposition, workflows v1 launch debt
 anyharness/crates/anyharness-lib/src/domains/workflows/service.rs 1036 workflow service pending decomposition, workflows v1 launch debt
 anyharness/crates/anyharness-lib/src/domains/workflows/service_tests.rs 1076 workflow service test coverage pending split, workflows v1 launch debt
-server/proliferate/db/models/cloud/workflows.py 637 workflow/run/trigger ORM models pending split, workflows v1 launch debt
+server/proliferate/db/models/cloud/workflows.py 583 workflow/run/trigger ORM models pending split, workflows v1 launch debt
 server/proliferate/db/store/cloud_workflows.py 1084 workflow/run/gateway-token store queries pending split, workflows v1 launch debt
 server/proliferate/server/cloud/workflows/api.py 468 workflow HTTP routes (runs/triggers/executor claim plane/poll setup) pending split, workflows v1 launch debt (+1: compiler/triggers/worker.service import split, WS0B-S)
 server/proliferate/server/cloud/workflows/domain/definition.py 1121 v2 workflow definition parser/validator pending split, workflows v1 launch debt

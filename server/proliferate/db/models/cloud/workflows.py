@@ -143,6 +143,35 @@ class WorkflowRun(Base):
             ")",
             name="ck_workflow_run_status",
         ),
+        # --- WS2a persistence skeleton: independent run state axes (spec §8.1). ---
+        # These constrain only the ADD-ONLY axis columns below. They permit NULL so
+        # every pre-feature/current-code run row (which never sets them) still
+        # validates; the legacy ``status`` CHECK above is untouched.
+        CheckConstraint(
+            "desired_state IS NULL OR desired_state IN ('running', 'cancel_requested')",
+            name="ck_workflow_run_desired_state",
+        ),
+        CheckConstraint(
+            "delivery_state IS NULL OR delivery_state IN ("
+            "'ready', 'claimed', 'materializing', 'delivered', 'acknowledged', "
+            "'retryable_ready', 'terminal_delivery_failure')",
+            name="ck_workflow_run_delivery_state",
+        ),
+        CheckConstraint(
+            "observed_state IS NULL OR observed_state IN ("
+            "'accepted', 'running', 'completed', 'failed', 'quiescing', 'cancelled', "
+            "'waiting_action_result', 'waiting_credential_refresh')",
+            name="ck_workflow_run_observed_state",
+        ),
+        CheckConstraint(
+            "execution_health IS NULL OR execution_health IN ('healthy', 'suspect', 'orphaned')",
+            name="ck_workflow_run_execution_health",
+        ),
+        CheckConstraint(
+            "preaccept_cancel_state IS NULL OR preaccept_cancel_state IN ("
+            "'none', 'cancelling_preaccept', 'cancelled_before_acceptance')",
+            name="ck_workflow_run_preaccept_cancel_state",
+        ),
         Index("ix_workflow_run_workflow_created", "workflow_id", "created_at"),
         Index("ix_workflow_run_executor_user_id", "executor_user_id"),
         Index("ix_workflow_run_workflow_version_id", "workflow_version_id"),
@@ -255,6 +284,34 @@ class WorkflowRun(Base):
     last_heartbeat_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # --- WS2a persistence skeleton: independent run state axes (spec §8.1). -------
+    # ADD-ONLY. The legacy ``status`` column above keeps driving all current code;
+    # nothing reads/writes these axes yet except WS2a's own tests. WS2b/2c cut over
+    # and *derive* the public status from these facts — status is never stored
+    # twice, and ``orphaned`` (execution_health) never overwrites the last runtime
+    # observation (observed_state/observed_snapshot_json).
+    desired_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    delivery_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    observed_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    observed_quiescence_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    execution_health: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    preaccept_cancel_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Monotonic observation revision + the whole ``ObservedRun`` snapshot (spec
+    # §5.4). WS2c accepts a snapshot only at exactly ``current + 1`` via an
+    # optimistic ``UPDATE ... WHERE observed_revision IS NOT DISTINCT FROM :current``
+    # (see ``workflow_ledger.cas_observed_snapshot``). Terminal snapshots are
+    # immutable; late cost/audit reconciliation lands in a separate ledger, never here.
+    observed_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    observed_snapshot_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    # Immutable delivery identity fields (spec §5.2/§5.3): the full delivery
+    # identity is ``(run_id, plan_hash, binding_hash, execution_generation)``.
+    # ``plan_version`` is the resolved-plan schema version. ``execution_binding_json``
+    # is the *redacted*, secret-free accepted ``ExecutionBinding`` — never a bearer.
+    plan_hash: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    binding_hash: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    execution_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    plan_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    execution_binding_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
 
 class WorkflowTrigger(Base):
@@ -399,6 +456,12 @@ class WorkflowTrigger(Base):
     poll_item_schema_json: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     # Opaque, server-issued cursor: Proliferate stores and echoes it, never reads it.
     poll_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # WS2a: CAS fence for the opaque poll cursor (spec §10.3 — "compare-and-swap
+    # the cursor only when every page item is durable"). The poll-apply
+    # transaction reads (poll_cursor, poll_cursor_generation), then advances the
+    # cursor only when the generation is unchanged, bumping it by one. ADD-ONLY:
+    # nothing writes it until WS4b's poll worker.
+    poll_cursor_generation: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     last_poll_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Trigger-error surface (HTTP failure, malformed page). Cleared on a clean poll.
     last_poll_error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -510,128 +573,11 @@ class WorkflowStepAction(Base):
     )
 
 
-class FunctionInvocationDefinition(Base):
-    """A user-authored HTTP function the agent can invoke through the gateway.
-
-    Part II mental-model §1: v1 = a pure HTTP request our server makes on the
-    agent's behalf, with server-side safety guarantees (SSRF guard, size/timeout
-    caps, no cross-host redirects). Exposed at the integration gateway under the
-    reserved ``functions`` provider namespace; the agent addresses one by its
-    stable ``name`` (which is also how the run/chat grant list names it).
-
-    Person-scoped for now (``owner_user_id``), consistent with workflows being
-    user-scoped in v1; ``organization_id`` is carried nullable so the org-wide
-    move (workflows + invocations together) needs no migration.
-
-    ``headers_ciphertext`` is a Fernet-encrypted JSON blob (house crypto helpers)
-    carrying request headers that may hold API keys — WRITE-ONLY from the UI
-    (set/rotate, never read back), the same D4 posture as poll-trigger auth.
-
-    ``chat_scope_enabled`` is the §2 "default access modes" knob for invocations:
-    a new invocation is WORKFLOW-ONLY by default (``false``) and is only added to
-    the interactive/chat default-access set once explicitly enabled. Workflow
-    runs grant invocations explicitly (E3), independent of this flag.
-    """
-
-    __tablename__ = "function_invocation_definition"
-    __table_args__ = (
-        CheckConstraint(
-            "method IN ('get', 'post', 'patch', 'put', 'delete')",
-            name="ck_function_invocation_definition_method",
-        ),
-        # ``name`` is the gateway tool address — unique per owner, among live rows.
-        Index(
-            "uq_function_invocation_definition_owner_name",
-            "owner_user_id",
-            "name",
-            unique=True,
-            postgresql_where=text("archived_at IS NULL"),
-        ),
-        Index(
-            "ix_function_invocation_definition_owner_active",
-            "owner_user_id",
-            postgresql_where=text("archived_at IS NULL"),
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"),
-    )
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True, index=True)
-    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("user.id", ondelete="SET NULL"),
-        nullable=True,
-    )
-    # Stable slug — the grant list + the agent's tool call both address by it.
-    name: Mapped[str] = mapped_column(String(64))
-    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    endpoint_url: Mapped[str] = mapped_column(Text)
-    method: Mapped[str] = mapped_column(String(8))
-    # Fernet-encrypted JSON blob of request headers; write-only (never read back).
-    headers_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # JSON Schema the agent's call arguments are validated against at the gateway
-    # (jsonschema), then merged into the request body/query.
-    args_schema_json: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
-    # §2 default access modes: WORKFLOW-ONLY until explicitly enabled for chat.
-    chat_scope_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default=text("false")
-    )
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utcnow,
-        onupdate=utcnow,
-    )
-
-
-class WorkflowRunGatewayToken(Base):
-    """The per-run integration-gateway credential (PR E / OPEN-3(a), L16).
-
-    Every run mints exactly one of these at StartRun — even a run whose plan needs
-    no integration tools (``scope_json`` is then an empty list, which is legal and
-    NEVER conflated with an unscoped worker token). Its plaintext rides inside the
-    run's ``resolved_plan_json.gateway`` block to the sandbox; only the hash is
-    stored (hashed exactly like the worker token, under its own HMAC domain).
-
-    The token is the run-report credential too: the runtime pings
-    ``/runs/{run_id}/ping`` with it. Identity is proven by the credential, so a
-    request's run attribution is not a claim — ``workflow_run_id`` IS the run.
-
-    ``scope_json`` is the frozen function grant (the definition's ``functions[]``,
-    resolved), narrowed at delivery to the intersection with the delivering
-    worker's allowlist (L25 layer 2 ⊆ layer 1). ``status`` walks
-    active -> expired (terminal run status) | revoked.
-    """
-
-    __tablename__ = "cloud_workflow_run_gateway_token"
-    __table_args__ = (
-        CheckConstraint(
-            "status IN ('active', 'expired', 'revoked')",
-            name="ck_cloud_workflow_run_gateway_token_status",
-        ),
-        Index("ix_cloud_workflow_run_gateway_token_run_id", "workflow_run_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    workflow_run_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("workflow_run.id", ondelete="CASCADE"),
-    )
-    owner_user_id: Mapped[uuid.UUID] = mapped_column(index=True)
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(index=True, nullable=True)
-    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    # The resolved function grant: ``[{"provider": str, "tools": [str, ...]}, ...]``.
-    # NOT NULL — an empty list means "no tools granted", distinct from a worker
-    # token's NULL "unscoped" (L25).
-    scope_json: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
-    status: Mapped[str] = mapped_column(String(16), default="active")
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=utcnow,
-        onupdate=utcnow,
-    )
+# Re-exported for existing importers; the classes moved to
+# ``workflow_gateway_models.py`` in WS2a (size discipline, no behavior change).
+from proliferate.db.models.cloud.workflow_gateway_models import (  # noqa: E402
+    FunctionInvocationDefinition as FunctionInvocationDefinition,
+)
+from proliferate.db.models.cloud.workflow_gateway_models import (  # noqa: E402
+    WorkflowRunGatewayToken as WorkflowRunGatewayToken,
+)
