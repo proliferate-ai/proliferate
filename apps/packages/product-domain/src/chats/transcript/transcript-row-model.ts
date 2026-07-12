@@ -1,6 +1,5 @@
 import type {
   PendingPromptEntry,
-  TranscriptItem,
   TranscriptState,
   TurnRecord,
 } from "@anyharness/sdk";
@@ -12,6 +11,11 @@ import {
 } from "./transcript-presentation";
 import type { PromptOutboxEntry } from "../../sessions/intents/session-intent-model";
 import type { GoalTranscriptEvent } from "../../activity/goal-transcript-events";
+import {
+  createTranscriptTurnRowCacheKey,
+  isTranscriptTurnRowCacheHit,
+  type TranscriptTurnRowCacheKey,
+} from "./transcript-row-cache-key";
 
 export const TURN_CONTENT_BLOCK_KEY = "content";
 export const TURN_COMPLETED_HISTORY_BLOCK_KEY = "completed-history";
@@ -83,11 +87,7 @@ export interface TranscriptRowModelCache {
   turnRowsById: Map<string, CachedTurnRow>;
 }
 
-interface CachedTurnRow {
-  turn: TurnRecord;
-  itemRefs: readonly (TranscriptItem | null)[];
-  needsLeadingSplit: boolean;
-  goalSeqBoundaries: readonly number[];
+interface CachedTurnRow extends TranscriptTurnRowCacheKey {
   rows: readonly Extract<TranscriptRow, { kind: "turn" }>[];
 }
 
@@ -455,15 +455,14 @@ function buildTurnRows(
   needsLeadingSplit: boolean,
   goalSeqBoundaries: readonly number[] = [],
 ): TurnRowsResult {
-  const itemRefs = collectTurnItemRefs(turn, transcript);
+  const cacheKey = createTranscriptTurnRowCacheKey(
+    turn,
+    transcript,
+    needsLeadingSplit,
+    goalSeqBoundaries,
+  );
   const cached = cache?.turnRowsById.get(turn.turnId) ?? null;
-  if (
-    cached
-    && cached.turn === turn
-    && cached.needsLeadingSplit === needsLeadingSplit
-    && areSeqBoundariesEqual(cached.goalSeqBoundaries, goalSeqBoundaries)
-    && areItemRefsEqual(cached.itemRefs, itemRefs)
-  ) {
+  if (cached && isTranscriptTurnRowCacheHit(cached, cacheKey)) {
     return { rows: cached.rows };
   }
 
@@ -476,10 +475,7 @@ function buildTurnRows(
     goalSeqBoundaries,
   );
   cache?.turnRowsById.set(turn.turnId, {
-    turn,
-    itemRefs,
-    needsLeadingSplit,
-    goalSeqBoundaries: [...goalSeqBoundaries],
+    ...cacheKey,
     rows,
   });
   return { rows };
@@ -694,43 +690,6 @@ function getTurnDisplayBlockKey(block: TurnDisplayBlock): string {
     return block.blockId;
   }
   return block.itemId;
-}
-
-function collectTurnItemRefs(
-  turn: TurnRecord,
-  transcript: TranscriptState,
-): (TranscriptItem | null)[] {
-  return turn.itemOrder.map((itemId) => transcript.itemsById[itemId] ?? null);
-}
-
-function areItemRefsEqual(
-  left: readonly (TranscriptItem | null)[],
-  right: readonly (TranscriptItem | null)[],
-): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function areSeqBoundariesEqual(
-  left: readonly number[],
-  right: readonly number[],
-): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 /**

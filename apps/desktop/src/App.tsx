@@ -1,6 +1,5 @@
 import { Suspense, lazy, useEffect } from "react"
-import { Navigate, Route, useLocation } from "react-router-dom"
-import { RedirectCallbackScreen } from "@proliferate/product-ui/auth/RedirectCallbackScreen"
+import { Navigate, Route } from "react-router-dom"
 import { BootstrappedRoute, PublicOnlyRoute } from "@/components/auth/AuthGate"
 import { UserPreferencesGate } from "@/components/app/UserPreferencesGate"
 import { KeyboardShortcutsDialog } from "@/components/workspace/shell/sidebar/KeyboardShortcutsDialog"
@@ -56,12 +55,12 @@ import { InstrumentedRoutes } from "@/lib/integrations/telemetry/sentry"
 import { logRendererEvent } from "@/lib/access/tauri/diagnostics"
 import { AuthenticatedAppHost } from "@/pages/AuthenticatedAppHost"
 import { LoginPage } from "@/pages/LoginPage"
+import { SettingsCloudRedirect } from "@/pages/SettingsCloudRedirect"
 import { useAuthStore } from "@/stores/auth/auth-store"
 import { useUserPreferencesStore } from "@/stores/preferences/user-preferences-store"
 import { AppCommandActionsProvider } from "@/providers/AppCommandActionsProvider"
 import { ShortcutRevealProvider } from "@/providers/ShortcutRevealProvider"
 
-const LOCALHOST_NAMES = new Set(["localhost", "127.0.0.1", "::1"])
 const APP_RUNTIME_RENDER_MILESTONES = new Set([1, 2, 3, 5, 10, 25, 50, 100, 250])
 
 let appRuntimeRenderCount = 0
@@ -116,32 +115,6 @@ const SubagentsUxPlaygroundPage = import.meta.env.DEV
     )
   : null
 
-function isTauriDesktop(): boolean {
-  return typeof window !== "undefined"
-    && "__TAURI_INTERNALS__" in (window as unknown as Record<string, unknown>)
-}
-
-function desktopDeepLinkScheme(): "proliferate" | "proliferate-local" {
-  return LOCALHOST_NAMES.has(window.location.hostname)
-    ? "proliferate-local"
-    : "proliferate"
-}
-
-function cloudSettingsPath(search: string): string {
-  const nextParams = new URLSearchParams(search)
-  nextParams.set("section", "billing")
-  return `/settings?${nextParams.toString()}`
-}
-
-function cloudSettingsDeepLink(search: string): string {
-  const url = new URL(`${desktopDeepLinkScheme()}://settings/cloud`)
-  const params = new URLSearchParams(search)
-  for (const [key, value] of params.entries()) {
-    url.searchParams.set(key, value)
-  }
-  return url.toString()
-}
-
 function recordAppRendererEvent(message: string, elapsedMs?: number): void {
   recordBootDiagnostic(
     `app_bootstrap.${message}`,
@@ -154,34 +127,6 @@ function recordAppRendererEvent(message: string, elapsedMs?: number): void {
   }).catch(() => {
     // Native logging is diagnostic-only; app startup should never depend on it.
   })
-}
-
-function StripeReturnHandoff({ deepLinkUrl }: { deepLinkUrl: string }) {
-  useEffect(() => {
-    window.location.replace(deepLinkUrl)
-  }, [deepLinkUrl])
-
-  return (
-    <RedirectCallbackScreen
-      title="Billing done"
-      description="Redirecting to desktop app..."
-      statusLabel="Billing redirect"
-      variant="handoff"
-      primaryAction={{
-        label: "Click here if not redirected",
-        onClick: () => window.location.assign(deepLinkUrl),
-      }}
-    />
-  )
-}
-
-function SettingsCloudRedirect() {
-  const location = useLocation()
-  if (!isTauriDesktop()) {
-    return <StripeReturnHandoff deepLinkUrl={cloudSettingsDeepLink(location.search)} />
-  }
-
-  return <Navigate to={cloudSettingsPath(location.search)} replace />
 }
 
 function App() {

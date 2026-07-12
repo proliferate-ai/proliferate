@@ -17,9 +17,8 @@ import {
   buildSubagentAggregate,
   subagentCountsLine,
   type ActivityFact,
-  type PrototypeAgent,
-  type PrototypeGit,
-} from "./PopoverPaneFixtures";
+} from "./PopoverPaneActivityFacts";
+import type { PrototypeAgent, PrototypeGit } from "./PopoverPaneFixtures";
 
 export type PrototypeSourceControlAction =
   | "review"
