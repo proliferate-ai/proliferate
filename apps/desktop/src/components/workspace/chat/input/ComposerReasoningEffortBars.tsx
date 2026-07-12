@@ -1,27 +1,16 @@
 import { useMemo } from "react";
-import { resolveReasoningEffortPresentation } from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
+import {
+  resolveReasoningEffortEmphasis,
+  resolveReasoningEffortPresentation,
+} from "@/lib/domain/chat/session-controls/session-reasoning-effort-control";
 import { resolveSessionControlTooltip } from "@/lib/domain/chat/session-controls/session-toggle-control";
 import type { LiveSessionControlDescriptor } from "@/lib/domain/chat/session-controls/session-controls";
 import { Tooltip } from "@proliferate/ui/primitives/Tooltip";
-import { LevelBarsButton, type LevelBarsEmphasis } from "@proliferate/ui/primitives/LevelBarsButton";
+import { LevelBarsButton } from "@proliferate/ui/primitives/LevelBarsButton";
 import { PendingConfigIndicator } from "./PendingConfigIndicator";
 
 interface ComposerReasoningEffortBarsProps {
   control: LiveSessionControlDescriptor;
-}
-
-// "max" — the session sits at the top reasoning level its model offers.
-// "ultra" — that top level is the ultra tier, which only frontier models
-// expose, so ultra-at-max doubles as the "top model at full capacity" signal.
-function resolveEmphasis(
-  options: LiveSessionControlDescriptor["options"],
-  effectiveIndex: number,
-): LevelBarsEmphasis {
-  if (options.length < 2 || effectiveIndex !== options.length - 1) {
-    return "none";
-  }
-  const topValue = options[effectiveIndex]?.value.toLowerCase() ?? "";
-  return topValue === "ultra" ? "ultra" : "max";
 }
 
 export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffortBarsProps) {
@@ -32,7 +21,7 @@ export function ComposerReasoningEffortBars({ control }: ComposerReasoningEffort
 
   const currentIndex = control.options.findIndex((option) => option.selected);
   const effectiveIndex = currentIndex >= 0 ? currentIndex : 0;
-  const emphasis = resolveEmphasis(control.options, effectiveIndex);
+  const emphasis = resolveReasoningEffortEmphasis(control.options);
 
   const currentOption = control.options[effectiveIndex] ?? null;
   const currentPresentation = resolveReasoningEffortPresentation(

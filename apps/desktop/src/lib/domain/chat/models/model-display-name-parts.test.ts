@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { splitProviderDisplayName } from "@/lib/domain/chat/models/model-display-name-parts";
+import {
+  formatModelLeafName,
+  splitProviderDisplayName,
+} from "@/lib/domain/chat/models/model-display-name-parts";
 
 describe("splitProviderDisplayName", () => {
   it("splits on the first slash", () => {
@@ -51,10 +54,17 @@ describe("splitProviderDisplayName", () => {
     });
   });
 
-  it("passes through plain model names", () => {
+  it("drops the GPT prefix from plain model names", () => {
     expect(splitProviderDisplayName("GPT 5.5")).toEqual({
-      leaf: "GPT 5.5",
+      leaf: "5.5",
       badge: null,
+    });
+  });
+
+  it("drops the GPT prefix from namespaced leaves", () => {
+    expect(splitProviderDisplayName("OpenAI/GPT-5.6 Sol")).toEqual({
+      leaf: "5.6 Sol",
+      badge: "OpenAI",
     });
   });
 
@@ -63,5 +73,21 @@ describe("splitProviderDisplayName", () => {
       leaf: "",
       badge: null,
     });
+  });
+});
+
+describe("formatModelLeafName", () => {
+  it("strips GPT- and title-cases variant words", () => {
+    expect(formatModelLeafName("GPT-5.6 Sol")).toBe("5.6 Sol");
+    expect(formatModelLeafName("gpt-5.6-sol")).toBe("5.6 Sol");
+    expect(formatModelLeafName("gpt-5.4-mini")).toBe("5.4 Mini");
+    expect(formatModelLeafName("GPT-5.5")).toBe("5.5");
+  });
+
+  it("leaves non-GPT names untouched", () => {
+    expect(formatModelLeafName("Sonnet 4.5")).toBe("Sonnet 4.5");
+    expect(formatModelLeafName("Claude Opus 4.8")).toBe("Claude Opus 4.8");
+    expect(formatModelLeafName("grok-4.3")).toBe("grok-4.3");
+    expect(formatModelLeafName("chatgpt-image-latest")).toBe("chatgpt-image-latest");
   });
 });

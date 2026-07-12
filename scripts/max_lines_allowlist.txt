@@ -54,3 +54,5 @@ anyharness/crates/anyharness-lib/src/app/mod.rs 608 AnyHarness app wiring (+goal
 anyharness/crates/anyharness-lib/src/domains/loops/runtime.rs 861 loops runtime — native write path + emulated Codex scheduler
 anyharness/crates/anyharness-lib/src/live/sessions/actor/startup.rs 686 session startup (+goal/loop capability parsing, roster reconcile-on-attach)
 server/tests/integration/test_organizations_api.py 624 added admin-only coverage for GET .../invitations
+apps/desktop/src/components/playground/subagents-ux/full-flow/FullFlowPrototype.tsx 718 subagents UX playground prototype (#1133)
+apps/desktop/src/components/playground/subagents-ux/navigation-close/NavigationClosePrototype.tsx 677 subagents UX playground prototype (#1133)

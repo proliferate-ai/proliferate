@@ -326,7 +326,11 @@ const HARNESS_SETTINGS = {
 };
 
 // Explicit display overrides where prettifying alone is ambiguous (two
-// "GPT-5.4" rows when the bedrock CMB models sit beside the API ones).
+// "GPT-5.4" rows when the bedrock CMB models sit beside the API ones), or
+// where the probe-reported name is a lowercase/hyphenated raw id.
+// prettifyDisplayName() below skips any name that already contains an
+// uppercase letter, so these raw probe names (all-lowercase) never get
+// auto-prettified and need an explicit curated entry here.
 const MODEL_DISPLAY_OVERRIDES = {
   claude: {
     "claude-fable-5": "Fable 5",
@@ -336,6 +340,49 @@ const MODEL_DISPLAY_OVERRIDES = {
   codex: {
     "openai.gpt-5.4-cmb": "GPT-5.4 on Bedrock",
     "openai.gpt-5.4-cmb/xhigh": "GPT-5.4 (xhigh) on Bedrock",
+    "openai.gpt-oss-120b": "GPT-OSS 120B",
+    "gpt-5.6-sol": "GPT-5.6 Sol",
+    "gpt-5.6-terra": "GPT-5.6 Terra",
+    "gpt-5.6-luna": "GPT-5.6 Luna",
+    "gpt-5.4-mini": "GPT-5.4 Mini",
+    "gpt-5.3-codex-spark": "GPT-5.3 Codex Spark",
+  },
+  cursor: {
+    "composer-2.5": "Composer 2.5",
+    "claude-opus-4-8": "Claude Opus 4.8",
+    "claude-opus-4-7": "Claude Opus 4.7",
+    "claude-opus-4-6": "Claude Opus 4.6",
+    "claude-opus-4-5": "Claude Opus 4.5",
+    "claude-sonnet-4-6": "Claude Sonnet 4.6",
+    "claude-sonnet-4-5": "Claude Sonnet 4.5",
+    "claude-sonnet-4": "Claude Sonnet 4",
+    "claude-haiku-4-5": "Claude Haiku 4.5",
+    "claude-fable-5": "Claude Fable 5",
+    "grok-build-0.1": "Grok Build 0.1",
+    "grok-4.3": "Grok 4.3",
+    "gpt-5.3-codex": "GPT-5.3 Codex",
+    "gpt-5.2-codex": "GPT-5.2 Codex",
+    "gpt-5.1-codex-max": "GPT-5.1 Codex Max",
+    "gpt-5.1-codex-mini": "GPT-5.1 Codex Mini",
+    "gpt-5.4-mini": "GPT-5.4 Mini",
+    "gpt-5.4-nano": "GPT-5.4 Nano",
+    "gpt-5-mini": "GPT-5 Mini",
+    "gemini-3.1-pro": "Gemini 3.1 Pro",
+    "gemini-3-flash": "Gemini 3 Flash",
+    "gemini-3.5-flash": "Gemini 3.5 Flash",
+    "gemini-2.5-flash": "Gemini 2.5 Flash",
+    "kimi-k2.5": "Kimi K2.5",
+  },
+  grok: {
+    "grok-4.20-0309-non-reasoning": "Grok 4.20 Non-Reasoning",
+    "grok-4.20-0309-reasoning": "Grok 4.20 Reasoning",
+    "grok-4.20-multi-agent-0309": "Grok 4.20 Multi-Agent",
+    "grok-4.3": "Grok 4.3",
+    "grok-build-0.1": "Grok Build 0.1",
+    "grok-imagine-image": "Grok Imagine Image",
+    "grok-imagine-image-quality": "Grok Imagine Image Quality",
+    "grok-imagine-video": "Grok Imagine Video",
+    "grok-imagine-video-1.5-preview": "Grok Imagine Video 1.5 Preview",
   },
 };
 

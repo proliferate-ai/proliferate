@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "catalogVersion": "2026-07-11.1",
+  "catalogVersion": "2026-07-11.2",
   "probedAgainst": {
     "registryVersion": "2026-07-10.1"
   },
@@ -1338,7 +1338,7 @@
         "models": [
           {
             "id": "openai.gpt-oss-120b",
-            "displayName": "Openai.gpt-Oss-120b",
+            "displayName": "GPT-OSS 120B",
             "availability": {
               "anyOf": [
                 "bedrock"
@@ -1601,7 +1601,7 @@
           },
           {
             "id": "gpt-5.6-sol",
-            "displayName": "GPT-5.6-Sol",
+            "displayName": "GPT-5.6 Sol",
             "description": "Latest frontier agentic coding model.",
             "availability": {
               "anyOf": [
@@ -1657,7 +1657,7 @@
           },
           {
             "id": "gpt-5.6-terra",
-            "displayName": "GPT-5.6-Terra",
+            "displayName": "GPT-5.6 Terra",
             "description": "Balanced agentic coding model for everyday work.",
             "availability": {
               "anyOf": [
@@ -1713,7 +1713,7 @@
           },
           {
             "id": "gpt-5.6-luna",
-            "displayName": "GPT-5.6-Luna",
+            "displayName": "GPT-5.6 Luna",
             "description": "Fast and affordable agentic coding model.",
             "availability": {
               "anyOf": [
@@ -1876,7 +1876,7 @@
           },
           {
             "id": "gpt-5.4-mini",
-            "displayName": "GPT-5.4-Mini",
+            "displayName": "GPT-5.4 Mini",
             "description": "Small, fast, and cost-efficient model for simpler coding tasks.",
             "availability": {
               "anyOf": [
@@ -1969,7 +1969,7 @@
           },
           {
             "id": "gpt-5.3-codex-spark",
-            "displayName": "GPT-5.3-Codex-Spark",
+            "displayName": "GPT-5.3 Codex Spark",
             "description": "Ultra-fast coding model.",
             "availability": {
               "anyOf": [
@@ -2290,7 +2290,7 @@
           },
           {
             "id": "composer-2.5",
-            "displayName": "Composer-2.5",
+            "displayName": "Composer 2.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2326,7 +2326,7 @@
           },
           {
             "id": "claude-opus-4-8",
-            "displayName": "Claude-Opus-4-8",
+            "displayName": "Claude Opus 4.8",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2423,7 +2423,7 @@
           },
           {
             "id": "claude-sonnet-4-6",
-            "displayName": "Claude-Sonnet-4-6",
+            "displayName": "Claude Sonnet 4.6",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2469,7 +2469,7 @@
           },
           {
             "id": "gpt-5.3-codex",
-            "displayName": "GPT-5.3-Codex",
+            "displayName": "GPT-5.3 Codex",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2510,7 +2510,7 @@
           },
           {
             "id": "claude-opus-4-7",
-            "displayName": "Claude-Opus-4-7",
+            "displayName": "Claude Opus 4.7",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2561,7 +2561,7 @@
           },
           {
             "id": "grok-build-0.1",
-            "displayName": "Grok-Build-0.1",
+            "displayName": "Grok Build 0.1",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2643,7 +2643,7 @@
           },
           {
             "id": "claude-opus-4-6",
-            "displayName": "Claude-Opus-4-6",
+            "displayName": "Claude Opus 4.6",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2694,7 +2694,7 @@
           },
           {
             "id": "claude-opus-4-5",
-            "displayName": "Claude-Opus-4-5",
+            "displayName": "Claude Opus 4.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2771,7 +2771,7 @@
           },
           {
             "id": "gemini-3.1-pro",
-            "displayName": "Gemini-3.1-Pro",
+            "displayName": "Gemini 3.1 Pro",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2802,7 +2802,7 @@
           },
           {
             "id": "gpt-5.4-mini",
-            "displayName": "GPT-5.4-Mini",
+            "displayName": "GPT-5.4 Mini",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2838,7 +2838,7 @@
           },
           {
             "id": "gpt-5.4-nano",
-            "displayName": "GPT-5.4-Nano",
+            "displayName": "GPT-5.4 Nano",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2874,7 +2874,7 @@
           },
           {
             "id": "claude-haiku-4-5",
-            "displayName": "Claude-Haiku-4-5",
+            "displayName": "Claude Haiku 4.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2910,7 +2910,7 @@
           },
           {
             "id": "grok-4.3",
-            "displayName": "Grok-4.3",
+            "displayName": "Grok 4.3",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2946,7 +2946,7 @@
           },
           {
             "id": "claude-sonnet-4-5",
-            "displayName": "Claude-Sonnet-4-5",
+            "displayName": "Claude Sonnet 4.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -2987,7 +2987,7 @@
           },
           {
             "id": "gpt-5.2-codex",
-            "displayName": "GPT-5.2-Codex",
+            "displayName": "GPT-5.2 Codex",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3028,7 +3028,7 @@
           },
           {
             "id": "gpt-5.1-codex-max",
-            "displayName": "GPT-5.1-Codex-Max",
+            "displayName": "GPT-5.1 Codex Max",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3105,7 +3105,7 @@
           },
           {
             "id": "gemini-3-flash",
-            "displayName": "Gemini-3-Flash",
+            "displayName": "Gemini 3 Flash",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3136,7 +3136,7 @@
           },
           {
             "id": "gemini-3.5-flash",
-            "displayName": "Gemini-3.5-Flash",
+            "displayName": "Gemini 3.5 Flash",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3167,7 +3167,7 @@
           },
           {
             "id": "gpt-5.1-codex-mini",
-            "displayName": "GPT-5.1-Codex-Mini",
+            "displayName": "GPT-5.1 Codex Mini",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3203,7 +3203,7 @@
           },
           {
             "id": "claude-sonnet-4",
-            "displayName": "Claude-Sonnet-4",
+            "displayName": "Claude Sonnet 4",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3244,7 +3244,7 @@
           },
           {
             "id": "gpt-5-mini",
-            "displayName": "GPT-5-Mini",
+            "displayName": "GPT-5 Mini",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3275,7 +3275,7 @@
           },
           {
             "id": "gemini-2.5-flash",
-            "displayName": "Gemini-2.5-Flash",
+            "displayName": "Gemini 2.5 Flash",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3306,7 +3306,7 @@
           },
           {
             "id": "kimi-k2.5",
-            "displayName": "Kimi-K2.5",
+            "displayName": "Kimi K2.5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3337,7 +3337,7 @@
           },
           {
             "id": "claude-fable-5",
-            "displayName": "Claude-Fable-5",
+            "displayName": "Claude Fable 5",
             "availability": {
               "anyOf": [
                 "cursor-login"
@@ -3458,7 +3458,7 @@
         "models": [
           {
             "id": "grok-4.20-0309-non-reasoning",
-            "displayName": "Grok-4.20-0309-Non-Reasoning",
+            "displayName": "Grok 4.20 Non-Reasoning",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3477,7 +3477,7 @@
           },
           {
             "id": "grok-4.20-0309-reasoning",
-            "displayName": "Grok-4.20-0309-Reasoning",
+            "displayName": "Grok 4.20 Reasoning",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3496,7 +3496,7 @@
           },
           {
             "id": "grok-4.20-multi-agent-0309",
-            "displayName": "Grok-4.20-Multi-Agent-0309",
+            "displayName": "Grok 4.20 Multi-Agent",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3515,7 +3515,7 @@
           },
           {
             "id": "grok-4.3",
-            "displayName": "Grok-4.3",
+            "displayName": "Grok 4.3",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3534,7 +3534,7 @@
           },
           {
             "id": "grok-build-0.1",
-            "displayName": "Grok-Build-0.1",
+            "displayName": "Grok Build 0.1",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3553,7 +3553,7 @@
           },
           {
             "id": "grok-imagine-image",
-            "displayName": "Grok-Imagine-Image",
+            "displayName": "Grok Imagine Image",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3572,7 +3572,7 @@
           },
           {
             "id": "grok-imagine-image-quality",
-            "displayName": "Grok-Imagine-Image-Quality",
+            "displayName": "Grok Imagine Image Quality",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3591,7 +3591,7 @@
           },
           {
             "id": "grok-imagine-video",
-            "displayName": "Grok-Imagine-Video",
+            "displayName": "Grok Imagine Video",
             "availability": {
               "anyOf": [
                 "xai-api"
@@ -3610,7 +3610,7 @@
           },
           {
             "id": "grok-imagine-video-1.5-preview",
-            "displayName": "Grok-Imagine-Video-1.5-Preview",
+            "displayName": "Grok Imagine Video 1.5 Preview",
             "availability": {
               "anyOf": [
                 "xai-api"

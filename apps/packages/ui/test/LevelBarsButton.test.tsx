@@ -26,8 +26,8 @@ describe("LevelBarsButton", () => {
       <LevelBarsButton levels={levels} currentIndex={0} onStep={onStep} />,
     );
 
-    const svg = container.querySelector("svg");
-    expect(svg?.querySelectorAll("rect").length).toBe(3);
+    const icon = container.querySelector("[data-level-bars-icon]");
+    expect(icon?.children.length).toBe(3);
   });
 
   it("can render the bars without visible level text", () => {

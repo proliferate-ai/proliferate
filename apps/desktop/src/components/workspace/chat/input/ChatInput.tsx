@@ -39,6 +39,7 @@ import { promptAttachmentSnapshotsToContentParts } from "@proliferate/product-do
 import { useChatInputStore } from "@/stores/chat/chat-input-store";
 import { mergeSessionConfigControlDescriptors } from "@/lib/domain/chat/session-controls/session-controls";
 import { buildComposerSessionControlGroups } from "@/lib/domain/chat/session-controls/composer-control-groups";
+import { useComposerUltraEmphasis } from "@/hooks/chat/ui/use-composer-ultra-emphasis";
 import {
   finishOrCancelMeasurementOperation,
   recordMeasurementWorkflowStep,
@@ -115,6 +116,7 @@ export function ChatInput({
     : buildComposerSessionControlGroups(effectiveSessionConfigControls).modeControl
       ?? modeControl
       ?? null;
+  const isUltraEmphasis = useComposerUltraEmphasis(effectiveSessionConfigControls);
   const { handleSubmit, handleCancel } = useChatPromptActions();
   const { isSubmitting, run: runSubmit } = useComposerSubmitGate();
   const {
@@ -337,6 +339,7 @@ export function ChatInput({
         <div ref={setComposerOverlayHost} className="relative z-20 flex flex-col" />
         <ChatComposerSurface
           overflowMode="clip"
+          data-ultra-emphasis={isUltraEmphasis || undefined}
           onClick={handleComposerSurfaceClick}
           onPaste={handlePaste}
         >

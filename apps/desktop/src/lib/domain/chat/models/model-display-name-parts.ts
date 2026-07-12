@@ -20,15 +20,37 @@ export interface DisplayNameParts {
 export function splitProviderDisplayName(displayName: string): DisplayNameParts {
   const slashIdx = displayName.indexOf("/");
   if (slashIdx === -1) {
-    return { leaf: displayName, badge: null };
+    return { leaf: formatModelLeafName(displayName), badge: null };
   }
 
   const prefix = displayName.slice(0, slashIdx).trim();
   const suffix = displayName.slice(slashIdx + 1).trim();
 
   if (!prefix || !suffix) {
-    return { leaf: displayName, badge: null };
+    return { leaf: formatModelLeafName(displayName), badge: null };
   }
 
-  return { leaf: suffix, badge: prefix };
+  return { leaf: formatModelLeafName(suffix), badge: prefix };
+}
+
+/**
+ * Drops the redundant "GPT-" family prefix from OpenAI model names and
+ * title-cases the variant suffix: "GPT-5.6 Sol" / "gpt-5.6-sol" → "5.6 Sol".
+ * The provider icon on the pill already carries the family identity, so the
+ * prefix is noise. Non-GPT names pass through unchanged. Display-only — never
+ * touches catalog identity or modelId.
+ */
+export function formatModelLeafName(name: string): string {
+  const match = /^gpt[-\s]+(.+)$/i.exec(name.trim());
+  if (!match) {
+    return name;
+  }
+
+  return match[1]
+    .split(/[-\s]+/)
+    .filter(Boolean)
+    .map((part) =>
+      /^[a-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part
+    )
+    .join(" ");
 }
