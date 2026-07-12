@@ -65,7 +65,11 @@ export const t3Bill4: ScenarioDefinition = {
   title: "org billing lifecycle — out-of-credits enforcement, live",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-BILL-4",
   lanes: ["sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL"],
+  requiredEnv: [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_DURABLE_USER_EMAIL",
+    "RELEASE_E2E_DURABLE_USER_PASSWORD",
+  ],
   plan: () => [
     { description: "authenticate the durable user (lane-aware: staging rotates the seeded session)" },
     { description: "resolve the durable org (RELEASE_E2E_DURABLE_ORG_ID, else the one owned org)" },

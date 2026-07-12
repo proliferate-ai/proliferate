@@ -65,22 +65,16 @@ export interface MeterRecords {
   error?: string;
 }
 
-export interface DrainGrantsResult {
-  drained: number;
-  subjects: Partial<Record<BillingSubjectKind, string>>;
-  error?: string;
-}
-
 /**
- * Runs `tests/release/scripts/billing_probe.py` in-process against the local
- * profile DB (same seam and env contract as T3-PROV-1's `prov1_fallback.py`),
- * returning the parsed JSON. Requires `RELEASE_E2E_LOCAL_DATABASE_URL`.
+ * Runs the read-only `tests/release/scripts/billing_probe.py` in-process
+ * against the local profile DB, returning parsed reconciliation evidence.
+ * Requires `RELEASE_E2E_LOCAL_DATABASE_URL`.
  */
 export async function runBillingProbe(
-  command: "meter-records" | "drain-grants",
+  command: "meter-records",
   email: string,
-  options: { sinceSeconds?: number } = {},
-): Promise<MeterRecords | DrainGrantsResult> {
+  options: { sinceSeconds?: number; organizationId?: string } = {},
+): Promise<MeterRecords> {
   const databaseUrl = process.env.RELEASE_E2E_LOCAL_DATABASE_URL;
   if (!databaseUrl) {
     throw new Error(
@@ -91,13 +85,18 @@ export async function runBillingProbe(
   const scriptPath = path.resolve(import.meta.dirname, "../../scripts/billing_probe.py");
   const serverDir = path.resolve(import.meta.dirname, "../../../../server");
   const args = [scriptPath, command, email];
-  if (command === "meter-records") {
-    args.push("--since-seconds", String(options.sinceSeconds ?? 3600));
+  args.push("--since-seconds", String(options.sinceSeconds ?? 3600));
+  if (options.organizationId) {
+    args.push("--organization-id", options.organizationId);
   }
   return new Promise((resolve, reject) => {
     const child = spawn("uv", ["run", "python", ...args], {
       cwd: serverDir,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
+      // This is a read-only local DB probe, not a production server process.
+      // Force the server settings module into its local posture so importing
+      // the shared engine/models does not demand unrelated production secrets
+      // such as JWT_SECRET from the release-runner shell.
+      env: { ...process.env, DATABASE_URL: databaseUrl, DEBUG: "true" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";

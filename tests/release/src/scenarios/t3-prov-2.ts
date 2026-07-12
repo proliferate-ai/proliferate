@@ -55,7 +55,14 @@ export const t3Prov2: ScenarioDefinition = {
   title: "access — existing user (warm path)",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-PROV-2",
   lanes: ["sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL"],
+  requiredEnv: [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_DURABLE_USER_EMAIL",
+    "RELEASE_E2E_DURABLE_USER_PASSWORD",
+  ],
+  requiredEnvByLane: {
+    sandbox: ["RELEASE_E2E_E2B_API_KEY"],
+  },
   plan: () => [
     { description: "log in as the durable user (lane-aware: password locally, rotating staging session on staging)" },
     { description: "GET /cloud-sandbox; if the sandbox has never materialized, force it via a real secret PUT" },

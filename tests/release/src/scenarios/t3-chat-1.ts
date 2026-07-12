@@ -51,6 +51,9 @@ export const t3Chat1: ScenarioDefinition = {
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-CHAT-1",
   lanes: ["local", "sandbox"],
   requiredEnv: [],
+  requiredEnvByLane: {
+    local: ["RELEASE_E2E_LOCAL_RUNTIME_URL"],
+  },
   plan: ({ runtimeLane, agents }) => {
     const harnesses = agents.includes("all") ? ["claude", "codex", "cursor", "grok", "opencode"] : [...agents];
     return harnesses.flatMap((harness) => [

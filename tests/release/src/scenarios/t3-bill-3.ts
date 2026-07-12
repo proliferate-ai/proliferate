@@ -64,7 +64,11 @@ export const t3Bill3: ScenarioDefinition = {
   title: "funded billing lifecycle + test-mode deployment, live",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-BILL-3",
   lanes: ["sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL"],
+  requiredEnv: [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_DURABLE_USER_EMAIL",
+    "RELEASE_E2E_DURABLE_USER_PASSWORD",
+  ],
   plan: () => [
     { description: "authenticate the durable user (lane-aware: staging rotates the seeded session)" },
     { description: "resolve the durable org (RELEASE_E2E_DURABLE_ORG_ID, else the one owned org)" },

@@ -38,6 +38,9 @@ export const t3Cfg1: ScenarioDefinition = {
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-CFG-1",
   lanes: ["local"],
   requiredEnv: [],
+  requiredEnvByLane: {
+    local: ["RELEASE_E2E_LOCAL_RUNTIME_URL"],
+  },
   plan: () => [
     { description: "create a session (claude, cheapest Anthropic model) and send one message" },
     { description: "GET /v1/sessions/{id}/live-config, enumerate normalizedControls at runtime" },

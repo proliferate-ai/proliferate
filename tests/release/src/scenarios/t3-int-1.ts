@@ -61,14 +61,18 @@ export const t3Int1: ScenarioDefinition = {
   title: "real integration through the gateway — every harness, both lanes",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-INT-1",
   lanes: ["local", "sandbox"],
-  requiredEnv: [
-    "RELEASE_E2E_SERVER_URL",
-    "RELEASE_E2E_DURABLE_USER_EMAIL",
-    "RELEASE_E2E_DURABLE_USER_PASSWORD",
-    "RELEASE_E2E_DURABLE_ORG_ID",
-    "RELEASE_E2E_INTEGRATION_API_KEY",
-    "RELEASE_E2E_LOCAL_DATABASE_URL",
-  ],
+  requiredEnv: [],
+  requiredEnvByLane: {
+    local: [
+      "RELEASE_E2E_SERVER_URL",
+      "RELEASE_E2E_DURABLE_USER_EMAIL",
+      "RELEASE_E2E_DURABLE_USER_PASSWORD",
+      "RELEASE_E2E_DURABLE_ORG_ID",
+      "RELEASE_E2E_INTEGRATION_API_KEY",
+      "RELEASE_E2E_LOCAL_DATABASE_URL",
+      "RELEASE_E2E_LOCAL_RUNTIME_URL",
+    ],
+  },
   plan: ({ runtimeLane, agents }) => {
     const harnesses = agents.includes("all") ? ["claude", "codex", "cursor", "grok", "opencode"] : [...agents];
     return [

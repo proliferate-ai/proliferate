@@ -84,6 +84,9 @@ export const t3Gw1: ScenarioDefinition = {
   registryFlowRef: "specs/developing/testing/flows.md#self-hosting",
   lanes: ["local"],
   requiredEnv: ["RELEASE_E2E_GATEWAY_TEST_KEY", "RELEASE_E2E_GATEWAY_BASE_URL"],
+  requiredEnvByLane: {
+    local: ["RELEASE_E2E_LOCAL_RUNTIME_URL"],
+  },
   plan: () =>
     GATEWAY_HARNESSES.flatMap((harness) => [
       { description: `push a gateway-only agent-auth state (no workspace env credential)` },

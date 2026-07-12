@@ -32,6 +32,9 @@ export const t3Wt1: ScenarioDefinition = {
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-WT-1",
   lanes: ["local", "sandbox"],
   requiredEnv: [],
+  requiredEnvByLane: {
+    local: ["RELEASE_E2E_LOCAL_RUNTIME_URL"],
+  },
   plan: ({ runtimeLane }) =>
     runtimeLane === "local"
       ? [

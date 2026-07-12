@@ -61,7 +61,14 @@ export const t3SecMat1: ScenarioDefinition = {
   title: "secrets materialize",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-SEC-MAT-1",
   lanes: ["sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL"],
+  requiredEnv: [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_DURABLE_USER_EMAIL",
+    "RELEASE_E2E_DURABLE_USER_PASSWORD",
+  ],
+  requiredEnvByLane: {
+    sandbox: ["RELEASE_E2E_E2B_API_KEY", "RELEASE_E2E_LOCAL_DATABASE_URL"],
+  },
   plan: () => [
     { description: "log in as the durable user (lane-aware); resolve their default organization" },
     { description: "PUT a personal env-var secret and an org env-var secret" },

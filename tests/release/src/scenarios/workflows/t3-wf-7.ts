@@ -93,6 +93,7 @@ export const t3Wf7: ScenarioDefinition = {
     // local runtime (register the repo clone the claim resolves) — both local-only.
     "RELEASE_E2E_LOCAL_DATABASE_URL",
     "RELEASE_E2E_LOCAL_RUNTIME_URL",
+    "RELEASE_E2E_DESKTOP_WEB_URL",
   ],
   plan: () => [
     { description: "[local dev-profile only] register a local repo clone matching the trigger repo pin" },

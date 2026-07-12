@@ -55,7 +55,12 @@ export const t3Repo1: ScenarioDefinition = {
   title: "repo settings take effect, both lanes",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-REPO-1",
   lanes: ["local", "sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL", "RELEASE_E2E_DURABLE_USER_EMAIL", "RELEASE_E2E_DURABLE_USER_PASSWORD"],
+  requiredEnv: [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_DURABLE_USER_EMAIL",
+    "RELEASE_E2E_DURABLE_USER_PASSWORD",
+    "RELEASE_E2E_LOCAL_DATABASE_URL",
+  ],
   plan: ({ runtimeLane }) => [
     { description: "seed the durable user's real GitHub App authorization (github_app_seed.py seed; no browser)" },
     {

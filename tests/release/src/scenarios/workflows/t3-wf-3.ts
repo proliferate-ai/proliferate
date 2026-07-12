@@ -32,13 +32,16 @@ export const t3Wf3: ScenarioDefinition = {
   title: "integration scoping — connected but ungranted",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-WF-3",
   lanes: ["local", "sandbox"],
-  requiredEnv: [
-    "RELEASE_E2E_SERVER_URL",
-    "RELEASE_E2E_DURABLE_USER_EMAIL",
-    "RELEASE_E2E_DURABLE_USER_PASSWORD",
-    "RELEASE_E2E_DURABLE_ORG_ID",
-    "RELEASE_E2E_INTEGRATION_API_KEY",
-  ],
+  requiredEnv: [],
+  requiredEnvByLane: {
+    local: [
+      "RELEASE_E2E_SERVER_URL",
+      "RELEASE_E2E_DURABLE_USER_EMAIL",
+      "RELEASE_E2E_DURABLE_USER_PASSWORD",
+      "RELEASE_E2E_DURABLE_ORG_ID",
+      "RELEASE_E2E_INTEGRATION_API_KEY",
+    ],
+  },
   plan: () => [
     { description: "connect a real api_key provider (default exa) so it is genuinely connected for the owner" },
     { description: "create wf-integration-denied (integrations: []) — the provider is connected but NOT granted" },
