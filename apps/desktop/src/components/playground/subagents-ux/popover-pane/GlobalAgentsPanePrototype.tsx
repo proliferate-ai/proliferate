@@ -5,8 +5,8 @@ import { AgentGlyph, AgentGlyphStack } from "./AgentGlyph";
 import {
   buildSubagentAggregate,
   subagentCountsLine,
-  type PrototypeAgent,
-} from "./PopoverPaneFixtures";
+} from "./PopoverPaneActivityFacts";
+import type { PrototypeAgent } from "./PopoverPaneFixtures";
 import { SubagentsPanePrototype } from "./SubagentsPanePrototype";
 
 export interface GlobalAgentsParentFixture {

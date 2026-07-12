@@ -2,25 +2,29 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Button } from "@proliferate/ui/primitives/Button";
 import { ConfirmationDialog } from "@proliferate/ui/primitives/ConfirmationDialog";
-import { Archive, X } from "@proliferate/ui/icons";
-import { SubagentIdentityGlyph } from "../identity-receipts/SubagentIdentityGlyph";
-import { SubagentCreationReceipt } from "../identity-receipts/SubagentCreationReceipt";
-import { AgentGlyph } from "../popover-pane/AgentGlyph";
-import { ActivityAggregatePopover } from "../popover-pane/ActivityAggregatePopover";
-import { PrototypeComposerSurface } from "../popover-pane/PopoverPanePrototype";
 import {
   GlobalAgentsPanePrototype,
   type GlobalAgentsParentFixture,
 } from "../popover-pane/GlobalAgentsPanePrototype";
-import type { PrototypeAgent } from "../popover-pane/PopoverPaneFixtures";
+import {
+  ArchivedChatView,
+  ChildChatView,
+  ParentChatView,
+  childToPaneAgent,
+} from "./FullFlowChatViews";
 import {
   buildFullFlowWorkspace,
-  FULL_FLOW_STATUS_LABELS,
   type FullFlowArchivedSession,
   type FullFlowChild,
-  type FullFlowMessage,
   type FullFlowParent,
 } from "./FullFlowFixtures";
+import {
+  ArchivedTab,
+  ChildTab,
+  ParentTab,
+  tabKey,
+  type TabDescriptor,
+} from "./FullFlowTabs";
 
 /**
  * The coherent default lane: one app-like surface that walks the whole model
@@ -32,34 +36,7 @@ import {
  * active, immediate for completed), and archive reopen after delete.
  */
 
-type TabDescriptor =
-  | { kind: "parent"; parentId: string }
-  | { kind: "child"; parentId: string; childId: string }
-  | { kind: "archived"; archivedId: string };
-
-function tabKey(tab: TabDescriptor): string {
-  switch (tab.kind) {
-    case "parent":
-      return `parent:${tab.parentId}`;
-    case "child":
-      return `child:${tab.childId}`;
-    case "archived":
-      return `archived:${tab.archivedId}`;
-  }
-}
-
 type PaneView = { mode: "overview" } | { mode: "parent"; parentId: string };
-
-function childToPaneAgent(child: FullFlowChild): PrototypeAgent {
-  return {
-    id: child.id,
-    label: child.label,
-    harness: child.harness,
-    status: child.status,
-    wakeScheduled: child.wakeScheduled,
-    detail: child.detail,
-  };
-}
 
 export function FullFlowPrototype() {
   const [workspace, setWorkspace] = useState(buildFullFlowWorkspace);
@@ -411,308 +388,6 @@ export function FullFlowPrototype() {
           }
         }}
       />
-    </div>
-  );
-}
-
-const TAB_SHELL_CLASS = "group/tab flex max-w-[240px] shrink-0 items-center rounded-md border";
-
-function tabToneClass(selected: boolean): string {
-  return selected
-    ? "border-border bg-accent text-foreground"
-    : "border-transparent text-muted-foreground hover:bg-accent/60";
-}
-
-function TabCloseButton({ label, onClose }: { label: string; onClose: () => void }) {
-  return (
-    <Button
-      type="button"
-      variant="unstyled"
-      size="unstyled"
-      aria-label={`Close tab for ${label} (keeps the session)`}
-      title="Close tab — hides the tab only"
-      onClick={onClose}
-      className="ml-1 rounded p-0.5 text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground group-hover/tab:opacity-100 focus-visible:opacity-100"
-    >
-      <X className="size-3" aria-hidden="true" />
-    </Button>
-  );
-}
-
-function ParentTab({
-  parent,
-  selected,
-  onSelect,
-  onOpenCluster,
-}: {
-  parent: FullFlowParent;
-  selected: boolean;
-  onSelect: () => void;
-  onOpenCluster: () => void;
-}) {
-  const bubbleChildren = parent.children.slice(0, 3);
-  const overflow = parent.children.length - bubbleChildren.length;
-  return (
-    <div className={`${TAB_SHELL_CLASS} ${tabToneClass(selected)}`}>
-      <Button
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        role="tab"
-        id={`full-flow-tab-parent:${parent.id}`}
-        aria-selected={selected}
-        aria-controls="full-flow-chat"
-        tabIndex={selected ? 0 : -1}
-        title={parent.title}
-        onClick={onSelect}
-        className="flex min-w-0 items-center gap-1.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
-      >
-        <span className="truncate text-ui font-medium">{parent.title}</span>
-      </Button>
-      {parent.children.length > 0 ? (
-        <Button
-          type="button"
-          variant="unstyled"
-          size="unstyled"
-          aria-label={`${parent.children.length} delegated ${parent.children.length === 1 ? "agent" : "agents"} for ${parent.title} — open Agents pane`}
-          title="Delegated agents — open Agents pane"
-          onClick={onOpenCluster}
-          className="mr-1 flex shrink-0 items-center rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border"
-        >
-          <span className="flex items-center -space-x-1.5">
-            {bubbleChildren.map((child) => (
-              <span
-                key={child.id}
-                className="flex size-[16px] items-center justify-center rounded-full bg-background ring-1 ring-border"
-              >
-                <AgentGlyph id={child.id} size={10} />
-              </span>
-            ))}
-          </span>
-          {overflow > 0 ? (
-            <span className="ml-0.5 font-mono text-xs text-muted-foreground">
-              +{overflow}
-            </span>
-          ) : null}
-        </Button>
-      ) : null}
-    </div>
-  );
-}
-
-function ChildTab({
-  child,
-  selected,
-  onSelect,
-  onCloseTab,
-}: {
-  child: FullFlowChild;
-  selected: boolean;
-  onSelect: () => void;
-  onCloseTab: () => void;
-}) {
-  return (
-    <div className={`${TAB_SHELL_CLASS} ${tabToneClass(selected)}`}>
-      <TabCloseButton label={child.label} onClose={onCloseTab} />
-      <Button
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        role="tab"
-        id={`full-flow-tab-child:${child.id}`}
-        aria-selected={selected}
-        aria-controls="full-flow-chat"
-        tabIndex={selected ? 0 : -1}
-        title={child.label}
-        onClick={onSelect}
-        className="flex min-w-0 items-center gap-1.5 py-1 pl-1 pr-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
-      >
-        <SubagentIdentityGlyph
-          seed={child.id}
-          size={13}
-          label={`Identity mark for ${child.label}`}
-        />
-        <span className="truncate text-ui font-medium">{child.label}</span>
-      </Button>
-    </div>
-  );
-}
-
-function ArchivedTab({
-  session,
-  selected,
-  onSelect,
-  onCloseTab,
-}: {
-  session: FullFlowArchivedSession;
-  selected: boolean;
-  onSelect: () => void;
-  onCloseTab: () => void;
-}) {
-  return (
-    <div className={`${TAB_SHELL_CLASS} ${tabToneClass(selected)}`}>
-      <TabCloseButton label={session.label} onClose={onCloseTab} />
-      <Button
-        type="button"
-        variant="unstyled"
-        size="unstyled"
-        role="tab"
-        id={`full-flow-tab-archived:${session.id}`}
-        aria-selected={selected}
-        aria-controls="full-flow-chat"
-        tabIndex={selected ? 0 : -1}
-        title={`${session.label} (archived)`}
-        onClick={onSelect}
-        className="flex min-w-0 items-center gap-1.5 py-1 pl-1 pr-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border"
-      >
-        <SubagentIdentityGlyph
-          seed={session.id}
-          size={13}
-          dimmed
-          label={`Identity mark for ${session.label}`}
-        />
-        <span className="truncate text-ui font-medium text-muted-foreground">
-          {session.label}
-        </span>
-      </Button>
-    </div>
-  );
-}
-
-function TranscriptMessage({ message }: { message: FullFlowMessage }) {
-  return (
-    <div className="mb-3 last:mb-0">
-      <p className="text-ui-sm text-muted-foreground">
-        {message.speaker === "user" ? "You" : message.speaker === "agent" ? "Agent" : "System"}
-      </p>
-      <p className={`text-ui leading-5 ${message.speaker === "tool" ? "text-muted-foreground" : "text-foreground"}`}>
-        {message.text}
-      </p>
-    </div>
-  );
-}
-
-function ParentChatView({
-  parent,
-  onOpenChild,
-  onOpenAgentsPane,
-}: {
-  parent: FullFlowParent | undefined;
-  onOpenChild: (childId: string) => void;
-  onOpenAgentsPane: () => void;
-}) {
-  if (!parent) return null;
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-10 py-4">
-          {parent.transcript.map((item, index) => (
-            item.kind === "message" ? (
-              <TranscriptMessage key={index} message={item.message} />
-            ) : (
-              // Quiet immutable historical event: the receipt records the
-              // creation as it happened. Live status stays in the pane/tab.
-              <div key={index} className="mb-3 last:mb-0">
-                <SubagentCreationReceipt
-                  model={item.receipt}
-                  density="compact"
-                  onOpenSession={(subagentId) => onOpenChild(subagentId)}
-                />
-              </div>
-            )
-          ))}
-        </div>
-      </div>
-      <div className="mx-auto flex w-full max-w-2xl flex-col px-5 pb-6">
-        <div className="px-5">
-          <ActivityAggregatePopover
-            git={parent.git}
-            agents={parent.children.map(childToPaneAgent)}
-            onOpenSubagentsPane={onOpenAgentsPane}
-          />
-        </div>
-        <PrototypeComposerSurface />
-      </div>
-    </div>
-  );
-}
-
-function ChildChatView({
-  found,
-}: {
-  found: { parent: FullFlowParent; child: FullFlowChild } | undefined;
-}) {
-  if (!found) return null;
-  const { parent, child } = found;
-  // `detail` is already composed from the runtime status ("Working · 4m");
-  // wakeScheduled is metadata appended after it, never a roster state.
-  const statusLine = [
-    child.detail || FULL_FLOW_STATUS_LABELS[child.status],
-    child.wakeScheduled ? "Wake scheduled" : null,
-  ].filter((part): part is string => part !== null).join(" · ");
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
-        <SubagentIdentityGlyph
-          seed={child.id}
-          size={18}
-          label={`Identity mark for ${child.label}`}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-ui font-medium">{child.label}</p>
-          <p className="truncate text-ui-sm text-muted-foreground">
-            {statusLine} · Delegated by {parent.title}
-          </p>
-        </div>
-        <span className="shrink-0 font-mono text-xs text-muted-foreground">{child.harness}</span>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-10 py-4">
-          {child.transcript.map((message, index) => (
-            <TranscriptMessage key={index} message={message} />
-          ))}
-        </div>
-      </div>
-      <div className="mx-auto flex w-full max-w-2xl flex-col px-5 pb-6">
-        <PrototypeComposerSurface />
-      </div>
-    </div>
-  );
-}
-
-function ArchivedChatView({ session }: { session: FullFlowArchivedSession | undefined }) {
-  if (!session) return null;
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
-        <SubagentIdentityGlyph
-          seed={session.id}
-          size={18}
-          dimmed
-          label={`Identity mark for ${session.label}`}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-ui font-medium">{session.label}</p>
-          <p className="truncate text-ui-sm text-muted-foreground">
-            {session.closedDetail} · Was delegated by {session.parentTitle}
-          </p>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-10 py-4">
-          {session.transcript.map((message, index) => (
-            <TranscriptMessage key={index} message={message} />
-          ))}
-        </div>
-      </div>
-      {/* Terminal session: no composer, no writable affordance — just a quiet
-          read-only footer stating the session is closed. */}
-      <footer className="mx-auto w-full max-w-2xl px-5 pb-6">
-        <div className="flex items-center gap-2 rounded-md border border-border/60 bg-foreground/5 px-3 py-2 text-ui-sm text-muted-foreground">
-          <Archive className="size-3.5 shrink-0" aria-hidden="true" />
-          <span>This session is closed. The transcript is read-only; no new prompts can be sent.</span>
-        </div>
-      </footer>
     </div>
   );
 }
