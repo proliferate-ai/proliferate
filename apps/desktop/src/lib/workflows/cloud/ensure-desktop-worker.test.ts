@@ -39,7 +39,9 @@ describe("ensureDesktopWorker", () => {
   });
 
   it("enrolls with the caller-supplied organization id", async () => {
-    await expect(ensureDesktopWorker("org-1")).resolves.toBe(true);
+    await expect(
+      ensureDesktopWorker("org-1", { onFailure: vi.fn() }),
+    ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith("install-1", "org-1");
     expect(tauriMocks.ensureDesktopDispatchWorker).toHaveBeenCalledWith({
@@ -49,16 +51,33 @@ describe("ensureDesktopWorker", () => {
   });
 
   it("enrolls org-less users with a null organization id", async () => {
-    await expect(ensureDesktopWorker(null)).resolves.toBe(true);
+    await expect(
+      ensureDesktopWorker(null, { onFailure: vi.fn() }),
+    ).resolves.toBe(true);
 
     expect(sdkMocks.enrollDesktopWorker).toHaveBeenCalledWith("install-1", null);
   });
 
   it("resolves false when enrollment fails so the guard can retry", async () => {
-    sdkMocks.enrollDesktopWorker.mockRejectedValue(new Error("offline"));
+    const error = new Error("offline");
+    const onFailure = vi.fn();
+    sdkMocks.enrollDesktopWorker.mockRejectedValue(error);
 
-    await expect(ensureDesktopWorker(null)).resolves.toBe(false);
+    await expect(ensureDesktopWorker(null, { onFailure })).resolves.toBe(false);
 
     expect(tauriMocks.ensureDesktopDispatchWorker).not.toHaveBeenCalled();
+    expect(onFailure).toHaveBeenCalledWith(error);
+  });
+
+  it("still resolves false when the failure reporter throws", async () => {
+    sdkMocks.enrollDesktopWorker.mockRejectedValue(new Error("offline"));
+
+    await expect(
+      ensureDesktopWorker(null, {
+        onFailure: () => {
+          throw new Error("toast unavailable");
+        },
+      }),
+    ).resolves.toBe(false);
   });
 });

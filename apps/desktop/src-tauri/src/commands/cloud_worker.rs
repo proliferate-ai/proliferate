@@ -1,6 +1,6 @@
 use std::{
     fs::OpenOptions,
-    io,
+    io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -11,17 +11,20 @@ use tauri::State;
 use tokio::{
     process::Child,
     sync::Mutex,
-    time::{sleep, Duration},
+    time::{sleep, Duration, Instant},
 };
 
 use crate::{
     app_config,
+    diagnostics::scrub_diagnostic_text,
     sidecar::{resolve_shell_path, SharedSidecar},
 };
 
 mod launcher;
 
 use launcher::find_proliferate_worker_launcher;
+
+const WORKER_LOG_TAIL_MAX_BYTES: u64 = 64 * 1024;
 
 #[derive(Default)]
 pub struct CloudWorkerState {
@@ -181,20 +184,33 @@ pub async fn ensure_desktop_dispatch_worker(
         pid = child.id(),
         "Proliferate Worker spawned"
     );
-    sleep(Duration::from_millis(150)).await;
-    if let Some(status) = child
-        .try_wait()
-        .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
-    {
+    let startup_deadline = Instant::now() + startup_watch_window(enrollment_token.is_some());
+    let startup_exit = loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|error| format!("Failed to inspect Proliferate Worker startup: {error}"))?
+        {
+            break Some(status);
+        }
+        if Instant::now() >= startup_deadline {
+            break None;
+        }
+        sleep(Duration::from_millis(100)).await;
+    };
+    if let Some(status) = startup_exit {
+        let log_tail = read_worker_log_tail(&paths.log, 12);
+        let scrubbed_log_path = scrub_diagnostic_text(&paths.log.to_string_lossy());
         tracing::error!(
             launcher = %launcher,
             %status,
-            log_path = %paths.log.display(),
+            log_path = %scrubbed_log_path,
+            log_tail = %log_tail,
             "Proliferate Worker exited during startup"
         );
-        return Err(format!(
-            "Proliferate Worker exited during startup with {status}. See {} for output.",
-            paths.log.display()
+        return Err(worker_startup_failure_message(
+            &status.to_string(),
+            &paths.log,
+            &log_tail,
         ));
     }
 
@@ -430,6 +446,53 @@ fn open_worker_log(path: &Path) -> Result<(std::fs::File, std::fs::File), String
         .try_clone()
         .map_err(|error| format!("Failed to open worker log at {}: {error}", path.display()))?;
     Ok((file, clone))
+}
+
+fn startup_watch_window(fresh_enrollment: bool) -> Duration {
+    if fresh_enrollment {
+        // A fresh enrollment must survive its first control-plane roundtrip.
+        // This catches contract mismatches that exit after the old 150ms watch.
+        Duration::from_secs(3)
+    } else {
+        Duration::from_millis(500)
+    }
+}
+
+fn worker_startup_failure_message(status: &str, log_path: &Path, log_tail: &str) -> String {
+    let scrubbed_log_path = scrub_diagnostic_text(&log_path.to_string_lossy());
+    let mut message = format!(
+        "Proliferate Worker exited during startup with {status}. See {scrubbed_log_path} for output."
+    );
+    if !log_tail.is_empty() {
+        message.push_str("\n\nLast worker log lines:\n");
+        message.push_str(log_tail);
+    }
+    message
+}
+
+/// Best-effort context for a startup error returned to the renderer. The
+/// worker log is truncated for every launch. Read only a fixed suffix so this
+/// error path cannot allocate or block in proportion to total log volume.
+fn read_worker_log_tail(path: &Path, max_lines: usize) -> String {
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return String::new();
+    };
+    let Ok(file_len) = file.metadata().map(|metadata| metadata.len()) else {
+        return String::new();
+    };
+    let read_len = file_len.min(WORKER_LOG_TAIL_MAX_BYTES) as usize;
+    let start = file_len.saturating_sub(read_len as u64);
+    if file.seek(SeekFrom::Start(start)).is_err() {
+        return String::new();
+    }
+    let mut bytes = vec![0; read_len];
+    if file.read_exact(&mut bytes).is_err() {
+        return String::new();
+    }
+    let contents = String::from_utf8_lossy(&bytes);
+    let lines = contents.lines().collect::<Vec<_>>();
+    let start = lines.len().saturating_sub(max_lines);
+    scrub_diagnostic_text(&lines[start..].join("\n"))
 }
 
 fn toml_string(value: &str) -> String {

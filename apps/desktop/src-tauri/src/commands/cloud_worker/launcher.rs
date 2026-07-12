@@ -63,12 +63,39 @@ impl fmt::Display for WorkerLauncher {
 }
 
 pub(super) fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
-    if let Ok(value) = std::env::var("PROLIFERATE_WORKER_BIN") {
-        if let Some(path) = usable_worker_binary(&PathBuf::from(value)) {
-            return Some(WorkerLauncher::Binary(path));
-        }
-    }
+    let explicit = std::env::var("PROLIFERATE_WORKER_BIN")
+        .ok()
+        .and_then(|value| usable_worker_binary(&PathBuf::from(value)))
+        .map(WorkerLauncher::Binary);
 
+    let debug_cargo = if cfg!(debug_assertions) {
+        match (which::which("cargo").ok(), workspace_root()) {
+            (Some(cargo), Some(workspace_root)) => Some(WorkerLauncher::CargoRun {
+                cargo,
+                workspace_root,
+            }),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    select_worker_launcher(explicit, debug_cargo, find_scanned_worker_launcher)
+}
+
+/// Preserves an explicit developer override while ensuring debug builds run the
+/// worker from the current checkout instead of silently selecting a stale
+/// target/debug or PATH binary. Release builds pass no cargo launcher and keep
+/// the packaged/scanned binary behavior.
+fn select_worker_launcher(
+    explicit: Option<WorkerLauncher>,
+    debug_cargo: Option<WorkerLauncher>,
+    scan: impl FnOnce() -> Option<WorkerLauncher>,
+) -> Option<WorkerLauncher> {
+    explicit.or(debug_cargo).or_else(scan)
+}
+
+fn find_scanned_worker_launcher() -> Option<WorkerLauncher> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             let target = current_target_triple();
@@ -92,16 +119,6 @@ pub(super) fn find_proliferate_worker_launcher() -> Option<WorkerLauncher> {
     if let Ok(path) = which::which("proliferate-worker") {
         if let Some(path) = usable_worker_binary(&path) {
             return Some(WorkerLauncher::Binary(path));
-        }
-    }
-
-    if cfg!(debug_assertions) {
-        if let (Some(cargo), Some(workspace_root)) = (which::which("cargo").ok(), workspace_root())
-        {
-            return Some(WorkerLauncher::CargoRun {
-                cargo,
-                workspace_root,
-            });
         }
     }
 
@@ -172,4 +189,57 @@ fn is_placeholder_sidecar(path: &Path) -> bool {
     };
     let text = String::from_utf8_lossy(&bytes);
     text.contains("sidecar is not available") || text.contains("unsupported target placeholder")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::Cell, path::PathBuf};
+
+    use super::{select_worker_launcher, WorkerLauncher};
+
+    fn binary(path: &str) -> WorkerLauncher {
+        WorkerLauncher::Binary(PathBuf::from(path))
+    }
+
+    fn cargo_run() -> WorkerLauncher {
+        WorkerLauncher::CargoRun {
+            cargo: PathBuf::from("/toolchain/cargo"),
+            workspace_root: PathBuf::from("/workspace"),
+        }
+    }
+
+    #[test]
+    fn explicit_binary_wins_without_scanning() {
+        let scanned = Cell::new(false);
+        let launcher = select_worker_launcher(Some(binary("/explicit")), Some(cargo_run()), || {
+            scanned.set(true);
+            Some(binary("/scanned"))
+        });
+
+        assert!(
+            matches!(launcher, Some(WorkerLauncher::Binary(path)) if path == PathBuf::from("/explicit"))
+        );
+        assert!(!scanned.get());
+    }
+
+    #[test]
+    fn debug_cargo_wins_over_scanned_binaries() {
+        let scanned = Cell::new(false);
+        let launcher = select_worker_launcher(None, Some(cargo_run()), || {
+            scanned.set(true);
+            Some(binary("/stale-target-debug"))
+        });
+
+        assert!(matches!(launcher, Some(WorkerLauncher::CargoRun { .. })));
+        assert!(!scanned.get());
+    }
+
+    #[test]
+    fn scanned_binary_is_used_when_cargo_run_is_unavailable() {
+        let launcher = select_worker_launcher(None, None, || Some(binary("/packaged")));
+
+        assert!(
+            matches!(launcher, Some(WorkerLauncher::Binary(path)) if path == PathBuf::from("/packaged"))
+        );
+    }
 }

@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "@/lib/domain/auth/auth-user";
 
 const workflowMocks = vi.hoisted(() => ({
-  ensureDesktopWorker: vi.fn<(organizationId: string | null) => Promise<boolean>>(),
+  ensureDesktopWorker: vi.fn<
+    (
+      organizationId: string | null,
+      deps: { onFailure: (error: unknown) => void },
+    ) => Promise<boolean>
+  >(),
   teardownDesktopWorker: vi.fn<() => Promise<void>>(),
 }));
 
@@ -24,6 +29,7 @@ async function loadEnrollmentHarness() {
   vi.resetModules();
   const { useAuthStore } = await import("@/stores/auth/auth-store");
   const { useOrganizationStore } = await import("@/stores/organizations/organization-store");
+  const { useToastStore } = await import("@/stores/toast/toast-store");
   const { useDesktopWorkerEnrollment } = await import("./use-desktop-worker-enrollment");
   useAuthStore.setState({
     status: "bootstrapping",
@@ -35,6 +41,7 @@ async function loadEnrollmentHarness() {
     activeOrganizationId: null,
     activeOrganizationValidated: false,
   });
+  useToastStore.setState({ toasts: [] });
   const rendered = renderHook(() => useDesktopWorkerEnrollment());
   return {
     ...rendered,
@@ -45,6 +52,7 @@ async function loadEnrollmentHarness() {
       useOrganizationStore.getState().setActiveOrganizationId(organizationId, {
         validated: true,
       }),
+    getToasts: () => useToastStore.getState().toasts,
     nudgeRender: () => useAuthStore.setState({ error: "nudge a re-render" }),
   };
 }
@@ -135,7 +143,10 @@ describe("useDesktopWorkerEnrollment", () => {
     await waitFor(() => {
       expect(workflowMocks.ensureDesktopWorker).toHaveBeenCalledTimes(2);
     });
-    expect(workflowMocks.ensureDesktopWorker).toHaveBeenLastCalledWith("org-2");
+    expect(workflowMocks.ensureDesktopWorker).toHaveBeenLastCalledWith(
+      "org-2",
+      expect.objectContaining({ onFailure: expect.any(Function) }),
+    );
     expect(workflowMocks.teardownDesktopWorker).not.toHaveBeenCalled();
   });
 
@@ -221,5 +232,53 @@ describe("useDesktopWorkerEnrollment", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("shows the native startup failure to the user", async () => {
+    workflowMocks.ensureDesktopWorker.mockImplementationOnce(async (_organizationId, deps) => {
+      deps.onFailure("worker exited: enrollment contract mismatch");
+      return false;
+    });
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(harness.getToasts()).toEqual([
+        expect.objectContaining({
+          message:
+            "Cloud integrations worker failed to start: worker exited: enrollment contract mismatch",
+          type: "error",
+        }),
+      ]);
+    });
+  });
+
+  it("does not show a stale failure after sign-out cancels enrollment", async () => {
+    let failOldEnrollment: (() => void) | null = null;
+    workflowMocks.ensureDesktopWorker.mockImplementationOnce(
+      (_organizationId, deps) =>
+        new Promise<boolean>((resolve) => {
+          failOldEnrollment = () => {
+            deps.onFailure("old identity failed after sign-out");
+            resolve(false);
+          };
+        }),
+    );
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(failOldEnrollment).not.toBeNull();
+    });
+    harness.signOut();
+    await waitFor(() => {
+      expect(workflowMocks.teardownDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      failOldEnrollment?.();
+      await flushEffects();
+    });
+    expect(harness.getToasts()).toEqual([]);
   });
 });
