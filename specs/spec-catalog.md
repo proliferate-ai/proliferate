@@ -310,6 +310,19 @@ Sentry lane requires them.
 
 ---
 
+### Testing
+
+**`specs/developing/testing/README.md`** — the automated-testing standard:
+four tiers (unit/contract, mocked intent, live end-to-end, upgrade path),
+placement table per language, the merge-vs-release gate rule (no real
+LLM/sandbox/third-party in the merge gate, ever), contract-fixture pattern
+under `fixtures/contracts/`, the decision procedure for where a change's
+tests go, and the postmortem rule.
+
+**`specs/developing/testing/flows.md`** — the flow registry: the inventory of
+end-to-end flows that must never break, each with its tier and a pointer to
+the enforcing test. Owned by Pablo; updated in the same PR as any flow change.
+
 ### QA
 
 **`specs/developing/qa/README.md`**
@@ -317,7 +330,8 @@ Sentry lane requires them.
 The QA root is now an authoritative release QA entrypoint. It covers operator
 requirements, release intake, baseline verification, profile-isolated
 full-stack QA, a touched-surface matrix, regression rules, failure handling,
-and final QA report shape.
+and final QA report shape. Manual QA only — automated testing is owned by
+`specs/developing/testing/`.
 
 The remaining opportunity is depth: split per-surface checklists into
 `specs/developing/qa/*.md` only when release execution needs more detail than

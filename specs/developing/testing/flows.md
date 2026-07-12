@@ -134,6 +134,29 @@ Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md
 | Overage bills real money correctly: compute metered events + amounts match up to cap then hard-block; LLM auto top-up charges once then fail-closes on payment failure | 3 | — |
 | Plan gates the model list: user sees/uses exactly the models their plan allows | 3 | — |
 
+## Self-hosting
+
+Scenario definitions, tier-2 escalations, and infra prerequisites:
+[self-hosting.md](self-hosting.md). `2*` = needs the tier-2 escalation in
+that doc's §4 (the connect UI is Tauri-gated; desktop-web never renders it —
+tests drive the LoginScreen fixture instead).
+
+| Flow | Tier | Test pointer |
+| --- | --- | --- |
+| `single_org_mode` derivation: self_managed telemetry ⇒ single-org; override respected | 1 | — |
+| SSO env aliasing: bare `SSO_*` ≡ `PROLIFERATE_SSO_*` (AliasChoices) | 1 | — |
+| `GET /meta` response contract (fields the desktop connect dialog parses) | 1 | — |
+| Desktop connect-to-server: enter URL → `/meta` verify (host+version shown) → confirm → relaunch → connected banner | 2* | — |
+| Desktop server switch: reset to Cloud → connect to a second server | 2* | — |
+| `/setup` claim through the UI → admin lands in instance org (self-hosted framing of the claim flow) | 2 | — |
+| Invite → browser `/register` with token → invitee desktop password login | 2 | — |
+| Sign-in surface adapts to `GET /auth/desktop/methods` (password form vs GitHub button) | 2 | — |
+| Self-hosted server on real EC2 + real TLS: boot → claim → login → invite lands in DB | 3 | — |
+| Two-server connect/switch against real staging servers (alpha/beta) | 3 | — |
+| Model gateway add-on: `--profile agent-gateway` boot, agent request routes through LiteLLM | 3 | — |
+| `./update.sh`: N−1 pin → update → migrated + healthy + `/meta` reports N | 4 | — |
+| Release artifact chain intact: server desktop-pin → updater manifest → artifact URL 200 → artifact tag contains the release SHA | 4 | — |
+
 ## Upgrade & release
 
 There is no single "upgrade path" — five distinct mechanisms, each tested at
