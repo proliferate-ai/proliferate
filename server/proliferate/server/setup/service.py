@@ -20,7 +20,11 @@ The lifecycle, all single-org mode only:
 from __future__ import annotations
 
 import logging
+import os
+import secrets
+import stat
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,6 +55,9 @@ from proliferate.server.setup.errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+_TOKEN_FILE_MODE = 0o600
+_TOKEN_FILE_MAX_BYTES = 256
 
 
 @dataclass(frozen=True)
@@ -87,17 +94,11 @@ async def ensure_setup_token(db: AsyncSession) -> None:
 
     token = mint_setup_token()
     await instance_setup_store.save_setup_token_hash(db, hash_setup_token(token))
-    if _write_token_file(token_file, token):
-        logger.info("First-run setup pending. Setup token written to %s.", token_file)
-    else:
-        logger.warning(
-            "Could not write the setup token file at %s; the token below is "
-            "only in this log and will rotate on the next restart.",
-            token_file,
-        )
-    # Local log line: the grep-able fallback for dev setups without the token
-    # file volume. Server logs are not remotely readable.
-    logger.info("First-run setup token: %s", token)
+    # A persistence error must escape. The lifecycle wrapper rolls this
+    # transaction back and aborts startup, so a verifier can never be committed
+    # without its matching plaintext file.
+    _write_token_file(token_file, token)
+    logger.info("First-run setup pending. Setup token written to %s.", token_file)
     logger.info("Claim this instance at https://<your-host>/setup")
 
 
@@ -169,20 +170,100 @@ def _token_file_path() -> Path:
 
 
 def _read_token_file(token_file: Path) -> str | None:
+    parent_fd: int | None = None
+    token_fd: int | None = None
     try:
-        return token_file.read_text(encoding="utf-8").strip() or None
-    except OSError:
+        parent_fd = os.open(
+            token_file.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        token_fd = os.open(
+            token_file.name,
+            os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+            dir_fd=parent_fd,
+        )
+        metadata = os.fstat(token_fd)
+        mode = stat.S_IMODE(metadata.st_mode)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or mode & 0o077
+            or not mode & stat.S_IRUSR
+            or metadata.st_nlink != 1
+        ):
+            return None
+
+        payload = os.read(token_fd, _TOKEN_FILE_MAX_BYTES + 1)
+        if len(payload) > _TOKEN_FILE_MAX_BYTES:
+            return None
+        return payload.decode("utf-8").strip() or None
+    except (OSError, UnicodeError):
         return None
+    finally:
+        if token_fd is not None:
+            os.close(token_fd)
+        if parent_fd is not None:
+            os.close(parent_fd)
 
 
-def _write_token_file(token_file: Path, token: str) -> bool:
+def _write_token_file(token_file: Path, token: str) -> None:
+    parent_fd: int | None = None
+    token_fd: int | None = None
+    temporary_name: str | None = None
     try:
-        token_file.parent.mkdir(parents=True, exist_ok=True)
-        token_file.write_text(f"{token}\n", encoding="utf-8")
-        token_file.chmod(0o600)
-    except OSError:
-        return False
-    return True
+        token_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        parent_fd = os.open(
+            token_file.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        temporary_name = f".{token_file.name}.{secrets.token_hex(16)}.tmp"
+        token_fd = os.open(
+            temporary_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+            _TOKEN_FILE_MODE,
+            dir_fd=parent_fd,
+        )
+        os.fchmod(token_fd, _TOKEN_FILE_MODE)
+
+        remaining = memoryview(f"{token}\n".encode())
+        while remaining:
+            written = os.write(token_fd, remaining)
+            if written == 0:
+                raise OSError("setup token file write made no progress")
+            remaining = remaining[written:]
+        os.fsync(token_fd)
+        os.close(token_fd)
+        token_fd = None
+
+        # rename(2) replaces a destination symlink rather than following it.
+        # Keeping both names relative to the no-follow directory descriptor
+        # also prevents a last-component parent symlink from redirecting us.
+        os.replace(
+            temporary_name,
+            token_file.name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=parent_fd,
+        )
+        temporary_name = None
+        os.fsync(parent_fd)
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(
+            "Could not securely persist the first-run setup token at "
+            f"{token_file}. Verify that the parent directory is writable by "
+            "the API process, is not a symlink, and supports atomic file "
+            "replacement. Startup was stopped so the token verifier cannot "
+            "be committed."
+        ) from exc
+    finally:
+        if token_fd is not None:
+            with suppress(OSError):
+                os.close(token_fd)
+        if temporary_name is not None and parent_fd is not None:
+            with suppress(OSError):
+                os.unlink(temporary_name, dir_fd=parent_fd)
+        if parent_fd is not None:
+            with suppress(OSError):
+                os.close(parent_fd)
 
 
 def _remove_token_file() -> None:

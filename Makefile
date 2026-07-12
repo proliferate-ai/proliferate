@@ -163,6 +163,10 @@ run: dev-artifacts-ready
 		echo "PROFILE is required. Example: make run PROFILE=main"; \
 		exit 1; \
 	fi; \
+	database_url_override_set="$${DATABASE_URL+x}"; \
+	database_url_override_value="$${DATABASE_URL:-}"; \
+	database_mode=profile; \
+	if [ "$$database_url_override_set" = "x" ]; then database_mode=external; fi; \
 	launch_env=$$( \
 		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
 		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
@@ -174,10 +178,10 @@ run: dev-artifacts-ready
 		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
 		PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
 		PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
+		PROLIFERATE_DEV_DATABASE_MODE="$$database_mode" \
+		SINGLE_ORG_MODE="$(if $(filter 1 true,$(RELEASE_E2E)),true,$(SINGLE_ORG_MODE))" \
 		node scripts/dev.mjs ensure --profile "$(PROFILE)" --lock \
 	); \
-	database_url_override_set="$${DATABASE_URL+x}"; \
-	database_url_override_value="$${DATABASE_URL:-}"; \
 	cleanup() { \
 		status=$$?; \
 		trap - EXIT INT TERM; \
@@ -240,6 +244,11 @@ run: dev-artifacts-ready
 		echo "Unsupported CLOUD_WORKER_TUNNEL=$$cloud_worker_tunnel_mode. Use 0, 1, or ngrok."; \
 		exit 1; \
 	fi; \
+	LOCAL_PGHOST="$(LOCAL_PGHOST)" \
+	LOCAL_PGPORT="$(LOCAL_PGPORT)" \
+	LOCAL_PGUSER="$(LOCAL_PGUSER)" \
+	LOCAL_PGPASSWORD="$(LOCAL_PGPASSWORD)" \
+		node scripts/dev.mjs record-runtime-metadata --profile "$(PROFILE)"; \
 	if [ "$$use_profile_db" = "1" ]; then \
 		$(PROFILE_DB_ENSURE_COMMAND) \
 	fi; \
@@ -300,6 +309,8 @@ setup:
 		exit 1; \
 	fi; \
 	database_url_override_set="$${DATABASE_URL+x}"; \
+	database_mode=profile; \
+	if [ "$$database_url_override_set" = "x" ]; then database_mode=external; fi; \
 	launch_env=$$( \
 		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
 		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
@@ -311,6 +322,7 @@ setup:
 		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
 		PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
 		PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
+		PROLIFERATE_DEV_DATABASE_MODE="$$database_mode" \
 		node scripts/dev.mjs ensure --profile "$(PROFILE)" \
 	); \
 	if [ "$$database_url_override_set" = "x" ]; then \
@@ -373,6 +385,8 @@ seed-sso:
 	fi; \
 	database_url_override_set="$${DATABASE_URL+x}"; \
 	database_url_override_value="$${DATABASE_URL:-}"; \
+	database_mode=profile; \
+	if [ "$$database_url_override_set" = "x" ]; then database_mode=external; fi; \
 	launch_env=$$( \
 		PROLIFERATE_API_PORT="$(PROLIFERATE_API_PORT)" \
 		PROLIFERATE_WEB_PORT="$(PROLIFERATE_WEB_PORT)" \
@@ -384,6 +398,7 @@ seed-sso:
 		ANYHARNESS_RUNTIME_HOME="$(ANYHARNESS_RUNTIME_HOME)" \
 		PROLIFERATE_DEV_HOME="$(PROLIFERATE_DEV_HOME)" \
 		PROLIFERATE_DEV_DB_NAME="$(PROLIFERATE_DEV_DB_NAME)" \
+		PROLIFERATE_DEV_DATABASE_MODE="$$database_mode" \
 		node scripts/dev.mjs ensure --profile "$(PROFILE)" \
 	); \
 	$(SERVER_ENV_SOURCE) \
@@ -785,9 +800,14 @@ test-cloud-all: cloud-runtime-build server-db-ready
 # CLI with lane flags; this target is a thin wrapper so CI and laptops call it
 # identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
 # SCENARIOS=<list|all> POLICY=signal|release DRY_RUN=1 FILE_ISSUES=1.
+# Start a fresh local qualification profile with:
+#   make run PROFILE=<name> RELEASE_E2E=1 [CLOUD_WORKER_TUNNEL=ngrok]
+# RELEASE_E2E=1 gives the profile the single-org first-run claim posture used
+# by the local durable-identity fixture; it is a Make launch mode, not a
+# persistent runner authorization switch.
 release-e2e:
 	pnpm install --silent
-	cd tests/release && pnpm exec tsx src/cli/run.ts \
+	cd tests/release && $(if $(strip $(PROFILE)),RELEASE_E2E_PROFILE="$(PROFILE)" )pnpm exec tsx src/cli/run.ts \
 		--lane $(LANE) \
 		--desktop $(DESKTOP) \
 		--agents $(AGENTS) \

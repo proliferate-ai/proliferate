@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import stat
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,7 @@ from proliferate.server.setup.domain.tokens import (
     mint_setup_token,
     setup_token_matches,
 )
+from proliferate.server.setup import service as setup_service
 from proliferate.server.setup.lifecycle import ensure_first_run_setup_token
 
 CLAIM_EMAIL = "owner@acme.example.com"
@@ -85,7 +87,10 @@ async def single_org_client(test_engine, monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-async def test_boot_mint_persists_hash_and_survives_restart(test_engine, monkeypatch, tmp_path):
+async def test_boot_mint_persists_hash_and_survives_restart(
+    test_engine, monkeypatch, tmp_path, caplog
+):
+    caplog.set_level("INFO")
     _enable_single_org(monkeypatch, tmp_path)
     from proliferate.db import engine as engine_module
 
@@ -94,6 +99,8 @@ async def test_boot_mint_persists_hash_and_survives_restart(test_engine, monkeyp
     await ensure_first_run_setup_token()
     first_token = _token_file(tmp_path).read_text().strip()
     assert first_token
+    assert stat.S_IMODE(_token_file(tmp_path).stat().st_mode) == 0o600
+    assert first_token not in caplog.text
 
     async with _factory(test_engine)() as session:
         stored_hash = await instance_setup_store.get_setup_token_hash(session)
@@ -113,6 +120,91 @@ async def test_boot_mint_persists_hash_and_survives_restart(test_engine, monkeyp
         rotated_hash = await instance_setup_store.get_setup_token_hash(session)
     assert rotated_hash is not None
     assert setup_token_matches(second_token, rotated_hash)
+
+
+async def test_boot_mint_replaces_token_symlink_without_following_it(
+    test_engine, monkeypatch, tmp_path
+):
+    _enable_single_org(monkeypatch, tmp_path)
+    from proliferate.db import engine as engine_module
+
+    monkeypatch.setattr(engine_module, "async_session_factory", _factory(test_engine))
+
+    previous_token = await _seed_setup_token(test_engine)
+    symlink_target = tmp_path / "symlink-target"
+    symlink_target.write_text(f"{previous_token}\n", encoding="utf-8")
+    symlink_target.chmod(0o600)
+    _token_file(tmp_path).symlink_to(symlink_target)
+
+    await ensure_first_run_setup_token()
+
+    assert not _token_file(tmp_path).is_symlink()
+    current_token = _token_file(tmp_path).read_text(encoding="utf-8").strip()
+    assert current_token != previous_token
+    assert symlink_target.read_text(encoding="utf-8").strip() == previous_token
+    assert stat.S_IMODE(_token_file(tmp_path).stat().st_mode) == 0o600
+    async with _factory(test_engine)() as session:
+        stored_hash = await instance_setup_store.get_setup_token_hash(session)
+    assert stored_hash is not None
+    assert setup_token_matches(current_token, stored_hash)
+
+
+async def test_boot_mint_persistence_failure_aborts_and_rolls_back_hash(
+    test_engine, monkeypatch, tmp_path, caplog
+):
+    caplog.set_level("INFO")
+    _enable_single_org(monkeypatch, tmp_path)
+    from proliferate.db import engine as engine_module
+
+    monkeypatch.setattr(engine_module, "async_session_factory", _factory(test_engine))
+    minted_token = "never-log-this-setup-token"
+    monkeypatch.setattr(setup_service, "mint_setup_token", lambda: minted_token)
+    invalid_parent = tmp_path / "not-a-directory"
+    invalid_parent.write_text("occupied", encoding="utf-8")
+    monkeypatch.setattr(settings, "setup_token_file", str(invalid_parent / "setup-token"))
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await ensure_first_run_setup_token()
+
+    message = str(exc_info.value)
+    assert "Could not securely persist the first-run setup token" in message
+    assert "parent directory is writable" in message
+    assert "token verifier cannot be committed" in message
+    assert minted_token not in message
+    assert minted_token not in caplog.text
+    async with _factory(test_engine)() as session:
+        assert await instance_setup_store.get_setup_token_hash(session) is None
+
+
+async def test_boot_mint_atomic_replace_failure_preserves_previous_pair(
+    test_engine, monkeypatch, tmp_path, caplog
+):
+    caplog.set_level("INFO")
+    _enable_single_org(monkeypatch, tmp_path)
+    from proliferate.db import engine as engine_module
+
+    monkeypatch.setattr(engine_module, "async_session_factory", _factory(test_engine))
+    previous_token = await _seed_setup_token(test_engine, tmp_path)
+    _token_file(tmp_path).chmod(0o600)
+    next_token = "replacement-must-not-leak"
+    monkeypatch.setattr(setup_service, "mint_setup_token", lambda: next_token)
+    monkeypatch.setattr(setup_service, "_read_token_file", lambda _path: None)
+
+    def fail_replace(*_args, **_kwargs):
+        raise PermissionError("simulated atomic replacement failure")
+
+    monkeypatch.setattr(setup_service.os, "replace", fail_replace)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await ensure_first_run_setup_token()
+
+    assert _token_file(tmp_path).read_text(encoding="utf-8").strip() == previous_token
+    assert next_token not in str(exc_info.value)
+    assert next_token not in caplog.text
+    async with _factory(test_engine)() as session:
+        stored_hash = await instance_setup_store.get_setup_token_hash(session)
+    assert stored_hash is not None
+    assert setup_token_matches(previous_token, stored_hash)
 
 
 async def test_boot_mint_is_noop_in_hosted_mode(test_engine, monkeypatch, tmp_path):

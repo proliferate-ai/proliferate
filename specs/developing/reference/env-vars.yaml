@@ -304,7 +304,7 @@
 - name: PROLIFERATE_SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD
   secret: false
   default: "client_secret_basic"
-  description: OIDC token endpoint auth method: client_secret_basic, client_secret_post, or none
+  description: "OIDC token endpoint auth method: client_secret_basic, client_secret_post, or none"
   tags: [local-dev, self-hosted, production]
 
 - name: PROLIFERATE_SSO_OIDC_ALLOW_PRIVATE_PROVIDER_URLS
@@ -1330,6 +1330,295 @@
   default: ""
   description: Absolute path override for the AnyHarness-managed worktree root used by inventory, orphan pruning, and automatic checkout retention
   tags: [local-dev, self-hosted]
+
+# ═══════════════════════════════════════════════════════════════════════
+# Testing: Tier 3/4 release E2E
+# ═══════════════════════════════════════════════════════════════════════
+# These configure tests/release. Credentials belong in the owner-only local
+# release-e2e.env file or GitHub Actions secrets; mutation opt-ins are ambient,
+# one-run authorizations and must never be stored in that file.
+
+- name: RELEASE_POLICY
+  secret: false
+  default: "signal"
+  description: Runner policy; signal records blockers while release fails closed on every required row
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_ENV_FILE
+  secret: false
+  default: "~/.proliferate-local/dev/release-e2e.env"
+  description: Local override for the owner-only dotenv file; CI ignores the implicit default
+  tags: [local-dev]
+
+- name: RELEASE_E2E_PROFILE
+  secret: false
+  default: ""
+  description: Local full-stack profile whose API, runtime, Desktop, and database endpoints the runner derives
+  tags: [local-dev]
+
+- name: RELEASE_E2E_ALLOW_PROFILE_WORKTREE_MISMATCH
+  secret: false
+  default: ""
+  description: "Per-run safety override: set exactly 1 to target a profile bound to another worktree; never persist"
+  tags: [local-dev]
+
+- name: RELEASE_E2E_SERVER_URL
+  secret: false
+  default: ""
+  description: Target API base URL, including any deployment API path prefix
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GATEWAY_TEST_KEY
+  secret: true
+  default: ""
+  description: Dedicated cheap-model LiteLLM virtual key for real-agent release scenarios
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GATEWAY_BASE_URL
+  secret: false
+  default: ""
+  description: Public LiteLLM base URL against which the release-E2E gateway key was issued
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_E2B_API_KEY
+  secret: true
+  default: ""
+  description: Dedicated E2B-team credential for sandbox scenarios and template publication
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_E2B_TEAM_ID
+  secret: false
+  default: ""
+  description: E2B team identifier used to scope template cache manifests
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DURABLE_USER_EMAIL
+  secret: false
+  default: ""
+  description: Durable release-E2E account email for existing-user scenarios outside staging OAuth bootstrap
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DURABLE_USER_PASSWORD
+  secret: true
+  default: ""
+  description: Password for the durable release-E2E account outside staging OAuth bootstrap
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN
+  secret: true
+  default: ""
+  description: Bootstrap refresh token for the staging durable user's rotating product session
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_STAGING_SESSION_STATE
+  secret: false
+  default: "~/.proliferate-local/dev/release-e2e-staging-session.json"
+  description: Path to the owner-only state file holding the rotating staging refresh token
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DURABLE_ORG_ID
+  secret: false
+  default: ""
+  description: Organization identifier owned by the durable target-specific release-E2E identity
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SLACK_WEBHOOK_URL
+  secret: true
+  default: ""
+  description: Incoming webhook for the disposable Slack workspace used by workflow delivery tests
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SLACK_BOT_TOKEN
+  secret: true
+  default: ""
+  description: Reserved Slack bot credential for release scenarios that support bot-token auth
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_INTEGRATION_NAMESPACE
+  secret: false
+  default: "exa"
+  description: Cataloged api_key integration namespace exercised by the live integration scenario
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_INTEGRATION_API_KEY
+  secret: true
+  default: ""
+  description: Real provider credential for the selected release-E2E integration namespace
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GITHUB_TEST_REPO
+  secret: false
+  default: "proliferate-e2e/e2e-fixture"
+  description: Disposable owner/repo fixture for checkout, worktree, and repository-setting scenarios
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GITHUB_TEST_TOKEN
+  secret: true
+  default: ""
+  description: Fine-scoped GitHub token for release-E2E fixture repository operations
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GITHUB_APP_SEED_REFRESH_TOKEN
+  secret: true
+  default: ""
+  description: Bootstrap refresh token used to seed a real local GitHub App authorization
+  tags: [local-dev]
+
+- name: RELEASE_E2E_GITHUB_APP_SEED_STATE
+  secret: false
+  default: "~/.proliferate-local/dev/release-e2e-github-seed.json"
+  description: Path to the owner-only state file holding the rotating GitHub App seed token
+  tags: [local-dev]
+
+- name: RELEASE_E2E_LOCAL_RUNTIME_URL
+  secret: false
+  default: "http://127.0.0.1:8542"
+  description: Local-lane AnyHarness HTTP base URL, normally derived from the selected profile
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DESKTOP_WEB_URL
+  secret: false
+  default: ""
+  description: Desktop renderer URL for browser-driven local-lane scenarios
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DESKTOP_T4
+  secret: false
+  default: ""
+  description: "Per-run mutation authorization: set exactly 1 for the real signed Desktop updater install; never persist"
+  tags: [local-dev]
+
+- name: RELEASE_E2E_DESKTOP_UPDATE_FROM
+  secret: false
+  default: ""
+  description: Exact published N-1 Desktop version used to begin the updater scenario
+  tags: [local-dev]
+
+- name: RELEASE_E2E_DESKTOP_UPDATE_TO
+  secret: false
+  default: ""
+  description: Exact candidate N Desktop version installed by the updater scenario
+  tags: [local-dev]
+
+- name: RELEASE_E2E_STAGING_ECS_PIN_BUMP
+  secret: false
+  default: ""
+  description: "Per-run mutation authorization: set exactly 1 to change and restore the staging ECS runtime pin; never persist"
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_CLOUD_UPDATE_FROM
+  secret: false
+  default: ""
+  description: Exact published N-1 AnyHarness version already running before cloud update qualification
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_CLOUD_UPDATE_TO
+  secret: false
+  default: ""
+  description: Exact candidate N AnyHarness version required after cloud update qualification
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_PROVISION
+  secret: false
+  default: ""
+  description: "Per-run mutation authorization: set exactly 1 to provision and terminate throwaway self-hosted EC2; never persist"
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_UPDATE_FROM
+  secret: false
+  default: ""
+  description: Exact published N-1 server image version installed before self-hosted update qualification
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_UPDATE_TO
+  secret: false
+  default: ""
+  description: Exact published candidate N server image version installed by self-hosted update qualification
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_REGION
+  secret: false
+  default: "us-east-1"
+  description: AWS region for the throwaway self-hosted qualification instance
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_INSTANCE_TYPE
+  secret: false
+  default: "t3.small"
+  description: EC2 instance type for the throwaway self-hosted qualification instance
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_IMAGE_TAG
+  secret: false
+  default: ""
+  description: Initial server image tag installed while provisioning the throwaway self-hosted instance
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_DESKTOP
+  secret: false
+  default: ""
+  description: Optional Desktop renderer URL pointed at the self-hosted qualification target
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_URL
+  secret: false
+  default: ""
+  description: Public base URL of a standing claimed self-hosted qualification instance
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_SSH
+  secret: false
+  default: ""
+  description: SSH destination for optional read-only assertions against the standing self-hosted target
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_SSH_KEY
+  secret: false
+  default: ""
+  description: Filesystem path to the private SSH key; the referenced file, not this path, is secret
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_GATEWAY_MODEL
+  secret: false
+  default: ""
+  description: Cheap model alias exercised through the self-hosted LiteLLM add-on
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_GATEWAY_PUBLIC_URL
+  secret: false
+  default: ""
+  description: Public inference URL used to validate the self-hosted LiteLLM add-on
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_RELEASE_DESKTOP_VERSION
+  secret: false
+  default: ""
+  description: Exact Desktop version whose updater manifest, artifacts, and release tag must agree
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_RELEASE_DATE
+  secret: false
+  default: ""
+  description: Expected UTC publication date for the release under qualification, formatted YYYY-MM-DD
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_RELEASE_SHA
+  secret: false
+  default: ""
+  description: Immutable candidate commit SHA whose lineage published release tags must contain
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DESKTOP_CDN_BASE_URL
+  secret: false
+  default: "https://downloads.proliferate.com"
+  description: Desktop downloads CDN base URL used for updater artifact-chain qualification
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_LOCAL_DATABASE_URL
+  secret: true
+  default: ""
+  description: Local profile Postgres URL used by read-only ledger, audit, and provisioning seams
+  tags: [local-dev, ci]
 
 # ═══════════════════════════════════════════════════════════════════════
 # Deploy: Docker Compose / Bootstrap
