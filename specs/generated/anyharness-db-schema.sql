@@ -499,7 +499,7 @@ CREATE TABLE session_pending_prompts (
     seq        INTEGER NOT NULL,
     prompt_id  TEXT,
     text       TEXT NOT NULL,
-    queued_at  TEXT NOT NULL, blocks_json TEXT, provenance_json TEXT,
+    queued_at  TEXT NOT NULL, blocks_json TEXT, provenance_json TEXT, queue_position INTEGER,
     PRIMARY KEY (session_id, seq)
 );
 
@@ -543,7 +543,7 @@ CREATE TABLE sessions (
     updated_at TEXT NOT NULL,
     last_prompt_at TEXT,
     closed_at TEXT
-, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT);
+, thinking_budget_tokens INTEGER, title TEXT, requested_model_id TEXT, current_model_id TEXT, requested_mode_id TEXT, current_mode_id TEXT, dismissed_at TEXT, mcp_bindings_ciphertext TEXT, system_prompt_append TEXT, mcp_binding_summaries_json TEXT, origin_json TEXT, subagents_enabled INTEGER NOT NULL DEFAULT 1, mcp_binding_policy TEXT NOT NULL DEFAULT 'inherit_workspace', action_capabilities_json TEXT, agent_auth_contexts TEXT, pending_prompt_seq_cursor INTEGER NOT NULL DEFAULT 0);
 
 -- table: terminal_command_runs
 CREATE TABLE terminal_command_runs (
@@ -773,6 +773,10 @@ WHERE relation = 'review_agent';
 CREATE UNIQUE INDEX idx_session_links_subagent_child_owner
     ON session_links(relation, child_session_id)
     WHERE relation = 'subagent';
+
+-- index: idx_session_pending_prompts_session_position
+CREATE UNIQUE INDEX idx_session_pending_prompts_session_position
+    ON session_pending_prompts (session_id, queue_position);
 
 -- index: idx_session_pending_prompts_session_seq
 CREATE INDEX idx_session_pending_prompts_session_seq
