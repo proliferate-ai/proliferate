@@ -9,10 +9,10 @@ The lifecycle, all single-org mode only:
    can read it remotely. Restarts reuse the token as long as the file still
    matches the stored hash; if the plaintext is lost the token rotates so the
    operator always has a recoverable token.
-2. ``claim_first_run`` verifies the token, takes a transaction-scoped advisory
-   lock, re-asserts the user table is empty, creates the owner account through
-   the existing auth primitives, and creates THE instance organization through
-   the single-org claim path.
+2. ``claim_first_run`` takes a transaction-scoped advisory lock, re-asserts the
+   user table is empty, verifies the token under that same serialization point,
+   creates the owner account through the existing auth primitives, and creates
+   THE instance organization through the single-org claim path.
 3. Once any user exists, setup is closed permanently: the routes 404 and the
    boot path deletes the token row and file.
 """
@@ -119,6 +119,14 @@ async def claim_first_run(
     if not await is_setup_open(db):
         raise SetupClosedError()
 
+    # Serialize the state check and token lookup. Reading the verifier before
+    # this lock races a concurrent winner deleting it: the loser could then
+    # report "invalid token" (403) even though setup has permanently closed
+    # (404). The lock is held until this transaction commits.
+    await instance_setup_store.acquire_first_run_claim_lock(db)
+    if await instance_setup_store.count_users(db) > 0:
+        raise SetupClosedError()
+
     stored_hash = await instance_setup_store.get_setup_token_hash(db)
     if (
         stored_hash is None
@@ -138,12 +146,6 @@ async def claim_first_run(
         issue = organization_name_issue(requested_organization_name)
         if issue is not None:
             raise SetupValidationError(issue.message)
-
-    # Serialize concurrent claims; the lock is held until this transaction
-    # commits, so the user-count check below is race-free.
-    await instance_setup_store.acquire_first_run_claim_lock(db)
-    if await instance_setup_store.count_users(db) > 0:
-        raise SetupClosedError()
 
     user = await create_password_account(db, email=normalized_email, password=password)
     organization = await claim_instance_organization(

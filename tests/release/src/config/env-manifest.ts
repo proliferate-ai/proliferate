@@ -183,6 +183,16 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["local"],
   },
   {
+    name: "STRIPE_TEST_SECRET_KEY",
+    description:
+      "Stripe test-mode secret used by the fail-closed Tier-2 billing lane and by a local " +
+      "qualification-profile server when billing is enabled.",
+    whereItLives:
+      "Local: ~/.proliferate-local/dev/release-e2e.env, selected explicitly through env:exec. " +
+      "CI: GitHub Actions STRIPE_TEST_SECRET_KEY secret. Must start with sk_test_.",
+    secret: true,
+  },
+  {
     name: "RELEASE_E2E_E2B_API_KEY",
     description:
       "E2B API key used to provision sandbox-lane cloud workspaces and to build/upload " +

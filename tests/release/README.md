@@ -14,7 +14,11 @@ promotion; see the enforcement exception in
 ```
 # One-time profile setup, then launch it in qualification posture.
 make setup PROFILE=<name>
-make run PROFILE=<name> RELEASE_E2E=1
+# Select only credentials the pre-run server needs. Omit either --allow when
+# that service is not part of the chosen local profile.
+pnpm -C tests/release run env:exec --allow STRIPE_TEST_SECRET_KEY \
+  --allow RELEASE_E2E_E2B_API_KEY \
+  -- make run PROFILE=<name> RELEASE_E2E=1
 # Add CLOUD_WORKER_TUNNEL=ngrok when a selected cell uses a real E2B sandbox.
 
 make release-e2e PROFILE=<name> LANE=local DESKTOP=web AGENTS=all SCENARIOS=all [POLICY=signal|release] [DRY_RUN=1]
@@ -35,6 +39,17 @@ read the implicit home file. Costly/mutating authorization switches
 (`RELEASE_E2E_SELFHOST_PROVISION`, `RELEASE_E2E_STAGING_ECS_PIN_BUMP`, and
 `RELEASE_E2E_DESKTOP_T4`) are rejected from the persistent file and must be set
 for one invocation in the ambient environment.
+
+Commands that run before the release runner use the same parser through
+`pnpm -C tests/release run env:exec --allow NAME -- <command>`. The launcher
+rejects undeclared or persistent-forbidden names, requires an explicit
+allowlist, materializes no other file credential, preserves ambient overrides
+and child exit status, and never prints values. `make test-intent-billing` uses
+this path locally and in CI. At the Make launch boundary, an explicitly selected
+`STRIPE_TEST_SECRET_KEY` is validated as test mode before being mapped to the
+server's `STRIPE_SECRET_KEY`; an explicitly selected
+`RELEASE_E2E_E2B_API_KEY` maps to the server's `E2B_API_KEY`. Real local E2B
+profiles still require their nonsecret immutable `E2B_TEMPLATE_NAME`/ref.
 
 For the local lane, `PROFILE=<name>` resolves the profile's API, AnyHarness,
 Desktop web, and database endpoints from

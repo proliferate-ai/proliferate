@@ -184,7 +184,7 @@ jobs:
           CI: "true"
           # Stripe TEST key (sk_test_...). Absent or invalid → setup fails.
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
-        run: pnpm -C tests/intent run test:billing
+        run: make test-intent-billing
 
       - name: Upload Playwright traces on failure
         if: failure()

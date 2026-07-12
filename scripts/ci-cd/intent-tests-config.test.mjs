@@ -9,8 +9,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const read = (relative) => readFileSync(path.join(repoRoot, relative), "utf8");
 
 const workflow = read(".github/workflows/intent-tests.yml");
+const makefile = read("Makefile");
 const mainConfig = read("tests/intent/playwright.config.ts");
 const billingConfig = read("tests/intent/playwright.billing.config.ts");
+const surfacesConfig = read("tests/intent/playwright.surfaces.config.ts");
 const billingSetup = read("tests/intent/stack/billing-global-setup.ts");
 const boot = read("tests/intent/stack/boot.ts");
 const reporter = read("tests/intent/stack/strict-reporter.ts");
@@ -50,6 +52,12 @@ test("billing runs only in trusted secret contexts and then fails closed", () =>
   assert.match(block, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   assert.match(block, /github\.actor != 'dependabot\[bot\]'/);
   assert.match(block, /STRIPE_TEST_SECRET_KEY: \$\{\{ secrets\.STRIPE_TEST_SECRET_KEY \}\}/);
+  assert.match(block, /run: make test-intent-billing/);
+  assert.match(makefile, /test-intent-billing:[\s\S]*?env:exec --allow STRIPE_TEST_SECRET_KEY/);
+  assert.match(makefile, /sk_test_\*\) server_stripe_secret_key=/);
+  assert.match(makefile, /server_e2b_api_key="\$\$release_e2b_api_key"/);
+  assert.match(makefile, /unset STRIPE_TEST_SECRET_KEY RELEASE_E2E_E2B_API_KEY/);
+  assert.match(makefile, /STRIPE_SECRET_KEY="\$\$server_stripe_secret_key" E2B_API_KEY="\$\$server_e2b_api_key" \.venv\/bin\/uvicorn/);
   assert.match(billingSetup, /The required suite cannot be skipped/);
   assert.match(billingSetup, /Refusing the configured non-test credential/);
   assert.doesNotMatch(billingSetup, /TIER2_BILLING_SKIP/);
@@ -60,6 +68,13 @@ test("both Playwright configs forbid focused CI tests and install the strict rep
     assert.match(config, /forbidOnly: Boolean\(process\.env\.CI\)/);
     assert.match(config, /\.\/stack\/strict-reporter\.ts/);
   }
+});
+
+test("dual-host readiness remains isolated from the canonical strict gate", () => {
+  assert.match(mainConfig, /"\*\*\/surfaces\/\*\*"/);
+  assert.match(surfacesConfig, /shared-control-plane checks/);
+  assert.match(surfacesConfig, /do not claim chat\/settings\/billing parity/);
+  assert.doesNotMatch(workflow, /test:surfaces|intent-surfaces/);
 });
 
 test("the strict reporter rejects final skips, expected failures, unexpected passes, and flaky retries", () => {

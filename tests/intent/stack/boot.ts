@@ -359,7 +359,10 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   // CI, or `skipFrontend`) so a spec can probe reachability itself and skip
   // gracefully rather than the boot deciding for it.
   const anyharnessBaseUrl = `http://127.0.0.1:${instance.ports.anyharness}`;
-  const setupTokenFile = `/tmp/proliferate-${profile}-setup-token`;
+  // Keep the plaintext claim token inside the profile's real owner-controlled
+  // directory. On macOS `/tmp` is a symlink to `/private/tmp`; the server's
+  // fail-closed no-follow writer correctly refuses that parent path.
+  const setupTokenFile = path.join(path.dirname(profileInstancePath(profile)), "setup-token");
   const children: ChildProcess[] = [];
   let torndown = false;
   const teardown = async () => {

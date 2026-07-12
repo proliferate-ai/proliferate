@@ -1434,6 +1434,12 @@
   description: Public LiteLLM base URL against which the release-E2E gateway key was issued
   tags: [local-dev, ci]
 
+- name: STRIPE_TEST_SECRET_KEY
+  secret: true
+  default: ""
+  description: Stripe test-mode secret selected for Tier-2 billing and local qualification-profile server startup
+  tags: [local-dev, ci]
+
 - name: RELEASE_E2E_E2B_API_KEY
   secret: true
   default: ""

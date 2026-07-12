@@ -52,6 +52,14 @@ test("every scenario requiredEnv name is declared by the environment manifest", 
   assert.deepEqual(missing, []);
 });
 
+test("Stripe test credentials are declared secret and safe for owner-only persistence", () => {
+  const stripe = ENV_MANIFEST.find((spec) => spec.name === "STRIPE_TEST_SECRET_KEY");
+  assert.ok(stripe);
+  assert.equal(stripe.secret, true);
+  assert.notEqual(stripe.persistentFileAllowed, false);
+  assert.equal(stripe.lanes, undefined);
+});
+
 test("canonical environment reference includes every release runner variable", () => {
   const referencePath = path.join(REPO_ROOT, "specs", "developing", "reference", "env-vars.yaml");
   const canonicalNames = parseCanonicalEnvironmentNames(readFileSync(referencePath, "utf8"));

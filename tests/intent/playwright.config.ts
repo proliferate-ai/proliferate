@@ -6,9 +6,10 @@ import { defineConfig } from "@playwright/test";
 // Postgres DB, so parallel workers would race on org/invitation state.
 export default defineConfig({
   testDir: "./specs",
-  // The billing specs live under ./specs/billing but boot a different stack
-  // (Stripe + enforce mode) via their own config; keep them out of this suite.
-  testIgnore: "**/billing/**",
+  // Billing and dual-host readiness each own a different stack/config. The
+  // surface lane is intentionally not part of this strict canonical gate until
+  // it has the required-surface manifest and real shared product journeys.
+  testIgnore: ["**/billing/**", "**/surfaces/**"],
   globalSetup: "./stack/global-setup.ts",
   workers: 1,
   fullyParallel: false,

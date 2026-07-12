@@ -56,12 +56,25 @@ LOCAL_CODEX_ACP_ENV = if [ -z "$${ANYHARNESS_CODEX_AGENT_PROGRAM:-}" ] && [ -x "
 	export ANYHARNESS_CODEX_AGENT_PROGRAM="$(LOCAL_CODEX_ACP)"; \
 	echo "Using local codex-acp: $$ANYHARNESS_CODEX_AGENT_PROGRAM"; \
 fi;
-STRIPE_LOCAL_SECRET_ENV = if [ -z "$${STRIPE_SECRET_KEY:-}" ] && command -v stripe >/dev/null 2>&1; then \
+STRIPE_LOCAL_SECRET_ENV = server_stripe_secret_key="$${STRIPE_SECRET_KEY:-}"; \
+	stripe_test_secret_key="$${selected_stripe_test_key:-$${STRIPE_TEST_SECRET_KEY:-}}"; \
+if [ -z "$$server_stripe_secret_key" ] && [ -n "$$stripe_test_secret_key" ]; then \
+	case "$$stripe_test_secret_key" in \
+		sk_test_*) server_stripe_secret_key="$$stripe_test_secret_key" ;; \
+		*) echo "STRIPE_TEST_SECRET_KEY must be a Stripe test-mode key (sk_test_...)." >&2; exit 1 ;; \
+	esac; \
+fi; \
+if [ -z "$$server_stripe_secret_key" ] && command -v stripe >/dev/null 2>&1; then \
 	stripe_secret_key=$$(stripe config --list 2>/dev/null | grep '^test_mode_api_key' | cut -d "'" -f2); \
 	if [ -n "$$stripe_secret_key" ]; then \
-		export STRIPE_SECRET_KEY="$$stripe_secret_key"; \
+		server_stripe_secret_key="$$stripe_secret_key"; \
 		echo "Using Stripe CLI test key for local billing API calls."; \
 	fi; \
+fi;
+E2B_LOCAL_SECRET_ENV = server_e2b_api_key="$${E2B_API_KEY:-}"; \
+	release_e2b_api_key="$${selected_release_e2b_api_key:-$${RELEASE_E2E_E2B_API_KEY:-}}"; \
+if [ -z "$$server_e2b_api_key" ] && [ -n "$$release_e2b_api_key" ]; then \
+	server_e2b_api_key="$$release_e2b_api_key"; \
 fi;
 AUTH_PROFILE_ENV_SOURCE = auth_profile="$(AUTH_PROFILE)"; \
 	if [ -n "$$auth_profile" ]; then \
@@ -107,7 +120,7 @@ endif
 .PHONY: catalog-view catalog-pin catalog-update setup run dev dev-init dev-list dev-local dev-desktop dev-runtime dev-server dev-mobile-auth dev-mobile-tunnel dev-web-auth seed-sso server-db-up server-db-wait \
         server-db-down server-db-ready server-redis-up server-redis-wait server-redis-down server-redis-ready \
         server-litellm-up server-litellm-wait server-litellm-down db db-local db-ah server-migrate serve install \
-        check check-max-lines check-server-boundaries test test-server fmt clippy \
+        check check-max-lines check-server-boundaries test test-server test-intent-billing fmt clippy \
         dev-automation-worker \
         sdk-generate sdk-build sdk-react-build cloud-sdk-build cloud-sdk-react-build shared-build dev-artifacts-ready build-rust runtime-build web-build desktop-build build-frontend build rebuild \
         desktop-test-build release-desktop-dry-run release-desktop-draft \
@@ -163,6 +176,9 @@ run: dev-artifacts-ready
 		echo "PROFILE is required. Example: make run PROFILE=main"; \
 		exit 1; \
 	fi; \
+	selected_stripe_test_key="$${STRIPE_TEST_SECRET_KEY:-}"; \
+	selected_release_e2b_api_key="$${RELEASE_E2E_E2B_API_KEY:-}"; \
+	unset STRIPE_TEST_SECRET_KEY RELEASE_E2E_E2B_API_KEY; \
 	database_url_override_set="$${DATABASE_URL+x}"; \
 	database_url_override_value="$${DATABASE_URL:-}"; \
 	database_mode=profile; \
@@ -195,7 +211,9 @@ run: dev-artifacts-ready
 	$(SERVER_ENV_SOURCE) \
 	. "$$launch_env"; \
 	$(AUTH_PROFILE_ENV_SOURCE) \
+	$(E2B_LOCAL_SECRET_ENV) \
 	$(STRIPE_LOCAL_SECRET_ENV) \
+	unset STRIPE_SECRET_KEY E2B_API_KEY; \
 	$(LOCAL_CODEX_ACP_ENV) \
 	$(PROFILE_REDIS_READY_COMMAND) \
 	if [ "$$database_url_override_set" = "x" ]; then \
@@ -297,7 +315,7 @@ run: dev-artifacts-ready
 	runtime_bin="$${ANYHARNESS_DEV_RUNTIME_BIN:-$(DEV_ANYHARNESS_TARGET_DIR)/debug/anyharness}"; \
 	echo "Starting profile $$PROLIFERATE_DEV_PROFILE: runtime :$$ANYHARNESS_PORT, backend :$$PROLIFERATE_API_PORT, desktop :$$PROLIFERATE_WEB_PORT, web :$$PROLIFERATE_HOSTED_WEB_PORT, mobile web :$$PROLIFERATE_MOBILE_WEB_PORT"; \
 	RUST_LOG=info ANYHARNESS_DEV_CORS=1 "$$runtime_bin" serve --port "$$ANYHARNESS_PORT" --runtime-home "$$ANYHARNESS_RUNTIME_HOME" & \
-	(cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
+	(cd server && STRIPE_SECRET_KEY="$$server_stripe_secret_key" E2B_API_KEY="$$server_e2b_api_key" .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port "$$PROLIFERATE_API_PORT") & \
 	echo "Starting hosted web app..."; \
 	(cd apps/web && VITE_PROLIFERATE_API_BASE_URL="$$API_BASE_URL" VITE_PROLIFERATE_DEV_TOKEN_LOGIN="$${VITE_PROLIFERATE_DEV_TOKEN_LOGIN:-true}" pnpm dev --host 127.0.0.1 --port "$$PROLIFERATE_HOSTED_WEB_PORT" --strictPort) & \
 	sleep 2; \
@@ -729,14 +747,19 @@ db-migrate-down: server-db-ready
 dev-server: export DEBUG := true
 dev-server: server-migrate server-redis-ready
 	@$(SERVER_ENV_SOURCE) \
+	$(E2B_LOCAL_SECRET_ENV) \
 	$(STRIPE_LOCAL_SECRET_ENV) \
-	cd server && .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000
+	unset STRIPE_TEST_SECRET_KEY RELEASE_E2E_E2B_API_KEY STRIPE_SECRET_KEY E2B_API_KEY; \
+	cd server && STRIPE_SECRET_KEY="$$server_stripe_secret_key" E2B_API_KEY="$$server_e2b_api_key" .venv/bin/uvicorn proliferate.main:app --reload --host 127.0.0.1 --port 8000
 
 server-install:
 	cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
 
 test-server: server-db-ready
 	cd server && .venv/bin/python -m pytest tests/ -xvs
+
+test-intent-billing:
+	pnpm -C tests/release run env:exec --allow STRIPE_TEST_SECRET_KEY -- pnpm -C tests/intent run test:billing
 
 cloud-runtime-build:
 	@if [ -n "$(CLOUD_RUNTIME_SOURCE_BINARY_PATH)" ] && \
@@ -800,8 +823,10 @@ test-cloud-all: cloud-runtime-build server-db-ready
 # CLI with lane flags; this target is a thin wrapper so CI and laptops call it
 # identically. LANE=local|staging DESKTOP=web|native AGENTS=<list|all>
 # SCENARIOS=<list|all> POLICY=signal|release DRY_RUN=1 FILE_ISSUES=1.
-# Start a fresh local qualification profile with:
-#   make run PROFILE=<name> RELEASE_E2E=1 [CLOUD_WORKER_TUNNEL=ngrok]
+# Start a fresh local qualification profile with selected canonical credentials:
+#   pnpm -C tests/release run env:exec --allow STRIPE_TEST_SECRET_KEY \
+#     --allow RELEASE_E2E_E2B_API_KEY -- make run PROFILE=<name> RELEASE_E2E=1 \
+#     [CLOUD_WORKER_TUNNEL=ngrok]
 # RELEASE_E2E=1 gives the profile the single-org first-run claim posture used
 # by the local durable-identity fixture; it is a Make launch mode, not a
 # persistent runner authorization switch.

@@ -91,6 +91,36 @@ test("loadReleaseEnvironment validates but does not materialize unselected crede
   }
 });
 
+test("a Stripe-only preload leaves the canonical file's E2B credential unmaterialized", () => {
+  const homeDir = mkdtempSync(path.join(tmpdir(), "release-env-home-"));
+  try {
+    const filePath = path.join(homeDir, ".proliferate-local/dev/release-e2e.env");
+    writeSecretFile(
+      filePath,
+      [
+        "STRIPE_TEST_SECRET_KEY=sk_test_selected_file_secret",
+        "RELEASE_E2E_E2B_API_KEY=e2b_unselected_file_secret",
+      ].join("\n"),
+    );
+    const env: NodeJS.ProcessEnv = {};
+    const result = loadReleaseEnvironment({
+      env,
+      homeDir,
+      allowedNames: new Set(["STRIPE_TEST_SECRET_KEY"]),
+    });
+
+    assert.equal(env.STRIPE_TEST_SECRET_KEY, "sk_test_selected_file_secret");
+    assert.equal(env.RELEASE_E2E_E2B_API_KEY, undefined);
+    assert.deepEqual(result.loadedNames, ["STRIPE_TEST_SECRET_KEY"]);
+    assert.deepEqual(result.ignoredNames, ["RELEASE_E2E_E2B_API_KEY"]);
+    const serialized = JSON.stringify(result);
+    assert.equal(serialized.includes("sk_test_selected_file_secret"), false);
+    assert.equal(serialized.includes("e2b_unselected_file_secret"), false);
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true });
+  }
+});
+
 test("loadReleaseEnvironment skips the implicit home file in CI", () => {
   const homeDir = mkdtempSync(path.join(tmpdir(), "release-env-home-"));
   try {
