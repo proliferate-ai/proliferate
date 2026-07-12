@@ -105,6 +105,7 @@ fi
 # the profiled services up.
 
 if proliferate_is_truthy "$(get AGENT_GATEWAY_ENABLED)"; then
+  GATEWAY_ERRORS_BEFORE="$ERRORS"
   GATEWAY_MASTER="$(get AGENT_GATEWAY_LITELLM_MASTER_KEY)"
   LITELLM_MASTER="$(get LITELLM_MASTER_KEY)"
   LITELLM_PG_PW="$(get LITELLM_POSTGRES_PASSWORD)"
@@ -124,7 +125,7 @@ if proliferate_is_truthy "$(get AGENT_GATEWAY_ENABLED)"; then
   if [[ -z "$(get ANTHROPIC_API_KEY)" && -z "$(get OPENAI_API_KEY)" && -z "$(get XAI_API_KEY)" ]]; then
     err "AGENT_GATEWAY_ENABLED=true but none of ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY is set. LiteLLM has no provider credentials to serve models with; set at least one."
   fi
-  if [[ "$ERRORS" -eq 0 ]]; then
+  if [[ "$ERRORS" -eq "$GATEWAY_ERRORS_BEFORE" ]]; then
     ok "Agent gateway config is internally consistent (profile: agent-gateway)."
   fi
 fi
@@ -156,6 +157,7 @@ fi
 # catches the same incompleteness before an operator discovers it at sign-in.
 
 if proliferate_is_truthy "$(get SSO_ENABLED)"; then
+  SSO_ERRORS_BEFORE="$ERRORS"
   SSO_CLIENT_ID="$(get SSO_OIDC_CLIENT_ID)"
   SSO_CLIENT_SECRET="$(get SSO_OIDC_CLIENT_SECRET)"
   SSO_AUTH_METHOD="$(get SSO_OIDC_TOKEN_ENDPOINT_AUTH_METHOD)"
@@ -183,7 +185,7 @@ if proliferate_is_truthy "$(get SSO_ENABLED)"; then
   if [[ "${SSO_JIT:-disabled}" == "disabled" && -z "$ADMIN_EMAILS_VAL" ]]; then
     warn "SSO_ENABLED=true with SSO_JIT_POLICY=disabled (the default) and ADMIN_EMAILS empty. No SSO sign-in can create the first user; either set ADMIN_EMAILS so an admin can sign in with password first, or set SSO_JIT_POLICY=create_member."
   fi
-  if [[ "$ERRORS" -eq 0 ]]; then
+  if [[ "$ERRORS" -eq "$SSO_ERRORS_BEFORE" ]]; then
     ok "SSO OIDC config is complete."
   fi
 fi

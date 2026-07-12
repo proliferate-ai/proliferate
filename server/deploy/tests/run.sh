@@ -217,6 +217,16 @@ pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
 echo "$pfout" | grep -q "GitHub sign-in stays unavailable" && ok "GitHub OAuth partial config warns" || no "expected a GitHub OAuth partial-config warning"
 pf "$t" && ok "GitHub OAuth partial config does not block" || no "GitHub OAuth partial config should not block"
 
+# -- per-section OK lines must not be suppressed by an UNRELATED earlier
+# error: missing SITE_ADDRESS still blocks the run, but a fully consistent
+# gateway and a complete SSO config must still print their confirmations so
+# the operator can tell which sections actually validated.
+printf 'AGENT_GATEWAY_ENABLED=true\nLITELLM_MASTER_KEY=a\nAGENT_GATEWAY_LITELLM_MASTER_KEY=a\nLITELLM_POSTGRES_PASSWORD=p\nAGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL=https://api.example.com/llm\nANTHROPIC_API_KEY=sk-ant-x\nSSO_ENABLED=true\nSSO_OIDC_CLIENT_ID=abc\nSSO_OIDC_CLIENT_SECRET=shh\nSSO_OIDC_ISSUER_URL=https://idp.example.com\nADMIN_EMAILS=admin@example.com\n' >"$t"
+pfout="$("$DEPLOY_DIR/preflight.sh" "$t" 2>&1 || true)"
+echo "$pfout" | grep -q "Agent gateway config is internally consistent" && ok "gateway OK line survives an unrelated error" || no "gateway OK line suppressed by an unrelated error"
+echo "$pfout" | grep -q "SSO OIDC config is complete" && ok "SSO OK line survives an unrelated error" || no "SSO OK line suppressed by an unrelated error"
+pf "$t" && no "missing SITE_ADDRESS should still BLOCK" || ok "unrelated error still blocks the run"
+
 # ---------------------------------------------------------------------------
 group "4. Installer: release selection + fetch + verify"
 # ---------------------------------------------------------------------------
