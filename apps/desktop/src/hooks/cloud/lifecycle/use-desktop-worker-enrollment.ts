@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { desktopWorkerStartupFailureCopy } from "@/copy/cloud/desktop-worker-copy";
 import {
   ensureDesktopWorker,
   teardownDesktopWorker,
 } from "@/lib/workflows/cloud/ensure-desktop-worker";
 import { useAuthStore } from "@/stores/auth/auth-store";
 import { useOrganizationStore } from "@/stores/organizations/organization-store";
+import { useToastStore } from "@/stores/toast/toast-store";
 
 // (user, org) key the desktop worker is currently enrolled for. Module-level
 // so remounts (or StrictMode double-effects) don't re-enroll for the same
@@ -48,6 +50,7 @@ export function useDesktopWorkerEnrollment(): void {
   const activeOrganizationId = useOrganizationStore(
     (state) => state.activeOrganizationId,
   );
+  const showToast = useToastStore((state) => state.show);
   const [retryNonce, setRetryNonce] = useState(0);
   useEffect(() => {
     if (authStatus === "bootstrapping") {
@@ -74,7 +77,11 @@ export function useDesktopWorkerEnrollment(): void {
     enrolledIdentityKey = nextIdentityKey;
     let cancelled = false;
     let retryTimer: number | null = null;
-    void ensureDesktopWorker(activeOrganizationId).then((enrolled) => {
+    void ensureDesktopWorker(activeOrganizationId, {
+      onFailure: (error) => {
+        showToast(desktopWorkerStartupFailureCopy(error), "error");
+      },
+    }).then((enrolled) => {
       if (enrolled || enrolledIdentityKey !== nextIdentityKey) {
         return;
       }
@@ -95,5 +102,5 @@ export function useDesktopWorkerEnrollment(): void {
         window.clearTimeout(retryTimer);
       }
     };
-  }, [authStatus, authUserId, activeOrganizationId, retryNonce]);
+  }, [authStatus, authUserId, activeOrganizationId, retryNonce, showToast]);
 }

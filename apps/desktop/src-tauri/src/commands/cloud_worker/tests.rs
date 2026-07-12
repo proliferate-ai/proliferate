@@ -1,6 +1,6 @@
-use std::{env, fs};
+use std::{env, fs, time::Duration};
 
-use super::write_worker_config;
+use super::{read_worker_log_tail, startup_watch_window, write_worker_config};
 
 #[test]
 fn worker_config_uses_the_desktop_sidecar_url() {
@@ -25,4 +25,70 @@ fn worker_config_uses_the_desktop_sidecar_url() {
     let contents = fs::read_to_string(config_path).expect("read worker config");
     assert!(contents.contains("runtime_base_url = \"http://127.0.0.1:50746\""));
     fs::remove_dir_all(root).expect("remove temporary worker config root");
+}
+
+#[test]
+fn fresh_enrollment_gets_the_longer_startup_watch() {
+    assert_eq!(startup_watch_window(true), Duration::from_secs(3));
+    assert_eq!(startup_watch_window(false), Duration::from_millis(500));
+}
+
+#[test]
+fn worker_log_tail_returns_only_the_requested_final_lines() {
+    let root = env::temp_dir().join(format!(
+        "proliferate-worker-log-tail-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create temporary worker log root");
+    let log_path = root.join("worker.log");
+    let contents = (1..=20)
+        .map(|line| format!("line {line}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&log_path, contents).expect("write worker log");
+
+    assert_eq!(
+        read_worker_log_tail(&log_path, 3),
+        "line 18\nline 19\nline 20"
+    );
+    fs::remove_dir_all(root).expect("remove temporary worker log root");
+}
+
+#[test]
+fn missing_worker_log_has_no_tail() {
+    let missing = env::temp_dir().join(format!(
+        "proliferate-worker-missing-log-{}",
+        uuid::Uuid::new_v4()
+    ));
+
+    assert_eq!(read_worker_log_tail(&missing, 12), "");
+}
+
+#[test]
+fn worker_log_tail_scrubs_secrets_and_user_paths() {
+    let root = env::temp_dir().join(format!(
+        "proliferate-worker-scrubbed-log-tail-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create temporary worker log root");
+    let log_path = root.join("worker.log");
+    let home = crate::app_config::home_dir().expect("resolve user home");
+    let private_path = home.join("projects/private-repository");
+    fs::write(
+        &log_path,
+        format!(
+            "Authorization: Bearer auth-secret-value\nPROLIFERATE_TOKEN=env-secret-value\nworkspace={}",
+            private_path.display()
+        ),
+    )
+    .expect("write worker log");
+
+    let tail = read_worker_log_tail(&log_path, 12);
+
+    assert!(!tail.contains("auth-secret-value"));
+    assert!(!tail.contains("env-secret-value"));
+    assert!(!tail.contains(&home.to_string_lossy().to_string()));
+    assert!(tail.contains("[REDACTED]"));
+    assert!(tail.contains("~/projects/private-repository"));
+    fs::remove_dir_all(root).expect("remove temporary worker log root");
 }

@@ -13,6 +13,10 @@ import { captureTelemetryException } from "@/lib/integrations/telemetry/client";
 // versa). Tasks swallow their own errors, so the chain never rejects.
 let workerLifecycleChain: Promise<unknown> = Promise.resolve();
 
+export interface EnsureDesktopWorkerDeps {
+  onFailure: (error: unknown) => void;
+}
+
 function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
   const run = workerLifecycleChain.then(task, task);
   workerLifecycleChain = run;
@@ -27,7 +31,10 @@ function enqueueWorkerLifecycleTask<T>(task: () => Promise<T>): Promise<T> {
 // active organization changes mid-flight.
 // Runs opportunistically on login; never blocks or throws on failure.
 // Resolves false when enrollment failed so the guard can retry.
-export function ensureDesktopWorker(organizationId: string | null): Promise<boolean> {
+export function ensureDesktopWorker(
+  organizationId: string | null,
+  deps: EnsureDesktopWorkerDeps,
+): Promise<boolean> {
   return enqueueWorkerLifecycleTask(async () => {
     try {
       const desktopInstallId = await getDesktopInstallId();
@@ -47,6 +54,16 @@ export function ensureDesktopWorker(organizationId: string | null): Promise<bool
           domain: "cloud",
         },
       });
+      try {
+        deps.onFailure(error);
+      } catch (notificationError) {
+        captureTelemetryException(notificationError, {
+          tags: {
+            action: "notify-desktop-worker-failure",
+            domain: "cloud",
+          },
+        });
+      }
       return false;
     }
   });
