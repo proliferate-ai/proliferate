@@ -341,9 +341,10 @@ async def cmd_trigger(email: str, poll_timeout_seconds: int) -> dict:
         # never have — ruled working-as-intended 2026-07-08 ("GitHub identity IS
         # the bad-actor gate for free credits"). Without credits, enforcement
         # blocks materialization with credits_exhausted before E2B is reached.
-        # Grant manipulation is explicitly allowed as *setup* by the scenario
-        # contract (scenarios.md T3-BILL-2; billing_probe.py drain-grants is the
-        # inverse precedent). Under pro billing only `free_trial_v2` (or refill)
+        # This provisioning-only fixture setup is not billing qualification;
+        # authoritative billing scenarios use correlation-owned subjects and
+        # must never mutate this shared durable grant. Under pro billing only
+        # `free_trial_v2` (or refill)
         # grant types count for a free user (`grant_applies_to_paid_state`,
         # plans.py:316), so seed the trial-v2 shape directly — the same row
         # `ensure_free_trial_v2_grant` writes, minus its GitHub-identity gate

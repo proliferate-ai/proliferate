@@ -3,23 +3,17 @@
 Same in-process-against-the-real-DB seam as ``prov1_fallback.py``: a scenario's
 metering and grant assertions read the real billing ledger tables the product
 writes (``usage_segment``, ``agent_llm_usage_event``, ``billing_grant``,
-``billing_grant_consumption``), and its exhaustion *setup* (test-clock/grant
-manipulation is explicitly allowed as setup by the contract; the enforcement
-under test is still the real gate) drains grant seconds directly.
+``billing_grant_consumption``). It is intentionally read-only. Mutable billing
+setup belongs to a disposable, correlation-owned fixture with teardown; this
+probe must never drain a shared durable subject.
 
-Why a DB seam and not HTTP: on this branch the running server exposes no
-``/billing/usage/*`` or ``/billing/llm-balance`` HTTP endpoints (the consumption
-UI/API arc is not in this build), and every ``/v1/billing/*`` route that does
-exist is ``current_product_user``-gated, so a password-only durable user 403s
-with ``github_link_required`` before any billing logic runs. Reading the ledger
-tables directly is the only faithful way to assert the metering side today; the
-scenario reports blocked for the parts that require producing *new* records
-(a gateway test key for LLM events; a reachable cloud sandbox + public webhook
-URL for compute segments).
+Why a DB seam as well as HTTP: owner-scoped billing APIs are the product path
+that materializes subjects and exposes user-visible balances. This probe reads
+the underlying ledger afterward so qualification can reconcile exact segments,
+events, grants, and consumptions that the summary envelope intentionally omits.
 
 Usage:
   uv run python billing_probe.py meter-records <user-email> [--since-seconds N]
-  uv run python billing_probe.py drain-grants  <user-email>   # BILL-2 setup only
 
 Prints one JSON object to stdout.
 """
@@ -30,12 +24,14 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "server"))
 
-from sqlalchemy import select, update  # noqa: E402
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from proliferate.db.engine import async_session_factory  # noqa: E402
 from proliferate.db.models.auth import User  # noqa: E402
@@ -48,8 +44,12 @@ from proliferate.db.models.billing import (  # noqa: E402
 from proliferate.db.models.cloud.agent_gateway import AgentLlmUsageEvent  # noqa: E402
 
 
-async def _subjects_for_user(db, user_id) -> dict[str, str]:
-    """Resolve the user's personal + (best-effort) org billing subjects.
+async def _subjects_for_user(
+    db: AsyncSession,
+    user_id: UUID,
+    organization_id: UUID | None,
+) -> dict[str, str]:
+    """Resolve personal plus one explicitly selected organization subject.
 
     Since #1047, compute AND LLM both bill the *org* subject where the user has
     a current membership (org Stripe customer + org grant pool), and personal
@@ -58,17 +58,37 @@ async def _subjects_for_user(db, user_id) -> dict[str, str]:
     the two never disagree. Returning both subjects lets the scenario assert an
     org-member segment invoices the org subject, not personal.
     """
-    rows = (
-        await db.execute(select(BillingSubject).where(BillingSubject.user_id == user_id))
-    ).scalars().all()
     subjects: dict[str, str] = {}
-    for row in rows:
-        subjects[row.kind] = str(row.id)
+    personal = (
+        await db.execute(
+            select(BillingSubject).where(
+                BillingSubject.kind == "personal",
+                BillingSubject.user_id == user_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if personal is not None:
+        subjects[personal.kind] = str(personal.id)
+    if organization_id is not None:
+        organization = (
+            await db.execute(
+                select(BillingSubject).where(
+                    BillingSubject.kind == "organization",
+                    BillingSubject.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if organization is not None:
+            subjects[organization.kind] = str(organization.id)
     return subjects
 
 
-async def meter_records(email: str, since_seconds: int) -> dict:
-    since = datetime.now(timezone.utc) - timedelta(seconds=since_seconds)
+async def meter_records(
+    email: str,
+    since_seconds: int,
+    organization_id: UUID | None,
+) -> dict:
+    since = datetime.now(UTC) - timedelta(seconds=since_seconds)
     async with async_session_factory() as db:
         user = (
             await db.execute(select(User).where(User.email == email))
@@ -76,7 +96,7 @@ async def meter_records(email: str, since_seconds: int) -> dict:
         if user is None:
             return {"error": f"no user found for email {email!r}"}
 
-        subjects = await _subjects_for_user(db, user.id)
+        subjects = await _subjects_for_user(db, user.id, organization_id)
         subject_ids = list(subjects.values())
 
         segments = (
@@ -138,7 +158,9 @@ async def meter_records(email: str, since_seconds: int) -> dict:
             "llmUsageEvents": [
                 {
                     "id": str(e.id),
-                    "billingSubjectId": str(e.billing_subject_id) if e.billing_subject_id else None,
+                    "billingSubjectId": (
+                        str(e.billing_subject_id) if e.billing_subject_id else None
+                    ),
                     "organizationId": str(e.organization_id) if e.organization_id else None,
                     "virtualKeyId": e.virtual_key_id,
                     "model": e.model,
@@ -169,39 +191,14 @@ async def meter_records(email: str, since_seconds: int) -> dict:
         }
 
 
-async def drain_grants(email: str) -> dict:
-    """BILL-2 setup: zero every grant's remaining_seconds for the user's
-    subjects, forcing compute exhaustion. Enforcement (the resume gate) is still
-    the real deployed gate; this only sets the precondition, per the contract's
-    "grant manipulation is allowed as setup" allowance.
-    """
-    async with async_session_factory() as db:
-        user = (
-            await db.execute(select(User).where(User.email == email))
-        ).scalar_one_or_none()
-        if user is None:
-            return {"error": f"no user found for email {email!r}"}
-        subjects = await _subjects_for_user(db, user.id)
-        subject_ids = list(subjects.values())
-        if not subject_ids:
-            return {"error": "user has no billing subjects", "drained": 0}
-        result = await db.execute(
-            update(BillingGrant)
-            .where(BillingGrant.billing_subject_id.in_(subject_ids))
-            .values(remaining_seconds=0.0)
-        )
-        await db.commit()
-        return {"drained": result.rowcount, "subjects": subjects}
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["meter-records", "drain-grants"])
+    parser.add_argument("command", choices=["meter-records"])
     parser.add_argument("email")
     parser.add_argument("--since-seconds", type=int, default=3600)
+    parser.add_argument("--organization-id", type=UUID)
     args = parser.parse_args()
-    if args.command == "meter-records":
-        out = asyncio.run(meter_records(args.email, args.since_seconds))
-    else:
-        out = asyncio.run(drain_grants(args.email))
+    out = asyncio.run(
+        meter_records(args.email, args.since_seconds, args.organization_id)
+    )
     print(json.dumps(out))

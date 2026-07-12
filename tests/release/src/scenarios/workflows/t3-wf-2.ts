@@ -42,12 +42,15 @@ export const t3Wf2: ScenarioDefinition = {
   title: "function invocations + denial",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-WF-2",
   lanes: ["local", "sandbox"],
-  requiredEnv: [
-    "RELEASE_E2E_SERVER_URL",
-    "RELEASE_E2E_DURABLE_USER_EMAIL",
-    "RELEASE_E2E_DURABLE_USER_PASSWORD",
-    "RELEASE_E2E_DURABLE_ORG_ID",
-  ],
+  requiredEnv: [],
+  requiredEnvByLane: {
+    local: [
+      "RELEASE_E2E_SERVER_URL",
+      "RELEASE_E2E_DURABLE_USER_EMAIL",
+      "RELEASE_E2E_DURABLE_USER_PASSWORD",
+      "RELEASE_E2E_DURABLE_ORG_ID",
+    ],
+  },
   plan: () => [
     { description: "stand up a scenario-local capture endpoint (node http server) recording inbound requests" },
     { description: "create a function invocation (POST /v1/cloud/integrations/functions) pointing at the capture endpoint" },

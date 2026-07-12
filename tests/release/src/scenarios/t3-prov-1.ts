@@ -65,6 +65,9 @@ export const t3Prov1: ScenarioDefinition = {
     "RELEASE_E2E_DURABLE_USER_PASSWORD",
     "RELEASE_E2E_DURABLE_ORG_ID",
   ],
+  requiredEnvByLane: {
+    sandbox: ["RELEASE_E2E_LOCAL_DATABASE_URL"],
+  },
   plan: () => {
     const seedMode = githubAppSeedAvailable(process.env);
     return [
@@ -271,7 +274,10 @@ async function runFallbackScript(
   return new Promise((resolve, reject) => {
     const child = spawn("uv", ["run", "python", ...args], {
       cwd: serverDir,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
+      // This fallback is an in-process local DB/provider probe, not a
+      // production server. Keep shared settings imports in local posture so
+      // unrelated production secrets are not a hidden runner prerequisite.
+      env: { ...process.env, DATABASE_URL: databaseUrl, DEBUG: "true" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";

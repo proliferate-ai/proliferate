@@ -75,6 +75,8 @@ export interface ScenarioDefinition {
   lanes: readonly RuntimeLane[];
   /** Env var names (from src/config/env-manifest.ts) this scenario needs to run for real. */
   requiredEnv: readonly string[];
+  /** Additional env requirements that apply only to one runtime lane. */
+  requiredEnvByLane?: Partial<Record<RuntimeLane, readonly string[]>>;
   /** Ordered human-readable steps; printed verbatim under --dry-run. */
   plan(ctx: ScenarioPlanContext): ScenarioPlanStep[];
   /**

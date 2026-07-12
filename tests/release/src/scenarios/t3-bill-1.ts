@@ -70,9 +70,20 @@ export const t3Bill1: ScenarioDefinition = {
 
     // Reachable real assertion: read the ledger and pin the branch's
     // compute-attribution capability against the flag.
-    const meter = (await runBillingProbe("meter-records", email, { sinceSeconds: 3600 })) as MeterRecords;
+    const meter = (await runBillingProbe("meter-records", email, {
+      sinceSeconds: 3600,
+      organizationId: process.env.RELEASE_E2E_DURABLE_ORG_ID,
+    })) as MeterRecords;
     assert.equal(meter.error, undefined, `T3-BILL-1: meter probe failed: ${meter.error}`);
-    assert.ok(meter.subjects.personal, "T3-BILL-1: durable user must have a personal billing subject");
+    if (!meter.subjects.personal) {
+      throw new ScenarioBlockedError(
+        "T3-BILL-1: this profile has no initialized managed-cloud billing subject. A first-run self-host " +
+          "claim intentionally creates only its user and instance organization; it is not a billing fixture. " +
+          "Run this proof against the authoritative disposable managed-cloud billing world after its real " +
+          "owner-scoped billing setup has materialized the correlation-owned personal/org subjects. No billing " +
+          "state was mutated by this run.",
+      );
+    }
     assert.equal(
       meter.usageSegmentHasOrgColumn,
       ORG_COMPUTE_ATTRIBUTION_FIXED,

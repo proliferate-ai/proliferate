@@ -37,12 +37,15 @@ export const t3Wf1: ScenarioDefinition = {
   title: "structured output + required tools (emit gate)",
   registryFlowRef: "specs/developing/testing/scenarios.md#T3-WF-1",
   lanes: ["local", "sandbox"],
-  requiredEnv: [
-    "RELEASE_E2E_SERVER_URL",
-    "RELEASE_E2E_DURABLE_USER_EMAIL",
-    "RELEASE_E2E_DURABLE_USER_PASSWORD",
-    "RELEASE_E2E_DURABLE_ORG_ID",
-  ],
+  requiredEnv: [],
+  requiredEnvByLane: {
+    local: [
+      "RELEASE_E2E_SERVER_URL",
+      "RELEASE_E2E_DURABLE_USER_EMAIL",
+      "RELEASE_E2E_DURABLE_USER_PASSWORD",
+      "RELEASE_E2E_DURABLE_ORG_ID",
+    ],
+  },
   plan: () => [
     { description: "create the wf-emit-gate workflow (one agent: required_invocation gate + strict agent.emit)" },
     { description: "StartRun; poll the run to a terminal status" },
