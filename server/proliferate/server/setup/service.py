@@ -173,8 +173,13 @@ def _read_token_file(token_file: Path) -> str | None:
     parent_fd: int | None = None
     token_fd: int | None = None
     try:
+        # macOS exposes /tmp as a trusted symlink to /private/tmp. Resolve the
+        # parent once, then apply O_NOFOLLOW to the directory we actually open
+        # and to the token's final path component. This permits that standard
+        # filesystem layout without ever following a token-file symlink.
+        parent_path = token_file.parent.resolve(strict=True)
         parent_fd = os.open(
-            token_file.parent,
+            parent_path,
             os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
         )
         token_fd = os.open(
@@ -212,8 +217,9 @@ def _write_token_file(token_file: Path, token: str) -> None:
     temporary_name: str | None = None
     try:
         token_file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        parent_path = token_file.parent.resolve(strict=True)
         parent_fd = os.open(
-            token_file.parent,
+            parent_path,
             os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
         )
         temporary_name = f".{token_file.name}.{secrets.token_hex(16)}.tmp"
@@ -250,7 +256,7 @@ def _write_token_file(token_file: Path, token: str) -> None:
         raise RuntimeError(
             "Could not securely persist the first-run setup token at "
             f"{token_file}. Verify that the parent directory is writable by "
-            "the API process, is not a symlink, and supports atomic file "
+            "the API process, resolves to a directory, and supports atomic file "
             "replacement. Startup was stopped so the token verifier cannot "
             "be committed."
         ) from exc

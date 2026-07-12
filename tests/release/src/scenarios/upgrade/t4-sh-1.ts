@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
 
 import type { ScenarioDefinition } from "../types.js";
 import { ScenarioBlockedError } from "../types.js";
@@ -29,17 +26,13 @@ import {
  *   - /meta reports N,
  *   - the pre-update admin still logs in (session/user data intact).
  *
- * N is the repo VERSION (the release under test), overridable via
- * RELEASE_E2E_SELFHOST_UPDATE_TO. N-1 defaults to the previous patch,
- * overridable via RELEASE_E2E_SELFHOST_UPDATE_FROM. Cost-gated behind
- * RELEASE_E2E_SELFHOST_PROVISION; terminates the box in a finally.
+ * Both published artifact versions are explicit: the runner never guesses
+ * N-1 from the candidate patch number and never silently substitutes the
+ * checkout VERSION. Cost-gated behind RELEASE_E2E_SELFHOST_PROVISION;
+ * terminates the box in a finally.
  */
 
 const ADMIN_PASSWORD = "proliferate-e2e-admin-1";
-
-// src/scenarios/upgrade -> up three to tests/release -> ../../ to repo root VERSION.
-const HERE = dirname(fileURLToPath(import.meta.url));
-const VERSION_FILE = resolve(HERE, "..", "..", "..", "..", "..", "VERSION");
 
 export const t4Sh1: ScenarioDefinition = {
   id: "T4-SH-1",
@@ -75,14 +68,17 @@ export const t4Sh1: ScenarioDefinition = {
 };
 
 async function runReal(): Promise<void> {
-  const toVersion = nonEmpty(process.env.RELEASE_E2E_SELFHOST_UPDATE_TO) ?? readVersionFile();
-  const fromVersion = nonEmpty(process.env.RELEASE_E2E_SELFHOST_UPDATE_FROM) ?? previousPatch(toVersion);
-  if (!fromVersion) {
-    throw new ScenarioBlockedError(
-      `T4-SH-1: could not derive an N-1 tag from N=${toVersion} (patch is .0). Set ` +
-        "RELEASE_E2E_SELFHOST_UPDATE_FROM to a published previous server image tag.",
+  const rawFrom = nonEmpty(process.env.RELEASE_E2E_SELFHOST_UPDATE_FROM);
+  const rawTo = nonEmpty(process.env.RELEASE_E2E_SELFHOST_UPDATE_TO);
+  if (!rawFrom || !rawTo) {
+    throw new Error(
+      "T4-SH-1: RELEASE_E2E_SELFHOST_UPDATE_FROM and RELEASE_E2E_SELFHOST_UPDATE_TO must both name " +
+        "explicit immutable published versions; version inference is forbidden.",
     );
   }
+  const fromVersion = releaseVersion(rawFrom, "N-1");
+  const toVersion = releaseVersion(rawTo, "candidate N");
+  assert.notEqual(fromVersion, toVersion, "T4-SH-1: N-1 and candidate N must differ");
 
   const box = await provisionSelfHostBox(fromVersion);
   try {
@@ -125,23 +121,6 @@ async function runReal(): Promise<void> {
   }
 }
 
-function readVersionFile(): string {
-  return readFileSync(VERSION_FILE, "utf8").trim();
-}
-
-/** "0.3.17" -> "0.3.16"; returns undefined when the patch is already 0. */
-function previousPatch(version: string): string | undefined {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
-  if (!match) {
-    return undefined;
-  }
-  const patch = Number(match[3]);
-  if (patch <= 0) {
-    return undefined;
-  }
-  return `${match[1]}.${match[2]}.${patch - 1}`;
-}
-
 async function claim(baseUrl: string, email: string, password: string, setupToken: string): Promise<void> {
   const body = new URLSearchParams({ email, password, setup_token: setupToken });
   const response = await fetch(`${baseUrl}/setup`, {
@@ -172,4 +151,12 @@ async function psqlScalar(box: SelfHostBox, query: string): Promise<string> {
 
 function nonEmpty(value: string | undefined): string | undefined {
   return value && value.trim().length > 0 ? value : undefined;
+}
+
+function releaseVersion(value: string, label: string): string {
+  const version = value.trim();
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error(`T4-SH-1: ${label} version is not an immutable semver: ${JSON.stringify(value)}`);
+  }
+  return version;
 }

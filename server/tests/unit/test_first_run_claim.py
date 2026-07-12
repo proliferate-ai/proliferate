@@ -149,6 +149,28 @@ async def test_boot_mint_replaces_token_symlink_without_following_it(
     assert setup_token_matches(current_token, stored_hash)
 
 
+async def test_boot_mint_accepts_a_symlinked_parent_but_keeps_final_file_secure(
+    test_engine, monkeypatch, tmp_path
+):
+    _enable_single_org(monkeypatch, tmp_path)
+    from proliferate.db import engine as engine_module
+
+    monkeypatch.setattr(engine_module, "async_session_factory", _factory(test_engine))
+    real_parent = tmp_path / "real-token-parent"
+    real_parent.mkdir(mode=0o700)
+    linked_parent = tmp_path / "linked-token-parent"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+    token_path = linked_parent / "setup-token"
+    monkeypatch.setattr(settings, "setup_token_file", str(token_path))
+
+    await ensure_first_run_setup_token()
+
+    assert token_path.exists()
+    assert not token_path.is_symlink()
+    assert token_path.resolve().parent == real_parent.resolve()
+    assert stat.S_IMODE(token_path.stat().st_mode) == 0o600
+
+
 async def test_boot_mint_persistence_failure_aborts_and_rolls_back_hash(
     test_engine, monkeypatch, tmp_path, caplog
 ):
