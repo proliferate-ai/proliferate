@@ -111,6 +111,51 @@ the seam**: workflow create/edit/trigger asserts "run created, plan resolved,
 delivery attempted"; cloud workspace create asserts the request path and UI
 state — never sandbox readiness or run completion, which are Tier 3.
 
+### Tier-2 execution profiles
+
+Tier 2 has three independently collected Playwright runs. They share the same
+real server/Postgres boot machinery but intentionally own different global
+setup and provider posture:
+
+| Local command | What it boots | Required CI job |
+| --- | --- | --- |
+| `pnpm -C tests/intent test` | Desktop Web, server, Postgres, and the narrow AnyHarness HTTP seam | `intent-tests` |
+| `pnpm -C tests/intent run test:surfaces` | Desktop Web and hosted Web against the same server, organization, and runtime | `intent-surfaces` |
+| `pnpm -C tests/intent run test:billing` | Desktop Web, server, Postgres, Stripe test mode/test clocks, and billing enforcement | `intent-billing` |
+
+The default config excludes `specs/billing/**` and `specs/surfaces/**`; each is
+collected only by its owning config. All three configs install the strict
+reporter, so a skip, expected failure, flaky retry, or failed row leaves the
+job red. The public baseline and dual-host jobs run on every PR and merge
+queue. Billing runs only when the Stripe test secret is available in a trusted
+context and reruns as required work on the merge queue; an untrusted skip is
+explicitly non-qualifying.
+
+For a local run that matches CI's exact-runtime posture:
+
+```bash
+cargo build -p anyharness --bin anyharness
+
+ANYHARNESS_DEV_RUNTIME_BIN="$PWD/target/debug/anyharness" \
+TIER2_INTENT_REQUIRE_RUNTIME=1 \
+TIER2_INTENT_PROFILE=<unique-profile> \
+pnpm -C tests/intent test
+
+ANYHARNESS_DEV_RUNTIME_BIN="$PWD/target/debug/anyharness" \
+TIER2_INTENT_REQUIRE_RUNTIME=1 \
+TIER2_INTENT_PROFILE=<unique-surface-profile> \
+pnpm -C tests/intent run test:surfaces
+
+STRIPE_TEST_SECRET_KEY=<sk_test_...> \
+TIER2_INTENT_SKIP_RUNTIME=1 \
+TIER2_BILLING_PROFILE=<unique-billing-profile> \
+pnpm -C tests/intent run test:billing
+```
+
+Use a different profile name per concurrent worktree. The profile owns ports,
+database identity, run lock, and runtime home; the test boot tears down child
+processes and releases its lock, but keeps the isolated database for diagnosis.
+
 ---
 
 ## Tier 3 — live end-to-end
