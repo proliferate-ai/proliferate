@@ -690,6 +690,7 @@ CREATE TABLE "workspaces" (
             cleanup_error_message TEXT,
             cleanup_failed_at TEXT,
             cleanup_attempted_at TEXT,
+            generation INTEGER NOT NULL DEFAULT 1 CHECK (generation > 0),
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
