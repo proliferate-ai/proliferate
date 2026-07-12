@@ -1,4 +1,4 @@
-// T2-SH-6 (specs/developing/testing/self-hosting.md): cloud-workspace
+// T2-SH-3 (specs/developing/testing/core-release-validation.md): cloud-workspace
 // provisioning stays safe when E2B is half-configured (E2B_API_KEY set,
 // E2B_TEMPLATE_NAME empty, non-debug) — the exact posture that used to raise
 // at FastAPI startup and crash-loop the whole control plane, taking auth and
@@ -39,7 +39,7 @@ async function claimInstance(stack: BootedStack): Promise<void> {
     return; // This persistent profile was claimed by an earlier local run.
   }
   if (!probe.ok) {
-    throw new Error(`T2-SH-6: setup probe failed (${probe.status})`);
+    throw new Error(`T2-SH-3: setup probe failed (${probe.status})`);
   }
   const token = readFileSync(stack.setupTokenFile, "utf8").trim();
   const response = await fetch(`${stack.apiBaseUrl}/setup`, {
@@ -54,7 +54,7 @@ async function claimInstance(stack: BootedStack): Promise<void> {
   });
   const html = await response.text();
   if (response.status !== 200) {
-    throw new Error(`T2-SH-6: instance claim failed (${response.status}): ${html.slice(0, 300)}`);
+    throw new Error(`T2-SH-3: instance claim failed (${response.status}): ${html.slice(0, 300)}`);
   }
 }
 
@@ -66,12 +66,12 @@ async function loginOn(baseUrl: string, email: string, password: string): Promis
   });
   const body = (await response.json()) as { access_token?: string };
   if (response.status !== 200 || !body.access_token) {
-    throw new Error(`T2-SH-6: login failed for ${email} (${response.status}): ${JSON.stringify(body)}`);
+    throw new Error(`T2-SH-3: login failed for ${email} (${response.status}): ${JSON.stringify(body)}`);
   }
   return body.access_token;
 }
 
-test.describe("T2-SH-6: cloud-workspace provisioning stays safe when E2B is half-configured", () => {
+test.describe("T2-SH-3: cloud-workspace provisioning stays safe when E2B is half-configured", () => {
   test.setTimeout(180_000);
   let stack: BootedStack;
   let ownerToken: string;

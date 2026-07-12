@@ -44,6 +44,17 @@ describe("auth rules", () => {
     expect(deriveAuthGateState(baseViewer)).toEqual({ kind: "active", viewer: baseViewer });
   });
 
+  it("allows a policy-active self-hosted or organization-SSO user without GitHub", () => {
+    const viewer = {
+      ...baseViewer,
+      githubConnected: false,
+      onboardingState: "active" as const,
+      linkedProviders: [],
+      passwordCredential: { enabled: true, setAt: "2026-07-12T00:00:00Z" },
+    };
+    expect(deriveAuthGateState(viewer)).toEqual({ kind: "active", viewer });
+  });
+
   it("treats Apple and Google as secondary providers", () => {
     expect(providerRequiresGitHubGate("github")).toBe(false);
     expect(providerRequiresGitHubGate("google")).toBe(true);

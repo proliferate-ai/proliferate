@@ -408,12 +408,18 @@ jobs:
       # A red scenario may already have rotated the token. Seal the current
       # state before any cache action and remove the plaintext on every exit.
       - name: Encrypt rotated staging session
+        id: seal-session
         if: always()
         env:
           STATE_CACHE_KEY: ${{ secrets.RELEASE_E2E_STAGING_SESSION_CACHE_KEY }}
         run: |
           set -euo pipefail
           trap 'rm -f "$RELEASE_E2E_STAGING_SESSION_STATE"' EXIT
+          # Restore placed the prior run's ciphertext here. Remove it before
+          # any early return or encryption attempt so it can never be saved
+          # under this run's newer cache key as if it were freshly rotated.
+          rm -f "$STAGING_SESSION_CACHE_PATH"
+          echo "fresh=false" >> "$GITHUB_OUTPUT"
           if [ ! -f "$RELEASE_E2E_STAGING_SESSION_STATE" ]; then
             exit 0
           fi
@@ -423,11 +429,16 @@ jobs:
           fi
           pnpm -C tests/release exec tsx scripts/staging-session-cache.ts \
             encrypt "$RELEASE_E2E_STAGING_SESSION_STATE" "$STAGING_SESSION_CACHE_PATH"
+          test -s "$STAGING_SESSION_CACHE_PATH"
+          echo "fresh=true" >> "$GITHUB_OUTPUT"
 
       # Save only ciphertext under a fresh immutable key. Prefix restore selects
       # the latest prior run; the workflow concurrency group prevents races.
       - name: Save encrypted staging session
-        if: always() && hashFiles('.staging-session-cache/state.bin') != ''
+        if: >-
+          always() &&
+          steps.seal-session.outcome == 'success' &&
+          steps.seal-session.outputs.fresh == 'true'
         uses: actions/cache/save@v4
         with:
           path: ${{ github.workspace }}/.staging-session-cache

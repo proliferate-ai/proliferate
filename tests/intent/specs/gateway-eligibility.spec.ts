@@ -1,4 +1,4 @@
-// T2-SH-7 (specs/developing/testing/self-hosting.md): gateway model
+// T2-SH-4 (specs/developing/testing/core-release-validation.md): gateway model
 // eligibility — a gateway-routed context (agent-auth state pushed with only
 // a `gateway` source, no native CLI login) REJECTS session creation with a
 // bare native model selector (e.g. "default") and ACCEPTS a real
@@ -35,15 +35,11 @@
 // same cost tests/release's T3 scenarios already pay routinely).
 
 import { expect, test } from "@playwright/test";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { anyharnessBaseUrl } from "../stack/seed.ts";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
-// The checked-out monorepo itself is a real git repo already on disk — reuse
-// it as the local workspace path so this suite never needs to clone
-// anything over the network.
-const REPO_ROOT = path.resolve(here, "..", "..", "..");
 
 const HARNESS_KIND = "claude";
 const INELIGIBLE_NATIVE_MODEL_ID = "default";
@@ -73,8 +69,9 @@ async function runtimeFetch(
   return { status: response.status, body: parsed };
 }
 
-test.describe("T2-SH-7: gateway model eligibility — session creation gates native ids, accepts gateway ids", () => {
+test.describe("T2-SH-4: gateway model eligibility — session creation gates native ids, accepts gateway ids", () => {
   let workspaceId: string;
+  let workspacePath: string;
 
   test.beforeAll(async () => {
     const baseUrl = anyharnessBaseUrl();
@@ -99,16 +96,29 @@ test.describe("T2-SH-7: gateway model eligibility — session creation gates nat
     const installResult = await runtimeFetch(baseUrl, "POST", `/v1/agents/${HARNESS_KIND}/install`, {});
     expect(installResult.status, `install ${HARNESS_KIND} failed: ${JSON.stringify(installResult.body)}`).toBeLessThan(300);
 
-    const workspaceResult = await runtimeFetch(baseUrl, "POST", "/v1/workspaces", { path: REPO_ROOT });
+    // Runtime homes persist across local qualification reruns. Reusing this
+    // checkout's one path can race the prior retired workspace's asynchronous
+    // cleanup, so create a unique local Git fixture with no network access.
+    workspacePath = createFixtureRepo();
+    const workspaceResult = await runtimeFetch(baseUrl, "POST", "/v1/workspaces", { path: workspacePath });
     expect(workspaceResult.status, `workspace create failed: ${JSON.stringify(workspaceResult.body)}`).toBeLessThan(300);
     workspaceId = (workspaceResult.body as { workspace: { id: string } }).workspace.id;
   });
 
   test.afterAll(async () => {
-    if (!workspaceId) {
-      return;
+    try {
+      if (workspaceId) {
+        const deleted = await runtimeFetch(anyharnessBaseUrl(), "DELETE", `/v1/workspaces/${workspaceId}`);
+        expect(
+          deleted.status,
+          `workspace cleanup failed for ${workspaceId}: ${JSON.stringify(deleted.body)}`,
+        ).toBeLessThan(300);
+      }
+    } finally {
+      if (workspacePath) {
+        rmSync(workspacePath, { recursive: true, force: true });
+      }
     }
-    await runtimeFetch(anyharnessBaseUrl(), "DELETE", `/v1/workspaces/${workspaceId}`).catch(() => undefined);
   });
 
   test("rejects session creation with a bare native model selector on a gateway-only route", async () => {
@@ -148,3 +158,29 @@ test.describe("T2-SH-7: gateway model eligibility — session creation gates nat
     // workspace in afterAll is sufficient cleanup for this ephemeral runtime-home.
   });
 });
+
+function createFixtureRepo(): string {
+  const directory = mkdtempSync(path.join(tmpdir(), "proliferate-t2-gateway-"));
+  writeFileSync(path.join(directory, "README.md"), "# Tier-2 gateway fixture\n", "utf8");
+  for (const args of [
+    ["init", "--initial-branch=main", directory],
+    ["-C", directory, "add", "README.md"],
+    ["-c", "commit.gpgsign=false", "-C", directory, "commit", "-m", "fixture"],
+  ]) {
+    const result = spawnSync("git", args, {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: "Tier 2",
+        GIT_AUTHOR_EMAIL: "tier2@proliferate.example.com",
+        GIT_COMMITTER_NAME: "Tier 2",
+        GIT_COMMITTER_EMAIL: "tier2@proliferate.example.com",
+      },
+    });
+    if (result.status !== 0) {
+      rmSync(directory, { recursive: true, force: true });
+      throw new Error(`git ${args.join(" ")} failed: ${(result.stderr || result.stdout).trim()}`);
+    }
+  }
+  return directory;
+}

@@ -56,7 +56,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <AuthScreen />;
   }
 
-  if (!viewer.data?.githubConnected) {
+  if (!viewer.data) {
+    return <AuthLoadingScreen />;
+  }
+
+  // `githubConnected` is an identity fact, not the product-access decision.
+  // Single-org/self-hosted and organization-SSO users are active without a
+  // GitHub link; the server's onboarding policy is authoritative.
+  if (viewer.data.onboardingState === "needs_github") {
     return <ConnectGitHubScreen />;
   }
 

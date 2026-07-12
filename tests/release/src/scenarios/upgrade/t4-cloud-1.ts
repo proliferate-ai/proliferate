@@ -12,6 +12,7 @@ import {
   type RuntimeHealth,
   type StagingEcsTarget,
 } from "../../fixtures/anyharness-upgrade.js";
+import { withRequiredCleanup } from "../../fixtures/required-cleanup.js";
 
 /**
  * T4-CLOUD-1 — AnyHarness runtime binary self-update in a cloud sandbox.
@@ -136,38 +137,38 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   console.log(`[T4-CLOUD-1] bumping advertised RUNTIME_VERSION -> ${target}`);
 
   const bump = await bumpStagingRuntimePin(STAGING_ECS_TARGET, target);
-  try {
-    const converged = await waitForRuntimeVersion(client, target, CONVERGE_TIMEOUT_MS);
-    if (converged) {
-      const running = await proxiedRuntimeVersion(client);
-      assert.ok(
-        anyharnessBinaryConverged(running, target),
-        `T4-CLOUD-1: runtime /health version ${running} did not converge to advertised pin ${target}`,
+  await withRequiredCleanup({
+    label: "T4-CLOUD-1 staging ECS runtime pin",
+    resourceIds: [
+      `cluster=${STAGING_ECS_TARGET.cluster}`,
+      `service=${STAGING_ECS_TARGET.service}`,
+      `task-definition=${bump.previousTaskDefinitionArn}`,
+    ],
+    run: async () => {
+      const converged = await waitForRuntimeVersion(client, target, CONVERGE_TIMEOUT_MS);
+      if (converged) {
+        const running = await proxiedRuntimeVersion(client);
+        assert.ok(
+          anyharnessBinaryConverged(running, target),
+          `T4-CLOUD-1: runtime /health version ${running} did not converge to advertised pin ${target}`,
+        );
+        console.log(`[T4-CLOUD-1] converged: runtime reports ${running} == advertised pin ${target}`);
+        return;
+      }
+      throw new ScenarioExpectedFailError(
+        `T4-CLOUD-1: the sandbox runtime never reported the bumped pin ${target} within ` +
+          `${CONVERGE_TIMEOUT_MS / 1000}s. Diagnosed product blocker (found building this test): the released ` +
+          `anyharness binary reports CARGO_PKG_VERSION (hardcoded 0.1.0, never stamped at release) from BOTH ` +
+          `\`anyharness --version\` and the runtime /health \`version\`. The worker convergence preflight and ` +
+          `post-relaunch health gate both require an exact match to the pinned semver ` +
+          `(anyharness_update.rs via self_update.rs version_output_matches), so no real pin (${target}) can ` +
+          `converge — preflight rejects the downloaded binary and the health gate never sees the target ` +
+          `version. Verified directly: \`anyharness --version\` on the runtime-v0.3.12 release asset prints ` +
+          `"anyharness 0.1.0". Filed as https://github.com/proliferate-ai/proliferate/issues/1089.`,
       );
-      console.log(`[T4-CLOUD-1] converged: runtime reports ${running} == advertised pin ${target}`);
-      return;
-    }
-    throw new ScenarioExpectedFailError(
-      `T4-CLOUD-1: the sandbox runtime never reported the bumped pin ${target} within ` +
-        `${CONVERGE_TIMEOUT_MS / 1000}s. Diagnosed product blocker (found building this test): the released ` +
-        `anyharness binary reports CARGO_PKG_VERSION (hardcoded 0.1.0, never stamped at release) from BOTH ` +
-        `\`anyharness --version\` and the runtime /health \`version\`. The worker convergence preflight and ` +
-        `post-relaunch health gate both require an exact match to the pinned semver ` +
-        `(anyharness_update.rs via self_update.rs version_output_matches), so no real pin (${target}) can ` +
-        `converge — preflight rejects the downloaded binary and the health gate never sees the target ` +
-        `version. Verified directly: \`anyharness --version\` on the runtime-v0.3.12 release asset prints ` +
-        `"anyharness 0.1.0". Filed as https://github.com/proliferate-ai/proliferate/issues/1089.`,
-    );
-  } finally {
-    await restoreStagingRuntimePin(STAGING_ECS_TARGET, bump.previousTaskDefinitionArn).catch((error) => {
-      console.error(
-        `[T4-CLOUD-1] WARNING: failed to restore staging task definition ${bump.previousTaskDefinitionArn}: ` +
-          `${error instanceof Error ? error.message : String(error)}. Restore it manually: ` +
-          `aws ecs update-service --cluster ${STAGING_ECS_TARGET.cluster} --service ${STAGING_ECS_TARGET.service} ` +
-          `--task-definition ${bump.previousTaskDefinitionArn}`,
-      );
-    });
-  }
+    },
+    cleanup: () => restoreStagingRuntimePin(STAGING_ECS_TARGET, bump.previousTaskDefinitionArn),
+  });
 }
 
 /** Ensure the durable user's cloud sandbox exists and reaches ready. */

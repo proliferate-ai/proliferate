@@ -9,9 +9,12 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   retries: 0,
+  forbidOnly: Boolean(process.env.CI),
   timeout: 120_000,
   expect: { timeout: 15_000 },
-  reporter: process.env.CI ? [["list"], ["github"]] : [["list"]],
+  reporter: process.env.CI
+    ? [["list"], ["github"], ["./stack/strict-reporter.ts"]]
+    : [["list"], ["./stack/strict-reporter.ts"]],
   use: {
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

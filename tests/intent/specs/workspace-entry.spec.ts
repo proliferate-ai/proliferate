@@ -25,12 +25,9 @@
 // Beyond the Tauri file-picker gap this scenario names, worktree (and local)
 // creation also unconditionally drives the local AnyHarness runtime
 // (ensureRuntimeReady in add-repo-workflow.ts / use-workspace-actions.ts).
-// This suite's CI profile explicitly disables that runtime
-// (TIER2_INTENT_SKIP_RUNTIME=1, stack/boot.ts — building the Rust binary
-// from scratch per-PR is too slow) — so even a seam-only assertion of
-// "clicking New workspace starts a real worktree creation call" would be
-// flaky-by-construction in CI (no runtime to answer it) while passing
-// locally, which is worse than not testing it. Resolving scenarios.md's own
+// The canonical Tier-2 stack now boots and health-checks the candidate
+// checkout's runtime, but desktop-web still lacks the native filesystem seam
+// needed to select a real local repository. Resolving scenarios.md's own
 // open ruling #3 ("is seam-only coverage of local/worktree create acceptable
 // for tier 2?") the way this spec reads it: yes for the Add-Repo entry
 // surface (below), and worktree creation specifically is out of scope for
@@ -154,9 +151,8 @@ test.describe("T2-WS-2: local + worktree create (desktop-web limits apply)", () 
 // NOT COVERED by this wave, named so the gap is loud rather than silent:
 // - Worktree creation end to end (name/branch/base-ref resolution, the
 //   actual runtime call) — not reachable from the Add-Repo flow at all (see
-//   the SPEC DIVERGENCE note above), and requires a live local AnyHarness
-//   runtime this suite's CI profile disables. Tier 3's desktop lane owns
-//   this per the scenario's own fallback framing.
+//   the SPEC DIVERGENCE note above). Tier 3's native desktop lane owns this
+//   per the scenario's own fallback framing.
 // - Local repo creation's success path (a real native folder picker
 //   selection -> addRepoFromPath -> repo registered) — Tauri-only, no web
 //   fallback exists for the OS file dialog itself, regardless of the

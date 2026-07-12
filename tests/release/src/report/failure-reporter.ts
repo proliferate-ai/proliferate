@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FailureReport, ScenarioFailure } from "./types.js";
+import { redactSecrets } from "./redaction.js";
 
 /**
  * Single place that turns a scenario failure into the on-disk (and, later,
@@ -8,15 +9,18 @@ import type { FailureReport, ScenarioFailure } from "./types.js";
  * failures file issues into the issues service and never block a merge — this
  * module produces the payload that flow will eventually consume.
  */
-export function toFailureReport(failure: ScenarioFailure): FailureReport {
+export function toFailureReport(
+  failure: ScenarioFailure,
+  env: NodeJS.ProcessEnv = process.env,
+): FailureReport {
   return {
-    flow: failure.registryFlowRef,
+    flow: redactSecrets(failure.registryFlowRef, { env }),
     scenario_id: failure.scenarioId,
     lane: failure.lane,
-    expected: failure.expected,
-    observed: describeError(failure.error),
-    logs_excerpt: failure.logsExcerpt ?? "",
-    correlation_ids: failure.correlationIds ?? [],
+    expected: redactSecrets(failure.expected, { env }),
+    observed: redactSecrets(describeError(failure.error), { env }),
+    logs_excerpt: redactSecrets(failure.logsExcerpt ?? "", { env }),
+    correlation_ids: (failure.correlationIds ?? []).map((value) => redactSecrets(value, { env })),
     timestamp: new Date().toISOString(),
   };
 }
@@ -45,8 +49,18 @@ export async function writeFailureReports(
     const report = toFailureReport(failure);
     const safeTimestamp = report.timestamp.replace(/[:.]/g, "-");
     const filePath = path.join(outputDir, `${report.scenario_id}-${report.lane}-${safeTimestamp}.json`);
-    await writeFile(filePath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    await writeFile(filePath, `${JSON.stringify(report, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    // `mode` applies only on creation; enforce it again if a timestamp
+    // collision or prior file caused writeFile to reuse an inode.
+    await chmod(filePath, 0o600);
     written.push(filePath);
   }
   return written;
+}
+
+export function failureConsoleLine(report: FailureReport): string {
+  return `  - [${report.scenario_id}/${report.lane}] ${report.observed.split("\n")[0]}`;
 }

@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 
 import { BILLING_PROFILE, bootStack, REPO_ROOT, type StripeBillingEnv } from "./boot.ts";
 import { resetBillingState } from "./billing-seed.ts";
-import { resetPasswordLoginRateLimits } from "./seed.ts";
+import { removeLegacyFakeOauthAccounts, resetPasswordLoginRateLimits } from "./seed.ts";
 
 function resolveStripeSecretKey(): string | null {
   const fromEnv =
@@ -123,6 +123,10 @@ export default async function billingGlobalSetup(): Promise<() => Promise<void>>
   const stack = await bootStack({
     profile: process.env.TIER2_BILLING_PROFILE ?? BILLING_PROFILE,
     stripe,
+    // Billing owns the real server/Stripe accounting path, not a runtime HTTP
+    // seam. Make that targeted omission explicit instead of relying on an
+    // ambient environment switch.
+    skipRuntime: true,
   });
 
   try {
@@ -145,6 +149,7 @@ export default async function billingGlobalSetup(): Promise<() => Promise<void>>
     process.env.TIER2_INTENT_DATABASE_URL = stack.databaseUrl;
     process.env.TIER2_INTENT_SETUP_TOKEN_FILE = stack.setupTokenFile;
 
+    await removeLegacyFakeOauthAccounts();
     await resetPasswordLoginRateLimits();
     // Billing rows accumulate in the persistent profile DB; wipe them so this
     // run's grant/adjustment/export assertions count only their own effects

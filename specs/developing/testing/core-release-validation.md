@@ -19,6 +19,10 @@ roles:
   Presence is not coverage: `planned` means unqualified until the row is
   audited to a concrete collector, collected test id, lane, gate, and evidence
   status.
+- [`core-release-execution-manifest.json`](core-release-execution-manifest.json)
+  is the exact audited Tier-2 Playwright collection (file, full title, project,
+  test id, lane, collector, and gate). It fails on collection drift and remains
+  separate from target-completion claims.
 - [`../qa/README.md`](../qa/README.md) owns manual verification that cannot be
   automated.
 

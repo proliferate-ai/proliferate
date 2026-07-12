@@ -4,6 +4,7 @@ import path from "node:path";
 import os from "node:os";
 
 import { ScenarioBlockedError } from "../scenarios/types.js";
+import { redactSecrets } from "../report/redaction.js";
 
 /**
  * Ensures a local clone of `owner/repo` exists at a stable scratch path,
@@ -24,20 +25,22 @@ export async function ensureLocalClone(
 ): Promise<string> {
   const dest = path.join(os.tmpdir(), "proliferate-release-e2e", "repos", ownerRepo.replace("/", "__"));
   await mkdir(path.dirname(dest), { recursive: true });
+  const token = options.token ?? ghAuthToken();
+  const url = `https://github.com/${ownerRepo}.git`;
   const alreadyCloned = await pathExists(path.join(dest, ".git"));
   if (alreadyCloned) {
-    await runGit(["fetch", "--all", "--prune"], dest);
+    // Older harness versions embedded credentials in origin. Normalize the
+    // persisted remote before any fetch so a local .git/config never retains
+    // a tokenized URL.
+    await runGit(["remote", "set-url", "origin", url], dest);
+    await runGit(["fetch", "--all", "--prune"], dest, token);
     await runGit(["checkout", "main"], dest);
     await runGit(["reset", "--hard", "origin/main"], dest);
     await runGit(["clean", "-fdx"], dest);
     return dest;
   }
-  const token = options.token ?? ghAuthToken();
-  const url = token
-    ? `https://x-access-token:${token}@github.com/${ownerRepo}.git`
-    : `https://github.com/${ownerRepo}.git`;
   try {
-    await runGit(["clone", url, dest], process.cwd());
+    await runGit(["clone", url, dest], process.cwd(), token);
   } catch (error) {
     if (isUnreachableCloneError(error)) {
       throw new ScenarioBlockedError(
@@ -82,7 +85,8 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-function runGit(args: string[], cwd: string): Promise<void> {
+function runGit(args: string[], cwd: string, token?: string): Promise<void> {
+  const auth = gitAuthenticationEnvironment(token);
   return new Promise((resolve, reject) => {
     const child = spawn("git", args, {
       cwd,
@@ -90,7 +94,7 @@ function runGit(args: string[], cwd: string): Promise<void> {
       // Never block on an interactive username/password prompt (a private repo
       // with no credential would otherwise hang a CI runner); fail fast so the
       // caller can classify it as unreachable.
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      env: auth.env,
     });
     let stderr = "";
     child.stderr.on("data", (chunk) => {
@@ -99,10 +103,34 @@ function runGit(args: string[], cwd: string): Promise<void> {
     child.on("error", reject);
     child.on("exit", (code) => {
       if (code !== 0) {
-        reject(new Error(`git ${args.join(" ")} (cwd=${cwd}) failed (${code}): ${stderr}`));
+        reject(
+          new Error(
+            redactSecrets(`git ${args.join(" ")} (cwd=${cwd}) failed (${code}): ${stderr}`, {
+              additionalSecrets: auth.sensitiveValues,
+            }),
+          ),
+        );
         return;
       }
       resolve();
     });
   });
+}
+
+export function gitAuthenticationEnvironment(token?: string): {
+  env: NodeJS.ProcessEnv;
+  sensitiveValues: string[];
+} {
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
+  if (!token) {
+    return { env, sensitiveValues: [] };
+  }
+  // Pass the HTTPS auth header through Git's environment-backed config. The
+  // credential is absent from the remote URL, argv, persisted .git/config,
+  // and thrown command string.
+  const basic = Buffer.from(`x-access-token:${token}`, "utf8").toString("base64");
+  env.GIT_CONFIG_COUNT = "1";
+  env.GIT_CONFIG_KEY_0 = "http.https://github.com/.extraheader";
+  env.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${basic}`;
+  return { env, sensitiveValues: [token, basic, env.GIT_CONFIG_VALUE_0] };
 }

@@ -1,4 +1,4 @@
-// T2-SH-5 (specs/developing/testing/self-hosting.md): the /meta capability
+// T2-SH-2 (specs/developing/testing/core-release-validation.md): the /meta capability
 // contract, asserted against REAL running servers.
 //
 // server/tests/unit/test_meta_endpoint.py already owns the pure
@@ -52,7 +52,7 @@ async function fetchMeta(baseUrl: string): Promise<MetaResponse> {
   return (await response.json()) as MetaResponse;
 }
 
-test.describe("T2-SH-5: /meta capability contract — self-managed, every add-on off", () => {
+test.describe("T2-SH-2: /meta capability contract — self-managed, every add-on off", () => {
   test.setTimeout(180_000);
   let stack: BootedStack;
 
@@ -101,7 +101,7 @@ test.describe("T2-SH-5: /meta capability contract — self-managed, every add-on
   });
 });
 
-test.describe("T2-SH-5: /meta capability contract — hosted mode advertises full caps", () => {
+test.describe("T2-SH-2: /meta capability contract — hosted mode advertises full caps", () => {
   test.setTimeout(180_000);
   let stack: BootedStack;
 

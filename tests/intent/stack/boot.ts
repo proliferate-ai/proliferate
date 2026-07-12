@@ -19,7 +19,15 @@
 // directly; packaged-native guarantees remain Tier 3/4.
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  accessSync,
+  constants as fsConstants,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -85,6 +93,13 @@ export interface BootedStack {
   teardown: () => Promise<void>;
 }
 
+export function isRuntimeRequired(
+  frontendMode: "desktop-web" | "hosted-web" | "both" | null,
+  runtimeSkipped: boolean,
+): boolean {
+  return frontendMode !== null && !runtimeSkipped;
+}
+
 interface ProfileInstance {
   profile: string;
   anyharnessRuntimeHome: string;
@@ -104,6 +119,8 @@ function log(message: string): void {
   // eslint-disable-next-line no-console
   console.log(`[tier2-intent/boot] ${message}`);
 }
+
+const childStartErrors = new WeakMap<ChildProcess, Error>();
 
 function run(command: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): string {
   const result = spawnSync(command, args, {
@@ -188,38 +205,38 @@ function ensureFrontendBuilt(): void {
   }
 }
 
-function resolveAnyharnessRuntimeBin(): string {
+function assertCandidateCheckoutRuntimeBin(candidate: string): string {
+  if (!existsSync(candidate)) {
+    throw new Error(`AnyHarness runtime binary does not exist: ${candidate}`);
+  }
+  const resolvedCandidate = realpathSync(candidate);
+  const resolvedRepo = realpathSync(REPO_ROOT);
+  const relative = path.relative(resolvedRepo, resolvedCandidate);
+  if (relative === "" || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error(
+      `AnyHarness runtime binary must belong to the candidate checkout (${resolvedRepo}): ${resolvedCandidate}`,
+    );
+  }
+  accessSync(resolvedCandidate, fsConstants.X_OK);
+  return resolvedCandidate;
+}
+
+export function resolveAnyharnessRuntimeBin(): string {
   if (process.env.ANYHARNESS_DEV_RUNTIME_BIN) {
-    if (!existsSync(process.env.ANYHARNESS_DEV_RUNTIME_BIN)) {
-      throw new Error(
-        `ANYHARNESS_DEV_RUNTIME_BIN does not exist: ${process.env.ANYHARNESS_DEV_RUNTIME_BIN}`,
-      );
-    }
-    return process.env.ANYHARNESS_DEV_RUNTIME_BIN;
+    return assertCandidateCheckoutRuntimeBin(process.env.ANYHARNESS_DEV_RUNTIME_BIN);
   }
-  // The shared prebuilt binary local dev keeps at this fixed path (built from
-  // main, refreshed by `pdevui`/`make build-rust`) — reusing it here mirrors
-  // the `pdevui` shortcut documented in feature-worktree-auth.md, and this
-  // suite makes no Rust changes so main's runtime is a correct stand-in.
-  const shared = path.join(
-    process.env.HOME ?? "",
-    ".proliferate-local",
-    "dev",
-    "runtime-bin",
-    "anyharness",
-  );
-  if (existsSync(shared)) {
-    return shared;
-  }
+
+  // Build through Cargo on every owning boot. Cargo remains incremental, but
+  // it revalidates the current checkout's source graph before we trust the
+  // binary. A shared binary built from main (or another worktree) is never
+  // acceptable evidence for this candidate.
   const targetDir = path.join(REPO_ROOT, "target", "runtime-local");
   const built = path.join(targetDir, "debug", "anyharness");
-  if (!existsSync(built)) {
-    log("no prebuilt AnyHarness runtime binary found; building (this can take a while)...");
-    run("cargo", ["build", "--bin", "anyharness"], {
-      env: { CARGO_TARGET_DIR: targetDir },
-    });
-  }
-  return built;
+  log("validating the candidate checkout's AnyHarness runtime build...");
+  run("cargo", ["build", "-p", "anyharness", "--bin", "anyharness"], {
+    env: { CARGO_TARGET_DIR: targetDir },
+  });
+  return assertCandidateCheckoutRuntimeBin(built);
 }
 
 async function waitForHttpOk(
@@ -241,6 +258,10 @@ async function waitForHttpOk(
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown;
   while (Date.now() < deadline) {
+    const startError = child ? childStartErrors.get(child) : undefined;
+    if (startError) {
+      throw new Error(`${childName} failed to start before ${url} became ready: ${startError.message}`);
+    }
     if (child && (child.exitCode !== null || child.signalCode !== null)) {
       const result = child.exitCode !== null ? `code ${child.exitCode}` : `signal ${child.signalCode}`;
       throw new Error(`${childName} exited with ${result} before ${url} became ready`);
@@ -274,6 +295,7 @@ function spawnTracked(
     detached: process.platform !== "win32",
   });
   const prefix = `[${options.name}]`;
+  child.once("error", (error) => childStartErrors.set(child, error));
   child.stdout?.on("data", (chunk: Buffer) => {
     if (process.env.TIER2_INTENT_VERBOSE) {
       process.stdout.write(`${prefix} ${chunk}`);
@@ -289,16 +311,13 @@ function spawnTracked(
 }
 
 function signalTracked(child: ChildProcess, signal: NodeJS.Signals): void {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return;
-  }
   try {
     if (process.platform !== "win32" && child.pid) {
       // Negative pid signals the whole detached process group (uvicorn/vite
       // spawn their own children; a plain SIGTERM to the parent alone can
       // leave orphans holding the port open across test runs).
       process.kill(-child.pid, signal);
-    } else {
+    } else if (child.exitCode === null && child.signalCode === null) {
       child.kill(signal);
     }
   } catch {
@@ -306,17 +325,63 @@ function signalTracked(child: ChildProcess, signal: NodeJS.Signals): void {
   }
 }
 
-async function terminateTracked(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return;
-  }
-  const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+export async function terminateTracked(
+  child: ChildProcess,
+  options: { gracefulTimeoutMs?: number; killTimeoutMs?: number } = {},
+): Promise<void> {
+  const gracefulTimeoutMs = options.gracefulTimeoutMs ?? 2_000;
+  const killTimeoutMs = options.killTimeoutMs ?? 2_000;
   signalTracked(child, "SIGTERM");
-  await Promise.race([exited, delay(2_000)]);
-  if (child.exitCode === null && child.signalCode === null) {
+  await waitForTrackedGroupExit(child, gracefulTimeoutMs);
+  if (isTrackedGroupAlive(child)) {
     signalTracked(child, "SIGKILL");
-    await Promise.race([exited, delay(2_000)]);
+    await waitForTrackedGroupExit(child, killTimeoutMs);
   }
+  // A detached parent can exit while a stubborn descendant keeps the process
+  // group (and its ports/files) alive. Never report teardown complete merely
+  // because the leader emitted `exit`.
+  if (isTrackedGroupAlive(child)) {
+    throw new Error(
+      `process group ${child.pid ?? "unknown"} remained alive after SIGKILL (${killTimeoutMs}ms)`,
+    );
+  }
+}
+
+function isTrackedGroupAlive(child: ChildProcess): boolean {
+  if (process.platform === "win32" || !child.pid) {
+    return child.exitCode === null && child.signalCode === null;
+  }
+  try {
+    process.kill(-child.pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+async function waitForTrackedGroupExit(child: ChildProcess, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline && isTrackedGroupAlive(child)) {
+    await delay(25);
+  }
+}
+
+export async function terminateTrackedChildren(
+  children: readonly ChildProcess[],
+  runLockPath: string,
+  terminate: (child: ChildProcess) => Promise<void> = terminateTracked,
+): Promise<void> {
+  const results = await Promise.allSettled(children.map((child) => terminate(child)));
+  const failures = results
+    .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+    .map(({ reason }) => reason);
+  if (failures.length > 0) {
+    throw new AggregateError(
+      failures,
+      `Tier-2 teardown could not prove ${failures.length} child process group(s) stopped; retaining ${runLockPath}`,
+    );
+  }
+  rmSync(runLockPath, { force: true });
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -330,13 +395,12 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   const frontendMode = options.skipFrontend ? null : options.frontendMode ?? "desktop-web";
   const startsDesktopWeb = frontendMode === "desktop-web" || frontendMode === "both";
   const startsHostedWeb = frontendMode === "hosted-web" || frontendMode === "both";
-  // Server-only nested fixtures deliberately have no runtime. The requirement
-  // applies to a full-stack boot that owns the gateway-policy seam.
-  const runtimeRequired =
-    frontendMode !== null
-    && !options.skipRuntime
-    && process.env.TIER2_INTENT_REQUIRE_RUNTIME === "1";
-  if (runtimeRequired && process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
+  // Every ordinary full-stack boot owns the runtime seam and therefore
+  // requires it locally as well as in CI. Only an explicit server-only or
+  // targeted no-runtime fixture may omit it.
+  const runtimeSkipped = options.skipRuntime || process.env.TIER2_INTENT_SKIP_RUNTIME === "1";
+  const runtimeRequired = isRuntimeRequired(frontendMode, runtimeSkipped);
+  if (process.env.TIER2_INTENT_REQUIRE_RUNTIME === "1" && runtimeSkipped) {
     throw new Error(
       "TIER2_INTENT_REQUIRE_RUNTIME=1 is incompatible with TIER2_INTENT_SKIP_RUNTIME=1",
     );
@@ -364,6 +428,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
   // fail-closed no-follow writer correctly refuses that parent path.
   const setupTokenFile = path.join(path.dirname(profileInstancePath(profile)), "setup-token");
   const children: ChildProcess[] = [];
+  const runLockPath = path.join(path.dirname(profileInstancePath(profile)), "run.lock");
   let torndown = false;
   const teardown = async () => {
     if (torndown) {
@@ -371,13 +436,10 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
     }
     torndown = true;
     log("tearing down...");
-    try {
-      await Promise.all(children.map((child) => terminateTracked(child)));
-    } finally {
-      // Release the profile run lock only after every child has exited, so the
-      // next boot cannot inherit a still-bound port from this run.
-      rmSync(path.join(path.dirname(profileInstancePath(profile)), "run.lock"), { force: true });
-    }
+    // Release the profile run lock only after every process group is proven
+    // gone. A teardown failure stays red and deliberately retains the lock so
+    // the next boot cannot inherit still-bound ports from a stubborn child.
+    await terminateTrackedChildren(children, runLockPath);
   };
 
   try {
@@ -492,7 +554,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
       // ── AnyHarness runtime ──
       // Surface scenarios do not read through it, but ordinary local intent
       // runs keep the app shell out of a persistent runtime-unavailable state.
-      if (options.skipRuntime || process.env.TIER2_INTENT_SKIP_RUNTIME === "1") {
+      if (runtimeSkipped) {
         log("skipping AnyHarness runtime for this profile");
       } else {
         try {
@@ -507,10 +569,7 @@ export async function bootStack(options: BootOptions = {}): Promise<BootedStack>
             },
           );
         } catch (error) {
-          if (runtimeRequired) {
-            throw new Error(`required AnyHarness runtime failed to start: ${String(error)}`);
-          }
-          log(`warning: could not start AnyHarness runtime (${String(error)}); continuing without it`);
+          throw new Error(`required AnyHarness runtime failed to start: ${String(error)}`);
         }
       }
 

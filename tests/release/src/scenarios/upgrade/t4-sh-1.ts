@@ -15,6 +15,7 @@ import {
   COMPOSE_OVER_SSH,
   type SelfHostBox,
 } from "../../fixtures/selfhost.js";
+import { withRequiredCleanup } from "../../fixtures/required-cleanup.js";
 
 /**
  * T4-SH-1 — operator update motion.
@@ -81,44 +82,51 @@ async function runReal(): Promise<void> {
   }
 
   const box = await provisionSelfHostBox(fromVersion);
-  try {
-    const adminEmail = `admin-${box.instanceId}@proliferate-releasee2e.dev`;
-    const client = new ApiClient({ baseUrl: box.url });
+  await withRequiredCleanup({
+    label: "T4-SH-1 self-host qualification box",
+    resourceIds: [
+      `instance=${box.instanceId}`,
+      `security-group=${box.sgId}`,
+      `key-pair=${box.keyName}`,
+    ],
+    run: async () => {
+      const adminEmail = `admin-${box.instanceId}@proliferate-releasee2e.dev`;
+      const client = new ApiClient({ baseUrl: box.url });
 
-    const before = await client.get<{ serverVersion?: string }>("/meta");
-    assert.equal(before.serverVersion, fromVersion, `T4-SH-1: box did not boot on N-1=${fromVersion}`);
-    console.log(`[T4-SH-1] booted on N-1=${before.serverVersion}`);
+      const before = await client.get<{ serverVersion?: string }>("/meta");
+      assert.equal(before.serverVersion, fromVersion, `T4-SH-1: box did not boot on N-1=${fromVersion}`);
+      console.log(`[T4-SH-1] booted on N-1=${before.serverVersion}`);
 
-    // Claim so there is durable user data across the update.
-    const setupToken = await readSetupTokenOverSsh(box);
-    assert.ok(setupToken.length > 0, "T4-SH-1: could not read the setup token");
-    await claim(box.url, adminEmail, ADMIN_PASSWORD, setupToken);
-    await desktopLogin(box.url, adminEmail, ADMIN_PASSWORD); // proves it works pre-update
-    const usersBefore = await psqlScalar(box, 'select count(*) from "user"');
+      // Claim so there is durable user data across the update.
+      const setupToken = await readSetupTokenOverSsh(box);
+      assert.ok(setupToken.length > 0, "T4-SH-1: could not read the setup token");
+      await claim(box.url, adminEmail, ADMIN_PASSWORD, setupToken);
+      await desktopLogin(box.url, adminEmail, ADMIN_PASSWORD); // proves it works pre-update
+      const usersBefore = await psqlScalar(box, 'select count(*) from "user"');
 
-    // The operator update motion.
-    console.log(`[T4-SH-1] running ./update.sh -> N=${toVersion}`);
-    await runUpdateOverSsh(box, toVersion);
+      // The operator update motion.
+      console.log(`[T4-SH-1] running ./update.sh -> N=${toVersion}`);
+      await runUpdateOverSsh(box, toVersion);
 
-    // Migrations applied.
-    const alembicRows = await psqlScalar(box, "select count(*) from alembic_version");
-    assert.ok(/^[1-9]/.test(alembicRows), `T4-SH-1: alembic_version empty after update (${alembicRows})`);
+      // Migrations applied.
+      const alembicRows = await psqlScalar(box, "select count(*) from alembic_version");
+      assert.ok(/^[1-9]/.test(alembicRows), `T4-SH-1: alembic_version empty after update (${alembicRows})`);
 
-    // Health green + /meta reports N.
-    const health = await client.get<{ status?: string }>("/health");
-    assert.equal(health.status, "ok", "T4-SH-1: health not ok after update");
-    const after = await client.get<{ serverVersion?: string }>("/meta");
-    assert.equal(after.serverVersion, toVersion, `T4-SH-1: /meta should report N=${toVersion} after update`);
-    console.log(`[T4-SH-1] converged: /meta serverVersion=${after.serverVersion}`);
+      // Health green + /meta reports N.
+      const health = await client.get<{ status?: string }>("/health");
+      assert.equal(health.status, "ok", "T4-SH-1: health not ok after update");
+      const after = await client.get<{ serverVersion?: string }>("/meta");
+      assert.equal(after.serverVersion, toVersion, `T4-SH-1: /meta should report N=${toVersion} after update`);
+      console.log(`[T4-SH-1] converged: /meta serverVersion=${after.serverVersion}`);
 
-    // Data intact: the pre-update admin still authenticates, and the row count held.
-    await desktopLogin(box.url, adminEmail, ADMIN_PASSWORD);
-    const usersAfter = await psqlScalar(box, 'select count(*) from "user"');
-    assert.equal(usersAfter, usersBefore, `T4-SH-1: user rows changed across update (${usersBefore} -> ${usersAfter})`);
-    console.log(`[T4-SH-1] data intact: admin still logs in, users=${usersAfter}`);
-  } finally {
-    await terminateSelfHostBox(box);
-  }
+      // Data intact: the pre-update admin still authenticates, and the row count held.
+      await desktopLogin(box.url, adminEmail, ADMIN_PASSWORD);
+      const usersAfter = await psqlScalar(box, 'select count(*) from "user"');
+      assert.equal(usersAfter, usersBefore, `T4-SH-1: user rows changed across update (${usersBefore} -> ${usersAfter})`);
+      console.log(`[T4-SH-1] data intact: admin still logs in, users=${usersAfter}`);
+    },
+    cleanup: () => terminateSelfHostBox(box),
+  });
 }
 
 function readVersionFile(): string {

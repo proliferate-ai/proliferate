@@ -179,6 +179,17 @@ async def auth_viewer_payload(
     AuthPasswordCredential,
 ]:
     readiness = await get_account_readiness(db, user_id=user.id)
+    # `github_connected` is an identity fact; `onboarding_state` is the product
+    # access policy. Single-org owners and active organization-SSO members can
+    # use product surfaces without GitHub, matching `current_product_user`.
+    product_access_ready = (
+        readiness.product_ready
+        or settings.single_org_mode
+        or await sso_store.user_has_active_organization_sso_membership(
+            db,
+            user_id=user.id,
+        )
+    )
     identities = await linked_provider_payloads(db, user_id=user.id)
     linked = [
         AuthLinkedProvider(
@@ -224,7 +235,7 @@ async def auth_viewer_payload(
     ]
     return (
         readiness.product_ready,
-        "active" if readiness.product_ready else "needs_github",
+        "active" if product_access_ready else "needs_github",
         linked,
         availability,
         auth_password_credential(user),

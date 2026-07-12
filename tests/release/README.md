@@ -148,7 +148,9 @@ The staging lane targets the real deployment
   `RELEASE_E2E_STAGING_SESSION_CACHE_KEY` staging-environment secret; only
   authenticated ciphertext is cached. Per-run-id save keys + a prefix restore
   key carry the newest state forward, and workflow-level concurrency serialises
-  runs so no two rotations race.
+  runs so no two rotations race. The restored ciphertext is deleted before
+  sealing; a new cache key is saved only when fresh encryption succeeds, so an
+  absent plaintext state or encryption failure can never promote stale state.
 - **Broken-session outcome.** A broken session chain
   (revoked/expired/never-persisted token) raises
   `StagingSessionUnavailableError`, which durable-user scenarios convert to a

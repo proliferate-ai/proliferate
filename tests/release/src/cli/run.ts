@@ -17,7 +17,12 @@ import {
   ensureLocalDurableUser,
 } from "../fixtures/identity.js";
 import type { ScenarioFailure } from "../report/types.js";
-import { writeFailureReports, toFailureReport } from "../report/failure-reporter.js";
+import {
+  failureConsoleLine,
+  writeFailureReports,
+  toFailureReport,
+} from "../report/failure-reporter.js";
+import { installSecretRedactingConsole } from "../report/redaction.js";
 import { fileIssuesForFailures } from "../report/issue-filer.js";
 import type { RuntimeLane } from "../config/types.js";
 import {
@@ -327,15 +332,14 @@ async function main(): Promise<void> {
   }
 
   if (failures.length > 0) {
-    const reports = failures.map(toFailureReport);
+    const reports = failures.map((failure) => toFailureReport(failure));
     console.error(`\n${failures.length} scenario run(s) failed:`);
     for (const report of reports) {
       // First line of the observed error, inline in the log — the JSON reports
       // are the full record, but the runner is often read straight from the CI
       // log (where the report artifact may not be fetched), so surface the
       // reason there too.
-      const firstLine = report.observed.split("\n")[0];
-      console.error(`  - [${report.scenario_id}/${report.lane}] ${firstLine}`);
+      console.error(failureConsoleLine(report));
     }
     const written = await writeFailureReports(failures, args.outputDir);
     console.error("Reports written:");
@@ -785,6 +789,8 @@ function countRuns(scenarios: ReturnType<typeof selectScenarios>): number {
 function formatSelector(selector: string[] | "all"): string {
   return selector === "all" ? "all" : selector.join(",");
 }
+
+installSecretRedactingConsole();
 
 try {
   await main();

@@ -32,9 +32,9 @@ export function webBaseUrl(): string {
   return value;
 }
 
-/** The local AnyHarness runtime's base URL. Required CI runs prove `/v1/agents`
- * reachable during global setup; targeted server-only profiles may publish the
- * allocated address without starting a runtime. */
+/** The local AnyHarness runtime's base URL. Ordinary local and CI runs prove
+ * `/v1/agents` reachable during global setup; targeted server-only profiles may
+ * publish the allocated address without starting a runtime. */
 export function anyharnessBaseUrl(): string {
   const value = process.env.TIER2_INTENT_ANYHARNESS_BASE_URL;
   if (!value) {
@@ -153,24 +153,39 @@ export async function getOwnOrganization(token: string): Promise<OrganizationSum
   return body.organizations[0];
 }
 
-/** Give a password fixture account the legacy `githubConnected` compatibility
- * fact Hosted Web currently requires before mounting the product shell. This
- * does not represent canonical GitHub App authorization or repository access.
- * It is an idempotent gate-only seed, not an auth bypass: each surface still
- * establishes its real Desktop bearer or Web cookie session. */
-export async function ensureProductReady(userId: string, email: string): Promise<void> {
+/** Remove rows written by the pre-hardening harness. They represented no real
+ * OAuth exchange and must not survive in a persistent local test profile. */
+export async function removeLegacyFakeOauthAccounts(): Promise<void> {
   const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
   await client.connect();
   try {
     await client.query(
-      `INSERT INTO oauth_account
-         (id, user_id, oauth_name, access_token, expires_at, refresh_token, account_id, account_email)
-       SELECT $1, $2, 'github', 'gho_t2_surface_product_ready_stub', NULL, NULL, $3, $4
-       WHERE NOT EXISTS (
-         SELECT 1 FROM oauth_account WHERE user_id = $2 AND oauth_name = 'github'
+      `DELETE FROM oauth_account
+       WHERE access_token IN (
+         'gho_t2_surface_product_ready_stub',
+         'gho_t2billing_product_ready_stub'
        )`,
-      [randomUUID(), userId, `t2surface-${userId}`, email],
     );
+  } finally {
+    await client.end();
+  }
+}
+
+/** Assert the fixture is exercising the supported single-org password path,
+ * not a fabricated legacy GitHub-readiness row. */
+export async function assertNoOauthAccountRows(userId: string): Promise<void> {
+  const client = new Client({ connectionString: toPostgresDriverUrl(databaseUrl()) });
+  await client.connect();
+  try {
+    const result = await client.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM oauth_account WHERE user_id = $1`,
+      [userId],
+    );
+    if (result.rows[0]?.count !== "0") {
+      throw new Error(
+        `Password-only Tier-2 fixture unexpectedly has ${result.rows[0]?.count ?? "unknown"} oauth_account rows`,
+      );
+    }
   } finally {
     await client.end();
   }

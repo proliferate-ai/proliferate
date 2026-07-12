@@ -7,7 +7,9 @@ complete normative Tier 2/3/4 qualification manifest. `flows.md` maps the
 currently implemented subset to collected tests, and `scenarios.md` records
 implementation detail; neither is complete enough to qualify a release today.
 `core-release-scenario-manifest.json` is the machine-checked target ID
-inventory, not a complete collected execution/lane map.
+inventory. `core-release-execution-manifest.json` is the separate exact,
+machine-checked inventory of what Tier 2 currently collects; an execution row
+does not by itself mark its paired target scenario complete.
 
 Companion: `specs/developing/qa/README.md` owns *manual* release QA. This doc
 owns automated testing. A flow covered by an automated tier here does not also
@@ -256,14 +258,21 @@ a real agent or sandbox is Tier 3.
   scenario in `scenarios.md`, then register the flow's row in `flows.md`
   pointing at the spec file — **in the same PR** (the PR obligation and the
   `flows.md` completeness audit both enforce this).
-- **Run it locally:** `pnpm -C tests/intent test` (or a single file, e.g.
-  `pnpm -C tests/intent exec playwright test specs/<flow>.spec.ts`).
-  `TIER2_INTENT_SKIP_RUNTIME=1` is only for a targeted run that excludes every
-  runtime-dependent spec; it cannot make the complete suite pass. Required CI
-  supplies a prebuilt runtime and sets `TIER2_INTENT_REQUIRE_RUNTIME=1`, so a
-  missing or unhealthy runtime fails setup. `TIER2_INTENT_PROFILE=<name>` boots
-  on an isolated profile so parallel worktrees don't collide;
-  `TIER2_INTENT_VERBOSE=1` streams the server/vite logs.
+- **Run it locally:** `pnpm -C tests/intent test` for the core lane,
+  `make test-intent-billing` for real Stripe test-mode accounting, and
+  `pnpm -C tests/intent test:surfaces` for required dual-host readiness. The
+  ordinary core boot incrementally builds and health-checks the current
+  checkout's AnyHarness binary; it never borrows another worktree's shared
+  binary. `TIER2_INTENT_SKIP_RUNTIME=1` is only for an explicitly targeted run
+  that excludes every runtime-dependent spec. `TIER2_INTENT_PROFILE=<name>`
+  boots on an isolated profile so parallel worktrees don't collide;
+  `TIER2_INTENT_VERBOSE=1` streams server/Vite logs.
+- **Keep collection exact:** every spec change runs
+  `pnpm -C tests/intent run manifest:write`; audit and commit the resulting
+  `core-release-execution-manifest.json` diff. CI reruns `test:inventory` and
+  fails on deleted, renamed, missing, duplicated, or otherwise drifted cells.
+  Legacy title ids are identity-only and never become canonical target
+  coverage without a separate semantic audit.
 
 ### Tier 3 — a new live scenario
 
@@ -300,7 +309,7 @@ the tier.
 
 | Gate | Jobs |
 | --- | --- |
-| Merge (every PR or trusted merge-queue run) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, every frontend/SDK/Desktop suite, and the complete Tier 2 manifest in `core-release-validation.md` |
+| Merge (every PR or trusted merge-queue run) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, frontend/SDK/Desktop suites, and every cell in the exact collected Tier 2 execution ledger. The still-planned target rows remain unqualified. |
 | Staging → production promotion | Complete strict Tier 3 manifest plus every Tier 4 row triggered by the candidate artifacts. Only green exact-SHA evidence permits promotion |
 | Nightly | Tier 3 lanes (incl. native-shell smoke) against whatever is on staging; failures file issues, never block merges |
 
@@ -328,9 +337,9 @@ Migration exceptions, named per house rule: several product suites are still
 outside the merge gate. Executed Tier 2 jobs now fail closed, but fork and
 Dependabot PRs explicitly skip the secret-bearing billing job and are
 non-qualifying until the trusted merge-queue rerun. The collected suite is not
-the complete 68-row target. The target manifest marks rows as `planned` until
-an audited execution mapping names a collector, collected test id, lane, gate,
-and evidence status. Release-E2E strict runs derive required rows from the
+the complete 68-row target. The target manifest keeps its rows `planned`; the
+separate execution manifest preserves exact collected reality without
+inferring semantic coverage from legacy title ids. Release-E2E strict runs derive required rows from the
 current executable registry, but scheduled local/source runs are signal,
 staging is dispatch-only, and self-host artifact checks are post-publish
 diagnostics. Complete target-to-execution mapping, exact-artifact aggregation,

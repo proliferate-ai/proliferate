@@ -8,10 +8,10 @@ import {
   ADMIN_EMAIL,
   ADMIN_ORG_NAME,
   ADMIN_PASSWORD,
+  assertNoOauthAccountRows,
   ensureInstanceClaimed,
   passwordLogin,
 } from "../../stack/seed.ts";
-import { ensureProductReady } from "../../stack/billing-seed.ts";
 
 export interface AdminContext {
   token: string;
@@ -38,14 +38,14 @@ export async function adminContext(): Promise<AdminContext> {
   const listing = (await response.json()) as { organizations: Array<{ id: string; name: string }> };
   const org =
     listing.organizations.find((o) => o.name === ADMIN_ORG_NAME) ?? listing.organizations[0];
-  // Billing/product surfaces sit behind the GitHub product-readiness gate
-  // even in single-org mode; this boot is password-only, so seed the legacy
-  // GitHub link the gate accepts (see ensureProductReady's doc).
+  // Single-org mode deliberately admits its claimed password owner without a
+  // GitHub identity. Pin that supported self-host posture instead of forging
+  // a legacy OAuth row to satisfy hosted-product readiness.
   const meResponse = await fetch(`${process.env.TIER2_BILLING_API_BASE_URL}/users/me`, {
     headers: { Authorization: `Bearer ${access_token}` },
   });
   const me = (await meResponse.json()) as { id: string };
-  await ensureProductReady(me.id, ADMIN_EMAIL);
+  await assertNoOauthAccountRows(me.id);
   cached = { token: access_token, organizationId: org.id };
   return cached;
 }

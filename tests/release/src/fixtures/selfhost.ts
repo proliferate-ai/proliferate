@@ -49,30 +49,32 @@ export async function provisionSelfHostBox(imageTag: string): Promise<SelfHostBo
   return parsed;
 }
 
-/** Terminates the instance and deletes the throwaway SG + key pair. Best-effort. */
+/** Terminates the instance and deletes the throwaway SG + key pair. A failure
+ * is part of qualification: callers aggregate it with any scenario error. */
 export async function terminateSelfHostBox(box: SelfHostBox): Promise<void> {
-  await runScript(
-    [
-      "terminate",
-      "--instance-id",
-      box.instanceId,
-      "--sg-id",
-      box.sgId,
-      "--key-name",
-      box.keyName,
-      "--key-path",
-      box.keyPath,
-    ],
-    10 * 60_000,
-  ).catch((error) => {
-    // A teardown failure must be loud (it leaks a box) but must not mask a real
-    // scenario result — callers run this in a finally.
-    console.error(
-      `[selfhost] WARNING: teardown of ${box.instanceId} failed: ` +
-        `${error instanceof Error ? error.message : String(error)}. ` +
-        `Terminate it manually: aws ec2 terminate-instances --instance-ids ${box.instanceId}`,
+  try {
+    await runScript(
+      [
+        "terminate",
+        "--instance-id",
+        box.instanceId,
+        "--sg-id",
+        box.sgId,
+        "--key-name",
+        box.keyName,
+        "--key-path",
+        box.keyPath,
+      ],
+      10 * 60_000,
     );
-  });
+  } catch (error) {
+    throw new Error(
+      `self-host cleanup failed for instance=${box.instanceId}, security-group=${box.sgId}, ` +
+        `key-pair=${box.keyName}: ${error instanceof Error ? error.message : String(error)}. ` +
+        `Terminate manually: aws ec2 terminate-instances --instance-ids ${box.instanceId}`,
+      { cause: error },
+    );
+  }
 }
 
 const SETUP_TOKEN_PATH = "/var/lib/proliferate/setup/setup-token";

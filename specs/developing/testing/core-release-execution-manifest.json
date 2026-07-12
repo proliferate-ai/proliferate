@@ -1,0 +1,1647 @@
+{
+  "schemaVersion": 1,
+  "targetManifest": "core-release-scenario-manifest.json",
+  "note": "Exact audited Tier-2 Playwright collection. This preservation ledger records executable reality, not target coverage. Legacy title ids are identity only; canonical target refs remain empty until a semantic domain audit records clauses and a contract digest.",
+  "executionCells": [
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/core.spec.ts",
+      "title": "T2-BILL-1: checkout → grants → consumption → cut-off → reactivate › cloud-checkout creates a real Stripe test-mode session",
+      "project": "",
+      "testId": "d064c8ac994e44e7c99b-94bfc102131c2d526026",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/core.spec.ts",
+      "title": "T2-BILL-1: checkout → grants → consumption → cut-off → reactivate › grants drain earliest-expiring-first (ordered_accounting_grants)",
+      "project": "",
+      "testId": "d064c8ac994e44e7c99b-cfabfd3b68e8e3977c21",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/core.spec.ts",
+      "title": "T2-BILL-1: checkout → grants → consumption → cut-off → reactivate › invoice.paid on a pro subscription issues the pro_period grant; consumption drains it; then blocked; then reactivated",
+      "project": "",
+      "testId": "d064c8ac994e44e7c99b-27d110f8abfea4cafacc",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/core.spec.ts",
+      "title": "T2-BILL-2: plan limits + policy gates › agent-gateway policy edit is gated by min plan on a free org (org_agent_policy_plan_required, 403)",
+      "project": "",
+      "testId": "d064c8ac994e44e7c99b-41ed029a11953c7c5d64",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/overage.spec.ts",
+      "title": "T2-BILL-5: compute overage — bill to cap, write off, then block › overage disabled → immediate cutoff at grant exhaustion, zero export rows",
+      "project": "",
+      "testId": "c3cf0e55bc39be68049b-e68642d208e113e74b83",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/overage.spec.ts",
+      "title": "T2-BILL-5: compute overage — bill to cap, write off, then block › overage-settings API validates the cap (invalid_overage_cap outside 0..1,000,000)",
+      "project": "",
+      "testId": "c3cf0e55bc39be68049b-b3523891bf3e822f0f80",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/overage.spec.ts",
+      "title": "T2-BILL-5: compute overage — bill to cap, write off, then block › uncovered seconds export as billable cents up to cap, then write off; snapshot flips to cap_exhausted",
+      "project": "",
+      "testId": "c3cf0e55bc39be68049b-f9252b5d2d891f9e64b1",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/overage.spec.ts",
+      "title": "T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups › admin llm cap is independent of credit refill; disabling the cap clears the binding",
+      "project": "",
+      "testId": "c3cf0e55bc39be68049b-093b3fa9aba875755cc0",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-6"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/overage.spec.ts",
+      "title": "T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups › auto top-up is fail-closed when the top-up price id is unset (feature off)",
+      "project": "",
+      "testId": "c3cf0e55bc39be68049b-9bbaba13714b2cf79ecf",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-6"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/overage.spec.ts",
+      "title": "T2-BILL-6: LLM credits — exhaustion, admin caps, top-ups › llm-balance reflects seeded spend and goes non-positive on exhaustion",
+      "project": "",
+      "testId": "c3cf0e55bc39be68049b-452b63aca4bb44545497",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-6"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/seats.spec.ts",
+      "title": "T2-BILL-3: seats — invite/remove/re-invite on a Pro org › membership changes reconcile Stripe seat quantity + proration grants, with no double-grant",
+      "project": "",
+      "testId": "244b33338620d09dc550-334734a0cae14d1b0fcb",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/seats.spec.ts",
+      "title": "T2-BILL-3: seats — invite/remove/re-invite on a Pro org › seat adjustment retries then goes failed_terminal; a later adjustment still converges",
+      "project": "",
+      "testId": "244b33338620d09dc550-4a246af8ddbbe4c248dd",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/seats.spec.ts",
+      "title": "T2-BILL-3: seats — invite/remove/re-invite on a Pro org › two active org subscriptions no longer break membership changes (issue #1044 fixed)",
+      "project": "",
+      "testId": "244b33338620d09dc550-cb3bdcb304bc841b8087",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/seats.spec.ts",
+      "title": "T2-BILL-4: team checkout — the second, independent org-creation path › creating a team checkout intent leaves the org pending_checkout (not joinable)",
+      "project": "",
+      "testId": "244b33338620d09dc550-daa9b74e39f6cb9d9d13",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/seats.spec.ts",
+      "title": "T2-BILL-4: team checkout — the second, independent org-creation path › replayed team-subscription activation webhook is idempotent (no second org activation)",
+      "project": "",
+      "testId": "244b33338620d09dc550-d01b6942ddc52e3e0def",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/usage.spec.ts",
+      "title": "T2-BILL-9: usage surfaces tell the truth › org by-user attributes seeded usage to the right user",
+      "project": "",
+      "testId": "52a2fa15d86270e5dd66-c6ff77551a68f25b9691",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-9"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/usage.spec.ts",
+      "title": "T2-BILL-9: usage surfaces tell the truth › summary + timeseries + llm-balance return exactly the seeded totals",
+      "project": "",
+      "testId": "52a2fa15d86270e5dd66-662e2eaf243efa3c58dd",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-9"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/usage.spec.ts",
+      "title": "T2-BILL-9: usage surfaces tell the truth › the settings billing/usage surface renders (desktop web)",
+      "project": "",
+      "testId": "52a2fa15d86270e5dd66-97453c5c0d2a96f32a90",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-9"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/webhooks.spec.ts",
+      "title": "T2-BILL-7: webhook robustness › concurrent duplicate delivery never double-processes (409 in-progress is the guard)",
+      "project": "",
+      "testId": "9cc65da5bbcc3bc8422c-538d6874731428fa84d4",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-7"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/webhooks.spec.ts",
+      "title": "T2-BILL-7: webhook robustness › exact duplicate delivery of invoice.paid is idempotent — no double grant",
+      "project": "",
+      "testId": "9cc65da5bbcc3bc8422c-49cfee6384a66671546a",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-7"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/webhooks.spec.ts",
+      "title": "T2-BILL-7: webhook robustness › out-of-order: invoice.paid before subscription.updated still converges",
+      "project": "",
+      "testId": "9cc65da5bbcc3bc8422c-e147c5787e6ebf89b57a",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-7"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/webhooks.spec.ts",
+      "title": "T2-BILL-8: subscription edge states › cancel mid-period: cancel_at_period_end synced, access continues; past the grace → cut off",
+      "project": "",
+      "testId": "9cc65da5bbcc3bc8422c-483a700ceba51e607788",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-8"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/webhooks.spec.ts",
+      "title": "T2-BILL-8: subscription edge states › free trial: a password-only account (no GitHub identity) gets no trial and no error",
+      "project": "",
+      "testId": "9cc65da5bbcc3bc8422c-9145eb0dfaa223e46023",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-8"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/webhooks.spec.ts",
+      "title": "T2-BILL-8: subscription edge states › payment_failed applies a hold that blocks; invoice.paid clears it",
+      "project": "",
+      "testId": "9cc65da5bbcc3bc8422c-1dd57ae34cd611afd4f1",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-8"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-billing",
+      "gate": "merge",
+      "job": "intent-billing",
+      "collector": "tests/intent/playwright.billing.config.ts",
+      "file": "tests/intent/specs/billing/webhooks.spec.ts",
+      "title": "T2-BILL-8: subscription edge states › subscription.deleted after a clean voluntary cancellation applies no payment_failed hold",
+      "project": "",
+      "testId": "9cc65da5bbcc3bc8422c-aa0d15cabb5e48be6e37",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-BILL-8"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/agent-policy.spec.ts",
+      "title": "T2-POL-1: organization agent policy › a pre-existing member selection becomes a visible conflict after the owner saves through desktop-web",
+      "project": "",
+      "testId": "71e45e822ae108d7bcfc-9d1bf37daf679557b1e8",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-POL-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/agent-policy.spec.ts",
+      "title": "T2-POL-1: organization agent policy › new disallowed selections fail closed, while clearing stale state remains allowed",
+      "project": "",
+      "testId": "71e45e822ae108d7bcfc-ffea8c233f96633c0371",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-POL-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/agent-policy.spec.ts",
+      "title": "T2-POL-1: organization agent policy › owner can normalize the policy while a member cannot read or mutate it",
+      "project": "",
+      "testId": "71e45e822ae108d7bcfc-d643c35529eecc70c956",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-POL-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/auth.spec.ts",
+      "title": "T2-AUTH-1: setup claim + password login lifecycle › claims the instance once via /setup, then re-visiting shows already-claimed",
+      "project": "",
+      "testId": "d748ac400d08b85935ef-b523ff7db921bf191601",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/auth.spec.ts",
+      "title": "T2-AUTH-1: setup claim + password login lifecycle › logout returns the UI to signed-out state and re-login works",
+      "project": "",
+      "testId": "d748ac400d08b85935ef-accf6f5ea26b8db04f0c",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/auth.spec.ts",
+      "title": "T2-AUTH-1: setup claim + password login lifecycle › logs in through the desktop-web UI with the claimed password",
+      "project": "",
+      "testId": "d748ac400d08b85935ef-6c45dc15663b77a7a055",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/auth.spec.ts",
+      "title": "T2-AUTH-1: setup claim + password login lifecycle › negative: wrong password is rejected with the uniform error",
+      "project": "",
+      "testId": "d748ac400d08b85935ef-9723ca5e782e398fa8e2",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/auth.spec.ts",
+      "title": "T2-AUTH-1: setup claim + password login lifecycle › second claim attempt is rejected (setup permanently closed)",
+      "project": "",
+      "testId": "d748ac400d08b85935ef-8b84e6df52ee3a26c6c4",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/auth.spec.ts",
+      "title": "T2-AUTH-2: session revocation › revoking the session makes context A's authenticated calls fail and the UI signs out",
+      "project": "",
+      "testId": "d748ac400d08b85935ef-ee93689636513dcfdce9",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/capability-contract.spec.ts",
+      "title": "T2-SH-2: /meta capability contract — hosted mode advertises full caps › advertises every capability true, vendor support, and vendor pricing",
+      "project": "",
+      "testId": "587409fc08f6cdd252f2-9fcda0ef6b63f39758cf",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/capability-contract.spec.ts",
+      "title": "T2-SH-2: /meta capability contract — self-managed, every add-on off › advertises every capability false, no vendor support/pricing, and the operator's own deployment identity",
+      "project": "",
+      "testId": "587409fc08f6cdd252f2-a0e54eb8c025dc2865cb",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/cloud-provisioning-gating.spec.ts",
+      "title": "T2-SH-3: cloud-workspace provisioning stays safe when E2B is half-configured › a real cloud-workspace-create request gets the actionable 503, not a crash or a generic 500",
+      "project": "",
+      "testId": "905e9af8770a1ce522f0-06725b57f503913199a0",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/cloud-provisioning-gating.spec.ts",
+      "title": "T2-SH-3: cloud-workspace provisioning stays safe when E2B is half-configured › the /meta capability contract already reflects the disabled state, matching what provisioning will actually do",
+      "project": "",
+      "testId": "905e9af8770a1ce522f0-e0ce44cc1d9e74dced8c",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/cloud-provisioning-gating.spec.ts",
+      "title": "T2-SH-3: cloud-workspace provisioning stays safe when E2B is half-configured › the control plane comes up healthy — half-configured E2B never crash-loops the API",
+      "project": "",
+      "testId": "905e9af8770a1ce522f0-bf116b8c9ccf7933afc2",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/cloud-workspace.spec.ts",
+      "title": "T2-WS-1: cloud workspace create request path (to the seam) › POST /cloud/workspaces 404s cloud_repo_environment_not_found for a repo with no cloud repo environment configured",
+      "project": "",
+      "testId": "f82bcd73e5174dfc7171-fe301e518c6b3a3cf4b0",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-WS-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/gateway-eligibility.spec.ts",
+      "title": "T2-SH-4: gateway model eligibility — session creation gates native ids, accepts gateway ids › accepts session creation with a real gateway-catalog model id",
+      "project": "",
+      "testId": "24ca0074bbf62f8e5c71-be2d4731ad7ea67faa9c",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/gateway-eligibility.spec.ts",
+      "title": "T2-SH-4: gateway model eligibility — session creation gates native ids, accepts gateway ids › rejects session creation with a bare native model selector on a gateway-only route",
+      "project": "",
+      "testId": "24ca0074bbf62f8e5c71-e53b643e57773a62359e",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/integrations.spec.ts",
+      "title": "T2-INT-1: api_key connect + org policy toggle › catalog is reachable and lists the real context7 api_key definition with its connect schema",
+      "project": "",
+      "testId": "b1ad4c9b5349975121f2-d0082049dd205a4e198d",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INT-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/integrations.spec.ts",
+      "title": "T2-INT-1: api_key connect + org policy toggle › connects context7 with a placeholder api_key: account created, ready, enabled — no outbound provider call",
+      "project": "",
+      "testId": "b1ad4c9b5349975121f2-25f15f58c07205560f73",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INT-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/integrations.spec.ts",
+      "title": "T2-INT-1: api_key connect + org policy toggle › disconnect: DELETE the account 204s, health returns to needs_auth, and re-connecting works",
+      "project": "",
+      "testId": "b1ad4c9b5349975121f2-af2a558f54b6c3907e9f",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INT-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/integrations.spec.ts",
+      "title": "T2-INT-1: api_key connect + org policy toggle › health surface composes all three layers for the connected account: ready, effective-enabled, account enabled",
+      "project": "",
+      "testId": "b1ad4c9b5349975121f2-092d2f6f8bcec2627de6",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INT-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/integrations.spec.ts",
+      "title": "T2-INT-1: api_key connect + org policy toggle › health surface flips to disabled_by_org while the policy is off, with the account row intact underneath",
+      "project": "",
+      "testId": "b1ad4c9b5349975121f2-1b92a30e321fe21d0329",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INT-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/integrations.spec.ts",
+      "title": "T2-INT-1: api_key connect + org policy toggle › org admin toggles the definition back on: effective_enabled true again",
+      "project": "",
+      "testId": "b1ad4c9b5349975121f2-7d5b1173c89c052b4bad",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INT-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/integrations.spec.ts",
+      "title": "T2-INT-1: api_key connect + org policy toggle › org admin toggles the definition off: effective_enabled composes the policy override over the seed default",
+      "project": "",
+      "testId": "b1ad4c9b5349975121f2-7a45c321f92cbe903143",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INT-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/invitation.spec.ts",
+      "title": "T2-INV-1: invitation happy path › admin invites → pending row with skipped delivery → invitee joins via the invite link → active membership",
+      "project": "",
+      "testId": "94030e3a77a8b296006f-4819ba28266a5525210e",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INV-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/invitation.spec.ts",
+      "title": "T2-INV-1: invitation happy path › fixed: pending-invitation accept UI is reachable for a non-admin invitee via the Account pane (#1013, #1017)",
+      "project": "",
+      "testId": "94030e3a77a8b296006f-5954ffe6ba4f35f87e9f",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INV-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/invitation.spec.ts",
+      "title": "T2-INV-1: invitation happy path › negative: duplicate pending invite for the same (org, email) — the partial unique index guarantees one pending row",
+      "project": "",
+      "testId": "94030e3a77a8b296006f-2b2779119188243427e8",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INV-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/invitation.spec.ts",
+      "title": "T2-INV-1: invitation happy path › negative: expired invitation cannot be accepted and is lazily marked expired",
+      "project": "",
+      "testId": "94030e3a77a8b296006f-d95efcd7830f654ae0eb",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INV-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/invitation.spec.ts",
+      "title": "T2-INV-1: invitation happy path › negative: revoked invitation cannot be accepted",
+      "project": "",
+      "testId": "94030e3a77a8b296006f-9a295ceb92fdeb0ba595",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INV-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/invitation.spec.ts",
+      "title": "T2-INV-1: invitation happy path › negative: wrong email — invitation not listed and direct accept with the known UUID rejected",
+      "project": "",
+      "testId": "94030e3a77a8b296006f-9423ab72efe33608e881",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-INV-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/login-methods.spec.ts",
+      "title": "T2-AUTH-4: login-method availability seam › GET /auth/desktop/github/availability reports GitHub OAuth disabled (no client env)",
+      "project": "",
+      "testId": "169f49bfb83e2da219f2-e91b3b5ccf6684e7ca4c",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/login-methods.spec.ts",
+      "title": "T2-AUTH-4: login-method availability seam › login screen renders the password form as the offered method, not a GitHub OAuth entry",
+      "project": "",
+      "testId": "169f49bfb83e2da219f2-a4a4b8f30d2627f2b2b6",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/login-methods.spec.ts",
+      "title": "T2-AUTH-4: login-method availability seam › public /auth/desktop/methods probe reports password on, GitHub off for this deployment",
+      "project": "",
+      "testId": "169f49bfb83e2da219f2-8f51c94e3dba0a035edf",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/member-visibility.spec.ts",
+      "title": "T2-ORG-2: member visibility boundaries › member cannot reach into another member's membership record (management stays closed)",
+      "project": "",
+      "testId": "b4010775becc7f23ed22-6cd3eaeba508c0cdf7db",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/member-visibility.spec.ts",
+      "title": "T2-ORG-2: member visibility boundaries › member cannot see others' invite state: the org invitations list is admin-only (#1029)",
+      "project": "",
+      "testId": "b4010775becc7f23ed22-8d691b3038451b32f57c",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/member-visibility.spec.ts",
+      "title": "T2-ORG-2: member visibility boundaries › member cannot see the org join secret: join-link is admin-only",
+      "project": "",
+      "testId": "b4010775becc7f23ed22-0ef1b9d6b951a88af46e",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/member-visibility.spec.ts",
+      "title": "T2-ORG-2: member visibility boundaries › member sees own work: their org appears in their org list and reads back",
+      "project": "",
+      "testId": "b4010775becc7f23ed22-021a428416dcb24545db",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/member-visibility.spec.ts",
+      "title": "T2-ORG-2: member visibility boundaries › member sees shared team state: the member roster, including themselves and the owner",
+      "project": "",
+      "testId": "b4010775becc7f23ed22-232e1d36228f8776d331",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/organization-roles.spec.ts",
+      "title": "T2-ORG-1: roles and gating › admin can invite member and admin, but not owner",
+      "project": "",
+      "testId": "d164c4f0b422987785ef-01ddb289dfef66c3869b",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/organization-roles.spec.ts",
+      "title": "T2-ORG-1: roles and gating › member gets 403 on an admin-gated endpoint (create invitation)",
+      "project": "",
+      "testId": "d164c4f0b422987785ef-87d5037a1d929561285a",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/organization-roles.spec.ts",
+      "title": "T2-ORG-1: roles and gating › member gets 403 on list-invitations (admin-gated since #1029)",
+      "project": "",
+      "testId": "d164c4f0b422987785ef-2059bf864bce9991feb8",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/organization-roles.spec.ts",
+      "title": "T2-ORG-1: roles and gating › owner can invite owner",
+      "project": "",
+      "testId": "d164c4f0b422987785ef-1a82433cf620905a573e",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/organization-roles.spec.ts",
+      "title": "T2-ORG-1: roles and gating › promote member -> admin via membership update; the promoted user gains admin surfaces on their next call, no re-login needed",
+      "project": "",
+      "testId": "d164c4f0b422987785ef-ec9417d743cc19f21110",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/organization-roles.spec.ts",
+      "title": "T2-ORG-1: roles and gating › remove a member -> membership status 'removed' -> their next org-scoped call fails",
+      "project": "",
+      "testId": "d164c4f0b422987785ef-66bb39d2897baa68130c",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-ORG-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/secrets.spec.ts",
+      "title": "T2-SEC-1: secrets CRUD, all three scopes › organization secrets: a plain member gets 403 organization_secrets_permission_denied on write",
+      "project": "",
+      "testId": "9cf1a5537777654058aa-e0561748be3018c9d7b1",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SEC-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/secrets.spec.ts",
+      "title": "T2-SEC-1: secrets CRUD, all three scopes › organization secrets: GET/PUT roundtrip as owner",
+      "project": "",
+      "testId": "9cf1a5537777654058aa-f6db6e6215c04b8db848",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SEC-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/secrets.spec.ts",
+      "title": "T2-SEC-1: secrets CRUD, all three scopes › personal secrets: GET/PUT roundtrip, version bumps, value never echoed",
+      "project": "",
+      "testId": "9cf1a5537777654058aa-ed7eeffca0fbb8ccc895",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SEC-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/secrets.spec.ts",
+      "title": "T2-SEC-1: secrets CRUD, all three scopes › workspace secrets: GET and PUT 404 cloud_repo_environment_not_configured for a repo with no cloud repo environment",
+      "project": "",
+      "testId": "9cf1a5537777654058aa-cae06fa3d35d98c4f50d",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SEC-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/self-hosting.spec.ts",
+      "title": "T2-SH-2: /setup claim yields a single-org OWNER; re-claim is permanently closed › a second context hitting /setup after the claim gets the closed 404 surface",
+      "project": "",
+      "testId": "efbdc30cd6e844dcb4e6-b967cf2c301defe8243a",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/self-hosting.spec.ts",
+      "title": "T2-SH-2: /setup claim yields a single-org OWNER; re-claim is permanently closed › the claimed user owns the single instance organization",
+      "project": "",
+      "testId": "efbdc30cd6e844dcb4e6-d54b91b2e7a7d153aa52",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/self-hosting.spec.ts",
+      "title": "T2-SH-3: invite → register-with-token → invitee sign-in › invitee registers through the token'd /register page and signs in to the app shell",
+      "project": "",
+      "testId": "efbdc30cd6e844dcb4e6-9096a961371510356cc8",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/self-hosting.spec.ts",
+      "title": "T2-SH-3: invite → register-with-token → invitee sign-in › negative: a real token presented with the wrong email is rejected and creates no account",
+      "project": "",
+      "testId": "efbdc30cd6e844dcb4e6-d9cb07da47cc90641943",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/self-hosting.spec.ts",
+      "title": "T2-SH-4: sign-in surface adapts to the server's advertised methods › GitHub availability advertised → the GitHub button replaces the password form",
+      "project": "",
+      "testId": "efbdc30cd6e844dcb4e6-6a392905d2cca88924c0",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/self-hosting.spec.ts",
+      "title": "T2-SH-4: sign-in surface adapts to the server's advertised methods › no GitHub OAuth env (this deployment) → password form only, no GitHub button",
+      "project": "",
+      "testId": "efbdc30cd6e844dcb4e6-a563239de85ca9a5ee82",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-SH-4"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — desktop cold-login affordance › an existing org with no SSO shows the same generic error (no enumeration)",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-b5e4a6bd40a2c89c56b2",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — desktop cold-login affordance › an unknown slug surfaces the generic error and does not start SSO",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-ba11868369bbcc12ce75",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — desktop cold-login affordance › the affordance reveals a slug field and a Continue action",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-ccf26b4e9aec8ef95c33",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — discover seam › a slug resolving to an enabled connection returns exactly the start ids",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-c6bdf0fceaa09dfa5215",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — discover seam › an existing org with no SSO returns the identical answer (no enumeration)",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-ccd7e76f9dd7052446b3",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — discover seam › the /join path's org-id discovery resolves the same enabled connection",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-e728d11086e5c262beef",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — discover seam › truthfulness: a connection marked enabled but missing required OIDC config still reports enabled=false, with the specific reason (not a false positive)",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-8e860f6fa98650e1c0f9",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso-entry-points.spec.ts",
+      "title": "T2-AUTH-5: org SSO entry points — discover seam › unknown slug returns the generic not-available answer with no ids",
+      "project": "",
+      "testId": "a2ab88312d71f65a07d6-de44976fca754ed4ce3c",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-5"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso.spec.ts",
+      "title": "T2-AUTH-3: SSO OIDC round trip (mock IdP) › discover by connectionId resolves the organization-scoped connection",
+      "project": "",
+      "testId": "ddfd9b00dc423c089564-d6d22179ea507986dbc6",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso.spec.ts",
+      "title": "T2-AUTH-3: SSO OIDC round trip (mock IdP) › happy path: mock IdP round trip creates sso_identity, signs the user in, and joins with default_role",
+      "project": "",
+      "testId": "ddfd9b00dc423c089564-e3dfc04ba8580a51758d",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso.spec.ts",
+      "title": "T2-AUTH-3: SSO OIDC round trip (mock IdP) › negative: email on a non-configured domain — discover finds no connection",
+      "project": "",
+      "testId": "ddfd9b00dc423c089564-9db77cdf41e24bb0cff5",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso.spec.ts",
+      "title": "T2-AUTH-3: SSO OIDC round trip (mock IdP) › negative: jit_policy disabled + unknown user — enumerated error, not a 500",
+      "project": "",
+      "testId": "ddfd9b00dc423c089564-5a999f548e19c0ea5cde",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso.spec.ts",
+      "title": "T2-AUTH-3: SSO OIDC round trip (mock IdP) › negative: tampered state on callback is rejected, not a 500",
+      "project": "",
+      "testId": "ddfd9b00dc423c089564-017c742bf9cbf2f7d2e2",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso.spec.ts",
+      "title": "T2-AUTH-3: SSO OIDC round trip (mock IdP) › re-login with the same identity reuses the existing user (no duplicate)",
+      "project": "",
+      "testId": "ddfd9b00dc423c089564-99847c80f6a86096469f",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/sso.spec.ts",
+      "title": "T2-AUTH-3: SSO OIDC round trip (mock IdP) › security: email-only discovery never enumerates an organization-scoped connection",
+      "project": "",
+      "testId": "ddfd9b00dc423c089564-bba01d33116a2931842d",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-AUTH-3"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/workspace-entry.spec.ts",
+      "title": "T2-WS-2: local + worktree create (desktop-web limits apply) › Add-Repo entry step renders all three options",
+      "project": "",
+      "testId": "a5dbe94669fd70e8e5bc-afd6e9775dc277470e09",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-WS-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/workspace-entry.spec.ts",
+      "title": "T2-WS-2: local + worktree create (desktop-web limits apply) › cloud branch renders and reflects the account's GitHub product-readiness gate (same as T2-WS-1/T2-SEC-1)",
+      "project": "",
+      "testId": "a5dbe94669fd70e8e5bc-306e65974968b0f1df11",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-WS-2",
+        "T2-WS-1",
+        "T2-SEC-1"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/workspace-entry.spec.ts",
+      "title": "T2-WS-2: local + worktree create (desktop-web limits apply) › desktop-web limit: picking \"Add a local repo\" has no native folder picker, so it no-ops — dialog stays on the entry step, nothing added",
+      "project": "",
+      "testId": "a5dbe94669fd70e8e5bc-07e976b1a03bfc4a9fcf",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-WS-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-core",
+      "gate": "merge",
+      "job": "intent-tests",
+      "collector": "tests/intent/playwright.config.ts",
+      "file": "tests/intent/specs/workspace-entry.spec.ts",
+      "title": "T2-WS-2: local + worktree create (desktop-web limits apply) › desktop-web limit: picking \"Link a local repo\" has no native folder picker, so it no-ops — dialog stays on the entry step, nothing added",
+      "project": "",
+      "testId": "a5dbe94669fd70e8e5bc-b05e9661c4f840269977",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [
+        "T2-WS-2"
+      ],
+      "targetScenarioRefs": [],
+      "relationship": "collection-identity-only"
+    },
+    {
+      "lane": "tier2-surfaces-readiness",
+      "gate": "merge",
+      "job": "intent-surfaces",
+      "collector": "tests/intent/playwright.surfaces.config.ts",
+      "file": "tests/intent/specs/surfaces/cross/boot-lifecycle.cross.spec.ts",
+      "title": "a failed child boot releases its profile lock",
+      "project": "cross-surface",
+      "testId": "50a4b048f52470daf6b9-58907edb983a152c9b48",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [],
+      "targetScenarioRefs": [],
+      "relationship": "harness-readiness"
+    },
+    {
+      "lane": "tier2-surfaces-readiness",
+      "gate": "merge",
+      "job": "intent-surfaces",
+      "collector": "tests/intent/playwright.surfaces.config.ts",
+      "file": "tests/intent/specs/surfaces/cross/shared-records.cross.spec.ts",
+      "title": "both products authenticate independently against the same principal and organization",
+      "project": "cross-surface",
+      "testId": "1b3d5e73ac890146a45d-d93faf586b59f56e14e7",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [],
+      "targetScenarioRefs": [],
+      "relationship": "harness-readiness"
+    },
+    {
+      "lane": "tier2-surfaces-readiness",
+      "gate": "merge",
+      "job": "intent-surfaces",
+      "collector": "tests/intent/playwright.surfaces.config.ts",
+      "file": "tests/intent/specs/surfaces/cross/shared-records.cross.spec.ts",
+      "title": "credentialed CORS admits both product origins and rejects an unlisted origin",
+      "project": "cross-surface",
+      "testId": "1b3d5e73ac890146a45d-1c4713db596c1e76f436",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [],
+      "targetScenarioRefs": [],
+      "relationship": "harness-readiness"
+    },
+    {
+      "lane": "tier2-surfaces-readiness",
+      "gate": "merge",
+      "job": "intent-surfaces",
+      "collector": "tests/intent/playwright.surfaces.config.ts",
+      "file": "tests/intent/specs/surfaces/shared/auth-session.surface.spec.ts",
+      "title": "establishes the host-specific session and reaches the product shell",
+      "project": "desktop-web",
+      "testId": "2b0fc5545eab12d2ea8d-09d707fb33a36727df81",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [],
+      "targetScenarioRefs": [],
+      "relationship": "harness-readiness"
+    },
+    {
+      "lane": "tier2-surfaces-readiness",
+      "gate": "merge",
+      "job": "intent-surfaces",
+      "collector": "tests/intent/playwright.surfaces.config.ts",
+      "file": "tests/intent/specs/surfaces/shared/auth-session.surface.spec.ts",
+      "title": "establishes the host-specific session and reaches the product shell",
+      "project": "hosted-web",
+      "testId": "2b0fc5545eab12d2ea8d-d09eb46691fd0cdd4cc0",
+      "expectedStatus": "passed",
+      "legacyTitleIds": [],
+      "targetScenarioRefs": [],
+      "relationship": "harness-readiness"
+    }
+  ]
+}

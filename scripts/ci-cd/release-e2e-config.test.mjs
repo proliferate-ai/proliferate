@@ -68,6 +68,23 @@ test("staging installs the runner and caches only encrypted session state", () =
   assert.match(block, /path: \$\{\{ github\.workspace \}\}\/\.staging-session-cache/);
   assert.doesNotMatch(block, /path: \$\{\{ github\.workspace \}\}\/\.staging-session\n/);
   assert.match(block, /trap 'rm -f "\$RELEASE_E2E_STAGING_SESSION_STATE"' EXIT/);
+  const encrypt = block.slice(
+    block.indexOf("- name: Encrypt rotated staging session"),
+    block.indexOf("- name: Save encrypted staging session"),
+  );
+  assert.match(encrypt, /id: seal-session/);
+  assert.ok(
+    encrypt.indexOf('rm -f "$STAGING_SESSION_CACHE_PATH"') <
+      encrypt.indexOf('if \[ ! -f "$RELEASE_E2E_STAGING_SESSION_STATE" \]'),
+    "restored ciphertext is deleted before every early return and encryption attempt",
+  );
+  assert.match(encrypt, /echo "fresh=false" >> "\$GITHUB_OUTPUT"/);
+  assert.match(encrypt, /test -s "\$STAGING_SESSION_CACHE_PATH"/);
+  assert.match(encrypt, /echo "fresh=true" >> "\$GITHUB_OUTPUT"/);
+  const save = block.slice(block.indexOf("- name: Save encrypted staging session"));
+  assert.match(save, /steps\.seal-session\.outcome == 'success'/);
+  assert.match(save, /steps\.seal-session\.outputs\.fresh == 'true'/);
+  assert.doesNotMatch(save, /hashFiles\('\.staging-session-cache\/state\.bin'\)/);
 });
 
 test("self-host Tier 3/4 jobs preserve genuine runner failures", () => {

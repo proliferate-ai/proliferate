@@ -11,6 +11,7 @@ import {
 } from "@proliferate/cloud-sdk/client/organizations";
 import type {
   OrganizationInviteRequest,
+  OrganizationInvitationsResponse,
   OrganizationMembershipUpdateRequest,
   OrganizationUpdateRequest,
 } from "@/lib/access/cloud/client";
@@ -102,7 +103,7 @@ export function useOrganizationActions(organizationId: string | null) {
 
   const acceptCurrentInvitationMutation = useMutation({
     mutationFn: (invitationId: string) => acceptCurrentUserOrganizationInvitation(invitationId),
-    onSuccess: async (response) => {
+    onSuccess: async (response, invitationId) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: organizationsListKey() }),
         queryClient.invalidateQueries({ queryKey: currentUserOrganizationInvitationsKey() }),
@@ -113,6 +114,22 @@ export function useOrganizationActions(organizationId: string | null) {
           queryKey: organizationInvitationsKey(response.organization.id),
         }),
       ]);
+      // The API transaction commits during request-dependency teardown, just
+      // after the response is written. An immediate invalidation can win that
+      // narrow race and refill the cache with the just-accepted row. A
+      // successful accept is authoritative: remove that exact invitation from
+      // every current-user cache variant after invalidation settles.
+      queryClient.setQueriesData<OrganizationInvitationsResponse>(
+        { queryKey: currentUserOrganizationInvitationsKey() },
+        (current) => current
+          ? {
+              ...current,
+              invitations: current.invitations.filter(
+                (invitation) => invitation.id !== invitationId,
+              ),
+            }
+          : current,
+      );
     },
   });
 

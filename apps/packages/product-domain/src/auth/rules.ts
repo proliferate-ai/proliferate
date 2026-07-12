@@ -5,7 +5,7 @@ export function deriveAuthGateState(viewer: ProductViewer | null): AuthGateState
     return { kind: "unauthenticated" };
   }
 
-  if (!viewer.githubConnected || viewer.onboardingState === "needs_github") {
+  if (viewer.onboardingState === "needs_github") {
     return { kind: "needs_github", viewer };
   }
 

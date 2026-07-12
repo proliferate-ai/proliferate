@@ -136,34 +136,6 @@ export async function resetBillingState(): Promise<void> {
   });
 }
 
-// ── Product readiness (GitHub gate) ──
-
-/** Product surfaces (billing, agent-gateway) sit behind the GitHub
- * product-readiness gate (`_require_product_ready` → 403
- * `github_link_required`) — deliberately even in single-org mode (see
- * `current_organization_actor`'s docstring: only org-membership surfaces
- * admit password-only accounts). This boot disables GitHub OAuth, so accounts
- * here are password-only; seed the legacy `oauth_account` GitHub row the
- * readiness check accepts (`_read_valid_legacy_github_account`) — the
- * direct-DB analog of local dev's seeded-GitHub-auth layer
- * (specs/developing/local/feature-worktree-auth.md).
- *
- * Deliberately NOT an `auth_identity` row: free-trial-v2 issuance keys off
- * `auth_identity` (`_linked_github_provider_user_id`), so this unlocks the
- * product gate without lazily issuing free-trial grants that would corrupt
- * the suite's grant math (drain/cut-off assertions), and the "no GitHub
- * identity → no trial" pin in webhooks.spec.ts keeps its meaning. */
-export async function ensureProductReady(userId: string, email: string): Promise<void> {
-  await withDb((db) =>
-    db.query(
-      `INSERT INTO oauth_account (id, user_id, oauth_name, access_token, expires_at, refresh_token, account_id, account_email)
-       SELECT $1, $2, 'github', 'gho_t2billing_product_ready_stub', NULL, NULL, $3, $4
-       WHERE NOT EXISTS (SELECT 1 FROM oauth_account WHERE user_id = $2 AND oauth_name = 'github')`,
-      [randomUUID(), userId, `t2billing-${userId}`, email],
-    ),
-  );
-}
-
 // ── Grants ──
 
 export interface SeedGrantOptions {

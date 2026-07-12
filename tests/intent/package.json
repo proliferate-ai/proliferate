@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "test:reporter": "tsx --test stack/strict-reporter.test.ts",
+    "test:reporter": "tsx --test stack/*.test.ts",
+    "test:inventory": "node ../../scripts/ci-cd/collect-tier2-execution-manifest.mjs --check",
+    "manifest:write": "node ../../scripts/ci-cd/collect-tier2-execution-manifest.mjs --write",
     "test:auth": "playwright test specs/auth.spec.ts",
     "test:login-methods": "playwright test specs/login-methods.spec.ts",
     "test:invitation": "playwright test specs/invitation.spec.ts",

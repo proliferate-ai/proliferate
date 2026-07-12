@@ -9,8 +9,8 @@ import {
   ADMIN_PASSWORD,
   apiBaseUrl,
   apiRequest,
+  assertNoOauthAccountRows,
   ensureInstanceClaimed,
-  ensureProductReady,
   getOwnOrganization,
   passwordLogin,
 } from "./seed.ts";
@@ -51,7 +51,7 @@ export async function prepareSurfacePrincipal(): Promise<SurfacePrincipal> {
   if (viewer.status !== 200) {
     throw new Error(`Could not resolve surface fixture user (${viewer.status})`);
   }
-  await ensureProductReady(viewer.body.id, viewer.body.email);
+  await assertNoOauthAccountRows(viewer.body.id);
   const organization = await getOwnOrganization(tokens.access_token);
   return {
     userId: viewer.body.id,

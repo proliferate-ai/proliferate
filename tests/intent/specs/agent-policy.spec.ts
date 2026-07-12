@@ -47,6 +47,11 @@ test.beforeAll(async () => {
     extraServerEnv: {
       AGENT_GATEWAY_ENABLED: "true",
       AGENT_GATEWAY_POLICY_MIN_PLAN: "free",
+      // Desktop renders cloud policy controls only when the capability
+      // contract advertises cloud workspaces. These placeholders turn on that
+      // deterministic seam; this Tier-2 scenario never provisions E2B.
+      E2B_API_KEY: "e2b_t2_policy_capability_placeholder",
+      E2B_TEMPLATE_NAME: "proliferate-runtime-cloud",
     },
   });
   await claimPolicyInstance();
@@ -121,9 +126,13 @@ test.describe("T2-POL-1: organization agent policy", () => {
         allowedRoutes: ["native", "api_key"],
         allowedHarnesses: ["claude", "opencode", "gemini", "grok"],
       });
-    await expect(page.getByText(memberEmail)).toBeVisible();
-    await expect(page.getByRole("cell", { name: "Codex" })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "Gateway" })).toBeVisible();
+    // Persistent local qualification profiles can retain prior run members.
+    // Scope the conflict proof to this run's freshly registered member rather
+    // than requiring the whole violations table to contain exactly one row.
+    const memberViolation = page.getByRole("row").filter({ hasText: memberEmail });
+    await expect(memberViolation).toBeVisible();
+    await expect(memberViolation.getByRole("cell", { name: "Codex" })).toBeVisible();
+    await expect(memberViolation.getByRole("cell", { name: "Gateway" })).toBeVisible();
   });
 
   test("new disallowed selections fail closed, while clearing stale state remains allowed", async () => {
@@ -147,10 +156,10 @@ test.describe("T2-POL-1: organization agent policy", () => {
 
     await expect
       .poll(async () => {
-        const result = await api<{ violations: unknown[] }>(`${policyPath()}/violations`, {
+        const result = await api<{ violations: Array<{ email: string | null }> }>(`${policyPath()}/violations`, {
           token: ownerToken,
         });
-        return result.body.violations.length;
+        return result.body.violations.filter(({ email }) => email === memberEmail).length;
       })
       .toBe(0);
   });

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from proliferate.auth.identity.store import get_account_readiness
+from proliferate.config import settings
 from proliferate.db.models.auth import AuthIdentity, OAuthAccount, ProviderGrant, SsoIdentity, User
 from proliferate.utils.crypto import encrypt_text
 from tests.helpers.desktop_auth import mint_desktop_token_payload
@@ -108,6 +109,42 @@ async def test_auth_viewer_marks_google_only_user_as_needing_github(
     linked = {provider["provider"]: provider for provider in payload["linkedProviders"]}
     assert linked["google"]["connected"] is True
     assert linked["github"]["connected"] is False
+
+
+@pytest.mark.asyncio
+async def test_auth_viewer_marks_single_org_password_user_active_without_oauth(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "single_org_mode_override", True)
+    user_id, access_token = await _create_user_and_get_token(
+        client,
+        db_session,
+        email="viewer-single-org-password@example.com",
+    )
+
+    response = await client.get(
+        "/v1/auth/viewer",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["githubConnected"] is False
+    assert payload["onboardingState"] == "active"
+    oauth_rows = (
+        await db_session.execute(
+            select(OAuthAccount).where(OAuthAccount.user_id == uuid.UUID(user_id))
+        )
+    ).scalars().all()
+    assert oauth_rows == []
+
+    product_response = await client.get(
+        "/v1/cloud/workspaces",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert product_response.status_code == 200
 
 
 @pytest.mark.asyncio
