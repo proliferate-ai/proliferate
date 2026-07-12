@@ -11,6 +11,7 @@ const read = (relative) => readFileSync(path.join(repoRoot, relative), "utf8");
 const workflow = read(".github/workflows/intent-tests.yml");
 const mainConfig = read("tests/intent/playwright.config.ts");
 const billingConfig = read("tests/intent/playwright.billing.config.ts");
+const surfacesConfig = read("tests/intent/playwright.surfaces.config.ts");
 const billingSetup = read("tests/intent/stack/billing-global-setup.ts");
 const boot = read("tests/intent/stack/boot.ts");
 const reporter = read("tests/intent/stack/strict-reporter.ts");
@@ -28,11 +29,23 @@ function jobBlock(jobId) {
 
 test("Tier-2 jobs preserve failures and run on the merge queue", () => {
   assert.match(workflow, /\n  merge_group:/);
-  for (const jobId of ["intent-tests", "intent-billing"]) {
+  for (const jobId of ["intent-tests", "intent-surfaces", "intent-billing"]) {
     const block = jobBlock(jobId);
     assert.doesNotMatch(block, /\n    continue-on-error:/);
     assert.doesNotMatch(block, /provisional/i);
   }
+});
+
+test("dual-host surfaces are isolated in a public required job", () => {
+  const block = jobBlock("intent-surfaces");
+  assert.match(mainConfig, /"\*\*\/surfaces\/\*\*"/);
+  assert.match(surfacesConfig, /surfaces-global-setup\.ts/);
+  assert.match(block, /pnpm -C tests\/intent run test:surfaces/);
+  assert.match(block, /cargo build -p anyharness --bin anyharness/);
+  assert.match(block, /TIER2_INTENT_REQUIRE_RUNTIME: "1"/);
+  assert.doesNotMatch(block, /TIER2_INTENT_SKIP_RUNTIME: "1"/);
+  assert.doesNotMatch(block, /\n    if:/);
+  assert.match(block, /name: intent-surfaces-traces/);
 });
 
 test("the main job builds and requires the AnyHarness HTTP seam", () => {
@@ -55,8 +68,8 @@ test("billing runs only in trusted secret contexts and then fails closed", () =>
   assert.doesNotMatch(billingSetup, /TIER2_BILLING_SKIP/);
 });
 
-test("both Playwright configs forbid focused CI tests and install the strict reporter", () => {
-  for (const config of [mainConfig, billingConfig]) {
+test("all Playwright configs forbid focused CI tests and install the strict reporter", () => {
+  for (const config of [mainConfig, billingConfig, surfacesConfig]) {
     assert.match(config, /forbidOnly: Boolean\(process\.env\.CI\)/);
     assert.match(config, /\.\/stack\/strict-reporter\.ts/);
   }

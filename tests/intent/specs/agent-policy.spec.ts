@@ -47,6 +47,11 @@ test.beforeAll(async () => {
     extraServerEnv: {
       AGENT_GATEWAY_ENABLED: "true",
       AGENT_GATEWAY_POLICY_MIN_PLAN: "free",
+      // The Desktop intentionally renders cloud policy controls only when the
+      // server advertises cloud workspaces. These placeholders turn on that
+      // capability contract; this scenario never provisions or calls E2B.
+      E2B_API_KEY: "e2b_t2_policy_capability_placeholder",
+      E2B_TEMPLATE_NAME: "proliferate-runtime-cloud",
     },
   });
   await claimPolicyInstance();

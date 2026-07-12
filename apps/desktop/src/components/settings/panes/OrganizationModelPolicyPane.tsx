@@ -256,7 +256,12 @@ function PolicySwitchRow({
         <div className="text-muted-foreground">{description}</div>
       </div>
       <div className="shrink-0">
-        <Switch checked={checked} disabled={disabled} onChange={onChange} />
+        <Switch
+          aria-label={label}
+          checked={checked}
+          disabled={disabled}
+          onChange={onChange}
+        />
       </div>
     </div>
   );

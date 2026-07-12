@@ -77,6 +77,10 @@ test.describe("T2-SH-7: gateway model eligibility — session creation gates nat
   let workspaceId: string;
 
   test.beforeAll(async () => {
+    // A fresh runtime home installs the real harness CLI before exercising the
+    // validation seam. That cold package install is fixture setup, not the
+    // session-creation latency asserted by the two tests below.
+    test.setTimeout(600_000);
     const baseUrl = anyharnessBaseUrl();
     // Push a gateway-only agent-auth state: the exact shape a real client
     // (desktop dispatch worker / cloud materialization worker) delivers, with

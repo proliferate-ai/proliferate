@@ -8,7 +8,10 @@ export default defineConfig({
   testDir: "./specs",
   // The billing specs live under ./specs/billing but boot a different stack
   // (Stripe + enforce mode) via their own config; keep them out of this suite.
-  testIgnore: "**/billing/**",
+  // Billing and dual-host surface contracts each have their own global setup
+  // and required CI job. Collecting either here would run them against the
+  // wrong single-host stack and could turn harness wiring into product noise.
+  testIgnore: ["**/billing/**", "**/surfaces/**"],
   globalSetup: "./stack/global-setup.ts",
   workers: 1,
   fullyParallel: false,
