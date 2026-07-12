@@ -1,6 +1,9 @@
 use std::{env, fs, time::Duration};
 
-use super::{read_worker_log_tail, startup_watch_window, write_worker_config};
+use super::{
+    read_worker_log_tail, startup_watch_window, worker_startup_failure_message,
+    write_worker_config, WORKER_LOG_TAIL_MAX_BYTES,
+};
 
 #[test]
 fn worker_config_uses_the_desktop_sidecar_url() {
@@ -90,5 +93,41 @@ fn worker_log_tail_scrubs_secrets_and_user_paths() {
     assert!(!tail.contains(&home.to_string_lossy().to_string()));
     assert!(tail.contains("[REDACTED]"));
     assert!(tail.contains("~/projects/private-repository"));
+    fs::remove_dir_all(root).expect("remove temporary worker log root");
+}
+
+#[test]
+fn startup_failure_message_scrubs_the_worker_log_path() {
+    let home = crate::app_config::home_dir().expect("resolve user home");
+    let log_path = home.join(".proliferate-local/dev/profiles/private/cloud-worker/worker.log");
+
+    let message = worker_startup_failure_message("exit status: 1", &log_path, "safe tail");
+
+    assert!(!message.contains(&home.to_string_lossy().to_string()));
+    assert!(message.contains("See ~/"));
+    assert!(message.contains("safe tail"));
+}
+
+#[test]
+fn worker_log_tail_reads_only_the_bounded_suffix() {
+    let root = env::temp_dir().join(format!(
+        "proliferate-worker-bounded-log-tail-{}",
+        uuid::Uuid::new_v4()
+    ));
+    fs::create_dir_all(&root).expect("create temporary worker log root");
+    let log_path = root.join("worker.log");
+    let old_prefix = "old-prefix-that-must-not-be-read";
+    let oversized_middle = "x".repeat(WORKER_LOG_TAIL_MAX_BYTES as usize + 1024);
+    fs::write(
+        &log_path,
+        format!("{old_prefix}\n{oversized_middle}\nrecent line one\nrecent line two\n"),
+    )
+    .expect("write oversized worker log");
+
+    let tail = read_worker_log_tail(&log_path, 3);
+
+    assert!(!tail.contains(old_prefix));
+    assert!(tail.contains("recent line one"));
+    assert!(tail.contains("recent line two"));
     fs::remove_dir_all(root).expect("remove temporary worker log root");
 }

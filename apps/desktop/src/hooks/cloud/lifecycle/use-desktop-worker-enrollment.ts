@@ -79,6 +79,9 @@ export function useDesktopWorkerEnrollment(): void {
     let retryTimer: number | null = null;
     void ensureDesktopWorker(activeOrganizationId, {
       onFailure: (error) => {
+        if (cancelled || enrolledIdentityKey !== nextIdentityKey) {
+          return;
+        }
         showToast(desktopWorkerStartupFailureCopy(error), "error");
       },
     }).then((enrolled) => {

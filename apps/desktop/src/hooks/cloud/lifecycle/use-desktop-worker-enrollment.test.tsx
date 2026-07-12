@@ -252,4 +252,33 @@ describe("useDesktopWorkerEnrollment", () => {
       ]);
     });
   });
+
+  it("does not show a stale failure after sign-out cancels enrollment", async () => {
+    let failOldEnrollment: (() => void) | null = null;
+    workflowMocks.ensureDesktopWorker.mockImplementationOnce(
+      (_organizationId, deps) =>
+        new Promise<boolean>((resolve) => {
+          failOldEnrollment = () => {
+            deps.onFailure("old identity failed after sign-out");
+            resolve(false);
+          };
+        }),
+    );
+    const harness = await loadEnrollmentHarness();
+
+    harness.signIn("user-a");
+    await waitFor(() => {
+      expect(failOldEnrollment).not.toBeNull();
+    });
+    harness.signOut();
+    await waitFor(() => {
+      expect(workflowMocks.teardownDesktopWorker).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      failOldEnrollment?.();
+      await flushEffects();
+    });
+    expect(harness.getToasts()).toEqual([]);
+  });
 });
