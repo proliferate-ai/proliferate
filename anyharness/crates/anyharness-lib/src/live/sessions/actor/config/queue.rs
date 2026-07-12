@@ -10,7 +10,8 @@ use crate::live::sessions::actor::config::apply::{
 };
 use crate::live::sessions::actor::config::selection::{
     current_select_value, find_select_option_for_request, is_mode_config_request,
-    is_model_config_request, pending_config_rank, select_option_contains_value,
+    is_model_config_request, pending_config_rank, resolve_model_variant_value,
+    select_option_contains_value,
 };
 use crate::live::sessions::actor::config::types::PersistedSessionConfigState;
 use crate::live::sessions::actor::state::SessionStartupState;
@@ -23,11 +24,25 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
     config_id: &str,
     value: &str,
     catalog_authorized_model: bool,
-) -> Result<(), SetConfigOptionCommandError> {
+) -> Result<String, SetConfigOptionCommandError> {
     let option = find_select_option_for_request(&startup_state.config_options, config_id);
     let is_model_request = is_model_config_request(config_id, option);
     let is_mode_request = is_mode_config_request(config_id, option);
     let model_value_authorized = is_model_request && catalog_authorized_model;
+    let resolved_value = option.map_or_else(
+        || value.to_string(),
+        |option| resolve_model_variant_value(option, value),
+    );
+    if resolved_value != value {
+        tracing::debug!(
+            session_id,
+            config_id,
+            requested = value,
+            resolved = %resolved_value,
+            "[model-switch] resolved queued bare model variant from live ACP config"
+        );
+    }
+    let value = resolved_value.as_str();
 
     if option.is_none() && !is_model_request && !is_mode_request {
         return Err(SetConfigOptionCommandError::Rejected(format!(
@@ -70,7 +85,9 @@ pub(in crate::live::sessions::actor) fn queue_pending_config_change(
             value: value.to_string(),
             queued_at,
         })
-        .map_err(|error| SetConfigOptionCommandError::Rejected(error.to_string()))
+        .map_err(|error| SetConfigOptionCommandError::Rejected(error.to_string()))?;
+
+    Ok(resolved_value)
 }
 
 pub(in crate::live::sessions::actor) fn config_request_matches_current_state(

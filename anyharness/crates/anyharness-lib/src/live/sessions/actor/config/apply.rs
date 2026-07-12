@@ -5,6 +5,7 @@ use anyharness_contract::v1::{ConfigApplyState, SessionLiveConfigSnapshot};
 use tokio::sync::Mutex;
 
 use crate::live::sessions::actor::command::SetConfigOptionCommandError;
+use crate::live::sessions::actor::config::diagnostics;
 use crate::live::sessions::actor::config::persist::{
     emit_live_config_update, persist_requested_config_value_if_changed, persisted_control_values,
 };
@@ -12,7 +13,7 @@ use crate::live::sessions::actor::config::queue::config_request_matches_current_
 use crate::live::sessions::actor::config::selection::{
     current_select_value, find_select_option_by_purpose, find_select_option_for_request,
     find_select_option_for_value, is_mode_config_request, is_model_config_request,
-    option_matches_purpose, select_option_contains_value,
+    option_matches_purpose, resolve_model_variant_value, select_option_contains_value,
 };
 use crate::live::sessions::actor::config::types::{
     tracked_config_purpose, ConfigApplyOutcome, ConfigPurpose, PersistedSessionConfigState,
@@ -134,6 +135,10 @@ pub(in crate::live::sessions::actor) async fn apply_select_config_option_with_po
         return Ok(ConfigApplyOutcome::NotApplied);
     };
 
+    let resolved_value = resolve_model_variant_value(option, desired_value);
+    diagnostics::trace_native_variant(native_session_id, config_id, desired_value, &resolved_value);
+    let desired_value = resolved_value.as_str();
+
     if !select_option_contains_value(option, desired_value) && !allow_foreign_value {
         return Ok(ConfigApplyOutcome::NotApplied);
     }
@@ -179,6 +184,14 @@ pub(in crate::live::sessions::actor) async fn apply_specific_config_option(
     let is_mode_request = is_mode_config_request(config_id, option);
     let tracked_purpose = tracked_config_purpose(config_id, option);
     let model_value_authorized = is_model_request && catalog_authorized_model;
+
+    // Resolve before validation so validation, ACP, and persistence agree.
+    let resolved_value = option.map_or_else(
+        || desired_value.to_string(),
+        |option| resolve_model_variant_value(option, desired_value),
+    );
+    diagnostics::trace_session_variant(session_id, config_id, desired_value, &resolved_value);
+    let desired_value = resolved_value.as_str();
 
     if option.is_none() && !is_model_request && !is_mode_request {
         return Err(SetConfigOptionCommandError::Rejected(format!(
