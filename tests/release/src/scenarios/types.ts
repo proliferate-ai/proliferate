@@ -49,6 +49,15 @@ export interface ScenarioRunContext {
   agents: readonly string[];
   dryRun: boolean;
   env: EnvResolution;
+  /**
+   * Unique correlation ID for this scenario/lane run (shared live-scenario
+   * policy). Injected by the runner; scenarios may thread it into product
+   * requests so a live run is traceable. Optional so existing scenarios that
+   * ignore it are unaffected.
+   */
+  correlationId?: string;
+  /** Fixed per-scenario deadline in ms the runner enforces around `run`. */
+  deadlineMs?: number;
 }
 
 export interface ScenarioPlanContext {
@@ -66,6 +75,8 @@ export interface ScenarioDefinition {
   lanes: readonly RuntimeLane[];
   /** Env var names (from src/config/env-manifest.ts) this scenario needs to run for real. */
   requiredEnv: readonly string[];
+  /** Additional dependencies needed only by a specific runtime lane. */
+  requiredEnvByLane?: Partial<Record<RuntimeLane, readonly string[]>>;
   /** Ordered human-readable steps; printed verbatim under --dry-run. */
   plan(ctx: ScenarioPlanContext): ScenarioPlanStep[];
   /**

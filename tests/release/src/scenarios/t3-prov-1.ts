@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 
 import type { ScenarioDefinition } from "./types.js";
-import { ScenarioExpectedFailError } from "./types.js";
+import { ScenarioBlockedError, ScenarioExpectedFailError } from "./types.js";
 import { mintFreshUser } from "../fixtures/identity.js";
 import { ApiClient } from "../fixtures/http.js";
 import { DEFAULT_GITHUB_TEST_REPO } from "../config/env-manifest.js";
@@ -95,6 +95,21 @@ export const t3Prov1: ScenarioDefinition = {
   run: async (ctx) => {
     if (ctx.dryRun) {
       return;
+    }
+    if (ctx.targetLane === "staging") {
+      // Deferred from the first staging pass: the cold-path trigger mints
+      // throwaway users INTO the shared durable org and provisions real E2B
+      // sandboxes, and its App-authorization seed (github_app_seed.py) needs an
+      // in-VPC DB the staging DB does not expose. Both mutate/charge shared
+      // staging state, so this reports blocked (not red) until a dedicated,
+      // non-shared staging fixture org + an in-VPC seed path exist. See
+      // tests/release/README.md (staging-lane runbook).
+      throw new ScenarioBlockedError(
+        "T3-PROV-1/staging: deferred from the first staging pass — the cold-path trigger mints throwaway " +
+          "users into the SHARED durable org and provisions real E2B sandboxes, and its GitHub-App seed " +
+          "needs an in-VPC DB (staging's DB is VPC-only). Both would mutate/charge shared staging state. " +
+          "Needs a dedicated non-shared staging fixture org + an in-VPC seed path before it can run for real.",
+      );
     }
     const serverUrl = ctx.env.require("RELEASE_E2E_SERVER_URL");
     const durableCreds = {

@@ -31,7 +31,16 @@ import { expect, test } from "@playwright/test";
 import { bootStack, type BootedStack } from "../stack/boot.ts";
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "../stack/seed.ts";
 
+const GATING_PROFILE = `${process.env.TIER2_INTENT_PROFILE ?? "t2intent"}-e2b-gate`;
+
 async function claimInstance(stack: BootedStack): Promise<void> {
+  const probe = await fetch(`${stack.apiBaseUrl}/setup`);
+  if (probe.status === 404) {
+    return; // This persistent profile was claimed by an earlier local run.
+  }
+  if (!probe.ok) {
+    throw new Error(`T2-SH-6: setup probe failed (${probe.status})`);
+  }
   const token = readFileSync(stack.setupTokenFile, "utf8").trim();
   const response = await fetch(`${stack.apiBaseUrl}/setup`, {
     method: "POST",
@@ -68,8 +77,11 @@ test.describe("T2-SH-6: cloud-workspace provisioning stays safe when E2B is half
   let ownerToken: string;
 
   test.beforeAll(async () => {
+    // A cold profile migration can be slow under parallel worktree load; the
+    // product health/provisioning assertions retain their 180-second budget.
+    test.setTimeout(600_000);
     stack = await bootStack({
-      profile: "t2e2bgate",
+      profile: GATING_PROFILE,
       skipFrontend: true,
       extraServerEnv: {
         DEBUG: "false",

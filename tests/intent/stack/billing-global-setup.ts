@@ -8,10 +8,8 @@
 //
 // Stripe requirement: the suite needs a Stripe TEST secret key and the local
 // test-mode price catalog (scripts/stripe-setup-test-mode.mjs, idempotent).
-// If no Stripe test key is resolvable (e.g. a CI job without the secret), the
-// whole suite is skipped rather than failing — matching the provisional,
-// non-blocking posture of the intent-tests workflow while the harness earns
-// trust.
+// Missing, invalid, or live-mode credentials fail setup. A required billing
+// run must never become green by skipping every test.
 
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -20,16 +18,28 @@ import { BILLING_PROFILE, bootStack, REPO_ROOT, type StripeBillingEnv } from "./
 import { resetBillingState } from "./billing-seed.ts";
 import { resetPasswordLoginRateLimits } from "./seed.ts";
 
-export class BillingSuiteSkipped extends Error {}
-
 function resolveStripeSecretKey(): string | null {
   const fromEnv =
-    process.env.STRIPE_SECRET_KEY ||
+    process.env.TIER2_BILLING_STRIPE_SECRET_KEY ||
     process.env.STRIPE_TEST_SECRET_KEY ||
-    process.env.TIER2_BILLING_STRIPE_SECRET_KEY;
-  if (fromEnv && fromEnv.startsWith("sk_test_")) {
+    process.env.STRIPE_SECRET_KEY;
+  if (fromEnv) {
+    if (!fromEnv.startsWith("sk_test_")) {
+      throw new Error(
+        "Tier-2 billing requires a Stripe test-mode secret key (sk_test_...). " +
+          "Refusing the configured non-test credential.",
+      );
+    }
     return fromEnv;
   }
+
+  // CI must use the explicitly configured repository secret. The developer
+  // CLI fallback is local-only so a hosted runner cannot silently use ambient
+  // machine state instead of its declared dependency.
+  if (process.env.CI) {
+    return null;
+  }
+
   // Fall back to the developer's Stripe CLI config (test_mode_api_key), the
   // same key `stripe config --list` prints locally.
   const result = spawnSync("stripe", ["config", "--list"], { encoding: "utf8" });
@@ -47,6 +57,13 @@ interface PriceCatalog {
   prices: { proMonthly: string; managedCloudOverageCent: string; refill10h: string };
 }
 
+function requiredCatalogId(value: unknown, name: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Stripe test catalog is missing required ${name}.`);
+  }
+  return value;
+}
+
 function provisionPriceCatalog(secretKey: string): PriceCatalog {
   // Idempotent: finds existing test-mode prices by lookup key, creates only
   // what's missing. Never touches live mode. The script shells out to the
@@ -60,20 +77,36 @@ function provisionPriceCatalog(secretKey: string): PriceCatalog {
   if (result.status !== 0) {
     throw new Error(`stripe-setup-test-mode.mjs failed: ${(result.stderr || result.stdout || "").trim()}`);
   }
-  return JSON.parse(result.stdout) as PriceCatalog;
+  const parsed = JSON.parse(result.stdout) as Partial<PriceCatalog>;
+  return {
+    meter: { id: requiredCatalogId(parsed.meter?.id, "meter.id") },
+    prices: {
+      proMonthly: requiredCatalogId(parsed.prices?.proMonthly, "prices.proMonthly"),
+      managedCloudOverageCent: requiredCatalogId(
+        parsed.prices?.managedCloudOverageCent,
+        "prices.managedCloudOverageCent",
+      ),
+      refill10h: requiredCatalogId(parsed.prices?.refill10h, "prices.refill10h"),
+    },
+  };
 }
 
 export default async function billingGlobalSetup(): Promise<() => Promise<void>> {
   const secretKey = resolveStripeSecretKey();
   if (!secretKey) {
-    // No Stripe test key → skip the suite (see header). Publish a flag every
-    // spec's top-level guard reads; Playwright's own skip is per-test.
-    process.env.TIER2_BILLING_SKIP = "no-stripe-test-key";
-    // Nothing booted; teardown is a no-op.
-    return async () => {};
+    throw new Error(
+      "Tier-2 billing requires STRIPE_TEST_SECRET_KEY with a Stripe test-mode " +
+        "secret key (sk_test_...). The required suite cannot be skipped.",
+    );
   }
 
   const catalog = provisionPriceCatalog(secretKey);
+  const billingMode = process.env.TIER2_BILLING_MODE ?? "enforce";
+  if (billingMode !== "enforce") {
+    throw new Error(
+      `Tier-2 billing requires TIER2_BILLING_MODE=enforce; received ${JSON.stringify(billingMode)}.`,
+    );
+  }
   const stripe: StripeBillingEnv = {
     secretKey,
     webhookSecret: `whsec_t2billing_${randomBytes(16).toString("hex")}`,
@@ -81,34 +114,45 @@ export default async function billingGlobalSetup(): Promise<() => Promise<void>>
     overagePriceId: catalog.prices.managedCloudOverageCent,
     refillPriceId: catalog.prices.refill10h,
     meterId: catalog.meter.id,
-    billingMode: process.env.TIER2_BILLING_MODE ?? "enforce",
+    billingMode,
   };
 
-  const stack = await bootStack({ profile: BILLING_PROFILE, stripe });
+  // Match the main intent suite's per-worktree profile override. The default
+  // remains stable in CI, while local worktrees can run billing concurrently
+  // without rebinding or disturbing another developer's t2billing profile.
+  const stack = await bootStack({
+    profile: process.env.TIER2_BILLING_PROFILE ?? BILLING_PROFILE,
+    stripe,
+  });
 
-  // Billing harness (stack/billing.ts) reads these.
-  process.env.TIER2_BILLING_API_BASE_URL = stack.apiBaseUrl;
-  process.env.TIER2_BILLING_WEB_BASE_URL = stack.webBaseUrl;
-  process.env.TIER2_BILLING_DATABASE_URL = stack.databaseUrl;
-  process.env.TIER2_BILLING_STRIPE_SECRET_KEY = stripe.secretKey;
-  process.env.TIER2_BILLING_STRIPE_WEBHOOK_SECRET = stripe.webhookSecret;
-  process.env.TIER2_BILLING_STRIPE_PRO_MONTHLY_PRICE_ID = stripe.proMonthlyPriceId;
-  process.env.TIER2_BILLING_STRIPE_OVERAGE_PRICE_ID = stripe.overagePriceId;
-  process.env.TIER2_BILLING_STRIPE_REFILL_PRICE_ID = stripe.refillPriceId;
-  process.env.TIER2_BILLING_STRIPE_METER_ID = stripe.meterId;
+  try {
+    // Billing harness (stack/billing.ts) reads these.
+    process.env.TIER2_BILLING_API_BASE_URL = stack.apiBaseUrl;
+    process.env.TIER2_BILLING_WEB_BASE_URL = stack.webBaseUrl;
+    process.env.TIER2_BILLING_DATABASE_URL = stack.databaseUrl;
+    process.env.TIER2_BILLING_STRIPE_SECRET_KEY = stripe.secretKey;
+    process.env.TIER2_BILLING_STRIPE_WEBHOOK_SECRET = stripe.webhookSecret;
+    process.env.TIER2_BILLING_STRIPE_PRO_MONTHLY_PRICE_ID = stripe.proMonthlyPriceId;
+    process.env.TIER2_BILLING_STRIPE_OVERAGE_PRICE_ID = stripe.overagePriceId;
+    process.env.TIER2_BILLING_STRIPE_REFILL_PRICE_ID = stripe.refillPriceId;
+    process.env.TIER2_BILLING_STRIPE_METER_ID = stripe.meterId;
 
-  // Reuse seed.ts's auth/org helpers (claim, login, invite) against this same
-  // billing stack: they key off TIER2_INTENT_* env, so point those here too.
-  // The two suites never share a process (separate playwright configs).
-  process.env.TIER2_INTENT_API_BASE_URL = stack.apiBaseUrl;
-  process.env.TIER2_INTENT_WEB_BASE_URL = stack.webBaseUrl;
-  process.env.TIER2_INTENT_DATABASE_URL = stack.databaseUrl;
-  process.env.TIER2_INTENT_SETUP_TOKEN_FILE = stack.setupTokenFile;
+    // Reuse seed.ts's auth/org helpers (claim, login, invite) against this same
+    // billing stack: they key off TIER2_INTENT_* env, so point those here too.
+    // The two suites never share a process (separate playwright configs).
+    process.env.TIER2_INTENT_API_BASE_URL = stack.apiBaseUrl;
+    process.env.TIER2_INTENT_WEB_BASE_URL = stack.webBaseUrl;
+    process.env.TIER2_INTENT_DATABASE_URL = stack.databaseUrl;
+    process.env.TIER2_INTENT_SETUP_TOKEN_FILE = stack.setupTokenFile;
 
-  await resetPasswordLoginRateLimits();
-  // Billing rows accumulate in the persistent profile DB; wipe them so this
-  // run's grant/adjustment/export assertions count only their own effects
-  // (accounts and org memberships are preserved — see resetBillingState).
-  await resetBillingState();
-  return stack.teardown;
+    await resetPasswordLoginRateLimits();
+    // Billing rows accumulate in the persistent profile DB; wipe them so this
+    // run's grant/adjustment/export assertions count only their own effects
+    // (accounts and org memberships are preserved — see resetBillingState).
+    await resetBillingState();
+    return stack.teardown;
+  } catch (error) {
+    await stack.teardown();
+    throw error;
+  }
 }

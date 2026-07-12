@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CloudSupportSurface } from "./CloudSupportSurface";
 
 const support = vi.hoisted(() => ({
-  client: { POST: vi.fn() },
+  client: { requestJson: vi.fn() },
 }));
 
 afterEach(() => {
@@ -23,30 +23,27 @@ afterEach(() => {
 
 describe("CloudSupportSurface", () => {
   it("creates a zero-upload support report with app-provided context", async () => {
-    support.client.POST.mockImplementation(async (path: string, options?: CloudPostOptions) => {
+    support.client.requestJson.mockImplementation(async (request: CloudRequestInput) => {
+      const path = request.path;
       if (path === "/v1/support/reports") {
         return {
-          data: {
-            reportId: "report-1",
-            clientJobId: supportRequestBody(options).clientJobId,
-            status: "created",
-            cloudDiagnosticsStatus: "not_applicable",
-            serverCorrelation: serverCorrelation("report-1"),
-          },
+          reportId: "report-1",
+          clientJobId: supportRequestBody(request).clientJobId,
+          status: "created",
+          cloudDiagnosticsStatus: "not_applicable",
+          serverCorrelation: serverCorrelation("report-1"),
         };
       }
       if (path === "/v1/support/reports/{report_id}/complete") {
-        return { data: { ok: true, reportId: "report-1" } };
+        return { ok: true, reportId: "report-1" };
       }
       if (path === "/v1/support/reports/{report_id}/tracker") {
         return {
-          data: {
-            ok: true,
-            reportId: "report-1",
-            trackerStatus: "pending",
-            githubIssueUrl: null,
-            linearIssueUrl: null,
-          },
+          ok: true,
+          reportId: "report-1",
+          trackerStatus: "pending",
+          githubIssueUrl: null,
+          linearIssueUrl: null,
         };
       }
       throw new Error(`Unexpected support endpoint: ${path}`);
@@ -60,9 +57,9 @@ describe("CloudSupportSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send support message" }));
 
     await waitFor(() => {
-      expect(findPostCall("/v1/support/reports/{report_id}/tracker")).toBeTruthy();
+      expect(findRequest("/v1/support/reports/{report_id}/tracker")).toBeTruthy();
     });
-    const createBody = supportRequestBody(findPostCall("/v1/support/reports")?.[1]);
+    const createBody = supportRequestBody(findRequest("/v1/support/reports"));
     expect(createBody).toEqual({
       clientJobId: expect.any(String),
       message: "The workspace stopped syncing.",
@@ -82,13 +79,15 @@ describe("CloudSupportSurface", () => {
         attachmentCount: 0,
       },
       publicContentConsent: true,
+      kind: "bug",
+      creditConsent: false,
+      urgent: false,
+      notifyMe: false,
     });
-    expect(findPostCall("/v1/support/reports/{report_id}/complete")?.[1]).toEqual({
-      params: {
-        path: {
-          report_id: "report-1",
-        },
-      },
+    expect(findRequest("/v1/support/reports/{report_id}/complete")).toEqual({
+      method: "POST",
+      path: "/v1/support/reports/{report_id}/complete",
+      pathParams: { report_id: "report-1" },
       body: {
         diagnostics: null,
         attachments: [],
@@ -100,43 +99,42 @@ describe("CloudSupportSurface", () => {
         },
       },
     });
-    expect(findPostCall("/v1/support/reports/{report_id}/tracker")?.[1]).toEqual({
-      params: {
-        path: {
-          report_id: "report-1",
-        },
-      },
+    expect(findRequest("/v1/support/reports/{report_id}/tracker")).toEqual({
+      method: "POST",
+      path: "/v1/support/reports/{report_id}/tracker",
+      pathParams: { report_id: "report-1" },
+      query: undefined,
+      headers: undefined,
+      body: undefined,
+      signal: undefined,
     });
     expect(screen.queryByText("Support issue sent.")).not.toBeNull();
   });
 
   it("reuses a pending client job id and skips completion once report is completed", async () => {
     let createAttempts = 0;
-    support.client.POST.mockImplementation(async (path: string, options?: CloudPostOptions) => {
+    support.client.requestJson.mockImplementation(async (request: CloudRequestInput) => {
+      const path = request.path;
       if (path === "/v1/support/reports") {
         createAttempts += 1;
         if (createAttempts === 1) {
           throw new Error("network down");
         }
         return {
-          data: {
-            reportId: "report-2",
-            clientJobId: supportRequestBody(options).clientJobId,
-            status: "completed",
-            cloudDiagnosticsStatus: "not_applicable",
-            serverCorrelation: serverCorrelation("report-2"),
-          },
+          reportId: "report-2",
+          clientJobId: supportRequestBody(request).clientJobId,
+          status: "completed",
+          cloudDiagnosticsStatus: "not_applicable",
+          serverCorrelation: serverCorrelation("report-2"),
         };
       }
       if (path === "/v1/support/reports/{report_id}/tracker") {
         return {
-          data: {
-            ok: true,
-            reportId: "report-2",
-            trackerStatus: "completed",
-            githubIssueUrl: "https://github.com/proliferate-ai/proliferate/issues/2",
-            linearIssueUrl: null,
-          },
+          ok: true,
+          reportId: "report-2",
+          trackerStatus: "completed",
+          githubIssueUrl: "https://github.com/proliferate-ai/proliferate/issues/2",
+          linearIssueUrl: null,
         };
       }
       throw new Error(`Unexpected support endpoint: ${path}`);
@@ -156,27 +154,34 @@ describe("CloudSupportSurface", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send support message" }));
 
     await waitFor(() => {
-      expect(findPostCall("/v1/support/reports/{report_id}/tracker")).toBeTruthy();
+      expect(findRequest("/v1/support/reports/{report_id}/tracker")).toBeTruthy();
     });
-    const createBodies = postCalls("/v1/support/reports").map((call) =>
-      supportRequestBody(call[1])
+    const createBodies = requests("/v1/support/reports").map((request) =>
+      supportRequestBody(request)
     );
     expect(createBodies).toHaveLength(2);
     expect(createBodies[1]?.clientJobId).toBe(createBodies[0]?.clientJobId);
-    expect(findPostCall("/v1/support/reports/{report_id}/complete")).toBeUndefined();
-    expect(findPostCall("/v1/support/reports/{report_id}/tracker")?.[1]).toEqual({
-      params: {
-        path: {
-          report_id: "report-2",
-        },
-      },
+    expect(findRequest("/v1/support/reports/{report_id}/complete")).toBeUndefined();
+    expect(findRequest("/v1/support/reports/{report_id}/tracker")).toEqual({
+      method: "POST",
+      path: "/v1/support/reports/{report_id}/tracker",
+      pathParams: { report_id: "report-2" },
+      query: undefined,
+      headers: undefined,
+      body: undefined,
+      signal: undefined,
     });
   });
 });
 
-interface CloudPostOptions {
+interface CloudRequestInput {
+  method: string;
+  path: string;
+  pathParams?: Record<string, string>;
+  query?: unknown;
+  headers?: unknown;
   body?: unknown;
-  params?: unknown;
+  signal?: unknown;
 }
 
 interface SupportReportCreateBody {
@@ -204,18 +209,18 @@ function renderCloudSupportSurface() {
   );
 }
 
-function postCalls(path: string): Array<[string, CloudPostOptions | undefined]> {
-  return support.client.POST.mock.calls.filter((call): call is [string, CloudPostOptions | undefined] =>
-    call[0] === path
-  );
+function requests(path: string): CloudRequestInput[] {
+  return support.client.requestJson.mock.calls
+    .map((call) => call[0] as CloudRequestInput)
+    .filter((request) => request.path === path);
 }
 
-function findPostCall(path: string): [string, CloudPostOptions | undefined] | undefined {
-  return postCalls(path)[0];
+function findRequest(path: string): CloudRequestInput | undefined {
+  return requests(path)[0];
 }
 
-function supportRequestBody(options: CloudPostOptions | undefined): SupportReportCreateBody {
-  return options?.body as SupportReportCreateBody;
+function supportRequestBody(request: CloudRequestInput | undefined): SupportReportCreateBody {
+  return request?.body as SupportReportCreateBody;
 }
 
 function serverCorrelation(reportId: string) {

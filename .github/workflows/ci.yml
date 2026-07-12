@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -60,6 +61,11 @@ jobs:
         with:
           node-version: "22"
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.24.x"
+          cache: false
+
       - name: Check CI/CD scripts parse
         run: |
           node --check scripts/ci-cd/create-release-tags.mjs
@@ -85,8 +91,34 @@ jobs:
       - name: Check workflow YAML parses
         run: ruby -e 'require "yaml"; ARGV.each { |file| YAML.load_file(file); puts file }' .github/workflows/*.yml
 
+      - name: Check workflow semantics
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
       - name: Smoke deploy surface detector
         run: node scripts/ci-cd/detect-deploy-surfaces.mjs --base HEAD --head HEAD
+
+  release-test-runner:
+    name: Release test runner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck release runner
+        run: pnpm -C tests/release typecheck
+
+      - name: Test release runner
+        run: pnpm -C tests/release test
 
   cargo-check:
     name: Cargo check & test
@@ -143,9 +175,20 @@ jobs:
         working-directory: anyharness/sdk
         run: pnpm run build
 
+      - name: Test SDK
+        working-directory: anyharness/sdk
+        run: pnpm run test
+
       - name: Build sdk-react
         working-directory: anyharness/sdk-react
         run: pnpm run build
+
+      - name: Test sdk-react
+        working-directory: anyharness/sdk-react
+        run: pnpm run test
+
+      - name: Test deterministic AnyHarness tooling and HTTP/git flows
+        run: pnpm --filter @anyharness/tests test:deterministic
 
   desktop-frontend:
     name: Desktop frontend build
@@ -217,6 +260,9 @@ jobs:
       - name: Build web
         run: pnpm web:build
 
+      - name: Test web
+        run: pnpm --filter @proliferate/web test
+
   shared-frontend-packages:
     name: Shared frontend packages
     runs-on: ubuntu-latest
@@ -245,3 +291,9 @@ jobs:
 
       - name: Test product UI
         run: pnpm --filter @proliferate/product-ui test
+
+      - name: Test shared UI primitives
+        run: pnpm --filter @proliferate/ui test
+
+      - name: Test connected product surfaces
+        run: pnpm --filter @proliferate/product-surfaces test

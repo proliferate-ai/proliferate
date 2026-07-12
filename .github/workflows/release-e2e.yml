@@ -7,26 +7,26 @@ name: Release E2E (tier 3)
 #
 # Cadence: release-train, NOT per-PR. It burns real money/time (E2B sandboxes,
 # gateway LLM calls) so it runs on a schedule and on demand, never on
-# `pull_request`. Per the README CI mapping it is non-blocking: failures file
-# issues and block the staging->production promotion, they never gate merges.
-# Every job is `continue-on-error` while the runner earns a flake-free record.
+# `pull_request`. It never gates merges. Signal mode reports the provisional
+# blocked/expected-fail inventory, but a genuine scenario failure still fails
+# the workflow. Release mode additionally requires every executable registry
+# row to be present exactly once and every emitted result to be unique and
+# green. The larger target inventory remains explicitly planned until mapped.
 #
 # Honest scoping (the runner self-reports blocked/expected-fail per scenario
-# for anything it lacks credentials for; the gates below just avoid booting a
-# stack that could not produce signal):
+# for anything it lacks credentials for; preflight only inventories gaps):
 #   - The local lane needs a way to drive real agents. In CI there is no native
 #     agent CLI login, so it routes through the LLM gateway with
-#     RELEASE_E2E_GATEWAY_TEST_KEY. With no key the job skips itself cleanly
-#     (::notice::), the same pattern the tier-2 billing suite uses for
-#     STRIPE_TEST_SECRET_KEY.
+#     RELEASE_E2E_GATEWAY_TEST_KEY. With no key, only scenarios that require it
+#     report blocked; independent billing/configuration/runtime scenarios still
+#     run. Release policy rejects any blocked required row.
 #   - The sandbox lane additionally needs an E2B team (E2B_API_KEY repo secret,
 #     mapped to RELEASE_E2E_E2B_API_KEY) AND a publicly reachable server URL for
 #     E2B to deliver webhooks to — a locally booted server on 127.0.0.1 needs a
 #     tunnel, so sandbox scenarios self-report blocked without one.
-#   - The staging lane (against the real staging deployment + its gateway) is
-#     the README's documented CI target, but the staging gateway test key is not
-#     provisioned yet (RELEASE_E2E_GATEWAY_TEST_KEY on staging). Its job is left
-#     commented at the bottom until that key exists.
+#   - The staging lane (against the real staging deployment + its gateway) is a
+#     dispatch-only target. Any absent staging identity, gateway, E2B, or
+#     integration credential becomes a per-scenario blocked result.
 
 on:
   workflow_dispatch:
@@ -49,10 +49,21 @@ on:
         default: all
         required: false
         type: string
+      policy:
+        description: Signal is diagnostic; release is the fail-closed required-scenario gate.
+        default: release
+        required: false
+        type: choice
+        options:
+          - signal
+          - release
   schedule:
-    # Nightly, offset after the release train (which runs at 09:00 UTC) so it
-    # exercises the freshly cut artifacts. README: "Nightly — Tier 3 lanes
-    # against whatever is on staging; failures file issues, never block merges."
+    # Provisional nightly signal run. It boots a source-built local server and
+    # AnyHarness runtime from this ref; it does not target staging or boot a
+    # Desktop/Web product shell. Staging remains dispatch-only below. This is
+    # therefore coverage inventory, not the complete nightly contract in the
+    # testing standard. Scheduled events have no inputs, so policy expressions
+    # resolve to signal; manual dispatch defaults to release.
     - cron: "0 11 * * *"
 
 permissions:
@@ -67,13 +78,14 @@ env:
 
 jobs:
   release-e2e-local:
-    name: tier-3 local lane (provisional)
+    name: tier-3 local lane (${{ github.event.inputs.policy || 'signal' }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    # Provisional posture, enforced twice: the job name says so, and the job
-    # never fails the workflow while it is provisional (README CI mapping —
-    # tier 3 is not yet a merge gate).
-    continue-on-error: true
+    # A `lane=staging` dispatch belongs to the staging job below, not here —
+    # this job boots a fresh local stack and ignores --lane, so routing a
+    # staging dispatch into it produced a local run mislabelled "staging". Run
+    # on the nightly schedule and on any dispatch EXCEPT lane=staging.
+    if: github.event_name != 'workflow_dispatch' || github.event.inputs.lane != 'staging'
     services:
       postgres:
         image: postgres:16-alpine
@@ -98,20 +110,23 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      # Preflight gate (billing-suite pattern): a tier-3 local run needs the
-      # gateway test key to drive real agents in CI. Absent -> skip cleanly.
+      # Inventory credentials before the stack boot. Missing credentials never
+      # skip the whole suite: the runner records only affected scenario/lanes as
+      # blocked, so independent flows (especially billing) still execute.
       - name: Preflight — required credentials
-        id: preflight
         env:
+          POLICY: ${{ github.event.inputs.policy || 'signal' }}
           GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
           DURABLE_USER_EMAIL: ${{ secrets.RELEASE_E2E_DURABLE_USER_EMAIL }}
           DURABLE_USER_PASSWORD: ${{ secrets.RELEASE_E2E_DURABLE_USER_PASSWORD }}
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
         run: |
-          enabled=true
           if [ -z "$GATEWAY_TEST_KEY" ]; then
-            echo "::notice title=Tier-3 skipped::RELEASE_E2E_GATEWAY_TEST_KEY is not set. The local lane cannot drive real agents in CI without it (there is no native agent CLI login on the runner). Provision a LiteLLM virtual key for an e2e-tests team (cheap-model allowlist, see T3-CHAT-1) and add it as the RELEASE_E2E_GATEWAY_TEST_KEY secret. Skipping cleanly."
-            enabled=false
+            if [ "$POLICY" = "release" ]; then
+              echo "::error title=Tier-3 release credential missing::RELEASE_E2E_GATEWAY_TEST_KEY is not set. The strict runner will record the affected required rows as blocked and fail closed."
+            else
+              echo "::notice title=Tier-3 gateway scenarios blocked::RELEASE_E2E_GATEWAY_TEST_KEY is not set. Gateway-dependent scenarios will report blocked; all independent scenarios still run. Provision a gateway virtual key for an e2e-tests subject with a cheap-model allowlist."
+            fi
           fi
           if [ -z "$DURABLE_USER_EMAIL" ] || [ -z "$DURABLE_USER_PASSWORD" ]; then
             echo "::notice title=Tier-3 durable identity self-seeded::RELEASE_E2E_DURABLE_USER_EMAIL / _PASSWORD not set — the runner seeds a per-run durable user through the real /setup claim (the stack is ephemeral), so local-lane server-mediated scenarios still run. Sandbox-lane scenarios that need the real persistent identity report blocked."
@@ -119,42 +134,31 @@ jobs:
           if [ -z "$E2B_API_KEY" ]; then
             echo "::notice title=Tier-3 sandbox lane absent::E2B_API_KEY not set — sandbox-lane scenarios will report blocked. (Note: even with the key, the sandbox lane needs a publicly reachable server URL / tunnel for E2B webhooks.)"
           fi
-          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v6
-        if: steps.preflight.outputs.enabled == 'true'
 
       - uses: actions/setup-node@v6
-        if: steps.preflight.outputs.enabled == 'true'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
-        if: steps.preflight.outputs.enabled == 'true'
         with:
           version: 10
       - uses: astral-sh/setup-uv@v7
-        if: steps.preflight.outputs.enabled == 'true'
       - uses: actions/setup-python@v6
-        if: steps.preflight.outputs.enabled == 'true'
         with:
           python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
-        if: steps.preflight.outputs.enabled == 'true'
       - uses: Swatinem/rust-cache@v2
-        if: steps.preflight.outputs.enabled == 'true'
         with:
           workspaces: ". -> target/runtime-local"
 
       - name: Install workspace dependencies
-        if: steps.preflight.outputs.enabled == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Install server (venv, matches local layout)
-        if: steps.preflight.outputs.enabled == 'true'
         run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
 
       - name: Install system deps (Tauri crates in the workspace build)
-        if: steps.preflight.outputs.enabled == 'true'
         # `make build-rust` compiles the whole workspace, including the Tauri
         # desktop crate — same package set ci.yml installs for it.
         run: |
@@ -162,14 +166,12 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Build the AnyHarness runtime binary
-        if: steps.preflight.outputs.enabled == 'true'
         # Same target dir the Makefile's dev-artifacts check reads
         # (DEV_ANYHARNESS_TARGET_DIR), so `make release-e2e`'s downstream tooling
         # and a laptop run resolve the same binary.
         run: make build-rust
 
       - name: Boot the server + AnyHarness runtime, then run the tier-3 runner
-        if: steps.preflight.outputs.enabled == 'true'
         env:
           # Local stack wiring — the runner points at these (env-manifest.ts).
           SINGLE_ORG_MODE: "true"
@@ -214,6 +216,7 @@ jobs:
           RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID }}
           # Stripe test mode for the billing scenarios' setup seam.
           STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          RELEASE_POLICY: ${{ github.event.inputs.policy || 'signal' }}
           LANE: ${{ github.event.inputs.lane || 'local' }}
           SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
           AGENTS: ${{ github.event.inputs.agents || 'all' }}
@@ -249,11 +252,9 @@ jobs:
           make release-e2e LANE="$LANE" DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
 
       - name: Upload failure reports
-        # always() (not failure()): the runner step is continue-on-error, so a
-        # red runner never flips the job to "failed" and failure() would skip
-        # this. Upload whenever the job ran the runner; the step no-ops when
-        # there are no reports.
-        if: always() && steps.preflight.outputs.enabled == 'true'
+        # Keep diagnostics and strict summary evidence even when the runner is
+        # red. The step no-ops when the output directory is empty.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: release-e2e-reports
@@ -262,84 +263,178 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Staging lane — the README's documented tier-3 CI target (real deployment,
-  # publicly reachable, real gateway with cheap models). Runs against the
-  # `staging` GitHub environment (its vars/secrets: API_BASE_URL,
-  # RELEASE_E2E_GATEWAY_TEST_KEY, RELEASE_E2E_DURABLE_ORG_ID, …). The staging
-  # gateway + durable org id + gateway test key are now provisioned; the one
-  # remaining gate is the browser-free durable-user session:
-  # RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (a `staging` environment secret).
-  # Refresh tokens rotate on every use, so a durable-in-CI mechanism (a
-  # non-rotating bootstrap, or persisting the rotated state between runs) is
-  # still needed before this authenticates for real — until then the preflight
-  # skips cleanly (::notice::), the same pattern the local lane uses.
+  # Staging lane — the README's documented tier-3 CI target: the real staging
+  # deployment (https://staging-app.proliferate.com/api, publicly reachable).
+  #
+  # Dispatch-only (never on the nightly schedule) in this first pass, so the
+  # SHARED durable staging user (proliferate-e2e-bot) is not exercised on an
+  # unattended cadence until the lane is proven. Trigger with:
+  #   gh workflow run release-e2e.yml -f lane=staging
+  #
+  # STAGING-LANE RUNBOOK (verified 2026-07-09, first honest staging run):
+  #   - Identity: the durable user is GitHub-OAuth-only (no password), so on
+  #     `--lane staging` scenarios authenticate via the rotating PRODUCT session
+  #     (tests/release/src/fixtures/staging-session.ts loginDurableUserOnStaging),
+  #     NOT RELEASE_E2E_DURABLE_USER_EMAIL/PASSWORD. env-resolution.ts drops those
+  #     two from requiredEnv on staging and checks stagingSessionAvailable instead.
+  #   - Server URL: staging runs API_PATH_PREFIX=/api, so RELEASE_E2E_SERVER_URL
+  #     MUST be the /api-prefixed base (the runner posts the raw HTTP contract,
+  #     e.g. /auth/mobile/session/refresh, under it). Confirmed: /api/health=200,
+  #     /health=404, /api/auth/mobile/session/refresh=401 on a bad token.
+  #   - ROTATION: staging refresh tokens rotate on EVERY use (the refresh route
+  #     mints a new pair and revokes the old). A stateless job would burn the
+  #     bootstrap token on run 1. The owner-only plaintext state exists only in
+  #     the ephemeral runner workspace; actions/cache stores AES-GCM ciphertext
+  #     authenticated with a dedicated staging-environment secret. Per-run-id
+  #     save keys + a prefix restore-key carry the newest ciphertext forward.
+  #     The workflow concurrency group serialises runs so rotations cannot race.
+  #     On the first-ever run (cache miss) the fixture falls back to the bootstrap
+  #     secret; later runs decrypt the cached live token before the runner starts.
+  #   - FAILURE MODE: a broken session chain (revoked/expired/never-persisted
+  #     token) reports BLOCKED. Signal mode keeps that diagnostic non-fatal;
+  #     release mode rejects it. loginDurableUserForTargetLane raises
+  #     StagingSessionUnavailableError, which durable-user scenarios convert to
+  #     ScenarioBlockedError. Re-bootstrap with staging_session_seed.py (in-VPC
+  #     one-off ECS task on cluster proliferate-staging) and reseed the secret.
+  #   - HONEST SCOPE (first signal pass): the `local` RUNTIME lane has no
+  #     staging pairing (blocked); mutating/charging sandbox scenarios against the
+  #     SHARED durable user (PROV-1 mint-user, PROV-2 wake, SEC-MAT-1 secret write,
+  #     INT-1 integration connect) are DEFERRED (blocked) until a dedicated
+  #     non-shared staging fixture org exists; BILL-1/2 block on the local-only
+  #     RELEASE_E2E_LOCAL_DATABASE_URL (staging DB is VPC-only); CHAT/WT/UPDATE/
+  #     REPO sandbox halves are expected-fail (test bodies unimplemented / seed
+  #     unavailable). PROV-2 is the real end-to-end proof: it authenticates the
+  #     durable user through the rotating session and reads GET /cloud-sandbox.
   release-e2e-staging:
-    name: tier-3 staging lane (provisional)
+    name: tier-3 staging lane (${{ github.event.inputs.policy || 'signal' }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    continue-on-error: true
+    # Dispatch-only, lane=staging. Keeps shared staging state off the schedule.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.lane == 'staging'
+    # Read the `staging` GitHub environment's secrets (RELEASE_E2E_GATEWAY_TEST_KEY,
+    # RELEASE_E2E_E2B_API_KEY, ...). Repo-level secrets of the same name are used
+    # when an env-level one is absent, so the session bootstrap secret can live at
+    # either scope.
     environment: staging
+    env:
+      # Staging API base — MUST include /api (API_PATH_PREFIX). Not a secret.
+      RELEASE_E2E_SERVER_URL: https://staging-app.proliferate.com/api
+      # Plaintext exists only for the duration of this job. The cache path below
+      # contains authenticated ciphertext, never a product session token.
+      RELEASE_E2E_STAGING_SESSION_STATE: ${{ github.workspace }}/.staging-session/state.json
+      STAGING_SESSION_CACHE_PATH: ${{ github.workspace }}/.staging-session-cache/state.bin
     steps:
-      - name: Preflight — staging credentials
-        id: preflight
-        env:
-          GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
-          STAGING_SERVER_URL: ${{ vars.API_BASE_URL }}
-          STAGING_SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
-        run: |
-          enabled=true
-          if [ -z "$STAGING_SERVER_URL" ]; then
-            echo "::notice title=Staging tier-3 skipped::staging API_BASE_URL variable is not set."
-            enabled=false
-          fi
-          if [ -z "$STAGING_SESSION_REFRESH_TOKEN" ]; then
-            echo "::notice title=Staging tier-3 skipped::RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN (staging env secret) is not set — the durable staging user (proliferate-e2e-bot, GitHub-OAuth-only, no password) authenticates via a rotating session refresh token. Bootstrap one per tests/release/src/fixtures/staging-session.ts and add it (plus a rotation-durable mechanism) before this lane runs. Skipping cleanly."
-            enabled=false
-          fi
-          if [ -z "$GATEWAY_TEST_KEY" ]; then
-            echo "::notice title=Staging gateway key absent::RELEASE_E2E_GATEWAY_TEST_KEY not set — gateway-dependent scenarios report blocked. Billing-surface scenarios (T3-BILL-4) still run."
-          fi
-          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@v6
-        if: steps.preflight.outputs.enabled == 'true'
+
       - uses: actions/setup-node@v6
-        if: steps.preflight.outputs.enabled == 'true'
         with:
           node-version: "22"
       - uses: pnpm/action-setup@v6
-        if: steps.preflight.outputs.enabled == 'true'
         with:
           version: 10
-      - uses: astral-sh/setup-uv@v7
-        if: steps.preflight.outputs.enabled == 'true'
-      - uses: actions/setup-python@v6
-        if: steps.preflight.outputs.enabled == 'true'
-        with:
-          python-version: "3.12"
+
       - name: Install workspace dependencies
-        if: steps.preflight.outputs.enabled == 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Run tier-3 against staging
-        if: steps.preflight.outputs.enabled == 'true'
+      - name: Prepare staging-session state dir
+        run: |
+          mkdir -p "$(dirname "$RELEASE_E2E_STAGING_SESSION_STATE")"
+          mkdir -p "$(dirname "$STAGING_SESSION_CACHE_PATH")"
+
+      # Cache contents are readable by repository collaborators and must never
+      # contain plaintext credentials. Restore only authenticated ciphertext.
+      - name: Restore encrypted staging session
+        id: session-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.staging-session-cache
+          key: release-e2e-staging-session-${{ github.run_id }}
+          restore-keys: |
+            release-e2e-staging-session-
+
+      - name: Decrypt rotated staging session
         env:
-          # API_BASE_URL already includes the deployment's /api prefix, which is
-          # exactly what RELEASE_E2E_SERVER_URL wants (env-manifest.ts).
-          RELEASE_E2E_SERVER_URL: ${{ vars.API_BASE_URL }}
-          RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
-          RELEASE_E2E_GATEWAY_BASE_URL: ${{ vars.AGENT_GATEWAY_LITELLM_PUBLIC_BASE_URL || 'https://staging-gateway.proliferate.com' }}
+          STATE_CACHE_KEY: ${{ secrets.RELEASE_E2E_STAGING_SESSION_CACHE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$STAGING_SESSION_CACHE_PATH" ]; then
+            exit 0
+          fi
+          if [ -z "$STATE_CACHE_KEY" ]; then
+            echo "::error title=Staging cache key absent::Encrypted session state exists, but RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN is unavailable as key material."
+            exit 1
+          fi
+          pnpm -C tests/release exec tsx scripts/staging-session-cache.ts \
+            decrypt "$STAGING_SESSION_CACHE_PATH" "$RELEASE_E2E_STAGING_SESSION_STATE"
+
+      - name: Preflight — staging session bootstrap
+        env:
+          SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
+          SESSION_CACHE_KEY: ${{ secrets.RELEASE_E2E_STAGING_SESSION_CACHE_KEY }}
+        run: |
+          if [ -z "$SESSION_CACHE_KEY" ]; then
+            echo "::error title=Staging cache key absent::RELEASE_E2E_STAGING_SESSION_CACHE_KEY must be a stable random secret so rotated product credentials are never persisted in plaintext."
+            exit 1
+          fi
+          if [ -f "$RELEASE_E2E_STAGING_SESSION_STATE" ]; then
+            echo "::notice title=Staging session restored::Using the decrypted rotating session state file."
+          elif [ -n "$SESSION_REFRESH_TOKEN" ]; then
+            echo "::notice title=Staging session bootstrap::No encrypted state was restored; falling back to the RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN bootstrap secret (first run). Its rotated successor will be cached only as ciphertext."
+          else
+            echo "::notice title=Staging session absent::No cached state file AND no RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN secret. Durable-user scenarios will self-report blocked. Mint a token with tests/release/scripts/staging_session_seed.py (in-VPC ECS task) and add the secret."
+          fi
+
+      - name: Run tier-3 against staging
+        env:
+          # Durable identity on staging = the rotating product session (state
+          # file above OR this bootstrap secret on the first run). NOT email/pw.
           RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN: ${{ secrets.RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN }}
-          RELEASE_E2E_DURABLE_ORG_ID: ${{ vars.RELEASE_E2E_DURABLE_ORG_ID }}
-          RELEASE_E2E_E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
-          RELEASE_E2E_E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
-          LANE: staging
+          # Org id owning the durable user's account (non-secret). When set, the
+          # deferred sandbox scenarios report their staging-deferral reason; when
+          # absent they block on this var. Release policy rejects that result.
+          RELEASE_E2E_DURABLE_ORG_ID: ${{ secrets.RELEASE_E2E_DURABLE_ORG_ID }}
+          # Provisioned for when the deferred sandbox scenarios light up; unused
+          # by the first honest pass (those scenarios block before reaching them).
+          RELEASE_E2E_GATEWAY_TEST_KEY: ${{ secrets.RELEASE_E2E_GATEWAY_TEST_KEY }}
+          RELEASE_E2E_GATEWAY_BASE_URL: ${{ secrets.RELEASE_E2E_GATEWAY_BASE_URL || 'https://staging-gateway.proliferate.com' }}
+          RELEASE_E2E_E2B_API_KEY: ${{ secrets.RELEASE_E2E_E2B_API_KEY || secrets.E2B_API_KEY }}
+          RELEASE_E2E_E2B_TEAM_ID: ${{ secrets.RELEASE_E2E_E2B_TEAM_ID }}
+          RELEASE_E2E_INTEGRATION_API_KEY: ${{ secrets.RELEASE_E2E_INTEGRATION_API_KEY }}
+          RELEASE_POLICY: ${{ github.event.inputs.policy || 'signal' }}
           SCENARIOS: ${{ github.event.inputs.scenarios || 'all' }}
           AGENTS: ${{ github.event.inputs.agents || 'all' }}
-        run: make release-e2e LANE="$LANE" DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
+        run: make release-e2e LANE=staging DESKTOP=web AGENTS="$AGENTS" SCENARIOS="$SCENARIOS"
+
+      # A red scenario may already have rotated the token. Seal the current
+      # state before any cache action and remove the plaintext on every exit.
+      - name: Encrypt rotated staging session
+        if: always()
+        env:
+          STATE_CACHE_KEY: ${{ secrets.RELEASE_E2E_STAGING_SESSION_CACHE_KEY }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$RELEASE_E2E_STAGING_SESSION_STATE"' EXIT
+          if [ ! -f "$RELEASE_E2E_STAGING_SESSION_STATE" ]; then
+            exit 0
+          fi
+          if [ -z "$STATE_CACHE_KEY" ]; then
+            echo "::error title=Staging cache key absent::Refusing to persist rotated session state without encryption key material."
+            exit 1
+          fi
+          pnpm -C tests/release exec tsx scripts/staging-session-cache.ts \
+            encrypt "$RELEASE_E2E_STAGING_SESSION_STATE" "$STAGING_SESSION_CACHE_PATH"
+
+      # Save only ciphertext under a fresh immutable key. Prefix restore selects
+      # the latest prior run; the workflow concurrency group prevents races.
+      - name: Save encrypted staging session
+        if: always() && hashFiles('.staging-session-cache/state.bin') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.staging-session-cache
+          key: release-e2e-staging-session-${{ github.run_id }}
 
       - name: Upload failure reports
-        if: always() && steps.preflight.outputs.enabled == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: release-e2e-reports-staging

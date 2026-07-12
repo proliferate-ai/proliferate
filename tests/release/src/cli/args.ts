@@ -1,17 +1,25 @@
 import { parseDesktopMode, parseTargetLane, type DesktopMode, type TargetLane } from "../config/types.js";
+import { RELEASE_POLICY_ENV, parseReleasePolicy, type ReleasePolicy } from "../runner/release-policy.js";
 
 export interface CliArgs {
   lane: TargetLane;
   desktop: DesktopMode;
   agents: string[] | "all";
   scenarios: string[] | "all";
+  /**
+   * `signal` (default) is the informational nightly
+   * mode — unchanged behavior. `release` is strict: the required-scenario
+   * executable registry gates the run and a summary artifact is emitted. Selected by
+   * `--policy` or the `RELEASE_POLICY` env var, the flag winning.
+   */
+  policy: ReleasePolicy;
   dryRun: boolean;
   fileIssues: boolean;
   outputDir: string;
   help: boolean;
 }
 
-const DEFAULTS: Omit<CliArgs, "help"> = {
+const DEFAULTS: Omit<CliArgs, "help" | "policy"> = {
   lane: "local",
   desktop: "web",
   agents: "all",
@@ -32,7 +40,14 @@ const DEFAULTS: Omit<CliArgs, "help"> = {
  * dependency for a handful of flags.
  */
 export function parseArgs(argv: readonly string[]): CliArgs {
-  const args: CliArgs = { ...DEFAULTS, help: false };
+  // Resolve the environment default at invocation time. The local runner
+  // securely loads release-e2e.env immediately before calling parseArgs, so a
+  // RELEASE_POLICY declared there must not be captured during module import.
+  const args: CliArgs = {
+    ...DEFAULTS,
+    policy: parseReleasePolicy(process.env[RELEASE_POLICY_ENV]),
+    help: false,
+  };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -54,6 +69,10 @@ export function parseArgs(argv: readonly string[]): CliArgs {
         // --only is sugar for --scenarios (per the tier-3 build task: "runner
         // should support --only <id>"); both set the same field.
         args.scenarios = parseListFlag(requireValue(argv, i, arg));
+        i += 1;
+        break;
+      case "--policy":
+        args.policy = parseReleasePolicy(requireValue(argv, i, arg));
         i += 1;
         break;
       case "--dry-run":
@@ -106,6 +125,8 @@ Flags:
   --agents <list|all>        Comma-separated harness kinds, or "all" (default: all)
   --scenarios <list|all>     Comma-separated scenario ids, or "all" (default: all)
   --only <id>                Alias for --scenarios with a single id (e.g. --only T3-WT-1)
+  --policy <signal|release>  Release policy (default: RELEASE_POLICY env, else signal). release = strict:
+                             every registered scenario/lane must run exactly once and green; a summary is written.
   --dry-run                  Report the plan + env manifest; never call a real provider/LLM
   --file-issues              File one GitHub issue per distinct failure via \`gh\` (default: off)
   --output-dir <path>        Where failure reports are written, relative to tests/release/ (default: .output)

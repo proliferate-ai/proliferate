@@ -126,13 +126,12 @@ describe("BillingSettingsSurface", () => {
 
     expect(screen.getAllByRole("heading", { name: "Billing" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Plan")).toBeTruthy();
-    expect(screen.getByText(/tracked, budgeted, and topped up separately/)).toBeTruthy();
-    expect(screen.getByText("360 PCUs")).toBeTruthy();
-    expect(screen.getByText("$12,000.00")).toBeTruthy();
+    expect(screen.getByText(/tracked and topped up separately/)).toBeTruthy();
+    expect(screen.getByLabelText("Compute units available").getAttribute("aria-valuenow")).toBe("33");
+    expect(screen.getByLabelText("LLM credits available").getAttribute("aria-valuenow")).toBe("38");
     expect(screen.queryByText("Loading")).toBeNull();
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add compute units" }).disabled).toBe(true);
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Add LLM credits" }).disabled).toBe(true);
-    expect(screen.getAllByText("Credit pack checkout for organizations is coming soon.")).toHaveLength(2);
     expect(screen.getByLabelText("Auto top-up")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Manage" }));

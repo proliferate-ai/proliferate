@@ -1,11 +1,14 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createConnection, createServer } from "node:net";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   renameSync,
   rmSync,
   statSync,
@@ -54,6 +57,7 @@ const portPoolSizes = new Map([
 function usage() {
   console.error(`Usage:
   node scripts/dev.mjs ensure --profile <name> [--lock]
+  node scripts/dev.mjs record-runtime-metadata --profile <name>
   node scripts/dev.mjs list
   node scripts/dev.mjs database-url --db-name <name>
   node scripts/dev.mjs ensure-db --db-name <name>`);
@@ -157,6 +161,21 @@ function run(command, args, options = {}) {
   return result.stdout.trim();
 }
 
+function runBuffer(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd ?? repoRoot,
+    env: { ...process.env, ...(options.env ?? {}) },
+    encoding: null,
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString("utf8").trim();
+    const stdout = result.stdout?.toString("utf8").trim();
+    throw new Error(stderr || stdout || `${command} ${args.join(" ")} failed`);
+  }
+  return result.stdout;
+}
+
 function gitBranch(worktreePath) {
   try {
     return run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: worktreePath });
@@ -165,6 +184,63 @@ function gitBranch(worktreePath) {
     console.warn(`Could not determine git branch for ${worktreePath}: ${message}`);
     return "unknown";
   }
+}
+
+function candidateGitIdentity(worktreePath) {
+  let gitHead;
+  let trackedDiff;
+  let untrackedOutput;
+  try {
+    gitHead = run("git", ["rev-parse", "--verify", "HEAD"], { cwd: worktreePath });
+    trackedDiff = runBuffer(
+      "git",
+      ["diff", "--binary", "--no-ext-diff", "--no-textconv", "HEAD", "--"],
+      { cwd: worktreePath },
+    );
+    untrackedOutput = runBuffer(
+      "git",
+      ["ls-files", "--others", "--exclude-standard", "-z"],
+      { cwd: worktreePath },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not compute candidate git/build identity for ${worktreePath}: ${message}`);
+  }
+  if (!/^[0-9a-f]{40,64}$/i.test(gitHead)) {
+    throw new Error(`Git returned an invalid HEAD identity for ${worktreePath}.`);
+  }
+
+  const hash = createHash("sha256");
+  hash.update("git-head\0");
+  hash.update(gitHead.toLowerCase());
+  hash.update("\0tracked-diff\0");
+  hash.update(trackedDiff);
+
+  const untrackedPaths = untrackedOutput
+    .toString("utf8")
+    .split("\0")
+    .filter(Boolean)
+    .sort();
+  for (const relativePath of untrackedPaths) {
+    const absolutePath = path.join(worktreePath, relativePath);
+    const stat = lstatSync(absolutePath);
+    hash.update("\0untracked-path\0");
+    hash.update(relativePath);
+    if (stat.isSymbolicLink()) {
+      hash.update("\0symlink\0");
+      hash.update(readlinkSync(absolutePath));
+    } else if (stat.isFile()) {
+      hash.update("\0file\0");
+      hash.update(readFileSync(absolutePath));
+    } else {
+      hash.update(`\0mode:${stat.mode};size:${stat.size}\0`);
+    }
+  }
+
+  return {
+    gitHead: gitHead.toLowerCase(),
+    buildIdentity: `sha256:${hash.digest("hex")}`,
+  };
 }
 
 function profileDir(profile) {
@@ -190,6 +266,103 @@ function profilePaths(profile) {
 
 function dbNameForProfile(profile) {
   return `proliferate_dev_${profile.replaceAll("-", "_")}`;
+}
+
+function databaseModeForInvocation() {
+  const mode = process.env.PROLIFERATE_DEV_DATABASE_MODE || "profile";
+  if (mode !== "profile" && mode !== "external") {
+    throw new Error(`PROLIFERATE_DEV_DATABASE_MODE must be "profile" or "external", got "${mode}".`);
+  }
+  return mode;
+}
+
+function defaultLocalPostgresHost() {
+  return process.platform === "darwin" ? "::1" : "127.0.0.1";
+}
+
+function normalizedPostgresHost(value) {
+  const host = value.trim();
+  if (host.startsWith("[") && host.endsWith("]")) {
+    return host.slice(1, -1);
+  }
+  return host;
+}
+
+function managedDatabaseConnectionForInvocation(databaseName) {
+  const host = normalizedPostgresHost(process.env.LOCAL_PGHOST || defaultLocalPostgresHost());
+  const port = Number(process.env.LOCAL_PGPORT || "5432");
+  const user = (process.env.LOCAL_PGUSER || "proliferate").trim();
+  const effectivePassword = process.env.LOCAL_PGPASSWORD || "localdev";
+  if (!host || /[\s/@?#]/.test(host)) {
+    throw new Error("LOCAL_PGHOST must be a hostname or IP address without URL syntax.");
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("LOCAL_PGPORT must be a TCP port number.");
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(user)) {
+    throw new Error("LOCAL_PGUSER must be a valid non-empty Postgres role name.");
+  }
+  validateDbName(databaseName);
+  return {
+    connection: {
+      host,
+      port,
+      user,
+      database: databaseName,
+    },
+    usesDefaultPassword: effectivePassword === "localdev",
+  };
+}
+
+function singleOrgModeForInvocation() {
+  const value = (process.env.SINGLE_ORG_MODE || "false").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(value)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(value)) {
+    return false;
+  }
+  throw new Error(
+    `SINGLE_ORG_MODE must be a boolean (true/false or 1/0), got "${process.env.SINGLE_ORG_MODE}".`,
+  );
+}
+
+function isLoopbackHostname(hostname) {
+  const value = hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  return (
+    value === "localhost" ||
+    value.endsWith(".localhost") ||
+    value === "::1" ||
+    value === "::" ||
+    value === "0.0.0.0" ||
+    value.startsWith("127.")
+  );
+}
+
+function publicCloudWorkerBaseUrlForInvocation() {
+  const raw = process.env.CLOUD_WORKER_BASE_URL?.trim();
+  if (!raw) {
+    return undefined;
+  }
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("CLOUD_WORKER_BASE_URL must be an absolute HTTP(S) URL.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("CLOUD_WORKER_BASE_URL must use http or https.");
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error(
+      "CLOUD_WORKER_BASE_URL must not contain credentials, a query string, or a fragment.",
+    );
+  }
+  if (isLoopbackHostname(parsed.hostname)) {
+    return undefined;
+  }
+  const pathname = parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
+  return `${parsed.origin}${pathname}`;
 }
 
 function hostForUrl(host) {
@@ -578,7 +751,7 @@ exec cargo "$@"
   chmodSync(paths.tauriRunner, 0o755);
 }
 
-function writeLaunchEnv(paths, env) {
+function writeLaunchEnv(paths, env, singleOrgMode) {
   const launchEnv = {
     PROLIFERATE_DEV: "1",
     DEBUG: "true",
@@ -587,7 +760,11 @@ function writeLaunchEnv(paths, env) {
     // single-org mode and 503 every sign-in on a fresh dev database until
     // /setup is claimed). Override at invocation when working on
     // self-hosting flows: SINGLE_ORG_MODE=true make run PROFILE=<name>.
-    SINGLE_ORG_MODE: process.env.SINGLE_ORG_MODE || "false",
+    SINGLE_ORG_MODE: singleOrgMode ? "true" : "false",
+    // Keep the first-run claim token profile-scoped and readable by local
+    // release-e2e. The production default (/var/lib/...) is intentionally not
+    // writable by an unprivileged macOS dev process.
+    SETUP_TOKEN_FILE: path.join(paths.root, "setup-token"),
     ...orderedEnv(env, persistedKeys),
     // The harness serves with --runtime-home $ANYHARNESS_RUNTIME_HOME; export
     // the same path to the desktop app so files it writes for the harness
@@ -619,15 +796,22 @@ async function ensureProfile(options) {
   const paths = profilePaths(profile);
   const worktreePath = path.resolve(process.cwd());
   const branch = gitBranch(worktreePath);
+  const candidateIdentity = candidateGitIdentity(worktreePath);
+  const databaseMode = databaseModeForInvocation();
+  const singleOrgMode = singleOrgModeForInvocation();
+  const publicCloudWorkerBaseUrl = publicCloudWorkerBaseUrlForInvocation();
   mkdirSync(paths.root, { recursive: true });
   mkdirSync(paths.appHome, { recursive: true });
   mkdirSync(paths.runtimeHome, { recursive: true });
 
   const env = await resolveProfileEnv(profile, paths);
+  const managedDatabaseMetadata = databaseMode === "profile"
+    ? managedDatabaseConnectionForInvocation(env.PROLIFERATE_DEV_DB_NAME)
+    : undefined;
   ensureProfileBound(profile, paths, worktreePath, branch);
   writeJsonAtomic(paths.tauriConfig, generatedTauriConfig(profile, env));
   writeTauriRunner(profile, paths);
-  writeLaunchEnv(paths, env);
+  writeLaunchEnv(paths, env, singleOrgMode);
 
   const instance = {
     profile,
@@ -641,6 +825,20 @@ async function ensureProfile(options) {
     anyharnessRuntimeHome: env.ANYHARNESS_RUNTIME_HOME,
     desktopHome: env.PROLIFERATE_DEV_HOME,
     databaseName: env.PROLIFERATE_DEV_DB_NAME,
+    singleOrgMode,
+    candidateGitHead: candidateIdentity.gitHead,
+    candidateBuildIdentity: candidateIdentity.buildIdentity,
+    ...(publicCloudWorkerBaseUrl ? { publicCloudWorkerBaseUrl } : {}),
+    // Never persist an external DATABASE_URL (it may contain credentials).
+    // The mode is enough for release-e2e to know whether it can safely derive
+    // the managed profile DB URL or must require an explicit test-side URL.
+    databaseMode,
+    ...(managedDatabaseMetadata
+      ? {
+          managedDatabaseConnection: managedDatabaseMetadata.connection,
+          managedDatabaseUsesDefaultPassword: managedDatabaseMetadata.usesDefaultPassword,
+        }
+      : {}),
     ports: {
       api: Number(env.PROLIFERATE_API_PORT),
       desktopWeb: Number(env.PROLIFERATE_WEB_PORT),
@@ -667,6 +865,46 @@ async function ensureProfile(options) {
   }
   console.error(`Prepared dev profile "${profile}" at ${paths.root}`);
   console.log(paths.launchEnv);
+}
+
+function recordRuntimeMetadata(options) {
+  const profile = validateProfile(options.profile);
+  const paths = profilePaths(profile);
+  const instance = readJsonFile(paths.instance);
+  if (!instance) {
+    throw new Error(`Dev profile "${profile}" does not exist. Run make setup PROFILE=${profile} first.`);
+  }
+  const worktreePath = path.resolve(process.cwd());
+  if (path.resolve(instance.worktreePath || "") !== worktreePath) {
+    throw new Error(
+      `Profile "${profile}" is bound to ${instance.worktreePath || "an unknown worktree"}; ` +
+        `current worktree is ${worktreePath}.`,
+    );
+  }
+  const candidateIdentity = candidateGitIdentity(worktreePath);
+  const publicCloudWorkerBaseUrl = publicCloudWorkerBaseUrlForInvocation();
+  const next = {
+    ...instance,
+    singleOrgMode: singleOrgModeForInvocation(),
+    candidateGitHead: candidateIdentity.gitHead,
+    candidateBuildIdentity: candidateIdentity.buildIdentity,
+    updatedAt: new Date().toISOString(),
+  };
+  if (instance.databaseMode === "profile") {
+    const managedDatabaseMetadata = managedDatabaseConnectionForInvocation(instance.databaseName);
+    next.managedDatabaseConnection = managedDatabaseMetadata.connection;
+    next.managedDatabaseUsesDefaultPassword = managedDatabaseMetadata.usesDefaultPassword;
+  } else {
+    delete next.managedDatabaseConnection;
+    delete next.managedDatabaseUsesDefaultPassword;
+  }
+  if (publicCloudWorkerBaseUrl) {
+    next.publicCloudWorkerBaseUrl = publicCloudWorkerBaseUrl;
+  } else {
+    delete next.publicCloudWorkerBaseUrl;
+  }
+  writeJsonAtomic(paths.instance, next);
+  console.error(`Recorded runtime metadata for dev profile "${profile}".`);
 }
 
 function dbUrlFor(dbName) {
@@ -848,6 +1086,8 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.command === "ensure" || options.command === "dev-init") {
     await ensureProfile(options);
+  } else if (options.command === "record-runtime-metadata") {
+    recordRuntimeMetadata(options);
   } else if (options.command === "list") {
     await listProfiles();
   } else if (options.command === "database-url") {

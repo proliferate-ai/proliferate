@@ -4,7 +4,7 @@
 
 import { expect } from "@playwright/test";
 
-import { test, adminContext, skipIfNoStripe } from "./_fixtures.ts";
+import { test, adminContext } from "./_fixtures.ts";
 import * as b from "../../stack/billing.ts";
 import * as seed from "../../stack/seed.ts";
 
@@ -40,8 +40,6 @@ async function subscribeOrgToPro(organizationId: string, ownerUserId: string, se
 
 
 test.describe("T2-BILL-3: seats — invite/remove/re-invite on a Pro org", () => {
-  skipIfNoStripe(test);
-
   test("membership changes reconcile Stripe seat quantity + proration grants, with no double-grant", async () => {
     const { token, organizationId } = await adminContext();
     const ownerId = await userIdFor(token);
@@ -237,8 +235,6 @@ test.describe("T2-BILL-3: seats — invite/remove/re-invite on a Pro org", () =>
 });
 
 test.describe("T2-BILL-4: team checkout — the second, independent org-creation path", () => {
-  skipIfNoStripe(test);
-
   test("creating a team checkout intent leaves the org pending_checkout (not joinable)", async () => {
     const { token } = await adminContext();
     // Request shape per TeamCheckoutRequest (team_checkout/models.py):

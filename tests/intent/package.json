@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "test:reporter": "tsx --test stack/strict-reporter.test.ts",
     "test:auth": "playwright test specs/auth.spec.ts",
     "test:login-methods": "playwright test specs/login-methods.spec.ts",
     "test:invitation": "playwright test specs/invitation.spec.ts",
@@ -22,6 +23,7 @@
     "@types/node": "^24.13.2",
     "@types/pg": "^8.11.10",
     "oauth2-mock-server": "^9.1.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   }
 }

@@ -28,17 +28,10 @@
 // document, not validated live on push; no real gateway is contacted, since
 // no prompt is ever sent).
 //
-// Runtime dependency, named rather than hidden (matches workspace-entry.spec.ts's
-// documented precedent for the identical constraint): this needs the local
-// AnyHarness runtime, which the CURRENT CI profile does not boot
-// (TIER2_INTENT_SKIP_RUNTIME=1, stack/boot.ts — building the Rust binary
-// per-PR is too slow, and no scenario needed it before this one). Building
-// something that would silently fail without the runtime would be
-// flaky-by-construction; instead this suite probes reachability and SKIPS
-// (never fails) when it is down, so the assertions run for real locally (or
-// in any CI profile that lifts the skip) and the gap stays visible rather
-// than silently passing. Also needs `installAgent` to succeed, which may
-// fetch the real CLI package over the network on a cold runtime-home (the
+// Runtime dependency, named rather than hidden: the required Tier-2 workflow
+// boots the local AnyHarness runtime. If it cannot build, start, or serve this
+// seam, setup fails instead of converting the scenario into a green skip.
+// `installAgent` may fetch the real CLI package on a cold runtime-home (the
 // same cost tests/release's T3 scenarios already pay routinely).
 
 import { expect, test } from "@playwright/test";
@@ -80,29 +73,11 @@ async function runtimeFetch(
   return { status: response.status, body: parsed };
 }
 
-async function isRuntimeReachable(baseUrl: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${baseUrl}/v1/agents`);
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
 test.describe("T2-SH-7: gateway model eligibility — session creation gates native ids, accepts gateway ids", () => {
   let workspaceId: string;
 
   test.beforeAll(async () => {
     const baseUrl = anyharnessBaseUrl();
-    const reachable = await isRuntimeReachable(baseUrl);
-    test.skip(
-      !reachable,
-      `local AnyHarness runtime not reachable at ${baseUrl} — this suite's CURRENT CI profile sets ` +
-        "TIER2_INTENT_SKIP_RUNTIME=1 (stack/boot.ts, too slow to build the Rust binary per-PR). Run " +
-        "locally with the runtime up (e.g. `make run PROFILE=t2intent` in another terminal, or unset " +
-        "TIER2_INTENT_SKIP_RUNTIME before booting this suite) to exercise this for real.",
-    );
-
     // Push a gateway-only agent-auth state: the exact shape a real client
     // (desktop dispatch worker / cloud materialization worker) delivers, with
     // NO native credential anywhere. A synthetic base_url+key is enough — the

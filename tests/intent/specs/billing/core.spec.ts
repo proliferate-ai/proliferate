@@ -15,14 +15,12 @@
 
 import { expect } from "@playwright/test";
 
-import { test, adminContext, adminUserId, skipIfNoStripe } from "./_fixtures.ts";
+import { test, adminContext, adminUserId } from "./_fixtures.ts";
 import * as b from "../../stack/billing.ts";
 
 const HOUR = 3600;
 
 test.describe("T2-BILL-1: checkout → grants → consumption → cut-off → reactivate", () => {
-  skipIfNoStripe(test);
-
   test("cloud-checkout creates a real Stripe test-mode session", async () => {
     const { token } = await adminContext();
     const res = await b.apiRequest<{ url: string }>("/v1/billing/cloud-checkout", {
@@ -76,12 +74,13 @@ test.describe("T2-BILL-1: checkout → grants → consumption → cut-off → re
     );
 
     // Overview reflects a paid plan, not blocked, with credit remaining.
-    let overview = await b.apiRequest<{ startBlocked: boolean; remainingHours: number }>(
+    let overview = await b.apiRequest<b.BlockState>(
       "/v1/billing/overview",
       { token: (await adminContext()).token },
     );
     expect(overview.body.startBlocked).toBe(false);
-    expect(overview.body.remainingHours).toBeGreaterThan(0);
+    expect(overview.body.remainingHours).not.toBeNull();
+    expect(overview.body.remainingHours ?? 0).toBeGreaterThan(0);
 
     // The subscription sync auto-enables overage for a fresh pro subject
     // (default_pro_overage_enabled in stripe_webhooks.py), and a healthy pro
@@ -104,7 +103,7 @@ test.describe("T2-BILL-1: checkout → grants → consumption → cut-off → re
     // the UI, more specific reason string).
     overview = await b.apiRequest<b.BlockState>("/v1/billing/overview", { token: (await adminContext()).token });
     expect(overview.body.startBlocked).toBe(true);
-    expect((overview.body as any).startBlockReason).toBe("overage_disabled");
+    expect(overview.body.startBlockReason).toBe("overage_disabled");
 
     // Reactivate (pro path): a top-up grant restores credit → unblocked.
     await b.seedGrant(subject.id, {
@@ -162,8 +161,6 @@ test.describe("T2-BILL-1: checkout → grants → consumption → cut-off → re
 });
 
 test.describe("T2-BILL-2: plan limits + policy gates", () => {
-  skipIfNoStripe(test);
-
   test("agent-gateway policy edit is gated by min plan on a free org (org_agent_policy_plan_required, 403)", async () => {
     const { token, organizationId } = await adminContext();
     // The claimed admin org is on the free plan; agent_gateway_policy_min_plan

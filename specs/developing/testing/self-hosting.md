@@ -1,14 +1,19 @@
-# Self-Hosting Test Hand-Off
+# Self-Hosting Test Design and Historical Hand-Off
 
-Status: hand-off from the self-hosting launch pass (2026-07-09) to the testing
-arc. Maps the self-hosting surface onto the 4-tier standard (`README.md`);
-scenario steps follow `scenarios.md` conventions. Grounded in code + a full
-local production-compose smoke run 2026-07-09, and one live incident (the
-desktop-artifact gap, §5) that this battery must be able to catch.
+Status: historical design hand-off from the self-hosting launch pass
+(2026-07-09), retained for its mechanism notes and incident history. The
+authoritative target is
+[`core-release-validation.md`](core-release-validation.md); current collected
+pointers and explicit gaps live in [`flows.md`](flows.md). A scenario described
+below is not qualification evidence merely because this hand-off proposed it.
+The original design was grounded in code, a full local production-compose
+smoke run, and the desktop-artifact incident in §5.
 
-Ruling already made by Pablo: self-hosting E2E runs against **standing staging
-servers** (real EC2), and tier-2 desktop flows **prefer desktop-web, escalate
-gaps** (gaps enumerated in §4).
+The hand-off recorded a ruling that self-hosting E2E use real EC2 and Tier 2
+desktop flows prefer desktop-web while escalating native-only gaps. The
+current runner uses both disposable provisioned EC2 and standing-box
+scenarios; see `flows.md` rather than inferring current coverage from the
+original shape below.
 
 ---
 
@@ -35,17 +40,46 @@ Invariants: every self-hosted server is single-org
 telemetry mode); `/setup` is claimed exactly once and 404s forever after;
 invitees register in a browser via the invitation's registration token.
 
-What already exists: `self-host-smoke.yml` (required merge check) boots the
-real compose stack http-only and walks health → `/meta` → claim → password
-login → invite → register → membership at the **API** level. Everything below
-is coverage that does not exist yet.
+At the time of the hand-off, only `self-host-smoke.yml` existed. It boots the
+real compose stack HTTP-only and walks health → `/meta` → claim → password
+login → invite → register → membership at the **API** level. It now runs
+fail-closed on pull requests and merge-group commits and is intended to become
+a required check; repository protection is configured separately.
 
-## 2. Flow registry rows
+Since then, the Tier 1 self-host contracts, several Tier 2 browser/server
+seams, and T3/T4 release-runner scenarios have landed. Some release scenarios
+still report blocked or expected-fail, and provisioning remains opt-in.
+T4-SH-2 is a nightly/manual post-publish diagnostic; it deliberately has no
+reusable release/promotion caller because stable-pointer equality is not a
+valid pre-publish gate. The missing trusted candidate-manifest gate remains a
+qualification gap. The per-row status in `flows.md` is the current inventory.
 
-Registered in `flows.md` under the **Self-hosting** section (same PR as this
-doc), same rules as the rest of the registry: pointer per row,
-audit-checked, `—` is a to-do. `2*` = needs the tier-2 escalation in §4 (not
-reachable from plain desktop-web).
+## 2. Historical flow-registry proposal
+
+These rows motivated the current self-hosting section in `flows.md`. The table
+below is preserved as the original proposal; do not use its empty pointers as
+the current coverage list.
+
+### Self-hosting
+
+| Flow | Tier | Test pointer |
+| --- | --- | --- |
+| `single_org_mode` derivation: self_managed telemetry ⇒ single-org; override respected | 1 | — |
+| SSO env aliasing: bare `SSO_*` ≡ `PROLIFERATE_SSO_*` (AliasChoices) | 1 | — |
+| `GET /meta` response contract (fields the desktop connect dialog parses) | 1 | — |
+| Desktop connect-to-server: enter URL → `/meta` verify (host+version shown) → confirm → relaunch → connected banner | 2* | — |
+| Desktop server switch: reset to Cloud → connect to a second server | 2* | — |
+| `/setup` claim through the UI → admin lands in instance org (self-hosted framing of T2-AUTH-1) | 2 | — |
+| Invite → browser `/register` with token → invitee desktop password login | 2 | — |
+| Sign-in surface adapts to `GET /auth/desktop/methods` (password form vs GitHub button) | 2 | — |
+| Self-hosted server on real EC2 + real TLS: boot → claim → login → invite lands in DB | 3 | — |
+| Two-server connect/switch against real staging servers (alpha/beta) | 3 | — |
+| Model gateway add-on: `--profile agent-gateway` boot, agent request routes through LiteLLM | 3 | — |
+| `./update.sh`: N−1 pin → update → migrated + healthy + `/meta` reports N | 4 | — |
+| **Release artifact chain intact: server desktop-pin → updater manifest → artifact URL 200 → artifact contains the release SHA** | 4 | — |
+
+`2*` = needs the tier-2 escalation in §4 (not reachable from plain
+desktop-web).
 
 ## 3. Scenario definitions
 
@@ -139,11 +173,18 @@ Asserts, against the release under test:
    hand-edited, not published).
 3. `https://downloads.proliferate.com/desktop/stable/<version>/latest.json`
    → HTTP 200 (the versioned manifest the server redirect targets).
-4. **HEAD every platform artifact URL in the manifest → HTTP 200.**
-5. The tag `desktop-v<version>` exists and contains the release SHA
-   (`git merge-base --is-ancestor <release-sha> desktop-v<version>`).
-Version-string equality is not a pass; only a fetchable artifact is. This
-must run in the release gate, not nightly-only.
+4. The manifest advertises exactly every platform in the shared shipped-updater
+   contract, and **HEAD every platform artifact URL → HTTP 200.** A manifest
+   cannot pass by silently dropping an architecture.
+5. The tag `desktop-v<version>` exists and contains the exact release SHA
+   (`git merge-base --is-ancestor <release-sha> desktop-v<version>`). The
+   inverse direction does not prove this and must fail candidate validation.
+Version-string equality is not a pass; only a fetchable artifact is. The target
+contract requires this in the release gate, not nightly-only. Current
+exception: `release-e2e-selfhost.yml` runs a post-publish stable-chain
+diagnostic nightly/manually. A qualifying pre-publish lane must instead inspect
+the immutable candidate manifest and artifacts for an exact SHA before moving
+the stable pointer; that lane and its promotion evidence consumer do not exist.
 
 ## 4. Tier-2 escalations (the desktop-web gaps)
 
@@ -167,8 +208,11 @@ same-day `release-2026-07-09` tag-collision in `create-release-tags.mjs`
 the server advanced to v0.3.16 while **no shipped desktop artifact contained
 the launch-flagship feature**, and every desktop-v* GitHub release sits in
 draft. No existing check catches this class: versions look consistent; the
-artifact is simply absent. T4-SH-2 is that check, and it must run in the
-release gate, not nightly-only.
+artifact is simply absent. T4-SH-2 is that check. It must run in the release
+gate rather than only as a nightly/manual monitor. The current T4-SH-2 caller
+is intentionally only the post-publish monitor; a trusted pre-publish
+`T4-ARTIFACT-1` candidate lane and its promotion evidence consumer remain the
+current gap.
 
 ## 6. Infrastructure prerequisites (one-time)
 

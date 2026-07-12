@@ -11,15 +11,13 @@
 
 import { expect } from "@playwright/test";
 
-import { test, adminContext, skipIfNoStripe } from "./_fixtures.ts";
+import { test, adminContext } from "./_fixtures.ts";
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from "../../stack/seed.ts";
 import * as b from "../../stack/billing.ts";
 
 const ORG_COMPUTE_ATTRIBUTION_ACTIVE = process.env.T2BILLING_ORG_COMPUTE_ATTRIBUTION === "1";
 
 test.describe("T2-BILL-9: usage surfaces tell the truth", () => {
-  skipIfNoStripe(test);
-
   test("summary + timeseries + llm-balance return exactly the seeded totals", async () => {
     const { token } = await adminContext();
     const userId = await userIdFor(token);
