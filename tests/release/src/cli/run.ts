@@ -6,7 +6,7 @@ import {
   requiredEnvForTargetLane,
   scenarioUsesDurableIdentity,
 } from "../config/env-resolution.js";
-import { envVarNames, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
+import { ENV_MANIFEST, envVarNames, DEFAULT_LOCAL_RUNTIME_URL } from "../config/env-manifest.js";
 import { pushGatewayAuthState } from "../fixtures/agent-auth.js";
 import { stagingSessionAvailable } from "../fixtures/staging-session.js";
 import { selectScenarios, allScenarioIds } from "../scenarios/registry.js";
@@ -23,6 +23,7 @@ import type { RuntimeLane } from "../config/types.js";
 import {
   evaluate,
   loadRequiredManifest,
+  RELEASE_POLICY_ENV,
   type ResultRow,
   type ScenarioStatus,
 } from "../runner/workflow-policy.js";
@@ -35,6 +36,21 @@ import {
 } from "../runner/live-scenario-policy.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  loadReleaseEnvironment,
+  ReleaseEnvironmentFileError,
+  type ReleaseEnvironmentLoadResult,
+} from "../config/local-environment.js";
+import {
+  assertLocalProfileTargetLaneCompatibility,
+  loadLocalProfileEnvironment,
+  LocalProfileConfigurationError,
+  type LocalProfileLoadResult,
+} from "../config/local-profile.js";
+import {
+  preflightLocalProfileServices,
+  type LocalServiceCheck,
+} from "../config/local-preflight.js";
 
 /**
  * Maps a runtime lane onto the release manifest's lane vocabulary
@@ -50,22 +66,107 @@ function runtimeLaneToReleaseLane(runtimeLane: RuntimeLane): string {
 const WORKFLOW_SUMMARY_FILENAME = "workflow-release-summary.json";
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-
-  if (args.help) {
+  const argv = process.argv.slice(2);
+  // Parse routing flags before touching the credential file. Scenario
+  // selection is CLI-only, so it gives the loader the least-privilege set of
+  // secrets this invocation may materialize. Parse once more after loading so
+  // RELEASE_POLICY from the file remains a supported default.
+  const preliminaryArgs = parseArgs(argv);
+  if (preliminaryArgs.help) {
     console.log(HELP_TEXT);
     return;
   }
+  const preliminaryScenarios = selectScenarios(preliminaryArgs.scenarios);
+  if (preliminaryScenarios.length === 0) {
+    console.log(`No scenarios selected. Known scenarios: ${allScenarioIds().join(", ")}`);
+    return;
+  }
+
+  const ambientEnvironmentNames = new Set(Object.keys(process.env));
+  const environmentLoad = loadReleaseEnvironment({
+    allowedNames: environmentFileNamesForSelection(preliminaryScenarios, preliminaryArgs.lane),
+  });
+  const args = parseArgs(argv);
+  assertLocalProfileTargetLaneCompatibility(args.lane);
+  const profileLoad = args.lane === "local"
+    ? loadLocalProfileEnvironment({ preserveNames: ambientEnvironmentNames })
+    : undefined;
+
+  printLocalEnvironmentSources(environmentLoad, profileLoad);
 
   console.log(
     `release-e2e: lane=${args.lane} desktop=${args.desktop} agents=${formatSelector(args.agents)} ` +
       `scenarios=${formatSelector(args.scenarios)} policy=${args.policy} dryRun=${args.dryRun}`,
   );
 
-  const scenarios = selectScenarios(args.scenarios);
-  if (scenarios.length === 0) {
-    console.log(`No scenarios selected. Known scenarios: ${allScenarioIds().join(", ")}`);
+  const scenarios = preliminaryScenarios;
+  const selectedRequiredEnv = new Set(scenarios.flatMap(allScenarioRequiredEnv));
+  const needsLocalDurableIdentity =
+    args.lane === "local" && selectedRequiredEnv.has("RELEASE_E2E_DURABLE_USER_EMAIL");
+  const needsLocalIdentityAutoSeed =
+    needsLocalDurableIdentity &&
+    (!nonEmpty(process.env.RELEASE_E2E_DURABLE_USER_EMAIL) ||
+      !nonEmpty(process.env.RELEASE_E2E_DURABLE_USER_PASSWORD));
+  if (needsLocalIdentityAutoSeed && profileLoad && !profileLoad.singleOrgMode) {
+    throw new LocalProfileConfigurationError(
+      `Dev profile "${profileLoad.profile}" was not launched in the single-org first-run posture needed ` +
+        "to seed a fresh local qualification identity. Restart it with: " +
+        `make run PROFILE=${profileLoad.profile} RELEASE_E2E=1`,
+    );
+  }
+
+  const sandboxCallbackIssue = configureLocalSandboxCallback(
+    args,
+    scenarios,
+    profileLoad,
+    ambientEnvironmentNames,
+  );
+  if (sandboxCallbackIssue && !args.dryRun) {
+    throw new LocalProfileConfigurationError(sandboxCallbackIssue);
+  }
+  const neededEnvNames = [...selectedRequiredEnv];
+  const preflightEnvNames = new Set(neededEnvNames);
+  if (args.lane === "local" && selectedRequiredEnv.has("RELEASE_E2E_DURABLE_USER_EMAIL")) {
+    // Local durable identity creation/login is runner infrastructure even for
+    // scenarios whose own body only reads the profile DB.
+    preflightEnvNames.add("RELEASE_E2E_SERVER_URL");
+  }
+  if (
+    args.lane === "local" &&
+    (selectedRequiredEnv.has("RELEASE_E2E_GATEWAY_TEST_KEY") ||
+      selectedRequiredEnv.has("RELEASE_E2E_GATEWAY_BASE_URL"))
+  ) {
+    preflightEnvNames.add("RELEASE_E2E_LOCAL_RUNTIME_URL");
+  }
+
+  const preSeedEnv = resolveEnv(neededEnvNames);
+  const localServiceChecks = args.lane === "local"
+    ? await preflightLocalProfileServices([...preflightEnvNames])
+    : [];
+  printEnvManifestReport();
+  printLocalServiceChecks(localServiceChecks);
+
+  if (args.dryRun) {
+    printDryRunPlan(
+      args,
+      scenarios,
+      preSeedEnv,
+      localServiceChecks,
+      profileLoad !== undefined,
+      sandboxCallbackIssue,
+    );
     return;
+  }
+  const unavailableServices = localServiceChecks.filter((check) => !check.ready);
+  if (unavailableServices.length > 0) {
+    const profileHint = profileLoad
+      ? ` Start it with make run PROFILE=${profileLoad.profile} SINGLE_ORG_MODE=true and retry.`
+      : " Start the explicitly configured local services (or select a dev PROFILE) and retry.";
+    throw new LocalProfileConfigurationError(
+      `${profileLoad ? `Dev profile "${profileLoad.profile}"` : "Local target"} is not ready for the selected scenarios: ` +
+        unavailableServices.map((check) => `${check.name} (${check.target})`).join(", ") +
+        `.${profileHint}`,
+    );
   }
 
   // Local lane self-seeds its durable user per run (Part 2 of #1069): the CI
@@ -74,13 +175,20 @@ async function main(): Promise<void> {
   // secret. Only local — staging keeps the durable-user env as its mechanism.
   const locallySeeded = new Set<string>();
   if (args.lane === "local" && !args.dryRun) {
-    await seedLocalDurableUser(locallySeeded);
-    await pushLocalGatewayAuth();
+    if (selectedRequiredEnv.has("RELEASE_E2E_DURABLE_USER_EMAIL")) {
+      await seedLocalDurableUser(locallySeeded);
+    }
+    if (
+      selectedRequiredEnv.has("RELEASE_E2E_GATEWAY_TEST_KEY") ||
+      selectedRequiredEnv.has("RELEASE_E2E_GATEWAY_BASE_URL")
+    ) {
+      await pushLocalGatewayAuth();
+    }
   }
 
-  printEnvManifestReport();
-
-  const neededEnvNames = [...new Set(scenarios.flatMap((scenario) => scenario.requiredEnv))];
+  // Seeding can materialize the durable email/password/org, so scenario
+  // resolution must happen after it. All non-mutating profile/service checks
+  // above intentionally happened first.
   const neededEnv = resolveEnv(neededEnvNames);
 
   const agentsSelector = args.agents;
@@ -126,14 +234,15 @@ async function main(): Promise<void> {
       // the staging target (there it authenticates via the rotating product
       // session, not a password), and the staging session's own availability is
       // checked right after.
-      const effectiveRequired = requiredEnvForTargetLane(scenario.requiredEnv, args.lane);
+      const runtimeRequired = scenarioRequiredEnvForRuntimeLane(scenario, runtimeLane);
+      const effectiveRequired = requiredEnvForTargetLane(runtimeRequired, args.lane);
       const missingEnv = args.dryRun
         ? []
         : missingRequiredForLane(effectiveRequired, runtimeLane, neededEnv, locallySeeded);
       if (
         !args.dryRun &&
         args.lane === "staging" &&
-        scenarioUsesDurableIdentity(scenario.requiredEnv) &&
+        scenarioUsesDurableIdentity(runtimeRequired) &&
         !stagingSessionAvailable()
       ) {
         missingEnv.push("RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN");
@@ -335,11 +444,12 @@ async function seedLocalDurableUser(seeded: Set<string>): Promise<void> {
     const creds = await ensureLocalDurableUser({ serverUrl, email, password, organizationId: "" });
     process.env.RELEASE_E2E_DURABLE_USER_EMAIL = creds.email;
     process.env.RELEASE_E2E_DURABLE_USER_PASSWORD = creds.password;
-    if (!nonEmpty(process.env.RELEASE_E2E_DURABLE_ORG_ID)) {
-      process.env.RELEASE_E2E_DURABLE_ORG_ID = creds.organizationId;
-      if (!emailPreset) {
-        seeded.add("RELEASE_E2E_DURABLE_ORG_ID");
-      }
+    // The organization id is a record in this profile's database. A shared
+    // local dotenv may contain an id from another profile, so the identity
+    // returned by the real claim/login flow is authoritative every run.
+    process.env.RELEASE_E2E_DURABLE_ORG_ID = creds.organizationId;
+    if (!emailPreset) {
+      seeded.add("RELEASE_E2E_DURABLE_ORG_ID");
     }
     // Only credentials that came from the per-run seed (not a real secret) are
     // marked seeded, so an operator who supplies a real durable identity for a
@@ -399,9 +509,266 @@ function printEnvManifestReport(): void {
   const resolution = resolveEnv(envVarNames());
   console.log("\nEnv manifest:");
   for (const entry of resolution.all) {
-    const status = entry.present ? "present" : "MISSING";
+    // The full manifest includes conditional controls and lane-specific
+    // credentials, so an absent global entry is merely unset. The dry-run
+    // plan and live per-cell resolver name actual required gaps as missing.
+    const status = entry.present ? "present" : "unset";
     const shown = entry.present && !entry.spec.secret ? ` = ${entry.value}` : "";
     console.log(`  [${status}] ${entry.spec.name}${shown}`);
+  }
+}
+
+function printLocalEnvironmentSources(
+  environment: ReleaseEnvironmentLoadResult,
+  profile: LocalProfileLoadResult | undefined,
+): void {
+  if (environment.status === "loaded") {
+    console.log(
+      `release-e2e: loaded ${environment.loadedNames.length} variable(s) from ${environment.filePath} ` +
+        `(values redacted; ${environment.preservedNames.length} ambient override(s) preserved; ` +
+        `${environment.ignoredNames.length} unselected key(s) not materialized)`,
+    );
+  } else if (environment.status === "missing") {
+    console.log(`release-e2e: no local credential file at ${environment.filePath}; using ambient environment only`);
+  }
+  if (profile) {
+    const callback = profile.publicCloudWorkerBaseUrl ? "public" : "none";
+    console.log(
+      `release-e2e: profile=${profile.profile} worktree=${profile.worktreePath} db=${profile.databaseMode} ` +
+        `singleOrg=${profile.singleOrgMode} callback=${callback} candidate=${profile.candidateGitHead.slice(0, 12)} ` +
+        `build=${profile.candidateBuildIdentity.slice(0, 19)}… ` +
+        `(${profile.appliedNames.length} profile default(s) derived; ${profile.preservedNames.length} ambient override(s))`,
+    );
+  }
+}
+
+function printDryRunPlan(
+  args: import("./args.js").CliArgs,
+  scenarios: ReturnType<typeof selectScenarios>,
+  neededEnv: ReturnType<typeof resolveEnv>,
+  localServiceChecks: readonly LocalServiceCheck[],
+  profileSelected: boolean,
+  sandboxCallbackIssue: string | undefined,
+): void {
+  const agents = args.agents === "all" ? ["all"] : args.agents;
+  let cellCount = 0;
+  console.log("\nDry-run plan (diagnostic only):");
+  for (const scenario of scenarios) {
+    for (const runtimeLane of scenario.lanes) {
+      cellCount += 1;
+      const runtimeRequired = scenarioRequiredEnvForRuntimeLane(scenario, runtimeLane);
+      const required = requiredEnvForTargetLane(runtimeRequired, args.lane);
+      const preflightRequired = new Set(required);
+      if (args.lane === "local" && scenarioUsesDurableIdentity(runtimeRequired)) {
+        preflightRequired.add("RELEASE_E2E_SERVER_URL");
+      }
+      if (
+        args.lane === "local" &&
+        (runtimeRequired.includes("RELEASE_E2E_GATEWAY_TEST_KEY") ||
+          runtimeRequired.includes("RELEASE_E2E_GATEWAY_BASE_URL"))
+      ) {
+        preflightRequired.add("RELEASE_E2E_LOCAL_RUNTIME_URL");
+      }
+      const missing = missingRequiredForLane(required, runtimeLane, neededEnv, new Set());
+      if (
+        args.lane === "staging" &&
+        scenarioUsesDurableIdentity(runtimeRequired) &&
+        !stagingSessionAvailable()
+      ) {
+        missing.push("RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN");
+      }
+      // The built-in first-run identity is deliberately local-runtime-only.
+      // A fresh profile user cannot stand in for the persistent, publicly
+      // reachable identity a sandbox cell needs. Mirror the live resolver
+      // here so --dry-run never advertises a sandbox cell as satisfiable by a
+      // seed that the real run will reject.
+      const autoSeed = args.lane === "local" && runtimeLane === "local"
+        ? missing.filter((name) => LOCAL_AUTO_SEED_NAMES.has(name))
+        : [];
+      const unresolved = missing.filter((name) => !autoSeed.includes(name));
+      const unreachable = localServiceChecks
+        .filter((check) => !check.ready && preflightRequired.has(check.name))
+        .map((check) => check.name);
+      const structuralBlock = dryRunStructuralBlock(args, scenario.id, runtimeLane);
+      const callbackBlock = runtimeLane === "sandbox" && scenarioNeedsPublicCallback(scenario)
+        ? sandboxCallbackIssue
+        : undefined;
+      const relevantChecks = localServiceChecks.filter((check) => preflightRequired.has(check.name));
+      const reachability = args.lane === "staging"
+        ? "remote reachability not checked by dry-run"
+        : relevantChecks.length > 0
+          ? "required local endpoints passed preflight"
+          : profileSelected
+            ? "no network service required by this cell"
+            : "reachability not checked (no profile endpoint required/provided)";
+      const readinessParts = [
+        unresolved.length > 0 ? `unsatisfied ${unresolved.join(", ")}` : undefined,
+        autoSeed.length > 0 ? `would attempt unverified local auto-seed: ${autoSeed.join(", ")}` : undefined,
+        unreachable.length > 0 ? `unreachable ${unreachable.join(", ")}` : undefined,
+        structuralBlock,
+        callbackBlock,
+        reachability,
+      ].filter((part): part is string => part !== undefined);
+      const readiness = readinessParts.join("; ");
+      console.log(`  [PLAN] ${scenario.id}/${runtimeLane} target=${args.lane} — ${readiness}`);
+      for (const [index, step] of scenario
+        .plan({ runtimeLane, desktop: args.desktop, agents })
+        .entries()) {
+        console.log(`    ${index + 1}. ${step.description}`);
+      }
+    }
+  }
+  console.log(
+    `\nDRY RUN ONLY: planned ${cellCount} scenario cell(s); validated 0. ` +
+      "No provider, model, billing, provisioning, browser, updater, or product flow was executed.",
+  );
+}
+
+const LOCAL_AUTO_SEED_NAMES = new Set([
+  "RELEASE_E2E_DURABLE_USER_EMAIL",
+  "RELEASE_E2E_DURABLE_USER_PASSWORD",
+  "RELEASE_E2E_DURABLE_ORG_ID",
+]);
+
+function dryRunStructuralBlock(
+  args: import("./args.js").CliArgs,
+  scenarioId: string,
+  runtimeLane: RuntimeLane,
+): string | undefined {
+  if (args.lane === "staging" && runtimeLane === "local") {
+    return "structurally blocked: staging has no paired local runtime";
+  }
+  if (scenarioId === "T4-CLOUD-1" && args.lane !== "staging") {
+    return "structurally blocked: cloud update requires the staging target";
+  }
+  if (scenarioId === "T4-DESKTOP-1" && (process.platform !== "darwin" || process.arch !== "arm64")) {
+    return `structurally blocked: desktop update requires darwin/arm64 (host ${process.platform}/${process.arch})`;
+  }
+  return undefined;
+}
+
+function printLocalServiceChecks(checks: readonly LocalServiceCheck[]): void {
+  if (checks.length === 0) {
+    return;
+  }
+  console.log("\nProfile service preflight:");
+  for (const check of checks) {
+    const detail = check.detail ? ` — ${check.detail}` : "";
+    console.log(`  [${check.ready ? "ready" : "UNREACHABLE"}] ${check.name} -> ${check.target}${detail}`);
+  }
+}
+
+type SelectedScenario = ReturnType<typeof selectScenarios>[number];
+
+function scenarioRequiredEnvForRuntimeLane(
+  scenario: SelectedScenario,
+  runtimeLane: RuntimeLane,
+): string[] {
+  return [...new Set([...scenario.requiredEnv, ...(scenario.requiredEnvByLane?.[runtimeLane] ?? [])])];
+}
+
+function allScenarioRequiredEnv(scenario: SelectedScenario): string[] {
+  return [
+    ...scenario.requiredEnv,
+    ...Object.values(scenario.requiredEnvByLane ?? {}).flat(),
+  ];
+}
+
+/**
+ * Credential-file least privilege: materialize every selected scenario's
+ * declared dependencies, all non-secret runner controls, and the small set of
+ * secret alternatives whose availability is represented by a state file or a
+ * bootstrap token rather than a hard requiredEnv entry.
+ */
+function environmentFileNamesForSelection(
+  scenarios: ReturnType<typeof selectScenarios>,
+  targetLane: import("../config/types.js").TargetLane,
+): ReadonlySet<string> {
+  const names = new Set<string>([RELEASE_POLICY_ENV]);
+  for (const spec of ENV_MANIFEST) {
+    if (!spec.secret) {
+      names.add(spec.name);
+    }
+  }
+  for (const scenario of scenarios) {
+    for (const name of allScenarioRequiredEnv(scenario)) {
+      names.add(name);
+    }
+  }
+  const selectedIds = new Set(scenarios.map((scenario) => scenario.id));
+  if (scenarios.some((scenario) => scenarioUsesDurableIdentity(allScenarioRequiredEnv(scenario)))) {
+    if (targetLane === "local") {
+      // The local runner authenticates (or first-run claims) this identity
+      // even when a scenario body only consumes its email for a DB
+      // reconciliation seam, so the password is an orchestration dependency.
+      names.add("RELEASE_E2E_DURABLE_USER_PASSWORD");
+    } else {
+      names.add("RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN");
+    }
+  }
+  if (["T3-PROV-1", "T3-REPO-1", "T3-SEC-MAT-1"].some((id) => selectedIds.has(id))) {
+    names.add("RELEASE_E2E_GITHUB_APP_SEED_REFRESH_TOKEN");
+  }
+  if (["T3-WT-1", "T3-PROV-1", "T3-REPO-1", "T3-SEC-MAT-1"].some((id) => selectedIds.has(id))) {
+    names.add("RELEASE_E2E_GITHUB_TEST_TOKEN");
+  }
+  return names;
+}
+
+function configureLocalSandboxCallback(
+  args: import("./args.js").CliArgs,
+  scenarios: ReturnType<typeof selectScenarios>,
+  profile: LocalProfileLoadResult | undefined,
+  ambientEnvironmentNames: ReadonlySet<string>,
+): string | undefined {
+  if (
+    args.lane !== "local" ||
+    !scenarios.some((scenario) => scenario.lanes.includes("sandbox") && scenarioNeedsPublicCallback(scenario))
+  ) {
+    return undefined;
+  }
+
+  if (!ambientEnvironmentNames.has("RELEASE_E2E_SERVER_URL") && profile?.publicCloudWorkerBaseUrl) {
+    process.env.RELEASE_E2E_SERVER_URL = profile.publicCloudWorkerBaseUrl;
+    console.log(
+      `release-e2e: sandbox cells use profile ${profile.profile}'s public Cloud worker callback URL`,
+    );
+  }
+  const serverUrl = nonEmpty(process.env.RELEASE_E2E_SERVER_URL);
+  if (serverUrl && isPublicHttpUrl(serverUrl)) {
+    return undefined;
+  }
+  const profileHint = profile
+    ? `Restart with make run PROFILE=${profile.profile} RELEASE_E2E=1 CLOUD_WORKER_TUNNEL=ngrok.`
+    : "Provide a publicly reachable RELEASE_E2E_SERVER_URL.";
+  return (
+    "Local sandbox cells require a non-loopback public API callback so E2B can deliver provider events; " +
+    `${serverUrl ? `got ${serverUrl}. ` : "none was configured. "}${profileHint}`
+  );
+}
+
+function scenarioNeedsPublicCallback(scenario: SelectedScenario): boolean {
+  const required = scenarioRequiredEnvForRuntimeLane(scenario, "sandbox");
+  return (
+    required.includes("RELEASE_E2E_SERVER_URL") ||
+    required.includes("RELEASE_E2E_E2B_API_KEY")
+  );
+}
+
+function isPublicHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+    const loopback =
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname === "::1" ||
+      hostname === "::" ||
+      hostname === "0.0.0.0" ||
+      hostname.startsWith("127.");
+    return (url.protocol === "https:" || url.protocol === "http:") && !loopback;
+  } catch {
+    return false;
   }
 }
 
@@ -413,4 +780,13 @@ function formatSelector(selector: string[] | "all"): string {
   return selector === "all" ? "all" : selector.join(",");
 }
 
-await main();
+try {
+  await main();
+} catch (error) {
+  if (error instanceof ReleaseEnvironmentFileError || error instanceof LocalProfileConfigurationError) {
+    console.error(`release-e2e configuration error: ${error.message}`);
+    process.exitCode = 2;
+  } else {
+    throw error;
+  }
+}

@@ -248,7 +248,9 @@ export async function runIntegrationAuditProbe(
   return new Promise((resolve, reject) => {
     const child = spawn("uv", ["run", "python", ...args], {
       cwd: serverDir,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
+      // DB seam only: importing the shared server engine must not require
+      // production-only secrets from the release-runner shell.
+      env: { ...process.env, DATABASE_URL: databaseUrl, DEBUG: "true" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";

@@ -22,9 +22,45 @@ export interface EnvVarSpec {
   secret: boolean;
   /** Lanes that need this var; omitted means "all runtime lanes". */
   lanes?: readonly RuntimeLane[];
+  /** Exact value that activates/satisfies a required opt-in. */
+  requiredValue?: string;
+  /** False for per-run authorization switches that must never persist in dotenv. */
+  persistentFileAllowed?: boolean;
 }
 
 export const ENV_MANIFEST: readonly EnvVarSpec[] = [
+  {
+    name: "RELEASE_E2E_ENV_FILE",
+    description:
+      "Optional path override for the local dotenv credential file. The runner parses it as data, " +
+      "requires owner-only permissions, and never shells/sources it.",
+    whereItLives:
+      "Operator override only. Defaults locally to ~/.proliferate-local/dev/release-e2e.env; CI ignores " +
+      "the default file and receives credentials from GitHub Actions.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_PROFILE",
+    description:
+      "Optional local full-stack dev profile whose instance metadata supplies the API, AnyHarness, " +
+      "Desktop web, and profile database endpoints.",
+    whereItLives:
+      "The profile name passed to `make setup PROFILE=<name>` / `make run PROFILE=<name>`. `make " +
+      "release-e2e PROFILE=<name> ...` exports this automatically.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_ALLOW_PROFILE_WORKTREE_MISMATCH",
+    description:
+      "Conspicuous per-run authorization (`1`) to target a dev profile bound to a different git " +
+      "worktree than the candidate checkout. Without it, candidate/profile mismatch fails preflight.",
+    whereItLives: "Ambient environment for one intentional invocation only; never the persistent dotenv file.",
+    secret: false,
+    requiredValue: "1",
+    persistentFileAllowed: false,
+    lanes: ["local"],
+  },
   {
     name: "RELEASE_E2E_SERVER_URL",
     description:
@@ -256,6 +292,42 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     lanes: ["local"],
   },
   {
+    name: "RELEASE_E2E_DESKTOP_WEB_URL",
+    description:
+      "Desktop renderer URL used by browser-driven desktop scenarios such as T3-WF-7. When a " +
+      "RELEASE_E2E_PROFILE is selected this is derived from that profile's desktopWeb port.",
+    whereItLives:
+      "The selected profile's instance.json / PROLIFERATE_WEB_PORT. May be overridden explicitly for " +
+      "a separately launched Desktop renderer.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_DESKTOP_T4",
+    description:
+      "Explicit opt-in (`1`) for T4-DESKTOP-1's two real signed macOS builds and updater install. " +
+      "Absent means the expensive local scenario is blocked, never silently skipped.",
+    whereItLives: "Set by the operator only for an intentional local macOS aarch64 update run.",
+    secret: false,
+    requiredValue: "1",
+    persistentFileAllowed: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_DESKTOP_UPDATE_FROM",
+    description: "Immutable published N-1 desktop version used as the starting app in T4-DESKTOP-1.",
+    whereItLives: "The immediately previous published desktop-v<version> release chosen for qualification.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_DESKTOP_UPDATE_TO",
+    description: "Immutable candidate N desktop version T4-DESKTOP-1 downloads, verifies, and installs.",
+    whereItLives: "The release candidate's exact desktop version; must match the artifact under qualification.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
     name: "RELEASE_E2E_STAGING_ECS_PIN_BUMP",
     description:
       "Opt-in switch (set to `1`) authorizing T4-CLOUD-1 to bump the advertised AnyHarness runtime " +
@@ -269,6 +341,22 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "Operator sets it explicitly for a nightly/on-demand staging run once AWS creds able to " +
       "register-task-definition + update-service on proliferate-staging are present. Never set in CI " +
       "without a dedicated staging-scoped role.",
+    secret: false,
+    requiredValue: "1",
+    persistentFileAllowed: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_UPDATE_FROM",
+    description: "Immutable published N-1 AnyHarness runtime version already running before T4-CLOUD-1.",
+    whereItLives: "The prior runtime release selected for candidate qualification.",
+    secret: false,
+    lanes: ["sandbox"],
+  },
+  {
+    name: "RELEASE_E2E_CLOUD_UPDATE_TO",
+    description: "Immutable candidate N AnyHarness runtime version T4-CLOUD-1 must self-update to.",
+    whereItLives: "The exact runtime CDN artifact version attached to the release candidate.",
     secret: false,
     lanes: ["sandbox"],
   },
@@ -286,6 +374,52 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "Operator sets it explicitly for an on-demand/nightly self-hosting run with AWS creds present. " +
       "CI: a workflow input / repo variable gating the provisioning job.",
     secret: false,
+    requiredValue: "1",
+    persistentFileAllowed: false,
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_UPDATE_FROM",
+    description:
+      "Explicit published N-1 self-hosted image version for T4-SH-1. This avoids deriving an image " +
+      "tag that was never published.",
+    whereItLives: "Chosen from published ghcr.io/proliferate-ai/proliferate-server version tags.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_UPDATE_TO",
+    description: "Explicit published N self-hosted image version T4-SH-1 updates the throwaway box to.",
+    whereItLives: "The release version under qualification; defaults to VERSION when intentionally omitted.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_REGION",
+    description: "AWS region for throwaway self-hosted EC2 scenarios.",
+    whereItLives: "Operator choice; tests/release/scripts/selfhost-box.sh defaults to us-east-1.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_INSTANCE_TYPE",
+    description: "EC2 instance type for the throwaway self-hosted qualification box.",
+    whereItLives: "Operator choice; tests/release/scripts/selfhost-box.sh has a low-cost default.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_IMAGE_TAG",
+    description: "Initial server image tag installed by the self-hosted box provisioning script.",
+    whereItLives: "Set by the owning self-hosted scenario to the release version it is validating.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_DESKTOP",
+    description: "Optional Desktop renderer URL used for browser validation against a self-hosted server.",
+    whereItLives: "A locally launched Desktop web renderer pointed at the throwaway or standing self-hosted box.",
+    secret: false,
+    lanes: ["local"],
   },
   {
     name: "RELEASE_E2E_SELFHOST_URL",
@@ -318,6 +452,20 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
     secret: false,
   },
   {
+    name: "RELEASE_E2E_SELFHOST_GATEWAY_MODEL",
+    description: "Cheap model alias T3-SH-3 calls through the self-hosted LiteLLM add-on.",
+    whereItLives: "Operator override; the scenario has a documented cheap default.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
+    name: "RELEASE_E2E_SELFHOST_GATEWAY_PUBLIC_URL",
+    description: "Public inference URL used to validate the self-hosted LiteLLM add-on.",
+    whereItLives: "Defaults to <RELEASE_E2E_SELFHOST_URL>/llm; override only for split gateway topology.",
+    secret: false,
+    lanes: ["local"],
+  },
+  {
     name: "RELEASE_E2E_RELEASE_DESKTOP_VERSION",
     description:
       "The desktop version the release under test ships, used by T4-SH-2 (artifact chain) as the " +
@@ -325,6 +473,18 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "tag must all agree on. Defaults to the repo VERSION file (the version of the checked-out ref, " +
       "which IS the release under test in the release gate). Override to check a specific release.",
     whereItLives: "The release pipeline sets it to the release being cut; otherwise the repo VERSION file.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_RELEASE_DATE",
+    description: "Expected UTC release day used to prove the updater manifest was freshly published.",
+    whereItLives: "The release workflow's release metadata, formatted as YYYY-MM-DD.",
+    secret: false,
+  },
+  {
+    name: "RELEASE_E2E_RELEASE_SHA",
+    description: "Release commit SHA whose lineage must match the published desktop-v<version> tag.",
+    whereItLives: "The release workflow's immutable candidate SHA; defaults to the checked-out HEAD.",
     secret: false,
   },
   {
@@ -352,7 +512,7 @@ export const ENV_MANIFEST: readonly EnvVarSpec[] = [
       "postgresql+asyncpg://proliferate:localdev@127.0.0.1:5432/proliferate_dev_<profile>, per " +
       "specs/developing/local/feature-worktree-auth.md. Required by the billing, integration-audit, " +
       "and provisioning DB seams (all local-lane only).",
-    secret: false,
+    secret: true,
     lanes: ["local"],
   },
 ] as const;

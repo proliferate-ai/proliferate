@@ -12,13 +12,62 @@ promotion; see the enforcement exception in
 ## Running it
 
 ```
-make release-e2e LANE=local|staging DESKTOP=web AGENTS=all SCENARIOS=all [POLICY=signal|release] [DRY_RUN=1]
+# One-time profile setup, then launch it in qualification posture.
+make setup PROFILE=<name>
+make run PROFILE=<name> RELEASE_E2E=1
+# Add CLOUD_WORKER_TUNNEL=ngrok when a selected cell uses a real E2B sandbox.
+
+make release-e2e PROFILE=<name> LANE=local DESKTOP=web AGENTS=all SCENARIOS=all [POLICY=signal|release] [DRY_RUN=1]
+make release-e2e LANE=staging DESKTOP=web AGENTS=all SCENARIOS=all [POLICY=signal|release] [DRY_RUN=1]
 # or, from tests/release/:
 pnpm exec tsx src/cli/run.ts --lane local --dry-run
 ```
 
 Every credential is declared in `src/config/env-manifest.ts` with where to get
-it. The runner records a missing credential only against the scenarios/lanes
+it. On a laptop, the runner automatically parses
+`~/.proliferate-local/dev/release-e2e.env` (or the explicit
+`RELEASE_E2E_ENV_FILE`) without shelling/sourcing it. The file must be a regular
+file owned by the current user with mode `600`; ambient variables override file
+values, and values are never logged. Only secrets needed by the selected
+scenarios are materialized into the runner process; unrelated file credentials
+remain unselected and cannot leak into child probes. GitHub Actions does not
+read the implicit home file. Costly/mutating authorization switches
+(`RELEASE_E2E_SELFHOST_PROVISION`, `RELEASE_E2E_STAGING_ECS_PIN_BUMP`, and
+`RELEASE_E2E_DESKTOP_T4`) are rejected from the persistent file and must be set
+for one invocation in the ambient environment.
+
+For the local lane, `PROFILE=<name>` resolves the profile's API, AnyHarness,
+Desktop web, and database endpoints from
+`~/.proliferate-local/dev/profiles/<name>/instance.json`. Profiles are
+worktree-bound. A profile whose worktree was deleted fails preflight with a
+command for preparing a fresh profile name instead of silently using stale
+ports. A profile bound to another existing checkout also fails unless the
+operator explicitly sets `RELEASE_E2E_ALLOW_PROFILE_WORKTREE_MISMATCH=1` for
+that invocation. The profile also records its candidate Git HEAD and a source
+fingerprint (tracked diff plus untracked content); changing the checkout after
+launch invalidates the profile until it is restarted. `RELEASE_E2E_PROFILE` is
+rejected outright with `LANE=staging`, so local endpoints cannot silently
+retarget a staging run.
+
+Before any identity claim or gateway-auth write, the runner probes only the
+selected scenarios' dependencies: API and AnyHarness must return their real
+versioned health payload, Desktop must serve the Proliferate application shell,
+and the profile database transport must be reachable. Explicit endpoint
+variables still win. Profiles launched with an external `DATABASE_URL` require
+an explicit `RELEASE_E2E_LOCAL_DATABASE_URL`; the runner never guesses or
+persists that credential-bearing URL. Non-default managed Postgres connection
+identity is recorded without its password and likewise requires an explicit
+test-side URL rather than silently falling back to a same-named default DB.
+
+`RELEASE_E2E=1` is a Make launch posture: it records `singleOrgMode=true` so a
+fresh profile exposes the one-time `/setup` claim used by the local durable
+identity fixture. It is not a release-runner authorization switch. Profiles
+started in ordinary multi-org posture fail a needed auto-seed with the exact
+relaunch command. Real local sandbox cells additionally require a persisted,
+non-loopback Cloud worker callback; launch with `CLOUD_WORKER_TUNNEL=ngrok` (or
+provide an explicit public callback) so E2B can reach the candidate API.
+
+The runner records a missing credential only against the scenarios/lanes
 that need it as **blocked** (`src/config/env-resolution.ts`,
 `missingRequiredForLane`), so independent work still executes. Outcomes are
 **green** (asserted for real), **blocked** (known out-of-band gate/credential
@@ -39,6 +88,17 @@ Policy determines the aggregate result:
 Neither policy proves the complete product contract yet: the provisional
 manifest and registered scenarios remain smaller than
 `specs/developing/testing/core-release-validation.md`.
+
+`--dry-run` is planning only. It prints every selected scenario cell, its
+missing environment names, and its ordered steps, then states `validated 0`.
+It never emits green qualification evidence or calls a provider, model,
+billing system, browser, provisioner, or updater.
+
+The legacy `T3-BILL-2` shared-account grant drain is intentionally disabled.
+It could poison later tests and violated the authoritative disposable-fixture
+contract. Until the correlation-owned Stripe/Bifrost/E2B billing world lands,
+the row reports non-green before mutating any grant; strict release policy
+therefore remains red rather than manufacturing billing confidence.
 
 ## Lanes
 

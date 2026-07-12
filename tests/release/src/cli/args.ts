@@ -19,14 +19,11 @@ export interface CliArgs {
   help: boolean;
 }
 
-const DEFAULTS: Omit<CliArgs, "help"> = {
+const DEFAULTS: Omit<CliArgs, "help" | "policy"> = {
   lane: "local",
   desktop: "web",
   agents: "all",
   scenarios: "all",
-  // Default resolved from RELEASE_POLICY (falls back to signal) so an
-  // un-flagged run behaves exactly as it does today.
-  policy: parseReleasePolicy(process.env[RELEASE_POLICY_ENV]),
   dryRun: false,
   fileIssues: false,
   // Relative to this package's own cwd (`tests/release/`), which is what
@@ -43,7 +40,14 @@ const DEFAULTS: Omit<CliArgs, "help"> = {
  * dependency for a handful of flags.
  */
 export function parseArgs(argv: readonly string[]): CliArgs {
-  const args: CliArgs = { ...DEFAULTS, help: false };
+  // Resolve the environment default at invocation time. The local runner
+  // securely loads release-e2e.env immediately before calling parseArgs, so a
+  // RELEASE_POLICY declared there must not be captured during module import.
+  const args: CliArgs = {
+    ...DEFAULTS,
+    policy: parseReleasePolicy(process.env[RELEASE_POLICY_ENV]),
+    help: false,
+  };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];

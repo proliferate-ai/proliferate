@@ -41,7 +41,13 @@ Profile state lives in:
 
 The profile stores non-secret defaults in `profile.env`, an effective
 `launch.env`, generated Tauri dev config, launch runners, lock/instance state,
-and the desktop file-backed app home. AnyHarness runtime state lives in:
+and the desktop file-backed app home. `instance.json` is the non-secret launch
+evidence descriptor. It records the bound worktree, candidate Git HEAD and
+source/build fingerprint, single-org posture, ports, database mode, and the
+managed database's host/port/user/database identity. It never contains a
+database password or URL. When a non-loopback `CLOUD_WORKER_BASE_URL` is active,
+the launcher records that public callback base too; loopback callbacks are
+omitted. AnyHarness runtime state lives in:
 
 ```text
 ~/.proliferate-local/runtimes/<name>/
@@ -66,7 +72,36 @@ Postgres listener is not confused with a Homebrew Postgres bound to
 intentionally want to bypass the profile database for a one-off run, or
 `LOCAL_PGHOST=127.0.0.1` when you intentionally want a separate local Postgres.
 When `DATABASE_URL` is set, profile setup and run skip profile database
-creation/readiness checks and migrate the provided database URL.
+creation/readiness checks and migrate the provided database URL. Profile
+`instance.json` records only `databaseMode: "external"` in that case—never the
+credential-bearing URL. For a managed profile database it records the effective
+non-secret connection identity and whether the documented local default
+password posture is in use. The release runner derives a URL only when that
+identity exactly matches the platform-safe defaults: `::1` on macOS or
+`127.0.0.1` elsewhere, port `5432`, user `proliferate`, the canonical
+`proliferate_dev_<profile>` database, and the local default password posture.
+An external database or any custom managed host, port, user, database, or
+password posture requires an ambient `RELEASE_E2E_LOCAL_DATABASE_URL` for the
+DB-dependent test cells. A shared credential-file value is not explicit and is
+removed rather than guessed or reused.
+
+Single-org profiles write their first-run claim token to the profile-scoped
+`setup-token` file (rather than the production `/var/lib/...` default). The
+local release runner resolves that path from the selected profile so it can
+claim a fresh test instance through the same setup flow. It also reads the
+recorded `singleOrgMode` boolean rather than inferring self-hosted posture from
+the presence of that file.
+
+`make setup` and the start of `make run` refresh the candidate identity in
+`instance.json`. The identity combines the Git HEAD with a SHA-256 fingerprint
+of tracked changes and non-ignored untracked content; only the digest is
+persisted. After optional tunnel setup, the run recipe invokes
+`scripts/dev.mjs record-runtime-metadata` so a generated public worker callback
+and the final launch posture are recorded atomically. The local release runner
+fails if the bound checkout disappears, moves to a different HEAD, or changes
+after the profile launch. Restart the profile before collecting evidence. An
+explicit one-run worktree-mismatch authorization permits targeting a profile
+from another checkout, but does not make stale launch metadata valid.
 
 `make run PROFILE=<name>` also starts and waits for the local Docker Redis
 service from `server/docker-compose.yml`. Redis backs RedBeat and cloud

@@ -126,6 +126,10 @@ export function missingRequiredForLane(
     if (!resolution.present(name)) {
       return true;
     }
+    const requiredValue = findEnvVarSpec(name)?.requiredValue;
+    if (requiredValue !== undefined && resolution.get(name) !== requiredValue) {
+      return true;
+    }
     return runtimeLane !== "local" && locallySeeded.has(name);
   });
 }
@@ -186,8 +190,9 @@ export function blockedReasonForMissingEnv(
     const seededNote = locallySeeded.has(name)
       ? " [set for this run by local durable-user seeding, which does not satisfy the sandbox lane]"
       : "";
+    const exactValueNote = spec?.requiredValue ? ` [must equal ${JSON.stringify(spec.requiredValue)}]` : "";
     const suffix = spec ? ` — ${spec.description} (${spec.whereItLives})` : "";
-    return `      - ${name}${seededNote}${suffix}`;
+    return `      - ${name}${seededNote}${exactValueNote}${suffix}`;
   });
-  return `${scenarioId}/${runtimeLane}: blocked on absent credential(s) — set the following to run it for real:\n${lines.join("\n")}`;
+  return `${scenarioId}/${runtimeLane}: blocked on unsatisfied environment requirement(s) — set the following to run it for real:\n${lines.join("\n")}`;
 }
