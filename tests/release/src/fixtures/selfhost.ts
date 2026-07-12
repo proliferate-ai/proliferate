@@ -39,7 +39,10 @@ export interface SelfHostBox {
  * process's stderr; the script prints one JSON line to stdout, parsed here.
  */
 export async function provisionSelfHostBox(imageTag: string): Promise<SelfHostBox> {
-  const stdout = await runScript(["provision", "--tag", imageTag], 20 * 60_000);
+  const stdout = await runScript(
+    ["provision", "--tag", imageTag],
+    configuredMilliseconds("SELFHOST_BOX_PROVISION_TIMEOUT_MS", 20 * 60_000),
+  );
   const line = stdout.trim().split("\n").filter(Boolean).pop() ?? "";
   let parsed: SelfHostBox;
   try {
@@ -66,7 +69,7 @@ export async function terminateSelfHostBox(box: SelfHostBox): Promise<void> {
         "--key-path",
         box.keyPath,
       ],
-      10 * 60_000,
+      configuredMilliseconds("SELFHOST_BOX_TERMINATE_TIMEOUT_MS", 10 * 60_000),
     );
   } catch (error) {
     throw new Error(
@@ -138,21 +141,63 @@ export async function ssh(box: SelfHostBox, command: string): Promise<string> {
 }
 
 function runScript(args: string[], timeoutMs: number): Promise<string> {
-  return runCommand("bash", [SELFHOST_BOX_SCRIPT, ...args], timeoutMs, { inheritStderr: true });
+  return runCommand("bash", [SELFHOST_BOX_SCRIPT, ...args], timeoutMs, {
+    inheritStderr: true,
+    // EC2's termination waiter can legitimately take ten minutes. Preserve a
+    // bounded window large enough for waiter + SG detach retries before KILL.
+    terminationGraceMs: configuredMilliseconds(
+      "SELFHOST_BOX_TERMINATION_GRACE_MS",
+      12 * 60_000,
+    ),
+  });
 }
 
 function runCommand(
   cmd: string,
   args: string[],
   timeoutMs: number,
-  options: { inheritStderr?: boolean } = {},
+  options: { inheritStderr?: boolean; terminationGraceMs?: number } = {},
 ): Promise<string> {
   return new Promise((resolvePromise, reject) => {
+    const terminationGraceMs = options.terminationGraceMs ?? 5_000;
     const child = spawn(cmd, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32",
     });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
+    let requiredSigkill = false;
+    let settled = false;
+    let graceTimer: NodeJS.Timeout | undefined;
+    let hardStopTimer: NodeJS.Timeout | undefined;
+
+    const clearTimers = () => {
+      clearTimeout(timeoutTimer);
+      if (graceTimer) clearTimeout(graceTimer);
+      if (hardStopTimer) clearTimeout(hardStopTimer);
+    };
+    const rejectOnce = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      reject(error);
+    };
+    const resolveOnce = (value: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      resolvePromise(value);
+    };
+    const timeoutError = () =>
+      new Error(
+        `${cmd} ${args[0]} timed out after ${timeoutMs / 1000}s; ` +
+          (requiredSigkill
+            ? `SIGTERM cleanup grace (${terminationGraceMs / 1000}s) expired and SIGKILL was required`
+            : `process exited during the ${terminationGraceMs / 1000}s SIGTERM cleanup grace`) +
+          (stderr ? `: ${stderr.trim()}` : ""),
+      );
+
     child.stdout?.on("data", (chunk) => {
       stdout += chunk.toString();
     });
@@ -163,21 +208,63 @@ function runCommand(
         process.stderr.write(safeChunk);
       }
     });
-    const timer = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error(`${cmd} ${args[0]} timed out after ${timeoutMs / 1000}s`));
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      signalProcessGroup(child.pid, child, "SIGTERM");
+      graceTimer = setTimeout(() => {
+        requiredSigkill = true;
+        signalProcessGroup(child.pid, child, "SIGKILL");
+        // SIGKILL should close the process group immediately. Keep the Promise
+        // bounded even if a platform fails to deliver a close event.
+        hardStopTimer = setTimeout(() => rejectOnce(timeoutError()), 5_000);
+      }, terminationGraceMs);
     }, timeoutMs);
     child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
+      rejectOnce(error);
     });
     child.on("close", (code) => {
-      clearTimeout(timer);
+      if (timedOut) {
+        rejectOnce(timeoutError());
+        return;
+      }
       if (code === 0) {
-        resolvePromise(stdout);
+        resolveOnce(stdout);
       } else {
-        reject(new Error(`${cmd} ${args[0]} exited ${code}${stderr ? `: ${stderr.trim()}` : ""}`));
+        rejectOnce(new Error(`${cmd} ${args[0]} exited ${code}${stderr ? `: ${stderr.trim()}` : ""}`));
       }
     });
   });
+}
+
+function signalProcessGroup(
+  pid: number | undefined,
+  child: ReturnType<typeof spawn>,
+  signal: NodeJS.Signals,
+): void {
+  try {
+    if (process.platform !== "win32" && pid) {
+      process.kill(-pid, signal);
+    } else {
+      child.kill(signal);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+    // Fall back to the leader on platforms/sandboxes that reject negative-pid
+    // delivery. The grace timer still owns the bounded KILL escalation.
+    try {
+      child.kill(signal);
+    } catch {
+      // The close event or hard-stop timer settles the command.
+    }
+  }
+}
+
+function configuredMilliseconds(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer number of milliseconds`);
+  }
+  return value;
 }

@@ -36,6 +36,7 @@
 # run-instances / create the SG + key pair in the default VPC), ssh, scp, curl.
 
 set -euo pipefail
+umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$(cd "$SCRIPT_DIR/../../../server/deploy" && pwd)"
@@ -44,6 +45,7 @@ REGION="${RELEASE_E2E_SELFHOST_REGION:-us-east-1}"
 INSTANCE_TYPE="${RELEASE_E2E_SELFHOST_INSTANCE_TYPE:-t3.small}"
 SERVER_IMAGE_REPO="ghcr.io/proliferate-ai/proliferate-server"
 SG_DELETE_ATTEMPTS="${SELFHOST_BOX_SG_DELETE_ATTEMPTS:-12}"
+INSTANCE_RECOVERY_ATTEMPTS="${SELFHOST_BOX_INSTANCE_RECOVERY_ATTEMPTS:-12}"
 RETRY_SLEEP_SECONDS="${SELFHOST_BOX_RETRY_SLEEP_SECONDS:-5}"
 
 [[ "$SG_DELETE_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || {
@@ -52,6 +54,10 @@ RETRY_SLEEP_SECONDS="${SELFHOST_BOX_RETRY_SLEEP_SECONDS:-5}"
 }
 [[ "$RETRY_SLEEP_SECONDS" =~ ^[0-9]+$ ]] || {
   printf '[selfhost-box] ERROR: SELFHOST_BOX_RETRY_SLEEP_SECONDS must be a non-negative integer.\n' >&2
+  exit 1
+}
+[[ "$INSTANCE_RECOVERY_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || {
+  printf '[selfhost-box] ERROR: SELFHOST_BOX_INSTANCE_RECOVERY_ATTEMPTS must be a positive integer.\n' >&2
   exit 1
 }
 
@@ -63,16 +69,38 @@ fail() { printf '[selfhost-box] ERROR: %s\n' "$*" >&2; exit 1; }
 # are sufficient to recover a leaked test resource.
 aws_quiet() { aws "$@" 2>/dev/null; }
 
+# Cleanup is idempotent only when AWS explicitly confirms the resource is
+# already absent. Raw provider stderr is inspected in an owner-only temp file
+# for the named error code and is never emitted.
+aws_cleanup_allow_absent() {
+  local absent_pattern="$1"
+  shift
+  local error_file
+  error_file="$(mktemp "${TMPDIR:-/tmp}/selfhost-aws-error.XXXXXX")"
+  if aws "$@" 2>"$error_file"; then
+    rm -f "$error_file"
+    return 0
+  fi
+  if grep -Eq "$absent_pattern" "$error_file"; then
+    rm -f "$error_file"
+    return 0
+  fi
+  rm -f "$error_file"
+  return 1
+}
+
 cleanup_resources() {
   local instance_id="$1" sg_id="$2" sg_name="$3" key_name="$4" key_path="$5"
   local -a failures=()
 
   if [[ -n "$instance_id" ]]; then
     log "terminating instance $instance_id"
-    if ! aws_quiet ec2 terminate-instances --region "$REGION" --instance-ids "$instance_id" >/dev/null; then
+    if ! aws_cleanup_allow_absent 'InvalidInstanceID\.NotFound' \
+      ec2 terminate-instances --region "$REGION" --instance-ids "$instance_id" >/dev/null; then
       failures+=("terminate-instances(instance=$instance_id)")
     fi
-    if ! aws_quiet ec2 wait instance-terminated --region "$REGION" --instance-ids "$instance_id"; then
+    if ! aws_cleanup_allow_absent 'InvalidInstanceID\.NotFound' \
+      ec2 wait instance-terminated --region "$REGION" --instance-ids "$instance_id"; then
       failures+=("wait-instance-terminated(instance=$instance_id)")
     fi
   fi
@@ -91,7 +119,8 @@ cleanup_resources() {
     # ENI detach after termination can lag. Exhaustion is a cleanup failure,
     # never a successful teardown.
     for ((attempt = 1; attempt <= SG_DELETE_ATTEMPTS; attempt += 1)); do
-      if aws_quiet ec2 delete-security-group --region "$REGION" "${sg_args[@]}" >/dev/null; then
+      if aws_cleanup_allow_absent 'InvalidGroup\.NotFound' \
+        ec2 delete-security-group --region "$REGION" "${sg_args[@]}" >/dev/null; then
         sg_deleted=1
         break
       fi
@@ -106,7 +135,8 @@ cleanup_resources() {
 
   if [[ -n "$key_name" ]]; then
     log "deleting key pair $key_name"
-    if ! aws_quiet ec2 delete-key-pair --region "$REGION" --key-name "$key_name" >/dev/null; then
+    if ! aws_cleanup_allow_absent 'InvalidKeyPair\.NotFound' \
+      ec2 delete-key-pair --region "$REGION" --key-name "$key_name" >/dev/null; then
       failures+=("delete-key-pair(key-pair=$key_name)")
     fi
   fi
@@ -137,18 +167,28 @@ cleanup_partial_provision() {
   PROVISION_ACTIVE=0
   local cleanup_failed=0
   if [[ -z "$PROVISION_INSTANCE_ID" && -n "$PROVISION_INSTANCE_CLIENT_TOKEN" ]]; then
-    local recovered_instance_id=""
+    local recovered_instance_id="" attempt recovery_state="None"
     log "resolving partial instance by client token $PROVISION_INSTANCE_CLIENT_TOKEN"
-    if recovered_instance_id="$(aws_quiet ec2 describe-instances \
-      --region "$REGION" \
-      --filters "Name=client-token,Values=$PROVISION_INSTANCE_CLIENT_TOKEN" \
-      --query 'Reservations[0].Instances[0].InstanceId' \
-      --output text)"; then
+    for ((attempt = 1; attempt <= INSTANCE_RECOVERY_ATTEMPTS; attempt += 1)); do
+      if recovered_instance_id="$(aws_quiet ec2 describe-instances \
+        --region "$REGION" \
+        --filters "Name=client-token,Values=$PROVISION_INSTANCE_CLIENT_TOKEN" \
+        --query 'Reservations[0].Instances[0].InstanceId' \
+        --output text)"; then
+        recovery_state="${recovered_instance_id:-None}"
+      else
+        recovery_state="describe-error"
+      fi
       if [[ -n "$recovered_instance_id" && "$recovered_instance_id" != "None" ]]; then
         PROVISION_INSTANCE_ID="$recovered_instance_id"
+        break
       fi
-    else
-      log "cleanup failure: resolve-instance(client-token=$PROVISION_INSTANCE_CLIENT_TOKEN)"
+      if ((attempt < INSTANCE_RECOVERY_ATTEMPTS)); then
+        sleep "$RETRY_SLEEP_SECONDS"
+      fi
+    done
+    if [[ -z "$PROVISION_INSTANCE_ID" ]]; then
+      log "cleanup failure: resolve-instance(client-token=$PROVISION_INSTANCE_CLIENT_TOKEN, exhausted=$INSTANCE_RECOVERY_ATTEMPTS, last=$recovery_state)"
       cleanup_failed=1
     fi
   fi

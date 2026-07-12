@@ -118,11 +118,16 @@ therefore remains red rather than manufacturing billing confidence.
 Self-hosted EC2 qualification owns every resource it creates. The provisioner
 records the key pair, security group, instance, and local private-key path as
 soon as each mutating call begins, and ERR/EXIT cleanup removes any partial
-stack before returning nonzero. Explicit teardown always attempts instance
+stack before returning nonzero. A lost `run-instances` response is recovered
+by polling its idempotency token; repeated `None` remains an unknown/leak risk,
+never evidence of absence. The TypeScript timeout sends TERM to the whole
+process group and gives those traps a bounded cleanup grace before using KILL.
+Explicit teardown always attempts instance
 termination, the termination waiter, bounded security-group deletion retries,
 key-pair deletion, and local key removal. Every failed operation is reported
 with non-secret resource identifiers; any failure makes the scenario and its
-cleanup evidence red, and teardown never prints a success marker in that case.
+cleanup evidence red. Only provider-confirmed NotFound is idempotent success,
+and teardown never prints a success marker on an ambiguous or failed cleanup.
 
 ## Lanes
 

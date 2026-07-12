@@ -239,6 +239,9 @@ current gap.
 - The AWS CFN template embeds a full copy of `.env.production.example`; any
   env-template assertion should check both or it will pass while CFN drifts.
 - Disposable EC2 is fail-closed: provisioning traps ERR/EXIT and cleans every
-  partial key/SG/instance it has acquired. Teardown attempts all resource
-  classes, treats exhausted SG retries as failure, and returns nonzero with
-  resource identifiers if any step fails; a cleanup warning is never a pass.
+  partial key/SG/instance it has acquired. Lost instance responses poll by
+  client token; persistent `None` is unknown and red. Timeouts TERM the process
+  group and wait for cleanup before bounded KILL escalation. Teardown attempts
+  all resource classes, treats only confirmed NotFound as already clean, treats
+  exhausted SG retries as failure, and returns nonzero with resource identifiers
+  if any step fails; a cleanup warning is never a pass.

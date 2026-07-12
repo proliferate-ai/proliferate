@@ -1,40 +1,33 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import {
-  chmodSync,
   existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
   readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 import { toFailureReport } from "../report/failure-reporter.js";
 import { withRequiredCleanup } from "./required-cleanup.js";
-import { terminateSelfHostBox, type SelfHostBox } from "./selfhost.js";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const SELFHOST_BOX_SCRIPT = path.resolve(HERE, "..", "..", "scripts", "selfhost-box.sh");
-const SECRET_SENTINEL = "ghp_SELFHOST_PROVIDER_SECRET_MUST_NOT_LEAK";
-
-interface MockHarness {
-  directory: string;
-  env: NodeJS.ProcessEnv;
-  logPath: string;
-}
-
-interface ShellResult {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-  calls: string[];
-}
+import {
+  SECRET_SENTINEL,
+  assertOperation,
+  cleanupFailurePattern,
+  cleanupOperations,
+  createMockHarness,
+  operationCount,
+  readCalls,
+  resourceExists,
+  runShell,
+  terminateArgs,
+  withTemporaryEnvironment,
+} from "./selfhost-box-mock.js";
+import {
+  provisionSelfHostBox,
+  terminateSelfHostBox,
+  type SelfHostBox,
+} from "./selfhost.js";
 
 test("provision cleanup owns partial key, security-group, and instance resources", () => {
   const cases = [
@@ -52,16 +45,6 @@ test("provision cleanup owns partial key, security-group, and instance resources
       name: "failure immediately after security-group creation",
       failOps: "ec2:authorize-security-group-ingress",
       expectedCleanup: ["ec2:delete-security-group", "ec2:delete-key-pair"],
-    },
-    {
-      name: "lost instance-creation response",
-      failOps: "ec2:run-instances",
-      expectedCleanup: [
-        "ec2:terminate-instances",
-        "ec2:wait:instance-terminated",
-        "ec2:delete-security-group",
-        "ec2:delete-key-pair",
-      ],
     },
     {
       name: "failure immediately after instance creation",
@@ -132,6 +115,51 @@ test("partial-provision cleanup failure remains red and never claims completion"
     assert.equal(result.stderr.includes("partial resource cleanup complete"), false);
     assert.equal(result.stderr.includes("teardown complete"), false);
     assert.equal(result.stderr.includes(SECRET_SENTINEL), false);
+  } finally {
+    rmSync(harness.directory, { recursive: true, force: true });
+  }
+});
+
+test("lost run-instances response polls None until the client token resolves to an instance", () => {
+  const harness = createMockHarness({
+    statefulResources: true,
+    successLostOps: "ec2:run-instances",
+    describeClientTokenSequence: "None,i-selfhost-test",
+    instanceRecoveryAttempts: 3,
+  });
+  try {
+    const result = runShell(harness, ["provision", "--tag", "0.3.99"]);
+    assert.notEqual(result.status, 0, "the lost provider response remains a failed provision");
+    assert.equal(operationCount(result.calls, "ec2:describe-instances"), 2);
+    assertOperation(result.calls, "ec2:terminate-instances", "resolved partial instance");
+    assert.match(result.stderr, /partial resource cleanup complete after provision failure/);
+    assert.equal(resourceExists(harness, "instance"), false);
+    assert.equal(result.stderr.includes(SECRET_SENTINEL), false);
+  } finally {
+    rmSync(harness.directory, { recursive: true, force: true });
+  }
+});
+
+test("persistent None is unknown, stays red, and retains client-token recovery context", () => {
+  const harness = createMockHarness({
+    statefulResources: true,
+    successLostOps: "ec2:run-instances",
+    describeClientTokenSequence: "None",
+    instanceRecoveryAttempts: 3,
+  });
+  try {
+    const result = runShell(harness, ["provision", "--tag", "0.3.99"]);
+    assert.notEqual(result.status, 0);
+    assert.equal(operationCount(result.calls, "ec2:describe-instances"), 3);
+    assert.match(
+      result.stderr,
+      /resolve-instance\(client-token=selfhost-e2e-[^,]+, exhausted=3, last=None\)/,
+    );
+    assert.match(result.stderr, /partial resource cleanup failed after provision failure/);
+    assert.equal(result.stderr.includes("partial resource cleanup complete"), false);
+    assert.equal(result.stderr.includes("teardown complete"), false);
+    assert.equal(result.stderr.includes(SECRET_SENTINEL), false);
+    assert.equal(resourceExists(harness, "instance"), true, "unknown instance was falsely cleared");
   } finally {
     rmSync(harness.directory, { recursive: true, force: true });
   }
@@ -211,6 +239,111 @@ test("terminate reports completion only after every cleanup operation succeeds",
   }
 });
 
+test("cleanup rerun after provider-side success with a lost response is idempotently clean", () => {
+  const harness = createMockHarness({
+    statefulResources: true,
+    initialResources: true,
+    successLostOps: [
+      "ec2:terminate-instances",
+      "ec2:delete-security-group",
+      "ec2:delete-key-pair",
+    ].join(","),
+  });
+  const keyPath = path.join(harness.directory, "owned-private-key.pem");
+  writeFileSync(keyPath, "private material\n", { mode: 0o600 });
+  try {
+    const first = runShell(harness, terminateArgs(keyPath));
+    assert.notEqual(first.status, 0, "lost cleanup responses cannot be green");
+    assert.equal(first.stderr.includes("teardown complete"), false);
+
+    const rerun = runShell(harness, terminateArgs(keyPath));
+    assert.equal(rerun.status, 0, "confirmed NotFound resources are idempotently clean");
+    assert.match(rerun.stderr, /teardown complete for instance=i-selfhost-test/);
+    assert.equal(rerun.stderr.includes("cleanup failure"), false);
+    assert.equal(rerun.stderr.includes(SECRET_SENTINEL), false);
+  } finally {
+    rmSync(harness.directory, { recursive: true, force: true });
+  }
+});
+
+test("confirmed already-absent resources are a clean teardown", () => {
+  const harness = createMockHarness({ statefulResources: true });
+  const keyPath = path.join(harness.directory, "already-absent.pem");
+  try {
+    const result = runShell(harness, terminateArgs(keyPath));
+    assert.equal(result.status, 0);
+    assert.match(result.stderr, /teardown complete for instance=i-selfhost-test/);
+    assert.equal(result.stderr.includes("cleanup failure"), false);
+  } finally {
+    rmSync(harness.directory, { recursive: true, force: true });
+  }
+});
+
+test("provision timeout TERM-waits for partial-resource traps before considering SIGKILL", async () => {
+  const harness = createMockHarness({
+    statefulResources: true,
+    hangOp: "ec2:wait:instance-running",
+    provisionTimeoutMs: 1_500,
+    terminationGraceMs: 3_000,
+  });
+  try {
+    const error = await withTemporaryEnvironment(harness.env, async () => {
+      try {
+        await provisionSelfHostBox("0.3.99");
+      } catch (caught) {
+        return caught;
+      }
+      throw new Error("timed provision unexpectedly passed");
+    });
+    assert.ok(error instanceof Error);
+    const message = String(error);
+    assert.match(message, /timed out after 1\.5s/);
+    assert.match(message, /process exited during the 3s SIGTERM cleanup grace/);
+    assert.match(message, /partial resource cleanup complete after provision failure/);
+    assert.equal(message.includes("SIGKILL was required"), false);
+    assert.equal(message.includes(SECRET_SENTINEL), false);
+    const calls = readCalls(harness);
+    for (const operation of cleanupOperations) {
+      assertOperation(calls, operation, "timeout cleanup");
+    }
+    assert.equal(resourceExists(harness, "instance"), false);
+    assert.deepEqual(
+      readdirSync(harness.directory).filter((name) => name.endsWith(".pem")),
+      [],
+    );
+  } finally {
+    rmSync(harness.directory, { recursive: true, force: true });
+  }
+});
+
+test("timeout escalates to process-group KILL only when cleanup exceeds its grace", async () => {
+  const harness = createMockHarness({
+    statefulResources: true,
+    hangOp: "ec2:wait:instance-running,ec2:terminate-instances",
+    provisionTimeoutMs: 1_500,
+    terminationGraceMs: 300,
+  });
+  try {
+    const error = await withTemporaryEnvironment(harness.env, async () => {
+      try {
+        await provisionSelfHostBox("0.3.99");
+      } catch (caught) {
+        return caught;
+      }
+      throw new Error("stubborn timed provision unexpectedly passed");
+    });
+    assert.ok(error instanceof Error);
+    const message = String(error);
+    assert.match(message, /SIGTERM cleanup grace \(0\.3s\) expired and SIGKILL was required/);
+    assert.equal(message.includes("partial resource cleanup complete"), false);
+    assertOperation(readCalls(harness), "ec2:terminate-instances", "stubborn cleanup");
+    assert.equal(resourceExists(harness, "instance"), true, "KILL path falsely cleared the instance");
+    assert.equal(message.includes(SECRET_SENTINEL), false);
+  } finally {
+    rmSync(harness.directory, { recursive: true, force: true });
+  }
+});
+
 test("TypeScript cleanup wrappers preserve red evidence IDs without secret leakage", async () => {
   const harness = createMockHarness("ec2:terminate-instances");
   const keyPath = path.join(harness.directory, "owned-private-key.pem");
@@ -265,175 +398,3 @@ test("TypeScript cleanup wrappers preserve red evidence IDs without secret leaka
     rmSync(harness.directory, { recursive: true, force: true });
   }
 });
-
-const cleanupOperations = [
-  "ec2:terminate-instances",
-  "ec2:wait:instance-terminated",
-  "ec2:delete-security-group",
-  "ec2:delete-key-pair",
-];
-
-function createMockHarness(failOps: string): MockHarness {
-  const directory = mkdtempSync(path.join(tmpdir(), "selfhost-box-test-"));
-  const bin = path.join(directory, "bin");
-  const logPath = path.join(directory, "aws-calls.log");
-  writeFileSync(logPath, "", "utf8");
-  writeExecutable(
-    path.join(bin, "aws"),
-    `#!/usr/bin/env bash
-set -euo pipefail
-service="\${1:-}"
-command="\${2:-}"
-qualifier=""
-if [[ "$service" == "ec2" && "$command" == "wait" ]]; then
-  qualifier=":\${3:-}"
-fi
-operation="$service:$command$qualifier"
-printf '%s|%s\\n' "$operation" "$*" >> "$MOCK_AWS_LOG"
-if [[ ",\${MOCK_AWS_FAIL_OPS:-}," == *",$operation,"* ]]; then
-  printf '%s\\n' "$MOCK_SECRET_SENTINEL" >&2
-  exit 42
-fi
-case "$operation" in
-  ssm:get-parameters) printf 'ami-selfhost-test\\n' ;;
-  ec2:create-key-pair) printf 'MOCK_PRIVATE_KEY_MATERIAL\\n' ;;
-  ec2:create-security-group) printf 'sg-selfhost-test\\n' ;;
-  ec2:run-instances) printf 'i-selfhost-test\\n' ;;
-  ec2:describe-instances)
-    if [[ "$*" == *"Name=client-token"* ]]; then
-      printf 'i-selfhost-test\\n'
-    else
-      printf '203.0.113.10\\n'
-    fi
-    ;;
-esac
-`,
-  );
-  writeExecutable(
-    path.join(bin, "curl"),
-    `#!/usr/bin/env bash
-set -euo pipefail
-url="\${!#}"
-if [[ "$url" == "https://checkip.amazonaws.com" ]]; then
-  printf '198.51.100.20\\n'
-fi
-`,
-  );
-  writeExecutable(path.join(bin, "ssh"), "#!/usr/bin/env bash\ncat >/dev/null || true\n");
-  writeExecutable(path.join(bin, "tar"), "#!/usr/bin/env bash\nprintf 'mock archive'\n");
-  writeExecutable(path.join(bin, "sleep"), "#!/usr/bin/env bash\nexit 0\n");
-
-  return {
-    directory,
-    logPath,
-    env: {
-      ...process.env,
-      PATH: `${bin}:${process.env.PATH ?? ""}`,
-      TMPDIR: directory,
-      MOCK_AWS_LOG: logPath,
-      MOCK_AWS_FAIL_OPS: failOps,
-      MOCK_SECRET_SENTINEL: SECRET_SENTINEL,
-      RELEASE_E2E_GITHUB_TEST_TOKEN: SECRET_SENTINEL,
-      SELFHOST_BOX_SG_DELETE_ATTEMPTS: "3",
-      SELFHOST_BOX_RETRY_SLEEP_SECONDS: "0",
-    },
-  };
-}
-
-function runShell(harness: MockHarness, args: string[]): ShellResult {
-  const result = spawnSync("bash", [SELFHOST_BOX_SCRIPT, ...args], {
-    encoding: "utf8",
-    env: harness.env,
-    timeout: 10_000,
-  });
-  if (result.error) {
-    throw result.error;
-  }
-  const calls = readFileSync(harness.logPath, "utf8").split("\n").filter(Boolean);
-  return {
-    status: result.status,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    calls,
-  };
-}
-
-function terminateArgs(keyPath: string): string[] {
-  return [
-    "terminate",
-    "--instance-id",
-    "i-selfhost-test",
-    "--sg-id",
-    "sg-selfhost-test",
-    "--key-name",
-    "key-selfhost-test",
-    "--key-path",
-    keyPath,
-  ];
-}
-
-function assertOperation(calls: string[], operation: string, message: string): void {
-  assert.ok(calls.some((call) => call.startsWith(`${operation}|`)), `${message}: missing ${operation}`);
-}
-
-function operationCount(calls: string[], operation: string): number {
-  return calls.filter((call) => call.startsWith(`${operation}|`)).length;
-}
-
-function cleanupFailurePattern(operation: string): RegExp {
-  switch (operation) {
-    case "ec2:terminate-instances":
-      return /terminate-instances\(instance=i-selfhost-test\)/;
-    case "ec2:wait:instance-terminated":
-      return /wait-instance-terminated\(instance=i-selfhost-test\)/;
-    case "ec2:delete-security-group":
-      return /delete-security-group\(security-group=sg-selfhost-test, exhausted=3\)/;
-    case "ec2:delete-key-pair":
-      return /delete-key-pair\(key-pair=key-selfhost-test\)/;
-    default:
-      throw new Error(`unknown cleanup operation ${operation}`);
-  }
-}
-
-function writeExecutable(file: string, content: string): void {
-  const parent = path.dirname(file);
-  mkdirSync(parent, { recursive: true });
-  writeFileSync(file, content, { mode: 0o700 });
-  chmodSync(file, 0o700);
-}
-
-async function withTemporaryEnvironment<T>(
-  environment: NodeJS.ProcessEnv,
-  run: () => Promise<T>,
-): Promise<T> {
-  const names = [
-    "PATH",
-    "TMPDIR",
-    "MOCK_AWS_LOG",
-    "MOCK_AWS_FAIL_OPS",
-    "MOCK_SECRET_SENTINEL",
-    "RELEASE_E2E_GITHUB_TEST_TOKEN",
-    "SELFHOST_BOX_SG_DELETE_ATTEMPTS",
-    "SELFHOST_BOX_RETRY_SLEEP_SECONDS",
-  ];
-  const prior = new Map(names.map((name) => [name, process.env[name]]));
-  for (const name of names) {
-    const value = environment[name];
-    if (value === undefined) {
-      delete process.env[name];
-    } else {
-      process.env[name] = value;
-    }
-  }
-  try {
-    return await run();
-  } finally {
-    for (const [name, value] of prior) {
-      if (value === undefined) {
-        delete process.env[name];
-      } else {
-        process.env[name] = value;
-      }
-    }
-  }
-}
