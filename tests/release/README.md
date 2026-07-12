@@ -115,6 +115,15 @@ contract. Until the correlation-owned Stripe/Bifrost/E2B billing world lands,
 the row reports non-green before mutating any grant; strict release policy
 therefore remains red rather than manufacturing billing confidence.
 
+Self-hosted EC2 qualification owns every resource it creates. The provisioner
+records the key pair, security group, instance, and local private-key path as
+soon as each mutating call begins, and ERR/EXIT cleanup removes any partial
+stack before returning nonzero. Explicit teardown always attempts instance
+termination, the termination waiter, bounded security-group deletion retries,
+key-pair deletion, and local key removal. Every failed operation is reported
+with non-secret resource identifiers; any failure makes the scenario and its
+cleanup evidence red, and teardown never prints a success marker in that case.
+
 ## Lanes
 
 - `--lane` = TARGET lane (where the API server lives): `local` or `staging`.

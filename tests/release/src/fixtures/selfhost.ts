@@ -15,6 +15,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { redactSecrets } from "../report/redaction.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // src/fixtures -> up two to tests/release, then scripts/.
@@ -148,7 +149,7 @@ function runCommand(
 ): Promise<string> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(cmd, args, {
-      stdio: ["ignore", "pipe", options.inheritStderr ? "inherit" : "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     let stderr = "";
@@ -156,7 +157,11 @@ function runCommand(
       stdout += chunk.toString();
     });
     child.stderr?.on("data", (chunk) => {
-      stderr += chunk.toString();
+      const safeChunk = redactSecrets(chunk.toString());
+      stderr += safeChunk;
+      if (options.inheritStderr) {
+        process.stderr.write(safeChunk);
+      }
     });
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
