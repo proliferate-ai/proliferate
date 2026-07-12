@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 import type { ScenarioDefinition, ScenarioRunContext } from "../types.js";
-import { ScenarioBlockedError, ScenarioExpectedFailError } from "../types.js";
+import { ScenarioBlockedError } from "../types.js";
 import { ApiClient, ApiRequestError } from "../../fixtures/http.js";
 import { loginDurableUserOnStaging, stagingSessionAvailable } from "../../fixtures/staging-session.js";
 import {
@@ -12,17 +13,37 @@ import {
   type RuntimeHealth,
   type StagingEcsTarget,
 } from "../../fixtures/anyharness-upgrade.js";
+import {
+  QUALIFICATION_MCP_TOOL,
+  assertAgentArtifactsMatchPins,
+  assertQualificationMcpApplied,
+  assertReconcileCompletedForAgent,
+  assertSameDurableSession,
+  assertServedCatalogMatchesCandidate,
+  assertTerminalTurnEvidence,
+  maxEventSeq,
+  selectQualificationAgent,
+  type QualificationAgent,
+  type QualificationCatalogDocument,
+  type RuntimeAgentSummary,
+  type RuntimeLaunchOptions,
+  type RuntimeReconcileStatus,
+  type RuntimeSessionEventEnvelope,
+  type RuntimeSessionSummary,
+} from "./t4-cloud-evidence.js";
 
 /**
  * T4-CLOUD-1 — AnyHarness runtime binary self-update in a cloud sandbox.
  * specs/tbd/anyharness-self-update-v1.md §7; flows.md "Upgrade & release".
  *
  * The tier-4 assertion (spec §5, "converged"): with a sandbox already running
- * version N, bump the server's advertised `desiredVersions.anyharness` pin and
+ * explicit N-1, start a durable live session, bump the server's advertised
+ * `desiredVersions.anyharness` pin to explicit candidate N, and
  * let the sandbox worker converge the runtime binary IN PLACE — no test-side
- * artifact push (the artifacts the redirect serves are real; the *feed* is the
- * one thing stubbed, here by moving the server pin). Then assert the running
- * runtime reports the new version and the catalog/agent pins reconcile.
+ * artifact push. Then assert the running runtime reports N, the candidate
+ * catalog and installed native/ACP-facing artifacts reconcile, the same
+ * durable session resumes, its product MCP binding is applied, and a real
+ * post-update turn completes a structured MCP tool invocation.
  *
  * Feed knob: the server advertises the pin from `RUNTIME_VERSION`
  * (server/proliferate/server/version.py `runtime_version_pin`), a baked-in
@@ -35,9 +56,11 @@ import {
  * the explicit `RELEASE_E2E_STAGING_ECS_PIN_BUMP` opt-in and guarded against any
  * production-looking target (assertNotProduction).
  *
- * Observation surface: the server proxy `GET /v1/cloud/cloud-sandbox/anyharness/
- * {path}` reaches the sandbox runtime; `/health` reports the runtime's running
- * version. Convergence is that version reaching the advertised pin.
+ * Observation surface: the server gateway proxy
+ * `GET /v1/gateway/cloud-sandbox/anyharness/{path}` reaches the sandbox runtime.
+ * `/health`, `/v1/catalogs/agents/version`, `/v1/agents*`, `/v1/sessions*`, and
+ * the structured event log jointly prove convergence. The old
+ * `/v1/cloud/cloud-sandbox/anyharness/*` path does not exist.
  *
  * Standing blockers this scenario reports honestly rather than faking:
  *   - --lane local has no ECS pin knob and no cloud sandbox -> blocked.
@@ -45,29 +68,19 @@ import {
  *   - Provisioning a real E2B sandbox not reachable in this environment -> blocked.
  *   - RELEASE_E2E_STAGING_ECS_PIN_BUMP not set -> blocked (never mutate ECS unasked).
  *
- * Known product blocker (found building this test, 2026-07-09): the released
- * AnyHarness binary reports `CARGO_PKG_VERSION` (hardcoded 0.1.0, never stamped
- * at release) from BOTH `anyharness --version` and the runtime `/health`
- * `version` field. The worker's convergence preflight and post-relaunch health
- * gate (anyharness/crates/proliferate-worker/src/anyharness_update.rs, via
- * self_update.rs `version_output_matches`) each require an exact match to the
- * pinned semver, so a real pin like 0.3.12 can never converge: preflight rejects
- * the downloaded binary and the health gate never sees the target version. When
- * the scenario reaches the mechanism and the swap never converges, it raises
- * ScenarioExpectedFailError diagnosing exactly this, rather than a red — this is
- * the bug a T4 test exists to surface. Filed as
- * https://github.com/proliferate-ai/proliferate/issues/1089.
+ * A product break is red. Missing fixture infrastructure may block before the
+ * ECS mutation, but version, catalog, reconcile, session, or MCP failures after
+ * the mutation are never converted to expected-fail.
  */
 
 const CONVERGE_TIMEOUT_MS = 6 * 60_000;
+const QUALIFICATION_TIMEOUT_MS = 4 * 60_000;
+const TURN_TIMEOUT_MS = 2 * 60_000;
 const POLL_INTERVAL_MS = 15_000;
+const TURN_POLL_INTERVAL_MS = 1_000;
 const SANDBOX_READY_TIMEOUT_MS = 3 * 60_000;
-
-// Published to the downloads CDN by scripts/ci-cd/publish-runtime-cdn.sh; both
-// resolve to a real 302->200 through the server runtime redirect. Whichever the
-// server is NOT currently advertising is the bump target, so the scenario always
-// moves the pin to a different, published version.
-const PUBLISHED_CANDIDATES = ["0.3.12", "0.3.11"] as const;
+const RUNTIME_GATEWAY_PREFIX = "/v1/gateway/cloud-sandbox/anyharness";
+const CANDIDATE_CATALOG_URL = new URL("../../../../../catalogs/agents/catalog.json", import.meta.url);
 
 const STAGING_ECS_TARGET: StagingEcsTarget = {
   cluster: "proliferate-staging",
@@ -81,15 +94,25 @@ export const t4Cloud1: ScenarioDefinition = {
   title: "AnyHarness runtime binary self-update in a cloud sandbox",
   registryFlowRef: "specs/developing/testing/scenarios.md#T4-CLOUD-1",
   lanes: ["sandbox"],
-  requiredEnv: ["RELEASE_E2E_SERVER_URL", "RELEASE_E2E_STAGING_ECS_PIN_BUMP"],
+  requiredEnv: [
+    "RELEASE_E2E_SERVER_URL",
+    "RELEASE_E2E_STAGING_ECS_PIN_BUMP",
+    "RELEASE_E2E_CLOUD_UPDATE_FROM",
+    "RELEASE_E2E_CLOUD_UPDATE_TO",
+  ],
   plan: () => [
     { description: "authenticate the durable staging user (rotating session refresh token)" },
     { description: "ensure the user's cloud sandbox is provisioned and ready" },
-    { description: "record baseline: advertised anyharness pin (/meta) + running version (proxied /health)" },
+    { description: "bind the staging catalog feed and all agent artifact pins to the candidate checkout" },
+    { description: "at explicit N-1, choose a ready cheap harness with exact native + agent-process pins" },
+    { description: "start a durable session with the applied subagents HTTP MCP binding; complete a baseline turn" },
     { description: "bump the advertised RUNTIME_VERSION pin on the staging server task def; roll the service" },
-    { description: "poll the proxied runtime /health until it reports the new pin (worker converges in place)" },
-    { description: "assert the running binary version equals the advertised pin (spec §5 converged)" },
-    { description: "restore the original staging task definition" },
+    { description: "wait for server pin + proxied /health to report explicit candidate N" },
+    { description: "assert candidate catalog active and startup installed-only reconcile completed for the harness" },
+    { description: "assert native CLI + ACP-facing agent-process paths and versions equal candidate pins" },
+    { description: "resume the same durable session and assert its subagents MCP binding is still applied" },
+    { description: `run a real post-update turn that completes ${QUALIFICATION_MCP_TOOL} and ends successfully` },
+    { description: "restore the original staging task definition in finally; restoration failure is red" },
   ],
   run: async (ctx) => {
     if (ctx.dryRun) {
@@ -123,50 +146,239 @@ async function runReal(ctx: ScenarioRunContext): Promise<void> {
   }
 
   const serverUrl = ctx.env.require("RELEASE_E2E_SERVER_URL");
-  const session = await loginDurableUserOnStaging(serverUrl);
-  const client = new ApiClient({ baseUrl: serverUrl }).withBearerToken(session.accessToken);
+  const productSession = await loginDurableUserOnStaging(serverUrl);
+  const client = new ApiClient({ baseUrl: serverUrl }).withBearerToken(productSession.accessToken);
 
   await ensureSandboxReady(client);
 
+  const candidateCatalog = await readCandidateCatalog();
+  const servedCatalog = await client.get<QualificationCatalogDocument>("/v1/catalogs/agents");
+  assertServedCatalogMatchesCandidate(candidateCatalog, servedCatalog);
+
   const advertisedBefore = await advertisedRuntimePin(client);
   const runningBefore = await proxiedRuntimeVersion(client);
-  console.log(`[T4-CLOUD-1] baseline: advertised pin=${advertisedBefore || "(unset)"} running /health=${runningBefore || "(none)"}`);
+  const fromVersion = releaseVersion(ctx.env.require("RELEASE_E2E_CLOUD_UPDATE_FROM"), "N-1");
+  const target = releaseVersion(ctx.env.require("RELEASE_E2E_CLOUD_UPDATE_TO"), "candidate N");
+  assert.notEqual(fromVersion, target, `T4-CLOUD-1: N-1 and candidate N are identical (${target})`);
+  assert.equal(
+    advertisedBefore,
+    fromVersion,
+    `T4-CLOUD-1: server advertises ${advertisedBefore || "(unset)"}, not configured N-1 ${fromVersion}`,
+  );
+  assert.equal(
+    runningBefore,
+    fromVersion,
+    `T4-CLOUD-1: sandbox runs ${runningBefore || "(unset)"}, not configured N-1 ${fromVersion}`,
+  );
+  const baselineCatalog = await runtimeGet<RuntimeCatalogVersion>(client, "/v1/catalogs/agents/version");
+  assert.equal(
+    baselineCatalog.catalogVersion,
+    candidateCatalog.catalogVersion,
+    `T4-CLOUD-1: N-1 runtime has active catalog ${baselineCatalog.catalogVersion}, ` +
+      `not candidate catalog ${candidateCatalog.catalogVersion}`,
+  );
 
-  const target = pickBumpTarget(advertisedBefore, runningBefore);
-  console.log(`[T4-CLOUD-1] bumping advertised RUNTIME_VERSION -> ${target}`);
+  console.log(
+    `[T4-CLOUD-1] baseline: advertised=${advertisedBefore} runtime=${runningBefore} ` +
+      `catalog=${baselineCatalog.catalogVersion}/${baselineCatalog.source}`,
+  );
 
-  const bump = await bumpStagingRuntimePin(STAGING_ECS_TARGET, target);
+  const workspace = await qualificationWorkspace(client);
+  const launchOptions = await runtimeGet<RuntimeLaunchOptions>(
+    client,
+    `/v1/agents/launch-options?workspace_id=${encodeURIComponent(workspace.id)}`,
+  );
+  const qualificationAgent = selectQualificationAgent(ctx.agents, launchOptions, candidateCatalog);
+  const baselineAgent = await runtimeGet<RuntimeAgentSummary>(
+    client,
+    `/v1/agents/${encodeURIComponent(qualificationAgent.kind)}`,
+  );
+  assertAgentArtifactsMatchPins(baselineAgent, qualificationAgent);
+
+  let durableSession: RuntimeSessionSummary | undefined;
   try {
-    const converged = await waitForRuntimeVersion(client, target, CONVERGE_TIMEOUT_MS);
-    if (converged) {
-      const running = await proxiedRuntimeVersion(client);
-      assert.ok(
-        anyharnessBinaryConverged(running, target),
-        `T4-CLOUD-1: runtime /health version ${running} did not converge to advertised pin ${target}`,
-      );
-      console.log(`[T4-CLOUD-1] converged: runtime reports ${running} == advertised pin ${target}`);
-      return;
-    }
-    throw new ScenarioExpectedFailError(
-      `T4-CLOUD-1: the sandbox runtime never reported the bumped pin ${target} within ` +
-        `${CONVERGE_TIMEOUT_MS / 1000}s. Diagnosed product blocker (found building this test): the released ` +
-        `anyharness binary reports CARGO_PKG_VERSION (hardcoded 0.1.0, never stamped at release) from BOTH ` +
-        `\`anyharness --version\` and the runtime /health \`version\`. The worker convergence preflight and ` +
-        `post-relaunch health gate both require an exact match to the pinned semver ` +
-        `(anyharness_update.rs via self_update.rs version_output_matches), so no real pin (${target}) can ` +
-        `converge — preflight rejects the downloaded binary and the health gate never sees the target ` +
-        `version. Verified directly: \`anyharness --version\` on the runtime-v0.3.12 release asset prints ` +
-        `"anyharness 0.1.0". Filed as https://github.com/proliferate-ai/proliferate/issues/1089.`,
-    );
-  } finally {
-    await restoreStagingRuntimePin(STAGING_ECS_TARGET, bump.previousTaskDefinitionArn).catch((error) => {
-      console.error(
-        `[T4-CLOUD-1] WARNING: failed to restore staging task definition ${bump.previousTaskDefinitionArn}: ` +
-          `${error instanceof Error ? error.message : String(error)}. Restore it manually: ` +
-          `aws ecs update-service --cluster ${STAGING_ECS_TARGET.cluster} --service ${STAGING_ECS_TARGET.service} ` +
-          `--task-definition ${bump.previousTaskDefinitionArn}`,
-      );
+    durableSession = await runtimePost<RuntimeSessionSummary>(client, "/v1/sessions", {
+      workspaceId: workspace.id,
+      agentKind: qualificationAgent.kind,
+      modelId: qualificationAgent.modelId,
+      subagentsEnabled: true,
     });
+    assert.ok(durableSession.nativeSessionId, "T4-CLOUD-1: N-1 session has no native session id");
+    assert.equal(
+      durableSession.executionSummary?.hasLiveHandle,
+      true,
+      "T4-CLOUD-1: N-1 session did not start a live agent handle",
+    );
+    assertQualificationMcpApplied(durableSession);
+
+    await runtimePost(client, `/v1/sessions/${encodeURIComponent(durableSession.id)}/prompt`, {
+      blocks: [{ type: "text", text: "Complete one short readiness turn without using tools." }],
+    });
+    const baselineEvents = await waitForTerminalTurn(client, durableSession.id, 0, TURN_TIMEOUT_MS);
+    const baselineTurn = assertTerminalTurnEvidence(baselineEvents, 0);
+    const baselineLastSeq = maxEventSeq(baselineEvents);
+    console.log(
+      `[T4-CLOUD-1] N-1 live session=${durableSession.id} agent=${qualificationAgent.kind} ` +
+        `model=${qualificationAgent.modelId} turn=${baselineTurn.turnId} lastSeq=${baselineLastSeq}`,
+    );
+
+    await qualifyRuntimeUpdate({
+      client,
+      target,
+      restorePin: fromVersion,
+      candidateCatalog,
+      qualificationAgent,
+      durableSession,
+      baselineLastSeq,
+    });
+  } finally {
+    if (durableSession) {
+      await runtimePost(
+        client,
+        `/v1/sessions/${encodeURIComponent(durableSession.id)}/close`,
+        {},
+      ).catch((error) => {
+        console.warn(`[T4-CLOUD-1] session cleanup failed: ${describeError(error)}`);
+      });
+    }
+  }
+}
+
+interface RuntimeCatalogVersion {
+  catalogVersion: string;
+  source: string;
+}
+
+interface RuntimeWorkspaceSummary {
+  id: string;
+  kind: string;
+  surface: string;
+  lifecycleState: string;
+  createdAt?: string;
+}
+
+interface RuntimeQualificationInput {
+  client: ApiClient;
+  target: string;
+  restorePin: string;
+  candidateCatalog: QualificationCatalogDocument;
+  qualificationAgent: QualificationAgent;
+  durableSession: RuntimeSessionSummary;
+  baselineLastSeq: number;
+}
+
+async function qualifyRuntimeUpdate(input: RuntimeQualificationInput): Promise<void> {
+  const {
+    client,
+    target,
+    restorePin,
+    candidateCatalog,
+    qualificationAgent,
+    durableSession,
+    baselineLastSeq,
+  } = input;
+  console.log(`[T4-CLOUD-1] bumping advertised RUNTIME_VERSION -> ${target}`);
+  const bump = await bumpStagingRuntimePin(STAGING_ECS_TARGET, target);
+  let qualificationError: unknown;
+  try {
+    const advertisedConverged = await waitForAdvertisedRuntimePin(client, target, CONVERGE_TIMEOUT_MS);
+    assert.ok(advertisedConverged, `T4-CLOUD-1: staging /meta never advertised candidate N ${target}`);
+
+    const binaryConverged = await waitForRuntimeVersion(client, target, CONVERGE_TIMEOUT_MS);
+    assert.ok(
+      binaryConverged,
+      `T4-CLOUD-1: AnyHarness did not converge in place to candidate N ${target} within ` +
+        `${CONVERGE_TIMEOUT_MS / 1000}s`,
+    );
+    const running = await proxiedRuntimeVersion(client);
+    assert.ok(
+      anyharnessBinaryConverged(running, target),
+      `T4-CLOUD-1: runtime /health version ${running} did not converge to advertised pin ${target}`,
+    );
+
+    await waitForRuntimeQualification(
+      client,
+      candidateCatalog.catalogVersion,
+      qualificationAgent,
+      QUALIFICATION_TIMEOUT_MS,
+    );
+
+    const persisted = await runtimeGet<RuntimeSessionSummary>(
+      client,
+      `/v1/sessions/${encodeURIComponent(durableSession.id)}`,
+    );
+    assertSameDurableSession(durableSession, persisted);
+
+    const resumed = await runtimePost<RuntimeSessionSummary>(
+      client,
+      `/v1/sessions/${encodeURIComponent(durableSession.id)}/resume`,
+      {},
+    );
+    assertSameDurableSession(durableSession, resumed);
+    assert.equal(
+      resumed.executionSummary?.hasLiveHandle,
+      true,
+      "T4-CLOUD-1: candidate N did not recreate a live handle for the durable session",
+    );
+    assertQualificationMcpApplied(resumed);
+
+    const eventsAfterResume = await runtimeGet<RuntimeSessionEventEnvelope[]>(
+      client,
+      `/v1/sessions/${encodeURIComponent(durableSession.id)}/events?limit=5000`,
+    );
+    assert.ok(
+      maxEventSeq(eventsAfterResume) >= baselineLastSeq,
+      "T4-CLOUD-1: persisted event log regressed across the runtime swap",
+    );
+
+    await runtimePost(client, `/v1/sessions/${encodeURIComponent(durableSession.id)}/prompt`, {
+      blocks: [
+        {
+          type: "text",
+          text:
+            "Use the subagents MCP server now. Call list_subagents exactly once, wait for its result, " +
+            "then reply briefly. Do not call any other tool.",
+        },
+      ],
+    });
+    const postUpdateEvents = await waitForTerminalTurn(
+      client,
+      durableSession.id,
+      baselineLastSeq,
+      TURN_TIMEOUT_MS,
+    );
+    const postUpdateTurn = assertTerminalTurnEvidence(
+      postUpdateEvents,
+      baselineLastSeq,
+      QUALIFICATION_MCP_TOOL,
+    );
+    console.log(
+      `[T4-CLOUD-1] qualified N=${target}: catalog=${candidateCatalog.catalogVersion} ` +
+        `agent=${qualificationAgent.kind} MCP=${QUALIFICATION_MCP_TOOL} ` +
+        `session=${durableSession.id} turn=${postUpdateTurn.turnId} terminalSeq=${postUpdateTurn.terminalSeq}`,
+    );
+  } catch (error) {
+    qualificationError = error;
+  }
+
+  let restoreError: unknown;
+  try {
+    await restoreStagingRuntimePin(STAGING_ECS_TARGET, bump.previousTaskDefinitionArn);
+    const restored = await waitForAdvertisedRuntimePin(client, restorePin, CONVERGE_TIMEOUT_MS);
+    assert.ok(restored, `T4-CLOUD-1: staging /meta did not return to the original runtime pin ${restorePin}`);
+  } catch (error) {
+    restoreError = error;
+  }
+  if (restoreError) {
+    const restoreMessage =
+      `failed to restore staging task definition ${bump.previousTaskDefinitionArn}; manual command: ` +
+      `aws ecs update-service --cluster ${STAGING_ECS_TARGET.cluster} --service ${STAGING_ECS_TARGET.service} ` +
+      `--task-definition ${bump.previousTaskDefinitionArn}`;
+    const errors = qualificationError ? [qualificationError, restoreError] : [restoreError];
+    throw new AggregateError(errors, `T4-CLOUD-1: ${restoreMessage}`);
+  }
+  if (qualificationError) {
+    throw qualificationError;
   }
 }
 
@@ -199,6 +411,45 @@ async function ensureSandboxReady(client: ApiClient): Promise<void> {
   }
 }
 
+async function readCandidateCatalog(): Promise<QualificationCatalogDocument> {
+  const contents = await readFile(CANDIDATE_CATALOG_URL, "utf8");
+  const catalog = JSON.parse(contents) as QualificationCatalogDocument;
+  assert.ok(catalog.catalogVersion?.trim(), "T4-CLOUD-1: candidate catalogVersion is missing");
+  assert.ok(Array.isArray(catalog.agents) && catalog.agents.length > 0, "T4-CLOUD-1: candidate catalog has no agents");
+  return catalog;
+}
+
+async function qualificationWorkspace(client: ApiClient): Promise<RuntimeWorkspaceSummary> {
+  let workspaces: RuntimeWorkspaceSummary[];
+  try {
+    workspaces = await runtimeGet<RuntimeWorkspaceSummary[]>(client, "/v1/workspaces");
+  } catch (error) {
+    if (isTransientGatewayError(error)) {
+      throw new ScenarioBlockedError(
+        "T4-CLOUD-1: the durable staging user's sandbox row is ready but its AnyHarness gateway is not " +
+          "reachable. Fully materialize the dedicated sandbox before qualification.",
+      );
+    }
+    throw error;
+  }
+  const candidates = workspaces
+    .filter((workspace) => workspace.surface === "standard" && workspace.lifecycleState === "active")
+    .sort((left, right) => {
+      if (left.kind === "local" && right.kind !== "local") return -1;
+      if (right.kind === "local" && left.kind !== "local") return 1;
+      return (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
+    });
+  const selected = candidates[0];
+  if (!selected) {
+    throw new ScenarioBlockedError(
+      "T4-CLOUD-1: the dedicated staging sandbox has no active standard AnyHarness workspace. " +
+        "Provision one repository workspace for the durable qualification user before running the scenario; " +
+        "the update test will create and later close only its own session.",
+    );
+  }
+  return selected;
+}
+
 /** The version the server advertises as the runtime pin (from /meta). */
 async function advertisedRuntimePin(client: ApiClient): Promise<string> {
   const meta = await client.get<{ runtimeVersion?: string }>("/meta");
@@ -208,17 +459,30 @@ async function advertisedRuntimePin(client: ApiClient): Promise<string> {
 /** The runtime's own reported version, via the sandbox anyharness proxy. */
 async function proxiedRuntimeVersion(client: ApiClient): Promise<string> {
   try {
-    const health = await client.get<RuntimeHealth>("/v1/cloud/cloud-sandbox/anyharness/health");
+    const health = await runtimeGet<RuntimeHealth>(client, "/health");
+    assert.equal(health.status, "ok", `T4-CLOUD-1: runtime /health status is ${health.status ?? "missing"}`);
     return runtimeHealthVersion(health);
   } catch (error) {
     if (error instanceof ApiRequestError && error.status === 404) {
       throw new ScenarioBlockedError(
-        "T4-CLOUD-1: the sandbox anyharness proxy /health route 404s. Either no sandbox is attached or the " +
-          "staging server predates the #1087 runtime routes — deploy current main to staging first.",
+        "T4-CLOUD-1: the sandbox AnyHarness gateway /health route 404s. Deploy a server with the real " +
+          "/v1/gateway/cloud-sandbox/anyharness/* proxy before qualification.",
       );
     }
     throw error;
   }
+}
+
+async function waitForAdvertisedRuntimePin(client: ApiClient, target: string, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const advertised = await advertisedRuntimePin(client).catch(() => "");
+    if (advertised === target) {
+      return true;
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+  return false;
 }
 
 /** Poll the proxied /health until it reports `target` or the window elapses. */
@@ -234,21 +498,104 @@ async function waitForRuntimeVersion(client: ApiClient, target: string, timeoutM
   return false;
 }
 
-/**
- * Pick a published version to bump the pin to — one that differs from both the
- * currently advertised pin and the running version, so the worker sees a real
- * divergence to act on.
- */
-function pickBumpTarget(advertised: string, running: string): string {
-  const target = PUBLISHED_CANDIDATES.find((candidate) => candidate !== advertised && candidate !== running);
-  if (!target) {
-    throw new ScenarioBlockedError(
-      `T4-CLOUD-1: no published bump target distinct from the current pin (${advertised}) / running ` +
-        `(${running}). Publish another runtime version to the CDN (scripts/ci-cd/publish-runtime-cdn.sh) ` +
-        `or extend PUBLISHED_CANDIDATES.`,
-    );
+async function waitForRuntimeQualification(
+  client: ApiClient,
+  expectedCatalogVersion: string,
+  expectedAgent: QualificationAgent,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastObserved = "no runtime response";
+  while (Date.now() < deadline) {
+    try {
+      const [catalog, reconcile, agent] = await Promise.all([
+        runtimeGet<RuntimeCatalogVersion>(client, "/v1/catalogs/agents/version"),
+        runtimeGet<RuntimeReconcileStatus>(client, "/v1/agents/reconcile"),
+        runtimeGet<RuntimeAgentSummary>(client, `/v1/agents/${encodeURIComponent(expectedAgent.kind)}`),
+      ]);
+      const reconcileResult = reconcile.results.find((entry) => entry.kind === expectedAgent.kind);
+      lastObserved =
+        `catalog=${catalog.catalogVersion}/${catalog.source}, reconcile=${reconcile.status}/` +
+        `${reconcileResult?.outcome ?? "missing"}, agentProcess=${agent.agentProcess?.version ?? "missing"}, ` +
+        `native=${agent.native?.version ?? "n/a"}`;
+
+      if (reconcile.status === "failed") {
+        throw new Error(`T4-CLOUD-1: startup agent reconcile failed: ${reconcile.message ?? "no detail"}`);
+      }
+      if (catalog.catalogVersion !== expectedCatalogVersion || reconcile.status !== "completed") {
+        await sleep(TURN_POLL_INTERVAL_MS);
+        continue;
+      }
+      if (!reconcileResult) {
+        await sleep(TURN_POLL_INTERVAL_MS);
+        continue;
+      }
+      assertReconcileCompletedForAgent(reconcile, expectedAgent.kind);
+      assertAgentArtifactsMatchPins(agent, expectedAgent);
+      return;
+    } catch (error) {
+      if (!isTransientGatewayError(error)) {
+        throw error;
+      }
+      lastObserved = describeError(error);
+      await sleep(TURN_POLL_INTERVAL_MS);
+    }
   }
-  return target;
+  throw new Error(
+    `T4-CLOUD-1: runtime catalog/agent reconciliation did not converge within ${timeoutMs / 1000}s; ` +
+      `last observed ${lastObserved}`,
+  );
+}
+
+async function waitForTerminalTurn(
+  client: ApiClient,
+  sessionId: string,
+  afterSeq: number,
+  timeoutMs: number,
+): Promise<RuntimeSessionEventEnvelope[]> {
+  const deadline = Date.now() + timeoutMs;
+  let lastEvents: RuntimeSessionEventEnvelope[] = [];
+  while (Date.now() < deadline) {
+    lastEvents = await runtimeGet<RuntimeSessionEventEnvelope[]>(
+      client,
+      `/v1/sessions/${encodeURIComponent(sessionId)}/events?after_seq=${afterSeq}&limit=5000&oldest_first=true`,
+    );
+    const error = lastEvents.find((entry) => entry.event.type === "error");
+    if (error) {
+      throw new Error(
+        `T4-CLOUD-1: session ${sessionId} emitted error at seq ${error.seq}: ` +
+          `${error.event.message ?? "unknown runtime error"}`,
+      );
+    }
+    if (lastEvents.some((entry) => entry.event.type === "turn_ended")) {
+      return lastEvents;
+    }
+    await sleep(TURN_POLL_INTERVAL_MS);
+  }
+  throw new Error(
+    `T4-CLOUD-1: session ${sessionId} did not reach a terminal turn within ${timeoutMs / 1000}s ` +
+      `(observed ${lastEvents.length} post-seq-${afterSeq} event(s))`,
+  );
+}
+
+function runtimeGet<T>(client: ApiClient, path: string): Promise<T> {
+  return client.get<T>(`${RUNTIME_GATEWAY_PREFIX}${normalizeRuntimePath(path)}`);
+}
+
+function runtimePost<T = unknown>(client: ApiClient, path: string, body: unknown): Promise<T> {
+  return client.post<T>(`${RUNTIME_GATEWAY_PREFIX}${normalizeRuntimePath(path)}`, body);
+}
+
+function normalizeRuntimePath(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function releaseVersion(value: string, label: string): string {
+  const version = value.trim();
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error(`T4-CLOUD-1: ${label} version is not an immutable semver: ${JSON.stringify(value)}`);
+  }
+  return version;
 }
 
 function describeError(error: unknown): string {
@@ -256,6 +603,13 @@ function describeError(error: unknown): string {
     return `${error.status}`;
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+function isTransientGatewayError(error: unknown): boolean {
+  return (
+    (error instanceof ApiRequestError && [502, 503, 504].includes(error.status)) ||
+    error instanceof TypeError
+  );
 }
 
 function sleep(ms: number): Promise<void> {

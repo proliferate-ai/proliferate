@@ -41,8 +41,6 @@ import { ScenarioBlockedError } from "../types.js";
 // heavy build orchestrator + the Rust driver crate.
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ORCHESTRATOR = resolve(HERE, "..", "..", "..", "upgrade", "run-t4-desktop.mjs");
-const FROM_VERSION = "0.3.17";
-const TO_VERSION = "0.3.18";
 
 function isCi(): boolean {
   return Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
@@ -53,11 +51,18 @@ export const t4Desktop1: ScenarioDefinition = {
   title: "desktop app auto-update, N-1 -> N",
   registryFlowRef: "specs/developing/testing/scenarios.md#T4-DESKTOP-1",
   lanes: ["local"],
-  requiredEnv: [],
-  plan: () => [
+  requiredEnv: [
+    "RELEASE_E2E_DESKTOP_T4",
+    "RELEASE_E2E_DESKTOP_UPDATE_FROM",
+    "RELEASE_E2E_DESKTOP_UPDATE_TO",
+  ],
+  plan: () => {
+    const fromVersion = process.env.RELEASE_E2E_DESKTOP_UPDATE_FROM ?? "<explicit N-1 required>";
+    const toVersion = process.env.RELEASE_E2E_DESKTOP_UPDATE_TO ?? "<explicit candidate N required>";
+    return [
     { description: "ensure a fixed throwaway signing keypair (both builds trust it; cached)" },
-    { description: `build test-flavor N-1 (${FROM_VERSION}) .app pointed at the local feed` },
-    { description: `build test-flavor N (${TO_VERSION}) .app signed with the same key` },
+    { description: `build test-flavor N-1 (${fromVersion}) .app pointed at the local feed` },
+    { description: `build test-flavor candidate N (${toVersion}) .app signed with the same key` },
     { description: "stage N .app.tar.gz + .sig behind serve-updater-feed.mjs; generate latest.json" },
     { description: "copy the N-1 .app to a pristine install dir; assert its bundle version == N-1" },
     {
@@ -66,7 +71,8 @@ export const t4Desktop1: ScenarioDefinition = {
         "download_and_install() (verify N artifact signature against the N-1-trusted pubkey; swap the bundle)",
     },
     { description: "assert the installed bundle version is now N (== getVersion() after relaunch)" },
-  ],
+    ];
+  },
   run: async (ctx) => {
     if (ctx.dryRun) {
       return;
@@ -97,9 +103,15 @@ export const t4Desktop1: ScenarioDefinition = {
       );
     }
 
+    const fromVersion = releaseVersion(ctx.env.require("RELEASE_E2E_DESKTOP_UPDATE_FROM"), "N-1");
+    const toVersion = releaseVersion(ctx.env.require("RELEASE_E2E_DESKTOP_UPDATE_TO"), "candidate N");
+    if (fromVersion === toVersion) {
+      throw new Error(`T4-DESKTOP-1: N-1 and candidate N are identical (${toVersion})`);
+    }
+
     const result = spawnSync(
       "node",
-      [ORCHESTRATOR, "--from", FROM_VERSION, "--to", TO_VERSION],
+      [ORCHESTRATOR, "--from", fromVersion, "--to", toVersion],
       { stdio: "inherit" },
     );
     if (result.status !== 0) {
@@ -110,3 +122,11 @@ export const t4Desktop1: ScenarioDefinition = {
     }
   },
 };
+
+function releaseVersion(value: string, label: string): string {
+  const version = value.trim();
+  if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
+    throw new Error(`T4-DESKTOP-1: ${label} version is not an immutable semver: ${JSON.stringify(value)}`);
+  }
+  return version;
+}
