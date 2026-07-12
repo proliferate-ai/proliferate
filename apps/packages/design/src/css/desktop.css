@@ -1190,26 +1190,56 @@ body {
   }
 }
 
-/* ---- Reasoning-effort emphasis (LevelBarsButton) ----
+/* ---- Reasoning-effort emphasis ----
    "max": the session sits at the highest reasoning level its model offers —
    the bars take the app accent, nothing else changes. "ultra": that top level
-   is the ultra tier (frontier model at full capacity) — accent bars breathe in
-   a staggered wave and the chip gets a faint accent fill. Compositor-only
-   (transform/opacity); color is the existing --color-special accent, no new
-   hues, no borders. */
+   is the ultra tier, which only frontier models expose (GPT-5.6 Sol/Terra
+   today) — the bars chip gets an animated spectrum ring + fill and the whole
+   composer border picks up a faint drifting tint of the same gradient.
+   Non-ultra models never show the spectrum, even at their own max.
+   Desaturated via color-mix so it reads as a shimmer, not a Conductor-style
+   paint job; bar wave is compositor-only (transform/opacity); gradient drift
+   animates background-position on two low-cost elements. */
 .composer-level-bars-max,
 .composer-level-bars-ultra {
   color: var(--color-special);
 }
 
-.composer-level-bars-button-ultra {
-  background: color-mix(in oklab, var(--color-special) 10%, transparent);
+.composer-level-bars-ultra {
+  color: var(--color-foreground);
 }
 
+.composer-level-bars-button-ultra {
+  --ultra-spectrum: linear-gradient(
+    100deg,
+    color-mix(in oklab, #ef4343 62%, var(--color-composer-background)),
+    color-mix(in oklab, #f76808 62%, var(--color-composer-background)),
+    color-mix(in oklab, #21c45d 62%, var(--color-composer-background)),
+    color-mix(in oklab, #07b6d5 62%, var(--color-composer-background)),
+    color-mix(in oklab, #e014ff 62%, var(--color-composer-background)),
+    color-mix(in oklab, #ef4343 62%, var(--color-composer-background))
+  );
+  border: 1px solid transparent;
+  background:
+    linear-gradient(
+      color-mix(in oklab, var(--color-special) 12%, var(--color-composer-background)),
+      color-mix(in oklab, var(--color-special) 12%, var(--color-composer-background))
+    ) padding-box,
+    var(--ultra-spectrum) border-box;
+  background-size: 100% 100%, 300% 100%;
+  /* background-position is a paint (not compositor) property; steps(60) caps
+     the repaint rate to 10fps instead of every frame. See the fuller note on
+     @keyframes composer-ultra-drift below for why this is the chosen
+     mitigation over converting to a child-element transform-drift. */
+  animation: composer-ultra-drift 6s steps(60) infinite;
+}
+
+/* Bars are plain HTML spans now (see LevelBarsIcon in LevelBarsButton.tsx) —
+   transform/opacity here run on the compositor instead of forcing a repaint
+   of SVG child elements every frame in WKWebView. */
 .composer-level-bar-wave {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: composer-level-bar-wave 1.6s ease-in-out infinite;
+  transform-origin: bottom;
+  animation: composer-level-bar-wave 1.1s ease-in-out infinite;
 }
 
 @keyframes composer-level-bar-wave {
@@ -1219,13 +1249,118 @@ body {
     opacity: 1;
   }
   50% {
-    transform: scaleY(0.72);
-    opacity: 0.75;
+    transform: scaleY(0.55);
+    opacity: 0.65;
+  }
+}
+
+/* Shared stop list for the ultra ring pseudo-elements below, defined once on
+   the composer column so both the input surface and the docked
+   workspace-activity cap (a sibling, not a descendant, of the surface) can
+   read the same gradient via inheritance instead of repeating the stops. */
+[data-chat-composer-column] {
+  --ultra-ring-spectrum: linear-gradient(
+    100deg,
+    color-mix(in oklab, #ef4343 38%, transparent),
+    color-mix(in oklab, #f76808 38%, transparent),
+    color-mix(in oklab, #21c45d 38%, transparent),
+    color-mix(in oklab, #07b6d5 38%, transparent),
+    color-mix(in oklab, #e014ff 38%, transparent),
+    color-mix(in oklab, #ef4343 38%, transparent)
+  );
+}
+
+/* Composer-wide ultra tint: the surface paints its border via the first
+   box-shadow ring, so overlay a 1px gradient ring in a masked pseudo-element
+   instead of touching the shadow stack. */
+.chat-composer-surface[data-ultra-emphasis]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--ultra-ring-spectrum);
+  background-size: 300% 100%;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  /* steps(60) — see the note on @keyframes composer-ultra-drift below. */
+  animation: composer-ultra-drift 6s steps(60) infinite;
+}
+
+/* When the workspace-activity cap is docked flush on top of the surface, the
+   surface loses its top rounding and the surface ring's top segment would
+   draw a seam directly under the cap. The surface clips overflow, so pushing
+   the pseudo's top edge above the box is enough to clip that segment away —
+   the cap grows its own ring below to cover the top+side edges instead. */
+[data-chat-composer-column]:has([data-workspace-activity-trigger])
+  .chat-composer-surface[data-ultra-emphasis]::after {
+  top: -2px;
+}
+
+/* The cap has no default position, so give it one only when it needs to host
+   the absolutely-positioned ring pseudo below. */
+[data-chat-composer-column]:has(.chat-composer-surface[data-ultra-emphasis])
+  [data-workspace-activity-trigger] {
+  position: relative;
+}
+
+/* Cap's half of the continuous ring: covers the top and side edges only
+   (bottom padding is 0) so it hands off to the surface ring below without a
+   doubled line at the cap/surface seam. */
+[data-chat-composer-column]:has(.chat-composer-surface[data-ultra-emphasis])
+  [data-workspace-activity-trigger]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px 1px 0 1px;
+  background: var(--ultra-ring-spectrum);
+  background-size: 300% 100%;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  /* steps(60) — see the note on @keyframes composer-ultra-drift below. */
+  animation: composer-ultra-drift 6s steps(60) infinite;
+}
+
+/* background-position is a paint (not compositor) property, so this drift
+   used to repaint every frame for its 6s-infinite lifetime across three
+   elements: the chip's border-box gradient and the two 1px-perimeter masked
+   ring pseudo-elements above. None of the three can hold a real child (the
+   pseudos can't have children at all; the chip's gradient is painted via the
+   border-box/padding-box layering trick, not a discrete node), which rules
+   out the usual "300%-wide child + translateX" compositor rewrite without a
+   markup change. steps(60) over the 6s loop instead caps repaint at 10fps —
+   imperceptible for a slow ambient drift — for a 6x cut in paint frequency
+   with no structural change. */
+@keyframes composer-ultra-drift {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 300% 50%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .composer-level-bar-wave {
+  .composer-level-bar-wave,
+  .composer-level-bars-button-ultra,
+  .chat-composer-surface[data-ultra-emphasis]::after,
+  [data-chat-composer-column]:has(.chat-composer-surface[data-ultra-emphasis])
+    [data-workspace-activity-trigger]::after {
     animation: none;
   }
 }

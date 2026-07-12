@@ -86,7 +86,15 @@ export function WorkspaceActivityComposerCard({
           size="unstyled"
           // The dock gives attached content px-5. Cancel it here so this cap
           // shares the composer's outer edges instead of reading as an inset card.
-          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-[var(--radius-composer,1rem)] border-x-[0.5px] border-t-[0.5px] border-[var(--color-composer-border)] bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground hover:text-foreground"
+          // Stroke is a box-shadow (not a border) so it paints OUTSIDE the
+          // border-box at the exact same offset as .chat-composer-surface's
+          // own stroke below — a real border paints inside the box instead,
+          // which reads ~0.5px narrower and creates a visible jog at the
+          // cap/surface seam even though both boxes share the same width.
+          // The shadow's bottom edge bleeds into the surface's box, but the
+          // surface is later in DOM (paints on top) and opaque, so that
+          // sliver is covered — no separate bottom-only clip needed.
+          className="-mx-5 flex h-9 w-[calc(100%+2.5rem)] min-w-0 items-center justify-start rounded-t-[var(--radius-composer,1rem)] bg-[var(--color-composer-background)] px-3 text-left text-ui-sm text-muted-foreground shadow-[0_0_0_0.5px_var(--color-composer-border)] hover:text-foreground"
           aria-label={`Workspace activity: ${shownFacts.map((fact) => fact.label).join(", ")}`}
           data-workspace-activity-trigger="true"
           data-telemetry-mask

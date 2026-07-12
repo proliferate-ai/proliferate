@@ -16,6 +16,18 @@ interface LevelBarsButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEleme
   emphasis?: LevelBarsEmphasis;
 }
 
+// HTML bars, not an inline SVG: WebKit does not compositor-accelerate
+// transform/opacity animations on SVG child elements, so the staggered
+// "wave" (see composer-level-bar-wave in desktop.css) used to force a
+// repaint of the whole icon every frame. Plain <span> bars with
+// currentColor backgrounds pick up the same scaleY/opacity keyframes on
+// the compositor instead. Geometry mirrors the old SVG rendering: 2px-wide
+// pill bars (rx=1 on a 2px rect is effectively a full round-cap), 2px gaps,
+// heights stepping up to the container's 14px (size-3.5) box, bottom-aligned
+// and horizontally centered the way preserveAspectRatio="xMidYMid meet"
+// centered the old viewBox.
+const LEVEL_BAR_CONTAINER_PX = 14;
+
 function LevelBarsIcon({
   levels,
   currentIndex,
@@ -26,29 +38,21 @@ function LevelBarsIcon({
   emphasis?: LevelBarsEmphasis;
 }) {
   const barCount = levels.length;
-  const barWidth = 2;
-  const barGap = 2;
-  const viewBoxWidth = barCount * barWidth + (barCount - 1) * barGap;
-  const viewBoxHeight = 15;
 
   const bars = Array.from({ length: barCount }, (_, i) => {
-    const x = i * (barWidth + barGap);
-    const height = Math.round(((i + 1) / barCount) * viewBoxHeight);
-    const y = viewBoxHeight - height;
+    const heightPx = Math.max(2, Math.round(((i + 1) / barCount) * LEVEL_BAR_CONTAINER_PX));
     const lit = i <= currentIndex;
+    const wave = lit && emphasis === "ultra";
 
     return (
-      <rect
+      <span
         key={i}
-        x={x}
-        y={y}
-        width={barWidth}
-        height={height}
-        rx={1}
-        fill="currentColor"
-        opacity={lit ? 1 : 0.3}
-        className={lit && emphasis === "ultra" ? "composer-level-bar-wave" : undefined}
-        style={lit && emphasis === "ultra" ? { animationDelay: `${i * 110}ms` } : undefined}
+        className={`block w-[2px] shrink-0 rounded-full bg-current${wave ? " composer-level-bar-wave" : ""}`}
+        style={{
+          height: `${heightPx}px`,
+          opacity: lit ? 1 : 0.3,
+          animationDelay: wave ? `${i * 110}ms` : undefined,
+        }}
       />
     );
   });
@@ -60,13 +64,13 @@ function LevelBarsIcon({
       : "";
 
   return (
-    <svg
-      viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
-      className={`size-3.5 ${emphasisClass}`}
+    <span
+      className={`inline-flex size-3.5 shrink-0 items-end justify-center gap-[2px] ${emphasisClass}`}
       aria-hidden="true"
+      data-level-bars-icon
     >
       {bars}
-    </svg>
+    </span>
   );
 }
 
