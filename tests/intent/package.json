@@ -13,6 +13,7 @@
     "test:secrets": "playwright test specs/secrets.spec.ts",
     "test:cloud-workspace": "playwright test specs/cloud-workspace.spec.ts",
     "test:billing": "playwright test --config playwright.billing.config.ts",
+    "test:surfaces": "playwright test --config playwright.surfaces.config.ts",
     "test:sso": "playwright test specs/sso.spec.ts"
   },
   "dependencies": {
