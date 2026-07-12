@@ -46,7 +46,11 @@ export const t4Sh1: ScenarioDefinition = {
   title: "operator update motion (update.sh N-1 -> N, data intact)",
   registryFlowRef: "specs/developing/testing/self-hosting.md#T4-SH-1",
   lanes: ["local"],
-  requiredEnv: ["RELEASE_E2E_SELFHOST_PROVISION"],
+  requiredEnv: [
+    "RELEASE_E2E_SELFHOST_PROVISION",
+    "RELEASE_E2E_SELFHOST_UPDATE_FROM",
+    "RELEASE_E2E_SELFHOST_UPDATE_TO",
+  ],
   plan: () => [
     { description: "provision a self-hosted box pinned to the previous release (N-1)" },
     { description: "claim an admin so there is existing user data to preserve" },
