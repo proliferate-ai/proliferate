@@ -115,7 +115,7 @@ async function main(): Promise<void> {
   const shard: WorldContext["shard"] = { runId, shardId: "shard-1-of-1", shardIndex: 0, shardCount: 1 };
 
   const evidencePath = join(await mkdtemp(join(tmpdir(), "selfhost-e2e-evidence-")), "evidence.jsonl");
-  const evidence = new LocalJsonlEvidenceSink(evidencePath);
+  const evidence = new LocalJsonlEvidenceSink(evidencePath, runId, shard.shardId);
   log(`[run-live] evidence sink: ${evidencePath}`);
 
   const ledgerPath = join(tmpdir(), `selfhost-e2e-ledger-${runId}.json`);

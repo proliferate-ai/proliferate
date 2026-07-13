@@ -8,7 +8,7 @@
  * verdict at construction and claims the journal exclusively.
  */
 
-import { closeSync, existsSync, mkdirSync, openSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import type { AppendedEventRef, EvidenceSink, RunEvidence } from "../contracts/evidence.js";
@@ -38,22 +38,9 @@ export class JsonlEvidenceSink implements EvidenceSink {
     this.runId = runId;
     this.shardId = shardId;
     mkdirSync(this.dir, { recursive: true });
-    // Never silently adopt another process's journal or verdict for this
-    // run/shard: evidence identity is exclusive to one sink instance.
-    if (existsSync(this.eventsPath)) {
-      throw new Error(
-        `evidence journal already exists for ${runId}/${shardId} (${this.eventsPath}); refusing to append to another run's evidence`,
-      );
-    }
-    if (existsSync(this.evidencePath)) {
-      throw new Error(
-        `evidence already finalized for ${runId}/${shardId} (${this.evidencePath}); refusing to reopen`,
-      );
-    }
-    // Claim the journal exclusively so a concurrent sink for the same
-    // run/shard fails at construction, not at first append.
-    const fd = openSync(this.eventsPath, "wx");
-    closeSync(fd);
+    // Exclusive journal/verdict claiming lives in DurableEvidenceCore: it
+    // refuses an existing journal or verdict and wx-claims the journal, so a
+    // concurrent sink for the same run/shard fails at construction.
     this.core = new DurableEvidenceCore({
       runId,
       shardId,

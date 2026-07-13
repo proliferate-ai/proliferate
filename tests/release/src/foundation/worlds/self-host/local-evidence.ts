@@ -14,6 +14,7 @@ import { dirname } from "node:path";
 
 import type { AppendedEventRef, EvidenceSink, RunEvidence } from "../../contracts/evidence.js";
 import { DurableEvidenceCore } from "../../evidence/durable-core.js";
+import { findForbiddenKey } from "../../preflight/redaction.js";
 
 /** Key names whose values are never written, regardless of nesting depth. */
 const REDACTED_KEY_PATTERN = /token|secret|password|api[_-]?key|credential|refresh|bearer/i;
@@ -33,9 +34,14 @@ function scrub(value: unknown): unknown {
 export class LocalJsonlEvidenceSink implements EvidenceSink {
   private readonly filePath: string;
   private core: DurableEvidenceCore | null = null;
+  private readonly runId: string;
+  private readonly shardId: string;
 
-  constructor(filePath: string) {
+  /** Requires the REAL run/shard identity — no placeholder defaults. */
+  constructor(filePath: string, runId: string, shardId: string) {
     this.filePath = filePath;
+    this.runId = runId;
+    this.shardId = shardId;
   }
 
   /** Lazy: the directory may not exist until first use. */
@@ -43,15 +49,20 @@ export class LocalJsonlEvidenceSink implements EvidenceSink {
     if (!this.core) {
       mkdirSync(dirname(this.filePath), { recursive: true });
       this.core = new DurableEvidenceCore({
-        runId: "self-host-local",
-        shardId: "shard-1-of-1",
+        runId: this.runId,
+        shardId: this.shardId,
         eventsPath: this.filePath,
         finalPath: this.filePath.replace(/\.jsonl$/, "") + ".final.json",
-        // This sink SCRUBS (replaces secret-shaped values) rather than
-        // rejecting: it is a diagnostic local writer. The scrub runs on the
-        // materialized value inside the screen hook by mutating a copy is
-        // not possible, so scrub before delegation instead (see append).
-        screen: () => {},
+        // Pre-scrub replaces known secret-shaped VALUES, but the screen must
+        // still inspect the MATERIALIZED value (post-toJSON) with the
+        // canonical forbidden-key policy: a toJSON can introduce a
+        // credential key the pre-scrub never saw.
+        screen: (materialized) => {
+          const forbidden = findForbiddenKey(materialized);
+          if (forbidden) {
+            throw new Error(`evidence sink rejects credential-shaped key: ${forbidden}`);
+          }
+        },
       });
     }
     return this.core;
@@ -59,7 +70,8 @@ export class LocalJsonlEvidenceSink implements EvidenceSink {
 
   async append(event: Readonly<Record<string, unknown>>): Promise<AppendedEventRef> {
     // Scrub BEFORE delegation so the core materializes + persists the
-    // scrubbed value and the returned digest matches the persisted line.
+    // scrubbed value and the returned digest matches the persisted line; the
+    // core then re-screens the materialized value (toJSON-introduced keys).
     return this.ensureCore().appendLine(scrub(event) as Record<string, unknown>);
   }
 

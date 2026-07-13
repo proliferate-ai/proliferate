@@ -42,7 +42,12 @@ export class JsonlEvidenceSink implements EvidenceSink {
   readonly finalPath: string;
   private readonly core: DurableEvidenceCore;
 
-  constructor(baseFilePath: string, runId = "tier2-local", shardId = "shard-1-of-1") {
+  /**
+   * Requires the REAL run/shard identity — there are no defaults: a durable
+   * qualification-capable sink must never stamp evidence with a placeholder
+   * identity. (Tests needing a throwaway identity must name one explicitly.)
+   */
+  constructor(baseFilePath: string, runId: string, shardId: string) {
     this.eventsPath = `${baseFilePath}.events.jsonl`;
     this.finalPath = `${baseFilePath}.final.json`;
     mkdirSync(path.dirname(baseFilePath), { recursive: true });

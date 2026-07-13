@@ -110,7 +110,7 @@ test("REGRESSION: append after finalize throws", async () => {
   const s = sink(dir);
   await s.append({ event: "one" });
   await s.finalize(fakeEvidence());
-  await assert.rejects(() => s.append({ event: "late" }), /finalized; no further appends/);
+  await assert.rejects(() => s.append({ event: "late" }), /no further appends/);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -216,5 +216,66 @@ test("ADVERSARIAL: two racing publishers cannot replace the winner (NO-REPLACE l
   assert.match(readFileSync(s.evidencePath, "utf8"), /other-publisher/, "winner not replaced");
   const leftovers = readdirSync(path.dirname(s.evidencePath)).filter((f) => f.includes(".tmp-"));
   assert.deepEqual(leftovers, [], "temp cleaned on the failure path");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+// ── P1 round 2: post-materialization injection, terminal finalize, cleanup errors ──
+
+test("ADVERSARIAL: a root toJSON that INTRODUCES a reserved sink-owned field post-materialization is rejected", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  // The RAW payload has no reserved keys ('toJSON' is a method, not data),
+  // but materialization replaces the whole object with the toJSON return —
+  // introducing a top-level reserved field that would merge into the
+  // envelope. The post-materialization re-check catches it.
+  const trojan = {
+    event: "x",
+    toJSON() {
+      return { event: "x", runId: "forged-by-tojson" };
+    },
+  } as unknown as Readonly<Record<string, unknown>>;
+  await assert.rejects(() => s.append(trojan), /introduced during serialization/);
+  assert.equal(readFileSync(s.eventsPath, "utf8"), "", "nothing persisted");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a NESTED toJSON-introduced reserved-looking key cannot override the envelope (authoritative fields win the merge)", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  const ref = await s.append({
+    event: "x",
+    payload: { toJSON: () => ({ runId: "nested-forgery" }) },
+  });
+  const persisted = JSON.parse(readFileSync(s.eventsPath, "utf8").trim());
+  assert.equal(persisted.runId, "run-1", "envelope runId is authoritative");
+  assert.equal(persisted.payload.runId, "nested-forgery", "nested data stays nested");
+  assert.equal(proofEventDigest(persisted), ref.digest);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("REGRESSION: finalize is terminal — append fails after an EEXIST-lost finalize, and retry fails too", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  await s.append({ event: "before" });
+  // Another publisher wins the race.
+  writeFileSync(s.evidencePath, '{"winner":"other"}\n');
+  await assert.rejects(() => s.finalize(fakeEvidence()), /already finalized/);
+  // The sink sealed the moment finalization began: appends and retries fail.
+  await assert.rejects(() => s.append({ event: "late" }), /no further appends/);
+  await assert.rejects(() => s.finalize(fakeEvidence()), /terminal and cannot be retried/);
+  assert.match(readFileSync(s.evidencePath, "utf8"), /other/, "winner untouched");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("REGRESSION: finalize is terminal even when the SCREEN rejects (failure before any write)", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  await assert.rejects(
+    () => s.finalize({ ...fakeEvidence(), leaked: { password: "p" } } as unknown as RunEvidence),
+    /credential-shaped key/,
+  );
+  await assert.rejects(() => s.append({ event: "late" }), /no further appends/);
+  await assert.rejects(() => s.finalize(fakeEvidence()), /terminal and cannot be retried/);
+  assert.ok(!existsSync(s.evidencePath), "no verdict was written");
   rmSync(dir, { recursive: true, force: true });
 });

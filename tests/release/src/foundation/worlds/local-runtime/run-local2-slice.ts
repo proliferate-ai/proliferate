@@ -93,7 +93,7 @@ async function main(): Promise<void> {
 
   const outputBase = path.join(REPO_ROOT, "tests", "release", ".vertical-slice-output", run.runId);
   const ledger = new JsonlCleanupLedger(`${outputBase}.cleanup.jsonl`);
-  const evidence = new JsonlEvidenceSink(outputBase);
+  const evidence = new JsonlEvidenceSink(outputBase, run.runId, shard.shardId);
 
   console.log(`[local2-vertical-slice] run=${run.runId} behavior=${behavior} harness=${harness} sourceSha=${run.sourceSha}`);
 
