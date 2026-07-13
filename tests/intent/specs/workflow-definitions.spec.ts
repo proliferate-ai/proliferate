@@ -239,7 +239,7 @@ test("creates, reloads, reopens, edits, and deletes a durable definition", async
  * SQL, no GitHub dependency (a local-kind environment needs neither).
  */
 async function seedRepositoryThroughProductApi(): Promise<string> {
-  const tokens = await passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD);
+  const tokens = await convergedAdminLogin();
   const saved = await apiRequest<{ repoConfigId?: string }>(
     `/v1/cloud/repositories/${REPO_OWNER}/${REPO_NAME}/environment`,
     {
@@ -256,12 +256,14 @@ async function seedRepositoryThroughProductApi(): Promise<string> {
     throw new Error(`Repository seed failed (${saved.status}): ${JSON.stringify(saved.body)}`);
   }
   const seededId = saved.body.repoConfigId;
+  let lastList = "never listed";
   await pollUntil(
-    `repository ${REPO_OWNER}/${REPO_NAME} (${seededId}) visible in /v1/cloud/repositories`,
+    () => `repository ${REPO_OWNER}/${REPO_NAME} (${seededId}) visible in /v1/cloud/repositories (last seen: ${lastList})`,
     async () => {
       const list = await apiRequest<{
         repositories: Array<{ id: string }>;
       }>("/v1/cloud/repositories", { token: tokens.access_token });
+      lastList = `status ${list.status}, ${list.body?.repositories?.length ?? 0} repositories`;
       return list.status === 200
         && list.body.repositories.some((candidate) => candidate.id === seededId);
     },
@@ -271,27 +273,73 @@ async function seedRepositoryThroughProductApi(): Promise<string> {
 
 const CONVERGENCE_TIMEOUT_MS = 15_000;
 const CONVERGENCE_POLL_MS = 250;
+const CONVERGENCE_PROBE_TIMEOUT_MS = 5_000;
 
 /** Bounded API convergence: the server commits request transactions in
  * dependency teardown after responding, so a follow-up request may briefly
- * see the prior state. Poll with a short interval up to a hard deadline and
- * fail with the description when the state never converges. */
+ * see the prior state. Poll with a short interval up to a hard overall
+ * deadline; each probe is additionally raced against the smaller of the
+ * per-probe cap and the remaining deadline, so one hung request cannot
+ * exceed the bound. The race abandons (does not cancel) an in-flight probe
+ * where the underlying API offers no cancellation seam — the shared
+ * `apiRequest` helper takes no AbortSignal, and threading one through is a
+ * suite-wide change this spec deliberately avoids. The `description` is
+ * evaluated at failure time so it can carry the last observed state. */
 async function pollUntil(
-  description: string,
+  description: string | (() => string),
   probe: () => Promise<boolean>,
 ): Promise<void> {
   const deadline = Date.now() + CONVERGENCE_TIMEOUT_MS;
   let attempts = 0;
   while (Date.now() < deadline) {
     attempts += 1;
-    if (await probe()) {
-      return;
+    const probeBudget = Math.min(CONVERGENCE_PROBE_TIMEOUT_MS, deadline - Date.now());
+    let timer: NodeJS.Timeout | undefined;
+    const timeoutSentinel = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), probeBudget);
+    });
+    try {
+      const outcome = await Promise.race([
+        probe().catch(() => false),
+        timeoutSentinel,
+      ]);
+      if (outcome === true) {
+        return;
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    if (Date.now() + CONVERGENCE_POLL_MS >= deadline) {
+      break;
     }
     await new Promise((resolve) => setTimeout(resolve, CONVERGENCE_POLL_MS));
   }
+  const rendered = typeof description === "function" ? description() : description;
   throw new Error(
-    `Timed out after ${CONVERGENCE_TIMEOUT_MS}ms (${attempts} probes) waiting for: ${description}`,
+    `Timed out after ${CONVERGENCE_TIMEOUT_MS}ms (${attempts} probes) waiting for: ${rendered}`,
   );
+}
+
+/** Converge the admin password login: a clean first-run claim commits its
+ * transaction after the /setup response, so the very first login may race
+ * it. Persistent auth failures still surface — the bound is the same 15s
+ * convergence deadline, and the failure carries the last login error. */
+async function convergedAdminLogin(): Promise<{ access_token: string }> {
+  let tokens: { access_token: string } | null = null;
+  let lastError = "never attempted";
+  await pollUntil(
+    () => `admin password login to converge (last error: ${lastError})`,
+    async () => {
+      try {
+        tokens = await passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD);
+        return true;
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        return false;
+      }
+    },
+  );
+  return tokens!;
 }
 
 /** Wait for the definition to be readable at the expected revision through
@@ -303,7 +351,7 @@ async function awaitWorkflowRevision(
 ): Promise<void> {
   let last: { status: number; revision?: number } = { status: -1 };
   await pollUntil(
-    `workflow ${workflowId} at revision ${expectedRevision} (last seen: ${JSON.stringify(last)})`,
+    () => `workflow ${workflowId} at revision ${expectedRevision} (last seen: ${JSON.stringify(last)})`,
     async () => {
       const result = await authenticatedWorkflowGet(page, workflowId);
       last = { status: result.status, revision: result.body?.revision };
@@ -315,11 +363,13 @@ async function awaitWorkflowRevision(
 /** Wait for the deletion to be durably visible: detail 404 and gone from the
  * authenticated list. */
 async function awaitWorkflowDeleted(page: Page, workflowId: string): Promise<void> {
+  let lastSeen = "never probed";
   await pollUntil(
-    `workflow ${workflowId} deleted (detail 404 + absent from list)`,
+    () => `workflow ${workflowId} deleted (detail 404 + absent from list; last seen: ${lastSeen})`,
     async () => {
       const detail = await authenticatedWorkflowGet(page, workflowId);
       if (detail.status !== 404) {
+        lastSeen = `detail status ${detail.status}`;
         return false;
       }
       const token = await pageAccessToken(page);
@@ -327,6 +377,7 @@ async function awaitWorkflowDeleted(page: Page, workflowId: string): Promise<voi
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await response.json() as { workflows: Array<{ id: string }> };
+      lastSeen = `detail 404, list status ${response.status()} with ${body.workflows?.length ?? 0} workflows`;
       return response.status() === 200
         && !body.workflows.some((candidate) => candidate.id === workflowId);
     },

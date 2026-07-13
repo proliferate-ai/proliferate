@@ -465,7 +465,9 @@ vercel.json                  # web app deploy config (Vercel project proliferate
 - Only packaged desktop builds should auto-check for updates. Development builds
   should remain updater-free.
 - `ci.yml` is the repo-wide merge gate for repo shape, Rust, SDK, frontend,
-  mobile, shared-package, and workflow-config checks.
+  mobile, shared-package, and workflow-config checks, plus the fail-closed
+  Tier-2 `Workflow definition lifecycle (tier-2)` job (see §4 Continuous
+  Integration).
 - `server-ci.yml` is the canonical server validation lane. Staging waits for a
   matching `Server CI` run when one exists for the same SHA, so server changes do
   not deploy before server lint/tests finish.
@@ -606,7 +608,17 @@ Flow:
    - the desktop frontend build
    - mobile typecheck
    - web typecheck/build
-   - shared frontend package typecheck/build/tests
+   - shared frontend package typecheck/build/tests, including the focused
+     Tier-1 workflow-definition surface run
+     (`product-surfaces` `src/workflows/WorkflowDefinitionsSurface.test.tsx`)
+   - the fail-closed Tier-2 job `Workflow definition lifecycle (tier-2)`,
+     which boots the real intent stack and runs only
+     `tests/intent/specs/workflow-definitions.spec.ts`; a red result fails
+     the CI workflow and therefore blocks the `deploy-staging.yml`
+     `workflow_run` spine. The check is eligible for a future repository
+     required-status rule, but no branch protection/ruleset exists today.
+     The broad tier-2 lanes (`intent-tests` + `intent-billing` in
+     `.github/workflows/intent-tests.yml`) remain provisional/non-blocking.
 3. `.github/workflows/server-ci.yml` validates the server slice separately with:
    - server catalog validation
    - Ruff

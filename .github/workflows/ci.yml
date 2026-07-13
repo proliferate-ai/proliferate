@@ -248,6 +248,15 @@ jobs:
       - name: Test product UI
         run: pnpm --filter @proliferate/product-ui test
 
+      # Focused Tier-1 gate for the workflow definition surface: passive
+      # refetch draft preservation, revision-conflict handling, failed-reload
+      # retry, and create-state reset (specs/codebase/features/workflows.md
+      # assigns UI conflict behavior to Tier 1). Runs this exact file - the
+      # package-wide product-surfaces suite has known-noisy unrelated tests
+      # and is not gated yet.
+      - name: Test workflow definition surface
+        run: pnpm --filter @proliferate/product-surfaces exec vitest run src/workflows/WorkflowDefinitionsSurface.test.tsx
+
   # Fail-closed Tier-2 gate for the workflow-definition lifecycle (T2-WFDEF-1)
   # only. No continue-on-error: a red result fails the CI workflow on PRs and
   # main, which also blocks the Deploy Staging workflow_run spine. This check
