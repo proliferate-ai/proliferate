@@ -802,8 +802,10 @@ with the exact PRODUCTION `only_surfaces` and
 failure, non-success, or unverifiable outcome enters a finally-style cleanup:
 restore EVERY gate to its recorded prior value or prior absence, read the
 restoration back and verify it, then release the landing hold and halt —
-except that an unexpected Deploy Staging run keeps the hold longer, per the
-rule below. The cleanup covers a partial override write or read-back failure,
+except as the terminality rule below requires the hold to be kept longer
+(any cancellation-requested run and any abnormal or unverifiable staging
+execution, not only an unexpected Deploy Staging run). The cleanup covers a
+partial override write or read-back failure,
 a failed merge, a merge-SHA tree mismatch, an exact-landing-SHA main CI
 failure/cancellation/timeout, an automatic staging
 failure/cancellation/timeout, an unexpected lane execution, an unexpected
@@ -815,21 +817,27 @@ failure is escalated — the hold is never released over unrestored gates. Only
 verified automatic staging success plus verified gate restoration may proceed
 to production promotion.
 
-**Unexpected-run cancellation is not terminal proof.** A cancellation request
-does not prove a run stopped, and a cancelled Deploy Staging run may already
-have partially deployed. For any unexpected Deploy Staging run after the
-first override mutation: request cancellation and restore/read back the gate
-state promptly, but KEEP the landing hold until the run is confirmed terminal
-AND its per-lane/deploy-summary/log evidence proves it produced no side
-effects — or until every possibly affected staging surface is restored to its
-recorded pre-landing staging baseline with artifact/health/routes
-re-verified. If terminality, the side-effect assessment, or that recovery
-cannot be proven, the hold remains and production stays hard-stopped and
-escalated. Only after confirmed terminality, absent-or-recovered effects, and
-verified gate restoration may the hold release — still halted for review,
-never proceeding to promotion. The failure and recovery evidence is recorded
-per the standing failure-evidence requirements (Phase V / incident record).
-The full mechanics live in the rollout ledger.
+**Terminality rule: cancellation is not terminal proof, and the hold outlives
+unproven runs.** A cancellation request does not prove a run stopped, and a
+cancelled run may already have acted. Once overrides are armed, gate
+restoration (with read-back verification) remains prompt in every case, but
+the landing hold may release only after ALL of the following are proven:
+every cancellation-requested run — a source main-CI run or any deploy run —
+is confirmed terminal; every cancelled source main-CI run is proven, across a
+bounded event-propagation barrier, to have emitted no downstream Deploy
+Staging run (if one appears, it is handled under this rule like any other
+staging execution); and every abnormal, failed, cancelled, timed-out, or
+unverifiable staging execution — including the expected exact-landing-SHA
+staging run executing unexpected lanes — is confirmed terminal AND its
+per-lane/deploy-summary/log evidence proves it produced no side effects, or
+every possibly affected staging surface is restored to its recorded
+pre-landing staging baseline with artifact/health/routes re-verified. Any
+unproven terminality, downstream-emission absence, side-effect assessment, or
+recovery retains the hold and hard-stops production with escalation. A fully
+proven failure path releases the hold only into halted-for-review, never into
+promotion. The failure and recovery evidence is recorded per the standing
+failure-evidence requirements (Phase V / incident record). The full mechanics
+live in the rollout ledger.
 
 **External configuration is mutated only after the landing merges, every
 PRODUCTION surface deploys at the exact merge SHA, and old + canonical routes

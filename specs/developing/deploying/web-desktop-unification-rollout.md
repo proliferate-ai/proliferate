@@ -276,34 +276,44 @@ exact-landing-SHA main CI failure/cancellation/timeout, automatic staging
 failure/cancellation/timeout, unexpected lane execution, an unexpected Deploy
 Staging run from ANY trigger source (a manual `workflow_dispatch` or any run
 other than the expected exact-landing-SHA automatic run — request its
-cancellation immediately, then enter cleanup under the unexpected-run rule
+cancellation immediately, then enter cleanup under the terminality rule
 below), or any state that cannot be verified — restore EVERY gate to its
 recorded prior value or prior absence, read the restoration back and verify
-it, then release the landing hold and halt; for an unexpected Deploy Staging
-run, the hold is released only per the unexpected-run rule below. No failure
-path may leave the temporary overrides active or permit a later source CI
-completion to emit staging. If restoration itself fails or cannot be
-verified, production promotion is hard-stopped and the landing hold REMAINS
-in place while the failure is escalated; the hold is never released over
-unrestored or unverified gates.
+it, then release the landing hold and halt; wherever a cancellation-requested
+run or an abnormal/unverifiable staging execution is involved, the hold is
+released only per the terminality rule below. No failure path may leave the
+temporary overrides active or permit a later source CI completion to emit
+staging. If restoration itself fails or cannot be verified, production
+promotion is hard-stopped and the landing hold REMAINS in place while the
+failure is escalated; the hold is never released over unrestored or
+unverified gates.
 
-**Unexpected-run rule (cancellation is not terminal proof):** a cancellation
-request does not prove the run stopped, and a cancelled Deploy Staging run
-may already have partially deployed. On any unexpected Deploy Staging run
-after the first override mutation: request cancellation and restore/read back
-the gate state promptly, but KEEP the landing hold until BOTH (a) the run is
-confirmed terminal, and (b) its per-lane enabled/skipped evidence,
-deploy-summary artifacts, and logs prove it produced no side effects — or,
-where side effects occurred or cannot be ruled out, every possibly affected
-staging surface is restored to its recorded pre-landing staging baseline and
-its artifact/health/routes are re-verified. If terminality, the side-effect
-assessment, or that recovery cannot be proven, the hold remains and
-production stays hard-stopped and escalated. Only after confirmed
-terminality, absent-or-recovered side effects, and verified gate restoration
-may the hold release — the chain is still halted for review and never
-proceeds directly to promotion. The failure and recovery evidence is retained
-per the standing failure-evidence requirements (§5.2 item 6 / a
-non-completing incident record).
+**Terminality rule (cancellation is not terminal proof; the hold outlives
+unproven runs):** a cancellation request does not prove a run stopped, and a
+cancelled run may already have acted. Once overrides are armed, gate
+restoration (with read-back verification) remains prompt in every case, but
+the landing hold may release only after ALL of the following are proven:
+
+- every cancellation-requested run — a source main-CI run or any deploy run —
+  is confirmed terminal;
+- every cancelled source main-CI run is proven, across a bounded
+  event-propagation barrier, to have emitted NO downstream Deploy Staging
+  run; if one appears, it is handled under the next bullet like any other
+  staging execution;
+- every abnormal, failed, cancelled, timed-out, or unverifiable staging
+  execution — including the expected exact-landing-SHA staging run executing
+  unexpected lanes — is confirmed terminal AND its per-lane enabled/skipped
+  evidence, deploy-summary artifacts, and logs prove it produced no side
+  effects, OR every possibly affected staging surface is restored to its
+  recorded pre-landing staging baseline and its artifact/health/routes are
+  re-verified.
+
+Any unproven terminality, downstream-emission absence, side-effect
+assessment, or recovery retains the hold and hard-stops production with
+escalation. A fully proven failure path releases the hold only into
+halted-for-review — never directly into promotion. The failure and recovery
+evidence is retained per the standing failure-evidence requirements (§5.2
+item 6 / a non-completing incident record).
 
 ### 4.3 External-configuration item schema
 
