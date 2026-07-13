@@ -67,6 +67,7 @@ jobs:
       mobile: ${{ steps.detect.outputs.mobile }}
       desktop: ${{ steps.detect.outputs.desktop }}
       runtime: ${{ steps.detect.outputs.runtime }}
+      litellm: ${{ steps.detect.outputs.litellm }}
       desktop_version: ${{ steps.artifacts.outputs.desktop_version }}
       runtime_version: ${{ steps.artifacts.outputs.runtime_version }}
       server_version: ${{ steps.artifacts.outputs.server_version }}
@@ -251,6 +252,16 @@ jobs:
       mode: build_and_promote
     secrets: inherit
 
+  deploy-litellm:
+    needs: [prepare]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
+    uses: ./.github/workflows/_deploy-litellm.yml
+    with:
+      environment: production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
+    secrets: inherit
+
   deploy-server:
     needs: [prepare, promote-e2b]
     if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' }}
@@ -313,6 +324,7 @@ jobs:
       - release-runtime
       - release-server
       - promote-e2b
+      - deploy-litellm
       - deploy-server
       - deploy-workers
       - deploy-web
@@ -330,6 +342,7 @@ jobs:
             (needs.prepare.outputs.server != 'true' || (needs.release-server.result == 'success' && needs.deploy-server.result == 'success')) &&
             (needs.prepare.outputs.desktop != 'true' || needs.deploy-desktop.result == 'success') &&
             (needs.prepare.outputs.e2b != 'true' || needs.promote-e2b.result == 'success') &&
+            (needs.prepare.outputs.litellm != 'true' || needs.deploy-litellm.result == 'success') &&
             (needs.prepare.outputs.workers != 'true' || needs.deploy-workers.result == 'success') &&
             (needs.prepare.outputs.web != 'true' || needs.deploy-web.result == 'success') &&
             (needs.prepare.outputs.mobile != 'true' || needs.deploy-mobile.result == 'success')
@@ -387,6 +400,7 @@ jobs:
       - release-runtime
       - release-server
       - promote-e2b
+      - deploy-litellm
       - deploy-server
       - deploy-workers
       - deploy-web
@@ -406,6 +420,7 @@ jobs:
             echo "- Runtime release: \`${{ needs.release-runtime.result }}\`"
             echo "- Server release: \`${{ needs.release-server.result }}\`"
             echo "- E2B production: \`${{ needs.promote-e2b.result }}\`"
+            echo "- LiteLLM production: \`${{ needs.deploy-litellm.result }}\`"
             echo "- Server production: \`${{ needs.deploy-server.result }}\`"
             echo "- Workers production: \`${{ needs.deploy-workers.result }}\`"
             echo "- Web production: \`${{ needs.deploy-web.result }}\`"

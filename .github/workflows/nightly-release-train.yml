@@ -64,6 +64,7 @@ jobs:
       mobile: ${{ steps.detect.outputs.mobile }}
       desktop: ${{ steps.detect.outputs.desktop }}
       runtime: ${{ steps.detect.outputs.runtime }}
+      litellm: ${{ steps.detect.outputs.litellm }}
       desktop_version: ${{ steps.artifacts.outputs.desktop_version }}
       runtime_version: ${{ steps.artifacts.outputs.runtime_version }}
       server_version: ${{ steps.artifacts.outputs.server_version }}
@@ -263,6 +264,16 @@ jobs:
       mode: build_and_promote
     secrets: inherit
 
+  deploy-litellm:
+    needs: [prepare]
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-litellm.yml
+    with:
+      environment: staging
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
+    secrets: inherit
+
   deploy-server:
     needs: [prepare, deploy-e2b]
     if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.dry_run != 'true' && needs.prepare.outputs.selected_surfaces != '' }}
@@ -322,6 +333,16 @@ jobs:
       mode: build_and_promote
     secrets: inherit
 
+  deploy-litellm-prod:
+    needs: [prepare, deploy-litellm]
+    if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-litellm.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
+    uses: ./.github/workflows/_deploy-litellm.yml
+    with:
+      environment: Production
+      git_sha: ${{ needs.prepare.outputs.head_sha }}
+      enabled: ${{ needs.prepare.outputs.litellm == 'true' }}
+    secrets: inherit
+
   deploy-server-prod:
     needs: [prepare, deploy-server, deploy-e2b-prod]
     if: ${{ always() && needs.prepare.outputs.dry_run != 'true' && needs.deploy-server.result == 'success' && needs.prepare.outputs.selected_surfaces != '' }}
@@ -369,6 +390,7 @@ jobs:
       - release-server
       - release-desktop
       - deploy-e2b
+      - deploy-litellm
       - deploy-server
       - deploy-workers
       - deploy-web
@@ -386,6 +408,7 @@ jobs:
             (needs.prepare.outputs.server != 'true' || (needs.release-server.result == 'success' && needs.deploy-server.result == 'success')) &&
             (needs.prepare.outputs.desktop != 'true' || needs.release-desktop.result == 'success') &&
             (needs.prepare.outputs.e2b != 'true' || needs.deploy-e2b.result == 'success') &&
+            (needs.prepare.outputs.litellm != 'true' || needs.deploy-litellm.result == 'success') &&
             (needs.prepare.outputs.workers != 'true' || needs.deploy-workers.result == 'success') &&
             (needs.prepare.outputs.web != 'true' || needs.deploy-web.result == 'success') &&
             (needs.prepare.outputs.mobile != 'true' || needs.deploy-mobile.result == 'success')
@@ -442,11 +465,13 @@ jobs:
       - release-server
       - release-desktop
       - deploy-e2b
+      - deploy-litellm
       - deploy-server
       - deploy-workers
       - deploy-web
       - deploy-mobile
       - deploy-e2b-prod
+      - deploy-litellm-prod
       - deploy-server-prod
       - deploy-workers-prod
       - deploy-web-prod
@@ -466,11 +491,13 @@ jobs:
             echo "- Server release: \`${{ needs.release-server.result }}\`"
             echo "- Desktop release: \`${{ needs.release-desktop.result }}\`"
             echo "- E2B staging: \`${{ needs.deploy-e2b.result }}\`"
+            echo "- LiteLLM staging: \`${{ needs.deploy-litellm.result }}\`"
             echo "- Server staging: \`${{ needs.deploy-server.result }}\`"
             echo "- Workers staging: \`${{ needs.deploy-workers.result }}\`"
             echo "- Web staging: \`${{ needs.deploy-web.result }}\`"
             echo "- Mobile staging: \`${{ needs.deploy-mobile.result }}\`"
             echo "- E2B prod: \`${{ needs.deploy-e2b-prod.result }}\`"
+            echo "- LiteLLM prod: \`${{ needs.deploy-litellm-prod.result }}\`"
             echo "- Server prod: \`${{ needs.deploy-server-prod.result }}\`"
             echo "- Workers prod: \`${{ needs.deploy-workers-prod.result }}\`"
             echo "- Web prod: \`${{ needs.deploy-web-prod.result }}\`"
