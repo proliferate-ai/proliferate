@@ -30,6 +30,8 @@ interface HarnessOptions {
   runners?: (plan: SelectedCellPlan) => CellRunner[];
   preflightComplete?: boolean;
   provisioners?: ReadonlyMap<WorldId, WorldProvisioner>;
+  previousBlocked?: readonly string[];
+  deferredScenarioIds?: readonly string[];
 }
 
 function harness(opts: HarnessOptions) {
@@ -46,7 +48,12 @@ function harness(opts: HarnessOptions) {
     localNonce: "n",
   });
   const shard = createShardIdentity({ runId: run.runId, shardIndex: 1, shardCount: 1 });
-  const fullPlan = buildPlan({ selector: "explicit", behavior: opts.behavior, cells: opts.cells });
+  const fullPlan = buildPlan({
+    selector: "explicit",
+    behavior: opts.behavior,
+    cells: opts.cells,
+    deferredScenarioIds: opts.deferredScenarioIds,
+  });
 
   const provisioner = new FakeTier2Provisioner(opts.provisionerOptions);
   const provisioners =
@@ -81,6 +88,7 @@ function harness(opts: HarnessOptions) {
     ledger,
     evidence: sink,
     dryRun: opts.dryRun ?? false,
+    previousBlockedCellKeys: opts.previousBlocked,
     now: () => new Date("2026-07-13T00:00:02.000Z").toISOString(),
   };
 
@@ -256,5 +264,89 @@ test("a malformed candidate manifest is rejected before any provisioning", async
   const broken = { ...h.input, candidate: { ...h.input.candidate, sourceSha: "" } };
   await assert.rejects(() => runFoundation(broken), /missing sourceSha|hash mismatch/);
   assert.equal(h.provisioner.prepareCalls, 0, "no provisioning on a malformed manifest");
+  cleanup(h.dir);
+});
+
+test("diagnostic + incomplete preflight blocks cells without provisioning and still emits evidence", async () => {
+  const h = harness({
+    cells: [tier2("T2-AUTH-1"), tier2("T2-INV-1")],
+    behavior: "diagnostic",
+    preflightComplete: false,
+  });
+  const { evidence, evaluation } = await runFoundation(h.input);
+  assert.equal(h.provisioner.prepareCalls, 0, "a fully-blocked diagnostic run never provisions");
+  assert.equal(evidence.finals.length, 2);
+  assert.ok(evidence.finals.every((f) => f.status === "blocked"), "every blocked cell has a blocked final");
+  assert.equal(evaluation.verdict.qualifying, false, "diagnostic is never qualifying");
+  assert.ok(existsSync(h.sink.evidencePath), "evidence emitted on the blocked-preflight path");
+  // The blocked finals are visible in the immutable document, not silently dropped.
+  const doc = JSON.parse(readFileSync(h.sink.evidencePath, "utf8"));
+  assert.equal(doc.finals.filter((f: { status: string }) => f.status === "blocked").length, 2);
+  cleanup(h.dir);
+});
+
+test("a newly-blocked diagnostic cell is flagged as a regression vs the previous run", async () => {
+  // No cell was blocked last run; both are blocked now => both are newly blocked.
+  const fresh = harness({
+    cells: [tier2("T2-AUTH-1"), tier2("T2-INV-1")],
+    behavior: "diagnostic",
+    preflightComplete: false,
+    previousBlocked: [],
+  });
+  const first = await runFoundation(fresh.input);
+  assert.deepEqual(
+    [...first.evaluation.newlyBlockedCellKeys].sort(),
+    ["tier-2/T2-AUTH-1/-/-", "tier-2/T2-INV-1/-/-"],
+    "both blocked cells are newly-blocked when the previous run had none",
+  );
+  cleanup(fresh.dir);
+
+  // Already-known blocked cells are not re-flagged as regressions.
+  const known = harness({
+    cells: [tier2("T2-AUTH-1")],
+    behavior: "diagnostic",
+    preflightComplete: false,
+    previousBlocked: ["tier-2/T2-AUTH-1/-/-"],
+  });
+  const second = await runFoundation(known.input);
+  assert.deepEqual(second.evaluation.newlyBlockedCellKeys, [], "a persistently-blocked cell is not a new regression");
+  cleanup(known.dir);
+});
+
+test("strict qualification is labelled partial when the plan enumerates deferred guarantees", async () => {
+  const withDeferred = harness({
+    cells: [tier2("T2-AUTH-1")],
+    behavior: "strict",
+    deferredScenarioIds: ["T3-CHAT-1"],
+  });
+  const partial = await runFoundation(withDeferred.input);
+  assert.equal(partial.evaluation.verdict.qualifying, true);
+  assert.equal(
+    partial.evaluation.verdict.qualifying === true && partial.evaluation.verdict.label,
+    "partial",
+    "a deferred-guarantee run can only ever be a partial baseline",
+  );
+  cleanup(withDeferred.dir);
+
+  const full = harness({ cells: [tier2("T2-AUTH-1")], behavior: "strict" });
+  const fullResult = await runFoundation(full.input);
+  assert.equal(
+    fullResult.evaluation.verdict.qualifying === true && fullResult.evaluation.verdict.label,
+    "full",
+    "no deferred guarantees => full qualification label",
+  );
+  cleanup(full.dir);
+});
+
+test("not_required cells never demand a result and do not block strict qualification", async () => {
+  const h = harness({
+    cells: [tier2("T2-AUTH-1"), { scenarioId: "T2-OPT-1", world: "tier-2", disposition: "not_required" }],
+    behavior: "strict",
+    // Only the required cell gets a collector; the not_required cell intentionally has none.
+    runners: (plan) => plan.cells.filter((c) => c.disposition === "required").map((c) => greenRunner(c.cell)),
+  });
+  const { evaluation } = await runFoundation(h.input);
+  assert.equal(evaluation.missingCellKeys.length, 0, "the not_required cell is not a missing result");
+  assert.equal(evaluation.verdict.qualifying, true);
   cleanup(h.dir);
 });
