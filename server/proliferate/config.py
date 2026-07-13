@@ -305,6 +305,14 @@ class Settings(BaseSettings):
     support_report_attachment_max_bytes: int = 25 * 1024 * 1024
     support_report_total_attachment_max_bytes: int = 100 * 1024 * 1024
     support_report_internal_base_url: str = ""
+    # Dedicated Bearer key for the private completed-report feed
+    # (GET /internal/support/reports). Empty disables the feed (every request is
+    # rejected); the route still exists so the feed is dark-deployable.
+    support_feed_bearer_token: str = ""
+    # When true, production report completion rejects a missing/malformed
+    # canonical client release ID. Defaults off so the capability deploys dark
+    # until clients emit their canonical release IDs.
+    support_report_require_client_release: bool = False
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
     billing_negative_slack_webhook_url: str = ""

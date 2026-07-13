@@ -18,7 +18,13 @@ from proliferate.middleware.request_context import (
     set_resource_tenant_context,
     set_support_report_context,
 )
+from proliferate.config import settings
 from proliferate.server.support.domain.message import normalize_support_message
+from proliferate.server.support.domain.tracker_intent import (
+    build_tracker_summary,
+    normalize_telemetry_refs,
+    parse_client_release_id,
+)
 from proliferate.server.support.domain.report_records import (
     expected_manifest_entries,
     expected_manifest_keys,
@@ -168,10 +174,10 @@ async def create_support_report(
             source_surface=body.source_surface,
             source_context=support_context_record(body.context),
             workspace_refs=trusted_workspace_refs,
-            telemetry_refs=(
+            telemetry_refs=normalize_telemetry_refs(
                 body.telemetry_refs.model_dump(by_alias=True, exclude_none=True)
                 if body.telemetry_refs
-                else {}
+                else None
             ),
             expected_uploads=body.expected_client_uploads.model_dump(by_alias=True),
             public_content_consent=False,
@@ -180,6 +186,10 @@ async def create_support_report(
             # Credit consent is available on both the bug and prompt modals
             # (previously prompt-only); gate on consent alone.
             credit_name=(body.credit_name if body.credit_consent else None),
+            # Immutable canonical release ID and scrubbed summary are produced
+            # server-side at capture; a malformed release stores as NULL.
+            client_release_id=parse_client_release_id(body.client_release_id),
+            tracker_summary=build_tracker_summary(body.message),
             urgent=body.urgent,
             notify_me=body.notify_me,
             request_id=get_request_id(),
@@ -303,6 +313,9 @@ async def create_support_report_upload(
             publicContentConsent=False,
             kind=body.kind,
             creditConsent=body.credit_consent,
+            creditName=body.credit_name,
+            clientReleaseId=body.client_release_id,
+            telemetryRefs=body.telemetry_refs,
         ),
     )
     return await create_support_report_upload_targets(
@@ -358,6 +371,15 @@ async def _complete_db_backed_report(
         raise SupportReportUploadInvalid("Support report upload belongs to another user.")
     if report.status == "completed":
         return SupportReportCompleteResponse(reportId=report.id)
+
+    # New production reports must carry a canonical client release ID before
+    # completion. Dark by default: legacy rows (created before the column, or
+    # with a malformed release) store NULL and stay feedable with a visible
+    # warning. P2 flips this on once every client emits its canonical release.
+    if settings.support_report_require_client_release and report.client_release_id is None:
+        raise SupportReportUploadInvalid(
+            "Support report is missing a canonical client release ID."
+        )
 
     _install_report_correlation(report)
     manifest = report.object_manifest
