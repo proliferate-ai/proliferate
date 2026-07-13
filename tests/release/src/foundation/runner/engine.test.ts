@@ -14,9 +14,10 @@ import { JsonlEvidenceSink } from "../evidence/jsonl-sink.js";
 import type { PreflightSource } from "../preflight/engine.js";
 import { candidateManifest } from "../fakes/manifests.js";
 import { FakeTier2Provisioner, fakeProvisioner, type FakeProvisionerOptions } from "../fakes/provisioners.js";
-import { greenRunner, failingRunner } from "../fakes/cells.js";
+import { greenRunner, failingRunner, fakeProofRequirement } from "../fakes/cells.js";
 import type { CellRunner } from "./cell.js";
-import type { WorldId } from "../contracts/identity.js";
+import type { WorldId, CellIdentity } from "../contracts/identity.js";
+import { cellKey } from "../contracts/identity.js";
 import type { WorldProvisioner } from "../contracts/world.js";
 import type { SelectedCellPlan } from "../contracts/plan.js";
 
@@ -49,10 +50,22 @@ function harness(opts: HarnessOptions) {
     localNonce: "n",
   });
   const shard = createShardIdentity({ runId: run.runId, shardIndex: 1, shardCount: 1 });
+  const specsWithProof = opts.cells.map((c) => ({
+    ...c,
+    proofRequirement:
+      c.proofRequirement !== undefined
+        ? c.proofRequirement
+        : fakeProofRequirement({
+            scenarioId: c.scenarioId,
+            world: c.world,
+            productHost: c.productHost ?? null,
+            dimensions: c.dimensions ?? {},
+          }),
+  }));
   const fullPlan = buildPlan({
     selector: opts.selector ?? "explicit",
     behavior: opts.behavior,
-    cells: opts.cells,
+    cells: specsWithProof,
     deferredScenarioIds: opts.deferredScenarioIds,
     // merge/release selectors must bind to the scenario manifest to qualify.
     scenarioManifestHash:
@@ -380,5 +393,130 @@ test("not_required cells never demand a result and do not block strict qualifica
     false,
     "shard-scope evaluation is a nonqualifying aggregate input by contract",
   );
+  cleanup(h.dir);
+});
+
+// ── Proof enforcement at the engine boundary ──
+
+test("ADVERSARIAL: a no-op collector (returns success, records nothing) is FAILED, never green", async () => {
+  const cell: CellIdentity = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: null, dimensions: {} };
+  const h = harness({
+    cells: [tier2("T2-AUTH-1")],
+    behavior: "strict",
+    runners: () => [
+      { cell, cellKey: cellKey(cell), run: async () => ({ correlationIds: [] }) }, // never calls ctx.proof.pass
+    ],
+  });
+  const { evidence } = await runFoundation(h.input);
+  assert.equal(evidence.finals[0].status, "failed");
+  assert.match(evidence.finals[0].attempts[0].detail, /proof contract unsatisfied/);
+  cleanup(h.dir);
+});
+
+test("ADVERSARIAL: recording only SOME required assertions is FAILED", async () => {
+  const cell: CellIdentity = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: null, dimensions: {} };
+  const twoAssertions = fakeProofRequirement(cell); // requires exactly FAKE assertion
+  const h = harness({
+    cells: [{ ...tier2("T2-AUTH-1"), proofRequirement: { ...twoAssertions, assertionIds: ["fixture-assertion", "second-assertion"] } }],
+    behavior: "strict",
+    runners: () => [
+      {
+        cell,
+        cellKey: cellKey(cell),
+        run: async (ctx) => {
+          await ctx.proof.pass("fixture-assertion", "only one of two");
+          return { correlationIds: [] };
+        },
+      },
+    ],
+  });
+  const { evidence } = await runFoundation(h.input);
+  assert.equal(evidence.finals[0].status, "failed");
+  assert.match(evidence.finals[0].attempts[0].detail, /never recorded/);
+  cleanup(h.dir);
+});
+
+test("ADVERSARIAL: recording an unknown assertion id is FAILED", async () => {
+  const cell: CellIdentity = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: null, dimensions: {} };
+  const h = harness({
+    cells: [tier2("T2-AUTH-1")],
+    behavior: "strict",
+    runners: () => [
+      {
+        cell,
+        cellKey: cellKey(cell),
+        run: async (ctx) => {
+          await ctx.proof.pass("fixture-assertion", "the real one");
+          await ctx.proof.pass("invented-assertion", "not in the contract");
+          return { correlationIds: [] };
+        },
+      },
+    ],
+  });
+  const { evidence } = await runFoundation(h.input);
+  assert.equal(evidence.finals[0].status, "failed");
+  assert.match(evidence.finals[0].attempts[0].detail, /unknown assertion/);
+  cleanup(h.dir);
+});
+
+test("ADVERSARIAL: a cell with NO proof requirement (bare placeholder) can never be green", async () => {
+  const cell: CellIdentity = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: null, dimensions: {} };
+  const h = harness({
+    cells: [{ ...tier2("T2-AUTH-1"), proofRequirement: null }],
+    behavior: "strict",
+    runners: () => [
+      {
+        cell,
+        cellKey: cellKey(cell),
+        run: async (ctx) => {
+          await ctx.proof.pass("fixture-assertion", "recorded but no contract exists");
+          return { correlationIds: [] };
+        },
+      },
+    ],
+  });
+  const { evidence } = await runFoundation(h.input);
+  assert.equal(evidence.finals[0].status, "failed");
+  assert.match(evidence.finals[0].attempts[0].detail, /no proof requirement/);
+  cleanup(h.dir);
+});
+
+test("a green attempt carries the engine-derived receipt bound to its attempt id and evidence digests", async () => {
+  const h = harness({ cells: [tier2("T2-AUTH-1")], behavior: "strict" });
+  const { evidence } = await runFoundation(h.input);
+  const attempt = evidence.finals[0].attempts[0];
+  assert.equal(attempt.status, "green");
+  assert.ok(attempt.proof, "green attempt must carry a proof receipt");
+  assert.equal(attempt.proof.attemptId, attempt.attemptId);
+  assert.equal(attempt.proof.passed.length, 1);
+  assert.match(attempt.proof.passed[0].eventDigest, /^[0-9a-f]{64}$/);
+  // The recorded proof event is in the shard's JSONL evidence.
+  const events = readFileSync(h.sink.eventsPath, "utf8");
+  assert.ok(events.includes('"event":"proof-assertion-pass"'));
+  assert.ok(events.includes('"assertionId":"fixture-assertion"'));
+  cleanup(h.dir);
+});
+
+test("ADVERSARIAL: recording after the collector returned throws (recorder is sealed)", async () => {
+  const cell: CellIdentity = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: null, dimensions: {} };
+  let leakedProof: { pass(id: string, obs: string): Promise<void> } | null = null;
+  const h = harness({
+    cells: [tier2("T2-AUTH-1")],
+    behavior: "strict",
+    runners: () => [
+      {
+        cell,
+        cellKey: cellKey(cell),
+        run: async (ctx) => {
+          leakedProof = ctx.proof;
+          await ctx.proof.pass("fixture-assertion", "legit");
+          return { correlationIds: [] };
+        },
+      },
+    ],
+  });
+  await runFoundation(h.input);
+  assert.ok(leakedProof);
+  await assert.rejects(() => leakedProof!.pass("fixture-assertion", "late forgery"), /sealed/);
   cleanup(h.dir);
 });

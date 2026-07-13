@@ -102,8 +102,8 @@ async function main(): Promise<void> {
     behavior,
     worlds: ["tier-2"],
     cells: [
-      { cell: authCellIdentity, cellKey: authCellKey, disposition: "required", legacy: false },
-      { cell: billingCellIdentity, cellKey: billingCellKey, disposition: "required", legacy: false },
+      { cell: authCellIdentity, cellKey: authCellKey, disposition: "required", legacy: false, proofRequirement: null },
+      { cell: billingCellIdentity, cellKey: billingCellKey, disposition: "required", legacy: false, proofRequirement: null },
     ],
     deferredScenarioIds: [],
     scenarioManifestHash: null,

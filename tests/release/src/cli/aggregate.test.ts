@@ -6,6 +6,7 @@ import path from "node:path";
 
 import { runAggregateCli } from "./aggregate.js";
 import { cellKey, type CellIdentity } from "../foundation/contracts/identity.js";
+import { buildProofRequirement, proofEventDigest } from "../foundation/contracts/proof.js";
 import type { RunEvidence } from "../foundation/contracts/evidence.js";
 import type { PlannedCell, SelectedCellPlan } from "../foundation/contracts/plan.js";
 import type { CellStatus, FinalCellResult } from "../foundation/contracts/results.js";
@@ -16,19 +17,49 @@ const KEY_A = cellKey(CELL_A);
 const KEY_B = cellKey(CELL_B);
 const MANIFEST_HASH = "a".repeat(64);
 
+const FIXTURE_TEST_ID = "fixture://aggregate-cli-test";
+const FIXTURE_ASSERTION = "fixture-assertion";
+
+function fixtureRequirement(cell: CellIdentity) {
+  return buildProofRequirement(cell, FIXTURE_TEST_ID, [FIXTURE_ASSERTION]);
+}
+
 function planned(cell: CellIdentity): PlannedCell {
-  return { cell, cellKey: cellKey(cell), disposition: "required", legacy: false };
+  return {
+    cell,
+    cellKey: cellKey(cell),
+    disposition: "required",
+    legacy: false,
+    proofRequirement: fixtureRequirement(cell),
+  };
 }
 
 function final(cell: CellIdentity, status: CellStatus): FinalCellResult {
   const key = cellKey(cell);
+  const requirement = fixtureRequirement(cell);
+  const attemptId = `att-${key}`;
+  const proof =
+    status === "green"
+      ? {
+          contractHash: requirement.contractHash,
+          collectedTestId: requirement.collectedTestId,
+          cellKey: key,
+          attemptId,
+          passed: [
+            {
+              assertionId: FIXTURE_ASSERTION,
+              eventDigest: proofEventDigest({ event: "proof-assertion-pass", assertionId: FIXTURE_ASSERTION }),
+            },
+          ],
+        }
+      : null;
   return {
     cellKey: key,
     cell,
     status,
     attempts: [
       {
-        attemptId: `att-${key}`,
+        attemptId,
         attemptNumber: 1,
         cellKey: key,
         cell,
@@ -38,6 +69,7 @@ function final(cell: CellIdentity, status: CellStatus): FinalCellResult {
         startedAt: "2026-07-13T00:00:00.000Z",
         finishedAt: "2026-07-13T00:00:01.000Z",
         superseded: false,
+        proof,
       },
     ],
   };

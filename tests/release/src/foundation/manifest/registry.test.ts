@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 
 import {
   defineCollector,
+  revalidateDefinition,
   adaptFinalResult,
   runnersForPlan,
   COLLECTOR_DEFINITIONS,
@@ -21,7 +22,14 @@ import type { FinalCellResult, CellAttempt } from "../contracts/results.js";
 const CELL_A: CellIdentity = { scenarioId: "S-1", world: "tier-2", productHost: "desktop-web", dimensions: { k: "a" } };
 const CELL_B: CellIdentity = { scenarioId: "S-1", world: "tier-2", productHost: "desktop-web", dimensions: { k: "b" } };
 
-const WIRING = {} as RunnerWiring; // never dereferenced by these fixtures
+const WIRING = {} as RunnerWiring;
+
+function fixtureExecute(assertionId: string) {
+  return async (ctx: { proof: { pass(id: string, obs: string): Promise<void> } }) => {
+    await ctx.proof.pass(assertionId, "fixture");
+    return { correlationIds: [] as string[] };
+  };
+} // never dereferenced by these fixtures
 
 function attempt(cell: CellIdentity, status: CellAttempt["status"]): CellAttempt {
   return {
@@ -35,6 +43,7 @@ function attempt(cell: CellIdentity, status: CellAttempt["status"]): CellAttempt
     startedAt: "2026-07-13T00:00:00.000Z",
     finishedAt: "2026-07-13T00:00:01.000Z",
     superseded: false,
+    proof: null,
   };
 }
 
@@ -49,12 +58,13 @@ test("ADVERSARIAL: a cell declared for another scenario is rejected at definitio
     () =>
       defineCollector({
         scenarioId: "S-1",
+        collectedTestId: "fixture://test-id",
         collectorRef: "x",
         coverage: "foundation-partial",
         gate: "merge",
         evidence: "x",
         cellDefinitions: [
-          { cell: { ...CELL_A, scenarioId: "S-OTHER" }, execute: async () => undefined },
+          { cell: { ...CELL_A, scenarioId: "S-OTHER" }, assertionIds: ["a1"], execute: fixtureExecute("a1") },
         ],
       }),
     /contains a cell for "S-OTHER"/,
@@ -66,13 +76,14 @@ test("ADVERSARIAL: duplicate declared cells are rejected at definition time", ()
     () =>
       defineCollector({
         scenarioId: "S-1",
+        collectedTestId: "fixture://test-id",
         collectorRef: "x",
         coverage: "foundation-partial",
         gate: "merge",
         evidence: "x",
         cellDefinitions: [
-          { cell: CELL_A, execute: async () => undefined },
-          { cell: CELL_A, execute: async () => undefined },
+          { cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") },
+          { cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") },
         ],
       }),
     /duplicate cell/,
@@ -84,6 +95,7 @@ test("ADVERSARIAL: a metadata-only definition (zero executable cells) is invalid
     () =>
       defineCollector({
         scenarioId: "S-1",
+        collectedTestId: "fixture://test-id",
         collectorRef: "x",
         coverage: "foundation-partial",
         gate: "merge",
@@ -99,13 +111,14 @@ test("ADVERSARIAL: a definition spanning two worlds is rejected", () => {
     () =>
       defineCollector({
         scenarioId: "S-1",
+        collectedTestId: "fixture://test-id",
         collectorRef: "x",
         coverage: "foundation-partial",
         gate: "merge",
         evidence: "x",
         cellDefinitions: [
-          { cell: CELL_A, execute: async () => undefined },
-          { cell: { ...CELL_B, world: "local-runtime" }, execute: async () => undefined },
+          { cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") },
+          { cell: { ...CELL_B, world: "local-runtime" }, assertionIds: ["b1"], execute: fixtureExecute("b1") },
         ],
       }),
     /spans worlds/,
@@ -115,13 +128,14 @@ test("ADVERSARIAL: a definition spanning two worlds is rejected", () => {
 test("runner identity/cardinality is DERIVED 1:1 from cell definitions — a missing or extra runner is unrepresentable", () => {
   const def = defineCollector({
     scenarioId: "S-1",
+    collectedTestId: "fixture://test-id",
     collectorRef: "x",
     coverage: "foundation-partial",
     gate: "merge",
     evidence: "x",
     cellDefinitions: [
-      { cell: CELL_A, execute: async () => undefined },
-      { cell: CELL_B, execute: async () => undefined },
+      { cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") },
+      { cell: CELL_B, assertionIds: ["b1"], execute: fixtureExecute("b1") },
     ],
   });
   assert.deepEqual(def.cellKeys, [cellKey(CELL_A), cellKey(CELL_B)]);
@@ -137,13 +151,14 @@ test("runner identity/cardinality is DERIVED 1:1 from cell definitions — a mis
 test("the separate-runner bypass is impossible: runnersForPlan is the only runner source and filters by selected keys", () => {
   const def = defineCollector({
     scenarioId: "S-1",
+    collectedTestId: "fixture://test-id",
     collectorRef: "x",
     coverage: "foundation-partial",
     gate: "merge",
     evidence: "x",
     cellDefinitions: [
-      { cell: CELL_A, execute: async () => undefined },
-      { cell: CELL_B, execute: async () => undefined },
+      { cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") },
+      { cell: CELL_B, assertionIds: ["b1"], execute: fixtureExecute("b1") },
     ],
   });
   const onlyA = runnersForPlan(new Set([cellKey(CELL_A)]), WIRING, [def]);
@@ -195,4 +210,51 @@ test("every shipped definition is foundation-partial today (T2-AUTH-1 skips fres
       `${def.scenarioId} must remain foundation-partial until qualification-safe`,
     );
   }
+});
+
+// ── Post-definition mutation cannot recreate metadata/runner drift ──
+
+test("ADVERSARIAL: post-definition mutation of derived views is frozen or caught by revalidation", () => {
+  const def = defineCollector({
+    scenarioId: "S-1",
+    collectedTestId: "fixture://test-id",
+    collectorRef: "x",
+    coverage: "foundation-partial",
+    gate: "merge",
+    evidence: "x",
+    cellDefinitions: [{ cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") }],
+  });
+  // Frozen: direct mutation throws (strict mode) or is a no-op.
+  assert.throws(() => {
+    (def.cellKeys as string[])[0] = "forged/KEY/-/-";
+  }, TypeError);
+  assert.throws(() => {
+    (def as { world: string }).world = "local-runtime";
+  }, TypeError);
+  // A structurally forged copy with drifted views fails runtime revalidation.
+  const forged = {
+    ...def,
+    cellKeys: ["forged/KEY/-/-"],
+    createRunners: def.createRunners,
+  };
+  assert.throws(() => revalidateDefinition(forged as never), /failed runtime revalidation/);
+});
+
+test("ADVERSARIAL: a forged proof requirement (edited assertion ids) fails revalidation", () => {
+  const def = defineCollector({
+    scenarioId: "S-1",
+    collectedTestId: "fixture://test-id",
+    collectorRef: "x",
+    coverage: "foundation-partial",
+    gate: "merge",
+    evidence: "x",
+    cellDefinitions: [{ cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") }],
+  });
+  const requirement = def.proofRequirements.get(cellKey(CELL_A));
+  assert.ok(requirement);
+  // Forge a copy whose requirement map disagrees with its cellDefinitions.
+  const forgedMap = new Map(def.proofRequirements);
+  forgedMap.set(cellKey(CELL_A), { ...requirement, contractHash: "f".repeat(64) });
+  const forged = { ...def, proofRequirements: forgedMap };
+  assert.throws(() => revalidateDefinition(forged as never), /no longer matches its definition inputs/);
 });

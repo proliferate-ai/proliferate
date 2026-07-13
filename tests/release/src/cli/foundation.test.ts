@@ -80,11 +80,21 @@ function fixtureEnvFile(dir: string): string {
 function syntheticDefinition(cell: CellIdentity, scenarioId = cell.scenarioId) {
   return defineCollector({
     scenarioId,
+    collectedTestId: "fixture://test-id",
     collectorRef: `fixture://${scenarioId}`,
     coverage: "foundation-partial",
     gate: "merge",
     evidence: "synthetic test definition",
-    cellDefinitions: [{ cell, execute: async () => ({ correlationIds: [] }) }],
+    cellDefinitions: [
+      {
+        cell,
+        assertionIds: ["fixture-assertion"],
+        async execute(ctx) {
+          await ctx.proof.pass("fixture-assertion", "fixture");
+          return { correlationIds: [] };
+        },
+      },
+    ],
   });
 }
 
@@ -271,11 +281,21 @@ test("release deferred derivation is exact and rides through the plan + evidence
   const collectorRegistry = [
     defineCollector({
       scenarioId: "T3-CHAT-1",
+      collectedTestId: "fixture://test-id",
       collectorRef: "fixture://chat",
       coverage: "core",
       gate: "release",
       evidence: "fixture",
-      cellDefinitions: [{ cell, execute: async () => ({ correlationIds: [] }) }],
+      cellDefinitions: [
+      {
+        cell,
+        assertionIds: ["fixture-assertion"],
+        async execute(ctx) {
+          await ctx.proof.pass("fixture-assertion", "fixture");
+          return { correlationIds: [] };
+        },
+      },
+    ],
     }),
   ];
   const result = await runFoundationCli(

@@ -123,7 +123,7 @@ test("a blocked cell cannot qualify a strict run (evaluate treats blocked as non
     selector: "explicit",
     behavior: "strict",
     worlds: ["local-runtime"],
-    cells: [{ cell: result.cell, cellKey: result.cellKey, disposition: "required", legacy: false }],
+    cells: [{ cell: result.cell, cellKey: result.cellKey, disposition: "required", legacy: false, proofRequirement: null }],
     deferredScenarioIds: [],
     scenarioManifestHash: null,
   };
@@ -157,6 +157,7 @@ test("a synthetic green result for the cell satisfies the strict cell-set core (
         startedAt: new Date().toISOString(),
         finishedAt: new Date().toISOString(),
         superseded: false,
+        proof: null,
       },
     ],
   };
@@ -164,7 +165,7 @@ test("a synthetic green result for the cell satisfies the strict cell-set core (
     selector: "release",
     behavior: "strict",
     worlds: ["local-runtime"],
-    cells: [{ cell, cellKey: key, disposition: "required", legacy: false }],
+    cells: [{ cell, cellKey: key, disposition: "required", legacy: false, proofRequirement: null }],
     deferredScenarioIds: [],
     // release selector must be bound to the scenario manifest to qualify
     scenarioManifestHash: "f".repeat(64),

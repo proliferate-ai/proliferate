@@ -7,6 +7,7 @@
  */
 
 import type { CellIdentity, ResultBehavior, WorldId } from "./identity.js";
+import type { CellProofRequirement } from "./proof.js";
 
 /** Why a cell is in (or out of) the plan. */
 export type CellDisposition =
@@ -24,6 +25,13 @@ export interface PlannedCell {
    * cell marked legacy is rejected by strict evaluation even when green.
    */
   readonly legacy: boolean;
+  /**
+   * The trusted proof requirement for this cell, derived from its collector
+   * definition at plan time. Null only for bare fail-closed placeholders
+   * (planned rows with no collector) — a cell with a null requirement can
+   * never produce a green result.
+   */
+  readonly proofRequirement: CellProofRequirement | null;
 }
 
 export interface SelectedCellPlan {

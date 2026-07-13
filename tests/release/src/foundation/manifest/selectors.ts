@@ -22,6 +22,7 @@
  */
 
 import type { ProductHost, WorldId } from "../contracts/identity.js";
+import { cellKey as computeCellKey } from "../contracts/identity.js";
 import type { CellSpec } from "../runner/plan-builder.js";
 import type { ParsedManifest } from "./types.js";
 import { COLLECTOR_REGISTRY, type CollectorRegistryEntry } from "./registry.js";
@@ -54,6 +55,9 @@ function collectorCellSpecs(
         productHost: cell.productHost,
         dimensions: cell.dimensions,
         disposition: "required",
+        // The trusted proof requirement rides with the selected cell: the
+        // engine and the aggregate both validate green against it.
+        proofRequirement: entry.proofRequirements.get(computeCellKey(cell)) ?? null,
       });
     }
   }

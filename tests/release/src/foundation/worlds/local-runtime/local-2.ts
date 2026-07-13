@@ -69,6 +69,8 @@ const CELL_DEADLINE_MS = 5 * 60_000;
 const SPEND_SETTLE_MS = 90_000;
 
 export interface Local2Options {
+  /** Engine proof recorder; each step assertion is recorded when it truly holds. */
+  readonly proof?: { pass(assertionId: string, observation: string): Promise<void> };
   env?: NodeJS.ProcessEnv;
   harness?: string;
   now?: () => number;
@@ -81,6 +83,15 @@ class CellBlockedError extends Error {
     this.name = "CellBlockedError";
   }
 }
+
+/** Stable step assertion ids for the one-harness LOCAL-2 partial path. */
+export const LOCAL_2_ASSERTIONS = [
+  "gateway-enrollment-produced-scoped-key",
+  "managed-turn-completed",
+  "transcript-stable-after-reload",
+  "spend-correlated-under-token-id",
+  "usage-event-reconciled",
+] as const;
 
 export function local2CellIdentity(harness: string): CellIdentity {
   return {
@@ -186,6 +197,10 @@ export async function runLocal2Cell(
     }
     const tokenId = enrollment.tokenId;
     correlationIds.push(`token_id:${tokenId}`, `litellm_origin:${safeHost(handle.gatewayOrigin)}`);
+    await options.proof?.pass(
+      "gateway-enrollment-produced-scoped-key",
+      `production enrollment minted scoped LiteLLM key (token_id recorded)`,
+    );
     await registerLedger(ctx, handle, "litellm-virtual-key", tokenId);
     const grantedBefore = enrollment.grantedUsd ?? null;
     const remainingBefore = enrollment.remainingUsd ?? null;
@@ -217,6 +232,7 @@ export async function runLocal2Cell(
       modelId: choice.modelId,
     });
     correlationIds.push(`workspace:${workspace.id}`, `session:${session.id}`);
+    await options.proof?.pass("managed-turn-completed", `bounded managed turn completed in session ${session.id}`);
 
     // Route proof: the launched session resolved a concrete gateway model id,
     // never a bare native selector LiteLLM would 400. Configuration alone is
@@ -251,6 +267,7 @@ export async function runLocal2Cell(
       findTurnEndedEvent(replayed),
       `${SCENARIO_ID}: transcript must replay a stable completed turn after reload`,
     );
+    await options.proof?.pass("transcript-stable-after-reload", "transcript replayed one stable completed turn");
 
     // --- (6) LiteLLM spend correlation under token_id ------------------------
     const spend = await pollSpendLogs(tokenId, deadline, now);
@@ -272,6 +289,10 @@ export async function runLocal2Cell(
       assert.ok(row.spend >= 0, `${SCENARIO_ID}: spend row must carry a cost`);
     }
     correlationIds.push(...spend.rows.map((r) => `litellm_request:${r.requestId}`));
+    await options.proof?.pass(
+      "spend-correlated-under-token-id",
+      `${spend.rows.length} LiteLLM spend row(s) correlated under api_key == token_id`,
+    );
 
     // --- (7) product usage event + managed balance reconcile -----------------
     const reconcile = await probeImportAndReconcile(actor.email);
@@ -308,6 +329,10 @@ export async function runLocal2Cell(
       );
     }
     correlationIds.push(...correlated.map((e) => `usage_event:${e.id}`));
+    await options.proof?.pass(
+      "usage-event-reconciled",
+      `${correlated.length} agent_llm_usage_event(s) imported and reconciled for the scoped key`,
+    );
 
     detail =
       `managed-gateway turn on ${choice.modelId} (${choice.fromAllowlist ? "allowlist" : "probe-fallback"}) ` +
@@ -340,6 +365,7 @@ export async function runLocal2Cell(
     startedAt,
     finishedAt,
     superseded: false,
+    proof: null,
   };
   await ctx.evidence.append({
     kind: "cell-final",

@@ -38,6 +38,8 @@ import { resolveManifestHash } from "./artifacts.js";
 import { shardScopedPlan } from "./plan-builder.js";
 import { verifyReadyHandle } from "./readiness.js";
 import { CellBlockedError, CellExpectedFailError, type CellExecutionContext, type CellRunner } from "./cell.js";
+import { ScopedProofRecorder } from "./proof-recorder.js";
+import { validateProofReceipt, type CellProofReceipt } from "../contracts/proof.js";
 import { redactSecrets } from "../preflight/redaction.js";
 
 export interface FoundationRunInput {
@@ -318,6 +320,12 @@ async function executeCell(
       input.attemptIdFactory?.(planned.cellKey, attemptNumber) ??
       `${input.run.runId}:${input.shard.shardId}:${planned.cellKey}#${attemptNumber}`,
   };
+  const recorder = new ScopedProofRecorder(
+    input.evidence,
+    attempt,
+    (value) => redactSecrets(value, secretValues),
+    now,
+  );
   const ctx: CellExecutionContext = {
     cell: planned.cell,
     cellKey: planned.cellKey,
@@ -327,16 +335,45 @@ async function executeCell(
     evidence: input.evidence,
     behavior: args.plan.behavior,
     dryRun: input.dryRun,
+    proof: recorder,
   };
 
   let status: CellStatus;
   let detail = "";
   let correlationIds: readonly string[] = [];
+  let proof: CellProofReceipt | null = null;
   try {
     const outcome = await runner.run(ctx);
-    status = "green";
     correlationIds = outcome?.correlationIds ?? [];
+    // Green exists ONLY through a valid engine-derived proof receipt: the
+    // recorder's sealed passes must satisfy the trusted requirement carried
+    // in the planned cell. A cell with no requirement (bare placeholder) or
+    // an incomplete/forged record set is a FAILED cell, not a green one.
+    const refs = recorder.seal();
+    if (!planned.proofRequirement) {
+      status = "failed";
+      detail =
+        "collector returned success but the planned cell carries no proof requirement; " +
+        "a cell without a trusted proof contract can never be green";
+    } else {
+      const candidateReceipt: CellProofReceipt = {
+        contractHash: planned.proofRequirement.contractHash,
+        collectedTestId: planned.proofRequirement.collectedTestId,
+        cellKey: planned.cellKey,
+        attemptId: attempt.attemptId,
+        passed: refs,
+      };
+      const problems = validateProofReceipt(planned.proofRequirement, candidateReceipt, planned.cellKey);
+      if (problems.length > 0) {
+        status = "failed";
+        detail = `proof contract unsatisfied: ${problems.join("; ")}`;
+      } else {
+        status = "green";
+        proof = candidateReceipt;
+      }
+    }
   } catch (error) {
+    recorder.seal();
     if (error instanceof CellBlockedError) {
       status = "blocked";
       detail = error.reason;
@@ -363,6 +400,7 @@ async function executeCell(
     startedAt,
     finishedAt,
     superseded: false,
+    proof,
   };
   await safeAppend(input.evidence, {
     event: "cell-attempt",
@@ -395,6 +433,9 @@ function makeSimpleFinal(
     startedAt: at,
     finishedAt: at,
     superseded: false,
+    // Synthetic preflight/readiness/blocked placeholders are never green, so
+    // they carry no proof.
+    proof: null,
   };
   return { cellKey: planned.cellKey, cell: planned.cell, status, attempts: [attempt] };
 }

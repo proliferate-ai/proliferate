@@ -12,13 +12,26 @@ import {
   type CellExecutionContext,
   type CellRunner,
 } from "../runner/cell.js";
+import { buildProofRequirement } from "../contracts/proof.js";
+
+/** The assertion id every fake green runner proves; pair with fakeProofRequirement(cell). */
+export const FAKE_ASSERTION_ID = "fixture-assertion";
+export const FAKE_COLLECTED_TEST_ID = "fixture://fake-runner";
+
+/** The trusted requirement matching greenRunner's recorded proof. */
+export function fakeProofRequirement(cell: CellIdentity) {
+  return buildProofRequirement(cell, FAKE_COLLECTED_TEST_ID, [FAKE_ASSERTION_ID]);
+}
 
 export function greenRunner(cell: CellIdentity, opts: { legacy?: boolean; correlationIds?: readonly string[] } = {}): CellRunner {
   return {
     cell,
     cellKey: cellKey(cell),
     legacy: opts.legacy,
-    async run() {
+    async run(ctx: CellExecutionContext) {
+      // Fakes prove their fixture assertion honestly — the engine derives the
+      // receipt; a fake that skipped this would (correctly) fail, not green.
+      await ctx.proof.pass(FAKE_ASSERTION_ID, "fake runner fixture assertion");
       return { correlationIds: opts.correlationIds ?? [] };
     },
   };
@@ -76,6 +89,7 @@ export function resourceRegisteringRunner(
         },
         cleanup,
       );
+      return { correlationIds: [] };
     },
   };
 }

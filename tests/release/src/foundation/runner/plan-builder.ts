@@ -15,6 +15,7 @@ import { assignShards } from "../contracts/plan.js";
 import type { PlannedCell, SelectedCellPlan } from "../contracts/plan.js";
 import type { CellIdentity, ProductHost, ResultBehavior, WorldId } from "../contracts/identity.js";
 import { cellKey } from "../contracts/identity.js";
+import type { CellProofRequirement } from "../contracts/proof.js";
 import type { ShardIdentity } from "../contracts/identity.js";
 
 /**
@@ -46,6 +47,8 @@ export interface CellSpec {
   readonly disposition?: "required" | "not_required" | "deferred";
   /** Force legacy marking; otherwise derived from the scenario id. */
   readonly legacy?: boolean;
+  /** Trusted proof requirement from the collector definition; null for bare placeholders. */
+  readonly proofRequirement?: CellProofRequirement | null;
 }
 
 export interface BuildPlanInput {
@@ -71,6 +74,7 @@ export function buildPlan(input: BuildPlanInput): SelectedCellPlan {
       cellKey: key,
       disposition: spec.disposition ?? "required",
       legacy: spec.legacy ?? isLegacyScenarioId(spec.scenarioId),
+      proofRequirement: spec.proofRequirement ?? null,
     };
   });
 

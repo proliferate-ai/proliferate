@@ -33,6 +33,19 @@ export const T2_AUTH_1_CELL: import("../../../contracts/identity.js").CellIdenti
 };
 const CELL = T2_AUTH_1_CELL;
 
+/**
+ * High-level clause assertion ids, each mapped to the ACTUAL Playwright spec
+ * title observed in the report — a clause whose spec did not run/pass is
+ * simply never recorded, so the engine cannot green the cell.
+ */
+export const T2_AUTH_1_ASSERTIONS = {
+  "setup-claim": "claims the instance once via /setup",
+  "second-claim-rejected": "second claim attempt is rejected",
+  "password-login": "logs in through the desktop-web UI",
+  "wrong-password-rejected": "negative: wrong password is rejected",
+  "logout-relogin": "logout returns the UI to signed-out state",
+} as const;
+
 interface PlaywrightSpecResult {
   title: string;
   status: string;
@@ -71,6 +84,7 @@ function collectSpecResults(report: PlaywrightJsonReport): PlaywrightSpecResult[
 export async function runT2Auth1Cell(
   handle: InternalTier2WorldHandle,
   evidence: EvidenceSink,
+  proof?: { pass(assertionId: string, observation: string): Promise<void> },
 ): Promise<FinalCellResult> {
   return runCell(CELL, evidence, async (): Promise<CellOutcome> => {
     const { REPO_ROOT } = await loadBootModule();
@@ -119,6 +133,16 @@ export async function runT2Auth1Cell(
         detail: `T2-AUTH-1 happy core did not pass in full: ${detail}`,
         correlationIds: [`playwright-exit-${spawned.status}`],
       };
+    }
+
+    // Record one honest pass per clause, matched against the ACTUAL spec
+    // titles the report collected. A missing clause records nothing and the
+    // engine's proof contract fails the cell.
+    for (const [assertionId, titleNeedle] of Object.entries(T2_AUTH_1_ASSERTIONS)) {
+      const spec = specResults.find((r) => r.title.includes(titleNeedle) && r.status === "passed");
+      if (spec) {
+        await proof?.pass(assertionId, `playwright passed: "${spec.title}"`);
+      }
     }
 
     return {

@@ -51,11 +51,19 @@ function fixtureDef(
 ): CollectorRegistryEntry {
   return defineCollector({
     scenarioId,
+    collectedTestId: "fixture://test-id",
     collectorRef,
     coverage,
     gate: "merge",
     evidence: "fixture",
-    cellDefinitions: cells.map((cell) => ({ cell, execute: async () => undefined })),
+    cellDefinitions: cells.map((cell) => ({
+      cell,
+      assertionIds: ["fixture-assertion"],
+      async execute(ctx) {
+        await ctx.proof.pass("fixture-assertion", "fixture");
+        return { correlationIds: [] };
+      },
+    })),
   });
 }
 

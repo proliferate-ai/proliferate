@@ -26,6 +26,7 @@ import { shardOwnedCellKeys } from "./plan.js";
 import type { CellAttempt, FinalCellResult, RunEvaluation } from "./results.js";
 import { cellKey as computeCellKey } from "./identity.js";
 import { evaluateCells } from "./evaluate.js";
+import { validateProofReceipt } from "./proof.js";
 
 /** Trusted identities the caller resolved independently of any shard. */
 export interface ExpectedRunIdentity {
@@ -186,6 +187,34 @@ export function evaluateAggregate(input: AggregateInput): AggregateEvaluation {
   const finals: FinalCellResult[] = shards.flatMap((s) => [...s.finals]);
   for (const final of finals) {
     defects.push(...validateFinal(final));
+  }
+
+  // ── Proof receipts: every GREEN final must carry a receipt matching the
+  // TRUSTED plan's proof requirement for that cell — validated here
+  // independently; the aggregate never assumes the engine checked it.
+  // (Journal-ref existence validation is the trusted fan-in turn's scope.) ──
+  const plannedByKey = new Map(plan.cells.map((c) => [c.cellKey, c]));
+  for (const final of finals) {
+    if (final.status !== "green") continue;
+    const planned = plannedByKey.get(final.cellKey);
+    if (!planned) continue; // unknown-final defect already reported by evaluateCells
+    if (!planned.proofRequirement) {
+      defects.push(
+        `green final ${final.cellKey} has no trusted proof requirement in the plan; a bare placeholder cell can never be green`,
+      );
+      continue;
+    }
+    const active = final.attempts.filter((a) => !a.superseded);
+    const greenAttempt = active.length === 1 ? active[0] : final.attempts[final.attempts.length - 1];
+    const problems = validateProofReceipt(planned.proofRequirement, greenAttempt?.proof, final.cellKey);
+    for (const problem of problems) {
+      defects.push(`green final ${final.cellKey} proof: ${problem}`);
+    }
+    if (greenAttempt && greenAttempt.proof && greenAttempt.proof.attemptId !== greenAttempt.attemptId) {
+      defects.push(
+        `green final ${final.cellKey} proof receipt is bound to attempt ${greenAttempt.proof.attemptId}, not the green attempt ${greenAttempt.attemptId}`,
+      );
+    }
   }
 
   // ── Cleanup: recompute health from counters; never trust complete=true. ──

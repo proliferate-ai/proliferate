@@ -13,6 +13,7 @@ import type { AttemptIdentity, CellIdentity, ResultBehavior } from "../contracts
 import type { ReadyWorldHandle } from "../contracts/world.js";
 import type { CleanupLedger } from "../contracts/cleanup.js";
 import type { EvidenceSink } from "../contracts/evidence.js";
+import type { ProofRecorder } from "./proof-recorder.js";
 
 export interface CellExecutionContext {
   readonly cell: CellIdentity;
@@ -23,6 +24,13 @@ export interface CellExecutionContext {
   readonly evidence: EvidenceSink;
   readonly behavior: ResultBehavior;
   readonly dryRun: boolean;
+  /**
+   * Engine-owned scoped proof recorder. A collector proves each contract
+   * assertion by calling `ctx.proof.pass(assertionId, observation)` during
+   * execution; the engine derives the green receipt from these records.
+   * Returning without recording every required assertion can never be green.
+   */
+  readonly proof: ProofRecorder;
 }
 
 /** Optional structured result; correlation ids are surfaced into the attempt. */
@@ -35,7 +43,8 @@ export interface CellRunner {
   readonly cell: CellIdentity;
   /** Whether this collector is a legacy port — legacy collectors cannot qualify. */
   readonly legacy?: boolean;
-  run(ctx: CellExecutionContext): Promise<CellOutcome | void>;
+  /** Must return a CellOutcome; void is not accepted (no-op cannot green). */
+  run(ctx: CellExecutionContext): Promise<CellOutcome>;
 }
 
 /**

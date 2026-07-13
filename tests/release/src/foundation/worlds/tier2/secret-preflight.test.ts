@@ -23,7 +23,7 @@ function planFor(behavior: "diagnostic" | "strict"): SelectedCellPlan {
     selector: "explicit",
     behavior,
     worlds: ["tier-2"],
-    cells: [{ cell: BILLING_CELL, cellKey: BILLING_CELL_KEY, disposition: "required", legacy: false }],
+    cells: [{ cell: BILLING_CELL, cellKey: BILLING_CELL_KEY, disposition: "required", legacy: false, proofRequirement: null }],
     deferredScenarioIds: [],
     scenarioManifestHash: null,
   };
@@ -125,6 +125,7 @@ test("strict path: Stripe present (FAKE satisfied) and the cell goes green -> th
         startedAt: new Date().toISOString(),
         finishedAt: new Date().toISOString(),
         superseded: false,
+        proof: null,
       },
     ],
   };

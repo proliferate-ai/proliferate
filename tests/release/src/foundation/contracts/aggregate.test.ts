@@ -22,6 +22,7 @@ import { shardOwnedCellKeys } from "./plan.js";
 import type { CellIdentity, RunIdentity, ShardIdentity } from "./identity.js";
 import { cellKey } from "./identity.js";
 import type { CellAttempt, FinalCellResult } from "./results.js";
+import { buildProofRequirement, proofEventDigest } from "./proof.js";
 
 const HASH = "a".repeat(64);
 
@@ -69,11 +70,18 @@ function attempt(c: CellIdentity, n: number, status: CellAttempt["status"], supe
     startedAt: `2026-07-13T00:0${n}:00.000Z`,
     finishedAt: `2026-07-13T00:0${n}:30.000Z`,
     superseded,
+  proof: null,
   };
 }
 
 function green(c: CellIdentity): FinalCellResult {
-  return { cellKey: cellKey(c), cell: c, status: "green", attempts: [attempt(c, 1, "green", false)] };
+  const a = attempt(c, 1, "green", false);
+  return {
+    cellKey: cellKey(c),
+    cell: c,
+    status: "green",
+    attempts: [{ ...a, proof: fixtureReceipt(c, a.attemptId) }],
+  };
 }
 
 function okWorld(world: string): WorldEvidence {
@@ -86,12 +94,42 @@ function okWorld(world: string): WorldEvidence {
   };
 }
 
+const FIXTURE_TEST_ID = "fixture://aggregate-test";
+const FIXTURE_ASSERTION = "fixture-assertion";
+
+function fixtureRequirement(c: CellIdentity) {
+  return buildProofRequirement(c, FIXTURE_TEST_ID, [FIXTURE_ASSERTION]);
+}
+
+/** Receipt matching fixtureRequirement, bound to the green attempt id. */
+function fixtureReceipt(c: CellIdentity, attemptId: string) {
+  const requirement = fixtureRequirement(c);
+  return {
+    contractHash: requirement.contractHash,
+    collectedTestId: requirement.collectedTestId,
+    cellKey: cellKey(c),
+    attemptId,
+    passed: [
+      {
+        assertionId: FIXTURE_ASSERTION,
+        eventDigest: proofEventDigest({ event: "proof-assertion-pass", assertionId: FIXTURE_ASSERTION }),
+      },
+    ],
+  };
+}
+
 function plan(cells: CellIdentity[], overrides: Partial<SelectedCellPlan> = {}): SelectedCellPlan {
   return {
     selector: "release",
     behavior: "strict",
     worlds: ["tier-2"],
-    cells: cells.map((c) => ({ cell: c, cellKey: cellKey(c), disposition: "required" as const, legacy: false })),
+    cells: cells.map((c) => ({
+      cell: c,
+      cellKey: cellKey(c),
+      disposition: "required" as const,
+      legacy: false,
+      proofRequirement: fixtureRequirement(c),
+    })),
     deferredScenarioIds: [],
     scenarioManifestHash: HASH,
     ...overrides,
@@ -300,10 +338,14 @@ test("REGRESSION: a green final may not supersede a product assertion failure", 
   assert.ok(agg.aggregateDefects.some((d) => d.includes("supersedes a product assertion failure")));
 
   // Infrastructure retry (blocked -> green) is allowed.
+  const retryGreen = attempt(a, 2, "green", false);
   const retried: FinalCellResult = {
     ...base.finals[0],
     status: "green",
-    attempts: [attempt(a, 1, "blocked", true), attempt(a, 2, "green", false)],
+    attempts: [
+      attempt(a, 1, "blocked", true),
+      { ...retryGreen, proof: fixtureReceipt(a, retryGreen.attemptId) },
+    ],
   };
   const ok = evaluateAggregate({ plan: p, expected: expected(), shards: [{ ...base, finals: [retried] }] });
   assert.equal(ok.verdict.qualifying, true);

@@ -60,6 +60,7 @@ export async function runCell(
     startedAt,
     finishedAt,
     superseded: false,
+    proof: null,
   };
   await evidence.append({ kind: "cell-attempt", ...attempt });
   return { cellKey: key, cell, status: attempt.status, attempts: [attempt] };

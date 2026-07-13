@@ -27,11 +27,12 @@ import type { CandidateManifest, RetainedProductionManifest } from "../contracts
 import type { WorldContext } from "../contracts/world.js";
 import type { LocalRuntimeWorldHandle } from "../contracts/world.js";
 import { CellBlockedError, CellExpectedFailError, type CellExecutionContext, type CellOutcome, type CellRunner } from "../runner/cell.js";
+import { buildProofRequirement, type CellProofRequirement } from "../contracts/proof.js";
 import type { FinalCellResult } from "../contracts/results.js";
-import { T2_AUTH_1_CELL, runT2Auth1Cell } from "../worlds/tier2/cells/t2-auth-1.js";
-import { T2_BILL_1_CELL, runT2Bill1Cell } from "../worlds/tier2/cells/t2-bill-1.js";
+import { T2_AUTH_1_CELL, T2_AUTH_1_ASSERTIONS, runT2Auth1Cell } from "../worlds/tier2/cells/t2-auth-1.js";
+import { T2_BILL_1_CELL, T2_BILL_1_ASSERTIONS, runT2Bill1Cell } from "../worlds/tier2/cells/t2-bill-1.js";
 import type { InternalTier2WorldHandle } from "../worlds/tier2/provisioner.js";
-import { local2CellIdentity, runLocal2Cell } from "../worlds/local-runtime/local-2.js";
+import { local2CellIdentity, LOCAL_2_ASSERTIONS, runLocal2Cell } from "../worlds/local-runtime/local-2.js";
 
 export type CollectorCoverage = "core" | "foundation-partial";
 
@@ -53,17 +54,25 @@ export interface RunnerWiring {
 export interface CellDefinition {
   readonly cell: CellIdentity;
   /**
-   * Executes the cell against the ready world. Returns the outcome for a
-   * green cell; throws CellBlockedError / CellExpectedFailError / Error for
-   * the non-green statuses. It never fabricates identity: the engine records
-   * the attempt under the DECLARED cell above.
+   * Stable exact assertion ids this cell must prove. The engine only records
+   * green when execute() has called ctx.proof.pass() for EVERY id exactly
+   * once — returning success proves nothing by itself.
    */
-  execute(ctx: CellExecutionContext, wiring: RunnerWiring): Promise<CellOutcome | void>;
+  readonly assertionIds: readonly string[];
+  /**
+   * Executes the cell against the ready world. Proves each declared
+   * assertion via ctx.proof.pass(assertionId, observation); returns the
+   * outcome (correlation ids). Throws CellBlockedError /
+   * CellExpectedFailError / Error for the non-green statuses.
+   */
+  execute(ctx: CellExecutionContext, wiring: RunnerWiring): Promise<CellOutcome>;
 }
 
 export interface CollectorDefinitionInput {
   readonly scenarioId: string;
   readonly collectorRef: string;
+  /** Stable executable-test id shared by this collector's cells. */
+  readonly collectedTestId: string;
   readonly coverage: CollectorCoverage;
   readonly gate: "merge" | "release";
   readonly evidence: string;
@@ -75,6 +84,8 @@ export interface CollectorDefinition extends CollectorDefinitionInput {
   readonly cells: readonly CellIdentity[];
   readonly cellKeys: readonly string[];
   readonly world: WorldId;
+  /** Trusted proof requirement per cell key, derived from assertionIds. */
+  readonly proofRequirements: ReadonlyMap<string, CellProofRequirement>;
   /** Derives engine CellRunners from the indivisible cell definitions. */
   createRunners(wiring: RunnerWiring): CellRunner[];
 }
@@ -123,12 +134,26 @@ export function defineCollector(input: CollectorDefinitionInput): CollectorDefin
 
   const cells = input.cellDefinitions.map((d) => d.cell);
   const cellKeys = cells.map(cellKey);
-  return {
+  // The proof requirement is derived from the SAME indivisible definition —
+  // buildProofRequirement throws on empty/duplicate/blank assertion ids.
+  const proofRequirements = new Map<string, CellProofRequirement>();
+  for (const def of input.cellDefinitions) {
+    proofRequirements.set(
+      cellKey(def.cell),
+      buildProofRequirement(def.cell, input.collectedTestId, def.assertionIds),
+    );
+  }
+  const definition: CollectorDefinition = {
     ...input,
-    cells,
-    cellKeys,
+    cells: deepFreeze(cells),
+    cellKeys: deepFreeze(cellKeys),
     world: cells[0].world,
+    proofRequirements,
     createRunners(wiring: RunnerWiring): CellRunner[] {
+      // Runtime re-validation: derived views must still agree with the
+      // definition inputs (mutation of a non-frozen path or a forged
+      // structural copy cannot recreate metadata/runner drift).
+      revalidateDefinition(definition);
       return input.cellDefinitions.map((def) => ({
         cellKey: cellKey(def.cell),
         cell: def.cell,
@@ -136,6 +161,47 @@ export function defineCollector(input: CollectorDefinitionInput): CollectorDefin
       }));
     },
   };
+  return deepFreeze(definition);
+}
+
+/** Recursively freezes plain objects/arrays (leaves functions/Maps intact). */
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value) && !(value instanceof Map)) {
+    Object.freeze(value);
+    for (const key of Object.getOwnPropertyNames(value)) {
+      deepFreeze((value as Record<string, unknown>)[key]);
+    }
+  }
+  return value;
+}
+
+/** Re-validates a definition's derived views against its inputs at runtime. */
+export function revalidateDefinition(def: CollectorDefinition): void {
+  const problems: string[] = [];
+  if (def.cells.length !== def.cellDefinitions.length) {
+    problems.push(`cells (${def.cells.length}) != cellDefinitions (${def.cellDefinitions.length})`);
+  }
+  def.cellDefinitions.forEach((cd, i) => {
+    const expected = cellKey(cd.cell);
+    if (def.cellKeys[i] !== expected) {
+      problems.push(`cellKeys[${i}] ${def.cellKeys[i]} != derived ${expected}`);
+    }
+    const requirement = def.proofRequirements.get(expected);
+    if (!requirement) {
+      problems.push(`no proof requirement derived for ${expected}`);
+    } else {
+      const fresh = buildProofRequirement(cd.cell, def.collectedTestId, cd.assertionIds);
+      if (fresh.contractHash !== requirement.contractHash) {
+        problems.push(`proof requirement for ${expected} no longer matches its definition inputs`);
+      }
+    }
+    if (cd.cell.scenarioId !== def.scenarioId) {
+      problems.push(`cell ${expected} belongs to "${cd.cell.scenarioId}", definition is "${def.scenarioId}"`);
+    }
+  });
+  if (problems.length > 0) {
+    throw new Error(`collector definition "${def.scenarioId}" failed runtime revalidation: ${problems.join("; ")}`);
+  }
 }
 
 /**
@@ -158,6 +224,18 @@ export function adaptFinalResult(declared: CellIdentity, final: FinalCellResult)
   if (final.attempts.length === 0) {
     problems.push("final carries no attempt history");
   }
+  // These single-attempt collectors must report EXACTLY one current inner
+  // attempt: a prior failed attempt buried under an unsuperseded green (or any
+  // multi-attempt history) is incoherent for this adapter and never greens.
+  if (final.attempts.length > 1) {
+    problems.push(
+      `single-attempt collector reported ${final.attempts.length} inner attempts; history cannot be manufactured or buried`,
+    );
+  }
+  const unsuperseded = final.attempts.filter((a) => !a.superseded);
+  if (final.attempts.length > 0 && unsuperseded.length !== 1) {
+    problems.push(`expected exactly one non-superseded inner attempt, found ${unsuperseded.length}`);
+  }
   const last = final.attempts[final.attempts.length - 1];
   if (last && last.status !== final.status) {
     problems.push(`last attempt status ${last.status} != final status ${final.status}`);
@@ -165,6 +243,9 @@ export function adaptFinalResult(declared: CellIdentity, final: FinalCellResult)
   for (const attempt of final.attempts) {
     if (attempt.cellKey !== declaredKey) {
       problems.push(`attempt ${attempt.attemptId} cellKey ${attempt.cellKey} != declared ${declaredKey}`);
+    }
+    if (cellKey(attempt.cell) !== declaredKey) {
+      problems.push(`attempt ${attempt.attemptId} cell identity != declared ${declaredKey}`);
     }
   }
   if (problems.length > 0) {
@@ -200,6 +281,7 @@ export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
   defineCollector({
     scenarioId: "T2-AUTH-1",
     collectorRef: "src/foundation/worlds/tier2/cells/t2-auth-1.ts",
+    collectedTestId: "tests/release:t2-auth-1",
     coverage: "foundation-partial",
     gate: "merge",
     evidence:
@@ -207,8 +289,9 @@ export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
     cellDefinitions: [
       {
         cell: T2_AUTH_1_CELL,
+        assertionIds: Object.keys(T2_AUTH_1_ASSERTIONS),
         async execute(ctx) {
-          const final = await runT2Auth1Cell(ctx.world as InternalTier2WorldHandle, ctx.evidence);
+          const final = await runT2Auth1Cell(ctx.world as InternalTier2WorldHandle, ctx.evidence, ctx.proof);
           return adaptFinalResult(T2_AUTH_1_CELL, final);
         },
       },
@@ -217,6 +300,7 @@ export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
   defineCollector({
     scenarioId: "T2-BILL-1",
     collectorRef: "src/foundation/worlds/tier2/cells/t2-bill-1.ts",
+    collectedTestId: "tests/release:t2-bill-1",
     coverage: "foundation-partial",
     gate: "merge",
     evidence:
@@ -224,9 +308,10 @@ export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
     cellDefinitions: [
       {
         cell: T2_BILL_1_CELL,
+        assertionIds: [...T2_BILL_1_ASSERTIONS],
         async execute(ctx) {
           const handle = ctx.world as InternalTier2WorldHandle;
-          const final = await runT2Bill1Cell(handle, ctx.evidence, ctx.ledger);
+          const final = await runT2Bill1Cell(handle, ctx.evidence, ctx.ledger, ctx.proof);
           return adaptFinalResult(T2_BILL_1_CELL, final);
         },
       },
@@ -235,6 +320,7 @@ export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
   defineCollector({
     scenarioId: "LOCAL-2",
     collectorRef: "src/foundation/worlds/local-runtime/local-2.ts",
+    collectedTestId: "tests/release:local-2:claude",
     coverage: "foundation-partial",
     gate: "release",
     evidence:
@@ -242,6 +328,7 @@ export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
     cellDefinitions: [
       {
         cell: local2CellIdentity("claude"),
+        assertionIds: [...LOCAL_2_ASSERTIONS],
         async execute(ctx, wiring) {
           const worldCtx: WorldContext = {
             run: wiring.run,
@@ -253,6 +340,7 @@ export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
           };
           const final = await runLocal2Cell(ctx.world as LocalRuntimeWorldHandle, worldCtx, {
             harness: "claude",
+            proof: ctx.proof,
           });
           return adaptFinalResult(local2CellIdentity("claude"), final);
         },

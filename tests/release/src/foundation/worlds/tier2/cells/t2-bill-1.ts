@@ -44,6 +44,14 @@ export const T2_BILL_1_CELL: CellIdentity = {
 };
 const CELL = T2_BILL_1_CELL;
 
+/** Stable assertion ids for the checkout-to-grant slice. */
+export const T2_BILL_1_ASSERTIONS = [
+  "subscription-created-webhook-accepted",
+  "invoice-paid-webhook-accepted",
+  "pro-period-grant-issued",
+  "grant-hours-match-seat-policy",
+] as const;
+
 /** Bridges the world handle's connection info onto the env vars
  * tests/intent/stack/{seed,billing-env}.ts read, since this cell calls those
  * helpers in-process rather than through a spawned Playwright worker. */
@@ -68,6 +76,7 @@ export async function runT2Bill1Cell(
   handle: InternalTier2WorldHandle,
   evidence: EvidenceSink,
   ledger: CleanupLedger,
+  proof?: { pass(assertionId: string, observation: string): Promise<void> },
 ): Promise<FinalCellResult> {
   return runCell(CELL, evidence, async (): Promise<CellOutcome> => {
     if (!handle.stripe) {
@@ -119,6 +128,9 @@ export async function runT2Bill1Cell(
       const sub = b.createProSubscription({ customerId: customer.id, seats: 1 });
       const fullSub = b.retrieveSubscription(sub.id);
       const createdDelivery = await b.deliverEvent({ type: "customer.subscription.created", object: fullSub });
+      if (createdDelivery.status === 200) {
+        await proof?.pass("subscription-created-webhook-accepted", `webhook 200 for stripe subscription ${sub.id}`);
+      }
       if (createdDelivery.status !== 200) {
         return {
           status: "failed",
@@ -130,6 +142,9 @@ export async function runT2Bill1Cell(
       const invoiceId: string = fullSub.latest_invoice?.id ?? fullSub.latest_invoice;
       const invoice = b.stripeCli<Record<string, unknown>>(["invoices", "retrieve", invoiceId, "--expand", "lines"]);
       const paidDelivery = await b.deliverEvent({ type: "invoice.paid", object: invoice });
+      if (paidDelivery.status === 200) {
+        await proof?.pass("invoice-paid-webhook-accepted", `webhook 200 for stripe invoice ${invoiceId}`);
+      }
       if (paidDelivery.status !== 200) {
         return {
           status: "failed",
@@ -147,6 +162,7 @@ export async function runT2Bill1Cell(
           correlationIds: [`stripe-subscription:${sub.id}`, `stripe-invoice:${invoiceId}`],
         };
       }
+      await proof?.pass("pro-period-grant-issued", `grant ${periodGrant.id} of type pro_period exists after invoice.paid`);
       const hours = Number(periodGrant.hours_granted);
       if (Math.abs(hours - 20) > 1) {
         return {
@@ -156,6 +172,16 @@ export async function runT2Bill1Cell(
         };
       }
 
+      await proof?.pass("grant-hours-match-seat-policy", `grant ${periodGrant.id} carries ~20h/seat as configured`);
+      // Unique billing proof event: bind the exact Stripe object graph to the
+      // cell attempt in evidence (ids only, no payloads/secrets).
+      await evidence.append({
+        kind: "t2-bill-1-proof",
+        stripeSubscriptionId: sub.id,
+        stripeInvoiceId: invoiceId,
+        grantId: periodGrant.id,
+        grantType: "pro_period",
+      });
       return {
         status: "green",
         detail: `real Stripe test-mode checkout (subscription created + invoice.paid) issued a ${hours}h pro_period grant`,

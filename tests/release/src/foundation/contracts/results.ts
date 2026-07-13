@@ -10,6 +10,7 @@
  */
 
 import type { CellIdentity, ResultBehavior } from "./identity.js";
+import type { CellProofReceipt } from "./proof.js";
 import type { CleanupReconciliation } from "./cleanup.js";
 import type { PreflightReport } from "./preflight.js";
 import type { SelectedCellPlan } from "./plan.js";
@@ -36,6 +37,12 @@ export interface CellAttempt {
   readonly finishedAt: string;
   /** True when a later attempt superseded this one; superseded attempts stay recorded. */
   readonly superseded: boolean;
+  /**
+   * Engine-derived proof receipt. REQUIRED for every green executable
+   * attempt; null for non-green attempts and synthetic
+   * preflight/readiness/blocked placeholders.
+   */
+  readonly proof: CellProofReceipt | null;
 }
 
 export interface FinalCellResult {

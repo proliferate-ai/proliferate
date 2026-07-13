@@ -103,7 +103,7 @@ async function main(): Promise<void> {
     selector: "explicit",
     behavior,
     worlds: ["local-runtime"],
-    cells: [{ cell, cellKey: key, disposition: "required", legacy: false }],
+    cells: [{ cell, cellKey: key, disposition: "required", legacy: false, proofRequirement: null }],
     deferredScenarioIds: [],
     scenarioManifestHash: null,
   };
