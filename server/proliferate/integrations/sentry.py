@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover - optional dependency in local/test envs
     StarletteIntegration = None
 
 from proliferate.config import settings
-from proliferate.server.version import server_version
+from proliferate.server.release import is_canonical_release_id, server_release_id
 from proliferate.utils.telemetry_mode import (
     get_server_telemetry_mode,
     is_vendor_telemetry_enabled,
@@ -96,10 +96,21 @@ def init_server_sentry() -> None:
         event_level=None,
     )
 
+    # Prefer a CI-stamped release only when it canonically names this component;
+    # otherwise fall back to the code-built `proliferate-server@<version>+<sha>`
+    # so a misconfigured `SENTRY_RELEASE` can never stamp the server's Sentry
+    # events with another component's (or a malformed) release.
+    configured_release = settings.sentry_release
+    release = (
+        configured_release
+        if is_canonical_release_id(configured_release, component="proliferate-server")
+        else server_release_id()
+    )
+
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.sentry_environment,
-        release=settings.sentry_release or f"proliferate-server@{server_version()}",
+        release=release,
         attach_stacktrace=True,
         max_breadcrumbs=100,
         send_default_pii=False,
@@ -125,6 +136,19 @@ def set_server_sentry_user(user_id: str) -> None:
             "id": user_id,
         }
     )
+
+
+def clear_server_sentry_user() -> None:
+    """Drop any authenticated user from the current Sentry scope.
+
+    Called at request/session teardown so an authenticated user's identity can
+    never leak onto a later, unrelated request handled on the same worker
+    (cross-user leakage). Passing ``None`` clears the scope's ``user``.
+    """
+    if not settings.sentry_dsn or sentry_sdk is None or not is_vendor_telemetry_enabled():
+        return
+
+    sentry_sdk.set_user(None)
 
 
 def set_server_sentry_tag(key: str, value: str) -> None:

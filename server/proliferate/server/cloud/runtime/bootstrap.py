@@ -9,6 +9,7 @@ from uuid import UUID
 
 from proliferate.config import settings
 from proliferate.integrations.sandbox import SandboxProvider, SandboxRuntimeContext
+from proliferate.server.release import sanitize_component_release_override
 from proliferate.server.version import runtime_version_pin
 from proliferate.utils.telemetry_mode import is_vendor_telemetry_enabled
 
@@ -23,8 +24,18 @@ def _runtime_sentry_environment() -> str:
     return settings.cloud_runtime_sentry_environment
 
 
-def _runtime_sentry_release() -> str:
-    return settings.cloud_runtime_sentry_release
+def _runtime_sentry_release() -> str | None:
+    """A canonical `anyharness@...` emergency override, or ``None``.
+
+    Refuses any value that does not canonically name the ``anyharness``
+    component (for example the server release accidentally wired in), which is
+    the code-side guard against stamping the server release onto a target
+    component. Normally empty: the AnyHarness binary stamps its own release.
+    """
+    return sanitize_component_release_override(
+        settings.cloud_runtime_sentry_release,
+        component="anyharness",
+    )
 
 
 def _runtime_sentry_traces_sample_rate() -> float:
@@ -43,8 +54,23 @@ def _target_sentry_env() -> dict[str, str]:
     }
     if settings.cloud_target_sentry_environment:
         env["PROLIFERATE_TARGET_SENTRY_ENVIRONMENT"] = settings.cloud_target_sentry_environment
-    if settings.cloud_target_sentry_release:
-        env["PROLIFERATE_TARGET_SENTRY_RELEASE"] = settings.cloud_target_sentry_release
+    # Component-specific emergency overrides only. The shared
+    # PROLIFERATE_TARGET_SENTRY_RELEASE was removed: one value could not
+    # distinguish worker from supervisor. Each binary otherwise stamps its own
+    # `<component>@<version>+<sha>` from its compile-time build stamp. A
+    # mismatched override (e.g. a server release) is refused, not propagated.
+    worker_release = sanitize_component_release_override(
+        settings.cloud_worker_sentry_release,
+        component="proliferate-worker",
+    )
+    if worker_release:
+        env["PROLIFERATE_WORKER_SENTRY_RELEASE"] = worker_release
+    supervisor_release = sanitize_component_release_override(
+        settings.cloud_supervisor_sentry_release,
+        component="proliferate-supervisor",
+    )
+    if supervisor_release:
+        env["PROLIFERATE_SUPERVISOR_SENTRY_RELEASE"] = supervisor_release
     return env
 
 
@@ -83,8 +109,9 @@ def build_runtime_env(
         env["ANYHARNESS_SENTRY_DSN"] = _runtime_sentry_dsn()
     if is_vendor_telemetry_enabled() and _runtime_sentry_environment():
         env["ANYHARNESS_SENTRY_ENVIRONMENT"] = _runtime_sentry_environment()
-    if is_vendor_telemetry_enabled() and _runtime_sentry_release():
-        env["ANYHARNESS_SENTRY_RELEASE"] = _runtime_sentry_release()
+    runtime_release_override = _runtime_sentry_release()
+    if is_vendor_telemetry_enabled() and runtime_release_override:
+        env["ANYHARNESS_SENTRY_RELEASE"] = runtime_release_override
     if is_vendor_telemetry_enabled():
         env["ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE"] = str(_runtime_sentry_traces_sample_rate())
     env["ANYHARNESS_BEARER_TOKEN"] = runtime_token

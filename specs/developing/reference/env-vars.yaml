@@ -682,7 +682,7 @@
 - name: CLOUD_RUNTIME_SENTRY_RELEASE
   secret: false
   default: ""
-  description: Sentry release for remote AnyHarness
+  description: Emergency component-specific Sentry release override for AnyHarness; must canonically name `anyharness@...` or it is refused. Normally empty (the binary stamps its own release)
   tags: [self-hosted, production]
 
 - name: CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE
@@ -703,10 +703,16 @@
   description: Sentry environment for cloud target worker and supervisor processes
   tags: [self-hosted, production]
 
-- name: CLOUD_TARGET_SENTRY_RELEASE
+- name: CLOUD_WORKER_SENTRY_RELEASE
   secret: false
   default: ""
-  description: Sentry release for cloud target worker and supervisor processes
+  description: Emergency component-specific Sentry release override for the cloud worker; must canonically name `proliferate-worker@...` or it is refused. Normally empty (the binary stamps its own release)
+  tags: [self-hosted, production]
+
+- name: CLOUD_SUPERVISOR_SENTRY_RELEASE
+  secret: false
+  default: ""
+  description: Emergency component-specific Sentry release override for the cloud supervisor; must canonically name `proliferate-supervisor@...` or it is refused. Normally empty (the binary stamps its own release)
   tags: [self-hosted, production]
 
 - name: CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE
@@ -951,8 +957,14 @@
 
 - name: SUPPORT_REPORT_REQUIRE_CLIENT_RELEASE
   secret: false
+  default: "true"
+  description: When true, report completion rejects a missing or malformed canonical client release ID for new reports (web/desktop clients now emit one). Set false on local/self-hosted deployments whose clients cannot stamp a canonical release
+  tags: [production]
+
+- name: PROLIFERATE_REQUIRE_RELEASE_IDENTITY
+  secret: false
   default: "false"
-  description: When true, report completion rejects a missing or malformed canonical client release ID; off by default until clients emit their release IDs
+  description: When true, the server fails closed (raises at release-ID construction) instead of emitting a degraded `0.0.0-dev`/SHA-less release. Production task definitions set this so a build shipped without a stamped version/SHA cannot emit a non-deterministic release
   tags: [production]
 
 - name: SUPPORT_TRACKER_ENABLED

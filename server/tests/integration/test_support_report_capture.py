@@ -122,9 +122,11 @@ async def test_completion_enforcement_rejects_missing_release_when_enabled(
 
 
 async def test_completion_allows_missing_release_when_disabled(
-    db_session: AsyncSession,
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Dark by default: a legacy/absent release still completes.
+    # Enforcement can be turned off (local/self-hosted safety net): an
+    # absent/legacy release still completes when the flag is disabled.
+    monkeypatch.setattr(settings, "support_report_require_client_release", False)
     user = await _user(db_session)
     response = await service.create_support_report(
         db=db_session,
