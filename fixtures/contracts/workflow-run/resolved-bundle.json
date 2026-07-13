@@ -1,0 +1,72 @@
+{
+  "description": "Immutable input-resolved workflow run bundle (PR2 design §6.3) with its RFC 8785 canonical SHA-256 digest (`bundleDigest`). Consumed by the Python, Rust, and TypeScript canonicalizer tests.",
+  "bundle": {
+    "contractVersion": 1,
+    "runId": "10000000-0000-4000-8000-000000000001",
+    "definition": {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "revision": 3,
+      "schemaVersion": 1,
+      "title": "Diagnose a ticket",
+      "defaultRepoConfigId": "30000000-0000-4000-8000-000000000001",
+      "validatedCatalogVersion": "2026-07-12.1",
+      "inputs": [
+        {
+          "name": "ticket",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "stages": [
+        {
+          "harnessConfig": {
+            "agentKind": "claude",
+            "modelId": "sonnet",
+            "effort": "high"
+          },
+          "steps": [
+            {
+              "kind": "agent.prompt",
+              "prompt": "Investigate {{inputs.ticket}}.",
+              "goal": {
+                "objective": "Produce a diagnosis for {{inputs.ticket}}."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "arguments": {
+      "ticket": "PRO-123"
+    },
+    "resolvedPlacement": {
+      "kind": "newWorkspace",
+      "repository": {
+        "kind": "repositoryEnvironment",
+        "repoConfigId": "30000000-0000-4000-8000-000000000001",
+        "repoEnvironmentId": "40000000-0000-4000-8000-000000000001",
+        "repositoryIdentity": "github:proliferate-ai/proliferate"
+      },
+      "baseRef": "main"
+    },
+    "resolvedStages": [
+      {
+        "harnessConfig": {
+          "agentKind": "claude",
+          "modelId": "sonnet",
+          "effort": "high"
+        },
+        "steps": [
+          {
+            "kind": "agent.prompt",
+            "prompt": "Investigate PRO-123.",
+            "goal": {
+              "objective": "Produce a diagnosis for PRO-123."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "sha256": "a1896ae5c124f0bd449e223d426683586afa1ab6bd2bec4c2d164603affce6ee"
+}

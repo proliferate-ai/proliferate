@@ -16,7 +16,10 @@ tower = "0.5"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# float_roundtrip: JSON floats must parse to the correctly rounded f64 (RFC
+# 8785 canonicalization digests are byte-compared across Python/Rust/JS).
+serde_json = { version = "1", features = ["float_roundtrip"] }
+ryu = "1"
 jsonwebtoken = "9"
 
 # OpenAPI / schema

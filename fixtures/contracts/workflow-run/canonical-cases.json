@@ -1,0 +1,73 @@
+{
+  "description": "Golden RFC 8785 canonicalization cases shared by the Python (server/proliferate/server/workflows/domain/canonical.py), Rust (anyharness/crates/anyharness-contract/src/canonical.rs), and TypeScript (apps/packages/product-domain/src/workflows/canonical.ts) workflow canonicalizers. Each case's `value` is parsed by every language's own JSON parser; `canonical` is the exact RFC 8785 canonical JSON text and `sha256` the hex digest of its UTF-8 bytes.",
+  "cases": [
+    {
+      "name": "literals-and-empties",
+      "value": { "b": [], "a": {}, "c": "", "d": [[null, true, false]], "": null },
+      "canonical": "{\"\":null,\"a\":{},\"b\":[],\"c\":\"\",\"d\":[[null,true,false]]}",
+      "sha256": "e6e220227abb6b985d1a413d95ddb65e79d63dff9d8c3e455d2ae554c15f8f0c"
+    },
+    {
+      "name": "rfc8785-section-3-2-3-example",
+      "value": {
+        "numbers": [333333333.33333329, 1E30, 4.5, 2e-3, 0.000000000000000000000000001],
+        "string": "\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/",
+        "literals": [null, true, false]
+      },
+      "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"€$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}",
+      "sha256": "2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb"
+    },
+    {
+      "name": "number-thresholds",
+      "value": [0, -0, 1, -1.5, 0.1, 1e20, 1E21, 1e23, 0.000001, 1e-7, 5e-324, 1.7976931348623157e+308, 9007199254740992, -9007199254740992, 9007199254740994.0],
+      "canonical": "[0,0,1,-1.5,0.1,100000000000000000000,1e+21,1e+23,0.000001,1e-7,5e-324,1.7976931348623157e+308,9007199254740992,-9007199254740992,9007199254740994]",
+      "sha256": "a7e17094fe4b86775830d4e2fee89d5c711b6d62c6731769daf4a780639eefae"
+    },
+    {
+      "name": "rfc8785-appendix-utf16-key-sort",
+      "value": {
+        "€": "Euro Sign",
+        "\r": "Carriage Return",
+        "\ufb33": "Hebrew Letter Dalet With Dagesh",
+        "1": "One",
+        "\ud83d\ude00": "Emoji: Grinning Face",
+        "\u0080": "Control",
+        "ö": "Latin Small Letter O With Diaeresis"
+      },
+      "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}",
+      "sha256": "5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c"
+    },
+    {
+      "name": "no-unicode-normalization",
+      "value": { "\u00e9": "composed", "e\u0301": "decomposed" },
+      "canonical": "{\"é\":\"decomposed\",\"é\":\"composed\"}",
+      "sha256": "8117f7eb721338d1c046fc7a3905d1f77b7a920abc82436194992a55af52f571"
+    },
+    {
+      "name": "control-character-escapes",
+      "value": { "controls": "\u0000\u0001\u0008\u0009\u000b\u000c\u000d\u001f\u007f" },
+      "canonical": "{\"controls\":\"\\u0000\\u0001\\b\\t\\u000b\\f\\r\\u001f\"}",
+      "sha256": "3ddc09aa49fb7fd07fd084bfbd9d2f88393f7d7353111fde24e7d5d12e00f8ef"
+    },
+    {
+      "name": "nested-object-sorting",
+      "value": { "b": { "z": 1, "a": [2, { "y": null, "x": "☃" }] }, "a\u0000b": 3, "a": 4 },
+      "canonical": "{\"a\":4,\"a\\u0000b\":3,\"b\":{\"a\":[2,{\"x\":\"☃\",\"y\":null}],\"z\":1}}",
+      "sha256": "10aeda6277a9456c5dfbfd161f278b227a392920288d3172eec3bc63c77237b5"
+    },
+    {
+      "name": "workflow-control-envelope",
+      "value": {
+        "expectedDataEpoch": "01JZX7LK4RCVBB0000000000EP",
+        "run": {
+          "contractVersion": 1,
+          "bundleDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "placement": { "kind": "newScratch" }
+        },
+        "control": { "cancelRequested": true }
+      },
+      "canonical": "{\"control\":{\"cancelRequested\":true},\"expectedDataEpoch\":\"01JZX7LK4RCVBB0000000000EP\",\"run\":{\"bundleDigest\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"contractVersion\":1,\"placement\":{\"kind\":\"newScratch\"}}}",
+      "sha256": "262388abdeef549201bc8e19434ad1ed07dfecb6cde3b8006ab313476f01e2d8"
+    }
+  ]
+}

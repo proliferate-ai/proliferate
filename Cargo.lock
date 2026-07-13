@@ -357,8 +357,10 @@ dependencies = [
 name = "anyharness-contract"
 version = "0.1.0"
 dependencies = [
+ "ryu",
  "serde",
  "serde_json",
+ "sha2",
  "utoipa",
 ]
 
@@ -4266,7 +4268,7 @@ dependencies = [
 
 [[package]]
 name = "proliferate"
-version = "0.3.25"
+version = "0.3.27"
 dependencies = [
  "base64 0.22.1",
  "chrono",

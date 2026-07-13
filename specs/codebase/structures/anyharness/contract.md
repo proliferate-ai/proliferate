@@ -15,6 +15,8 @@
 - public enums visible to SDK consumers
 - OpenAPI-visible struct and enum definitions
 - API version folders such as `v1/`
+- wire-contract serialization semantics shared across languages
+  (`canonical.rs`)
 
 ## Must Not Own
 
@@ -47,6 +49,25 @@ Transport schemas must live under an explicit version folder:
 
 Future breaking versions should become sibling folders such as `v2/`, not
 unstructured replacements.
+
+`canonical.rs` is the one deliberate non-versioned module: it implements RFC
+8785 (JCS) canonical JSON serialization plus SHA-256 digests, which define the
+meaning of workflow digest fields (`bundleDigest`, `runtimePayloadDigest`)
+rather than any one version's request/response shape. It is a pure function
+over `serde_json::Value` with Python and TypeScript twins; the golden fixtures
+under `fixtures/contracts/workflow-run/` are the cross-language correctness
+fence. Domain code may import it (it is not a `v1` request/response type).
+
+Validation posture across the twins: integer literals outside the IEEE-754
+exact range (`|value| > 2^53`) are rejected wherever the language's parser
+preserves the exact value — Python for every integer literal, Rust for
+literals fitting `i64`/`u64`. Literals beyond that (and everything in
+JavaScript) have already been rounded to a double at parse time and
+canonicalize as that double, byte-identically between Rust and TypeScript;
+Python at the Cloud write boundary is the strict gate, so such literals never
+reach a stored payload. Strings containing lone surrogates are rejected in
+Python and TypeScript and unrepresentable in Rust (serde_json rejects the
+escape at parse), so no digest exists for them in any language.
 
 ## Module Map
 
