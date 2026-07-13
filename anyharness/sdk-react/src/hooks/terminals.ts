@@ -9,7 +9,7 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { anyHarnessTerminalsKey } from "../lib/query-keys.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
@@ -19,18 +19,17 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
+function useWorkspaceCacheScopeKey() {
+  return useAnyHarnessCacheScopeKey();
 }
 
 export function useTerminalsQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessTerminalsKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -46,7 +45,7 @@ export function useTerminalsQuery(options?: WorkspaceQueryOptions) {
 export function useCreateTerminalMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
 
   return useMutation({
     mutationFn: async (
@@ -65,7 +64,7 @@ export function useCreateTerminalMutation(options?: { workspaceId?: string | nul
         ? input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId
         : options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessTerminalsKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -100,7 +99,7 @@ export function useResizeTerminalMutation() {
 export function useUpdateTerminalTitleMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -114,7 +113,7 @@ export function useUpdateTerminalTitleMutation(options?: { workspaceId?: string 
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessTerminalsKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -123,7 +122,7 @@ export function useUpdateTerminalTitleMutation(options?: { workspaceId?: string 
 export function useCloseTerminalMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -136,7 +135,7 @@ export function useCloseTerminalMutation(options?: { workspaceId?: string | null
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessTerminalsKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -145,7 +144,7 @@ export function useCloseTerminalMutation(options?: { workspaceId?: string | null
 export function useRunTerminalCommandMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -159,7 +158,7 @@ export function useRunTerminalCommandMutation(options?: { workspaceId?: string |
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessTerminalsKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessTerminalsKey(cacheScopeKey, workspaceId),
       });
     },
   });

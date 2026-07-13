@@ -2,10 +2,10 @@ import type { Session } from "@anyharness/sdk";
 import {
   anyHarnessSessionKey,
   anyHarnessSessionsKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
-import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 
 export type WorkspaceSession = Session & { workspaceId: string };
 
@@ -13,10 +13,6 @@ export interface WorkspaceSessionCacheSnapshot {
   sessions: WorkspaceSession[] | undefined;
   dataUpdatedAt: number;
   isInvalidated: boolean;
-}
-
-interface WorkspaceSessionCacheOptions {
-  runtimeUrl?: string;
 }
 
 function upsertWorkspaceSession(
@@ -37,60 +33,56 @@ function removeWorkspaceSession(
 
 export function useWorkspaceSessionCache() {
   const queryClient = useQueryClient();
-  const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
   const getWorkspaceSessionCacheSnapshot = useCallback((
     workspaceId: string,
-    options?: WorkspaceSessionCacheOptions,
   ): WorkspaceSessionCacheSnapshot => {
-    const queryKey = anyHarnessSessionsKey(options?.runtimeUrl ?? runtimeUrl, workspaceId);
+    const queryKey = anyHarnessSessionsKey(cacheScopeKey, workspaceId);
     const queryState = queryClient.getQueryState(queryKey);
     return {
       sessions: queryClient.getQueryData<WorkspaceSession[]>(queryKey),
       dataUpdatedAt: queryState?.dataUpdatedAt ?? 0,
       isInvalidated: queryState?.isInvalidated ?? false,
     };
-  }, [queryClient, runtimeUrl]);
+  }, [cacheScopeKey, queryClient]);
 
   const setWorkspaceSessions = useCallback((
     workspaceId: string,
     updater: (sessions: WorkspaceSession[] | undefined) => WorkspaceSession[],
-    options?: WorkspaceSessionCacheOptions,
   ) => {
     queryClient.setQueryData<WorkspaceSession[]>(
-      anyHarnessSessionsKey(options?.runtimeUrl ?? runtimeUrl, workspaceId),
+      anyHarnessSessionsKey(cacheScopeKey, workspaceId),
       updater,
     );
-  }, [queryClient, runtimeUrl]);
+  }, [cacheScopeKey, queryClient]);
 
   const upsertWorkspaceSessionRecord = useCallback((
     workspaceId: string,
     session: Session,
-    options?: WorkspaceSessionCacheOptions,
   ) => {
-    const targetRuntimeUrl = options?.runtimeUrl ?? runtimeUrl;
     queryClient.setQueryData(
-      anyHarnessSessionKey(targetRuntimeUrl, workspaceId, session.id),
+      anyHarnessSessionKey(cacheScopeKey, workspaceId, session.id),
       session,
     );
     queryClient.setQueryData<WorkspaceSession[]>(
-      anyHarnessSessionsKey(targetRuntimeUrl, workspaceId),
+      anyHarnessSessionsKey(cacheScopeKey, workspaceId),
       (sessions) => upsertWorkspaceSession(sessions, {
         ...session,
         workspaceId,
       }),
     );
-  }, [queryClient, runtimeUrl]);
+  }, [cacheScopeKey, queryClient]);
 
   const removeWorkspaceSessionRecord = useCallback((
     workspaceId: string,
     sessionId: string,
   ) => {
     queryClient.setQueryData<WorkspaceSession[]>(
-      anyHarnessSessionsKey(runtimeUrl, workspaceId),
+      anyHarnessSessionsKey(cacheScopeKey, workspaceId),
       (sessions) => removeWorkspaceSession(sessions, sessionId),
     );
-  }, [queryClient, runtimeUrl]);
+  }, [cacheScopeKey, queryClient]);
 
   return {
     getWorkspaceSessionCacheSnapshot,

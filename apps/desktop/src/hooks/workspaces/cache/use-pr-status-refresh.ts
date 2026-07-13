@@ -1,6 +1,7 @@
 import {
   anyHarnessRepoRootPullRequestsKey,
   anyHarnessWorktreesInventoryKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -17,8 +18,12 @@ const PR_STATUS_REFRESH_DEBOUNCE_MS = 250;
 
 const pendingRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function refreshTimerKey(runtimeUrl: string, repoRootId: string): string {
-  return `${runtimeUrl}::${repoRootId}`;
+function refreshTimerKey(
+  runtimeUrl: string,
+  repoRootId: string,
+  cacheScopeKey?: string | null,
+): string {
+  return `${cacheScopeKey?.trim() || runtimeUrl}::${runtimeUrl}::${repoRootId}`;
 }
 
 // Monotonic guard: never replace cached data whose fetchedAt is newer, and
@@ -43,21 +48,22 @@ async function runRepoPrStatusRefresh(input: {
   queryClient: QueryClient;
   runtimeUrl: string;
   repoRootId: string;
+  cacheScopeKey?: string | null;
 }): Promise<void> {
-  const { queryClient, runtimeUrl, repoRootId } = input;
+  const { cacheScopeKey, queryClient, runtimeUrl, repoRootId } = input;
   const result = await listRepoRootPullRequestStatuses(
     { runtimeUrl },
     repoRootId,
     { refresh: true },
   );
   queryClient.setQueryData<RepoPullRequestStatusesResult>(
-    anyHarnessRepoRootPullRequestsKey(runtimeUrl, repoRootId),
+    anyHarnessRepoRootPullRequestsKey(runtimeUrl, repoRootId, cacheScopeKey),
     (previous) => mergeRefreshedPrStatuses(previous, result),
   );
   // Layer 0 (ahead/behind/dirty) refreshes on the same triggers: the worktree
   // inventory query has no other desktop refetch trigger.
   await queryClient.invalidateQueries({
-    queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
+    queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
   });
 }
 
@@ -65,13 +71,15 @@ export function scheduleRepoPrStatusRefresh(input: {
   queryClient: QueryClient;
   runtimeUrl: string;
   repoRootId: string;
+  cacheScopeKey?: string | null;
 }): void {
   const runtimeUrl = input.runtimeUrl.trim();
   const repoRootId = input.repoRootId.trim();
   if (!runtimeUrl || !repoRootId) {
     return;
   }
-  const key = refreshTimerKey(runtimeUrl, repoRootId);
+  const cacheScopeKey = input.cacheScopeKey?.trim() || undefined;
+  const key = refreshTimerKey(runtimeUrl, repoRootId, cacheScopeKey);
   const existing = pendingRefreshTimers.get(key);
   if (existing !== undefined) {
     clearTimeout(existing);
@@ -82,6 +90,7 @@ export function scheduleRepoPrStatusRefresh(input: {
       queryClient: input.queryClient,
       runtimeUrl,
       repoRootId,
+      cacheScopeKey,
     });
   }, PR_STATUS_REFRESH_DEBOUNCE_MS));
 }
@@ -96,9 +105,10 @@ export function resetPrStatusRefreshForTests(): void {
 // The only writer of the repo-root PR status keys.
 export function useRefreshPrStatuses() {
   const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
 
   return useCallback((repoRootId: string) => {
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl, repoRootId });
-  }, [queryClient, runtimeUrl]);
+    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl, repoRootId, cacheScopeKey });
+  }, [cacheScopeKey, queryClient, runtimeUrl]);
 }

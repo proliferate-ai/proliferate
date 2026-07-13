@@ -6,7 +6,12 @@ import type {
   StartWorkspaceSetupRequest,
   UpdateWorkspaceDisplayNameRequest,
 } from "@anyharness/sdk";
-import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveRuntimeCacheScopeKey,
+  resolveRuntimeConnection,
+  useAnyHarnessCacheScopeKey,
+  useAnyHarnessRuntimeContext,
+} from "../context/AnyHarnessRuntime.js";
 import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
@@ -17,9 +22,10 @@ import {
 import {
   anyHarnessRepoRootsKey,
   anyHarnessRuntimeWorkspacesKey,
-  anyHarnessWorkspaceQueryKeyRoots,
+  anyHarnessWorkspaceKey,
   anyHarnessWorktreesInventoryKey,
   anyHarnessWorkspacePurgePreflightKey,
+  anyHarnessWorkspaceDetailKey,
   anyHarnessWorkspaceDetectSetupKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspaceSetupStatusKey,
@@ -37,17 +43,17 @@ interface WorkspaceQueryOptions {
   requestOptions?: AnyHarnessRequestOptions;
 }
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
+function useWorkspaceCacheScopeKey() {
+  return useAnyHarnessCacheScopeKey();
 }
 
 export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+    queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -58,11 +64,11 @@ export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
 
 export function useWorkspaceQuery(options: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: [...anyHarnessWorkspaceQueryKeyRoots(runtimeUrl, workspaceId), "detail"] as const,
+    queryKey: anyHarnessWorkspaceDetailKey(cacheScopeKey, workspaceId),
     enabled: (options.enabled ?? true) && !!workspaceId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -79,6 +85,7 @@ export function useResolveWorkspaceFromPathMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (path: string) => {
@@ -87,10 +94,10 @@ export function useResolveWorkspaceFromPathMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRepoRootsKey(runtimeUrl),
+        queryKey: anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey),
       });
     },
   });
@@ -100,6 +107,7 @@ export function useCreateWorkspaceMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (input: CreateWorkspaceRequest) => {
@@ -108,10 +116,10 @@ export function useCreateWorkspaceMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRepoRootsKey(runtimeUrl),
+        queryKey: anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey),
       });
     },
   });
@@ -121,6 +129,7 @@ export function useCreateWorktreeWorkspaceMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (input: CreateWorktreeWorkspaceRequest) => {
@@ -129,7 +138,7 @@ export function useCreateWorktreeWorkspaceMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
     },
   });
@@ -140,6 +149,7 @@ export function useUpdateWorkspaceDisplayNameMutation() {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async ({
@@ -162,10 +172,10 @@ export function useUpdateWorkspaceDisplayNameMutation() {
     onSuccess: async (_data, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+          queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceQueryKeyRoots(runtimeUrl, variables.workspaceId),
+          queryKey: anyHarnessWorkspaceKey(cacheScopeKey, variables.workspaceId),
         }),
       ]);
     },
@@ -174,11 +184,11 @@ export function useUpdateWorkspaceDisplayNameMutation() {
 
 export function useRetireWorkspacePreflightQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     staleTime: 60_000,
     queryFn: async ({ signal }) => {
@@ -194,11 +204,11 @@ export function useRetireWorkspacePreflightQuery(options?: WorkspaceQueryOptions
 
 export function usePurgeWorkspacePreflightQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessWorkspacePurgePreflightKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     staleTime: 60_000,
     queryFn: async ({ signal }) => {
@@ -217,6 +227,7 @@ export function useRetireWorkspaceMutation() {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (workspaceId: string) => {
@@ -226,10 +237,10 @@ export function useRetireWorkspaceMutation() {
     },
     onSuccess: async (_data, workspaceId) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -240,6 +251,7 @@ export function useRetryRetireCleanupMutation() {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (workspaceId: string) => {
@@ -251,10 +263,10 @@ export function useRetryRetireCleanupMutation() {
     },
     onSuccess: async (_data, workspaceId) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -265,6 +277,7 @@ export function usePurgeWorkspaceMutation() {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (workspaceId: string) => {
@@ -274,13 +287,13 @@ export function usePurgeWorkspaceMutation() {
     },
     onSuccess: async (_data, workspaceId) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
+        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspacePurgePreflightKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -291,6 +304,7 @@ export function useRetryPurgeWorkspaceMutation() {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (workspaceId: string) => {
@@ -302,13 +316,13 @@ export function useRetryPurgeWorkspaceMutation() {
     },
     onSuccess: async (_data, workspaceId) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
+        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspacePurgePreflightKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessWorkspacePurgePreflightKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -316,11 +330,11 @@ export function useRetryPurgeWorkspaceMutation() {
 
 export function useDetectProjectSetupQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceDetectSetupKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessWorkspaceDetectSetupKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     staleTime: Infinity,
     queryFn: async ({ signal }) => {
@@ -336,12 +350,12 @@ export function useDetectProjectSetupQuery(options?: WorkspaceQueryOptions) {
 
 export function useSetupStatusQuery(options?: WorkspaceQueryOptions & { refetchWhileRunning?: boolean }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const refetchWhileRunning = options?.refetchWhileRunning ?? true;
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceSetupStatusKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessWorkspaceSetupStatusKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     // Don't retry on 404 (no setup job exists for this workspace)
     retry: (failureCount, error) => {
@@ -370,7 +384,7 @@ export function useRerunSetupMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (workspaceId: string) => {
@@ -382,7 +396,7 @@ export function useRerunSetupMutation() {
     },
     onSuccess: async (_data, workspaceId) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceSetupStatusKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessWorkspaceSetupStatusKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -392,7 +406,7 @@ export function useStartSetupMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async ({
@@ -411,7 +425,7 @@ export function useStartSetupMutation() {
     },
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorkspaceSetupStatusKey(runtimeUrl, variables.workspaceId),
+        queryKey: anyHarnessWorkspaceSetupStatusKey(cacheScopeKey, variables.workspaceId),
       });
     },
   });

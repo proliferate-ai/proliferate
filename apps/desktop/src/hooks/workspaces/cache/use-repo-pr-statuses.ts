@@ -1,5 +1,8 @@
 import type { BranchPullRequestStatus } from "@anyharness/sdk";
-import { anyHarnessRepoRootPullRequestsKey } from "@anyharness/sdk-react";
+import {
+  anyHarnessRepoRootPullRequestsKey,
+  useAnyHarnessCacheScopeKey,
+} from "@anyharness/sdk-react";
 import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
@@ -22,6 +25,7 @@ export interface RepoPrStatusesState {
 // hooks. Reads only — the sole writer of these keys is use-pr-status-refresh.
 export function useRepoPrStatuses(repoRootIds: string[]): RepoPrStatusesState {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const trimmedRuntimeUrl = runtimeUrl.trim();
 
   const ids = useMemo(
@@ -31,7 +35,11 @@ export function useRepoPrStatuses(repoRootIds: string[]): RepoPrStatusesState {
 
   return useQueries({
     queries: ids.map((repoRootId) => ({
-      queryKey: anyHarnessRepoRootPullRequestsKey(trimmedRuntimeUrl, repoRootId),
+      queryKey: anyHarnessRepoRootPullRequestsKey(
+        trimmedRuntimeUrl,
+        repoRootId,
+        cacheScopeKey,
+      ),
       enabled: trimmedRuntimeUrl.length > 0,
       staleTime: PR_STATUS_STALE_MS,
       // No interval/focus polling (owner decision 2026-07-02): PR status

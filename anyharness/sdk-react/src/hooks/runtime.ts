@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
-import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveRuntimeCacheScopeKey,
+  resolveRuntimeConnection,
+  useAnyHarnessRuntimeContext,
+} from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { anyHarnessRuntimeHealthKey } from "../lib/query-keys.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
@@ -15,9 +19,10 @@ interface RuntimeQueryOptions {
 export function useRuntimeHealthQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessRuntimeHealthKey(runtimeUrl),
+    queryKey: anyHarnessRuntimeHealthKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));

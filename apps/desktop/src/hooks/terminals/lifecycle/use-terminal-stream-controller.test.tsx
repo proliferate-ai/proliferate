@@ -50,12 +50,13 @@ vi.mock("@anyharness/sdk", () => ({
 }));
 
 vi.mock("@anyharness/sdk-react", () => ({
-  anyHarnessTerminalsKey: (runtimeUrl: string, workspaceId: string) => [
+  anyHarnessTerminalsKey: (cacheScopeKey: string, workspaceId: string) => [
     "terminals",
-    runtimeUrl,
+    cacheScopeKey,
     workspaceId,
   ],
   getAnyHarnessClient: vi.fn(),
+  useAnyHarnessCacheScopeKey: () => "test-cache-scope",
 }));
 
 vi.mock("@/hooks/access/cloud/query-keys", () => ({

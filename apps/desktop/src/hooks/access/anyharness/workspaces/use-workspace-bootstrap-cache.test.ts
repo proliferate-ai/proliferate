@@ -3,7 +3,10 @@
 import { createElement, type ReactNode } from "react";
 import { renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { anyHarnessSessionsKey } from "@anyharness/sdk-react";
+import {
+  AnyHarnessRuntime,
+  anyHarnessSessionsKey,
+} from "@anyharness/sdk-react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   commitReplacedSessionTombstone,
@@ -25,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   listWorkspaceSessions: vi.fn(),
   writeSessionReplacementTombstones: vi.fn(() => true),
 }));
+
+const CACHE_SCOPE_KEY = "desktop:test-user";
 
 vi.mock("@/lib/access/browser/session-replacement-tombstones-storage", () => ({
   readSessionReplacementTombstones: () => ({}),
@@ -85,20 +90,15 @@ describe("replacement tombstone reconciliation", () => {
       defaultOptions: { queries: { retry: false } },
     });
     const runtimeUrl = "http://runtime.test";
-    queryClient.setQueryData(anyHarnessSessionsKey(runtimeUrl, "workspace-1"), [
+    queryClient.setQueryData(anyHarnessSessionsKey(CACHE_SCOPE_KEY, "workspace-1"), [
       { id: "runtime-old", workspaceId: "workspace-1" },
       { id: "runtime-new", workspaceId: "workspace-1" },
     ]);
     stageReplacedSessionTombstone("workspace-1", "runtime-old", ["client-old"]);
-    const wrapper = ({ children }: { children: ReactNode }) => createElement(
-      QueryClientProvider,
-      { client: queryClient },
-      children,
-    );
+    const wrapper = createWrapper(queryClient, runtimeUrl);
     const { result } = renderHook(() => useWorkspaceBootstrapCache(), { wrapper });
 
     const sessions = await result.current.loadWorkspaceSessions({
-      runtimeUrl,
       workspaceConnection: {} as never,
       workspaceId: "workspace-1",
     });
@@ -114,11 +114,7 @@ describe("replacement tombstone reconciliation", () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    const wrapper = ({ children }: { children: ReactNode }) => createElement(
-      QueryClientProvider,
-      { client: queryClient },
-      children,
-    );
+    const wrapper = createWrapper(queryClient, "http://runtime.test");
     const { result } = renderHook(() => useWorkspaceBootstrapCache(), { wrapper });
     const firstList = result.current.fetchWorkspaceSessions({
       workspaceConnection: {} as never,
@@ -141,6 +137,17 @@ describe("replacement tombstone reconciliation", () => {
     expect(committedReplacedSessionTombstonesForWorkspace("workspace-1")).toEqual([]);
   });
 });
+
+function createWrapper(queryClient: QueryClient, runtimeUrl: string) {
+  return ({ children }: { children: ReactNode }) => createElement(
+    QueryClientProvider,
+    { client: queryClient },
+    createElement(
+      AnyHarnessRuntime,
+      { runtimeUrl, cacheScopeKey: CACHE_SCOPE_KEY, children },
+    ),
+  );
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

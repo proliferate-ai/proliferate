@@ -16,7 +16,7 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
   type AnyHarnessQueryTimingOptions,
@@ -42,17 +42,16 @@ interface WorkspaceMutationInput {
 
 type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
+function useWorkspaceCacheScopeKey() {
+  return useAnyHarnessCacheScopeKey();
 }
 
 export function useWorkspaceSessionsQuery(options?: TimedWorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
+  const queryKey = anyHarnessSessionsKey(cacheScopeKey, workspaceId);
   useReportAnyHarnessCacheDecision({
     category: "session.list",
     enabled,
@@ -79,11 +78,11 @@ export function useSessionQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId),
+    queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -115,11 +114,11 @@ export function useSessionLiveConfigQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessSessionLiveConfigKey(runtimeUrl, workspaceId, sessionId),
+    queryKey: anyHarnessSessionLiveConfigKey(cacheScopeKey, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -137,7 +136,7 @@ export function useSessionEventsQuery(
   options?: TimedWorkspaceQueryOptions & { request?: ListSessionEventsOptions },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const afterSeq = options?.request?.afterSeq;
   const beforeSeq = options?.request?.beforeSeq;
@@ -145,7 +144,7 @@ export function useSessionEventsQuery(
   const turnLimit = options?.request?.turnLimit;
   const enabled = (options?.enabled ?? true) && !!workspaceId && !!sessionId;
   const queryKey = anyHarnessSessionEventsKey(
-    runtimeUrl,
+    cacheScopeKey,
     workspaceId,
     sessionId,
     afterSeq,
@@ -186,11 +185,11 @@ export function useSessionSubagentsQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, sessionId),
+    queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, sessionId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!sessionId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -205,7 +204,7 @@ export function useSessionSubagentsQuery(
 
 export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -218,10 +217,10 @@ export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string
     onSuccess: async (_response, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, variables.sessionId),
+          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.sessionId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, workspaceId, variables.childSessionId),
+          queryKey: anyHarnessSessionSubagentsKey(cacheScopeKey, workspaceId, variables.childSessionId),
         }),
       ]);
     },
@@ -230,7 +229,7 @@ export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string
 
 export function useCreateSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -262,7 +261,7 @@ export function useCreateSessionMutation(options?: { workspaceId?: string | null
         ? input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId
         : options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+        queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
       });
     },
   });
@@ -270,7 +269,7 @@ export function useCreateSessionMutation(options?: { workspaceId?: string | null
 
 export function useSetSessionConfigOptionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -289,13 +288,13 @@ export function useSetSessionConfigOptionMutation(options?: { workspaceId?: stri
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+          queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionLiveConfigKey(runtimeUrl, workspaceId, variables.sessionId),
+          queryKey: anyHarnessSessionLiveConfigKey(cacheScopeKey, workspaceId, variables.sessionId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
         }),
       ]);
     },
@@ -304,7 +303,7 @@ export function useSetSessionConfigOptionMutation(options?: { workspaceId?: stri
 
 export function usePromptSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -323,7 +322,7 @@ export function usePromptSessionMutation(options?: { workspaceId?: string | null
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionEventsKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionEventsKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -331,7 +330,7 @@ export function usePromptSessionMutation(options?: { workspaceId?: string | null
 
 export function usePromptSessionTextMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -343,7 +342,7 @@ export function usePromptSessionTextMutation(options?: { workspaceId?: string | 
     },
     onSuccess: async (_response, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionEventsKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionEventsKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -351,7 +350,7 @@ export function usePromptSessionTextMutation(options?: { workspaceId?: string | 
 
 export function useForkSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -364,16 +363,16 @@ export function useForkSessionMutation(options?: { workspaceId?: string | null }
     onSuccess: async (response, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+          queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, response.session.id),
+          queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, response.session.id),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionEventsKey(runtimeUrl, workspaceId, response.session.id),
+          queryKey: anyHarnessSessionEventsKey(cacheScopeKey, workspaceId, response.session.id),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
         }),
       ]);
     },
@@ -382,7 +381,7 @@ export function useForkSessionMutation(options?: { workspaceId?: string | null }
 
 export function useResumeSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -399,8 +398,8 @@ export function useResumeSessionMutation(options?: { workspaceId?: string | null
     onSuccess: async (_response, input) => {
       const sessionId = typeof input === "string" ? input : input.sessionId;
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId) }),
       ]);
     },
   });
@@ -408,7 +407,7 @@ export function useResumeSessionMutation(options?: { workspaceId?: string | null
 
 export function useUpdateSessionTitleMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -428,10 +427,10 @@ export function useUpdateSessionTitleMutation(options?: { workspaceId?: string |
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+          queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId),
         }),
       ]);
     },
@@ -440,7 +439,7 @@ export function useUpdateSessionTitleMutation(options?: { workspaceId?: string |
 
 export function useSetSessionGoalMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -459,7 +458,7 @@ export function useSetSessionGoalMutation(options?: { workspaceId?: string | nul
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -467,7 +466,7 @@ export function useSetSessionGoalMutation(options?: { workspaceId?: string | nul
 
 export function useClearSessionGoalMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -485,7 +484,7 @@ export function useClearSessionGoalMutation(options?: { workspaceId?: string | n
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -493,7 +492,7 @@ export function useClearSessionGoalMutation(options?: { workspaceId?: string | n
 
 export function useSetSessionLoopMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -521,7 +520,7 @@ export function useSetSessionLoopMutation(options?: { workspaceId?: string | nul
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -529,7 +528,7 @@ export function useSetSessionLoopMutation(options?: { workspaceId?: string | nul
 
 export function useClearSessionLoopMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -551,7 +550,7 @@ export function useClearSessionLoopMutation(options?: { workspaceId?: string | n
     onSuccess: async (_response, variables) => {
       const workspaceId = variables.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -559,7 +558,7 @@ export function useClearSessionLoopMutation(options?: { workspaceId?: string | n
 
 export function useCancelSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -578,8 +577,8 @@ export function useCancelSessionMutation(options?: { workspaceId?: string | null
         ? options?.workspaceId ?? workspace.workspaceId
         : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId) }),
       ]);
     },
   });
@@ -587,7 +586,7 @@ export function useCancelSessionMutation(options?: { workspaceId?: string | null
 
 export function useDismissSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -606,8 +605,8 @@ export function useDismissSessionMutation(options?: { workspaceId?: string | nul
         ? options?.workspaceId ?? workspace.workspaceId
         : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId) }),
       ]);
     },
   });
@@ -615,7 +614,7 @@ export function useDismissSessionMutation(options?: { workspaceId?: string | nul
 
 export function useCloseSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -634,8 +633,8 @@ export function useCloseSessionMutation(options?: { workspaceId?: string | null 
         ? options?.workspaceId ?? workspace.workspaceId
         : input.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, sessionId) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, sessionId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId) }),
       ]);
     },
   });
@@ -643,7 +642,7 @@ export function useCloseSessionMutation(options?: { workspaceId?: string | null 
 
 export function useRestoreDismissedSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -661,12 +660,12 @@ export function useRestoreDismissedSessionMutation(options?: { workspaceId?: str
     onSuccess: async (response, input) => {
       const workspaceId = input?.workspaceId ?? options?.workspaceId ?? workspace.workspaceId;
       const invalidations = [
-        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(runtimeUrl, workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: anyHarnessSessionsKey(cacheScopeKey, workspaceId) }),
       ];
       if (response?.id) {
         invalidations.push(
           queryClient.invalidateQueries({
-            queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, response.id),
+            queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, response.id),
           }),
         );
       }

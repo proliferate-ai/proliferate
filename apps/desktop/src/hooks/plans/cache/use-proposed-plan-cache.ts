@@ -7,6 +7,7 @@ import type {
 import {
   anyHarnessPlanKey,
   anyHarnessPlansKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { patchProposedPlanDecisionInTranscript } from "@/lib/domain/plans/proposed-plan-transcript";
 import {
@@ -15,29 +16,28 @@ import {
 } from "@/stores/sessions/session-records";
 
 interface ProposedPlanCacheOptions {
-  runtimeUrl: string;
   selectedWorkspaceId: string | null;
 }
 
 // Owns cache writes needed by proposed-plan card actions, including transcript projections.
 export function useProposedPlanCache({
-  runtimeUrl,
   selectedWorkspaceId,
 }: ProposedPlanCacheOptions) {
   const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
   const patchPlanDecisionQueries = useCallback((plan: ProposedPlanDetail) => {
     queryClient.setQueryData(
-      anyHarnessPlanKey(runtimeUrl, selectedWorkspaceId, plan.id),
+      anyHarnessPlanKey(cacheScopeKey, selectedWorkspaceId, plan.id),
       plan,
     );
     queryClient.setQueryData<ProposedPlanSummary[]>(
-      anyHarnessPlansKey(runtimeUrl, selectedWorkspaceId),
+      anyHarnessPlansKey(cacheScopeKey, selectedWorkspaceId),
       (plans) => plans?.map((cachedPlan) => (
         cachedPlan.id === plan.id ? { ...cachedPlan, ...plan } : cachedPlan
       )),
     );
-  }, [queryClient, runtimeUrl, selectedWorkspaceId]);
+  }, [cacheScopeKey, queryClient, selectedWorkspaceId]);
 
   const applyPlanDecisionToCache = useCallback((plan: ProposedPlanDetail) => {
     patchPlanDecisionQueries(plan);

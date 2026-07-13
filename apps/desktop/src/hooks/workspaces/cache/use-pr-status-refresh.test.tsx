@@ -21,7 +21,21 @@ vi.mock("@/lib/access/anyharness/pull-requests", () => ({
 }));
 
 const RUNTIME_URL = "http://runtime.test";
-const KEY = anyHarnessRepoRootPullRequestsKey(RUNTIME_URL, "root-a");
+const CACHE_SCOPE_KEY = "desktop:test-user";
+const KEY = anyHarnessRepoRootPullRequestsKey(
+  RUNTIME_URL,
+  "root-a",
+  CACHE_SCOPE_KEY,
+);
+
+function scheduleRefresh(queryClient: QueryClient): void {
+  scheduleRepoPrStatusRefresh({
+    queryClient,
+    runtimeUrl: RUNTIME_URL,
+    repoRootId: "root-a",
+    cacheScopeKey: CACHE_SCOPE_KEY,
+  });
+}
 
 function okResult(fetchedAt: string, headBranch = "feature"): RepoPullRequestStatusesResult {
   return {
@@ -46,9 +60,9 @@ describe("scheduleRepoPrStatusRefresh", () => {
     mocks.listRepoRootPullRequestStatuses.mockResolvedValue(okResult("2026-07-01T12:00:00.000Z"));
     const queryClient = new QueryClient();
 
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "root-a" });
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "root-a" });
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "root-a" });
+    scheduleRefresh(queryClient);
+    scheduleRefresh(queryClient);
+    scheduleRefresh(queryClient);
 
     expect(mocks.listRepoRootPullRequestStatuses).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(300);
@@ -68,7 +82,7 @@ describe("scheduleRepoPrStatusRefresh", () => {
     queryClient.setQueryData(KEY, newer);
     mocks.listRepoRootPullRequestStatuses.mockResolvedValue(okResult("2026-07-01T12:00:00.000Z"));
 
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "root-a" });
+    scheduleRefresh(queryClient);
     await vi.advanceTimersByTimeAsync(300);
 
     expect(queryClient.getQueryData(KEY)).toEqual(newer);
@@ -80,7 +94,7 @@ describe("scheduleRepoPrStatusRefresh", () => {
     const fresher = okResult("2026-07-01T13:00:00.000Z", "fresher");
     mocks.listRepoRootPullRequestStatuses.mockResolvedValue(fresher);
 
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "root-a" });
+    scheduleRefresh(queryClient);
     await vi.advanceTimersByTimeAsync(300);
 
     expect(queryClient.getQueryData(KEY)).toEqual(fresher);
@@ -96,7 +110,7 @@ describe("scheduleRepoPrStatusRefresh", () => {
       fetchedAt: null,
     });
 
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "root-a" });
+    scheduleRefresh(queryClient);
     await vi.advanceTimersByTimeAsync(300);
 
     expect(queryClient.getQueryData(KEY)).toEqual(good);
@@ -107,11 +121,11 @@ describe("scheduleRepoPrStatusRefresh", () => {
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
     mocks.listRepoRootPullRequestStatuses.mockResolvedValue(okResult("2026-07-01T12:00:00.000Z"));
 
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "root-a" });
+    scheduleRefresh(queryClient);
     await vi.advanceTimersByTimeAsync(300);
 
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: anyHarnessWorktreesInventoryKey(RUNTIME_URL),
+      queryKey: anyHarnessWorktreesInventoryKey(RUNTIME_URL, CACHE_SCOPE_KEY),
     });
   });
 

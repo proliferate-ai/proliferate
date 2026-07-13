@@ -43,7 +43,7 @@ export function useSessionTitleActions() {
       throw new Error("Chat title cannot be empty.");
     }
 
-    const { connection, workspaceId, materializedSessionId } =
+    const { workspaceId, materializedSessionId } =
       await getSessionClientAndWorkspace(sessionId);
     const operationId = startMeasurementOperation({
       kind: "session_rename",
@@ -62,9 +62,7 @@ export function useSessionTitleActions() {
 
     const storeStartedAt = performance.now();
     applySessionSummary(sessionId, session, workspaceId);
-    upsertWorkspaceSessionRecord(workspaceId, session, {
-      runtimeUrl: connection.runtimeUrl,
-    });
+    upsertWorkspaceSessionRecord(workspaceId, session);
     if (operationId) {
       recordMeasurementMetric({
         type: "store",

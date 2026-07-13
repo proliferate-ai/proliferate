@@ -10,7 +10,7 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -24,18 +24,17 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
+function useWorkspaceCacheScopeKey() {
+  return useAnyHarnessCacheScopeKey();
 }
 
 export function useWorkspaceMobilityPreflightQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessWorkspaceMobilityPreflightKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -52,7 +51,7 @@ export function useUpdateWorkspaceMobilityRuntimeStateMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -78,10 +77,10 @@ export function useUpdateWorkspaceMobilityRuntimeStateMutation(
       const targetWorkspaceId = variables.workspaceId ?? workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessWorkspaceMobilityPreflightKey(cacheScopeKey, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(cacheScopeKey, targetWorkspaceId),
         }),
       ]);
     },
@@ -119,7 +118,7 @@ export function useInstallWorkspaceMobilityArchiveMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -150,13 +149,13 @@ export function useInstallWorkspaceMobilityArchiveMutation(
       const targetWorkspaceId = variables.workspaceId ?? workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessSessionsKey(cacheScopeKey, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessWorkspaceMobilityPreflightKey(cacheScopeKey, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(cacheScopeKey, targetWorkspaceId),
         }),
       ]);
     },
@@ -167,7 +166,7 @@ export function useDestroyWorkspaceMobilitySourceMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -193,13 +192,13 @@ export function useDestroyWorkspaceMobilitySourceMutation(
       const targetWorkspaceId = variables.workspaceId ?? workspaceId;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessSessionsKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessSessionsKey(cacheScopeKey, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityPreflightKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessWorkspaceMobilityPreflightKey(cacheScopeKey, targetWorkspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(runtimeUrl, targetWorkspaceId),
+          queryKey: anyHarnessWorkspaceMobilityRuntimeStateKey(cacheScopeKey, targetWorkspaceId),
         }),
       ]);
     },

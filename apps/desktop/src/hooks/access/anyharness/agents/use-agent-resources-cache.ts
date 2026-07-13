@@ -2,12 +2,14 @@ import {
   anyHarnessAgentLaunchOptionsPrefixKey,
   anyHarnessAgentReconcileStatusKey,
   anyHarnessAgentsKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 export function useAgentResourcesCache() {
   const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
   const invalidateAgentListResources = useCallback(async (runtimeUrl: string) => {
     const normalizedRuntimeUrl = runtimeUrl.trim();
@@ -17,10 +19,10 @@ export function useAgentResourcesCache() {
 
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl),
+        queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl, cacheScopeKey),
       }),
     ]);
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   const invalidateAgentSetupResources = useCallback(async (runtimeUrl: string) => {
     const normalizedRuntimeUrl = runtimeUrl.trim();
@@ -30,13 +32,13 @@ export function useAgentResourcesCache() {
 
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl),
+        queryKey: anyHarnessAgentsKey(normalizedRuntimeUrl, cacheScopeKey),
       }),
       queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentReconcileStatusKey(normalizedRuntimeUrl),
+        queryKey: anyHarnessAgentReconcileStatusKey(normalizedRuntimeUrl, cacheScopeKey),
       }),
     ]);
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   const invalidateAgentLaunchReadinessResources = useCallback(async (
     runtimeUrl: string,
@@ -49,10 +51,13 @@ export function useAgentResourcesCache() {
     await Promise.all([
       invalidateAgentSetupResources(normalizedRuntimeUrl),
       queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentLaunchOptionsPrefixKey(normalizedRuntimeUrl),
+        queryKey: anyHarnessAgentLaunchOptionsPrefixKey(
+          normalizedRuntimeUrl,
+          cacheScopeKey,
+        ),
       }),
     ]);
-  }, [invalidateAgentSetupResources, queryClient]);
+  }, [cacheScopeKey, invalidateAgentSetupResources, queryClient]);
 
   return {
     invalidateAgentLaunchReadinessResources,

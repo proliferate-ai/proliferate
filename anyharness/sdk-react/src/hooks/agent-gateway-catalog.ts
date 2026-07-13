@@ -2,6 +2,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/rea
 import type { AnyHarnessClient } from "@anyharness/sdk";
 import {
   useAnyHarnessRuntimeContext,
+  resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
   type AnyHarnessRuntimeContextValue,
 } from "../context/AnyHarnessRuntime.js";
@@ -22,10 +23,11 @@ function gatewayModelsQueryOptions(
   options?: RuntimeQueryOptions,
 ) {
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const trimmedKind = kind.trim();
 
   return {
-    queryKey: anyHarnessAgentGatewayModelsKey(runtimeUrl, trimmedKind),
+    queryKey: anyHarnessAgentGatewayModelsKey(runtimeUrl, trimmedKind, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && trimmedKind.length > 0,
     refetchInterval: options?.refetchInterval,
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
@@ -73,6 +75,7 @@ export function useRefreshAgentGatewayModelsMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (kind: string) => {
@@ -85,7 +88,7 @@ export function useRefreshAgentGatewayModelsMutation() {
       // freshly-recorded probe. Invalidate so the next read re-enriches instead
       // of caching a sparse id-only list.
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentGatewayModelsKey(runtimeUrl, kind.trim()),
+        queryKey: anyHarnessAgentGatewayModelsKey(runtimeUrl, kind.trim(), cacheScopeKey),
       });
     },
   });

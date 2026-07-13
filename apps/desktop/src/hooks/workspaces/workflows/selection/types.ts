@@ -50,7 +50,6 @@ export interface WorkspaceSelectionDeps {
   bootstrapWorkspace: (input: {
     workspaceId: string;
     logicalWorkspaceId: string;
-    runtimeUrl: string;
     workspaceConnection: AnyHarnessResolvedConnection;
     startedAt: number;
     latencyFlowId?: string | null;
@@ -59,7 +58,6 @@ export interface WorkspaceSelectionDeps {
   reconcileHotWorkspace: (input: {
     workspaceId: string;
     logicalWorkspaceId: string;
-    runtimeUrl: string;
     workspaceConnection: AnyHarnessResolvedConnection;
     sessionId: string;
     selectionNonce: number;

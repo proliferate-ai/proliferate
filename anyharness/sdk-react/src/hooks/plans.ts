@@ -4,7 +4,7 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -19,18 +19,17 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
+function useWorkspaceCacheScopeKey() {
+  return useAnyHarnessCacheScopeKey();
 }
 
 export function useWorkspacePlansQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessPlansKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -48,11 +47,11 @@ export function usePlanDetailQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, planId),
+    queryKey: anyHarnessPlanKey(cacheScopeKey, workspaceId, planId),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!planId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -84,12 +83,12 @@ export function usePlanDetailsQueries(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQueries({
     queries: planIds.map((planId) => ({
-      queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, planId),
+      queryKey: anyHarnessPlanKey(cacheScopeKey, workspaceId, planId),
       enabled: (options?.enabled ?? true) && !!workspaceId && !!planId,
       queryFn: async ({ signal }) => {
         const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -109,12 +108,12 @@ export function usePlanDocumentQuery(
   options?: WorkspaceQueryOptions & { materialize?: boolean },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const materialize = options?.materialize ?? false;
 
   return useQuery({
-    queryKey: anyHarnessPlanDocumentKey(runtimeUrl, workspaceId, planId, materialize),
+    queryKey: anyHarnessPlanDocumentKey(cacheScopeKey, workspaceId, planId, materialize),
     enabled: (options?.enabled ?? true) && !!workspaceId && !!planId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -129,7 +128,7 @@ export function usePlanDocumentQuery(
 
 export function useMaterializePlanDocumentMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -143,7 +142,7 @@ export function useMaterializePlanDocumentMutation(options?: { workspaceId?: str
     },
     onSuccess: async (_response, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessPlanDocumentKey(runtimeUrl, workspaceId, variables.planId, true),
+        queryKey: anyHarnessPlanDocumentKey(cacheScopeKey, workspaceId, variables.planId, true),
       });
     },
   });
@@ -151,7 +150,7 @@ export function useMaterializePlanDocumentMutation(options?: { workspaceId?: str
 
 export function useApprovePlanMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -166,14 +165,14 @@ export function useApprovePlanMutation(options?: { workspaceId?: string | null }
     onSuccess: async (response, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessPlansKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, variables.planId),
+          queryKey: anyHarnessPlanKey(cacheScopeKey, workspaceId, variables.planId),
         }),
         queryClient.invalidateQueries({
           queryKey: anyHarnessSessionEventsKey(
-            runtimeUrl,
+            cacheScopeKey,
             workspaceId,
             response.plan.sessionId,
           ),
@@ -184,10 +183,10 @@ export function useApprovePlanMutation(options?: { workspaceId?: string | null }
       if (!isPlanDecisionVersionConflict(error)) return;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessPlansKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, variables.planId),
+          queryKey: anyHarnessPlanKey(cacheScopeKey, workspaceId, variables.planId),
         }),
       ]);
     },
@@ -196,7 +195,7 @@ export function useApprovePlanMutation(options?: { workspaceId?: string | null }
 
 export function useRejectPlanMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -211,14 +210,14 @@ export function useRejectPlanMutation(options?: { workspaceId?: string | null })
     onSuccess: async (response, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessPlansKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, variables.planId),
+          queryKey: anyHarnessPlanKey(cacheScopeKey, workspaceId, variables.planId),
         }),
         queryClient.invalidateQueries({
           queryKey: anyHarnessSessionEventsKey(
-            runtimeUrl,
+            cacheScopeKey,
             workspaceId,
             response.plan.sessionId,
           ),
@@ -229,10 +228,10 @@ export function useRejectPlanMutation(options?: { workspaceId?: string | null })
       if (!isPlanDecisionVersionConflict(error)) return;
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessPlansKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, variables.planId),
+          queryKey: anyHarnessPlanKey(cacheScopeKey, workspaceId, variables.planId),
         }),
       ]);
     },
@@ -241,7 +240,7 @@ export function useRejectPlanMutation(options?: { workspaceId?: string | null })
 
 export function useHandoffPlanMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -258,14 +257,14 @@ export function useHandoffPlanMutation(options?: { workspaceId?: string | null }
     onSuccess: async (response, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlansKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessPlansKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessPlanKey(runtimeUrl, workspaceId, variables.planId),
+          queryKey: anyHarnessPlanKey(cacheScopeKey, workspaceId, variables.planId),
         }),
         queryClient.invalidateQueries({
           queryKey: anyHarnessSessionEventsKey(
-            runtimeUrl,
+            cacheScopeKey,
             workspaceId,
             response.targetSessionId,
           ),

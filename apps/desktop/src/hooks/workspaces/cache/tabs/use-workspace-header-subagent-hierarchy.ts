@@ -6,6 +6,7 @@ import {
   anyHarnessSessionReviewsKey,
   anyHarnessSessionSubagentsKey,
   resolveWorkspaceConnectionFromContext,
+  useAnyHarnessCacheScopeKey,
   useAnyHarnessWorkspaceContext,
 } from "@anyharness/sdk-react";
 import type {
@@ -51,6 +52,7 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
   sessionIds: string[];
 }): WorkspaceHeaderSubagentHierarchy {
   const workspace = useAnyHarnessWorkspaceContext();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const recordSessionRelationshipHint = useSessionDirectoryStore(
     (state) => state.recordRelationshipHint,
@@ -83,7 +85,11 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     queries: uniqueSessionIds.map((sessionId, index) => {
       const materializedSessionId = materializedSessionIds[index];
       return {
-        queryKey: anyHarnessSessionSubagentsKey(runtimeUrl, args.workspaceId, sessionId),
+        queryKey: anyHarnessSessionSubagentsKey(
+          cacheScopeKey,
+          args.workspaceId,
+          sessionId,
+        ),
         enabled: shouldEnableHeaderSessionScopedQuery({
           workspaceId: args.workspaceId,
           sessionId,
@@ -109,7 +115,11 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     queries: uniqueSessionIds.map((sessionId, index) => {
       const materializedSessionId = materializedSessionIds[index];
       return {
-        queryKey: anyHarnessSessionReviewsKey(runtimeUrl, args.workspaceId, sessionId),
+        queryKey: anyHarnessSessionReviewsKey(
+          cacheScopeKey,
+          args.workspaceId,
+          sessionId,
+        ),
         enabled: shouldEnableHeaderSessionScopedQuery({
           workspaceId: args.workspaceId,
           sessionId,
@@ -135,7 +145,11 @@ export function useWorkspaceHeaderSubagentHierarchy(args: {
     queries: uniqueSessionIds.map((sessionId, index) => {
       const materializedSessionId = materializedSessionIds[index];
       return {
-        queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, materializedSessionId),
+        queryKey: anyHarnessCoworkManagedWorkspacesKey(
+          runtimeUrl,
+          materializedSessionId,
+          cacheScopeKey,
+        ),
         enabled: shouldEnableHeaderSessionScopedQuery({
           workspaceId: args.workspaceId,
           sessionId,

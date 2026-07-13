@@ -64,7 +64,6 @@ export interface PromptIntentDispatchDeps {
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
-    options?: { runtimeUrl?: string },
   ) => void;
 }
 
@@ -124,7 +123,6 @@ export async function dispatchPromptIntent(
       return;
     }
     const {
-      connection,
       workspaceId,
       materializedSessionId: resolvedSessionId,
     } = await getSessionClientAndWorkspace(entry.clientSessionId);
@@ -153,9 +151,7 @@ export async function dispatchPromptIntent(
     }
 
     deps.applySessionSummary(entry.clientSessionId, response.session, workspaceId);
-    deps.upsertWorkspaceSessionRecord(workspaceId, response.session, {
-      runtimeUrl: connection.runtimeUrl,
-    });
+    deps.upsertWorkspaceSessionRecord(workspaceId, response.session);
     useSessionIntentStore.getState().patchIntent(entry.intentId, {
       status: "accepted",
       deliveryState: response.status === "queued" ? "accepted_queued" : "accepted_running",

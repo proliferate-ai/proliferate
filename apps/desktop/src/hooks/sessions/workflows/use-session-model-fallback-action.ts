@@ -14,7 +14,7 @@ export function useSessionModelFallbackAction() {
   const setSessionConfigOptionMutation = useSetSessionConfigOptionMutation();
 
   return useCallback(async (sessionId: string, fallbackModelId: string) => {
-    const { connection, workspaceId, materializedSessionId } =
+    const { workspaceId, materializedSessionId } =
       await getSessionClientAndWorkspace(sessionId);
     const response = await setSessionConfigOptionMutation.mutateAsync({
       workspaceId,
@@ -25,9 +25,7 @@ export function useSessionModelFallbackAction() {
       },
     });
 
-    upsertWorkspaceSessionRecord(workspaceId, response.session, {
-      runtimeUrl: connection.runtimeUrl,
-    });
+    upsertWorkspaceSessionRecord(workspaceId, response.session);
 
     const latestSlot = getSessionRecord(sessionId);
     if (!latestSlot) {

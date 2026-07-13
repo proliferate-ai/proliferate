@@ -3,7 +3,11 @@ import type {
   PruneOrphanWorktreeRequest,
   UpdateWorktreeRetentionPolicyRequest,
 } from "@anyharness/sdk";
-import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveRuntimeCacheScopeKey,
+  resolveRuntimeConnection,
+  useAnyHarnessRuntimeContext,
+} from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -19,9 +23,10 @@ interface RuntimeQueryOptions {
 export function useWorktreeInventoryQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
+    queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -34,6 +39,7 @@ export function usePruneOrphanWorktreeMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (input: PruneOrphanWorktreeRequest) => {
@@ -42,10 +48,10 @@ export function usePruneOrphanWorktreeMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
+        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
     },
   });
@@ -54,9 +60,10 @@ export function usePruneOrphanWorktreeMutation() {
 export function useWorktreeRetentionPolicyQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessWorktreesRetentionPolicyKey(runtimeUrl),
+    queryKey: anyHarnessWorktreesRetentionPolicyKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -69,6 +76,7 @@ export function useUpdateWorktreeRetentionPolicyMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (input: UpdateWorktreeRetentionPolicyRequest) => {
@@ -77,10 +85,10 @@ export function useUpdateWorktreeRetentionPolicyMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesRetentionPolicyKey(runtimeUrl),
+        queryKey: anyHarnessWorktreesRetentionPolicyKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
+        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
       });
     },
   });
@@ -90,6 +98,7 @@ export function useRunWorktreeRetentionMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async () => {
@@ -98,13 +107,13 @@ export function useRunWorktreeRetentionMutation() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl),
+        queryKey: anyHarnessWorktreesInventoryKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessWorktreesRetentionPolicyKey(runtimeUrl),
+        queryKey: anyHarnessWorktreesRetentionPolicyKey(runtimeUrl, cacheScopeKey),
       });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl),
+        queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
       });
     },
   });

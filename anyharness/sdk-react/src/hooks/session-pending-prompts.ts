@@ -5,18 +5,17 @@ import {
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { anyHarnessSessionKey } from "../lib/query-keys.js";
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
+function useWorkspaceCacheScopeKey() {
+  return useAnyHarnessCacheScopeKey();
 }
 
 export function useEditPendingPromptMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -33,7 +32,7 @@ export function useEditPendingPromptMutation(options?: { workspaceId?: string | 
     },
     onSuccess: async (_response, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -41,7 +40,7 @@ export function useEditPendingPromptMutation(options?: { workspaceId?: string | 
 
 export function useDeletePendingPromptMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -53,7 +52,7 @@ export function useDeletePendingPromptMutation(options?: { workspaceId?: string 
     },
     onSuccess: async (_response, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -61,7 +60,7 @@ export function useDeletePendingPromptMutation(options?: { workspaceId?: string 
 
 export function useReorderPendingPromptsMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -78,7 +77,7 @@ export function useReorderPendingPromptsMutation(options?: { workspaceId?: strin
     },
     onSuccess: async (_response, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
@@ -86,7 +85,7 @@ export function useReorderPendingPromptsMutation(options?: { workspaceId?: strin
 
 export function useSteerPendingPromptMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useWorkspaceCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -98,7 +97,7 @@ export function useSteerPendingPromptMutation(options?: { workspaceId?: string |
     },
     onSuccess: async (_response, variables) => {
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessSessionKey(runtimeUrl, workspaceId, variables.sessionId),
+        queryKey: anyHarnessSessionKey(cacheScopeKey, workspaceId, variables.sessionId),
       });
     },
   });
