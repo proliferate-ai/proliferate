@@ -146,3 +146,44 @@ test("REGRESSION: buildPlan rejects an empty-assertion requirement", () => {
     /invalid proof requirement/,
   );
 });
+
+test("ADVERSARIAL: the trusted plan is deeply frozen — slot replacement and identity edits throw and never alter hashes", () => {
+  const cell = { scenarioId: "T2-AUTH-1", world: "tier-2" as const, productHost: "desktop-web" as const, dimensions: { k: "v" } };
+  const requirement = buildProofRequirement(cell, "fixture://test", ["a1"]);
+  const plan = buildPlan({
+    selector: "explicit",
+    behavior: "strict",
+    cells: [
+      {
+        scenarioId: "T2-AUTH-1",
+        world: "tier-2",
+        productHost: "desktop-web",
+        dimensions: { k: "v" },
+        proofRequirement: requirement,
+      },
+    ],
+  });
+  const planned = plan.cells[0];
+  const originalHash = planned.proofRequirement!.contractHash;
+  // Slot replacement throws.
+  assert.throws(() => {
+    (planned as { proofRequirement: unknown }).proofRequirement = null;
+  }, TypeError);
+  // Cell identity/dimensions edits throw.
+  assert.throws(() => {
+    (planned.cell as { scenarioId: string }).scenarioId = "FORGED";
+  }, TypeError);
+  assert.throws(() => {
+    (planned.cell.dimensions as Record<string, string>).k = "forged";
+  }, TypeError);
+  // Plan-level arrays are frozen.
+  assert.throws(() => {
+    (plan.cells as unknown[]).push({});
+  }, TypeError);
+  assert.throws(() => {
+    (plan.deferredScenarioIds as string[]).push("X");
+  }, TypeError);
+  // Nothing moved.
+  assert.equal(planned.proofRequirement!.contractHash, originalHash);
+  assert.equal(planned.cell.scenarioId, "T2-AUTH-1");
+});

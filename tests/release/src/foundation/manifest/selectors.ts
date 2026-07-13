@@ -57,7 +57,7 @@ function collectorCellSpecs(
         disposition: "required",
         // The trusted proof requirement rides with the selected cell: the
         // engine and the aggregate both validate green against it.
-        proofRequirement: entry.proofRequirements.get(computeCellKey(cell)) ?? null,
+        proofRequirement: entry.proofRequirements[computeCellKey(cell)] ?? null,
       });
     }
   }

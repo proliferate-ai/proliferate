@@ -9,11 +9,11 @@
  * policy is ever written.
  */
 
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 import type { AppendedEventRef, EvidenceSink, RunEvidence } from "../../contracts/evidence.js";
-import { EnvelopeCounter } from "../../evidence/envelope.js";
+import { DurableEvidenceCore } from "../../evidence/durable-core.js";
 
 /** Key names whose values are never written, regardless of nesting depth. */
 const REDACTED_KEY_PATTERN = /token|secret|password|api[_-]?key|credential|refresh|bearer/i;
@@ -32,34 +32,41 @@ function scrub(value: unknown): unknown {
 
 export class LocalJsonlEvidenceSink implements EvidenceSink {
   private readonly filePath: string;
-  private finalized = false;
+  private core: DurableEvidenceCore | null = null;
 
   constructor(filePath: string) {
     this.filePath = filePath;
   }
 
-  private readonly envelopes = new EnvelopeCounter();
+  /** Lazy: the directory may not exist until first use. */
+  private ensureCore(): DurableEvidenceCore {
+    if (!this.core) {
+      mkdirSync(dirname(this.filePath), { recursive: true });
+      this.core = new DurableEvidenceCore({
+        runId: "self-host-local",
+        shardId: "shard-1-of-1",
+        eventsPath: this.filePath,
+        finalPath: this.filePath.replace(/\.jsonl$/, "") + ".final.json",
+        // This sink SCRUBS (replaces secret-shaped values) rather than
+        // rejecting: it is a diagnostic local writer. The scrub runs on the
+        // materialized value inside the screen hook by mutating a copy is
+        // not possible, so scrub before delegation instead (see append).
+        screen: () => {},
+      });
+    }
+    return this.core;
+  }
 
   async append(event: Readonly<Record<string, unknown>>): Promise<AppendedEventRef> {
-    await mkdir(dirname(this.filePath), { recursive: true });
-    const [envelope, ref] = this.envelopes.wrap("self-host-local", "shard-1-of-1", scrub(event) as Record<string, unknown>);
-    await appendFile(this.filePath, `${JSON.stringify(envelope)}\n`, "utf8");
-    return ref;
+    // Scrub BEFORE delegation so the core materializes + persists the
+    // scrubbed value and the returned digest matches the persisted line.
+    return this.ensureCore().appendLine(scrub(event) as Record<string, unknown>);
   }
 
   async finalize(evidence: RunEvidence): Promise<void> {
-    if (this.finalized) {
-      throw new Error("LocalJsonlEvidenceSink.finalize called more than once for this run");
-    }
-    this.finalized = true;
-    await mkdir(dirname(this.filePath), { recursive: true });
-    const scrubbed = scrub(evidence as unknown as Record<string, unknown>);
-    await appendFile(
-      this.filePath,
-      `${JSON.stringify({ ts: new Date().toISOString(), event: "final-evidence", evidence: scrubbed })}\n`,
-      "utf8",
+    this.ensureCore().finalizeDocument(
+      scrub(evidence as unknown as Record<string, unknown>) as object,
+      `${evidence.run.runId}/${evidence.shard.shardId}`,
     );
-    const finalPath = this.filePath.replace(/\.jsonl$/, "") + ".final.json";
-    await writeFile(finalPath, JSON.stringify(scrubbed, null, 2), "utf8");
   }
 }

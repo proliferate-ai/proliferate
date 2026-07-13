@@ -166,3 +166,55 @@ test("append and finalize reject a credential-shaped key", async () => {
   );
   rmSync(dir, { recursive: true, force: true });
 });
+
+// ── P1 adversarial reproductions ──
+
+test("ADVERSARIAL: caller payload cannot override sink-owned fields (eventId/sequence/runId/shardId/at)", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  for (const key of ["eventId", "sequence", "runId", "shardId", "at"]) {
+    await assert.rejects(() => s.append({ event: "x", [key]: "forged" }), /sink-owned field/);
+  }
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("ADVERSARIAL: a Date/toJSON payload digests to the PARSED persisted line", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  const ref = await s.append({ event: "x", when: new Date("2026-07-13T05:00:00.000Z"), meta: { toJSON: undefined } });
+  const line = readFileSync(s.eventsPath, "utf8").trim();
+  const persisted = JSON.parse(line);
+  assert.equal(persisted.when, "2026-07-13T05:00:00.000Z", "Date materialized via toJSON");
+  assert.equal(proofEventDigest(persisted), ref.digest, "digest recomputes from the parsed persisted line");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("ADVERSARIAL: a toJSON that reveals a credential key is rejected BEFORE write", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  const trojan = {
+    event: "x",
+    payload: {
+      toJSON() {
+        return { access_token: "leaked-by-tojson" };
+      },
+    },
+  };
+  await assert.rejects(() => s.append(trojan), /credential-shaped key/);
+  // Nothing beyond the empty journal claim was written.
+  assert.equal(readFileSync(s.eventsPath, "utf8"), "");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("ADVERSARIAL: two racing publishers cannot replace the winner (NO-REPLACE link) and temps are cleaned", async () => {
+  const dir = tmp();
+  const s = sink(dir);
+  // Simulate the OTHER publisher winning between this sink's construction
+  // and its finalize: write the winner's verdict directly.
+  writeFileSync(s.evidencePath, '{"winner":"other-publisher"}\n');
+  await assert.rejects(() => s.finalize(fakeEvidence()), /already finalized/);
+  assert.match(readFileSync(s.evidencePath, "utf8"), /other-publisher/, "winner not replaced");
+  const leftovers = readdirSync(path.dirname(s.evidencePath)).filter((f) => f.includes(".tmp-"));
+  assert.deepEqual(leftovers, [], "temp cleaned on the failure path");
+  rmSync(dir, { recursive: true, force: true });
+});

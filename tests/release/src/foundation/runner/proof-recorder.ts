@@ -44,7 +44,7 @@ export class ScopedProofRecorder implements ProofRecorder {
       assertionId,
       observation: this.redact(observation),
     });
-    this.refs.push({ assertionId, eventDigest: ref.digest });
+    this.refs.push({ assertionId, eventId: ref.eventId, sequence: ref.sequence, eventDigest: ref.digest });
   }
 
   /** Engine-only: stops further recording and returns what was recorded. */

@@ -250,11 +250,44 @@ test("ADVERSARIAL: a forged proof requirement (edited assertion ids) fails reval
     evidence: "x",
     cellDefinitions: [{ cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") }],
   });
-  const requirement = def.proofRequirements.get(cellKey(CELL_A));
+  const requirement = def.proofRequirements[cellKey(CELL_A)];
   assert.ok(requirement);
-  // Forge a copy whose requirement map disagrees with its cellDefinitions.
-  const forgedMap = new Map(def.proofRequirements);
-  forgedMap.set(cellKey(CELL_A), { ...requirement, contractHash: "f".repeat(64) });
-  const forged = { ...def, proofRequirements: forgedMap };
+  // Forge a copy whose requirement record disagrees with its cellDefinitions.
+  const forgedRecord = {
+    ...def.proofRequirements,
+    [cellKey(CELL_A)]: { ...requirement, contractHash: "f".repeat(64) },
+  };
+  const forged = { ...def, proofRequirements: forgedRecord };
   assert.throws(() => revalidateDefinition(forged as never), /no longer matches its definition inputs/);
+});
+
+test("ADVERSARIAL: proofRequirements record cannot be mutated (no Map.prototype surface; frozen)", () => {
+  const def = defineCollector({
+    scenarioId: "S-1",
+    collectedTestId: "fixture://test-id",
+    collectorRef: "x",
+    coverage: "foundation-partial",
+    gate: "merge",
+    evidence: "x",
+    cellDefinitions: [{ cell: CELL_A, assertionIds: ["a1"], execute: fixtureExecute("a1") }],
+  });
+  const key = cellKey(CELL_A);
+  // No Map API exists at all — it is a frozen plain record.
+  assert.equal(typeof (def.proofRequirements as { set?: unknown }).set, "undefined");
+  // Property replacement/addition/deletion all throw.
+  assert.throws(() => {
+    (def.proofRequirements as Record<string, unknown>)[key] = { forged: true };
+  }, TypeError);
+  assert.throws(() => {
+    (def.proofRequirements as Record<string, unknown>)["injected/KEY/-/-"] = { forged: true };
+  }, TypeError);
+  assert.throws(() => {
+    delete (def.proofRequirements as Record<string, unknown>)[key];
+  }, TypeError);
+  // The requirement's own fields and id array are frozen too.
+  const requirement = def.proofRequirements[key];
+  assert.ok(requirement);
+  assert.throws(() => {
+    (requirement.assertionIds as string[]).push("x");
+  }, TypeError);
 });

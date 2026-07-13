@@ -102,14 +102,29 @@ export function buildPlan(input: BuildPlanInput): SelectedCellPlan {
   }
 
   const worlds = [...new Set(planned.map((c) => c.cell.world))];
-  return {
+  // The trusted plan is deeply frozen: planned cells, cell identities,
+  // dimensions, and proof slots cannot be replaced or edited after
+  // construction — a post-plan slot swap throws instead of silently
+  // changing what strict evaluation compares against.
+  return deepFreezePlan({
     selector: input.selector,
     behavior: input.behavior,
     worlds,
     cells: planned,
     deferredScenarioIds: input.deferredScenarioIds ?? [],
     scenarioManifestHash: input.scenarioManifestHash ?? null,
-  };
+  });
+}
+
+/** Recursively freezes the plan's plain objects/arrays. */
+function deepFreezePlan<T>(value: T): T {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const key of Object.getOwnPropertyNames(value)) {
+      deepFreezePlan((value as Record<string, unknown>)[key]);
+    }
+  }
+  return value;
 }
 
 /**

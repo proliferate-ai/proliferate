@@ -24,8 +24,15 @@ function req(assertions: string[] = ["a1", "a2"]) {
   return buildProofRequirement(CELL, "fixture://test", assertions);
 }
 
+let refSeq = 0;
 function ref(assertionId: string) {
-  return { assertionId, eventDigest: proofEventDigest({ event: "proof-assertion-pass", assertionId }) };
+  refSeq += 1;
+  return {
+    assertionId,
+    eventId: `evt-${refSeq}`,
+    sequence: refSeq,
+    eventDigest: proofEventDigest({ event: "proof-assertion-pass", assertionId }),
+  };
 }
 
 function receipt(overrides: Partial<CellProofReceipt> = {}): CellProofReceipt {
@@ -89,7 +96,7 @@ test("ADVERSARIAL: wrong contract hash / test id / cell key are each rejected", 
 test("ADVERSARIAL: malformed event digest is rejected", () => {
   const problems = validateProofReceipt(
     req(),
-    receipt({ passed: [{ assertionId: "a1", eventDigest: "nothex" }, ref("a2")] }),
+    receipt({ passed: [{ assertionId: "a1", eventId: "evt-x", sequence: 1, eventDigest: "nothex" }, { ...ref("a2"), sequence: 2 }] }),
     KEY,
   );
   assert.ok(problems.some((p) => p.includes("malformed event digest")));
@@ -115,9 +122,11 @@ test("ADVERSARIAL: a forged EMPTY requirement + empty receipt can never validate
     attemptId: "att-1",
     passed: [],
   };
-  // validateProofReceipt over the forged requirement trivially "matches", which
-  // is exactly why validateProofRequirement must run first everywhere.
-  assert.deepEqual(validateProofReceipt(forged, emptyReceipt, KEY), []);
+  // validateProofReceipt is SELF-DEFENDING: it re-validates the requirement
+  // internally, so the forged empty requirement + trivially matching empty
+  // receipt fails even when the caller forgets validateProofRequirement.
+  const receiptProblems = validateProofReceipt(forged, emptyReceipt, KEY);
+  assert.ok(receiptProblems.some((p) => p.includes("requirement invalid")));
 });
 
 test("ADVERSARIAL: a mutated requirement (edited ids) fails hash recomputation", () => {

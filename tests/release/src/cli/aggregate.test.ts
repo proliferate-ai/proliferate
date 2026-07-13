@@ -48,6 +48,8 @@ function final(cell: CellIdentity, status: CellStatus): FinalCellResult {
           passed: [
             {
               assertionId: FIXTURE_ASSERTION,
+              eventId: "evt-1",
+              sequence: 1,
               eventDigest: proofEventDigest({ event: "proof-assertion-pass", assertionId: FIXTURE_ASSERTION }),
             },
           ],

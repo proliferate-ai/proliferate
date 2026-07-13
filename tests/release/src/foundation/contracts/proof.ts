@@ -31,6 +31,10 @@ export interface CellProofRequirement {
 /** One recorded assertion pass, bound to the evidence event that persisted it. */
 export interface ProofEventRef {
   readonly assertionId: string;
+  /** Sink-assigned id of the persisted event. */
+  readonly eventId: string;
+  /** Sink-assigned monotonic sequence (positive). */
+  readonly sequence: number;
   /** Canonical sha256 digest of the appended evidence event envelope. */
   readonly eventDigest: string;
 }
@@ -150,6 +154,13 @@ export function validateProofReceipt(
   receipt: CellProofReceipt | null | undefined,
   expectedCellKey: string,
 ): string[] {
+  // Self-defending: the requirement is re-validated HERE (hash recomputation
+  // included), so a directly forged empty requirement + trivially matching
+  // empty receipt fails even when a caller forgets validateProofRequirement.
+  const requirementProblems = validateProofRequirement(expectedCellKey, requirement);
+  if (requirementProblems.length > 0) {
+    return requirementProblems.map((p) => `requirement invalid: ${p}`);
+  }
   if (!receipt) {
     return [`green result carries no proof receipt (requirement ${requirement.contractHash.slice(0, 12)}…)`];
   }
@@ -164,10 +175,29 @@ export function validateProofReceipt(
     problems.push(`receipt cellKey ${receipt.cellKey} != expected ${expectedCellKey}`);
   }
   const seen = new Map<string, number>();
+  const seenSequences = new Set<number>();
+  let lastSequence = 0;
   for (const ref of receipt.passed) {
     seen.set(ref.assertionId, (seen.get(ref.assertionId) ?? 0) + 1);
     if (!/^[0-9a-f]{64}$/.test(ref.eventDigest)) {
       problems.push(`assertion "${ref.assertionId}" has a malformed event digest`);
+    }
+    if (!ref.eventId || ref.eventId.trim().length === 0) {
+      problems.push(`assertion "${ref.assertionId}" has no persisted event id`);
+    }
+    if (!Number.isInteger(ref.sequence) || ref.sequence < 1) {
+      problems.push(`assertion "${ref.assertionId}" has a non-positive sequence ${ref.sequence}`);
+    } else {
+      if (seenSequences.has(ref.sequence)) {
+        problems.push(`assertion "${ref.assertionId}" reuses sequence ${ref.sequence}`);
+      }
+      seenSequences.add(ref.sequence);
+      if (ref.sequence <= lastSequence) {
+        problems.push(
+          `assertion "${ref.assertionId}" sequence ${ref.sequence} is out of order (after ${lastSequence})`,
+        );
+      }
+      lastSequence = ref.sequence;
     }
   }
   for (const id of requirement.assertionIds) {

@@ -1,18 +1,17 @@
 /**
- * Minimal durable `EvidenceSink` implementation (contracts/evidence.ts),
- * scoped to this workstream the same way `JsonlCleanupLedger` is (see that
- * file's header) — the shared runner-level evidence sink is a separate
- * workstream's concern. Persists intermediate `append()` events to one JSONL
- * file and the single final `RunEvidence` document to a sibling `.final.json`
- * file, refusing a second `finalize()` call (the contract's "exactly once per
- * run") and rejecting any payload whose keys match the redaction policy.
+ * Tier-2 workstream durable `EvidenceSink` (contracts/evidence.ts), now
+ * DELEGATING to the shared DurableEvidenceCore so the canonical integrity
+ * semantics (sink-owned envelope fields, materialized redaction, exact
+ * persisted refs, append-after-finalize rejection, atomic NO-REPLACE
+ * finalization) exist exactly once. This wrapper keeps the workstream's
+ * key-pattern screen and its base-file path layout.
  */
 
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 import type { AppendedEventRef, EvidenceSink, RunEvidence } from "../../../contracts/evidence.js";
-import { EnvelopeCounter } from "../../../evidence/envelope.js";
+import { DurableEvidenceCore } from "../../../evidence/durable-core.js";
 
 // Defense in depth: reject anything that looks like it could carry a secret
 // value, even though every caller in this codebase is expected to have
@@ -39,34 +38,28 @@ function assertNoRedactedKeys(value: unknown, pathSoFar: string): void {
 }
 
 export class JsonlEvidenceSink implements EvidenceSink {
-  private readonly eventsPath: string;
-  private readonly finalPath: string;
-  private finalized = false;
+  readonly eventsPath: string;
+  readonly finalPath: string;
+  private readonly core: DurableEvidenceCore;
 
-  constructor(baseFilePath: string) {
+  constructor(baseFilePath: string, runId = "tier2-local", shardId = "shard-1-of-1") {
     this.eventsPath = `${baseFilePath}.events.jsonl`;
     this.finalPath = `${baseFilePath}.final.json`;
     mkdirSync(path.dirname(baseFilePath), { recursive: true });
+    this.core = new DurableEvidenceCore({
+      runId,
+      shardId,
+      eventsPath: this.eventsPath,
+      finalPath: this.finalPath,
+      screen: (materialized) => assertNoRedactedKeys(materialized, "$"),
+    });
   }
 
-  private readonly envelopes = new EnvelopeCounter();
-
   async append(event: Readonly<Record<string, unknown>>): Promise<AppendedEventRef> {
-    assertNoRedactedKeys(event, "event");
-    const [envelope, ref] = this.envelopes.wrap("tier2-local", "shard-1-of-1", event);
-    appendFileSync(this.eventsPath, `${JSON.stringify(envelope)}\n`, "utf8");
-    return ref;
+    return this.core.appendLine(event);
   }
 
   async finalize(evidence: RunEvidence): Promise<void> {
-    if (this.finalized) {
-      throw new Error("JsonlEvidenceSink: finalize() called more than once for this run (contract requires exactly once)");
-    }
-    assertNoRedactedKeys(evidence, "evidence");
-    if (existsSync(this.finalPath)) {
-      throw new Error(`JsonlEvidenceSink: ${this.finalPath} already exists — a prior process already finalized this run`);
-    }
-    writeFileSync(this.finalPath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
-    this.finalized = true;
+    this.core.finalizeDocument(evidence, `${evidence.run.runId}/${evidence.shard.shardId}`);
   }
 }

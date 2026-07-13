@@ -55,7 +55,7 @@ test("JsonlEvidenceSink: finalize writes exactly one final document and a second
   await sink.finalize(fakeEvidence());
   const written = JSON.parse(readFileSync(`${base}.final.json`, "utf8")) as RunEvidence;
   assert.equal(written.run.runId, "run-1");
-  await assert.rejects(() => sink.finalize(fakeEvidence()), /more than once/);
+  await assert.rejects(() => sink.finalize(fakeEvidence()), /already finalized/);
 });
 
 test("JsonlEvidenceSink: append rejects a payload with a redaction-policy-matched key", async () => {
@@ -72,4 +72,17 @@ test("JsonlEvidenceSink: finalize rejects a payload with a redaction-policy-matc
     () => sink.finalize(fakeEvidence({ worlds: [{ world: "tier-2", readiness: [], observedArtifacts: { access_token: "leaked" } }] })),
     /redaction-policy-matched key/,
   );
+});
+
+test("SECONDARY SINK: append after finalize throws (canonical semantics via DurableEvidenceCore)", async () => {
+  const base = tmpBasePath();
+  const sink = new JsonlEvidenceSink(base);
+  await sink.append({ kind: "before" });
+  await sink.finalize(fakeEvidence());
+  await assert.rejects(() => sink.append({ kind: "late" }), /finalized; no further appends/);
+});
+
+test("SECONDARY SINK: reserved sink-owned fields are rejected", async () => {
+  const sink = new JsonlEvidenceSink(tmpBasePath());
+  await assert.rejects(() => sink.append({ kind: "x", runId: "forged" }), /sink-owned field/);
 });
