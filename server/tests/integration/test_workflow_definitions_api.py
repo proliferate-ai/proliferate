@@ -124,6 +124,16 @@ async def test_personal_workflow_crud_owner_isolation_and_revision_conflicts(
     assert hidden.status_code == 404
     assert hidden.json()["detail"]["code"] == "workflow_definition_not_found"
 
+    intruder_update = _workflow_payload()
+    intruder_update.update({"title": "Hijacked", "expectedRevision": 1})
+    intruder_put = await client.put(
+        f"/v1/workflows/{workflow_id}",
+        headers=intruder_headers,
+        json=intruder_update,
+    )
+    assert intruder_put.status_code == 404
+    assert intruder_put.json()["detail"]["code"] == "workflow_definition_not_found"
+
     intruder_delete = await client.delete(
         f"/v1/workflows/{workflow_id}",
         params={"expectedRevision": 1},

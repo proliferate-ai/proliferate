@@ -287,7 +287,7 @@ the tier.
 
 | Gate | Jobs |
 | --- | --- |
-| Merge (every PR) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-frontend-package vitest, desktop vitest, tier-2 intent suite (`intent-tests` + `intent-billing` in `.github/workflows/intent-tests.yml`) |
+| Merge (every PR) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-frontend-package vitest, desktop vitest, and the focused fail-closed tier-2 job `Workflow definition lifecycle (tier-2)` in `ci.yml` (runs only `workflow-definitions.spec.ts`; a red result fails CI and blocks the Deploy Staging spine, and the check is eligible for a future repository required-status rule — none exists today). The broad tier-2 lanes (`intent-tests` + `intent-billing` in `.github/workflows/intent-tests.yml`) run on every PR but are **provisional/non-blocking** — a named migration exception until they earn a flake-free record |
 | Staging → production promotion | Tier 3 runner per lane + tier 4 upgrade scenario, against staging. Red blocks promotion and files an issue. **Flake-tolerant:** a green re-run unblocks; repeated red on the same scenario is a real failure, not a flake |
 | Nightly | Tier 3 lanes (incl. native-shell smoke) against whatever is on staging; failures file issues, never block merges |
 
@@ -314,9 +314,14 @@ developed and debugged locally against staging:
   local command against the same staging deploy.
 
 Migration exceptions, named per house rule: desktop vitest (443 files) is not
-yet wired into the merge gate. (The tier-2 intent suite and the tier-3/4 runner
-now exist — `tests/intent/` and `tests/release/` respectively — and the "how to
-add one" mechanics are in "Writing a new test" above.)
+yet wired into the merge gate, and the broad tier-2 intent lanes
+(`intent-tests` + `intent-billing`) run provisional/non-blocking rather than
+fail-closed — Tier 2 is normatively a merge tier, but today only the focused
+`Workflow definition lifecycle (tier-2)` job in `ci.yml` enforces it; the
+broad lanes join once they demonstrate a flake-free record. (The tier-2 intent
+suite and the tier-3/4 runner now exist — `tests/intent/` and `tests/release/`
+respectively — and the "how to add one" mechanics are in "Writing a new test"
+above.)
 `scripts/validate-agent-catalog.mjs` remains a hand-kept
 mirror of the Rust catalog validator until the contract-fixture pattern
 absorbs it.

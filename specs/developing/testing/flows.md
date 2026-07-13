@@ -111,7 +111,7 @@ Spec of record + scenario definitions: `specs/developing/testing/self-hosting.md
 
 | Flow | Tier | Test pointer |
 | --- | --- | --- |
-| Create, save, reload, reopen, edit, and delete a validated workflow definition through the Desktop web UI | 2 | `tests/intent/specs/workflow-definitions.spec.ts` (`T2-WFDEF-1`; real server + Postgres, AnyHarness skipped) |
+| Create, save, reload, reopen, edit, and delete a validated workflow definition through the Desktop web UI — API-seeded repo selected, exact ordered inputs/stages/steps asserted at every reload | 2 | `tests/intent/specs/workflow-definitions.spec.ts` (`T2-WFDEF-1`; real server + Postgres, AnyHarness skipped; fail-closed in the CI/deploy spine via the "Workflow definition lifecycle (tier-2)" job in ci.yml, eligible for a future required-status rule — the broad intent lane stays provisional) |
 | Create/edit/trigger workflow via UI → run created, plan resolved, delivery attempted (up to the sandbox seam) | 2 | parked |
 | Workflow run reaches terminal state with a real agent | 3 | parked |
 | Poll trigger against stub feed: replay-safe, invalid items surfaced | 2 | parked |

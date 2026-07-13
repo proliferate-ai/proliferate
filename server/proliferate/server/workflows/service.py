@@ -20,7 +20,6 @@ from proliferate.server.workflows.domain.validation import (
 from proliferate.server.workflows.errors import (
     InvalidWorkflowDefinition,
     UnavailableWorkflowCatalogSelection,
-    WorkflowDefinitionNotFound,
     WorkflowDefinitionRevisionConflict,
 )
 from proliferate.server.workflows.models import (
@@ -35,22 +34,6 @@ async def list_workflow_definitions(
     user_id: UUID,
 ) -> tuple[WorkflowDefinitionSnapshot, ...]:
     return await workflow_store.list_workflow_definitions(db, user_id=user_id)
-
-
-async def get_workflow_definition(
-    db: AsyncSession,
-    *,
-    user_id: UUID,
-    workflow_definition_id: UUID,
-) -> WorkflowDefinitionSnapshot:
-    value = await workflow_store.get_workflow_definition(
-        db,
-        user_id=user_id,
-        workflow_definition_id=workflow_definition_id,
-    )
-    if value is None:
-        raise WorkflowDefinitionNotFound()
-    return value
 
 
 async def create_workflow_definition(
@@ -81,15 +64,9 @@ async def create_workflow_definition(
 async def update_workflow_definition(
     db: AsyncSession,
     *,
-    user_id: UUID,
-    workflow_definition_id: UUID,
+    current: WorkflowDefinitionSnapshot,
     body: WorkflowDefinitionUpdateRequest,
 ) -> WorkflowDefinitionSnapshot:
-    current = await get_workflow_definition(
-        db,
-        user_id=user_id,
-        workflow_definition_id=workflow_definition_id,
-    )
     if body.expected_revision != current.revision:
         raise WorkflowDefinitionRevisionConflict(
             expected_revision=body.expected_revision,
@@ -97,15 +74,15 @@ async def update_workflow_definition(
         )
     await _validate_default_repository(
         db,
-        user_id=user_id,
+        user_id=current.user_id,
         repo_config_id=body.default_repo_config_id,
     )
     catalog = read_agent_catalog().catalog
     document = _validate_document(catalog, body)
     updated = await workflow_store.update_workflow_definition_if_revision(
         db,
-        user_id=user_id,
-        workflow_definition_id=workflow_definition_id,
+        user_id=current.user_id,
+        workflow_definition_id=current.id,
         expected_revision=body.expected_revision,
         title=body.title,
         description=_normalized_description(body.description),
@@ -118,8 +95,8 @@ async def update_workflow_definition(
         return updated
     latest = await workflow_store.get_workflow_definition(
         db,
-        user_id=user_id,
-        workflow_definition_id=workflow_definition_id,
+        user_id=current.user_id,
+        workflow_definition_id=current.id,
     )
     raise WorkflowDefinitionRevisionConflict(
         expected_revision=body.expected_revision,
@@ -130,31 +107,25 @@ async def update_workflow_definition(
 async def delete_workflow_definition(
     db: AsyncSession,
     *,
-    user_id: UUID,
-    workflow_definition_id: UUID,
+    current: WorkflowDefinitionSnapshot,
     expected_revision: int,
 ) -> None:
-    await get_workflow_definition(
-        db,
-        user_id=user_id,
-        workflow_definition_id=workflow_definition_id,
-    )
     deleted = await workflow_store.soft_delete_workflow_definition_if_revision(
         db,
-        user_id=user_id,
-        workflow_definition_id=workflow_definition_id,
+        user_id=current.user_id,
+        workflow_definition_id=current.id,
         expected_revision=expected_revision,
     )
     if deleted is not None:
         return
-    current = await workflow_store.get_workflow_definition(
+    latest = await workflow_store.get_workflow_definition(
         db,
-        user_id=user_id,
-        workflow_definition_id=workflow_definition_id,
+        user_id=current.user_id,
+        workflow_definition_id=current.id,
     )
     raise WorkflowDefinitionRevisionConflict(
         expected_revision=expected_revision,
-        current_revision=None if current is None else current.revision,
+        current_revision=None if latest is None else latest.revision,
     )
 
 

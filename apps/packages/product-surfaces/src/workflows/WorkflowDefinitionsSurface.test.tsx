@@ -368,7 +368,7 @@ describe("WorkflowDefinitionsSurface", () => {
     await screen.findByText(/changed in another window/u);
 
     // The failed refetch still resolves with the stale cached data attached.
-    cloud.refetchDetail.mockResolvedValue({
+    cloud.refetchDetail.mockResolvedValueOnce({
       isError: true,
       error: new Error("network down"),
       data: persisted,
@@ -377,6 +377,20 @@ describe("WorkflowDefinitionsSurface", () => {
 
     await screen.findByText(/network down/u);
     expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("My unsaved title");
+
+    // The reload affordance must survive the failed attempt, stay singular,
+    // and a later successful retry adopts the fresh definition.
+    const retryButtons = screen.getAllByRole("button", { name: "Reload" });
+    expect(retryButtons).toHaveLength(1);
+    cloud.refetchDetail.mockResolvedValueOnce({
+      isError: false,
+      data: { ...persisted, revision: 3, title: "Winner title" },
+    });
+    fireEvent.click(retryButtons[0]!);
+    await waitFor(() =>
+      expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Winner title"),
+    );
+    expect(screen.queryByRole("button", { name: "Reload" })).toBeNull();
   });
 
   it("adopts its own successful save without a remount", async () => {

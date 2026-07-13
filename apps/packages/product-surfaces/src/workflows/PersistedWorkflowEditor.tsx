@@ -45,31 +45,34 @@ export function PersistedWorkflowEditor({
   const [base, setBase] = useState(definition);
   const [draft, setDraft] = useState(() => workflowDefinitionToDraft(definition));
   const [showValidation, setShowValidation] = useState(false);
-  const [writeFailure, setWriteFailure] = useState<
-    { message: string; conflict: boolean } | null
-  >(null);
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
+  // Once a revision conflict is seen, the deliberate-reload affordance stays
+  // available until a reload actually succeeds (adopt clears it) — a failed
+  // reload attempt must not remove the only way out of the conflict.
+  const [conflictPending, setConflictPending] = useState(false);
   const actions = useWorkflowDefinitionActions(authCacheScope);
   const issues = showValidation ? validateWorkflowDefinitionDraft(draft, catalog) : [];
 
   const recordWriteFailure = (error: unknown) => {
-    setWriteFailure({
-      message: workflowWriteErrorMessage(error),
-      conflict: isWorkflowRevisionConflict(error),
-    });
+    setFailureMessage(workflowWriteErrorMessage(error));
+    if (isWorkflowRevisionConflict(error)) {
+      setConflictPending(true);
+    }
   };
 
   const adopt = (next: WorkflowDefinition) => {
     setBase(next);
     setDraft(workflowDefinitionToDraft(next));
     setShowValidation(false);
-    setWriteFailure(null);
+    setFailureMessage(null);
+    setConflictPending(false);
   };
 
   const reload = async () => {
     try {
       adopt(await reloadDefinition());
     } catch (error) {
-      recordWriteFailure(error);
+      setFailureMessage(workflowWriteErrorMessage(error));
     }
   };
 
@@ -79,7 +82,7 @@ export function PersistedWorkflowEditor({
     if (nextIssues.length > 0) {
       return;
     }
-    setWriteFailure(null);
+    setFailureMessage(null);
     try {
       const updated = await actions.updateWorkflowDefinition({
         workflowDefinitionId: base.id,
@@ -93,7 +96,7 @@ export function PersistedWorkflowEditor({
   };
 
   const remove = async () => {
-    setWriteFailure(null);
+    setFailureMessage(null);
     try {
       await actions.deleteWorkflowDefinition({
         workflowDefinitionId: base.id,
@@ -106,7 +109,11 @@ export function PersistedWorkflowEditor({
   };
 
   const newerRevisionAvailable = definition.revision > base.revision;
-  const versionWarning = newerRevisionAvailable
+  const showReload = newerRevisionAvailable || conflictPending;
+  // One coherent reload affordance: when the error banner already carries the
+  // Reload action, the warning ladder must not render a second one, so the
+  // newer-revision hint collapses into the informational tier.
+  const versionWarning = newerRevisionAvailable && failureMessage === null
     ? "A newer revision of this workflow is available. Reload to edit the latest version."
     : definitionRefreshFailed
       ? "The workflow could not be refreshed; editing continues on the loaded version."
@@ -115,7 +122,6 @@ export function PersistedWorkflowEditor({
         : catalogError
           ? "Catalog refresh failed; editing uses the last loaded catalog."
           : null;
-  const showReload = newerRevisionAvailable || writeFailure?.conflict === true;
 
   return (
     <WorkflowDefinitionEditor
@@ -124,7 +130,7 @@ export function PersistedWorkflowEditor({
       catalog={catalog}
       repositories={repositories}
       issues={issues}
-      serverError={writeFailure?.message ?? null}
+      serverError={failureMessage}
       catalogWarning={versionWarning}
       saving={actions.updatingWorkflowDefinition}
       deleting={actions.deletingWorkflowDefinition}

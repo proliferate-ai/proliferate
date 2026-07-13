@@ -335,13 +335,20 @@ Usage & Limits pane render those numbers (Playwright).
 
 ### T2-WFDEF-1: definition authoring lifecycle
 
-Sign in through the Desktop web UI, create a personal workflow definition with
-one input and one catalog-backed prompt/goal stage, explicitly choose no
-default repository, then save. Hard-reload and reopen the definition, assert
-the exact stored values and ordering, edit and save revision 2, hard-reload
-again, then delete it and assert both the normal list and authenticated API no
-longer expose it. The real server and Postgres are in scope; AnyHarness is
-skipped because this PR does not execute definitions.
+Seed a repository configuration through the real product API (local-kind
+environment; no GitHub dependency), sign in through the Desktop web UI, and
+create a personal workflow definition that selects that repository and carries
+multiple uniquely identifiable ordered inputs, stages, and prompt steps (a
+goal on only one step, one stage on the runtime-default model). Assert the
+exact ordered input/stage/step arrays and the repoConfigId on the create
+response, after a hard reload, after list reopen, on an authenticated GET, and
+again on the revision-2 update. Then delete and assert both the normal list
+and the authenticated API no longer expose it. The real server and Postgres
+are in scope; AnyHarness is skipped because this PR does not execute
+definitions. This scenario runs fail-closed in the CI/deploy spine (the
+"Workflow definition lifecycle (tier-2)" job in ci.yml — a red result fails CI
+and blocks Deploy Staging, and the check is eligible for a future repository
+required-status rule); the broad intent lane remains provisional.
 
 **PARKED (ruled 2026-07-08): the execution scenarios below remain deferred
 until their owning workflow-execution PRs. T2-WFDEF-1 above is active and
