@@ -17,7 +17,8 @@ import type { CleanupEntry, CleanupLedger, CleanupState } from "../../contracts/
 import type { EvidenceSink } from "../../contracts/evidence.js";
 import type { RunIdentity, ShardIdentity } from "../../contracts/identity.js";
 import { WorldReadinessError, type WorldContext } from "../../contracts/world.js";
-import { loadMergedEnv } from "./env-file.js";
+import { loadMergedEnv, applyMergedEnv } from "./env-file.js";
+import { envVarNames } from "../../../config/env-manifest.js";
 import { resolveManagedCloudConfig, MissingManagedCloudApiUrlError } from "./config.js";
 import { ManagedCloudWorldProvisioner } from "./provisioner.js";
 import { createLiveDriver, liveGithubAppAuthorityAvailable } from "./live-driver.js";
@@ -58,6 +59,13 @@ function consoleEvidenceSink(secrets: readonly (string | undefined)[]): Evidence
 
 async function main(): Promise<number> {
   const env = loadMergedEnv();
+  // Bridge file-sourced declared credentials into process.env for the existing
+  // fixtures + spawned Python subprocesses (ambient still wins; nothing is
+  // overwritten). Names only — never log the applied values.
+  const applied = applyMergedEnv(env, envVarNames());
+  if (applied.length > 0) {
+    console.log(`[env] applied ${applied.length} file-sourced declared var(s) to the process environment (names): ${applied.join(", ")}`);
+  }
 
   let config;
   try {

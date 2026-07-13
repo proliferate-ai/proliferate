@@ -157,3 +157,32 @@ export function loadMergedEnv(options: MergeOptions = {}): MergedEnv {
     source: (name) => resolve(name).source,
   };
 }
+
+/**
+ * Applies specific declared keys from the merged env into a target env map
+ * (default process.env) ONLY when the target does not already have a non-empty
+ * value — so ambient always wins and no key is overwritten. This is a bounded,
+ * name-allowlisted data assignment, never a shell source: it exists so the
+ * existing tier-3 fixtures (and the Python subprocesses they spawn, which
+ * inherit process.env) can consume file-sourced credentials without the
+ * operator having to `source` the file. Returns the names actually applied.
+ */
+export function applyMergedEnv(
+  merged: MergedEnv,
+  names: readonly string[],
+  target: NodeJS.ProcessEnv = process.env,
+): string[] {
+  const applied: string[] = [];
+  for (const name of names) {
+    const existing = target[name];
+    if (existing !== undefined && existing.trim().length > 0) {
+      continue;
+    }
+    const value = merged.get(name);
+    if (value !== undefined) {
+      target[name] = value;
+      applied.push(name);
+    }
+  }
+  return applied;
+}

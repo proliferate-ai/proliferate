@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseEnvData, loadMergedEnv, type ParsedEnvFile } from "./env-file.js";
+import { parseEnvData, loadMergedEnv, applyMergedEnv, type ParsedEnvFile } from "./env-file.js";
 
 test("parseEnvData reads KEY=VALUE and export-prefixed lines", () => {
   const parsed = parseEnvData("A=1\nexport B=2\n");
@@ -57,6 +57,22 @@ test("loadMergedEnv: ambient wins over release-e2e.env wins over server/.env", (
   assert.equal(merged.source("ONLY_SERVER"), "server-env");
   assert.equal(merged.get("MISSING"), undefined);
   assert.equal(merged.source("MISSING"), "absent");
+});
+
+test("applyMergedEnv sets only absent target keys and never overwrites ambient", () => {
+  const merged = loadMergedEnv({
+    ambient: {},
+    releaseEnvPath: "/r",
+    serverEnvPath: "/s",
+    load: (p): ParsedEnvFile => (p === "/r" ? { values: { A: "fromfile", B: "fromfile" }, ignoredLines: [] } : { values: {}, ignoredLines: [] }),
+  });
+  const target: NodeJS.ProcessEnv = { A: "ambient-wins" };
+  const applied = applyMergedEnv(merged, ["A", "B", "C"], target);
+  // A already set (ambient) -> untouched; B applied from file; C absent everywhere.
+  assert.equal(target.A, "ambient-wins");
+  assert.equal(target.B, "fromfile");
+  assert.equal(target.C, undefined);
+  assert.deepEqual(applied, ["B"]);
 });
 
 test("loadMergedEnv: empty-string ambient does not shadow a real file value", () => {
