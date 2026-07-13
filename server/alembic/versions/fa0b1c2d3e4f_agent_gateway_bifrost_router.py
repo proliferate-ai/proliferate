@@ -245,9 +245,7 @@ def upgrade() -> None:
                 "slot_generation",
             ],
             unique=True,
-            postgresql_where=sa.text(
-                "object_scope = 'runtime_selection' AND status != 'revoked'"
-            ),
+            postgresql_where=sa.text("object_scope = 'runtime_selection' AND status != 'revoked'"),
         )
         op.create_index(
             "uq_agent_gateway_router_materialization_policy_object",
@@ -261,9 +259,7 @@ def upgrade() -> None:
             "agent_gateway_router_materialization",
             ["router_kind", "router_object_kind", "object_scope", "budget_subject_id"],
             unique=True,
-            postgresql_where=sa.text(
-                "object_scope = 'budget_subject' AND status != 'revoked'"
-            ),
+            postgresql_where=sa.text("object_scope = 'budget_subject' AND status != 'revoked'"),
         )
 
     if not _has_table("agent_gateway_llm_usage_event"):

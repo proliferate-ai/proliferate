@@ -141,18 +141,22 @@ def upgrade() -> None:
         "automation_run", "ix_automation_run_user_id"
     ):
         op.create_index("ix_automation_run_user_id", "automation_run", ["user_id"], unique=False)
-    if _has_column("automation_run", "automation_id") and _has_column(
-        "automation_run", "created_at"
-    ) and not _has_index("automation_run", "ix_automation_run_automation_created"):
+    if (
+        _has_column("automation_run", "automation_id")
+        and _has_column("automation_run", "created_at")
+        and not _has_index("automation_run", "ix_automation_run_automation_created")
+    ):
         op.create_index(
             "ix_automation_run_automation_created",
             "automation_run",
             ["automation_id", "created_at"],
             unique=False,
         )
-    if _has_column("automation_run", "automation_id") and _has_column(
-        "automation_run", "scheduled_for"
-    ) and not _has_index("automation_run", "uq_automation_run_scheduled_slot"):
+    if (
+        _has_column("automation_run", "automation_id")
+        and _has_column("automation_run", "scheduled_for")
+        and not _has_index("automation_run", "uq_automation_run_scheduled_slot")
+    ):
         op.create_index(
             "uq_automation_run_scheduled_slot",
             "automation_run",

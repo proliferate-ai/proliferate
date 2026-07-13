@@ -30,9 +30,7 @@ def _has_table(table_name: str) -> bool:
 def _has_column(table_name: str, column_name: str) -> bool:
     if not _has_table(table_name):
         return False
-    return column_name in {
-        column["name"] for column in _inspector().get_columns(table_name)
-    }
+    return column_name in {column["name"] for column in _inspector().get_columns(table_name)}
 
 
 def _has_index(table_name: str, index_name: str) -> bool:
@@ -328,7 +326,5 @@ def _upgrade_agent_gateway_router_materializations() -> None:
             "target_id",
         ],
         unique=True,
-        postgresql_where=sa.text(
-            "object_scope = 'runtime_selection' AND status != 'revoked'"
-        ),
+        postgresql_where=sa.text("object_scope = 'runtime_selection' AND status != 'revoked'"),
     )

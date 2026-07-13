@@ -74,7 +74,9 @@ def upgrade() -> None:
             sa.Column("last_verified_at", sa.DateTime(timezone=True), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-            sa.ForeignKeyConstraint(["auth_identity_id"], ["auth_identity.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(
+                ["auth_identity_id"], ["auth_identity.id"], ondelete="CASCADE"
+            ),
             sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint(
@@ -189,9 +191,7 @@ def _backfill_oauth_accounts() -> None:
         ).scalar_one_or_none()
         if grant_exists is not None:
             continue
-        scopes: list[str] = (
-            LEGACY_GITHUB_OAUTH_SCOPES if row["oauth_name"] == "github" else []
-        )
+        scopes: list[str] = LEGACY_GITHUB_OAUTH_SCOPES if row["oauth_name"] == "github" else []
         expires_at = (
             datetime.fromtimestamp(row["expires_at"], tz=UTC)
             if row["expires_at"] is not None

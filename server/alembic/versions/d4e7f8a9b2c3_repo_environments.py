@@ -178,7 +178,9 @@ def upgrade() -> None:
             ),
         )
 
-    _create_index_once("ix_repo_environment_repo_config_id", "repo_environment", ["repo_config_id"])
+    _create_index_once(
+        "ix_repo_environment_repo_config_id", "repo_environment", ["repo_config_id"]
+    )
     _create_index_once(
         "ix_repo_environment_environment_kind",
         "repo_environment",

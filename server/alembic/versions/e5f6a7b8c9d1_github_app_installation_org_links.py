@@ -132,7 +132,9 @@ def downgrade() -> None:
     if not _has_table("github_app_installations"):
         return
     _drop_index_once("ix_github_app_installations_organization", "github_app_installations")
-    _drop_index_once("ix_github_app_installations_installed_by_user_id", "github_app_installations")
+    _drop_index_once(
+        "ix_github_app_installations_installed_by_user_id", "github_app_installations"
+    )
     _drop_index_once("ix_github_app_installations_organization_id", "github_app_installations")
     _drop_foreign_key_once(
         "github_app_installations",

@@ -34,9 +34,7 @@ def _has_index(table_name: str, index_name: str) -> bool:
 
 
 def _create_index_once(index_name: str, columns: list[str]) -> None:
-    if _has_table("free_cloud_allocation") and not _has_index(
-        "free_cloud_allocation", index_name
-    ):
+    if _has_table("free_cloud_allocation") and not _has_index("free_cloud_allocation", index_name):
         op.create_index(index_name, "free_cloud_allocation", columns)
 
 

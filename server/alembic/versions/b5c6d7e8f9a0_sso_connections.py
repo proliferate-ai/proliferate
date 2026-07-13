@@ -40,7 +40,9 @@ def upgrade() -> None:
     if not _has_table("sso_connection"):
         op.create_table(
             "sso_connection",
-            sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+            sa.Column(
+                "id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False
+            ),
             sa.Column("scope", sa.String(length=32), nullable=False),
             sa.Column("organization_id", sa.UUID(), nullable=True),
             sa.Column("protocol", sa.String(length=16), nullable=False),
@@ -170,7 +172,9 @@ def upgrade() -> None:
     if not _has_table("sso_challenge"):
         op.create_table(
             "sso_challenge",
-            sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+            sa.Column(
+                "id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False
+            ),
             sa.Column("scope", sa.String(length=32), nullable=False),
             sa.Column("connection_id", sa.UUID(), nullable=True),
             sa.Column("connection_key", sa.String(length=255), nullable=False),
@@ -226,7 +230,9 @@ def upgrade() -> None:
     if not _has_table("sso_identity"):
         op.create_table(
             "sso_identity",
-            sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+            sa.Column(
+                "id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False
+            ),
             sa.Column("user_id", sa.UUID(), nullable=False),
             sa.Column("organization_id", sa.UUID(), nullable=True),
             sa.Column("connection_id", sa.UUID(), nullable=True),

@@ -41,9 +41,7 @@ def test_build_release_id_appends_twelve_char_sha() -> None:
 
 
 def test_build_release_id_accepts_already_truncated_sha() -> None:
-    assert (
-        build_release_id("anyharness", "0.3.27", _SHA12) == f"anyharness@0.3.27+{_SHA12}"
-    )
+    assert build_release_id("anyharness", "0.3.27", _SHA12) == f"anyharness@0.3.27+{_SHA12}"
 
 
 def test_build_release_id_version_only_without_sha() -> None:
@@ -110,12 +108,9 @@ def test_sanitize_override_refuses_cross_component_release() -> None:
     """The server release must never be accepted as a target override."""
     server_release = f"proliferate-server@0.3.27+{_SHA12}"
     assert (
-        sanitize_component_release_override(server_release, component="proliferate-worker")
-        is None
+        sanitize_component_release_override(server_release, component="proliferate-worker") is None
     )
-    assert (
-        sanitize_component_release_override(server_release, component="anyharness") is None
-    )
+    assert sanitize_component_release_override(server_release, component="anyharness") is None
 
 
 def test_sanitize_override_accepts_matching_component() -> None:

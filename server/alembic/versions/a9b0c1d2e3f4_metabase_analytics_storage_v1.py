@@ -355,9 +355,7 @@ def upgrade() -> None:
         "client_daily_activity",
         ["activity_date", "surface", "anonymous_install_uuid"],
         unique=True,
-        postgresql_where=sa.text(
-            "actor_user_id IS NULL AND anonymous_install_uuid IS NOT NULL"
-        ),
+        postgresql_where=sa.text("actor_user_id IS NULL AND anonymous_install_uuid IS NOT NULL"),
     )
     _create_index_once(
         "ix_client_daily_activity_date_surface",

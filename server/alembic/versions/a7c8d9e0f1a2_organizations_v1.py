@@ -123,7 +123,9 @@ def upgrade() -> None:
         "organization_membership",
         ["organization_id"],
     )
-    _create_index_once("ix_organization_membership_user_id", "organization_membership", ["user_id"])
+    _create_index_once(
+        "ix_organization_membership_user_id", "organization_membership", ["user_id"]
+    )
     _create_index_once(
         "ix_organization_membership_status",
         "organization_membership",
@@ -275,7 +277,9 @@ def upgrade() -> None:
     op.alter_column("cloud_workspace", "owner_scope", nullable=False)
     op.alter_column("cloud_workspace", "created_by_user_id", nullable=False)
     _create_index_once("ix_cloud_workspace_owner_user_id", "cloud_workspace", ["owner_user_id"])
-    _create_index_once("ix_cloud_workspace_organization_id", "cloud_workspace", ["organization_id"])
+    _create_index_once(
+        "ix_cloud_workspace_organization_id", "cloud_workspace", ["organization_id"]
+    )
     _create_index_once(
         "ix_cloud_workspace_created_by_user_id",
         "cloud_workspace",
@@ -294,8 +298,7 @@ def upgrade() -> None:
     _create_check_once(
         "cloud_workspace",
         "ck_cloud_workspace_organization_owner",
-        "owner_scope != 'organization' OR "
-        "(organization_id IS NOT NULL AND owner_user_id IS NULL)",
+        "owner_scope != 'organization' OR (organization_id IS NOT NULL AND owner_user_id IS NULL)",
     )
     _create_check_once(
         "cloud_workspace",
