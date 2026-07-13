@@ -1,0 +1,384 @@
+name: Release Foundation
+
+# Single GitHub Actions entrypoint for the Tier 2/3/4 foundation runner
+# (tests/release; specs/developing/testing/README.md "Tier 3 — live
+# end-to-end"; specs/developing/testing/core-release-validation.md;
+# specs/developing/testing/release-worlds-and-fixtures.md "Local And GitHub
+# Actions Execution"). This workflow is a pure caller: it supplies checkout,
+# toolchain setup, protected secrets as env, service containers, artifact
+# upload, and shard fan-out. It never reimplements world setup — every step
+# below runs the same pnpm script a laptop would run (`pnpm run foundation` /
+# `pnpm run vertical-slice:tier2` / `pnpm run access-audit`), so a red job
+# reproduces exactly by running that same command locally.
+#
+# Enforcement posture (core-release-validation.md "Current enforcement
+# exception" + "Gate cadence"): the foundation is mid-migration.
+#   - `foundation-unit` (deterministic typecheck/test of the runner itself,
+#     no external world) is strict from day one — no continue-on-error.
+#   - `tier2-slice` runs the real Tier 2 vertical slice (T2-AUTH-1 +
+#     T2-BILL-1's checkout-to-grant cell, tests/release/src/foundation/
+#     worlds/tier2/run-vertical-slice.ts) in DIAGNOSTIC mode with
+#     `continue-on-error: true` on that one caller only — a migration
+#     diagnostic per core-release-validation.md's closure order (step 6,
+#     "build and validate each world foundation as a vertical slice"), never
+#     qualifying evidence. The `behavior=strict` input is the flip-to-strict
+#     switch: it adds a second, separate invocation with NO
+#     continue-on-error, which fails closed when `STRIPE_TEST_SECRET_KEY` is
+#     absent — a missing credential is never a pass
+#     (release-worlds-and-fixtures.md "Secret preflight").
+#   - Every other world (local-runtime, managed-cloud, self-host,
+#     desktop-upgrade, managed-cloud-upgrade) is not green locally yet, so it
+#     only has a disabled skeleton at the bottom of this file. Do not enable
+#     one until its own workstream has a real, locally-green
+#     `pnpm run foundation -- --world <id> ...` invocation to point it at.
+
+on:
+  workflow_dispatch:
+    inputs:
+      worlds:
+        description: >-
+          Comma-separated world ids to select
+          (release-worlds-and-fixtures.md "Vocabulary": tier-2,
+          local-runtime, managed-cloud, self-host, desktop-upgrade,
+          managed-cloud-upgrade). Only tier-2 has a wired job today; other
+          ids are accepted for forward compatibility with the disabled
+          skeleton jobs below and currently select nothing.
+        type: string
+        default: tier-2
+        required: false
+      behavior:
+        description: >-
+          Result behavior (core-release-validation.md). diagnostic never
+          fails the workflow; strict adds a second, separate
+          no-continue-on-error invocation that fails closed on any missing
+          requirement (including a missing STRIPE_TEST_SECRET_KEY).
+        type: choice
+        options:
+          - diagnostic
+          - strict
+        default: diagnostic
+        required: false
+      cells:
+        description: >-
+          Optional comma-separated scenario/cell ids. Currently
+          informational: the wired tier2-slice job always runs its fixed
+          two-cell vertical slice (T2-AUTH-1, T2-BILL-1). This is plumbing
+          for the foundation CLI's --cells flag once a world job consumes
+          it directly.
+        type: string
+        default: ""
+        required: false
+      shard-count:
+        description: >-
+          Number of parallel shards to fan the tier2-slice job across. Each
+          shard runs on its own isolated runner and currently executes the
+          identical fixed vertical slice (no cell-level partitioning yet);
+          leave at 1 unless deliberately exercising the fan-out plumbing.
+        type: string
+        default: "1"
+        required: false
+  schedule:
+    # Nightly diagnostic run of the tier-2 vertical slice
+    # (core-release-validation.md "Gate cadence" Nightly row;
+    # release-worlds-and-fixtures.md "diagnostic local and scheduled runs").
+    # Schedule events carry no `inputs`, so this always resolves to
+    # behavior=diagnostic, worlds=tier-2, shard-count=1 below — never strict.
+    - cron: "17 6 * * *"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # Resolves the workflow_dispatch `shard-count` input (absent on schedule
+  # runs, hence the "1" fallback) into a JSON array so `tier2-slice` can fan
+  # out via a real matrix rather than a hand-rolled loop.
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shards: ${{ steps.compute.outputs.shards }}
+    steps:
+      - name: Compute shard matrix from the shard-count input
+        id: compute
+        env:
+          # Bracket notation is required: GitHub Actions expression dot-access
+          # does not support a hyphenated property name (`inputs.shard-count`
+          # would parse as `inputs.shard - count`, a subtraction).
+          SHARD_COUNT: ${{ inputs['shard-count'] || '1' }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$SHARD_COUNT" =~ ^[0-9]+$ ]] || [ "$SHARD_COUNT" -lt 1 ]; then
+            echo "shard-count must be a positive integer, got: $SHARD_COUNT" >&2
+            exit 1
+          fi
+          shards="[$(seq -s, 1 "$SHARD_COUNT")]"
+          echo "shards=$shards" >> "$GITHUB_OUTPUT"
+
+  # Deterministic Tier-1-shaped validation of the runner itself: no world,
+  # no service container, no credential. Strict from day one — this is the
+  # one job in this file that never gets continue-on-error.
+  foundation-unit:
+    name: foundation-unit (typecheck + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck the release runner
+        run: pnpm -C tests/release run typecheck
+
+      - name: Unit test the release runner
+        run: pnpm -C tests/release run test
+
+  # Real Tier 2 world (real server + real Postgres; see
+  # tests/intent/stack/boot.ts and
+  # tests/release/src/foundation/worlds/tier2/provisioner.ts, which reuses
+  # it). Boots the same way `tests/intent`'s own CI job
+  # (.github/workflows/intent-tests.yml) does — Postgres + Redis service
+  # containers, `uv`-managed server venv, Playwright chromium, and the
+  # Stripe CLI for the one real-network Tier 2 exception — then calls the
+  # runner CLI exactly like a laptop would. This job does not build the
+  # AnyHarness runtime (TIER2_INTENT_SKIP_RUNTIME=1): nothing this vertical
+  # slice covers reads through it.
+  tier2-slice:
+    name: tier2-slice (shard ${{ matrix.shard }})
+    needs: plan
+    # `inputs.worlds` is unset on schedule-triggered runs (schedule events
+    # carry no `inputs`); the `|| 'tier-2'` fallback keeps `contains()`
+    # operating on a real string in both cases rather than relying on `||`
+    # short-circuit semantics around a possibly-null first operand.
+    if: contains(inputs.worlds || 'tier-2', 'tier-2')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.plan.outputs.shards) }}
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proliferate
+          POSTGRES_PASSWORD: localdev
+          POSTGRES_DB: proliferate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U proliferate -d proliferate"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install server (venv, matches local layout)
+        run: cd server && uv venv .venv --python 3.12 && uv pip install -e ".[dev]"
+
+      - name: Install Playwright chromium
+        # T2-AUTH-1's cell shells out to the real tests/intent Playwright spec
+        # against the already-booted stack (tests/release/src/foundation/
+        # worlds/tier2/cells/t2-auth-1.ts).
+        run: pnpm -C tests/intent exec playwright install --with-deps chromium
+
+      - name: Install Stripe CLI
+        # T2-BILL-1's cell signs real Stripe test-mode webhook deliveries
+        # through the Stripe CLI (tests/intent/stack/billing.ts), same as
+        # intent-tests.yml's intent-billing job.
+        run: |
+          curl -fsSL https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" \
+            | sudo tee /etc/apt/sources.list.d/stripe.list
+          sudo apt-get update && sudo apt-get install -y stripe
+
+      # ── DIAGNOSTIC caller. continue-on-error is intentional and scoped to
+      # ONLY this step: it is a migration-diagnostic per
+      # core-release-validation.md's "Current enforcement exception" and
+      # foundation closure order (step 6, "build and validate each world
+      # foundation as a vertical slice"), never qualifying evidence.
+      # run-vertical-slice.ts itself also always exits 0 in diagnostic mode;
+      # continue-on-error here is a second, explicit backstop of that same
+      # policy, not a substitute for it. Do not copy this onto a job whose
+      # output is consumed as merge/promotion/qualification evidence.
+      - name: Tier-2 vertical slice — diagnostic (migration-diagnostic, non-qualifying)
+        id: diagnostic
+        continue-on-error: true
+        env:
+          TIER2_INTENT_PROFILE: ci
+          TIER2_INTENT_SKIP_RUNTIME: "1"
+          USE_EXISTING_POSTGRES: "1"
+          USE_EXISTING_REDIS: "1"
+          LOCAL_PGHOST: 127.0.0.1
+          CI: "true"
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: pnpm -C tests/release run vertical-slice:tier2
+
+      # ── STRICT flip switch. Only runs when explicitly requested via
+      # workflow_dispatch (schedule events carry no `inputs`, so this never
+      # runs on the nightly cron). NO continue-on-error: a strict run must
+      # fail closed, including on a missing STRIPE_TEST_SECRET_KEY — that is
+      # the correct, required behavior
+      # (release-worlds-and-fixtures.md "Secret preflight"), not a bug.
+      - name: Tier-2 vertical slice — strict
+        if: inputs.behavior == 'strict'
+        env:
+          TIER2_INTENT_PROFILE: ci
+          TIER2_INTENT_SKIP_RUNTIME: "1"
+          USE_EXISTING_POSTGRES: "1"
+          USE_EXISTING_REDIS: "1"
+          LOCAL_PGHOST: 127.0.0.1
+          CI: "true"
+          STRIPE_TEST_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: pnpm -C tests/release run vertical-slice:tier2 -- --strict
+
+      - name: Upload evidence and cleanup ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-foundation-tier2-slice-shard-${{ matrix.shard }}
+          path: |
+            tests/release/.vertical-slice-output/
+            tests/release/.output/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # DISABLED SKELETONS — every world below is not green locally yet
+  # (release-worlds-and-fixtures.md "World Dependency Matrix"). These exist
+  # only to reserve the job shape/name; `if: false` keeps them permanently
+  # skipped in every trigger. Enable one only after its own workstream has a
+  # real, locally-green `pnpm run foundation -- --world <id> ...`
+  # invocation to point it at — never flip continue-on-error on and call
+  # that "enabling" a world.
+  #
+  # local-runtime-diagnostic:
+  #   name: local-runtime-diagnostic (disabled skeleton — not green locally)
+  #   if: false
+  #   needs: plan
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: actions/setup-node@v6
+  #       with:
+  #         node-version: "22"
+  #     - uses: pnpm/action-setup@v6
+  #       with:
+  #         version: 10
+  #     - name: Install workspace dependencies
+  #       run: pnpm install --frozen-lockfile
+  #     - name: Local-runtime vertical slice — diagnostic
+  #       continue-on-error: true
+  #       run: pnpm -C tests/release run foundation -- --world local-runtime --behavior diagnostic --cells "${{ inputs.cells }}"
+  #
+  # managed-cloud-diagnostic:
+  #   name: managed-cloud-diagnostic (disabled skeleton — not green locally)
+  #   if: false
+  #   needs: plan
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: actions/setup-node@v6
+  #       with:
+  #         node-version: "22"
+  #     - uses: pnpm/action-setup@v6
+  #       with:
+  #         version: 10
+  #     - name: Install workspace dependencies
+  #       run: pnpm install --frozen-lockfile
+  #     - name: Managed-cloud vertical slice — diagnostic
+  #       continue-on-error: true
+  #       run: pnpm -C tests/release run foundation -- --world managed-cloud --behavior diagnostic --cells "${{ inputs.cells }}"
+  #
+  # self-host-diagnostic:
+  #   name: self-host-diagnostic (disabled skeleton — not green locally)
+  #   if: false
+  #   needs: plan
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: actions/setup-node@v6
+  #       with:
+  #         node-version: "22"
+  #     - uses: pnpm/action-setup@v6
+  #       with:
+  #         version: 10
+  #     - name: Install workspace dependencies
+  #       run: pnpm install --frozen-lockfile
+  #     - name: Self-host vertical slice — diagnostic
+  #       continue-on-error: true
+  #       run: pnpm -C tests/release run foundation -- --world self-host --behavior diagnostic --cells "${{ inputs.cells }}"
+  #
+  # desktop-upgrade-diagnostic:
+  #   name: desktop-upgrade-diagnostic (disabled skeleton — not green locally)
+  #   if: false
+  #   needs: plan
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: actions/setup-node@v6
+  #       with:
+  #         node-version: "22"
+  #     - uses: pnpm/action-setup@v6
+  #       with:
+  #         version: 10
+  #     - name: Install workspace dependencies
+  #       run: pnpm install --frozen-lockfile
+  #     - name: Desktop-upgrade vertical slice — diagnostic
+  #       continue-on-error: true
+  #       run: pnpm -C tests/release run foundation -- --world desktop-upgrade --behavior diagnostic --cells "${{ inputs.cells }}"
+  #
+  # managed-cloud-upgrade-diagnostic:
+  #   name: managed-cloud-upgrade-diagnostic (disabled skeleton — not green locally)
+  #   if: false
+  #   needs: plan
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: actions/setup-node@v6
+  #       with:
+  #         node-version: "22"
+  #     - uses: pnpm/action-setup@v6
+  #       with:
+  #         version: 10
+  #     - name: Install workspace dependencies
+  #       run: pnpm install --frozen-lockfile
+  #     - name: Managed-cloud-upgrade vertical slice — diagnostic
+  #       continue-on-error: true
+  #       run: pnpm -C tests/release run foundation -- --world managed-cloud-upgrade --behavior diagnostic --cells "${{ inputs.cells }}"
