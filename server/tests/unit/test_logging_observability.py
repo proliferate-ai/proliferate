@@ -88,7 +88,10 @@ class TestJsonLogFormatterVersionFields:
     ) -> None:
         monkeypatch.setattr(logging_module, "_SERVER_VERSION", None)
         monkeypatch.setattr(logging_module, "_SERVER_GIT_SHA", None)
-        monkeypatch.setenv("SERVER_GIT_SHA", "deadbeef")
+        monkeypatch.setattr(logging_module, "_RELEASE_ID", None)
+        monkeypatch.setenv("SERVER_GIT_SHA", "3c2bbf20e21599aa11bb22cc33dd44ee55ff6600")
+        monkeypatch.setenv("SERVER_VERSION", "0.3.27")
+        monkeypatch.delenv("PROLIFERATE_REQUIRE_RELEASE_IDENTITY", raising=False)
         # Reset configured flag so configure_server_logging runs fully
         app_logger = logging.getLogger("proliferate")
         app_logger._proliferate_configured = False  # type: ignore[attr-defined]
@@ -97,7 +100,48 @@ class TestJsonLogFormatterVersionFields:
 
         assert logging_module._SERVER_VERSION is not None
         assert logging_module._SERVER_VERSION != ""
-        assert logging_module._SERVER_GIT_SHA == "deadbeef"
+        assert logging_module._SERVER_GIT_SHA == "3c2bbf20e21599aa11bb22cc33dd44ee55ff6600"
+        # release_id is the canonical <component>@<version>+<12-sha> form.
+        assert logging_module._RELEASE_ID == "proliferate-server@0.3.27+3c2bbf20e215"
+
+
+class TestJsonLogFormatterReleaseId:
+    """The final serialized JSON log line carries a top-level release_id/user_id."""
+
+    def _record(self) -> logging.LogRecord:
+        return logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="hello",
+            args=None,
+            exc_info=None,
+        )
+
+    def test_release_id_present_when_set(self) -> None:
+        with patch.object(logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"):
+            parsed = json.loads(JsonLogFormatter().format(self._record()))
+            assert parsed["release_id"] == "proliferate-server@0.3.27+3c2bbf20e215"
+
+    def test_release_id_absent_when_none(self) -> None:
+        with patch.object(logging_module, "_RELEASE_ID", None):
+            parsed = json.loads(JsonLogFormatter().format(self._record()))
+            assert "release_id" not in parsed
+
+    def test_user_id_serialized_top_level_from_context(self) -> None:
+        with (
+            patch.object(logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"),
+            with_correlation_context(user_id="user-123"),
+        ):
+            parsed = json.loads(JsonLogFormatter().format(self._record()))
+            assert parsed["user_id"] == "user-123"
+            assert parsed["release_id"] == "proliferate-server@0.3.27+3c2bbf20e215"
+
+    def test_user_id_absent_for_anonymous_work(self) -> None:
+        with patch.object(logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"):
+            parsed = json.loads(JsonLogFormatter().format(self._record()))
+            assert "user_id" not in parsed
 
 
 class _FakeScope:

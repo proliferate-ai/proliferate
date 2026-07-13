@@ -20,6 +20,26 @@ fn env_or_default(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
+/// The build SHA stamped by `build.rs`, or `None` for an unstamped dev build.
+fn stamped_git_sha() -> Option<&'static str> {
+    let sha = env!("PROLIFERATE_STAMPED_GIT_SHA");
+    if sha.is_empty() {
+        None
+    } else {
+        Some(sha)
+    }
+}
+
+/// This binary's canonical release ID: `anyharness@<version>+<12-char-sha>`.
+/// The SHA is omitted only for an unstamped local/dev build.
+fn default_release() -> String {
+    let version = env!("PROLIFERATE_STAMPED_VERSION");
+    match stamped_git_sha() {
+        Some(sha) => format!("anyharness@{version}+{sha}"),
+        None => format!("anyharness@{version}"),
+    }
+}
+
 fn sample_rate(key: &str, default: f32) -> f32 {
     std::env::var(key)
         .ok()
@@ -67,13 +87,7 @@ pub fn init(command: &Commands) -> TelemetryGuards {
                 environment: Some(
                     env_or_default("ANYHARNESS_SENTRY_ENVIRONMENT", "trusted-beta").into(),
                 ),
-                release: Some(
-                    env_or_default(
-                        "ANYHARNESS_SENTRY_RELEASE",
-                        &format!("anyharness@{}", env!("PROLIFERATE_STAMPED_VERSION")),
-                    )
-                    .into(),
-                ),
+                release: Some(env_or_default("ANYHARNESS_SENTRY_RELEASE", &default_release()).into()),
                 traces_sample_rate: sample_rate("ANYHARNESS_SENTRY_TRACES_SAMPLE_RATE", 1.0),
                 attach_stacktrace: true,
                 ..Default::default()
@@ -111,6 +125,9 @@ pub fn init(command: &Commands) -> TelemetryGuards {
             for (key, value) in &sentry_scope_tags() {
                 scope.set_tag(key, value);
             }
+            if let Some(user) = sentry_user_from_env() {
+                scope.set_user(Some(user));
+            }
         });
     }
 
@@ -122,6 +139,27 @@ pub fn init(command: &Commands) -> TelemetryGuards {
         _sentry: telemetry,
         _file_log: file_sink.map(|sink| sink.guard),
     }
+}
+
+/// Sentry user context for the authenticated owner, when known.
+///
+/// This is the canonical identity surface. The `user_id` scope tag added by
+/// [`sentry_scope_tags`] remains only as a temporary adapter fallback during
+/// the migration to user context (support-system "Sentry users").
+fn sentry_user_from_env() -> Option<sentry::User> {
+    sentry_user_from_id(std::env::var("PROLIFERATE_USER_ID").ok().as_deref())
+}
+
+/// Pure: build Sentry user context from an optional raw user-id value.
+fn sentry_user_from_id(raw: Option<&str>) -> Option<sentry::User> {
+    let user_id = raw?.trim();
+    if user_id.is_empty() {
+        return None;
+    }
+    Some(sentry::User {
+        id: Some(user_id.to_string()),
+        ..Default::default()
+    })
 }
 
 fn sentry_scope_tags() -> Vec<(&'static str, String)> {
@@ -161,7 +199,8 @@ fn sentry_scope_tags() -> Vec<(&'static str, String)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        log_path_for_command, runtime_home_from_install, runtime_home_from_serve, sentry_scope_tags,
+        default_release, log_path_for_command, runtime_home_from_install, runtime_home_from_serve,
+        sentry_scope_tags, sentry_user_from_id, stamped_git_sha,
     };
     use crate::{
         cli::Commands,
@@ -174,6 +213,29 @@ mod tests {
         assert!(tags.iter().any(|(k, v)| *k == "surface" && v == "anyharness_runtime"));
         assert!(tags.iter().any(|(k, v)| *k == "telemetry_mode" && v == "hosted_product"));
         assert!(tags.iter().any(|(k, v)| *k == "runtime_env" && !v.is_empty()));
+    }
+
+    #[test]
+    fn default_release_is_canonical_for_this_component() {
+        let release = default_release();
+        assert!(release.starts_with("anyharness@"), "{release}");
+        let expected = match stamped_git_sha() {
+            Some(sha) => {
+                assert_eq!(sha.len(), 12);
+                format!("anyharness@{}+{sha}", env!("PROLIFERATE_STAMPED_VERSION"))
+            }
+            None => format!("anyharness@{}", env!("PROLIFERATE_STAMPED_VERSION")),
+        };
+        assert_eq!(release, expected);
+    }
+
+    #[test]
+    fn sentry_user_context_is_id_only_and_trimmed() {
+        let user = sentry_user_from_id(Some("  user-1  ")).expect("user present");
+        assert_eq!(user.id.as_deref(), Some("user-1"));
+        assert!(user.email.is_none());
+        assert!(sentry_user_from_id(None).is_none());
+        assert!(sentry_user_from_id(Some("   ")).is_none());
     }
 
     #[test]

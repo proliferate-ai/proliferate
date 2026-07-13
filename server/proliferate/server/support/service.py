@@ -187,8 +187,14 @@ async def create_support_report(
             # (previously prompt-only); gate on consent alone.
             credit_name=(body.credit_name if body.credit_consent else None),
             # Immutable canonical release ID and scrubbed summary are produced
-            # server-side at capture; a malformed release stores as NULL.
+            # server-side at capture; a malformed release stores as NULL while
+            # `client_release_provided` records that the client sent SOME value,
+            # so enforcement can reject provided-but-malformed without breaking
+            # legacy clients that never send the field.
             client_release_id=parse_client_release_id(body.client_release_id),
+            client_release_provided=bool(
+                body.client_release_id and body.client_release_id.strip()
+            ),
             tracker_summary=build_tracker_summary(body.message),
             urgent=body.urgent,
             notify_me=body.notify_me,
@@ -372,13 +378,20 @@ async def _complete_db_backed_report(
     if report.status == "completed":
         return SupportReportCompleteResponse(reportId=report.id)
 
-    # New production reports must carry a canonical client release ID before
-    # completion. Dark by default: legacy rows (created before the column, or
-    # with a malformed release) store NULL and stay feedable with a visible
-    # warning. P2 flips this on once every client emits its canonical release.
-    if settings.support_report_require_client_release and report.client_release_id is None:
+    # Enforcement distinguishes legacy-absent from provided-but-malformed:
+    # a client that PROVIDED a release value which failed canonical validation
+    # is rejected (it declares the new schema and should send a valid ID), but
+    # a legacy client that never sent the field completes normally and stays
+    # feedable with a visible warning. Off by default; production enablement is
+    # an explicit ops flip once desktop client adoption is confirmed.
+    if (
+        settings.support_report_require_client_release
+        and report.client_release_provided
+        and report.client_release_id is None
+    ):
         raise SupportReportUploadInvalid(
-            "Support report is missing a canonical client release ID."
+            "Support report provided a malformed client release ID; a canonical "
+            "<component>@<version>+<sha> release is required."
         )
 
     _install_report_correlation(report)

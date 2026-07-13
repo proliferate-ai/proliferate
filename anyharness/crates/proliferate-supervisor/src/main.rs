@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 use sentry_anyhow::capture_anyhow;
 
 #[derive(Debug, Parser)]
-#[command(name = "proliferate-supervisor", version)]
+#[command(name = "proliferate-supervisor", version = env!("PROLIFERATE_STAMPED_VERSION"))]
 struct Args {
     #[arg(long)]
     config: Option<PathBuf>,

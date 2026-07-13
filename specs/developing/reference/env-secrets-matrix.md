@@ -233,7 +233,8 @@ overrides.
 | `CLOUD_RUNTIME_SENTRY_TRACES_SAMPLE_RATE` | No | No | Remote AnyHarness tracing |
 | `CLOUD_TARGET_SENTRY_DSN` | Yes | No | Remote target worker/supervisor Sentry DSN |
 | `CLOUD_TARGET_SENTRY_ENVIRONMENT` | No | No | Remote target worker/supervisor Sentry environment |
-| `CLOUD_TARGET_SENTRY_RELEASE` | No | No | Remote target worker/supervisor Sentry release |
+| `CLOUD_WORKER_SENTRY_RELEASE` | No | No | Emergency worker Sentry release override (normally empty; binary stamps its own) |
+| `CLOUD_SUPERVISOR_SENTRY_RELEASE` | No | No | Emergency supervisor Sentry release override (normally empty; binary stamps its own) |
 | `CLOUD_TARGET_SENTRY_TRACES_SAMPLE_RATE` | No | No | Remote target worker/supervisor tracing |
 
 ## Legacy Compatibility

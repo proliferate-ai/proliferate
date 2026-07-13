@@ -309,9 +309,13 @@ class Settings(BaseSettings):
     # (GET /internal/support/reports). Empty disables the feed (every request is
     # rejected); the route still exists so the feed is dark-deployable.
     support_feed_bearer_token: str = ""
-    # When true, production report completion rejects a missing/malformed
-    # canonical client release ID. Defaults off so the capability deploys dark
-    # until clients emit their canonical release IDs.
+    # When true, report completion rejects a NEW report whose client PROVIDED a
+    # release value that failed canonical validation (captured at create time
+    # as `client_release_provided`). Reports from old/legacy clients that never
+    # sent the field complete normally and stay feedable with a visible
+    # warning. Defaults off: production enablement is an explicit ops flip once
+    # desktop client adoption of the canonical `<component>@<version>+<sha>`
+    # release ID is confirmed (old installed desktop builds send no release).
     support_report_require_client_release: bool = False
     signups_slack_webhook_url: str = ""
     billing_positive_slack_webhook_url: str = ""
@@ -348,8 +352,17 @@ class Settings(BaseSettings):
     cloud_runtime_sentry_traces_sample_rate: float = 1.0
     cloud_target_sentry_dsn: str = ""
     cloud_target_sentry_environment: str = ""
-    cloud_target_sentry_release: str = ""
     cloud_target_sentry_traces_sample_rate: float = 1.0
+    # Emergency, component-specific Sentry release overrides for the target
+    # processes. Each must canonically name its own component
+    # (`proliferate-worker@...` / `proliferate-supervisor@...`); a mismatched
+    # value is refused rather than propagated. Normally EMPTY: each binary
+    # stamps its own `<component>@<version>+<sha>` from its compile-time build
+    # stamp. The prior shared `cloud_target_sentry_release` /
+    # `PROLIFERATE_TARGET_SENTRY_RELEASE` override was removed because it could
+    # not distinguish worker from supervisor events.
+    cloud_worker_sentry_release: str = ""
+    cloud_supervisor_sentry_release: str = ""
     cloud_jwt_signing_key_pem: str = ""
     cloud_jwt_signing_key_id: str = "local-dev"
     cloud_jwt_verification_keys_json: str = "[]"

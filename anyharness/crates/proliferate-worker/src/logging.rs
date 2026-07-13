@@ -5,7 +5,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 const TARGET_SENTRY_DSN_ENV: &str = "PROLIFERATE_TARGET_SENTRY_DSN";
 const TARGET_SENTRY_ENVIRONMENT_ENV: &str = "PROLIFERATE_TARGET_SENTRY_ENVIRONMENT";
-const TARGET_SENTRY_RELEASE_ENV: &str = "PROLIFERATE_TARGET_SENTRY_RELEASE";
+// Component-specific emergency override. The shared
+// PROLIFERATE_TARGET_SENTRY_RELEASE was removed because one value could not
+// distinguish worker from supervisor events; each binary otherwise stamps its
+// own `<component>@<version>+<sha>` from its compile-time build stamp.
+const WORKER_SENTRY_RELEASE_ENV: &str = "PROLIFERATE_WORKER_SENTRY_RELEASE";
 const TARGET_SENTRY_TRACES_SAMPLE_RATE_ENV: &str = "PROLIFERATE_TARGET_SENTRY_TRACES_SAMPLE_RATE";
 
 pub struct TelemetryGuards {
@@ -28,8 +32,43 @@ fn env_filter_from_env() -> tracing_subscriber::EnvFilter {
         .unwrap_or_else(|_| "proliferate_worker=info,info".into())
 }
 
+/// The build SHA stamped by `build.rs`, or `None` for an unstamped dev build.
+fn stamped_git_sha() -> Option<&'static str> {
+    let sha = env!("PROLIFERATE_STAMPED_GIT_SHA");
+    if sha.is_empty() {
+        None
+    } else {
+        Some(sha)
+    }
+}
+
+/// This binary's canonical release ID: `proliferate-worker@<version>+<sha>`.
+/// The SHA is omitted only for an unstamped local/dev build.
 fn default_release() -> String {
-    format!("proliferate-worker@{}", env!("PROLIFERATE_STAMPED_VERSION"))
+    let version = env!("PROLIFERATE_STAMPED_VERSION");
+    match stamped_git_sha() {
+        Some(sha) => format!("proliferate-worker@{version}+{sha}"),
+        None => format!("proliferate-worker@{version}"),
+    }
+}
+
+/// Sentry user context for the authenticated owner, when known. The `user_id`
+/// scope tag remains only as a temporary adapter fallback during the migration
+/// to user context (support-system "Sentry users").
+fn sentry_user_from_env() -> Option<sentry::User> {
+    sentry_user_from_id(std::env::var("PROLIFERATE_USER_ID").ok().as_deref())
+}
+
+/// Pure: build Sentry user context from an optional raw user-id value.
+fn sentry_user_from_id(raw: Option<&str>) -> Option<sentry::User> {
+    let user_id = raw?.trim();
+    if user_id.is_empty() {
+        return None;
+    }
+    Some(sentry::User {
+        id: Some(user_id.to_string()),
+        ..Default::default()
+    })
 }
 
 fn scrub_text(value: &str) -> String {
@@ -301,7 +340,7 @@ pub fn init() -> TelemetryGuards {
                 environment: Some(
                     env_or_default(TARGET_SENTRY_ENVIRONMENT_ENV, "trusted-beta").into(),
                 ),
-                release: Some(env_or_default(TARGET_SENTRY_RELEASE_ENV, &default_release()).into()),
+                release: Some(env_or_default(WORKER_SENTRY_RELEASE_ENV, &default_release()).into()),
                 traces_sample_rate: sample_rate(TARGET_SENTRY_TRACES_SAMPLE_RATE_ENV, 1.0),
                 attach_stacktrace: true,
                 send_default_pii: false,
@@ -343,6 +382,9 @@ pub fn init() -> TelemetryGuards {
                     scope.set_tag("user_id", &user_id);
                 }
             }
+            if let Some(user) = sentry_user_from_env() {
+                scope.set_user(Some(user));
+            }
         });
     }
 
@@ -353,7 +395,38 @@ pub fn init() -> TelemetryGuards {
 mod tests {
     use sentry::protocol::{Event, Exception, Frame, Stacktrace, Value};
 
-    use super::scrub_event;
+    use super::{default_release, scrub_event, sentry_user_from_id, stamped_git_sha};
+
+    #[test]
+    fn default_release_is_canonical_for_this_component() {
+        let release = default_release();
+        assert!(
+            release.starts_with("proliferate-worker@"),
+            "release must name this component: {release}"
+        );
+        let expected = match stamped_git_sha() {
+            Some(sha) => {
+                assert_eq!(sha.len(), 12, "stamped sha is exactly 12 chars");
+                format!("proliferate-worker@{}+{sha}", env!("PROLIFERATE_STAMPED_VERSION"))
+            }
+            None => format!("proliferate-worker@{}", env!("PROLIFERATE_STAMPED_VERSION")),
+        };
+        assert_eq!(release, expected);
+    }
+
+    #[test]
+    fn sentry_user_context_is_id_only_and_trimmed() {
+        let user = sentry_user_from_id(Some("  user-123  ")).expect("user present");
+        assert_eq!(user.id.as_deref(), Some("user-123"));
+        assert!(user.email.is_none());
+        assert!(user.username.is_none());
+    }
+
+    #[test]
+    fn sentry_user_absent_for_blank_or_missing() {
+        assert!(sentry_user_from_id(None).is_none());
+        assert!(sentry_user_from_id(Some("   ")).is_none());
+    }
 
     #[test]
     fn sentry_event_scrubber_removes_paths_urls_and_bodies() {

@@ -3,6 +3,7 @@ import type { SupportReportJob } from "@/lib/domain/support/report-types";
 
 vi.mock("@/lib/integrations/telemetry/client", () => ({
   getSupportReportTelemetryRefs: () => ({}),
+  getSupportReportReleaseId: () => "proliferate-desktop@0.3.27+abcdef012345",
   trackProductEvent: vi.fn(),
 }));
 
@@ -63,6 +64,11 @@ describe("buildCreateReportRequest", () => {
     expect(buildCreateReportRequest(makeJob({ creditConsent: true, creditName: "Ada" }), 0).creditName)
       .toBe("Ada");
     expect(buildCreateReportRequest(makeJob(), 0).creditName).toBeNull();
+  });
+
+  it("populates clientReleaseId from the desktop telemetry release accessor", () => {
+    const request = buildCreateReportRequest(makeJob(), 0);
+    expect(request.clientReleaseId).toBe("proliferate-desktop@0.3.27+abcdef012345");
   });
 });
 

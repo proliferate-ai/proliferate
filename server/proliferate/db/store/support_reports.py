@@ -59,6 +59,7 @@ class SupportReportSnapshot:
     credit_consent: bool
     credit_name: str | None
     client_release_id: str | None
+    client_release_provided: bool
     tracker_summary: str | None
     urgent: bool
     notify_me: bool
@@ -143,6 +144,7 @@ async def create_report(
     credit_consent: bool,
     credit_name: str | None = None,
     client_release_id: str | None = None,
+    client_release_provided: bool = False,
     tracker_summary: str | None = None,
     urgent: bool = False,
     notify_me: bool = False,
@@ -171,6 +173,7 @@ async def create_report(
         credit_consent=credit_consent,
         credit_name=credit_name,
         client_release_id=client_release_id,
+        client_release_provided=client_release_provided,
         tracker_summary=tracker_summary,
         urgent=urgent,
         notify_me=notify_me,
@@ -494,6 +497,7 @@ def _snapshot(row: SupportReport) -> SupportReportSnapshot:
         credit_consent=row.credit_consent,
         credit_name=row.credit_name,
         client_release_id=row.client_release_id,
+        client_release_provided=row.client_release_provided,
         tracker_summary=row.tracker_summary,
         urgent=row.urgent,
         notify_me=row.notify_me,
