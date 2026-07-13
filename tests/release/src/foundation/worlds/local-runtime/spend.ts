@@ -143,3 +143,19 @@ export function probeImportAndReconcile(
     String(options.sinceSeconds ?? 3600),
   ]);
 }
+
+export interface DeleteKeyProbeResult {
+  tokenId?: string;
+  deleted?: boolean;
+  error?: string;
+  detail?: string;
+}
+
+/**
+ * Cleanup seam: delete a run-scoped LiteLLM virtual key by its `token_id`
+ * through the server's own admin client (the runner never holds the master
+ * key). Idempotent — an already-absent key is not an error.
+ */
+export function probeDeleteKey(tokenId: string): Promise<DeleteKeyProbeResult> {
+  return runProbe<DeleteKeyProbeResult>(["delete-key", tokenId]);
+}
