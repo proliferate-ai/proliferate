@@ -1,9 +1,10 @@
 # Scenario Definitions
 
-Status: DRAFT for Pablo's ruling. Once blessed, this is the contract the test
-agents implement against — a scenario's steps and assertions define what
-"works" means for its registry row in `flows.md`. Grounded in a code survey
-2026-07-07; endpoints/tables cited are as-built, not aspirational.
+Status: legacy implementation survey and finding ledger from 2026-07-07. It is
+not the canonical target inventory, collector registry, or current run status.
+Stable requirements live in `core-release-validation.md` and the Tier 3/Tier 4
+scenario contracts; findings move to issues as collectors are audited. Do not
+copy status prose from this file into qualification evidence.
 
 Conventions:
 - Every tier-2 scenario runs against the stack-boot fixture: seeded Postgres,
@@ -227,10 +228,6 @@ Assert: free-plan repo limit enforced (`repo_limit_for_billing_snapshot` →
 `repo_limit_exceeded` on scheduling past the cap); agent-gateway policy edit
 gated by `agent_gateway_policy_min_plan` (`org_agent_policy_plan_required`,
 403, on a free org when min plan is `pro`).
-Survey flag for the registry row "plan gates the model list": **no
-plan-conditioned model list exists in code today.** Row stays in `flows.md`
-only if that behavior is planned product work; otherwise it should be
-deleted. [PABLO TO RULE]
 
 ### T2-BILL-3: seats — invite/remove/re-invite on a Pro org
 Pro billing is seat-based; every membership change must reconcile Stripe seat
@@ -374,8 +371,10 @@ stays enabled.
 ## Self-hosting
 
 Full narrative + tier-3/4 definitions live in
-`specs/developing/testing/self-hosting.md` (the self-hosting spec of record);
-the tier-1/2 scenarios that the test suite implements are indexed here.
+the canonical core-release and Tier 3/4 contracts. `self-hosting.md` preserves
+the historical implementation/evidence hand-off; the tier-1/2 scenarios that
+the current test suite implements are indexed here with legacy IDs pending the
+canonical migration map.
 
 ### T1-SH-1: single-org derivation (unit)
 `telemetry_mode == "self_managed"` OR `"local_dev"` ⇒ `single_org_mode` true;
@@ -795,15 +794,15 @@ scenario").
 
 ---
 
-## Open rulings collected
+## Remaining configuration parameters
 
-1. "Plan gates the model list" — not in code; keep as planned work or delete
-   the row (T2-BILL-2).
-2. T3-PROV-1 time budget number.
-3. T2-WS-2: is seam-only coverage of local/worktree create acceptable for
-   tier 2, with full coverage in tier 3's desktop lane?
-4. Google OAuth stays tier-3-only (mock not feasible without product change)
-   — confirm.
+These are not world-design decisions:
+
+1. the canonical conversion from Core's `$15` compute allocation to compute
+   units;
+2. exact LLM and compute top-up pack sizes/prices with positive margin; and
+3. cold-provision and paused-wake SLOs. Already-ready access is targeted at
+   less than five seconds to commandable AnyHarness.
 
 ## Product findings from the billing survey (2026-07-08) — rule before fixing
 
