@@ -292,6 +292,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/github-app/connected": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Github App Connected Page Endpoint */
+        get: operations["github_app_connected_page_endpoint_auth_github_app_connected_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/integrations/github/callback": {
         parameters: {
             query?: never;
@@ -1681,6 +1698,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/cloud/runtime/download/{target}/{asset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Runtime Artifact Download Endpoint
+         * @description 302 to the pinned AnyHarness binary (or its ``.sha256``) on the downloads CDN.
+         *
+         *     Unauthenticated by design, like the worker artifact redirect: the sandbox
+         *     worker fetches the runtime binary over a public CDN URL behind this 302, so
+         *     the sandbox never needs GitHub egress or credentials.
+         */
+        get: operations["runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/cloud/integration-gateway/mcp": {
         parameters: {
             query?: never;
@@ -1899,6 +1940,43 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Definitions Endpoint */
+        get: operations["list_workflow_definitions_endpoint_v1_workflows_get"];
+        put?: never;
+        /** Create Workflow Definition Endpoint */
+        post: operations["create_workflow_definition_endpoint_v1_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workflows/{workflow_definition_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Definition Endpoint */
+        get: operations["get_workflow_definition_endpoint_v1_workflows__workflow_definition_id__get"];
+        /** Update Workflow Definition Endpoint */
+        put: operations["update_workflow_definition_endpoint_v1_workflows__workflow_definition_id__put"];
+        post?: never;
+        /** Delete Workflow Definition Endpoint */
+        delete: operations["delete_workflow_definition_endpoint_v1_workflows__workflow_definition_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3028,11 +3106,18 @@ export interface components {
             probedAgainst?: components["schemas"]["AgentCatalogProbedAgainst"] | null;
             /** Generatedat */
             generatedAt: string;
+            /** Defaultagentkind */
+            defaultAgentKind?: string | null;
             /** Agents */
             agents: components["schemas"]["AgentCatalogAgent"][];
         };
         /** AgentCatalogSession */
         AgentCatalogSession: {
+            /**
+             * Supportsgoals
+             * @default false
+             */
+            supportsGoals: boolean;
             /**
              * Controls
              * @default []
@@ -4070,6 +4155,22 @@ export interface components {
             /** Path */
             path: string;
         };
+        /**
+         * DeploymentIdentity
+         * @description How this control plane identifies itself.
+         *
+         *     ``mode`` mirrors the desktop telemetry runtime modes. ``displayName`` is the
+         *     operator's instance name; empty means "use the connected origin" so the
+         *     desktop never mislabels a self-managed server as the vendor product.
+         */
+        DeploymentIdentity: {
+            /** Mode */
+            mode: string;
+            /** Displayname */
+            displayName: string;
+            /** Logourl */
+            logoUrl: string | null;
+        };
         /** DesktopWorkerEnrollmentRequest */
         DesktopWorkerEnrollmentRequest: {
             /** Desktopinstallid */
@@ -4420,6 +4521,7 @@ export interface components {
             workerVersion: string;
             /** Mindesktopversion */
             minDesktopVersion: string;
+            capabilities: components["schemas"]["ServerCapabilities"];
         };
         /** OAuthAvailabilityResponse */
         OAuthAvailabilityResponse: {
@@ -5004,6 +5106,16 @@ export interface components {
             proBillingEnabled: boolean;
         };
         /**
+         * PricingCapability
+         * @description Whether a vendor pricing page is meaningful for this deployment.
+         */
+        PricingCapability: {
+            /** Available */
+            available: boolean;
+            /** Url */
+            url: string | null;
+        };
+        /**
          * ProfileUpdateRequest
          * @description Editable fields on the authenticated user's own profile.
          *
@@ -5154,6 +5266,30 @@ export interface components {
              */
             runCommand: string;
         };
+        /**
+         * ServerCapabilities
+         * @description Versioned, conservative declaration of what this deployment offers.
+         *
+         *     Defaults are disabled: a capability is true only when the operator
+         *     configured the underlying feature. The desktop treats an absent contract
+         *     (older servers) as all-off + self-managed.
+         */
+        ServerCapabilities: {
+            /** Contractversion */
+            contractVersion: number;
+            deployment: components["schemas"]["DeploymentIdentity"];
+            /** Billing */
+            billing: boolean;
+            /** Usagemetering */
+            usageMetering: boolean;
+            /** Cloudworkspaces */
+            cloudWorkspaces: boolean;
+            /** Agentgateway */
+            agentGateway: boolean;
+            webApp: components["schemas"]["WebAppCapability"];
+            support: components["schemas"]["SupportCapability"];
+            pricing: components["schemas"]["PricingCapability"];
+        };
         /** SetIntegrationEnabledRequest */
         SetIntegrationEnabledRequest: {
             /** Enabled */
@@ -5286,6 +5422,22 @@ export interface components {
             eventType: string;
             /** Livemode */
             livemode?: boolean | null;
+        };
+        /**
+         * SupportCapability
+         * @description Where a user of this deployment should go for support.
+         *
+         *     ``vendor`` is the hosted product's own support; ``operator`` is a
+         *     self-managed operator's configured destination; ``none`` means the desktop
+         *     offers no support-email affordance for this server.
+         */
+        SupportCapability: {
+            /** Kind */
+            kind: string;
+            /** Email */
+            email: string | null;
+            /** Url */
+            url: string | null;
         };
         /** SupportMessageContext */
         SupportMessageContext: {
@@ -5732,10 +5884,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Email
-             * Format: email
-             */
+            /** Email */
             email: string;
             /**
              * Is Active
@@ -5782,6 +5931,19 @@ export interface components {
             ctx?: Record<string, never>;
         };
         /**
+         * WebAppCapability
+         * @description Whether a hosted web app exists for this deployment, and where it lives.
+         *
+         *     Self-managed deployments have no hosted web app (users connect the signed
+         *     desktop app), so ``available`` is false and the desktop hides web handoffs.
+         */
+        WebAppCapability: {
+            /** Available */
+            available: boolean;
+            /** Baseurl */
+            baseUrl: string | null;
+        };
+        /**
          * WorkerDesiredVersions
          * @description The component versions this server pins; workers converge onto these.
          */
@@ -5789,7 +5951,7 @@ export interface components {
             /** Worker */
             worker?: string | null;
             /** Anyharness */
-            anyharness: string;
+            anyharness?: string | null;
             /** Catalogversion */
             catalogVersion?: string | null;
         };
@@ -5837,6 +5999,132 @@ export interface components {
             /** Heartbeatintervalseconds */
             heartbeatIntervalSeconds: number;
             desiredVersions: components["schemas"]["WorkerDesiredVersions"];
+        };
+        /** WorkflowDefinitionCreateRequest */
+        WorkflowDefinitionCreateRequest: {
+            /** Inputs */
+            inputs?: components["schemas"]["WorkflowInputDefinition"][];
+            /** Stages */
+            stages: components["schemas"]["WorkflowStageDefinition"][];
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Defaultrepoconfigid */
+            defaultRepoConfigId?: string | null;
+        };
+        /** WorkflowDefinitionListResponse */
+        WorkflowDefinitionListResponse: {
+            /** Workflows */
+            workflows: components["schemas"]["WorkflowDefinitionResponse"][];
+        };
+        /** WorkflowDefinitionResponse */
+        WorkflowDefinitionResponse: {
+            /** Inputs */
+            inputs?: components["schemas"]["WorkflowInputDefinition"][];
+            /** Stages */
+            stages: components["schemas"]["WorkflowStageDefinition"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Userid
+             * Format: uuid
+             */
+            userId: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+            /** Revision */
+            revision: number;
+            /** Validatedcatalogversion */
+            validatedCatalogVersion: string;
+            /** Defaultrepoconfigid */
+            defaultRepoConfigId: string | null;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+            /** Deletedat */
+            deletedAt: string | null;
+        };
+        /** WorkflowDefinitionUpdateRequest */
+        WorkflowDefinitionUpdateRequest: {
+            /** Inputs */
+            inputs?: components["schemas"]["WorkflowInputDefinition"][];
+            /** Stages */
+            stages: components["schemas"]["WorkflowStageDefinition"][];
+            /** Title */
+            title: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Defaultrepoconfigid */
+            defaultRepoConfigId?: string | null;
+            /** Expectedrevision */
+            expectedRevision: number;
+        };
+        /** WorkflowGoalDefinition */
+        WorkflowGoalDefinition: {
+            /** Objective */
+            objective: string;
+        };
+        /** WorkflowHarnessConfig */
+        WorkflowHarnessConfig: {
+            /** Agentkind */
+            agentKind: string;
+            /** Modelid */
+            modelId?: string | null;
+            /** Effort */
+            effort?: string | null;
+        };
+        /** WorkflowInputDefinition */
+        WorkflowInputDefinition: {
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "string" | "number" | "boolean";
+            /** Required */
+            required: boolean;
+        };
+        /** WorkflowPromptStep */
+        WorkflowPromptStep: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "agent.prompt";
+            /** Prompt */
+            prompt: string;
+            goal?: components["schemas"]["WorkflowGoalDefinition"] | null;
+        };
+        /** WorkflowStageDefinition */
+        WorkflowStageDefinition: {
+            harnessConfig: components["schemas"]["WorkflowHarnessConfig"];
+            /** Steps */
+            steps: components["schemas"]["WorkflowPromptStep"][];
         };
         /** WorkspaceCloudAccessSummary */
         WorkspaceCloudAccessSummary: {
@@ -6610,10 +6898,10 @@ export interface operations {
     };
     github_app_installation_callback_endpoint_auth_github_app_installation_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -6641,12 +6929,32 @@ export interface operations {
             };
         };
     };
+    github_app_connected_page_endpoint_auth_github_app_connected_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
     github_app_setup_callback_endpoint_integrations_github_callback_get: {
         parameters: {
-            query: {
+            query?: {
                 installation_id?: string | null;
                 setup_action?: string | null;
-                state: string;
+                state?: string | null;
             };
             header?: never;
             path?: never;
@@ -9603,6 +9911,38 @@ export interface operations {
             };
         };
     };
+    runtime_artifact_download_endpoint_v1_cloud_runtime_download__target___asset__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+                asset: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     integration_gateway_mcp_get_v1_cloud_integration_gateway_mcp_get: {
         parameters: {
             query?: never;
@@ -10063,6 +10403,156 @@ export interface operations {
             };
             /** @description Unsupported catalog schema version. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_definitions_endpoint_v1_workflows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionListResponse"];
+                };
+            };
+        };
+    };
+    create_workflow_definition_endpoint_v1_workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowDefinitionCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_definition_endpoint_v1_workflows__workflow_definition_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_definition_endpoint_v1_workflows__workflow_definition_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowDefinitionUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowDefinitionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_workflow_definition_endpoint_v1_workflows__workflow_definition_id__delete: {
+        parameters: {
+            query: {
+                expectedRevision: number;
+            };
+            header?: never;
+            path: {
+                workflow_definition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };

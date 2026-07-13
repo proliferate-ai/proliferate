@@ -139,6 +139,14 @@
       "types": "./dist/automations/AutomationSurface.d.ts",
       "import": "./dist/automations/AutomationSurface.js"
     },
+    "./workflows/WorkflowDefinitionEditor": {
+      "types": "./dist/workflows/WorkflowDefinitionEditor.d.ts",
+      "import": "./dist/workflows/WorkflowDefinitionEditor.js"
+    },
+    "./workflows/WorkflowDefinitionList": {
+      "types": "./dist/workflows/WorkflowDefinitionList.d.ts",
+      "import": "./dist/workflows/WorkflowDefinitionList.js"
+    },
     "./billing/BillingSettingsPane": {
       "types": "./dist/billing/BillingSettingsPane.d.ts",
       "import": "./dist/billing/BillingSettingsPane.js"

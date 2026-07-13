@@ -61,7 +61,7 @@ export function AuthenticatedAppHost({
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
-          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} extractLastSegment />} />
+          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={APP_ROUTES.workflows} />} />
           <Route path="workspaces" element={<WorkspacesPage />} />
           <Route path="workspaces/:workspaceId" element={<DesktopWorkspaceDeepLinkPage />} />
           <Route path="*" element={<Navigate to={APP_ROUTES.home} replace />} />
@@ -73,14 +73,9 @@ export function AuthenticatedAppHost({
 
 function LegacyRouteRedirect({
   to,
-  extractLastSegment = false,
 }: {
   to: string;
-  extractLastSegment?: boolean;
 }) {
   const location = useLocation();
-  const segments = extractLastSegment ? location.pathname.split("/").filter(Boolean) : [];
-  const match = extractLastSegment ? segments[segments.length - 1] ?? null : null;
-  const suffix = match ? `/${encodeURIComponent(decodeURIComponent(match))}` : "";
-  return <Navigate to={`${to}${suffix}${location.search}${location.hash}`} replace />;
+  return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
 }
