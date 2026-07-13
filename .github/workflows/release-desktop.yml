@@ -212,6 +212,12 @@ jobs:
       - name: Build AnyHarness runtime for target
         if: steps.filter.outputs.skip != 'true'
         shell: bash
+        # Stamp the deterministic build SHA into the bundled runtime so the
+        # sidecar's release ID carries `+<12-hex-sha>` (support-system "Release
+        # identity"). The version stays the crate's own version; build.rs
+        # truncates a full 40-char SHA to 12.
+        env:
+          PROLIFERATE_BUILD_SHA: ${{ inputs.git_sha || github.sha }}
         run: |
           cargo build --release -p anyharness --target "${{ matrix.target }}"
           mkdir -p apps/desktop/src-tauri/binaries
@@ -268,6 +274,8 @@ jobs:
       - name: Build Proliferate worker for target
         if: steps.filter.outputs.skip != 'true'
         shell: bash
+        env:
+          PROLIFERATE_BUILD_SHA: ${{ inputs.git_sha || github.sha }}
         run: |
           cargo build --release -p proliferate-worker --target "${{ matrix.target }}"
           mkdir -p apps/desktop/src-tauri/binaries

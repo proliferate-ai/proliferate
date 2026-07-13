@@ -266,6 +266,25 @@ jobs:
         run: cargo install cross --git https://github.com/cross-rs/cross
         working-directory: .
 
+      # Stamp the deterministic runtime release identity into the self-hosted
+      # anyharness/worker/supervisor binaries (support-system "Release identity":
+      # the self-hosted-release lane uses the tracked runtime version and the
+      # current build SHA, never a Cargo 0.1.0 fallback). The version source is
+      # anyharness/sdk/package.json; build.rs fails closed if the version is set
+      # without a SHA.
+      - name: Resolve runtime build stamp
+        env:
+          INPUT_GIT_SHA: ${{ inputs.git_sha || '' }}
+        run: |
+          set -euo pipefail
+          runtime_version="$(jq -r '.version' anyharness/sdk/package.json)"
+          : "${runtime_version:?Failed to read the runtime version from anyharness/sdk/package.json.}"
+          build_sha="${INPUT_GIT_SHA:-$GITHUB_SHA}"
+          {
+            echo "PROLIFERATE_BUILD_VERSION=$runtime_version"
+            echo "PROLIFERATE_BUILD_SHA=$build_sha"
+          } >> "$GITHUB_ENV"
+
       - name: Build self-hosted Linux runtime (x86_64)
         run: cargo build --release --target x86_64-unknown-linux-musl -p anyharness -p proliferate-worker -p proliferate-supervisor
         working-directory: .

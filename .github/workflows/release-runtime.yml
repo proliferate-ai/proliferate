@@ -81,8 +81,10 @@ jobs:
       # `runtime-v<semver>` tag push derives it by stripping the tag prefix.
       # Anything else (e.g. a workflow_dispatch dry run) leaves it unset so the
       # build falls back to the Cargo.toml version.
-      - name: Resolve build version
+      - name: Resolve build version and SHA
         shell: bash
+        env:
+          INPUT_GIT_SHA: ${{ inputs.git_sha || '' }}
         run: |
           set -euo pipefail
           if [[ -n "${{ inputs.version }}" ]]; then
@@ -90,6 +92,14 @@ jobs:
           elif [[ "${GITHUB_REF_NAME:-}" == runtime-v* ]]; then
             echo "PROLIFERATE_BUILD_VERSION=${GITHUB_REF_NAME#runtime-v}" >> "$GITHUB_ENV"
           fi
+          # Stamp the deterministic build SHA alongside the version so the
+          # binaries carry the canonical `<component>@<version>+<12-hex-sha>`
+          # release identity (support-system "Release identity"). build.rs
+          # truncates a full 40-char SHA to 12 and fails closed when a version is
+          # stamped without one. Always export it (SHA-only stamps are valid for
+          # unversioned dry runs; a version stamp then always has its SHA).
+          build_sha="${INPUT_GIT_SHA:-$GITHUB_SHA}"
+          echo "PROLIFERATE_BUILD_SHA=$build_sha" >> "$GITHUB_ENV"
 
       - name: Install musl-tools (x86_64 linux)
         if: matrix.target == 'x86_64-unknown-linux-musl'
