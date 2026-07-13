@@ -282,8 +282,9 @@ recorded prior value or prior absence, read the restoration back and verify
 it, then release the landing hold and halt; wherever a cancellation-requested
 run or an abnormal/unverifiable staging execution is involved, the hold is
 released only per the terminality rule below. No failure path may leave the
-temporary overrides active or permit a later source CI completion to emit
-staging. If restoration itself fails or cannot be verified, production
+temporary overrides active, and no failure path may release the hold while
+any downstream Deploy Staging emission remains unenumerated, non-terminal, or
+unhandled. If restoration itself fails or cannot be verified, production
 promotion is hard-stopped and the landing hold REMAINS in place while the
 failure is escalated; the hold is never released over unrestored or
 unverified gates.
