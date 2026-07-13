@@ -6,7 +6,8 @@
   "scripts": {
     "release-e2e": "tsx src/cli/run.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "foundation": "tsx src/cli/foundation.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
