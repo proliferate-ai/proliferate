@@ -232,7 +232,9 @@ Rules:
 
 - `agentKind` must exist in the catalog;
 - an explicit model must be active and visible in the authoring menu
-  (`status == active` and `defaultVisible != false`);
+  (`status == active` and `defaultVisible == true`);
+- promoted catalog rows materialize `defaultVisible`; malformed omissions fail
+  closed as hidden;
 - model aliases are accepted at the API boundary and the canonical model ID is
   stored and returned;
 - `effort` requires an explicit model;
