@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "vertical-slice:tier2": "tsx src/foundation/worlds/tier2/run-vertical-slice.ts",
+    "vertical-slice:local2": "tsx src/foundation/worlds/local-runtime/run-local2-slice.ts",
     "foundation": "tsx src/cli/foundation.ts",
     "access-audit": "tsx src/foundation/access/cli.ts",
     "build:dev-candidate-manifest": "tsx src/foundation/artifacts/dev-candidate-builder.ts"
