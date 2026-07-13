@@ -1,11 +1,22 @@
 # Support capture v1 — implementation record & architecture
 
+> Historical implementation record. The referenced
+> `issue-autofix-system-v1.md` draft no longer exists in the current tree and
+> its earlier resolution design was superseded by the accepted support-system
+> contract. Use
+> [`../codebase/features/support-system.md`](../codebase/features/support-system.md)
+> for downstream issue/release/changelog behavior, and
+> [`../codebase/features/support-reporting.md`](../codebase/features/support-reporting.md)
+> for shipped capture behavior.
+
 *2026-07-06. The complete record of the support-flow upgrade built across PRs
 #972 (server capture fields), #976 (desktop modals), and the parked
 `support-ops` prototype. Written after the 2026-07-06 split decision: capture
-(this doc's subject) is permanent and merging; resolution/triage/notify is
-superseded by `specs/tbd/issue-autofix-system-v1.md` (the issues service).
-Read that spec for everything after a report is captured.*
+(this doc's subject) is permanent and merging; the then-current
+resolution/triage/notify direction moved to an issue-service draft that has
+since been replaced by
+[`../codebase/features/support-system.md`](../codebase/features/support-system.md).
+Read that document for everything after a report is captured.*
 
 ---
 
@@ -40,7 +51,8 @@ persisted upload queue ──POST──▶ /v1/support/reports ─────�
 
 ────────────────────────────── CAPTURE / RESOLUTION BOUNDARY ──────────────────────────────
 
-Everything below is the issues service (specs/tbd/issue-autofix-system-v1.md):
+Everything below was assigned to the then-planned issues service (now replaced
+by [`../codebase/features/support-system.md`](../codebase/features/support-system.md)):
 ingestion via a pollable /v1/support/reports endpoint (scoped, not built),
 triage/fix workflows, state machine, and ALL reporter-facing email (Customer.io
 transactional, approval-gated).
@@ -341,8 +353,9 @@ modal, every bug report's name would have been silently dropped:
 ## 5. support-ops — parked prototype (do not build on)
 
 Repo: `github.com/proliferate-ai/support-ops` (private), local `~/support-ops`,
-PR #1 open and permanently unmerged. Superseded 2026-07-06 by the issues
-service (`specs/tbd/issue-autofix-system-v1.md` §9/§10): S3-polling → pollable
+PR #1 open and permanently unmerged. Superseded 2026-07-06 by the then-planned
+issues service (now replaced by
+[`../codebase/features/support-system.md`](../codebase/features/support-system.md)): S3-polling → pollable
 server endpoint; sqlite resolution state → issues-service Postgres; Resend
 sender → Customer.io transactional behind an approval queue. Rationale: two
 parallel "we fixed it" email systems is the failure mode that killed the old

@@ -26,7 +26,7 @@ low-level runtime contracts.
 | Artifacts | Cowork artifacts, artifact MCP definition, artifact product behavior, and artifact transcript/workflow surfaces. | [cowork-artifacts.md](cowork-artifacts.md), [agent-features/definitions/artifacts.md](agent-features/definitions/artifacts.md) |
 | Agent features / product MCPs | Product MCP server pattern and concrete agent-feature MCP definitions for reviews, subagents, artifacts, cowork, and prompt/skill policy. | [agent-features/servers.md](agent-features/servers.md), [agent-features/definitions/README.md](agent-features/definitions/README.md) |
 | Settings and admin IA | Settings/admin information architecture, billing/account/team/config surfaces, filtering, origins, and admin-facing state. | [settings-admin-ia.md](settings-admin-ia.md) |
-| Support reporting | Desktop support report uploads, sanitization, diagnostics, and support-submitted issue handoff. | [support-reporting.md](support-reporting.md) |
+| Support reporting and resolution | Private support capture, source ingestion, issue lifecycle, reporter attribution, release linkage, and generated public changelog output. | [support-reporting.md](support-reporting.md), [support-system.md](support-system.md) |
 | Terminals | Workspace terminal pane UX, terminal record actions, and the creation grid contract for new terminals. | [terminals.md](terminals.md) |
 | Workspace migration | Workspace migration flows, user attestation, durability, queue state, and completion/error semantics. | [workspace-migration.md](workspace-migration.md) |
 | Desktop updates | Packaged updater metadata, version-aware sidebar release notices, acknowledgment, and post-install behavior. | [desktop-updates.md](desktop-updates.md) |
