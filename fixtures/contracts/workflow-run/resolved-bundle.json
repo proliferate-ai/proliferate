@@ -1,5 +1,5 @@
 {
-  "description": "Immutable input-resolved workflow run bundle (PR2 design §6.3) with its RFC 8785 canonical SHA-256 digest (`bundleDigest`). Consumed by the Python, Rust, and TypeScript canonicalizer tests.",
+  "description": "Immutable input-resolved workflow run bundle (PR2 design §6.3). `bundleDigest` is the SHA-256 over the RFC 8785 canonical JSON of ONLY the four covered members — definition, arguments, resolvedStages, resolvedPlacement — never the wire wrapper (contractVersion, runId). Consumed by the Python, Rust, and TypeScript canonicalizer tests, which also prove the wrapper exclusion by mutation.",
   "bundle": {
     "contractVersion": 1,
     "runId": "10000000-0000-4000-8000-000000000001",
@@ -68,5 +68,5 @@
       }
     ]
   },
-  "sha256": "a1896ae5c124f0bd449e223d426683586afa1ab6bd2bec4c2d164603affce6ee"
+  "bundleDigest": "dbc37e73080a9008aef2fd54f2a194185d780e27830b5d61423b9d5d75c342a4"
 }

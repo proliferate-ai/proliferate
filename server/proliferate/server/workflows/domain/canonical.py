@@ -19,7 +19,14 @@ import hashlib
 import json
 from decimal import Decimal
 
-__all__ = ["canonical_json", "canonical_bytes", "sha256_hex", "digest"]
+__all__ = [
+    "canonical_json",
+    "canonical_bytes",
+    "sha256_hex",
+    "digest",
+    "bundle_digest",
+    "runtime_payload_digest",
+]
 
 # JSON integer literals beyond the IEEE-754 exact-integer range parse to
 # different values in JavaScript (silent rounding) than in Python (exact big
@@ -54,6 +61,47 @@ def sha256_hex(value: object) -> str:
 # ``digest`` is the public name delivery/AnyHarness code reaches for; it is an
 # alias for ``sha256_hex`` and keeps call sites reading as "the digest of X".
 digest = sha256_hex
+
+
+# ``bundleDigest`` (PR2 design §6.3) covers ONLY the immutable logical content
+# of a resolved run bundle. The wire wrapper (``contractVersion``, ``runId``)
+# is transport identity, not logical content: two invocations with identical
+# logical content share a bundle digest regardless of run identity.
+_BUNDLE_DIGEST_FIELDS = ("definition", "arguments", "resolvedStages", "resolvedPlacement")
+
+
+def bundle_digest(bundle: dict[str, object]) -> str:
+    """``bundleDigest``: SHA-256 over ONLY the §6.3-covered bundle members.
+
+    Accepts the full resolved bundle object and selects exactly ``definition``,
+    ``arguments``, ``resolvedStages``, and ``resolvedPlacement``, so no call
+    site can accidentally widen the digest to the wire wrapper.
+    """
+
+    if not isinstance(bundle, dict):
+        raise TypeError("bundle_digest expects the resolved bundle object.")
+    missing = [field for field in _BUNDLE_DIGEST_FIELDS if field not in bundle]
+    if missing:
+        raise ValueError(
+            f"Resolved bundle is missing digest-covered fields: {', '.join(missing)}."
+        )
+    return sha256_hex({field: bundle[field] for field in _BUNDLE_DIGEST_FIELDS})
+
+
+def runtime_payload_digest(payload: dict[str, object]) -> str:
+    """``runtimePayloadDigest``: SHA-256 over ONLY the immutable ``run`` object.
+
+    The delivery wire body is ``{run, control}`` plus the ``expectedDataEpoch``
+    transport precondition. The epoch and the per-attempt monotonic ``control``
+    object are excluded so a replay carrying updated cancellation state keeps
+    the digest of the first fixed payload.
+    """
+
+    if not isinstance(payload, dict):
+        raise TypeError("runtime_payload_digest expects the delivery payload object.")
+    if "run" not in payload:
+        raise ValueError("Delivery payload is missing the digest-covered 'run' object.")
+    return sha256_hex(payload["run"])
 
 
 def _serialize(value: object) -> str:

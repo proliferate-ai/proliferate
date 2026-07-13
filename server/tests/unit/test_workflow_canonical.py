@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import math
 from pathlib import Path
@@ -7,9 +8,11 @@ from pathlib import Path
 import pytest
 
 from proliferate.server.workflows.domain.canonical import (
+    bundle_digest,
     canonical_bytes,
     canonical_json,
     digest,
+    runtime_payload_digest,
     sha256_hex,
 )
 
@@ -29,9 +32,78 @@ def test_golden_canonical_cases_agree() -> None:
         assert sha256_hex(case["value"]) == case["sha256"], case["name"]
 
 
-def test_golden_resolved_bundle_digest_agrees() -> None:
+def test_golden_bundle_digest_agrees() -> None:
     fixture = _load("resolved-bundle.json")
-    assert sha256_hex(fixture["bundle"]) == fixture["sha256"]
+    bundle = fixture["bundle"]
+    assert bundle_digest(bundle) == fixture["bundleDigest"]
+    # The digest covers exactly the four §6.3 members, nothing else.
+    covered = {
+        key: bundle[key]
+        for key in ("definition", "arguments", "resolvedStages", "resolvedPlacement")
+    }
+    assert sha256_hex(covered) == fixture["bundleDigest"]
+
+
+def test_bundle_digest_excludes_wire_wrapper_fields() -> None:
+    bundle = copy.deepcopy(_load("resolved-bundle.json")["bundle"])
+    baseline = bundle_digest(bundle)
+    bundle["runId"] = "ffffffff-0000-4000-8000-000000000000"
+    bundle["contractVersion"] = 999
+    assert bundle_digest(bundle) == baseline
+    del bundle["runId"]
+    del bundle["contractVersion"]
+    assert bundle_digest(bundle) == baseline
+
+
+def test_bundle_digest_covers_every_logical_member() -> None:
+    fixture = _load("resolved-bundle.json")
+    baseline = bundle_digest(fixture["bundle"])
+    mutations: dict[str, object] = {
+        "definition": {"id": "other"},
+        "arguments": {"ticket": "PRO-999"},
+        "resolvedStages": [],
+        "resolvedPlacement": {"kind": "newScratch"},
+    }
+    for field, value in mutations.items():
+        bundle = copy.deepcopy(fixture["bundle"])
+        bundle[field] = value
+        assert bundle_digest(bundle) != baseline, field
+
+
+def test_bundle_digest_requires_covered_fields() -> None:
+    bundle = copy.deepcopy(_load("resolved-bundle.json")["bundle"])
+    del bundle["arguments"]
+    with pytest.raises(ValueError, match="arguments"):
+        bundle_digest(bundle)
+    with pytest.raises(TypeError):
+        bundle_digest([])  # type: ignore[arg-type]
+
+
+def test_golden_runtime_payload_digest_agrees() -> None:
+    fixture = _load("runtime-payload.json")
+    payload = fixture["payload"]
+    assert runtime_payload_digest(payload) == fixture["runtimePayloadDigest"]
+    # The digest covers exactly the immutable `run` object.
+    assert sha256_hex(payload["run"]) == fixture["runtimePayloadDigest"]
+
+
+def test_runtime_payload_digest_excludes_epoch_and_control() -> None:
+    payload = copy.deepcopy(_load("runtime-payload.json")["payload"])
+    baseline = runtime_payload_digest(payload)
+    payload["expectedDataEpoch"] = "01J00000000000000000000000"
+    payload["control"]["cancelRequested"] = False
+    assert runtime_payload_digest(payload) == baseline
+    del payload["expectedDataEpoch"]
+    del payload["control"]
+    assert runtime_payload_digest(payload) == baseline
+    # Mutating the run object itself must change the digest.
+    payload["run"]["placement"]["kind"] = "worktree"
+    assert runtime_payload_digest(payload) != baseline
+
+
+def test_runtime_payload_digest_requires_run() -> None:
+    with pytest.raises(ValueError, match="'run'"):
+        runtime_payload_digest({"control": {"cancelRequested": True}})
 
 
 @pytest.mark.parametrize(

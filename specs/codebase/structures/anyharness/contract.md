@@ -58,6 +58,17 @@ over `serde_json::Value` with Python and TypeScript twins; the golden fixtures
 under `fixtures/contracts/workflow-run/` are the cross-language correctness
 fence. Domain code may import it (it is not a `v1` request/response type).
 
+Digest scopes are part of the contract: `bundleDigest` covers ONLY the
+resolved bundle's `definition`, `arguments`, `resolvedStages`, and
+`resolvedPlacement` members — never the `contractVersion`/`runId` wire
+wrapper — and `runtimePayloadDigest` covers ONLY the immutable `run` object of
+a delivery payload — never the `expectedDataEpoch` transport precondition or
+the per-attempt monotonic `control` object. Each twin exposes scope-enforcing
+helpers (`bundle_digest`/`runtime_payload_digest` in Rust and Python,
+`bundleDigestJson`/`runtimePayloadDigestJson` in TypeScript) so call sites
+never re-derive the boundary ad hoc; the golden fixtures pin both digests and
+mutation tests in all three languages prove the exclusions.
+
 Validation posture across the twins: integer literals outside the IEEE-754
 exact range (`|value| > 2^53`) are rejected wherever the language's parser
 preserves the exact value — Python for every integer literal, Rust for

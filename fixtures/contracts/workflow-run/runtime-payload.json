@@ -1,0 +1,13 @@
+{
+  "description": "Workflow run delivery payload (PR2 design §6.3): the wire body is `{ run, control }` plus the `expectedDataEpoch` transport precondition. `runtimePayloadDigest` is the SHA-256 over the RFC 8785 canonical JSON of ONLY the immutable `run` object; `expectedDataEpoch` and the per-attempt monotonic `control` object (cancelRequested) are excluded so replays with updated cancellation state keep the digest of the first fixed payload. Consumed by the Python, Rust, and TypeScript canonicalizer tests, which also prove the exclusions by mutation.",
+  "payload": {
+    "expectedDataEpoch": "01JZX7LK4RCVBB0000000000EP",
+    "run": {
+      "contractVersion": 1,
+      "bundleDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "placement": { "kind": "newScratch" }
+    },
+    "control": { "cancelRequested": true }
+  },
+  "runtimePayloadDigest": "291c6258113819c5b67d94ae368dbb65c637774c7099374ab106ab6f8c9e3adf"
+}

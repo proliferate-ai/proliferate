@@ -36,6 +36,7 @@ const MAX_SAFE_INTEGER: u64 = 1 << 53;
 pub enum CanonicalJsonError {
     NonFiniteNumber,
     IntegerOutsideExactRange(String),
+    DigestScope(String),
 }
 
 impl fmt::Display for CanonicalJsonError {
@@ -48,6 +49,7 @@ impl fmt::Display for CanonicalJsonError {
                 f,
                 "cannot canonicalize an integer outside the IEEE-754 exact range (|value| > 2^53): {value}"
             ),
+            Self::DigestScope(message) => write!(f, "invalid digest scope: {message}"),
         }
     }
 }
@@ -76,6 +78,49 @@ pub fn sha256_hex(value: &Value) -> Result<String, CanonicalJsonError> {
         write!(hex, "{byte:02x}").expect("writing to a String cannot fail");
     }
     Ok(hex)
+}
+
+/// Members of a resolved run bundle covered by `bundleDigest` (PR2 design
+/// §6.3). The wire wrapper (`contractVersion`, `runId`) is transport
+/// identity, not logical content: two invocations with identical logical
+/// content share a bundle digest regardless of run identity.
+const BUNDLE_DIGEST_FIELDS: [&str; 4] =
+    ["definition", "arguments", "resolvedStages", "resolvedPlacement"];
+
+/// `bundleDigest`: SHA-256 over ONLY the §6.3-covered bundle members.
+///
+/// Accepts the full resolved bundle object and selects exactly `definition`,
+/// `arguments`, `resolvedStages`, and `resolvedPlacement`, so no call site can
+/// accidentally widen the digest to the wire wrapper.
+pub fn bundle_digest(bundle: &Value) -> Result<String, CanonicalJsonError> {
+    let object = bundle.as_object().ok_or_else(|| {
+        CanonicalJsonError::DigestScope("resolved bundle must be a JSON object".to_owned())
+    })?;
+    let mut covered = serde_json::Map::with_capacity(BUNDLE_DIGEST_FIELDS.len());
+    for field in BUNDLE_DIGEST_FIELDS {
+        let value = object.get(field).ok_or_else(|| {
+            CanonicalJsonError::DigestScope(format!(
+                "resolved bundle is missing digest-covered field '{field}'"
+            ))
+        })?;
+        covered.insert(field.to_owned(), value.clone());
+    }
+    sha256_hex(&Value::Object(covered))
+}
+
+/// `runtimePayloadDigest`: SHA-256 over ONLY the immutable `run` object.
+///
+/// The delivery wire body is `{run, control}` plus the `expectedDataEpoch`
+/// transport precondition. The epoch and the per-attempt monotonic `control`
+/// object are excluded so a replay carrying updated cancellation state keeps
+/// the digest of the first fixed payload.
+pub fn runtime_payload_digest(payload: &Value) -> Result<String, CanonicalJsonError> {
+    let run = payload.get("run").ok_or_else(|| {
+        CanonicalJsonError::DigestScope(
+            "delivery payload is missing the digest-covered 'run' object".to_owned(),
+        )
+    })?;
+    sha256_hex(run)
 }
 
 fn serialize(value: &Value, out: &mut String) -> Result<(), CanonicalJsonError> {
@@ -220,7 +265,9 @@ mod tests {
 
     use serde_json::{json, Value};
 
-    use super::{canonical_json, sha256_hex, CanonicalJsonError};
+    use super::{
+        bundle_digest, canonical_json, runtime_payload_digest, sha256_hex, CanonicalJsonError,
+    };
 
     fn fixture(name: &str) -> Value {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -250,11 +297,102 @@ mod tests {
     }
 
     #[test]
-    fn golden_resolved_bundle_digest_agrees() {
+    fn golden_bundle_digest_agrees() {
         let file = fixture("resolved-bundle.json");
-        let expected_sha256 = file["sha256"].as_str().expect("bundle sha256");
-        let digest = sha256_hex(&file["bundle"]).expect("digest");
-        assert_eq!(digest, expected_sha256);
+        let expected = file["bundleDigest"].as_str().expect("bundleDigest");
+        assert_eq!(bundle_digest(&file["bundle"]).expect("digest"), expected);
+        // The digest covers exactly the four §6.3 members, nothing else.
+        let bundle = file["bundle"].as_object().expect("bundle object");
+        let covered: Value = json!({
+            "definition": bundle["definition"],
+            "arguments": bundle["arguments"],
+            "resolvedStages": bundle["resolvedStages"],
+            "resolvedPlacement": bundle["resolvedPlacement"],
+        });
+        assert_eq!(sha256_hex(&covered).expect("digest"), expected);
+    }
+
+    #[test]
+    fn bundle_digest_excludes_wire_wrapper_fields() {
+        let file = fixture("resolved-bundle.json");
+        let mut bundle = file["bundle"].clone();
+        let baseline = bundle_digest(&bundle).expect("digest");
+        bundle["runId"] = json!("ffffffff-0000-4000-8000-000000000000");
+        bundle["contractVersion"] = json!(999);
+        assert_eq!(bundle_digest(&bundle).expect("digest"), baseline);
+        let object = bundle.as_object_mut().expect("object");
+        object.remove("runId");
+        object.remove("contractVersion");
+        assert_eq!(bundle_digest(&bundle).expect("digest"), baseline);
+    }
+
+    #[test]
+    fn bundle_digest_covers_every_logical_member() {
+        let file = fixture("resolved-bundle.json");
+        let baseline = bundle_digest(&file["bundle"]).expect("digest");
+        for (field, mutated) in [
+            ("definition", json!({"id": "other"})),
+            ("arguments", json!({"ticket": "PRO-999"})),
+            ("resolvedStages", json!([])),
+            ("resolvedPlacement", json!({"kind": "newScratch"})),
+        ] {
+            let mut bundle = file["bundle"].clone();
+            bundle[field] = mutated;
+            assert_ne!(
+                bundle_digest(&bundle).expect("digest"),
+                baseline,
+                "mutating {field} must change the bundle digest"
+            );
+        }
+    }
+
+    #[test]
+    fn bundle_digest_requires_covered_fields() {
+        let file = fixture("resolved-bundle.json");
+        let mut bundle = file["bundle"].clone();
+        bundle.as_object_mut().expect("object").remove("arguments");
+        assert!(matches!(
+            bundle_digest(&bundle),
+            Err(CanonicalJsonError::DigestScope(_))
+        ));
+        assert!(matches!(
+            bundle_digest(&json!([])),
+            Err(CanonicalJsonError::DigestScope(_))
+        ));
+    }
+
+    #[test]
+    fn golden_runtime_payload_digest_agrees() {
+        let file = fixture("runtime-payload.json");
+        let expected = file["runtimePayloadDigest"].as_str().expect("runtimePayloadDigest");
+        assert_eq!(runtime_payload_digest(&file["payload"]).expect("digest"), expected);
+        // The digest covers exactly the immutable `run` object.
+        assert_eq!(sha256_hex(&file["payload"]["run"]).expect("digest"), expected);
+    }
+
+    #[test]
+    fn runtime_payload_digest_excludes_epoch_and_control() {
+        let file = fixture("runtime-payload.json");
+        let mut payload = file["payload"].clone();
+        let baseline = runtime_payload_digest(&payload).expect("digest");
+        payload["expectedDataEpoch"] = json!("01J00000000000000000000000");
+        payload["control"]["cancelRequested"] = json!(false);
+        assert_eq!(runtime_payload_digest(&payload).expect("digest"), baseline);
+        let object = payload.as_object_mut().expect("object");
+        object.remove("expectedDataEpoch");
+        object.remove("control");
+        assert_eq!(runtime_payload_digest(&payload).expect("digest"), baseline);
+        // Mutating the run object itself must change the digest.
+        payload["run"]["placement"]["kind"] = json!("worktree");
+        assert_ne!(runtime_payload_digest(&payload).expect("digest"), baseline);
+    }
+
+    #[test]
+    fn runtime_payload_digest_requires_run() {
+        assert!(matches!(
+            runtime_payload_digest(&json!({"control": {"cancelRequested": true}})),
+            Err(CanonicalJsonError::DigestScope(_))
+        ));
     }
 
     #[test]
