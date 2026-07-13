@@ -2,7 +2,7 @@
 
 Status: authoritative for shared frontend package ownership.
 
-Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces}/**`
+Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces,product-client}/**`
 
 **Packages are the *shared tier* of the app-local layers — not a separate taxonomy.** Most are 1-1 with a layer you already know; derive them rather than re-learning them:
 
@@ -123,6 +123,28 @@ product-surfaces/src/<domain>/<surface>/**
 ```
 
 May import Cloud SDK React hooks, `product-domain`, `product-ui`, `ui`, `design`. Must not import Desktop/Web app internals, app routing/shell placement, Tauri/AnyHarness access, app stores, telemetry wiring, or React Native — app-specific behavior stays in the app and is passed in as callbacks/adapters. *Promote when:* Desktop and Web should share the same connected Cloud CRUD surface, including SDK React hooks and mutation wiring, and duplicating that wiring would make the product harder to keep consistent.
+
+### `product-client`
+The shared connected Desktop/Web application, per
+[`../../../features/web-desktop-client-unification.md`](../../../features/web-desktop-client-unification.md).
+Desktop is the baseline; Desktop and Web become thin hosts that each construct
+one typed `ProductHost` and mount the same product through `ProductHostProvider`.
+It differs from the other packages: it is **source-consumed** (each host's Vite
+build compiles its source directly) rather than consumed as built `dist`.
+
+```text
+product-client/src/host/**   # ProductHost + DesktopBridge types, ProductHostProvider
+```
+
+Current state is the foundation only: the host contract, the Desktop bridge
+contract, and the provider. It may depend in the correct direction on
+`product-ui`, `product-domain`, `ui`, `design`, and the Cloud/AnyHarness SDKs.
+It must **never** import either host (`apps/desktop/**`, `apps/web/**`), any
+`@tauri-apps/**` package, raw Tauri `invoke`, or Desktop-relative `@/` aliases;
+shared product code reaches native capability only through the optional
+`host.desktop` bridge. `product-surfaces` remains a separate package during this
+migration (`product-client` may consume it later). Mobile stays outside
+`product-client` and DOM-free.
 
 ## Package rules
 

@@ -1,0 +1,45 @@
+{
+  "name": "@proliferate/product-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": ["dist"],
+  "exports": {
+    "./host/product-host": {
+      "types": "./dist/host/product-host.d.ts",
+      "import": "./dist/host/product-host.js"
+    },
+    "./host/desktop-bridge": {
+      "types": "./dist/host/desktop-bridge.d.ts",
+      "import": "./dist/host/desktop-bridge.js"
+    },
+    "./host/ProductHostProvider": {
+      "types": "./dist/host/ProductHostProvider.d.ts",
+      "import": "./dist/host/ProductHostProvider.js"
+    }
+  },
+  "scripts": {
+    "build": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json",
+    "typecheck": "pnpm --filter @proliferate/cloud-sdk build && pnpm --filter @anyharness/sdk-react build && pnpm --filter @proliferate/product-domain build && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anyharness/sdk-react": "workspace:*",
+    "@proliferate/cloud-sdk": "workspace:*",
+    "@proliferate/product-domain": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "~19.2.17",
+    "@types/react-dom": "~19.2.3",
+    "jsdom": "^29.1.1",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "typescript": "^5.7",
+    "vitest": "^3.2.6"
+  }
+}

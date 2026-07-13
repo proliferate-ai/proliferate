@@ -14,6 +14,7 @@ These standards apply to all frontend app logic and shared frontend packages:
 - `apps/packages/product-domain/**`
 - `apps/packages/product-ui/**`
 - `apps/packages/product-surfaces/**`
+- `apps/packages/product-client/**`
 
 Desktop, Web, and Mobile use the same folder logic. Platform-specific folders
 exist only where the platform genuinely differs: Desktop has Tauri and local
@@ -171,6 +172,7 @@ Use the lowest layer that can own the logic cleanly.
 | Product domain package | `apps/packages/product-domain/**` | Pure shared product rules, vocabulary, validation, projections, view models. | React, DOM, React Native components, SDK clients, query clients, stores, access. | [packages/README.md](packages/README.md) |
 | Product UI package | `apps/packages/product-ui/src/<domain>/<surface>/**` | Shared Desktop/Web product presentation. Props in, callbacks out. | SDK clients, access helpers, query hooks, app stores, routes, Tauri, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |
 | Product surfaces package | `apps/packages/product-surfaces/src/<domain>/<surface>/**` | Shared connected Desktop/Web Cloud surfaces with SDK/query wiring and product UI composition. | Desktop/Web app internals, Tauri, AnyHarness runtime wiring, app stores, app routes, React Native, custom primitive redefinitions. | [packages/README.md](packages/README.md) |
+| Product client package | `apps/packages/product-client/src/**` | The shared connected Desktop/Web application; Desktop and Web become thin hosts that mount it via `ProductHostProvider`. Owns the `ProductHost`/`DesktopBridge` contract and provider (foundation state). | Either host (`apps/desktop/**`, `apps/web/**`), `@tauri-apps/**`, raw Tauri `invoke`, Desktop-relative `@/` aliases. | [packages/README.md](packages/README.md), [features/web-desktop-client-unification.md](../../features/web-desktop-client-unification.md) |
 
 ## Read Order
 
