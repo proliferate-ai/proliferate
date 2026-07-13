@@ -2,35 +2,36 @@
  * Collector definitions — the ONE canonical, executable inverse of the
  * scenario manifest.
  *
- * Each definition carries the exact cell identities its collector emits
- * (imported from the collector module, never hand-copied), a truthful
- * coverage classification, the gate that selects it, its evidence contract,
- * and the executable CellRunner binding the production CLI registers. The
- * audit (audit.ts) and the selectors (selectors.ts) consume THESE definitions;
- * there is no second metadata-only list to drift.
+ * A definition is a list of INDIVISIBLE cell definitions: each declared cell
+ * identity is bound to its executable function in the same object, and the
+ * metadata views (cells, cellKeys) plus the engine CellRunners are DERIVED
+ * from that binding. There is no way to author metadata and execution
+ * separately, so a mismatched or no-op factory cannot green declared cells.
  *
  * Coverage is a claim about the MANIFEST ROW, not about the collector's own
  * health:
  *  - `core`               — the collector's code/test mapping covers the row's
- *                           complete required validation, so it may satisfy a
- *                           collected/enforced row.
+ *                           complete required validation under run-scoped
+ *                           isolation, so it may satisfy a collected/enforced
+ *                           row. NO current collector qualifies (see below).
  *  - `foundation-partial` — an honest vertical slice: real, evidence-bound,
- *                           diagnostic-valuable, but NARROWER than the row (or
- *                           testing superseded semantics). It can never satisfy
- *                           a collected/enforced row and never promotes the
- *                           guarantee (core-release-validation.md: presence is
- *                           not coverage; the ratchet stays honest).
+ *                           diagnostic-valuable, but narrower than the row,
+ *                           testing superseded semantics, or dependent on
+ *                           reused/dirty world state. It can never satisfy a
+ *                           collected/enforced row and never promotes the
+ *                           guarantee.
  */
 
 import { cellKey, type CellIdentity, type RunIdentity, type ShardIdentity, type WorldId } from "../contracts/identity.js";
 import type { CandidateManifest, RetainedProductionManifest } from "../contracts/artifacts.js";
 import type { WorldContext } from "../contracts/world.js";
-import { CellBlockedError, CellExpectedFailError, type CellRunner } from "../runner/cell.js";
+import type { LocalRuntimeWorldHandle } from "../contracts/world.js";
+import { CellBlockedError, CellExpectedFailError, type CellExecutionContext, type CellOutcome, type CellRunner } from "../runner/cell.js";
+import type { FinalCellResult } from "../contracts/results.js";
 import { T2_AUTH_1_CELL, runT2Auth1Cell } from "../worlds/tier2/cells/t2-auth-1.js";
 import { T2_BILL_1_CELL, runT2Bill1Cell } from "../worlds/tier2/cells/t2-bill-1.js";
 import type { InternalTier2WorldHandle } from "../worlds/tier2/provisioner.js";
 import { local2CellIdentity, runLocal2Cell } from "../worlds/local-runtime/local-2.js";
-import type { LocalRuntimeWorldHandle } from "../contracts/world.js";
 
 export type CollectorCoverage = "core" | "foundation-partial";
 
@@ -45,145 +46,131 @@ export interface RunnerWiring {
   readonly retained: RetainedProductionManifest | null;
 }
 
-export interface CollectorDefinition {
-  /** Manifest guarantee/journey id the collector proves (must exist in the manifest). */
+/**
+ * One indivisible executable cell: the declared identity and the function
+ * that proves it live in the same object. Everything else is derived.
+ */
+export interface CellDefinition {
+  readonly cell: CellIdentity;
+  /**
+   * Executes the cell against the ready world. Returns the outcome for a
+   * green cell; throws CellBlockedError / CellExpectedFailError / Error for
+   * the non-green statuses. It never fabricates identity: the engine records
+   * the attempt under the DECLARED cell above.
+   */
+  execute(ctx: CellExecutionContext, wiring: RunnerWiring): Promise<CellOutcome | void>;
+}
+
+export interface CollectorDefinitionInput {
   readonly scenarioId: string;
-  /** The exact executable cell identities this collector emits finals for. */
-  readonly cells: readonly CellIdentity[];
-  /** Every cell key this collector produces a final result for. */
-  readonly cellKeys: readonly string[];
-  /** Repo-relative path to the collector source, for triage. */
   readonly collectorRef: string;
-  /** Truthful row-coverage claim — see module docs. */
   readonly coverage: CollectorCoverage;
-  /** Gate whose selector reaches this collector. */
   readonly gate: "merge" | "release";
-  /** What the collector's evidence binds (human contract line, no secrets). */
   readonly evidence: string;
+  readonly cellDefinitions: readonly CellDefinition[];
+}
+
+export interface CollectorDefinition extends CollectorDefinitionInput {
+  /** DERIVED views — never independently authored. */
+  readonly cells: readonly CellIdentity[];
+  readonly cellKeys: readonly string[];
   readonly world: WorldId;
-  /** Executable binding used by the real CLI runner registration. */
+  /** Derives engine CellRunners from the indivisible cell definitions. */
   createRunners(wiring: RunnerWiring): CellRunner[];
 }
 
 /** Back-compat alias: audit/selectors take the same definitions. */
 export type CollectorRegistryEntry = CollectorDefinition;
 
-function define(def: Omit<CollectorDefinition, "cellKeys">): CollectorDefinition {
-  for (const cell of def.cells) {
-    if (cell.scenarioId !== def.scenarioId) {
+/**
+ * Builds a CollectorDefinition from indivisible cell definitions, validating
+ * identity and cardinality BEFORE any provisioning can happen:
+ *  - every declared cell belongs to this scenario;
+ *  - no duplicate cell keys within the definition;
+ *  - at least one executable cell (a metadata-only definition is invalid);
+ *  - exactly one world across the definition's cells.
+ * The runner list is derived 1:1 from the cell definitions — a missing,
+ * extra, or identity-mismatched runner is unrepresentable.
+ */
+export function defineCollector(input: CollectorDefinitionInput): CollectorDefinition {
+  if (input.cellDefinitions.length === 0) {
+    throw new Error(
+      `collector "${input.scenarioId}" declares zero executable cells; a metadata-only definition is invalid`,
+    );
+  }
+  const seen = new Set<string>();
+  for (const def of input.cellDefinitions) {
+    if (def.cell.scenarioId !== input.scenarioId) {
       throw new Error(
-        `collector registry wiring bug: entry "${def.scenarioId}" contains a cell for "${cell.scenarioId}"`,
+        `collector "${input.scenarioId}" contains a cell for "${def.cell.scenarioId}"`,
       );
     }
+    const key = cellKey(def.cell);
+    if (seen.has(key)) {
+      throw new Error(`collector "${input.scenarioId}" declares duplicate cell "${key}"`);
+    }
+    seen.add(key);
+    if (typeof def.execute !== "function") {
+      throw new Error(`collector "${input.scenarioId}" cell "${key}" has no executable function`);
+    }
   }
-  return { ...def, cellKeys: def.cells.map(cellKey) };
+  const worlds = new Set(input.cellDefinitions.map((d) => d.cell.world));
+  if (worlds.size !== 1) {
+    throw new Error(
+      `collector "${input.scenarioId}" spans worlds [${[...worlds].join(", ")}]; one definition owns one world`,
+    );
+  }
+
+  const cells = input.cellDefinitions.map((d) => d.cell);
+  const cellKeys = cells.map(cellKey);
+  return {
+    ...input,
+    cells,
+    cellKeys,
+    world: cells[0].world,
+    createRunners(wiring: RunnerWiring): CellRunner[] {
+      return input.cellDefinitions.map((def) => ({
+        cellKey: cellKey(def.cell),
+        cell: def.cell,
+        run: (ctx: CellExecutionContext) => def.execute(ctx, wiring),
+      }));
+    },
+  };
 }
 
 /**
- * The collectors implemented on this branch. World adapters append their own
- * definitions as they land; the audit fails the build if this diverges from
- * the manifest.
+ * Adapts a collector that still returns a FinalCellResult to the engine's
+ * outcome contract, VALIDATING full result coherence before translating:
+ * the final's identity must match the declared cell exactly, its attempts
+ * must be present, terminal, and agree with the final status. Any incoherence
+ * is a failed cell, never a green. (Interim adapter — engine-native executors
+ * remove it; retained per instruction with full validation.)
  */
-export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
-  define({
-    scenarioId: "T2-AUTH-1",
-    cells: [T2_AUTH_1_CELL],
-    collectorRef: "src/foundation/worlds/tier2/cells/t2-auth-1.ts",
-    // Code/test mapping vs the T2-AUTH-1 row ("Fresh /setup claim, password
-    // login, logout, relogin, wrong-password rejection, and permanent
-    // second-claim rejection"): tests/intent/specs/auth.spec.ts "T2-AUTH-1"
-    // describe covers claim + already-claimed revisit, permanent second-claim
-    // rejection, password login, wrong-password rejection, and logout +
-    // re-login. Every clause of the row maps to an executed assertion, so the
-    // collector itself is core. The MANIFEST row stays `planned` until the
-    // status flip is made deliberately; the audit reports this visibly as a
-    // planned-core collector rather than hiding it behind "OK".
-    coverage: "core",
-    gate: "merge",
-    evidence: "Playwright JSON report of the T2-AUTH-1 spec against the booted tier-2 world; per-spec pass/fail bound to the cell attempt",
-    world: "tier-2",
-    createRunners: () => [
-      {
-        cellKey: cellKey(T2_AUTH_1_CELL),
-        cell: T2_AUTH_1_CELL,
-        async run(ctx) {
-          const final = await runT2Auth1Cell(ctx.world as InternalTier2WorldHandle, ctx.evidence);
-          return finalToOutcome(final);
-        },
-      },
-    ],
-  }),
-  define({
-    scenarioId: "T2-BILL-1",
-    cells: [T2_BILL_1_CELL],
-    collectorRef: "src/foundation/worlds/tier2/cells/t2-bill-1.ts",
-    // Explicitly narrower than the T2-BILL-1 row (checkout-to-grant slice
-    // only; no consumption/cutoff/top-up/recovery) AND currently exercising
-    // the superseded pro_period/hours grant semantics rather than the settled
-    // $2 free / $5+$15 Core policy. It can never satisfy the core row.
-    coverage: "foundation-partial",
-    gate: "merge",
-    evidence: "Real Stripe test-mode subscription + invoice.paid webhook to grant, ledger-bound; blocked without an sk_test_ credential",
-    world: "tier-2",
-    createRunners: () => [
-      {
-        cellKey: cellKey(T2_BILL_1_CELL),
-        cell: T2_BILL_1_CELL,
-        async run(ctx) {
-          const handle = ctx.world as InternalTier2WorldHandle;
-          const final = await runT2Bill1Cell(handle, ctx.evidence, ctx.ledger);
-          return finalToOutcome(final);
-        },
-      },
-    ],
-  }),
-  define({
-    scenarioId: "LOCAL-2",
-    cells: [local2CellIdentity("claude")],
-    collectorRef: "src/foundation/worlds/local-runtime/local-2.ts",
-    // One harness (claude) of LOCAL-2's every-supported-harness matrix — a
-    // real managed-gateway turn with LiteLLM spend correlation, but one cell
-    // of the journey's required matrix, so foundation-partial.
-    coverage: "foundation-partial",
-    gate: "release",
-    evidence: "Managed-gateway turn with LiteLLM spend-log correlation under token_id, product usage event + balance reconcile, run-scoped cleanup",
-    world: "local-runtime",
-    createRunners: (wiring) => [
-      {
-        cellKey: cellKey(local2CellIdentity("claude")),
-        cell: local2CellIdentity("claude"),
-        async run(ctx) {
-          const worldCtx: WorldContext = {
-            run: wiring.run,
-            shard: wiring.shard,
-            candidate: wiring.candidate,
-            retained: wiring.retained,
-            ledger: ctx.ledger,
-            evidence: ctx.evidence,
-          };
-          const final = await runLocal2Cell(ctx.world as LocalRuntimeWorldHandle, worldCtx, {
-            harness: "claude",
-          });
-          return finalToOutcome(final);
-        },
-      },
-    ],
-  }),
-];
-
-/** @deprecated import COLLECTOR_DEFINITIONS; kept so existing imports keep working. */
-export const COLLECTOR_REGISTRY: readonly CollectorDefinition[] = COLLECTOR_DEFINITIONS;
-
-/**
- * Adapts a collector's FinalCellResult to the engine CellRunner outcome
- * contract: green returns, blocked/expected_fail/failed re-throw so the engine
- * records the correct non-green attempt status.
- */
-function finalToOutcome(final: {
-  readonly status: string;
-  readonly attempts: readonly { readonly detail: string; readonly correlationIds: readonly string[] }[];
-}): { correlationIds: readonly string[] } {
+export function adaptFinalResult(declared: CellIdentity, final: FinalCellResult): CellOutcome {
+  const declaredKey = cellKey(declared);
+  const problems: string[] = [];
+  if (final.cellKey !== declaredKey) {
+    problems.push(`final.cellKey ${final.cellKey} != declared ${declaredKey}`);
+  }
+  if (cellKey(final.cell) !== declaredKey) {
+    problems.push(`final.cell identity ${cellKey(final.cell)} != declared ${declaredKey}`);
+  }
+  if (final.attempts.length === 0) {
+    problems.push("final carries no attempt history");
+  }
   const last = final.attempts[final.attempts.length - 1];
+  if (last && last.status !== final.status) {
+    problems.push(`last attempt status ${last.status} != final status ${final.status}`);
+  }
+  for (const attempt of final.attempts) {
+    if (attempt.cellKey !== declaredKey) {
+      problems.push(`attempt ${attempt.attemptId} cellKey ${attempt.cellKey} != declared ${declaredKey}`);
+    }
+  }
+  if (problems.length > 0) {
+    throw new Error(`collector returned an incoherent final result: ${problems.join("; ")}`);
+  }
+
   const detail = last?.detail ?? "";
   const correlationIds = last?.correlationIds ?? [];
   if (final.status === "green") return { correlationIds };
@@ -195,10 +182,92 @@ function finalToOutcome(final: {
 }
 
 /**
+ * The collectors implemented on this branch. World adapters append their own
+ * definitions as they land; the audit fails the build if this diverges from
+ * the manifest.
+ *
+ * ALL THREE are foundation-partial today:
+ *  - T2-AUTH-1: the spec covers the row's clauses BUT auth.spec.ts skips the
+ *    fresh /setup claim when the reused profile DB is already claimed
+ *    (conditional skip, shared tf-tier2 profile, no teardown reset). Until a
+ *    run/shard-scoped fresh DB makes readiness require setup-open and the
+ *    spec FAILS rather than skips, it is not qualification-safe.
+ *  - T2-BILL-1: checkout-to-grant slice only, on superseded pro_period
+ *    semantics.
+ *  - LOCAL-2: one harness (claude) of the required matrix.
+ */
+export const COLLECTOR_DEFINITIONS: readonly CollectorDefinition[] = [
+  defineCollector({
+    scenarioId: "T2-AUTH-1",
+    collectorRef: "src/foundation/worlds/tier2/cells/t2-auth-1.ts",
+    coverage: "foundation-partial",
+    gate: "merge",
+    evidence:
+      "Playwright JSON report of the T2-AUTH-1 spec against the booted tier-2 world; per-spec pass/fail bound to the cell attempt. NOT core: fresh-claim assertions conditionally skip on a reused/claimed profile DB",
+    cellDefinitions: [
+      {
+        cell: T2_AUTH_1_CELL,
+        async execute(ctx) {
+          const final = await runT2Auth1Cell(ctx.world as InternalTier2WorldHandle, ctx.evidence);
+          return adaptFinalResult(T2_AUTH_1_CELL, final);
+        },
+      },
+    ],
+  }),
+  defineCollector({
+    scenarioId: "T2-BILL-1",
+    collectorRef: "src/foundation/worlds/tier2/cells/t2-bill-1.ts",
+    coverage: "foundation-partial",
+    gate: "merge",
+    evidence:
+      "Real Stripe test-mode subscription + invoice.paid webhook to grant, ledger-bound; blocked without an sk_test_ credential. NOT core: checkout-to-grant slice only, superseded pro_period semantics",
+    cellDefinitions: [
+      {
+        cell: T2_BILL_1_CELL,
+        async execute(ctx) {
+          const handle = ctx.world as InternalTier2WorldHandle;
+          const final = await runT2Bill1Cell(handle, ctx.evidence, ctx.ledger);
+          return adaptFinalResult(T2_BILL_1_CELL, final);
+        },
+      },
+    ],
+  }),
+  defineCollector({
+    scenarioId: "LOCAL-2",
+    collectorRef: "src/foundation/worlds/local-runtime/local-2.ts",
+    coverage: "foundation-partial",
+    gate: "release",
+    evidence:
+      "Managed-gateway turn with LiteLLM spend-log correlation under token_id, product usage event + balance reconcile, run-scoped cleanup. NOT core: one harness (claude) of the required matrix",
+    cellDefinitions: [
+      {
+        cell: local2CellIdentity("claude"),
+        async execute(ctx, wiring) {
+          const worldCtx: WorldContext = {
+            run: wiring.run,
+            shard: wiring.shard,
+            candidate: wiring.candidate,
+            retained: wiring.retained,
+            ledger: ctx.ledger,
+            evidence: ctx.evidence,
+          };
+          const final = await runLocal2Cell(ctx.world as LocalRuntimeWorldHandle, worldCtx, {
+            harness: "claude",
+          });
+          return adaptFinalResult(local2CellIdentity("claude"), final);
+        },
+      },
+    ],
+  }),
+];
+
+/** @deprecated import COLLECTOR_DEFINITIONS; kept so existing imports keep working. */
+export const COLLECTOR_REGISTRY: readonly CollectorDefinition[] = COLLECTOR_DEFINITIONS;
+
+/**
  * Materializes the executable CellRunners for every definition whose cells
- * intersect the selected plan. This is the production CLI's default runner
- * registry — the CLI is never left empty when canonical executable
- * definitions exist.
+ * intersect the selected plan. This is the production CLI's ONLY runner
+ * source — runners and metadata always come from the same definitions.
  */
 export function runnersForPlan(
   selectedCellKeys: ReadonlySet<string>,

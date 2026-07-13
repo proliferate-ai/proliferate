@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { parseScenarioManifest } from "./load.js";
 import type { ParsedManifest } from "./types.js";
 import { cellKey } from "../contracts/identity.js";
-import type { CollectorRegistryEntry } from "./registry.js";
+import { defineCollector, type CollectorRegistryEntry } from "./registry.js";
+import { loadScenarioManifest } from "./load.js";
+import { defaultScenarioManifestPath } from "./paths.js";
+import { COLLECTOR_DEFINITIONS, runnersForPlan } from "./registry.js";
 import {
   resolveMergeSelection,
   resolveReleaseSelection,
@@ -54,12 +57,23 @@ function fixture(): ParsedManifest {
   });
 }
 
-test("merge selects every Tier 2 row as required, even planned ones", () => {
+/** Core registry for the fixture manifest's collected Tier 2 row. */
+function mergeFixtureRegistry(): CollectorRegistryEntry[] {
+  const auth = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: "desktop-web", dimensions: {} } as const;
+  return [fixtureEntry("T2-AUTH-1", [auth], "fixture://auth", "core")];
+}
+
+test("merge expands collected rows via core collectors and keeps planned rows as bare placeholders", () => {
   const parsed = fixture();
-  const sel = resolveMergeSelection(parsed);
+  const sel = resolveMergeSelection(parsed, mergeFixtureRegistry());
   const ids = sel.cells.map((c) => c.scenarioId).sort();
   assert.deepEqual(ids, ["T2-AUTH-1", "T2-BILL-1"]);
   assert.ok(sel.cells.every((c) => c.disposition === "required" && c.world === "tier-2"));
+  // Collected row rides the collector's exact identity; planned row is bare.
+  const auth = sel.cells.find((c) => c.scenarioId === "T2-AUTH-1");
+  const bill = sel.cells.find((c) => c.scenarioId === "T2-BILL-1");
+  assert.equal(auth?.productHost, "desktop-web");
+  assert.equal(bill?.productHost ?? null, null);
   assert.equal(sel.scenarioManifestHash, parsed.hash);
   assert.deepEqual(sel.deferredScenarioIds, []);
 });
@@ -72,17 +86,14 @@ function fixtureEntry(
   collectorRef: string,
   coverage: CollectorRegistryEntry["coverage"] = "core",
 ): CollectorRegistryEntry {
-  return {
+  return defineCollector({
     scenarioId,
-    cells,
-    cellKeys: cells.map((c) => cellKey(c)),
     collectorRef,
     coverage,
     gate: "release",
     evidence: "fixture",
-    world: cells[0]?.world ?? "tier-2",
-    createRunners: () => [],
-  };
+    cellDefinitions: cells.map((cell) => ({ cell, execute: async () => undefined })),
+  });
 }
 
 function fixtureRegistry(): CollectorRegistryEntry[] {
@@ -211,12 +222,13 @@ test("explicit with a fixture-namespace id is an ad hoc baseline with a null has
 
 test("resolveSelection dispatches on the selector label", () => {
   const parsed = fixture();
+  const registry = mergeFixtureRegistry();
   assert.deepEqual(
-    resolveSelection(parsed, { selector: "merge", cellIds: [], world: "tier-2" }).cells.map((c) => c.scenarioId).sort(),
+    resolveSelection(parsed, { selector: "merge", cellIds: [], world: "tier-2", registry }).cells.map((c) => c.scenarioId).sort(),
     ["T2-AUTH-1", "T2-BILL-1"],
   );
   // merge/release ignore --cells entirely (the reproduced false-green fix).
-  const merge = resolveSelection(parsed, { selector: "merge", cellIds: ["ARBITRARY"], world: "tier-2" });
+  const merge = resolveSelection(parsed, { selector: "merge", cellIds: ["ARBITRARY"], world: "tier-2", registry });
   assert.ok(!merge.cells.some((c) => c.scenarioId === "ARBITRARY"));
   const explicit = resolveSelection(parsed, { selector: "explicit", cellIds: ["T2-AUTH-1"], world: "tier-2" });
   assert.equal(explicit.cells.length, 1);
@@ -288,4 +300,43 @@ test("unknown selector names are rejected, never treated as explicit", () => {
     () => resolveSelection(parsed, { selector: "relaese", cellIds: ["T2-AUTH-1"], world: "tier-2" }),
     /unknown selector "relaese"/,
   );
+});
+
+// ── Explicit selection of registered collectors: exact declared cells ──
+
+test("explicit --cells T2-BILL-1 expands to the partial collector's EXACT cell (host + dimensions), runnable via the shared CLI", () => {
+  const parsed = loadScenarioManifest(defaultScenarioManifestPath());
+  const sel = resolveExplicitSelection(
+    parsed,
+    { cellIds: ["T2-BILL-1"], world: "tier-2" },
+    COLLECTOR_DEFINITIONS,
+  );
+  assert.equal(sel.cells.length, 1);
+  assert.equal(sel.cells[0].productHost, "desktop-web");
+  assert.deepEqual(sel.cells[0].dimensions, { slice: "checkout-to-grant" });
+  // The runner registry materializes exactly this cell — no bypass needed.
+  const key = cellKey({ scenarioId: "T2-BILL-1", world: "tier-2", productHost: "desktop-web", dimensions: { slice: "checkout-to-grant" } });
+  const runners = runnersForPlan(new Set([key]), {} as never, COLLECTOR_DEFINITIONS);
+  assert.equal(runners.length, 1);
+  assert.equal(runners[0].cellKey, key);
+});
+
+test("explicit --cells LOCAL-2 expands to the harness-dimensioned cell", () => {
+  const parsed = loadScenarioManifest(defaultScenarioManifestPath());
+  const sel = resolveExplicitSelection(
+    parsed,
+    { cellIds: ["LOCAL-2"], world: "local-runtime" },
+    COLLECTOR_DEFINITIONS,
+  );
+  assert.equal(sel.cells.length, 1);
+  assert.equal(sel.cells[0].world, "local-runtime");
+  assert.deepEqual(sel.cells[0].dimensions, { harness: "claude", route: "managed-gateway" });
+});
+
+test("partial collectors never satisfy merge/release: real-manifest merge has zero expanded cells", () => {
+  const parsed = loadScenarioManifest(defaultScenarioManifestPath());
+  const sel = resolveMergeSelection(parsed, COLLECTOR_DEFINITIONS);
+  // Every Tier 2 row is planned; every collector is partial — so every merge
+  // cell is a bare fail-closed placeholder and NONE carries collector identity.
+  assert.ok(sel.cells.every((c) => (c.productHost ?? null) === null && !c.dimensions));
 });

@@ -29,7 +29,7 @@ function main(): void {
   // Truthful coverage breakdown — printed on every run so honest gaps are
   // never hidden behind a bare "OK".
   console.log(`  core-covered (collected/enforced + core collector): ${fmt(report.coreCoveredScenarioIds)}`);
-  console.log(`  planned rows with a core collector awaiting a deliberate status flip: ${fmt(report.plannedCoreCollectors)}`);
+  console.log(`  planned rows with a core collector (DEFECT: flip must be atomic): ${fmt(report.plannedCoreCollectors)}`);
   console.log(`  foundation-partial collectors (diagnostic slices, never row coverage): ${fmt(report.foundationPartial)}`);
 
   if (report.ok) {

@@ -8,7 +8,7 @@ import { parseFoundationArgs } from "./foundation-args.js";
 import { runFoundationCli, detectHostPlatform, type FoundationCliDeps } from "./foundation.js";
 import { candidateManifest } from "../foundation/fakes/manifests.js";
 import { FakeTier2Provisioner } from "../foundation/fakes/provisioners.js";
-import { greenRunner } from "../foundation/fakes/cells.js";
+import { defineCollector } from "../foundation/manifest/registry.js";
 import { cellKey, type CellIdentity, type WorldId } from "../foundation/contracts/identity.js";
 import type { WorldProvisioner } from "../foundation/contracts/world.js";
 import type { CellRunner } from "../foundation/runner/cell.js";
@@ -75,6 +75,19 @@ function fixtureEnvFile(dir: string): string {
   return file;
 }
 
+
+/** Synthetic collector definition whose declared cell IS its executable. */
+function syntheticDefinition(cell: CellIdentity, scenarioId = cell.scenarioId) {
+  return defineCollector({
+    scenarioId,
+    collectorRef: `fixture://${scenarioId}`,
+    coverage: "foundation-partial",
+    gate: "merge",
+    evidence: "synthetic test definition",
+    cellDefinitions: [{ cell, execute: async () => ({ correlationIds: [] }) }],
+  });
+}
+
 function baseDeps(dir: string, extra: Partial<FoundationCliDeps> = {}): FoundationCliDeps {
   return {
     env: { RELEASE_E2E_ENV_FILE: fixtureEnvFile(dir) },
@@ -123,10 +136,10 @@ test("strict with a ready world and one green collector qualifies and exits 0", 
   const { dir, manifestPath, outputDir } = setup();
   const cell: CellIdentity = { scenarioId: "T2-AUTH-1", world: "tier-2", productHost: null, dimensions: {} };
   const provisioners = new Map<WorldId, WorldProvisioner>([["tier-2", new FakeTier2Provisioner()]]);
-  const cellRunners: CellRunner[] = [greenRunner(cell)];
+  const collectorRegistry = [syntheticDefinition(cell)];
   const result = await runFoundationCli(
     ["--world", "tier-2", "--cells", "T2-AUTH-1", "--behavior", "strict", "--candidate-manifest", manifestPath, "--output-dir", outputDir],
-    baseDeps(dir, { provisioners, cellRunners }),
+    baseDeps(dir, { provisioners, collectorRegistry }),
   );
   assert.equal(result.exitCode, 0);
   assert.match(result.message, /QUALIFYING \(partial\)/);
@@ -253,23 +266,21 @@ test("release deferred derivation is exact and rides through the plan + evidence
   );
   const cell: CellIdentity = { scenarioId: "T3-CHAT-1", world: "tier-2", productHost: null, dimensions: {} };
   const provisioners = new Map<WorldId, WorldProvisioner>([["tier-2", new FakeTier2Provisioner()]]);
-  const cellRunners: CellRunner[] = [greenRunner(cell)];
+  // Release requires a CORE collector; here the fixture manifest marks the
+  // row collected, so a core synthetic definition is the coherent pairing.
   const collectorRegistry = [
-    {
+    defineCollector({
       scenarioId: "T3-CHAT-1",
-      cells: [cell],
-      cellKeys: [cellKey(cell)],
       collectorRef: "fixture://chat",
-      coverage: "core" as const,
-      gate: "release" as const,
+      coverage: "core",
+      gate: "release",
       evidence: "fixture",
-      world: "tier-2" as const,
-      createRunners: () => [],
-    },
+      cellDefinitions: [{ cell, execute: async () => ({ correlationIds: [] }) }],
+    }),
   ];
   const result = await runFoundationCli(
     ["--selector", "release", "--behavior", "strict", "--candidate-manifest", manifestPath, "--output-dir", outputDir],
-    baseDeps(dir, { provisioners, cellRunners, scenarioManifestPath, collectorRegistry }),
+    baseDeps(dir, { provisioners, scenarioManifestPath, collectorRegistry }),
   );
   assert.equal(result.exitCode, 0, result.message);
   assert.match(result.message, /QUALIFYING \(partial\)/);

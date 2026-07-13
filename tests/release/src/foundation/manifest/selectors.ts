@@ -291,9 +291,19 @@ export interface ExplicitSelectionInput {
   readonly fixtureNamespaceIds?: readonly string[];
 }
 
+/**
+ * explicit: ad hoc --cells for foundation baselines. An id with a REGISTERED
+ * collector expands to that collector's exact declared cell identities (host +
+ * matrix dimensions) — never a fabricated hostless/dimensionless cell, so the
+ * partial billing/LOCAL-2 slices are runnable through the shared CLI. An id in
+ * the manifest without any collector resolves as a bare fail-closed
+ * placeholder. An unknown id is a hard error. Explicit selection is always a
+ * partial baseline; partial collectors run here and only here.
+ */
 export function resolveExplicitSelection(
   parsed: ParsedManifest,
   input: ExplicitSelectionInput,
+  registry: readonly CollectorRegistryEntry[] = COLLECTOR_REGISTRY,
 ): ResolvedSelection {
   if (input.cellIds.length === 0) {
     throw new ManifestSelectionError("explicit", [
@@ -307,7 +317,13 @@ export function resolveExplicitSelection(
   for (const id of input.cellIds) {
     const inManifest = parsed.scenarioById.has(id) || parsed.journeyById.has(id);
     if (inManifest) {
-      cells.push({ scenarioId: id, world: input.world, productHost: input.productHost ?? null, disposition: "required" });
+      // Registered collectors (core OR partial) own the exact cell identity.
+      const specs = collectorCellSpecs(id, registry, false);
+      if (specs.length > 0) {
+        cells.push(...specs);
+      } else {
+        cells.push({ scenarioId: id, world: input.world, productHost: input.productHost ?? null, disposition: "required" });
+      }
       continue;
     }
     if (fixture.has(id)) {
@@ -363,12 +379,16 @@ export function resolveSelection(
         request.registry ?? COLLECTOR_REGISTRY,
       );
     case "explicit":
-      return resolveExplicitSelection(parsed, {
-        cellIds: request.cellIds,
-        world: request.world,
-        productHost: request.productHost,
-        fixtureNamespaceIds: request.fixtureNamespaceIds,
-      });
+      return resolveExplicitSelection(
+        parsed,
+        {
+          cellIds: request.cellIds,
+          world: request.world,
+          productHost: request.productHost,
+          fixtureNamespaceIds: request.fixtureNamespaceIds,
+        },
+        request.registry ?? COLLECTOR_REGISTRY,
+      );
     default:
       // An unknown selector name is a hard error, never a silent explicit run.
       throw new ManifestSelectionError(request.selector, [

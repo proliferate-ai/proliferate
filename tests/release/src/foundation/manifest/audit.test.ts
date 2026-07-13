@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { parseScenarioManifest } from "./load.js";
 import type { ParsedManifest } from "./types.js";
 import { auditCollectors } from "./audit.js";
-import type { CollectorRegistryEntry } from "./registry.js";
+import { defineCollector, type CollectorRegistryEntry } from "./registry.js";
 import type { WorldId, ProductHost } from "../contracts/identity.js";
 import { COLLECTOR_DEFINITIONS } from "./registry.js";
 import { resolveMergeSelection } from "./selectors.js";
@@ -49,17 +49,14 @@ function fixtureDef(
   collectorRef: string,
   coverage: "core" | "foundation-partial" = "core",
 ): CollectorRegistryEntry {
-  return {
+  return defineCollector({
     scenarioId,
-    cells,
-    cellKeys: cells.map((c) => cellKey(c)),
     collectorRef,
     coverage,
     gate: "merge",
     evidence: "fixture",
-    world: cells[0]?.world ?? "tier-2",
-    createRunners: () => [],
-  };
+    cellDefinitions: cells.map((cell) => ({ cell, execute: async () => undefined })),
+  });
 }
 
 const CHAT_CELL = { scenarioId: "T3-CHAT-1", world: "managed-cloud", productHost: "hosted-web", dimensions: {} } as const;
@@ -148,32 +145,31 @@ test("a collected row backed ONLY by a foundation-partial collector is a defect,
   assert.ok(report.defects.some((d) => d.includes("partial slice cannot satisfy the core row")));
 });
 
-test("a core collector pointing at a planned row is visible, not hidden behind OK", () => {
+test("a core collector pointing at a planned row is a HARD defect (flip must be atomic)", () => {
   const parsed = manifestWith({ chat: "planned" });
   const registry: CollectorRegistryEntry[] = [
     fixtureDef("T3-CHAT-1", [CHAT_CELL], "src/.../chat.ts", "core"),
   ];
   const report = auditCollectors(parsed, registry);
-  // Not a defect (planned means planned), but enumerated.
-  assert.equal(report.ok, true);
+  assert.equal(report.ok, false);
   assert.deepEqual(report.plannedCoreCollectors, ["T3-CHAT-1"]);
   assert.deepEqual(report.coreCoveredScenarioIds, []);
+  assert.ok(report.defects.some((d) => d.includes("flip the row status atomically")));
 });
 
 // ── REAL-manifest regressions: the actual build-out state stays honest. ──
 
-test("REAL MANIFEST: every row is currently planned, so nothing is core-covered and every collector is visible", () => {
+test("REAL MANIFEST: every row is planned and every current collector is foundation-partial", () => {
   const parsed = loadScenarioManifest(defaultScenarioManifestPath());
   const report = auditCollectors(parsed, COLLECTOR_DEFINITIONS);
   assert.equal(report.ok, true, report.defects.join("; "));
   // No row claims collected/enforced yet, so the core-covered set is empty …
   assert.deepEqual(report.coreCoveredScenarioIds, []);
-  // … the T2-AUTH-1 core collector is visibly waiting on a deliberate status
-  // flip rather than silently 'agreeing' …
-  assert.ok(report.plannedCoreCollectors.includes("T2-AUTH-1"));
-  // … and both partial slices are enumerated as diagnostics, never coverage.
-  assert.ok(report.foundationPartial.includes("T2-BILL-1"));
-  assert.ok(report.foundationPartial.includes("LOCAL-2"));
+  // … no collector claims core (T2-AUTH-1 skips its fresh-claim assertions on
+  // a reused profile DB, so it is NOT qualification-safe yet) …
+  assert.deepEqual(report.plannedCoreCollectors, []);
+  // … and all three slices are enumerated as diagnostics, never coverage.
+  assert.deepEqual([...report.foundationPartial].sort(), ["LOCAL-2", "T2-AUTH-1", "T2-BILL-1"]);
 });
 
 test("REAL MANIFEST: a foundation-partial collector cannot promote its core guarantee even if the row were flipped", () => {

@@ -18,7 +18,6 @@ import { FOUNDATION_HELP_TEXT, parseFoundationArgs, type FoundationCliArgs } fro
 import type { CandidateManifest, PlatformKey, RetainedProductionManifest } from "../foundation/contracts/artifacts.js";
 import type { WorldId } from "../foundation/contracts/identity.js";
 import type { WorldProvisioner } from "../foundation/contracts/world.js";
-import type { CellRunner } from "../foundation/runner/cell.js";
 import { resolveManifestHash, availableCandidateSlots } from "../foundation/runner/artifacts.js";
 import { buildPlan } from "../foundation/runner/plan-builder.js";
 import { loadScenarioManifest } from "../foundation/manifest/load.js";
@@ -41,8 +40,6 @@ export interface FoundationCliDeps {
   hostPlatform?: PlatformKey;
   /** Real world provisioners, keyed by world (other workstreams register these). */
   provisioners?: ReadonlyMap<WorldId, WorldProvisioner>;
-  /** Real cell collectors. */
-  cellRunners?: readonly CellRunner[];
   /** Injectable clock/nonce for deterministic identity. */
   now?: () => Date;
   localNonce?: string;
@@ -186,7 +183,7 @@ export async function runFoundationCli(
     candidate,
     retained,
     provisioners: deps.provisioners ?? new Map(),
-    cellRunners: deps.cellRunners ?? defaultRunners,
+    cellRunners: defaultRunners,
     preflightSource,
     ledger,
     evidence,

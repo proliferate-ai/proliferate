@@ -11,9 +11,10 @@
  *  (b) a collector naming a scenario id ABSENT from the manifest is an orphan
  *      no gate can select;
  *  (c) two collectors claiming the SAME cell key produce duplicate finals;
- *  (d) a CORE collector pointing at a still-`planned` row is NOT a defect but
- *      is reported visibly (`plannedCoreCollectors`) — the row stays
- *      unqualified until its status is flipped deliberately; and
+ *  (d) a CORE collector pointing at a still-`planned` row is a DEFECT: a core
+ *      claim and its manifest status flip must land atomically, so a lingering
+ *      planned+core pairing is an unreachable implemented cell, not an
+ *      acceptable steady state; and
  *  (e) foundation-partial collectors are enumerated (`foundationPartial`) so a
  *      diagnostic slice is never mistaken for row coverage.
  */
@@ -89,7 +90,10 @@ export function auditCollectors(
     if (collectors.length > 1) duplicates.push({ cellKey: key, collectors });
   }
 
-  // (d) core collectors pointing at planned rows: visible, not silent.
+  // (d) core collectors pointing at planned rows: a HARD defect. The core
+  // classification and the manifest status flip must land in the same change;
+  // a planned+core pairing means merge would select an unreachable placeholder
+  // while a full collector exists — neither state is acceptable.
   const plannedCore: string[] = [];
   for (const entry of registry) {
     if (entry.coverage !== "core") continue;
@@ -116,6 +120,12 @@ export function auditCollectors(
   }
   for (const dup of duplicates) {
     defects.push(`cell "${dup.cellKey}" is claimed by multiple collectors: ${dup.collectors.join(", ")}`);
+  }
+  for (const id of plannedCore) {
+    defects.push(
+      `collector for "${id}" claims core coverage but the manifest row is still planned; ` +
+        "flip the row status atomically with the core classification (a core collector must not linger unreachable)",
+    );
   }
 
   return {
