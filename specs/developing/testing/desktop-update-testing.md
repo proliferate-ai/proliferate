@@ -1,16 +1,19 @@
-# Desktop auto-update testing (tier 4)
+# Desktop auto-update mechanism testing
 
-How to build an N−1 desktop app that points at a local update feed, stage an N
-artifact there, and watch the real Tauri auto-updater converge. This is the
-tier-4 "Desktop app" mechanism from the [testing README](./README.md); read that
-first for the tier model.
+How the current local prototype builds an N−1-shaped Desktop app, points it at
+a local update feed, stages an N artifact, and exercises the real Tauri updater
+engine. This is useful mechanism signal, but it is not the complete
+`T4-DESKTOP-1` qualification journey. Read the target artifact, relaunch,
+state-continuity, AnyHarness, native CLI, ACP agent-process, and post-update-turn
+contract in [`tier-4-scenario-contract.md`](tier-4-scenario-contract.md).
 
 Read the product and UI acceptance contract in
 [`desktop-updates.md`](../../codebase/features/desktop-updates.md) alongside
-this mechanism. T4-DESKTOP-1 proves manifest fetch, semver selection, signature
-verification, and the real bundle swap headlessly. It does not render the
-packaged WebView: release-notice presentation and interaction are covered by
-focused renderer tests plus a packaged-WebView smoke when preparing a release.
+this mechanism. The current collector proves manifest fetch, semver selection,
+signature verification, and a bundle swap headlessly. It does not launch the
+installed N application, run real bundled sidecars, preserve a real runtime
+home/session, or reconcile installed agents, so it cannot claim
+`T4-DESKTOP-1` qualification by itself.
 
 The shipped app is not touched. `apps/desktop/src-tauri/tauri.conf.json` keeps
 its production endpoint (`https://downloads.proliferate.com/desktop/stable/latest.json`)
@@ -124,15 +127,18 @@ The mock app reports package version `0.1.0`, so a feed serving `>0.1.0` yields
 
 ## Running the T4 scenario
 
-The steps above are wired into one scenario, **T4-DESKTOP-1**, under the
-release-e2e runner (`tests/release/`). It builds both apps, stages the feed, and
-drives the real updater headlessly — no GUI clicking.
+The steps above are wired into the current **T4-DESKTOP-1 prototype
+collector** under the release-e2e runner. It builds both apps, stages the feed,
+and drives the updater headlessly. The target journey must replace its
+N−1-shaped build with the exact retained production artifact, use the exact
+already-built candidate N, relaunch it, and collect the remaining runtime/state
+cells.
 
 **Pieces:**
 
 | Piece | Path | What it does |
 | --- | --- | --- |
-| Scenario | `tests/release/src/scenarios/t4-desktop-1.ts` | Registered T4-DESKTOP-1. Gates on platform / CI / opt-in and shells out to the orchestrator. |
+| Scenario | `tests/release/src/scenarios/upgrade/t4-desktop-1.ts` | Current partial T4-DESKTOP-1 collector. Gates on platform / CI / opt-in and shells out to the orchestrator. |
 | Orchestrator | `tests/release/upgrade/run-t4-desktop.mjs` | Builds N-1 + N (cached), stages the feed, copies the N-1 bundle, runs the driver, asserts N-1 → N. |
 | Headless driver | `tests/release/upgrade/updater-driver/` | A **workspace-detached** cargo crate. Drives the real `tauri_plugin_updater` `check()` + `download_and_install()` against a real N-1 `.app`. |
 
@@ -161,19 +167,20 @@ RELEASE_E2E_DESKTOP_T4=1 make release-e2e LANE=local SCENARIOS=T4-DESKTOP-1
 node tests/release/upgrade/run-t4-desktop.mjs --from 0.3.17 --to 0.3.18
 ```
 
-- **Local-macOS-aarch64-only, opt-in.** Without `RELEASE_E2E_DESKTOP_T4=1`, on a
-  non-macOS-aarch64 host, or in CI (GitHub Actions), the scenario reports
-  `blocked` cleanly — it never goes red on the release gate. That is correct:
-  the gate does not provision two macOS `tauri build`s and a bundle swap.
+- **Local-macOS-aarch64-only, opt-in today.** Without
+  `RELEASE_E2E_DESKTOP_T4=1`, on a non-macOS-aarch64 host, or in CI, the current
+  scenario reports blocked. That is acceptable only for diagnostic signal.
+  Strict qualification requires a protected macOS runner and treats the
+  required Desktop cell as red when it cannot run.
 - **Builds are cached.** The orchestrator caches the built N-1 `.app`, the N
   `.app.tar.gz` + `.sig`, the signing keypair, and the driver's cargo target
   dir under `tests/release/.output/t4-desktop/` (override with `T4_WORK_DIR`).
   Re-runs skip the ~10-min builds; pass `--force` or `T4_FORCE_REBUILD=1` to
   rebuild.
-- **Sidecar stubs.** The orchestrator stages tiny placeholder executables for
-  the three `externalBin` sidecars so `tauri build` succeeds without the
-  ~10-min real anyharness runtime build (the updater test does not run the
-  agent runtime).
+- **Sidecar stubs.** The current orchestrator stages tiny placeholder
+  executables for the three `externalBin` sidecars. That is adequate for this
+  updater-engine prototype and explicitly disqualifies it as production
+  artifact or AnyHarness-convergence evidence.
 - **Version mutation is restored.** The orchestrator edits
   `tauri.conf.json`'s `version` for each build and restores it (even on
   failure) — don't commit a changed version from a T4 run.

@@ -23,8 +23,9 @@ the area docs under `specs/codebase/structures/**`.
     freshness expectations
 - [testing/README.md](testing/README.md)
   - automated testing standard: the four tiers, per-language placement,
-    merge-vs-release gates, contract fixtures, and the flow registry
-    ([testing/flows.md](testing/flows.md))
+    merge-vs-release gates, and contract fixtures; the complete target lives in
+    [testing/core-release-validation.md](testing/core-release-validation.md),
+    with world and journey contracts beside it
 - [qa/README.md](qa/README.md)
   - manual release QA process and per-surface verification checklist
 - [runbooks/README.md](runbooks/README.md)
@@ -44,7 +45,7 @@ the area docs under `specs/codebase/structures/**`.
 | Developing locally with profiles, Stripe, and mobile | [local/README.md](local/README.md), [local/dev-profiles.md](local/dev-profiles.md), [local/stripe-local-testing.md](local/stripe-local-testing.md), and [local/mobile.md](local/mobile.md). |
 | Debugging and support issue triage | [debugging/README.md](debugging/README.md), [debugging/support-reports.md](debugging/support-reports.md), and [debugging/performance-profiling.md](debugging/performance-profiling.md). |
 | Analytics and keeping observability fresh | [analytics/README.md](analytics/README.md) plus the Customer.io, Metabase, PostHog, Sentry, and anonymous telemetry docs in that folder. |
-| Automated testing standard and flow registry | [testing/README.md](testing/README.md) and [testing/flows.md](testing/flows.md). |
+| Automated testing and release qualification | [testing/README.md](testing/README.md), [testing/core-release-validation.md](testing/core-release-validation.md), and [testing/release-worlds-and-fixtures.md](testing/release-worlds-and-fixtures.md). |
 | QA and release verification | [qa/README.md](qa/README.md), with feature-specific acceptance criteria under [../codebase/features/](../codebase/features/) and primitive smoke expectations under [../codebase/primitives/](../codebase/primitives/). |
 
 PR title, label, release-note, and checklist rules live in

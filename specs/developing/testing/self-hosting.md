@@ -1,14 +1,18 @@
 # Self-Hosting Test Hand-Off
 
-Status: hand-off from the self-hosting launch pass (2026-07-09) to the testing
-arc. Maps the self-hosting surface onto the 4-tier standard (`README.md`);
-scenario steps follow `scenarios.md` conventions. Grounded in code + a full
-local production-compose smoke run 2026-07-09, and one live incident (the
-desktop-artifact gap, §5) that this battery must be able to catch.
+Status: legacy implementation and evidence hand-off from the self-hosting
+launch pass (2026-07-09). It remains useful for mechanism history and existing
+collector pointers, but its old IDs and standing-server topology are not the
+target qualification contract.
 
-Ruling already made by Pablo: self-hosting E2E runs against **standing staging
-servers** (real EC2), and tier-2 desktop flows **prefer desktop-web, escalate
-gaps** (gaps enumerated in §4).
+`core-release-validation.md` and `core-release-scenario-manifest.json` own
+self-host guarantee IDs and qualification scope;
+`release-worlds-and-fixtures.md` owns the run-scoped disposable self-host
+world; `tier-3-scenario-contract.md` and `tier-4-scenario-contract.md` own
+composed journey semantics. This file, `flows.md`, and `scenarios.md` are
+legacy implementation/evidence views and must not define or renumber target
+scenarios. The standing `alpha`/`beta` notes below describe prior evidence;
+strict qualification provisions disposable EC2 instances by candidate digest.
 
 ---
 
@@ -42,10 +46,9 @@ is coverage that does not exist yet.
 
 ## 2. Flow registry rows
 
-Registered in `flows.md` under the **Self-hosting** section (same PR as this
-doc), same rules as the rest of the registry: pointer per row,
-audit-checked, `—` is a to-do. `2*` = needs the tier-2 escalation in §4 (not
-reachable from plain desktop-web).
+The rows below record the legacy collector vocabulary. The canonical ID
+migration table in `core-release-validation.md` controls how each pointer is
+folded, renamed, split, or rewritten before it can claim target coverage.
 
 ## 3. Scenario definitions
 
@@ -94,7 +97,7 @@ password form rendered (no GitHub button); with `GITHUB_OAUTH_CLIENT_ID/
 SECRET` set ⇒ GitHub button rendered. Driven purely by
 `GET /auth/desktop/methods`.
 
-### Tier 3 (standing staging servers)
+### Tier 3 (historical standing-server evidence)
 
 Two long-lived EC2 boxes, `alpha` and `beta`, each running the production
 compose bundle behind real DNS + Caddy-issued TLS (staging subdomains — needs

@@ -53,7 +53,7 @@ migration exception and state the canonical owner/rule directly.
 | Cloud provisioning, workspace creation, commands, auth, MCPs, billing, claiming | `specs/codebase/primitives/README.md`; focused primitive specs under `specs/codebase/primitives/`, including `specs/codebase/primitives/workspace-provisioning.md` for managed workspace creation read order |
 | Product workflows and surfaces | `specs/codebase/features/README.md`; focused feature specs under `specs/codebase/features/`; `specs/codebase/features/support-reporting.md` for private support capture; `specs/codebase/features/support-system.md` for the closed-loop issue, attribution, release, and changelog contract |
 | Local dev, CI/CD, deployment, env vars, debugging, analytics, QA | `specs/developing/README.md`; focused process docs under `specs/developing/local/`, `specs/developing/deploying/`, `specs/developing/debugging/`, `specs/developing/analytics/`, `specs/developing/qa/`, `specs/developing/runbooks/`, and `specs/developing/reference/` |
-| Automated testing standard + flow registry | `specs/developing/testing/README.md` (tiers, placement, gates), `specs/developing/testing/flows.md` (flows that must never break) |
+| Automated testing and release qualification | `specs/developing/testing/README.md` (tiers and placement), `specs/developing/testing/core-release-validation.md` (required guarantees and gates), `specs/developing/testing/release-worlds-and-fixtures.md` (worlds/artifacts/fixtures), and the Tier 3/Tier 4 scenario contracts in the same folder |
 | Draft planning notes | `specs/tbd/README.md`; files under `specs/tbd/` are non-authoritative until promoted. |
 
 ## Spec Rules
