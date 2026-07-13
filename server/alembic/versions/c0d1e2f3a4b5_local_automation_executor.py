@@ -92,7 +92,9 @@ def upgrade() -> None:
             "automation_run",
             ["claim_expires_at"],
             unique=False,
-            postgresql_where=sa.text("status = 'dispatching' AND claim_expires_at IS NOT NULL"),
+            postgresql_where=sa.text(
+                "status = 'dispatching' AND claim_expires_at IS NOT NULL"
+            ),
         )
 
     if _has_table("automation"):

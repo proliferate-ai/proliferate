@@ -139,7 +139,8 @@ def upgrade() -> None:
 
     if _has_table("cloud_workspace_mobility"):
         op.execute(
-            "UPDATE cloud_workspace_mobility SET owner = 'personal_cloud' WHERE owner = 'cloud'"
+            "UPDATE cloud_workspace_mobility SET owner = 'personal_cloud' "
+            "WHERE owner = 'cloud'"
         )
 
     if not _has_table("cloud_workspace_move_cleanup_item"):

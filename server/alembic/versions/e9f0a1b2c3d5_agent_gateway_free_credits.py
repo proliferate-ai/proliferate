@@ -264,7 +264,9 @@ def downgrade() -> None:
         )
         """
     )
-    op.execute("DELETE FROM agent_gateway_budget_subject WHERE owner_scope = 'personal'")
+    op.execute(
+        "DELETE FROM agent_gateway_budget_subject WHERE owner_scope = 'personal'"
+    )
 
     op.create_check_constraint(
         "ck_agent_gateway_budget_subject_owner_scope",

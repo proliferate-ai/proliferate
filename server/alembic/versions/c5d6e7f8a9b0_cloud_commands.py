@@ -95,7 +95,8 @@ def upgrade() -> None:
                 name="ck_cloud_commands_actor_kind",
             ),
             sa.CheckConstraint(
-                "source IN ('web', 'mobile', 'slack', 'api', 'automation', 'desktop_cloud_view')",
+                "source IN ('web', 'mobile', 'slack', 'api', 'automation', "
+                "'desktop_cloud_view')",
                 name="ck_cloud_commands_source",
             ),
             sa.ForeignKeyConstraint(["actor_user_id"], ["user.id"], ondelete="SET NULL"),

@@ -270,9 +270,7 @@ def downgrade() -> None:
     if _has_table("billing_overage_remainder"):
         op.drop_table("billing_overage_remainder")
 
-    _drop_index_if_exists(
-        "ix_billing_seat_adjustment_status", table_name="billing_seat_adjustment"
-    )
+    _drop_index_if_exists("ix_billing_seat_adjustment_status", table_name="billing_seat_adjustment")
     _drop_index_if_exists(
         "ix_billing_seat_adjustment_stripe_subscription_id",
         table_name="billing_seat_adjustment",

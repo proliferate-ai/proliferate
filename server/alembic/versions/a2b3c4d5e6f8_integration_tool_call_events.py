@@ -47,7 +47,9 @@ def upgrade() -> None:
         sa.Column("error_code", sa.String(length=128), nullable=True),
         sa.Column("latency_ms", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["user.id"], ondelete="SET NULL"),
-        sa.ForeignKeyConstraint(["organization_id"], ["organization.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["organization_id"], ["organization.id"], ondelete="SET NULL"
+        ),
         sa.ForeignKeyConstraint(
             ["runtime_worker_id"], ["cloud_runtime_worker.id"], ondelete="SET NULL"
         ),

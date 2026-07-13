@@ -120,7 +120,9 @@ class TestJsonLogFormatterReleaseId:
         )
 
     def test_release_id_present_when_set(self) -> None:
-        with patch.object(logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"):
+        with patch.object(
+            logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"
+        ):
             parsed = json.loads(JsonLogFormatter().format(self._record()))
             assert parsed["release_id"] == "proliferate-server@0.3.27+3c2bbf20e215"
 
@@ -131,7 +133,9 @@ class TestJsonLogFormatterReleaseId:
 
     def test_user_id_serialized_top_level_from_context(self) -> None:
         with (
-            patch.object(logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"),
+            patch.object(
+                logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"
+            ),
             with_correlation_context(user_id="user-123"),
         ):
             parsed = json.loads(JsonLogFormatter().format(self._record()))
@@ -139,7 +143,9 @@ class TestJsonLogFormatterReleaseId:
             assert parsed["release_id"] == "proliferate-server@0.3.27+3c2bbf20e215"
 
     def test_user_id_absent_for_anonymous_work(self) -> None:
-        with patch.object(logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"):
+        with patch.object(
+            logging_module, "_RELEASE_ID", "proliferate-server@0.3.27+3c2bbf20e215"
+        ):
             parsed = json.loads(JsonLogFormatter().format(self._record()))
             assert "user_id" not in parsed
 

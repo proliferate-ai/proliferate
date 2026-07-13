@@ -70,11 +70,17 @@ async def test_ws_route_clears_sentry_user_after_proxying(
         assert fake_sdk.user == {"id": str(user.id)}
         proxied.append(True)
 
-    monkeypatch.setattr(gateway_api, "authenticate_product_user_for_gateway_websocket", _auth)
+    monkeypatch.setattr(
+        gateway_api, "authenticate_product_user_for_gateway_websocket", _auth
+    )
     monkeypatch.setattr(gateway_api, "ensure_cloud_sandbox_gateway_access", _access)
     monkeypatch.setattr(gateway_api, "proxy_websocket_to_anyharness", _proxy)
-    monkeypatch.setattr(gateway_api, "product_token_from_websocket", lambda _ws: "token")
-    monkeypatch.setattr(gateway_api, "accepted_gateway_websocket_subprotocol", lambda _ws: None)
+    monkeypatch.setattr(
+        gateway_api, "product_token_from_websocket", lambda _ws: "token"
+    )
+    monkeypatch.setattr(
+        gateway_api, "accepted_gateway_websocket_subprotocol", lambda _ws: None
+    )
 
     await gateway_api.proxy_cloud_sandbox_anyharness_websocket(
         _fake_websocket(), "some/path", cast(AsyncSession, object())
@@ -102,11 +108,17 @@ async def test_ws_route_clears_sentry_user_when_proxy_raises(
     async def _proxy(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("socket blew up")
 
-    monkeypatch.setattr(gateway_api, "authenticate_product_user_for_gateway_websocket", _auth)
+    monkeypatch.setattr(
+        gateway_api, "authenticate_product_user_for_gateway_websocket", _auth
+    )
     monkeypatch.setattr(gateway_api, "ensure_cloud_sandbox_gateway_access", _access)
     monkeypatch.setattr(gateway_api, "proxy_websocket_to_anyharness", _proxy)
-    monkeypatch.setattr(gateway_api, "product_token_from_websocket", lambda _ws: "token")
-    monkeypatch.setattr(gateway_api, "accepted_gateway_websocket_subprotocol", lambda _ws: None)
+    monkeypatch.setattr(
+        gateway_api, "product_token_from_websocket", lambda _ws: "token"
+    )
+    monkeypatch.setattr(
+        gateway_api, "accepted_gateway_websocket_subprotocol", lambda _ws: None
+    )
 
     with pytest.raises(RuntimeError):
         await gateway_api.proxy_cloud_sandbox_anyharness_websocket(
@@ -126,8 +138,12 @@ async def test_ws_route_clears_sentry_user_on_auth_failure(
         sentry_integration.set_server_sentry_user(user_id="half-authed-user")
         raise gateway_api.GatewayWebSocketAuthError("nope")
 
-    monkeypatch.setattr(gateway_api, "authenticate_product_user_for_gateway_websocket", _auth)
-    monkeypatch.setattr(gateway_api, "product_token_from_websocket", lambda _ws: "token")
+    monkeypatch.setattr(
+        gateway_api, "authenticate_product_user_for_gateway_websocket", _auth
+    )
+    monkeypatch.setattr(
+        gateway_api, "product_token_from_websocket", lambda _ws: "token"
+    )
 
     await gateway_api.proxy_cloud_sandbox_anyharness_websocket(
         _fake_websocket(), "some/path", cast(AsyncSession, object())

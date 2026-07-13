@@ -27,7 +27,6 @@ Notes:
       early-access). Change --coupon to use a different policy.
     * Codes are created in whatever mode the key is (live key -> live codes).
 """
-
 from __future__ import annotations
 
 import argparse
@@ -68,9 +67,7 @@ def _request(method: str, path: str, key: str, params: dict | None = None) -> di
     except urllib.error.HTTPError as exc:
         body = json.loads(exc.read() or b"{}")
         err = body.get("error", {})
-        raise RuntimeError(
-            f"{exc.code} {err.get('code', '')}: {err.get('message', exc.reason)}"
-        ) from None
+        raise RuntimeError(f"{exc.code} {err.get('code','')}: {err.get('message', exc.reason)}") from None
 
 
 def slug(name: str, email: str) -> str:
@@ -134,9 +131,7 @@ def main() -> int:
     ap.add_argument("--person", action="append", help="'Name:email' (repeatable)")
     ap.add_argument("--csv", help="CSV file with name,email per line")
     ap.add_argument("--coupon", default=os.environ.get("STRIPE_PROMO_COUPON_ID", DEFAULT_COUPON))
-    ap.add_argument(
-        "--redeem-days", type=int, default=30, help="days until code expires (default 30)"
-    )
+    ap.add_argument("--redeem-days", type=int, default=30, help="days until code expires (default 30)")
     ap.add_argument("--dry-run", action="store_true", help="preview without creating codes")
     args = ap.parse_args()
 
@@ -154,11 +149,9 @@ def main() -> int:
         sys.exit(f"Coupon {args.coupon} is not valid.")
     expires_at = int(time.time()) + args.redeem_days * 86400
 
-    print(
-        f"Coupon {args.coupon}: {coup.get('percent_off')}% off, {coup.get('duration')} "
-        f"{coup.get('duration_in_months') or ''} | redeem window {args.redeem_days}d"
-        f"{'  [DRY-RUN]' if args.dry_run else ''}\n"
-    )
+    print(f"Coupon {args.coupon}: {coup.get('percent_off')}% off, {coup.get('duration')} "
+          f"{coup.get('duration_in_months') or ''} | redeem window {args.redeem_days}d"
+          f"{'  [DRY-RUN]' if args.dry_run else ''}\n")
     rows = []
     for name, email in people:
         existing = existing_code_for_email(key, args.coupon, email)
