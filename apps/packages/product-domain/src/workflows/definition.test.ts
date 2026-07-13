@@ -4,7 +4,6 @@ import minimalFixture from "../../../../../fixtures/contracts/workflow-definitio
 import {
   createWorkflowDefinitionDraft,
   resolveCanonicalWorkflowModelId,
-  validateWorkflowDefinitionDraft,
   workflowDefinitionToDraft,
   workflowDraftToWriteInput,
   workflowEffortOptions,
@@ -13,6 +12,7 @@ import {
   type WorkflowCatalogModel,
   type WorkflowDefinition,
 } from "./definition";
+import { validateWorkflowDefinitionDraft } from "./validation";
 
 const catalog: WorkflowAgentCatalog = {
   catalogVersion: "probe-7",

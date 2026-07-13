@@ -231,4 +231,122 @@ describe("WorkflowDefinitionsSurface", () => {
     expect(title.value).toBe("My unsaved title");
     expect(cloud.refetchDetail).not.toHaveBeenCalled();
   });
+
+  it("returns to the list after a no-reload create then cancel", async () => {
+    const props = {
+      authCacheScope: "user-1",
+      onSelectWorkflow: vi.fn(),
+      onBackToList: vi.fn(),
+    };
+    const { rerender } = render(<WorkflowDefinitionsSurface {...props} />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "New workflow" })[0]!);
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Triage" } });
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "Investigate" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(props.onSelectWorkflow).toHaveBeenCalledWith("workflow-1"));
+
+    // The parent navigates to the saved editor, then the user goes back to the
+    // list. The stale creating flag must not reopen a blank New workflow form.
+    rerender(<WorkflowDefinitionsSurface {...props} selectedWorkflowId="workflow-1" />);
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Saved title");
+
+    rerender(<WorkflowDefinitionsSurface {...props} selectedWorkflowId={null} />);
+    expect(screen.getAllByRole("button", { name: "New workflow" }).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText("Title")).toBeNull();
+  });
+
+  it("keeps the draft across a passive revision refetch and replaces it only on Reload", async () => {
+    const newerServer = {
+      ...persisted,
+      revision: 3,
+      title: "Server title",
+    };
+    const props = {
+      authCacheScope: "user-1",
+      selectedWorkflowId: "workflow-1",
+      onSelectWorkflow: vi.fn(),
+      onBackToList: vi.fn(),
+    };
+    const { rerender } = render(<WorkflowDefinitionsSurface {...props} />);
+
+    const title = screen.getByLabelText("Title") as HTMLInputElement;
+    fireEvent.change(title, { target: { value: "My unsaved title" } });
+
+    // A passive background refetch bumps the detail revision N -> N+1.
+    cloud.useWorkflowDefinition.mockReturnValue({
+      data: newerServer,
+      isLoading: false,
+      isError: false,
+      refetch: cloud.refetchDetail,
+    });
+    rerender(<WorkflowDefinitionsSurface {...props} />);
+
+    expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("My unsaved title");
+    screen.getByText(/newer revision of this workflow is available/u);
+
+    cloud.refetchDetail.mockResolvedValue({ data: newerServer });
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Server title"),
+    );
+    expect(cloud.refetchDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers a deliberate reload after a revision conflict and adopts the newer value", async () => {
+    cloud.update.mockRejectedValue(
+      new ProliferateClientError("stale revision", 409, "workflow_revision_conflict"),
+    );
+    render(
+      <WorkflowDefinitionsSurface
+        authCacheScope="user-1"
+        selectedWorkflowId="workflow-1"
+        onSelectWorkflow={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    const title = screen.getByLabelText("Title") as HTMLInputElement;
+    fireEvent.change(title, { target: { value: "My unsaved title" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await screen.findByText(/changed in another window/u);
+    expect(title.value).toBe("My unsaved title");
+
+    cloud.refetchDetail.mockResolvedValue({
+      data: { ...persisted, revision: 3, title: "Winner title" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe("Winner title"),
+    );
+    expect(screen.queryByText(/changed in another window/u)).toBeNull();
+  });
+
+  it("adopts its own successful save without a remount", async () => {
+    const savedResponse = { ...persisted, revision: 3, title: "Saved twice" };
+    cloud.update.mockResolvedValue(savedResponse);
+    render(
+      <WorkflowDefinitionsSurface
+        authCacheScope="user-1"
+        selectedWorkflowId="workflow-1"
+        onSelectWorkflow={vi.fn()}
+        onBackToList={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Saved twice" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(cloud.update).toHaveBeenCalledWith({
+      workflowDefinitionId: "workflow-1",
+      body: expect.objectContaining({ expectedRevision: 2, title: "Saved twice" }),
+    }));
+    // The next save must use the adopted revision, not the stale base.
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Saved thrice" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(cloud.update).toHaveBeenCalledWith({
+      workflowDefinitionId: "workflow-1",
+      body: expect.objectContaining({ expectedRevision: 3, title: "Saved thrice" }),
+    }));
+  });
 });

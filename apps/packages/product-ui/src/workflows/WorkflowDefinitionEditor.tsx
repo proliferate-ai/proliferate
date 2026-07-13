@@ -38,6 +38,7 @@ export interface WorkflowDefinitionEditorProps {
   onSave: () => void;
   onCancel: () => void;
   onDelete?: () => void;
+  onReload?: () => void;
 }
 
 export function WorkflowDefinitionEditor({
@@ -55,6 +56,7 @@ export function WorkflowDefinitionEditor({
   onSave,
   onCancel,
   onDelete,
+  onReload,
 }: WorkflowDefinitionEditorProps) {
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
   const busy = saving || deleting;
@@ -91,11 +93,35 @@ export function WorkflowDefinitionEditor({
           {serverError ? (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
               {serverError}
+              {onReload ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="ml-2"
+                  disabled={busy}
+                  onClick={onReload}
+                >
+                  Reload
+                </Button>
+              ) : null}
             </div>
           ) : null}
           {catalogWarning ? (
             <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning" role="status">
               {catalogWarning}
+              {onReload ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="ml-2"
+                  disabled={busy}
+                  onClick={onReload}
+                >
+                  Reload
+                </Button>
+              ) : null}
             </div>
           ) : null}
           {issues.length > 0 ? (

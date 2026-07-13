@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useCloudAgentCatalog,
   useRepositories,
@@ -7,28 +7,23 @@ import {
   useWorkflowDefinitions,
 } from "@proliferate/cloud-sdk-react";
 import {
-  ProliferateClientError,
-  type WorkflowDefinitionCreateRequest,
-  type WorkflowDefinitionResponse,
-  type WorkflowDefinitionUpdateRequest,
-} from "@proliferate/cloud-sdk";
-import {
   createWorkflowDefinitionDraft,
-  validateWorkflowDefinitionDraft,
+  isWorkflowRevisionConflict,
+  workflowDefinitionFromResponse,
   workflowDefinitionToDraft,
-  workflowDraftToWriteInput,
+  workflowDraftToCreateRequest,
+  workflowDraftToUpdateRequest,
+  workflowWriteErrorMessage,
   type WorkflowAgentCatalog,
   type WorkflowDefinition,
-  type WorkflowDefinitionDraft,
 } from "@proliferate/product-domain/workflows/definition";
+import { validateWorkflowDefinitionDraft } from "@proliferate/product-domain/workflows/validation";
 import {
   WorkflowDefinitionEditor,
   type WorkflowRepositoryOption,
 } from "@proliferate/product-ui/workflows/WorkflowDefinitionEditor";
 import { WorkflowDefinitionList } from "@proliferate/product-ui/workflows/WorkflowDefinitionList";
-import { EmptyState } from "@proliferate/ui/layout/EmptyState";
-import { Button } from "@proliferate/ui/primitives/Button";
-import { ProductPageShell } from "@proliferate/product-ui/layout/ProductPageShell";
+import { WorkflowResourceState } from "./WorkflowResourceState";
 
 export interface WorkflowDefinitionsSurfaceProps {
   authCacheScope: string;
@@ -44,6 +39,11 @@ export function WorkflowDefinitionsSurface({
   onBackToList,
 }: WorkflowDefinitionsSurfaceProps) {
   const [creating, setCreating] = useState(false);
+  useEffect(() => {
+    if (selectedWorkflowId) {
+      setCreating(false);
+    }
+  }, [selectedWorkflowId]);
   const definitionsQuery = useWorkflowDefinitions(
     authCacheScope,
     selectedWorkflowId === null && !creating,
@@ -92,13 +92,16 @@ export function WorkflowDefinitionsSurface({
         repositories={repositories}
         repositoriesLoading={repositoriesQuery.isLoading}
         repositoriesError={repositoriesQuery.isError}
-        onCreated={onSelectWorkflow}
+        onCreated={(workflowId) => {
+          setCreating(false);
+          onSelectWorkflow(workflowId);
+        }}
         onCancel={() => setCreating(false)}
       />
     );
   }
 
-  const definitions = (definitionsQuery.data?.workflows ?? []).map(toWorkflowDefinition);
+  const definitions = (definitionsQuery.data?.workflows ?? []).map(workflowDefinitionFromResponse);
   const catalogFailedWithoutData = catalogQuery.isError && !catalog;
   return (
     <WorkflowDefinitionList
@@ -154,10 +157,12 @@ function CreateWorkflowDefinitionEditor({
     }
     setServerError(null);
     try {
-      const created = await actions.createWorkflowDefinition(toCreateRequest(draft, catalog));
+      const created = await actions.createWorkflowDefinition(
+        workflowDraftToCreateRequest(draft, catalog),
+      );
       onCreated(created.id);
     } catch (error) {
-      setServerError(workflowWriteError(error));
+      setServerError(workflowWriteErrorMessage(error));
     }
   };
 
@@ -238,16 +243,20 @@ function ExistingWorkflowDefinitionEditor({
     );
   }
 
-  const definition = toWorkflowDefinition(definitionQuery.data);
+  const definition = workflowDefinitionFromResponse(definitionQuery.data);
   return (
     <PersistedWorkflowEditor
       authCacheScope={authCacheScope}
-      key={`${definition.id}:${definition.revision}`}
+      key={definition.id}
       definition={definition}
       catalog={catalog}
       catalogError={catalogError}
       repositories={repositories}
       repositoriesLoading={repositoriesLoading}
+      reloadDefinition={async () => {
+        const result = await definitionQuery.refetch();
+        return result.data ? workflowDefinitionFromResponse(result.data) : null;
+      }}
       onSaved={onSaved}
       onBack={onBack}
     />
@@ -261,6 +270,7 @@ function PersistedWorkflowEditor({
   catalogError,
   repositories,
   repositoriesLoading,
+  reloadDefinition,
   onSaved,
   onBack,
 }: {
@@ -270,14 +280,47 @@ function PersistedWorkflowEditor({
   catalogError: boolean;
   repositories: readonly WorkflowRepositoryOption[];
   repositoriesLoading: boolean;
+  reloadDefinition: () => Promise<WorkflowDefinition | null>;
   onSaved: (workflowId: string) => void;
   onBack: () => void;
 }) {
+  // The draft is seeded from `base`, not from the live query value: a passive
+  // background refetch may bump `definition.revision` while the user is
+  // editing, and the spec requires keeping the local draft until a deliberate
+  // reload. Saves use the base revision so a stale editor still 409s.
+  const [base, setBase] = useState(definition);
   const [draft, setDraft] = useState(() => workflowDefinitionToDraft(definition));
   const [showValidation, setShowValidation] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [writeFailure, setWriteFailure] = useState<
+    { message: string; conflict: boolean } | null
+  >(null);
   const actions = useWorkflowDefinitionActions(authCacheScope);
   const issues = showValidation ? validateWorkflowDefinitionDraft(draft, catalog) : [];
+
+  const recordWriteFailure = (error: unknown) => {
+    setWriteFailure({
+      message: workflowWriteErrorMessage(error),
+      conflict: isWorkflowRevisionConflict(error),
+    });
+  };
+
+  const adopt = (next: WorkflowDefinition) => {
+    setBase(next);
+    setDraft(workflowDefinitionToDraft(next));
+    setShowValidation(false);
+    setWriteFailure(null);
+  };
+
+  const reload = async () => {
+    try {
+      const next = await reloadDefinition();
+      if (next) {
+        adopt(next);
+      }
+    } catch (error) {
+      recordWriteFailure(error);
+    }
+  };
 
   const save = async () => {
     setShowValidation(true);
@@ -285,36 +328,41 @@ function PersistedWorkflowEditor({
     if (nextIssues.length > 0) {
       return;
     }
-    setServerError(null);
+    setWriteFailure(null);
     try {
       const updated = await actions.updateWorkflowDefinition({
-        workflowDefinitionId: definition.id,
-        body: toUpdateRequest(draft, definition.revision, catalog),
+        workflowDefinitionId: base.id,
+        body: workflowDraftToUpdateRequest(draft, base.revision, catalog),
       });
+      adopt(workflowDefinitionFromResponse(updated));
       onSaved(updated.id);
     } catch (error) {
-      setServerError(workflowWriteError(error));
+      recordWriteFailure(error);
     }
   };
 
   const remove = async () => {
-    setServerError(null);
+    setWriteFailure(null);
     try {
       await actions.deleteWorkflowDefinition({
-        workflowDefinitionId: definition.id,
-        expectedRevision: definition.revision,
+        workflowDefinitionId: base.id,
+        expectedRevision: base.revision,
       });
       onBack();
     } catch (error) {
-      setServerError(workflowWriteError(error));
+      recordWriteFailure(error);
     }
   };
 
-  const versionWarning = definition.validatedCatalogVersion !== catalog.catalogVersion
-    ? `This workflow was validated with catalog ${definition.validatedCatalogVersion}. Saving will validate it against ${catalog.catalogVersion}.`
-    : catalogError
-      ? "Catalog refresh failed; editing uses the last loaded catalog."
-      : null;
+  const newerRevisionAvailable = definition.revision > base.revision;
+  const versionWarning = newerRevisionAvailable
+    ? "A newer revision of this workflow is available. Reload to edit the latest version."
+    : base.validatedCatalogVersion !== catalog.catalogVersion
+      ? `This workflow was validated with catalog ${base.validatedCatalogVersion}. Saving will validate it against ${catalog.catalogVersion}.`
+      : catalogError
+        ? "Catalog refresh failed; editing uses the last loaded catalog."
+        : null;
+  const showReload = newerRevisionAvailable || writeFailure?.conflict === true;
 
   return (
     <WorkflowDefinitionEditor
@@ -323,7 +371,7 @@ function PersistedWorkflowEditor({
       catalog={catalog}
       repositories={repositories}
       issues={issues}
-      serverError={serverError}
+      serverError={writeFailure?.message ?? null}
       catalogWarning={versionWarning}
       saving={actions.updatingWorkflowDefinition}
       deleting={actions.deletingWorkflowDefinition}
@@ -332,42 +380,8 @@ function PersistedWorkflowEditor({
       onSave={() => void save()}
       onCancel={onBack}
       onDelete={() => void remove()}
+      onReload={showReload ? () => void reload() : undefined}
     />
-  );
-}
-
-function WorkflowResourceState({
-  loading = false,
-  title,
-  description,
-  onBack,
-  onRetry,
-}: {
-  loading?: boolean;
-  title: string;
-  description: string;
-  onBack: () => void;
-  onRetry?: () => void;
-}) {
-  return (
-    <ProductPageShell
-      title="Workflows"
-      actions={<Button type="button" variant="ghost" onClick={onBack}>Back</Button>}
-      maxWidthClassName="max-w-5xl"
-      telemetryBlocked
-    >
-      {loading ? (
-        <p className="py-6 text-sm text-muted-foreground" role="status">{title}</p>
-      ) : (
-        <EmptyState
-          title={title}
-          description={description}
-          action={onRetry ? (
-            <Button type="button" variant="secondary" onClick={onRetry}>Retry</Button>
-          ) : null}
-        />
-      )}
-    </ProductPageShell>
   );
 }
 
@@ -382,54 +396,4 @@ function repositoryOptions(
     id: repository.id,
     label: `${repository.gitOwner}/${repository.gitRepoName}`,
   }));
-}
-
-function toWorkflowDefinition(response: WorkflowDefinitionResponse): WorkflowDefinition {
-  return {
-    id: response.id,
-    userId: response.userId,
-    title: response.title,
-    description: response.description,
-    schemaVersion: 1,
-    revision: response.revision,
-    validatedCatalogVersion: response.validatedCatalogVersion,
-    defaultRepoConfigId: response.defaultRepoConfigId,
-    inputs: (response.inputs ?? []).map((input) => ({ ...input })),
-    stages: response.stages.map((stage) => ({
-      harnessConfig: { ...stage.harnessConfig },
-      steps: stage.steps.map((step) => ({
-        kind: "agent.prompt",
-        prompt: step.prompt,
-        goal: step.goal ? { objective: step.goal.objective } : null,
-      })),
-    })),
-    createdAt: response.createdAt,
-    updatedAt: response.updatedAt,
-    deletedAt: null,
-  };
-}
-
-function toCreateRequest(
-  draft: WorkflowDefinitionDraft,
-  catalog: WorkflowAgentCatalog,
-): WorkflowDefinitionCreateRequest {
-  return workflowDraftToWriteInput(draft, catalog);
-}
-
-function toUpdateRequest(
-  draft: WorkflowDefinitionDraft,
-  expectedRevision: number,
-  catalog: WorkflowAgentCatalog,
-): WorkflowDefinitionUpdateRequest {
-  return {
-    ...workflowDraftToWriteInput(draft, catalog),
-    expectedRevision,
-  };
-}
-
-function workflowWriteError(error: unknown): string {
-  if (error instanceof ProliferateClientError && error.status === 409) {
-    return "This workflow changed in another window. Reload it and apply your changes again.";
-  }
-  return error instanceof Error ? error.message : "Workflow could not be saved.";
 }

@@ -63,6 +63,10 @@
       "types": "./dist/workflows/definition.d.ts",
       "import": "./dist/workflows/definition.js"
     },
+    "./workflows/validation": {
+      "types": "./dist/workflows/validation.d.ts",
+      "import": "./dist/workflows/validation.js"
+    },
     "./chats/model": {
       "types": "./dist/chats/model.d.ts",
       "import": "./dist/chats/model.js"

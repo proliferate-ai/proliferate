@@ -47,19 +47,12 @@ export function useWorkflowDefinitionActions(authCacheScope: string) {
   const client = useCloudClient();
   const queryClient = useQueryClient();
 
-  const refresh = async (workflowDefinitionId?: string) => {
+  // The root key is a prefix of both the list and detail keys, so one
+  // invalidation covers every workflow-definition query in this scope.
+  const refresh = async () => {
     await queryClient.invalidateQueries({
       queryKey: workflowDefinitionsRootKey(client.baseUrl, authCacheScope),
     });
-    if (workflowDefinitionId) {
-      await queryClient.invalidateQueries({
-        queryKey: workflowDefinitionDetailKey(
-          client.baseUrl,
-          authCacheScope,
-          workflowDefinitionId,
-        ),
-      });
-    }
   };
 
   const createMutation = useMutation<
@@ -68,7 +61,7 @@ export function useWorkflowDefinitionActions(authCacheScope: string) {
     WorkflowDefinitionCreateRequest
   >({
     mutationFn: (body) => createWorkflowDefinition(body, client),
-    onSuccess: (workflow) => refresh(workflow.id),
+    onSuccess: () => refresh(),
   });
 
   const updateMutation = useMutation<
@@ -78,7 +71,7 @@ export function useWorkflowDefinitionActions(authCacheScope: string) {
   >({
     mutationFn: ({ workflowDefinitionId, body }) =>
       updateWorkflowDefinition(workflowDefinitionId, body, client),
-    onSuccess: (workflow) => refresh(workflow.id),
+    onSuccess: () => refresh(),
   });
 
   const deleteMutation = useMutation<
