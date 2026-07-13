@@ -229,6 +229,26 @@ test("creates, reloads, reopens, edits, and deletes a durable definition", async
   await expect(page.getByText(UPDATED_TITLE, { exact: true })).toHaveCount(0);
 });
 
+// Lockout-safety contract of convergedAdminLogin, exercised with injected
+// probes so delayed post-/setup commit visibility is deterministic: the
+// credentialed POST happens exactly once, only after the read-only /setup
+// probe reports the committed claim — never as a retried login that would
+// trip the 5-failures-per-15-minutes auth throttle.
+test("delayed claim visibility yields exactly one login POST", async () => {
+  const setupStatuses = [200, 200, 404];
+  let loginCalls = 0;
+  const tokens = await convergedAdminLogin({
+    probeSetupStatus: async () => setupStatuses.shift() ?? 404,
+    login: async () => {
+      loginCalls += 1;
+      return { access_token: `token-${loginCalls}` };
+    },
+  });
+  expect(setupStatuses).toHaveLength(0);
+  expect(loginCalls).toBe(1);
+  expect(tokens.access_token).toBe("token-1");
+});
+
 /**
  * Seed a repository configuration through the real product API — the same
  * PUT /v1/cloud/repositories/{owner}/{repo}/environment surface the desktop
@@ -280,11 +300,15 @@ const CONVERGENCE_PROBE_TIMEOUT_MS = 5_000;
  * see the prior state. Poll with a short interval up to a hard overall
  * deadline; each probe is additionally raced against the smaller of the
  * per-probe cap and the remaining deadline, so one hung request cannot
- * exceed the bound. The race abandons (does not cancel) an in-flight probe
- * where the underlying API offers no cancellation seam — the shared
- * `apiRequest` helper takes no AbortSignal, and threading one through is a
- * suite-wide change this spec deliberately avoids. The `description` is
- * evaluated at failure time so it can carry the last observed state. */
+ * exceed the bound. Probes MUST be read-only/idempotent: the race abandons
+ * (does not cancel) an in-flight probe where the underlying API offers no
+ * cancellation seam — the shared `apiRequest` helper takes no AbortSignal,
+ * and threading one through is a suite-wide change this spec deliberately
+ * avoids — so an abandoned probe may still complete server-side and overlap
+ * the next attempt. Never route a mutating request (login POSTs especially:
+ * auth throttles 5 failures per email/IP for 15 minutes) through this. The
+ * `description` is evaluated at failure time so it can carry the last
+ * observed state. */
 async function pollUntil(
   description: string | (() => string),
   probe: () => Promise<boolean>,
@@ -320,26 +344,34 @@ async function pollUntil(
   );
 }
 
-/** Converge the admin password login: a clean first-run claim commits its
- * transaction after the /setup response, so the very first login may race
- * it. Persistent auth failures still surface — the bound is the same 15s
- * convergence deadline, and the failure carries the last login error. */
-async function convergedAdminLogin(): Promise<{ access_token: string }> {
-  let tokens: { access_token: string } | null = null;
-  let lastError = "never attempted";
+/** Converge the admin login without lockout risk: a clean first-run claim
+ * commits its transaction after the /setup response, so the admin account
+ * may briefly be invisible to other requests. Retrying the credentialed
+ * login POST would trip the auth throttle (5 failures per email/IP locks
+ * the actor out for 15 minutes), so instead poll the read-only GET /setup
+ * signal — it flips to 404 only once the committed claim is visible, and
+ * the account commits in the same transaction — then POST the login
+ * exactly once. A real credential failure surfaces immediately instead of
+ * being retried into a lockout. `deps` exists for the focused delayed-
+ * visibility test below; production callers use the defaults. */
+async function convergedAdminLogin(deps?: {
+  probeSetupStatus?: () => Promise<number>;
+  login?: () => Promise<{ access_token: string }>;
+}): Promise<{ access_token: string }> {
+  const probeSetupStatus = deps?.probeSetupStatus
+    ?? (async () => (await fetch(`${apiBaseUrl()}/setup`)).status);
+  const login = deps?.login ?? (() => passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD));
+
+  let lastStatus = "never probed";
   await pollUntil(
-    () => `admin password login to converge (last error: ${lastError})`,
+    () => `GET /setup to report the committed claim as 404 (last seen: ${lastStatus})`,
     async () => {
-      try {
-        tokens = await passwordLogin(ADMIN_EMAIL, ADMIN_PASSWORD);
-        return true;
-      } catch (error) {
-        lastError = error instanceof Error ? error.message : String(error);
-        return false;
-      }
+      const status = await probeSetupStatus();
+      lastStatus = `status ${status}`;
+      return status === 404;
     },
   );
-  return tokens!;
+  return login();
 }
 
 /** Wait for the definition to be readable at the expected revision through
