@@ -20,6 +20,7 @@ from proliferate.constants.cloud import (
     CLOUD_RUNTIME_WORKER_DESKTOP_ENROLLMENT_TTL_SECONDS,
     CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
 )
+from proliferate.db.store import cloud_desired_versions as desired_versions_store
 from proliferate.db.store import organizations as organization_store
 from proliferate.db.store import runtime_workers as store
 from proliferate.integrations.desktop_downloads import (
@@ -250,15 +251,46 @@ async def record_heartbeat(
         worker_version=worker_version,
         anyharness_version=anyharness_version,
     )
+    desired = await _resolve_desired_versions(db, worker_id=worker_id)
     return WorkerHeartbeatResponse(
         worker_id=str(worker_id),
         server_time=utcnow(),
         heartbeat_interval_seconds=CLOUD_RUNTIME_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-        desired_versions=WorkerDesiredVersions(
-            worker=pinned_worker_version(),
-            anyharness=pinned_runtime_version(),
-            catalog_version=served_agent_catalog_version(),
+        desired_versions=desired,
+    )
+
+
+async def _resolve_desired_versions(
+    db: AsyncSession,
+    *,
+    worker_id: UUID,
+) -> WorkerDesiredVersions:
+    """Resolve the desired versions this worker converges toward.
+
+    A target-scoped record for the worker's sandbox overrides the global
+    image-env pin *per component*; an unset component defers to the global pin,
+    so an unrelated target (no record, or a record touching only the other
+    component) is never affected. This is the run/target-scoped desired-version
+    channel the Tier-4 upgrade world flips from N-1 to N without mutating the
+    shared global pin. Catalog version is always the globally served one.
+    """
+    global_worker = pinned_worker_version()
+    global_anyharness = pinned_runtime_version()
+
+    cloud_sandbox_id = await store.get_worker_cloud_sandbox_id(db, worker_id=worker_id)
+    override = (
+        await desired_versions_store.get_for_sandbox(db, cloud_sandbox_id=cloud_sandbox_id)
+        if cloud_sandbox_id is not None
+        else None
+    )
+    return WorkerDesiredVersions(
+        worker=(override.worker if override and override.worker is not None else global_worker),
+        anyharness=(
+            override.anyharness
+            if override and override.anyharness is not None
+            else global_anyharness
         ),
+        catalog_version=served_agent_catalog_version(),
     )
 
 

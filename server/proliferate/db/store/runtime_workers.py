@@ -340,6 +340,22 @@ async def get_worker_by_token_hash(
     return _worker_value(row) if row is not None else None
 
 
+async def get_worker_cloud_sandbox_id(
+    db: AsyncSession,
+    *,
+    worker_id: UUID,
+) -> UUID | None:
+    """The cloud sandbox this worker runs in, or ``None`` for a desktop worker.
+
+    The target-scoped desired-version resolver uses this to find a per-sandbox
+    override; a desktop worker (no sandbox) always defers to the global pin.
+    """
+    row = await db.get(CloudRuntimeWorker, worker_id)
+    if row is None or row.status == "revoked":
+        return None
+    return row.cloud_sandbox_id
+
+
 async def touch_worker_heartbeat(
     db: AsyncSession,
     *,
