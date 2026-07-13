@@ -19,6 +19,8 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | [support-system-alignment.md](support-system-alignment.md) | Historical live-system audit and superseded planning record. See the [accepted support-system contract](../codebase/features/support-system.md). |
 | [support-system-end-to-end-handoff.md](support-system-end-to-end-handoff.md) | Execution-grade worktree, implementation, AWS cutover, canary, rollback, and definition-of-done handoff for the accepted support-system contract. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
+| [web-desktop-unification-migration.md](web-desktop-unification-migration.md) | Non-authoritative rollout history and execution detail for the Web/Desktop product-client unification. The promoted contract is [web-desktop-client-unification.md](../codebase/features/web-desktop-client-unification.md); the binding execution/freeze ledger is [web-desktop-unification-rollout.md](../developing/deploying/web-desktop-unification-rollout.md). |
+| [web-desktop-unification-intake-ledger.md](web-desktop-unification-intake-ledger.md) | Historical 2026-07-13 intake snapshot of open PRs, worktrees, and migration conflicts. Binding intake/freeze snapshots live in the [rollout ledger](../developing/deploying/web-desktop-unification-rollout.md); this file is sweep input only. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 
 ## Promotion Rules

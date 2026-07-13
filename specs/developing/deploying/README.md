@@ -18,6 +18,12 @@ configuration, and self-hosted deployment. Local development belongs under
   image sources.
 - [self-hosted-aws.md](self-hosted-aws.md): one-click AWS CloudFormation launch
   stack that bootstraps the canonical self-hosted deployment.
+- [web-desktop-unification-rollout.md](web-desktop-unification-rollout.md):
+  binding execution and freeze ledger for the Web/Desktop client unification
+  chain — chain state, PR-1 intake snapshots, the PR-2 freeze ledger, and the
+  deployment-selection/external-configuration item schema. The contract itself
+  is canonical at
+  [`../../codebase/features/web-desktop-client-unification.md`](../../codebase/features/web-desktop-client-unification.md).
 
 ## Process Map
 

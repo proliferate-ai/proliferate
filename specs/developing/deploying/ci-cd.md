@@ -53,7 +53,8 @@ Configuration and secret locations:
 - GitHub environment variables hold non-secret lane config and gates, including
   `AWS_REGION`, `AWS_DEPLOY_ROLE_ARN`, `VERCEL_*`, `WEB_URL`, `API_*`,
   `MOBILE_DEPLOY_ENABLED`, `EAS_*`, `DESKTOP_DEPLOY_ENABLED`,
-  `DESKTOP_DOWNLOADS_BASE_URL`, `WORKERS_DEPLOY_ENABLED`, E2B template refs,
+  `DESKTOP_DOWNLOADS_BASE_URL`, `WORKERS_DEPLOY_ENABLED`,
+  `LITELLM_DEPLOY_ENABLED`, E2B template refs,
   and non-secret support SSM parameter names plus legacy tracker
   ids/labels/limits retained during cleanup.
 - GitHub environment secrets hold deploy credentials used directly by Actions,
@@ -117,6 +118,7 @@ Before deploying:
    - `EAS_SUBMIT_ENABLED`
    - `DESKTOP_DEPLOY_ENABLED`
    - `WORKERS_DEPLOY_ENABLED`
+   - `LITELLM_DEPLOY_ENABLED`
 5. For user-facing releases, confirm whether the landing page, public docs,
    changelog/release notes, in-app copy, install docs, or support docs need to
    change with the release. Update them before deployment when they are part of
@@ -301,7 +303,9 @@ only_surfaces=all       # deploy every lane that is enabled by env gates
 
 If the intent is "only web" but the diff also detects mobile, server, E2B, or
 desktop, use `only_surfaces=web`.
-Only mobile, desktop, and workers currently have environment gates. Setting
+Only mobile, desktop, workers, and LiteLLM currently have environment gates
+(`MOBILE_DEPLOY_ENABLED`, `DESKTOP_DEPLOY_ENABLED`, `WORKERS_DEPLOY_ENABLED`,
+`LITELLM_DEPLOY_ENABLED` — each defaults to `false` when unset). Setting
 `EAS_SUBMIT_ENABLED=false` skips TestFlight submission only; the mobile build
 can still run when `MOBILE_DEPLOY_ENABLED=true`. Server, web, and E2B do not
 have skip gates, so use `only_surfaces` when those detected lanes must not run.
@@ -389,6 +393,7 @@ and any remaining owner.
   _deploy-server.yml         # reusable ECR/ECS/Alembic/server-health lane
   _deploy-workers.yml        # reusable hosted worker lane, gated until workers are enabled
   _deploy-web.yml            # reusable Vercel deploy/alias/smoke lane
+  _deploy-litellm.yml        # reusable LiteLLM ECR/ECS lane, gated by LITELLM_DEPLOY_ENABLED
   _deploy-mobile.yml         # reusable EAS/TestFlight lane, gated until app identity is ready
   _deploy-desktop.yml        # reusable desktop release lane, gated until beta/stable channel split
   cloud-tests.yml            # real-provider cloud lifecycle + cloud-backed runtime suites
@@ -1015,13 +1020,17 @@ Deploy graph:
      promoted SHA, and no static `DESKTOP_RELEASE_REF` is used
    - workers are intentionally gated until the hosted worker ECS command/service
      is canonical
+   - LiteLLM deploys ECR/ECS when `LITELLM_DEPLOY_ENABLED=true` for the target
+     environment and skips otherwise
 4. Upload a deploy summary artifact.
 
 Important: `force_surfaces` is additive. It forces listed surfaces to deploy in
 addition to any surfaces detected from the diff. Use `only_surfaces` when the
-intent is exact, such as `only_surfaces=web` for a web-only hotfix. Only mobile,
-desktop, and workers currently have environment gates. Setting `only_surfaces`
-is the supported way to keep detected server/web/E2B lanes from running.
+intent is exact, such as `only_surfaces=web` for a web-only hotfix. Only
+mobile, desktop, workers, and LiteLLM currently have environment gates
+(`MOBILE_DEPLOY_ENABLED`, `DESKTOP_DEPLOY_ENABLED`, `WORKERS_DEPLOY_ENABLED`,
+`LITELLM_DEPLOY_ENABLED`). Setting `only_surfaces` is the supported way to
+keep detected server/web/E2B lanes from running.
 
 Required GitHub environment vars/secrets:
 
@@ -1116,6 +1125,17 @@ APPLE_API_ISSUER
 APPLE_API_KEY
 APPLE_API_KEY_PATH
 KEYCHAIN_PASSWORD
+
+# litellm, when enabled
+LITELLM_DEPLOY_ENABLED
+ECR_LITELLM_REPOSITORY
+ECS_LITELLM_SERVICE
+ECS_LITELLM_CONTAINER_NAME
+LITELLM_DATABASE_URL      # secret
+LITELLM_MASTER_KEY        # secret
+AGENT_GATEWAY_MANAGED_ANTHROPIC_API_KEY # secret
+AGENT_GATEWAY_MANAGED_OPENAI_API_KEY    # secret
+AGENT_GATEWAY_MANAGED_XAI_API_KEY       # secret
 ```
 
 For staging, the canonical values are expected to point at staging resources
@@ -1192,6 +1212,7 @@ EAS_SUBMIT_PROFILE=staging
 EAS_SUBMIT_ENABLED=true
 WORKERS_DEPLOY_ENABLED=false
 DESKTOP_DEPLOY_ENABLED=<unset; defaults to false>
+LITELLM_DEPLOY_ENABLED=true
 ```
 
 Current hosted production inventory:
