@@ -197,9 +197,7 @@ def _init_and_capture_release(monkeypatch: pytest.MonkeyPatch) -> str:
 def test_init_prefers_configured_canonical_server_release(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        settings, "sentry_release", "proliferate-server@0.3.27+3c2bbf20e215"
-    )
+    monkeypatch.setattr(settings, "sentry_release", "proliferate-server@0.3.27+3c2bbf20e215")
     assert _init_and_capture_release(monkeypatch) == "proliferate-server@0.3.27+3c2bbf20e215"
 
 
