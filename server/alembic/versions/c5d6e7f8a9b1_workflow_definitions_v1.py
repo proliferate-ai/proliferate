@@ -1,7 +1,7 @@
 """workflow definitions v1
 
-Revision ID: b3c4d5e6f7a9
-Revises: a2b3c4d5e6f8
+Revision ID: c5d6e7f8a9b1
+Revises: b3c4d5e6f7a9
 Create Date: 2026-07-12 00:00:00.000000
 """
 
@@ -14,8 +14,8 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision: str = "b3c4d5e6f7a9"
-down_revision: str | Sequence[str] | None = "a2b3c4d5e6f8"
+revision: str = "c5d6e7f8a9b1"
+down_revision: str | Sequence[str] | None = "b3c4d5e6f7a9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
