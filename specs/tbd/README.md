@@ -17,6 +17,7 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
+| [web-desktop-unification-migration.md](web-desktop-unification-migration.md) | Decision-complete plan for replacing the separate Desktop/Web connected products with one shared product client and two thin hosts. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 
 ## Promotion Rules

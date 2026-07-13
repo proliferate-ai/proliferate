@@ -2,8 +2,13 @@
 
 How tests are organized across the repo: what each tier owns, where test files
 live, what gates merges vs releases, and how a change decides which tests it
-must add. `flows.md` (sibling) is the registry of end-to-end flows that must
-never break; this doc is the law those flows are enforced under.
+must add. [`core-release-validation.md`](core-release-validation.md) owns the
+complete target guarantee and qualification semantics;
+[`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md),
+[`tier-3-scenario-contract.md`](tier-3-scenario-contract.md), and
+[`tier-4-scenario-contract.md`](tier-4-scenario-contract.md) own the live world
+and journey composition. `flows.md` is a legacy current-coverage view being
+replaced by generated manifest/collector output.
 
 Companion: `specs/developing/qa/README.md` owns *manual* release QA. This doc
 owns automated testing. A flow covered by an automated tier here does not also
@@ -19,14 +24,17 @@ where the boundary to fakes sits. Four tiers:
 | Tier | What is real | What is faked | Runs | Gates |
 | --- | --- | --- | --- | --- |
 | **1 — Unit / contract** | Logic; Postgres/SQLite where the guarantee lives in the DB | Everything across a network | Every PR, seconds | **Merge** |
-| **2 — Mocked intent** | Server + desktop web frontend + real Postgres, booted on a port | AnyHarness, sandbox provider, LLM, IdP, email, Slack — every third party | Every PR, minutes | **Merge** |
-| **3 — Live end-to-end** | Everything: real E2B template for the version, real AnyHarness binary, real agents on cheap models | Nothing (cheap LLM + cheap sandbox tier, but real) | Release train + nightly | **Release** |
-| **4 — Upgrade path** | An N−1 install upgraded in place to N | The update feed (stub server; the artifacts it serves are real) | Release train | **Release** |
+| **2 — Mocked intent** | Server + product browser hosts + real Postgres, booted on ports; real Stripe test mode for billing | AnyHarness, sandbox provider, LLM, IdP, email, Slack, and every other external provider | Every PR, minutes | **Merge** |
+| **3 — Live end-to-end** | The selected world's real candidate server/runtime/provider boundaries, real agents on cheap models, and exact deploy artifacts | Boundaries outside the selected world are absent rather than simulated | Release train + nightly | **Release** |
+| **4 — Upgrade path** | Exact retained production N−1 state upgraded through the shipped mechanism to exact candidate N | No claimed product boundary; updater/control channels are isolated while their artifacts and verification remain real | Release train | **Release** |
 
-**The gate rule (hard):** the merge gate is tiers 1–2 only. No real LLM, real
-sandbox, or real third party ever runs in the merge gate. A flaky merge gate
-poisons agent-driven merging; tier 3/4 failures block the *release* and file
-issues into the issues service — they never block a merge.
+**The gate rule (hard):** the merge gate is tiers 1–2 only. No real LLM or real
+sandbox runs in the merge gate. Stripe test mode is the one explicit
+real-network exception; trusted CI fails if its test credential or required
+billing cells are missing. Tier 3/4 failures block the *release* and file issues
+into the issues service — they never block an ordinary merge. Current-main
+fail-open exceptions are recorded, without being normalized as success, in
+[`core-release-validation.md`](core-release-validation.md#current-enforcement-exception).
 
 **Real-LLM tests assert outcomes, not transcripts.** "Run reached `completed`,
 file exists, emit validated against schema" — never "the agent said X."
@@ -79,13 +87,13 @@ the per-merge coverage they buy, and tier 1 already owns the logic in those
 paths. If nightly/promotion gaps in agent/workflow flows bite repeatedly, that
 evidence — not speculation — justifies building a fake then.
 
-The fakes that do exist are cheap and stable:
+The controlled dependencies are:
 
 | Dependency | Fake |
 | --- | --- |
 | SSO IdP | Mock OIDC container (asserts any identity on demand) |
 | Invite/notification email | Token capture (test-only endpoint), no send |
-| Stripe | Stripe test mode + test clocks |
+| Stripe | **Real network exception:** Stripe test mode + test clocks; required and fail-closed in trusted CI |
 | Poll feeds | Stub feed (replaying, per the poll contract) |
 
 Lives in `tests/intent/`: one stack-boot fixture (`stack/`), fakes as
@@ -104,20 +112,31 @@ state — never sandbox readiness or run completion, which are tier 3.
 
 ## Tier 3 — live end-to-end
 
-Tests the **deploy artifact, not just the code**: build (or cache-resolve) the
-E2B template for the version, run the real AnyHarness binary, drive real
-agents on cheap models through core flows — provision/pause/resume/connect,
-chat per cataloged agent × auth method, workflow services live (schedule +
-poll triggers, emit, chaining, Slack delivery), config updates applied by live
-agents, local↔cloud migration, billing metering integrity.
+Tests the **deploy artifact, not just the code** in three deliberately distinct
+worlds:
 
-- Lives in `tests/release/` as **one runner CLI with lane flags**
-  (`make release-e2e LANE=... DESKTOP=web|native AGENTS=...`). GitHub Actions
-  is one caller of it; the runner must work identically from a laptop. No
-  CI-only setup steps in workflow YAML.
-- Desktop web-port mode is the default lane; native-shell smoke is a separate
-  nightly/pre-release lane that reuses the release build's artifact in CI and
-  the local dev build locally.
+- local runtime deeply covers candidate AnyHarness, every supported harness,
+  managed-gateway and user-key routes, live configuration, local workspaces,
+  sessions, preferences, integrations, and managed-LLM billing;
+- managed cloud covers public candidate API, immutable candidate E2B template,
+  Worker/Supervisor enrollment, repository materialization, cloud access,
+  secrets, compute accounting, holds, and recovery; and
+- self-host covers disposable candidate installation, TLS, setup/claim,
+  invitation/login, Desktop connection, advertised capabilities, and selected
+  optional profiles.
+
+No world repeats the complete Cartesian product already proved by another.
+The exact dependency matrix lives in
+[`release-worlds-and-fixtures.md`](release-worlds-and-fixtures.md#world-dependency-matrix).
+
+- Lives in `tests/release/` as **one runner CLI with explicit world, product-host,
+  selector, and diagnostic/strict inputs**. Existing lane flags are migration
+  compatibility only. GitHub Actions is one caller of the same provisioners and
+  scenarios used from a laptop; workflow YAML supplies protected inputs and
+  shard selection, not a second setup implementation.
+- Desktop's browser renderer is the broad default product host; packaged/native
+  Desktop is selected only where the guarantee crosses Tauri, sidecars,
+  filesystem/keychain ownership, relaunch, or another native boundary.
 - The E2B template build is cached by content hash of its inputs (runtime
   binary, Dockerfile, agent pins); unchanged inputs resolve to the
   already-uploaded template.
@@ -125,59 +144,59 @@ agents, local↔cloud migration, billing metering integrity.
   version bump runs that agent's smoke on staging; failure means the agent
   stays pinned to last-good and an issue is filed.
 
-### Tier-3 environment (the wired-in infrastructure)
+### Tier-3 environment
 
-The tier-3 stack is a real deployment, not a laptop assembly: sandbox-mode
-Stripe, the real LLM gateway configured with cheap models, the real API
-server, desktop (web-port lane by default), real agents in real E2B
-sandboxes. Two constraints:
+The selected Tier 3 world uses real dependencies. It does not boot E2B, EC2,
+Stripe, Desktop, or hosted Web merely because another world or cell needs it.
+Candidate AnyHarness, Desktop, server, template, and self-host artifacts are
+built once per content identity and reused across compatible shards. Stable
+provider capacity such as the qualification LiteLLM deployment, Stripe test
+account, E2B team, GitHub App, and AWS network may be reused, while every
+actor, virtual key, customer, sandbox, instance, repository grant, and desired
+version remains run-scoped.
+
+Two constraints apply:
 
 - **The API server must be publicly reachable** — sandboxes call back into it
   for integrations, gateway auth, and the worker control loop. Staging
   satisfies this; a purely local tier-3 lane still needs a tunnel or a
   reachable server URL.
-- Credentials the runner burns (cheap-LLM key, E2B team, test Slack
-  workspace, test provider accounts) are named in
+- Credentials the selected cells require (cheap-LLM key, E2B team, Stripe
+  test mode, test GitHub App, test provider accounts) are named in
   `specs/developing/reference/env-vars.yaml`, never hardcoded in scenarios.
 
 ---
 
 ## Tier 4 — upgrade path
 
-Fresh-install testing never catches a broken updater, and a broken updater
-strands every existing user. There is no single "upgrade path" — five distinct
-mechanisms exist, and each is tested at its own seam. The general pattern:
-boot N−1 from kept artifacts with seeded N−1 data, stub the *feed* (the
-artifacts it serves are real), trigger the mechanism, assert convergence.
+Fresh-install testing never catches a broken updater, and a broken updater can
+strand existing users. The two standing core journeys are deliberately narrow:
 
-| Mechanism | Learns via | Feed knob | Testable today? |
-| --- | --- | --- | --- |
-| Worker self-update (sandbox only) | Heartbeat `desiredVersions.worker` | Server pins (`WORKER_VERSION`) + CDN base `DESKTOP_DOWNLOADS_BASE_URL` — both **server-side** env vars (the worker asks the API server, which 302-redirects to the CDN base; stub by pointing the base at a file server the sandbox can reach, e.g. via ngrok) | **Yes** — the priority scenario |
-| Agent catalog convergence (existing sandboxes + local runtimes) | Heartbeat `desiredVersions.catalogVersion` → worker pushes catalog → runtime reconcile reinstalls drifted CLIs | Server catalog version | **Yes** — full-chain test; today only per-hop units exist |
-| AnyHarness binary self-update (sandbox only) | Heartbeat `desiredVersions.anyharness` → worker downloads pinned runtime, stops/swaps/relaunches it in place | Server pin (`RUNTIME_VERSION`) + the download base the redirect resolves to — both **server-side** (same stub shape as the worker row) | Mechanism built (`specs/tbd/anyharness-self-update-v1.md`); scenario written (`tests/release/src/scenarios/upgrade/t4-cloud-1.ts`, T4-CLOUD-1). Two gaps it surfaced: the `runtime/`/`worker/` CDN trees the redirects resolve to were never published (now `scripts/ci-cd/publish-runtime-cdn.sh` + release-runtime.yml `publish-cdn`), and the binary's hardcoded `CARGO_PKG_VERSION` (0.1.0) `--version`/`/health` fails the worker's exact-match preflight/health-gate — no real pin converges (issue #1089) |
-| Desktop app (Tauri updater; bundles anyharness/worker sidecars) | 30-min poll of `latest.json` | Shipped default hardcoded in `tauri.conf.json`; **build-overridable** via a `tauri build --config` overlay (`make desktop-test-build UPDATER_URL=...`) — the shipped build is untouched | **Yes** — build an N−1 app pointed at a local feed and drive a real update. See [desktop-update-testing.md](./desktop-update-testing.md) |
-| E2B template | Build-time only; rolling `:staging`/`:production` tags affect **new** sandboxes only | `E2B_TEMPLATE_NAME` / `E2B_TEMPLATE_REF` | Yes — new-sandbox-gets-new-template + old-workspace-still-wakes |
-| SQLite/Alembic migrations | Ships inside the new binary/server | — | Yes — forward-apply on kept N−1 data |
+1. `T4-DESKTOP-1`: launch the exact retained production N−1 Desktop, complete
+   a real turn, perform the signed Tauri update to the already-built candidate
+   N, relaunch against the same runtime home, reconcile installed native CLIs
+   and ACP agent processes to N's pins, preserve auth/workspace/session state,
+   and complete another turn.
+2. `T4-RUNTIME-1`: provision the exact production N−1 E2B template against the
+   candidate qualification API, complete a real turn, change only that target's
+   desired AnyHarness version to N, let Worker heartbeat write the durable
+   request, let Supervisor verify/activate/health-gate it, reconcile installed
+   native CLIs and ACP agent processes, preserve state, and complete another
+   turn.
 
-The two heartbeat-driven mechanisms are the priority: they are the ones that
-run **unattended against every live customer sandbox** on every release, and
-neither has an end-to-end test today (coverage is per-hop unit tests). The
-worker scenario must include a live session on the box surviving the
-swap-and-exec.
+Every other Tier 4 row is selected by a changed artifact or persisted contract
+and reuses the smallest retained state or standing world. Self-host `update.sh`
+is change-triggered; public artifact integrity is an every-release gate. These
+do not create additional standing live worlds.
 
-Sandbox AnyHarness in-place update is **built**
-(`specs/tbd/anyharness-self-update-v1.md`): the sandbox worker watches
-`desiredVersions.anyharness`, downloads the pinned runtime through the server
-redirect, and stops/swaps/relaunches the binary in place, health-gating and
-rolling back on failure. A new anyharness now reaches a running sandbox without
-a new template. Desktop gets a new anyharness only via the app bundle, and that
-remains bundle-only by design (the worker leaves the gate off). The supervisor
-`update/` module validates and stages artifacts handed to it but fetches and
-swaps nothing, and is deliberately not the update owner in v1. The end-to-end
-T4 scenario that asserts convergence (binary **and** agent versions, cloud and
-local consistent) is the remaining follow-up.
+The current direct-Worker activation implementation is a migration exception:
+the target owner is Supervisor. The first ownership-transition release needs a
+dedicated bridge test; thereafter only the ordinary N−1→N path remains. Exact
+artifact, controller, evidence, and current-gap details live in
+[`tier-4-scenario-contract.md`](tier-4-scenario-contract.md).
 
-Lives in `tests/release/upgrade/`, runs under the same runner CLI.
+Tier 4 lives under `tests/release/src/scenarios/upgrade/` and runs through the
+same runner and candidate manifest locally and in GitHub Actions.
 
 ---
 
@@ -196,8 +215,9 @@ Lives in `tests/release/upgrade/`, runs under the same runner CLI.
 6. Did it touch the updater, template versioning, or migrations? → Tier 4.
 
 **PR obligation:** a PR that adds or changes a flow adds/updates tests at the
-tier where its guarantees live, and names them in the PR description. New
-end-to-end flows also add a row to `flows.md` in the same PR.
+tier where its guarantees live, and names them in the PR description. New or
+changed guarantees update the target manifest/contract and collector metadata
+in the same PR; generated flow and execution views must remain clean.
 
 **Postmortem rule:** any bug caught at tier 3/4 or in production gets an
 answer to "which lower tier should have owned this," and that test lands with
@@ -241,10 +261,11 @@ genuinely needs a real agent or sandbox is tier 3, not tier 2.
   (Google/GitHub OAuth, live IdP) are tier 3; tier 2 asserts the *seam that
   decides* which flow fires (discovery answer, availability probe, redirect
   kicked off).
-- **Naming:** scenario ids are `T2-<AREA>-<n>` (e.g. `T2-AUTH-5`). Define the
-  scenario in `scenarios.md`, then register the flow's row in `flows.md`
-  pointing at the spec file — **in the same PR** (the PR obligation and the
-  `flows.md` completeness audit both enforce this).
+- **Naming/registration:** guarantee ids are `T2-<AREA>-<n>` (for example
+  `T2-AUTH-5`). The spec declares those ids in collected metadata; the
+  bidirectional manifest audit proves every claimed id exists and every
+  enforced cell is collected. Do not hand-edit a pointer/status row in
+  `flows.md`.
 - **Run it locally:** `pnpm -C tests/intent test` (or a single file, e.g.
   `pnpm -C tests/intent exec playwright test specs/<flow>.spec.ts`).
   `TIER2_INTENT_SKIP_RUNTIME=1` skips building the Rust runtime (nothing in
@@ -254,9 +275,10 @@ genuinely needs a real agent or sandbox is tier 3, not tier 2.
 
 ### Tier 3 — a new live scenario
 
-Tier 3 lives in `tests/release/` as **one runner CLI with lane flags**, not a
-pile of independent test files. It builds/cache-resolves the real E2B template,
-runs the real AnyHarness binary, and drives real agents on cheap models.
+Tier 3 lives in `tests/release/` as **one runner CLI**, not a pile of
+independent test files. It selects an explicit world and cell set, consumes the
+exact candidate artifact receipt, and drives the real boundaries that world
+owns.
 
 - **Extend the existing smoke; do not add a new boot-the-world test.** Tier 3
   stays O(1) per lane, not O(features) — a per-feature tier-3 test is the smell
@@ -269,13 +291,15 @@ runs the real AnyHarness binary, and drives real agents on cheap models.
 - **No credential ever lives in a scenario.** Every key the runner needs is
   inventoried in `specs/developing/reference/env-vars.yaml`; the runner
   fails fast with a named-variable error when one is missing.
-- **Run it locally** — this is a first-class path, not a CI afterthought:
-  `make release-e2e LANE=... DESKTOP=web AGENTS=...`, pointed at staging (the
-  default, same publicly reachable API the sandboxes call back into) or a local
-  stack plus tunnel. A red CI run must reproduce by copying its lane flags into
-  the local command.
-- **Naming/registration:** scenario ids are `T3-<AREA>-<n>`; define in
-  `scenarios.md` and register the `flows.md` row (tier 3) in the same PR.
+- **Run it locally** — this is a first-class path, not a CI afterthought. Select
+  the same world, product host, cell set, behavior, and candidate manifest as
+  CI. A managed-cloud run still provisions real remote E2B and a publicly
+  reachable candidate API when invoked from a laptop; “local” describes the
+  execution host, not a different product world.
+- **Naming/registration:** stable guarantee ids are `T3-<AREA>-<n>` and
+  composed journey ids are defined in the Tier 3 contract. Register both in
+  the target manifest and declare collected cell metadata on the executable
+  scenario. Generated views, not prose pointer cells, report coverage.
 
 Deciding *which* tier a change belongs in is the "Deciding where a change's
 tests go" checklist above; this section is only about mechanics once you know
@@ -283,35 +307,46 @@ the tier.
 
 ---
 
-## What gates what (current CI mapping)
+## What gates what (target mapping)
 
 | Gate | Jobs |
 | --- | --- |
-| Merge (every PR) | `repo-shape`, `cargo test --workspace`, server `pytest tests/unit tests/integration`, shared-frontend-package vitest, desktop vitest, tier-2 intent suite (`intent-tests` + `intent-billing` in `.github/workflows/intent-tests.yml`) |
-| Staging → production promotion | Tier 3 runner per lane + tier 4 upgrade scenario, against staging. Red blocks promotion and files an issue. **Flake-tolerant:** a green re-run unblocks; repeated red on the same scenario is a real failure, not a flake |
-| Nightly | Tier 3 lanes (incl. native-shell smoke) against whatever is on staging; failures file issues, never block merges |
+| Merge queue | Tier 1 plus the complete trusted Tier 2 cell set, including real Stripe test mode; every required cell is green |
+| Staging → production promotion | Strict Tier 3 standing cells plus change-triggered Tier 4 cells for the exact SHA/artifact manifest; signed aggregate evidence is required by promotion |
+| Nightly / local diagnostic | Broad cells may report blocked/expected-fail and continue for signal, but always emit non-qualifying evidence and alert on newly blocked cells |
+
+Current workflows do not enforce this mapping: they use advisory
+`continue-on-error`, permit missing-credential skips, and production promotion
+does not consume release-E2E evidence. The precise migration exception and
+closure order are in
+[`core-release-validation.md`](core-release-validation.md#current-enforcement-exception).
 
 ## Running tier 3/4 locally
 
-Local runs are a first-class path, not a CI afterthought — the runner is
-developed and debugged locally against staging:
+Local runs are a first-class path, not a CI afterthought. Laptop and GitHub
+Actions invocations call the same artifact loaders, preflight, world
+provisioners, readiness checks, scenarios, evidence collector, and cleanup
+reconciler:
 
-- `make release-e2e LANE=... DESKTOP=web AGENTS=...` runs from a laptop,
-  pointed either at **staging** (default for debugging what CI saw — same
-  publicly reachable API the sandboxes call back into) or at a local stack
-  plus tunnel.
-- Every key the runner needs (cheap-LLM key, E2B team, sandbox-mode Stripe,
-  test Slack workspace, test provider accounts) is inventoried in
-  `specs/developing/reference/env-vars.yaml` with where to obtain it. A missing
-  key blocks only the scenarios/lanes that require it (reported as blocked, the
-  same as an out-of-band gate) rather than failing the whole run, so a
-  partially-credentialed environment still produces signal. No scenario ever
-  embeds a credential. The CI local lane additionally self-seeds its durable
-  user per run through the real `/setup` claim, so the local-lane server-
-  mediated scenarios run without any repo secret (the durable-user env stays
-  the mechanism for the staging lane).
-- A red CI run must be reproducible by copying the run's lane flags into the
-  local command against the same staging deploy.
+- select the same world, product host, required-cell selector, result behavior,
+  and candidate manifest used by CI;
+- remote dependencies remain remote and real: a laptop-managed-cloud run still
+  uses E2B, AWS-hosted public qualification services, the qualification
+  LiteLLM deployment, Stripe test mode where selected, and the test GitHub App;
+- each key is loaded from ignored local secret storage or protected GitHub
+  environments and is inventoried in
+  `specs/developing/reference/env-vars.yaml`; no scenario embeds a credential;
+- diagnostic behavior may report only affected cells blocked and always emits
+  non-qualifying evidence; strict behavior fails preflight before provisioning
+  or spend when any selected requirement is missing; and
+- reproducing CI means using its candidate/retained manifest hashes, world,
+  selector, product host, and scenario inputs. Shared durable staging users and
+  mutable global staging version pins are diagnostic legacy mechanisms, not
+  qualification fixtures.
+
+Merge and release are selectors for different required cell sets. The runner
+itself has only diagnostic and strict result behavior; planning/dry-run cannot
+produce green qualification evidence.
 
 Migration exceptions, named per house rule: desktop vitest (443 files) is not
 yet wired into the merge gate. (The tier-2 intent suite and the tier-3/4 runner
