@@ -11,7 +11,7 @@
  * register themselves through `deps`.
  */
 
-import { accessSync, constants as fsConstants, existsSync, readFileSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 import { FOUNDATION_HELP_TEXT, parseFoundationArgs, type FoundationCliArgs } from "./foundation-args.js";
@@ -28,6 +28,8 @@ import { JsonlEvidenceSink } from "../foundation/evidence/jsonl-sink.js";
 import type { PreflightSource } from "../foundation/preflight/engine.js";
 import { loadReleaseEnvironment } from "../foundation/preflight/env-loader.js";
 import { runFoundation } from "../foundation/runner/engine.js";
+import { SHARD_SCOPE_NONQUALIFYING_REASON } from "../foundation/contracts/evaluate.js";
+import type { AggregateArtifact } from "../foundation/contracts/aggregate.js";
 
 export interface FoundationCliDeps {
   env?: NodeJS.ProcessEnv;
@@ -161,6 +163,32 @@ export async function runFoundationCli(
   // A single-shard invocation covers the whole run, so runFoundation computed
   // it in-process; a multi-shard invocation reports its shard as an aggregate
   // input and the external aggregate command owns qualification.
+  // Persist the aggregate verdict as its OWN durable artifact — qualification
+  // never lives inside a shard evidence document.
+  let aggregateArtifactPath: string | null = null;
+  if (aggregate) {
+    const artifact: AggregateArtifact = {
+      schemaVersion: 1,
+      kind: "aggregate-verdict",
+      expected: {
+        runId: run.runId,
+        sourceSha: run.sourceSha,
+        candidateManifestHash,
+        retainedManifestHash,
+        shardCount: shard.shardCount,
+      },
+      scenarioManifestHash: fullPlan.scenarioManifestHash,
+      selector: fullPlan.selector,
+      behavior: fullPlan.behavior,
+      shardIds: [shard.shardId],
+      evaluation: aggregate,
+      emittedAt: new Date().toISOString(),
+    };
+    aggregateArtifactPath = path.join(outputRoot, run.runId, "aggregate-verdict.json");
+    mkdirSync(path.dirname(aggregateArtifactPath), { recursive: true });
+    writeFileSync(aggregateArtifactPath, JSON.stringify(artifact, null, 2));
+  }
+
   const verdictLine = aggregate
     ? aggregate.verdict.qualifying
       ? `verdict: QUALIFYING (${aggregate.verdict.label}) [aggregate over 1 shard]`
@@ -181,22 +209,21 @@ export async function runFoundationCli(
     `run=${run.runId} origin=${run.origin} host=${run.executionHost}`,
     `env-file: ${envLoad.status} (${envLoad.filePath})`,
     `evidence: ${evidence.evidencePath}`,
+    ...(aggregateArtifactPath ? [`aggregate-verdict: ${aggregateArtifactPath}`] : []),
     verdictLine,
   ];
 
-  // Exit code policy: a strict run fails the process when it does not
-  // qualify (single-shard: aggregate verdict) or when its shard is unhealthy
-  // (multi-shard: any missing/non-green/duplicate shard-assigned cell).
-  // A diagnostic run is informational and exits 0 even when non-qualifying.
+  // Exit code policy:
+  //  - single-shard strict: fail unless the aggregate qualifies;
+  //  - multi-shard strict: fail on EVERY real shard evaluator defect,
+  //    ignoring only the intentional shard-cannot-qualify-alone marker;
+  //  - diagnostic is informational and exits 0 even when non-qualifying.
+  const shardDefects = evaluation.verdict.qualifying
+    ? []
+    : evaluation.verdict.reasons.filter((r) => r !== SHARD_SCOPE_NONQUALIFYING_REASON);
   const strictFailed =
     args.behavior === "strict" &&
-    (aggregate
-      ? !aggregate.verdict.qualifying
-      : evaluation.missingCellKeys.length > 0 ||
-        evaluation.nonGreenCellKeys.length > 0 ||
-        evaluation.duplicateCellKeys.length > 0 ||
-        !emitted.cleanup.complete ||
-        !emitted.preflight.complete);
+    (aggregate ? !aggregate.verdict.qualifying : shardDefects.length > 0);
   return { exitCode: strictFailed ? 1 : 0, message: lines.join("\n") };
 }
 

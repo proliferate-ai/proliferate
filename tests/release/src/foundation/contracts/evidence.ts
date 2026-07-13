@@ -27,7 +27,12 @@ export interface RunEvidence {
   readonly run: RunIdentity;
   readonly shard: ShardIdentity;
   readonly behavior: ResultBehavior;
-  /** Hard nonqualification marker: true only for a strict, non-dry-run pass. */
+  /**
+   * Always false: a shard evidence document is a nonqualifying aggregate
+   * input. Qualification lives exclusively in the separate durable
+   * AggregateArtifact (contracts/aggregate.ts). The field remains so old
+   * documents stay parseable and forgeries are detectable.
+   */
   readonly qualifying: boolean;
   readonly dryRun: boolean;
   readonly plan: SelectedCellPlan;

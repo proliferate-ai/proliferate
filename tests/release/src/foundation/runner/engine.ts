@@ -163,12 +163,12 @@ export async function runFoundation(input: FoundationRunInput): Promise<Foundati
     previousBlockedCellKeys: input.previousBlockedCellKeys,
   });
 
-  // 6. Build the shard evidence document. Its `qualifying` flag means "this
-  //    document alone constitutes qualification": that can only be true when
-  //    the invocation covers the complete run (shardCount === 1) AND the
-  //    cross-shard aggregate — the sole qualifying verdict — passes strictly.
-  //    A partial shard's document is a nonqualifying aggregate input, always.
-  const draft: RunEvidence = {
+  // 6. Emit the shard evidence document. It is ALWAYS a nonqualifying
+  //    aggregate input: qualification lives in the separate durable
+  //    AggregateArtifact, never inside a shard document (a shard document
+  //    claiming qualification beside a nonqualifying shard evaluation would
+  //    be self-contradictory and forgeable).
+  const evidence: RunEvidence = {
     schemaVersion: 1,
     run: input.run,
     shard: input.shard,
@@ -183,16 +183,26 @@ export async function runFoundation(input: FoundationRunInput): Promise<Foundati
     evaluation,
     emittedAt: now(),
   };
+  await input.evidence.finalize(evidence);
+
+  // 7. Single-shard runs cover the whole run, so the aggregate — the sole
+  //    qualifying verdict — is computable in-process against the run's own
+  //    trusted identities. Multi-shard runs return null and are aggregated
+  //    externally (aggregate CLI) from collected shard evidence.
   const aggregate =
     input.shard.shardCount === 1 && !input.dryRun
-      ? evaluateAggregate({ plan: input.fullPlan, shards: [draft] })
+      ? evaluateAggregate({
+          plan: input.fullPlan,
+          expected: {
+            runId: input.run.runId,
+            sourceSha: input.run.sourceSha,
+            candidateManifestHash: input.run.candidateManifestHash,
+            retainedManifestHash: input.run.retainedManifestHash,
+            shardCount: input.shard.shardCount,
+          },
+          shards: [evidence],
+        })
       : null;
-  const evidence: RunEvidence = {
-    ...draft,
-    qualifying:
-      aggregate !== null && aggregate.verdict.qualifying && behavior === "strict" && !input.dryRun,
-  };
-  await input.evidence.finalize(evidence);
 
   return { evidence, evaluation, aggregate };
 }

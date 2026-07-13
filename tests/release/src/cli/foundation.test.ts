@@ -130,9 +130,14 @@ test("strict with a ready world and one green collector qualifies and exits 0", 
   );
   assert.equal(result.exitCode, 0);
   assert.match(result.message, /QUALIFYING \(partial\)/);
+  // Qualification lives in the separate durable aggregate artifact.
+  const aggregatePath = path.join(outputDir, "local-0123456789ab-nonce", "aggregate-verdict.json");
+  const aggregateDoc = JSON.parse(readFileSync(aggregatePath, "utf8"));
+  assert.equal(aggregateDoc.kind, "aggregate-verdict");
+  assert.equal(aggregateDoc.evaluation.verdict.qualifying, true);
   const evidencePath = path.join(outputDir, "local-0123456789ab-nonce", "shard-1-of-1", "evidence.json");
   const doc = JSON.parse(readFileSync(evidencePath, "utf8"));
-  assert.equal(doc.qualifying, true);
+  assert.equal(doc.qualifying, false, "shard documents never carry the qualification claim");
   assert.equal(doc.finals.length, 1);
   assert.equal(doc.finals[0].status, "green");
   assert.equal(doc.finals[0].cellKey, cellKey(cell));

@@ -67,6 +67,25 @@ export function assignShards(
   return { shardCount, assignments };
 }
 
+/**
+ * The exact deterministic set of cell keys a shard owns under the canonical
+ * one-based shard identity. The aggregate uses this to reject a shard that
+ * reports finals outside its assignment.
+ */
+export function shardOwnedCellKeys(
+  plan: SelectedCellPlan,
+  shard: { readonly shardIndex: number; readonly shardCount: number },
+): ReadonlySet<string> {
+  const assignment = assignShards(plan.cells, shard.shardCount);
+  const owned = new Set<string>();
+  for (const cell of plan.cells) {
+    if (assignment.assignments[cell.cellKey] === shard.shardIndex - 1) {
+      owned.add(cell.cellKey);
+    }
+  }
+  return owned;
+}
+
 function fnv1a(input: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i += 1) {
