@@ -333,11 +333,19 @@ Usage & Limits pane render those numbers (Playwright).
 
 ## Tier 2 — workflows (to the seam)
 
-**PARKED (ruled 2026-07-08): the workflows surface is being reworked in a
-large in-flight PR arc; these scenarios are not built now. The workflows
-branches rebase on top of the test harness when they land and add their own
-tests per the PR obligation in `README.md`. Definitions below are kept as the
-starting contract for that work, not as current to-dos.**
+### T2-WFDEF-1: definition authoring lifecycle
+
+Sign in through the Desktop web UI, create a personal workflow definition with
+one input and one catalog-backed prompt/goal stage, explicitly choose no
+default repository, then save. Hard-reload and reopen the definition, assert
+the exact stored values and ordering, edit and save revision 2, hard-reload
+again, then delete it and assert both the normal list and authenticated API no
+longer expose it. The real server and Postgres are in scope; AnyHarness is
+skipped because this PR does not execute definitions.
+
+**PARKED (ruled 2026-07-08): the execution scenarios below remain deferred
+until their owning workflow-execution PRs. T2-WFDEF-1 above is active and
+covers the PR1 definition-only seam.**
 
 ### T2-WF-1: definition lifecycle + run-to-delivery-seam
 Steps: create workflow in editor (steps incl. one invalid ref to assert live

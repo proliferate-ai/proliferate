@@ -22,5 +22,6 @@ export * from "./client/users.js";
 export * from "./client/timing.js";
 export * from "./client/workspaces.js";
 export * from "./client/worktree-policy.js";
+export * from "./client/workflows.js";
 export * from "./streams/sse.js";
 export * from "./types/index.js";

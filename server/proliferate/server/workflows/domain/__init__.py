@@ -1,0 +1,1 @@
+"""Pure workflow definition rules."""

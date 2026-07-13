@@ -50,7 +50,7 @@ export function App() {
           <Route path="workflows" element={<WorkflowsPage />} />
           <Route path="workflows/:workflowId" element={<WorkflowsPage />} />
           <Route path="automations" element={<LegacyRouteRedirect to={routes.workflows} />} />
-          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} extractLastSegment />} />
+          <Route path="automations/:workflowId" element={<LegacyRouteRedirect to={routes.workflows} />} />
           <Route path="support" element={<SupportPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/:sectionId" element={<SettingsPage />} />
@@ -91,15 +91,9 @@ function isSettingsPath(pathname: string): boolean {
 
 function LegacyRouteRedirect({
   to,
-  extractLastSegment = false,
 }: {
   to: string;
-  extractLastSegment?: boolean;
 }) {
   const location = useLocation();
-  const match = extractLastSegment
-    ? location.pathname.split("/").filter(Boolean).at(-1)
-    : null;
-  const suffix = match ? `/${encodeURIComponent(decodeURIComponent(match))}` : "";
-  return <Navigate to={`${to}${suffix}${location.search}${location.hash}`} replace />;
+  return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
 }
