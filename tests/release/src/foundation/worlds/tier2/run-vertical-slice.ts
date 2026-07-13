@@ -106,6 +106,7 @@ async function main(): Promise<void> {
       { cell: billingCellIdentity, cellKey: billingCellKey, disposition: "required", legacy: false },
     ],
     deferredScenarioIds: [],
+    scenarioManifestHash: null,
   };
 
   // ── Trusted secret preflight (real resolution this time, not a fake) —

@@ -34,6 +34,13 @@ export interface SelectedCellPlan {
   readonly cells: readonly PlannedCell[];
   /** Deferred guarantee ids enumerated so no run silently drops them. */
   readonly deferredScenarioIds: readonly string[];
+  /**
+   * Canonical hash of core-release-scenario-manifest.json the selector
+   * resolved against. Required (non-null) for the merge and release
+   * selectors — an unbound release/merge plan can never qualify. Explicit
+   * ad hoc selections may carry null and are always partial baselines.
+   */
+  readonly scenarioManifestHash: string | null;
 }
 
 export interface ShardAssignment {

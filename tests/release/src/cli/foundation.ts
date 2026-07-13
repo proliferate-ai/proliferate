@@ -141,7 +141,7 @@ export async function runFoundationCli(
     availableArtifactSlots: availableCandidateSlots(candidate, isPlatformKey(hostPlatform) ? hostPlatform : undefined),
   };
 
-  const { evaluation, evidence: emitted } = await runFoundation({
+  const { evaluation, evidence: emitted, aggregate } = await runFoundation({
     run,
     shard,
     fullPlan,
@@ -157,19 +157,46 @@ export async function runFoundationCli(
     secretValues: secretValuesFromLoad(env, envLoad.loadedNames, envLoad.preservedNames),
   });
 
+  // The qualifying verdict is the AGGREGATE, never shard-scope evaluation.
+  // A single-shard invocation covers the whole run, so runFoundation computed
+  // it in-process; a multi-shard invocation reports its shard as an aggregate
+  // input and the external aggregate command owns qualification.
+  const verdictLine = aggregate
+    ? aggregate.verdict.qualifying
+      ? `verdict: QUALIFYING (${aggregate.verdict.label}) [aggregate over 1 shard]`
+      : `verdict: NON-QUALIFYING\n  - ${aggregate.verdict.reasons.join("\n  - ")}`
+    : args.dryRun
+    ? `verdict: NON-QUALIFYING\n  - ${
+        evaluation.verdict.qualifying ? "dry-run/planning cannot emit green product evidence" : evaluation.verdict.reasons.join("\n  - ")
+      }`
+    : `verdict: SHARD INPUT (nonqualifying by contract; aggregate all ${shard.shardCount} shards to qualify)\n` +
+      `  shard health: ${
+        evaluation.missingCellKeys.length === 0 && evaluation.nonGreenCellKeys.length === 0 && evaluation.duplicateCellKeys.length === 0
+          ? "all shard-assigned required cells green"
+          : `missing=${evaluation.missingCellKeys.length} nonGreen=${evaluation.nonGreenCellKeys.length} duplicate=${evaluation.duplicateCellKeys.length}`
+      }`;
+
   const lines = [
     `foundation: world=${args.world} selector=${args.selector} behavior=${args.behavior} shard=${shard.shardId} dryRun=${args.dryRun}`,
     `run=${run.runId} origin=${run.origin} host=${run.executionHost}`,
     `env-file: ${envLoad.status} (${envLoad.filePath})`,
     `evidence: ${evidence.evidencePath}`,
-    evaluation.verdict.qualifying
-      ? `verdict: QUALIFYING (${evaluation.verdict.label})`
-      : `verdict: NON-QUALIFYING\n  - ${evaluation.verdict.reasons.join("\n  - ")}`,
+    verdictLine,
   ];
 
-  // Exit code policy: a strict run fails the process when it does not qualify.
+  // Exit code policy: a strict run fails the process when it does not
+  // qualify (single-shard: aggregate verdict) or when its shard is unhealthy
+  // (multi-shard: any missing/non-green/duplicate shard-assigned cell).
   // A diagnostic run is informational and exits 0 even when non-qualifying.
-  const strictFailed = args.behavior === "strict" && !emitted.qualifying;
+  const strictFailed =
+    args.behavior === "strict" &&
+    (aggregate
+      ? !aggregate.verdict.qualifying
+      : evaluation.missingCellKeys.length > 0 ||
+        evaluation.nonGreenCellKeys.length > 0 ||
+        evaluation.duplicateCellKeys.length > 0 ||
+        !emitted.cleanup.complete ||
+        !emitted.preflight.complete);
   return { exitCode: strictFailed ? 1 : 0, message: lines.join("\n") };
 }
 

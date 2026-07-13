@@ -29,7 +29,7 @@ function minimalEvidence(): RunEvidence {
     behavior: "strict",
     qualifying: false,
     dryRun: false,
-    plan: { selector: "explicit", behavior: "strict", worlds: [], cells: [], deferredScenarioIds: [] },
+    plan: { selector: "explicit", behavior: "strict", worlds: [], cells: [], deferredScenarioIds: [], scenarioManifestHash: null },
     preflight: { results: [], blockedCellKeys: [], complete: true },
     worlds: [],
     finals: [],

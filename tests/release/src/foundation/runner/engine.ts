@@ -30,6 +30,7 @@ import { WorldReadinessError } from "../contracts/world.js";
 import type { EvidenceSink, RunEvidence, WorldEvidence } from "../contracts/evidence.js";
 import type { CellAttempt, CellStatus, FinalCellResult, RunEvaluation } from "../contracts/results.js";
 import { evaluateRun } from "../contracts/evaluate.js";
+import { evaluateAggregate, type AggregateEvaluation } from "../contracts/aggregate.js";
 
 import { CleanupRunner } from "../ledger/reconcile.js";
 import { runPreflight, deriveRequirements, type PreflightSource } from "../preflight/engine.js";
@@ -62,7 +63,15 @@ export interface FoundationRunInput {
 
 export interface FoundationRunResult {
   readonly evidence: RunEvidence;
+  /** Shard-scope evaluation: always nonqualifying (aggregate input). */
   readonly evaluation: RunEvaluation;
+  /**
+   * Cross-shard aggregate — the ONLY qualifying verdict. Computed in-process
+   * only when this invocation covers the complete run (shardCount === 1);
+   * multi-shard runs aggregate their collected shard evidence externally via
+   * contracts/aggregate.ts `evaluateAggregate`.
+   */
+  readonly aggregate: AggregateEvaluation | null;
 }
 
 export async function runFoundation(input: FoundationRunInput): Promise<FoundationRunResult> {
@@ -154,14 +163,17 @@ export async function runFoundation(input: FoundationRunInput): Promise<Foundati
     previousBlockedCellKeys: input.previousBlockedCellKeys,
   });
 
-  // 6. Emit immutable evidence exactly once.
-  const evidence: RunEvidence = {
+  // 6. Build the shard evidence document. Its `qualifying` flag means "this
+  //    document alone constitutes qualification": that can only be true when
+  //    the invocation covers the complete run (shardCount === 1) AND the
+  //    cross-shard aggregate — the sole qualifying verdict — passes strictly.
+  //    A partial shard's document is a nonqualifying aggregate input, always.
+  const draft: RunEvidence = {
     schemaVersion: 1,
     run: input.run,
     shard: input.shard,
     behavior,
-    // Defense in depth: qualifying is true ONLY for a strict, non-dry-run pass.
-    qualifying: evaluation.verdict.qualifying && behavior === "strict" && !input.dryRun,
+    qualifying: false,
     dryRun: input.dryRun,
     plan,
     preflight,
@@ -171,9 +183,18 @@ export async function runFoundation(input: FoundationRunInput): Promise<Foundati
     evaluation,
     emittedAt: now(),
   };
+  const aggregate =
+    input.shard.shardCount === 1 && !input.dryRun
+      ? evaluateAggregate({ plan: input.fullPlan, shards: [draft] })
+      : null;
+  const evidence: RunEvidence = {
+    ...draft,
+    qualifying:
+      aggregate !== null && aggregate.verdict.qualifying && behavior === "strict" && !input.dryRun,
+  };
   await input.evidence.finalize(evidence);
 
-  return { evidence, evaluation };
+  return { evidence, evaluation, aggregate };
 }
 
 interface ExecuteWorldsArgs {

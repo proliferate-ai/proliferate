@@ -28,7 +28,7 @@ function fakeEvidence(overrides: Partial<RunEvidence> = {}): RunEvidence {
     behavior: "diagnostic",
     qualifying: false,
     dryRun: false,
-    plan: { selector: "explicit", behavior: "diagnostic", worlds: ["tier-2"], cells: [], deferredScenarioIds: [] },
+    plan: { selector: "explicit", behavior: "diagnostic", worlds: ["tier-2"], cells: [], deferredScenarioIds: [], scenarioManifestHash: null },
     preflight: { results: [], blockedCellKeys: [], complete: true },
     worlds: [],
     finals: [],

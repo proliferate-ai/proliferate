@@ -54,6 +54,9 @@ function harness(opts: HarnessOptions) {
     behavior: opts.behavior,
     cells: opts.cells,
     deferredScenarioIds: opts.deferredScenarioIds,
+    // merge/release selectors must bind to the scenario manifest to qualify.
+    scenarioManifestHash:
+      (opts.selector === "release" || opts.selector === "merge") ? "f".repeat(64) : null,
   });
 
   const provisioner = new FakeTier2Provisioner(opts.provisionerOptions);
@@ -104,8 +107,14 @@ function cleanup(dir: string): void {
 
 test("strict green: exactly one green per selected cell qualifies and emits evidence", async () => {
   const h = harness({ cells: [tier2("T2-AUTH-1"), tier2("T2-INV-1")], behavior: "strict" });
-  const { evaluation, evidence } = await runFoundation(h.input);
-  assert.equal(evaluation.verdict.qualifying, true);
+  const { evaluation, evidence, aggregate } = await runFoundation(h.input);
+  assert.ok(aggregate, "single-shard run must compute the in-process aggregate");
+  assert.equal(aggregate.verdict.qualifying, true);
+  assert.equal(
+    evaluation.verdict.qualifying,
+    false,
+    "shard-scope evaluation is a nonqualifying aggregate input by contract",
+  );
   assert.equal(evidence.qualifying, true);
   assert.equal(h.provisioner.prepareCalls, 1, "world prepared once for both cells");
   assert.ok(existsSync(h.sink.evidencePath), "evidence emitted on success");
@@ -321,9 +330,10 @@ test("strict qualification is labelled partial when the plan enumerates deferred
     deferredScenarioIds: ["T3-CHAT-1"],
   });
   const partial = await runFoundation(withDeferred.input);
-  assert.equal(partial.evaluation.verdict.qualifying, true);
+  assert.ok(partial.aggregate);
+  assert.equal(partial.aggregate.verdict.qualifying, true);
   assert.equal(
-    partial.evaluation.verdict.qualifying === true && partial.evaluation.verdict.label,
+    partial.aggregate.verdict.qualifying === true && partial.aggregate.verdict.label,
     "partial",
     "a deferred-guarantee run can only ever be a partial baseline",
   );
@@ -334,7 +344,7 @@ test("strict qualification is labelled partial when the plan enumerates deferred
   const explicit = harness({ cells: [tier2("T2-AUTH-1")], behavior: "strict" });
   const explicitResult = await runFoundation(explicit.input);
   assert.equal(
-    explicitResult.evaluation.verdict.qualifying === true && explicitResult.evaluation.verdict.label,
+    explicitResult.aggregate?.verdict.qualifying === true && explicitResult.aggregate.verdict.label,
     "partial",
     "explicit selector => partial baseline label even with no deferred guarantees",
   );
@@ -343,7 +353,7 @@ test("strict qualification is labelled partial when the plan enumerates deferred
   const release = harness({ cells: [tier2("T2-AUTH-1")], behavior: "strict", selector: "release" });
   const releaseResult = await runFoundation(release.input);
   assert.equal(
-    releaseResult.evaluation.verdict.qualifying === true && releaseResult.evaluation.verdict.label,
+    releaseResult.aggregate?.verdict.qualifying === true && releaseResult.aggregate.verdict.label,
     "full",
     "release selector with no deferred guarantees => full core-release label",
   );
@@ -357,8 +367,14 @@ test("not_required cells never demand a result and do not block strict qualifica
     // Only the required cell gets a collector; the not_required cell intentionally has none.
     runners: (plan) => plan.cells.filter((c) => c.disposition === "required").map((c) => greenRunner(c.cell)),
   });
-  const { evaluation } = await runFoundation(h.input);
+  const { evaluation, aggregate } = await runFoundation(h.input);
   assert.equal(evaluation.missingCellKeys.length, 0, "the not_required cell is not a missing result");
-  assert.equal(evaluation.verdict.qualifying, true);
+  assert.ok(aggregate, "single-shard run must compute the in-process aggregate");
+  assert.equal(aggregate.verdict.qualifying, true);
+  assert.equal(
+    evaluation.verdict.qualifying,
+    false,
+    "shard-scope evaluation is a nonqualifying aggregate input by contract",
+  );
   cleanup(h.dir);
 });

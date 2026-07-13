@@ -105,6 +105,7 @@ async function main(): Promise<void> {
     worlds: ["local-runtime"],
     cells: [{ cell, cellKey: key, disposition: "required", legacy: false }],
     deferredScenarioIds: [],
+    scenarioManifestHash: null,
   };
 
   const ctx: WorldContext = {

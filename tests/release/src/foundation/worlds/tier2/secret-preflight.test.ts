@@ -4,7 +4,7 @@ import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { evaluateRun } from "../../contracts/evaluate.js";
+import { evaluateRun, evaluateCells } from "../../contracts/evaluate.js";
 import type { SelectedCellPlan } from "../../contracts/plan.js";
 import { cellKey, type CellIdentity } from "../../contracts/identity.js";
 import type { FinalCellResult } from "../../contracts/results.js";
@@ -25,6 +25,7 @@ function planFor(behavior: "diagnostic" | "strict"): SelectedCellPlan {
     worlds: ["tier-2"],
     cells: [{ cell: BILLING_CELL, cellKey: BILLING_CELL_KEY, disposition: "required", legacy: false }],
     deferredScenarioIds: [],
+    scenarioManifestHash: null,
   };
 }
 
@@ -105,7 +106,7 @@ test("strict path: Stripe absent -> preflight incomplete fails the run BEFORE th
   assert.deepEqual(evaluation.missingCellKeys, [BILLING_CELL_KEY]);
 });
 
-test("strict path: Stripe present (FAKE satisfied) and the cell goes green -> the run qualifies", () => {
+test("strict path: Stripe present (FAKE satisfied) and the cell goes green -> the cell-set core passes", () => {
   const fakeSatisfied: StripeKeyResolution = { status: "satisfied", detail: "fake: present", secretKey: "sk_test_fake" };
   const preflight = buildTier2StripePreflight([BILLING_CELL_KEY], fakeSatisfied);
   const greenFinal: FinalCellResult = {
@@ -127,14 +128,14 @@ test("strict path: Stripe present (FAKE satisfied) and the cell goes green -> th
       },
     ],
   };
-  const evaluation = evaluateRun({
+  const cellEval = evaluateCells({
     plan: planFor("strict"),
-    preflight,
     finals: [greenFinal],
-    cleanup: { attempted: 1, cleaned: 1, alreadyAbsent: 0, failed: [], complete: true },
+    preflightComplete: preflight.complete,
+    cleanupComplete: true,
     dryRun: false,
   });
-  assert.equal(evaluation.verdict.qualifying, true);
+  assert.equal(cellEval.verdict.qualifying, true);
 });
 
 // ── resolveStripeTestSecretKey: real resolution logic, injected env/file so

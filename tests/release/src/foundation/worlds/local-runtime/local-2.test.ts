@@ -13,7 +13,7 @@ import type { WorldContext, LocalRuntimeWorldHandle } from "../../contracts/worl
 import type { CandidateManifest } from "../../contracts/artifacts.js";
 import type { FinalCellResult } from "../../contracts/results.js";
 import type { SelectedCellPlan } from "../../contracts/plan.js";
-import { evaluateRun } from "../../contracts/evaluate.js";
+import { evaluateRun, evaluateCells } from "../../contracts/evaluate.js";
 
 class InMemoryLedger implements CleanupLedger {
   readonly rows: CleanupEntry[] = [];
@@ -125,6 +125,7 @@ test("a blocked cell cannot qualify a strict run (evaluate treats blocked as non
     worlds: ["local-runtime"],
     cells: [{ cell: result.cell, cellKey: result.cellKey, disposition: "required", legacy: false }],
     deferredScenarioIds: [],
+    scenarioManifestHash: null,
   };
   const evaluation = evaluateRun({
     plan,
@@ -137,7 +138,7 @@ test("a blocked cell cannot qualify a strict run (evaluate treats blocked as non
   assert.ok(evaluation.nonGreenCellKeys.includes(result.cellKey));
 });
 
-test("a synthetic green result for the cell qualifies a strict run", () => {
+test("a synthetic green result for the cell satisfies the strict cell-set core (shard scope stays a nonqualifying aggregate input)", () => {
   const cell = local2CellIdentity("claude");
   const key = cellKey(cell);
   const green: FinalCellResult = {
@@ -165,13 +166,23 @@ test("a synthetic green result for the cell qualifies a strict run", () => {
     worlds: ["local-runtime"],
     cells: [{ cell, cellKey: key, disposition: "required", legacy: false }],
     deferredScenarioIds: [],
+    // release selector must be bound to the scenario manifest to qualify
+    scenarioManifestHash: "f".repeat(64),
   };
-  const evaluation = evaluateRun({
+  const cellEval = evaluateCells({
+    plan,
+    finals: [green],
+    preflightComplete: true,
+    cleanupComplete: true,
+    dryRun: false,
+  });
+  assert.equal(cellEval.verdict.qualifying, true);
+  const shardScope = evaluateRun({
     plan,
     preflight: { results: [], blockedCellKeys: [], complete: true },
     finals: [green],
     cleanup: { attempted: 0, cleaned: 0, alreadyAbsent: 0, failed: [], complete: true },
     dryRun: false,
   });
-  assert.equal(evaluation.verdict.qualifying, true);
+  assert.equal(shardScope.verdict.qualifying, false, "shard scope never qualifies by itself");
 });

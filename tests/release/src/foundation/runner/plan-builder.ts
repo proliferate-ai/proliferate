@@ -54,6 +54,7 @@ export interface BuildPlanInput {
   readonly cells: readonly CellSpec[];
   /** Deferred guarantee ids that no journey references yet. */
   readonly deferredScenarioIds?: readonly string[];
+  readonly scenarioManifestHash?: string | null;
 }
 
 export function buildPlan(input: BuildPlanInput): SelectedCellPlan {
@@ -88,6 +89,7 @@ export function buildPlan(input: BuildPlanInput): SelectedCellPlan {
     worlds,
     cells: planned,
     deferredScenarioIds: input.deferredScenarioIds ?? [],
+    scenarioManifestHash: input.scenarioManifestHash ?? null,
   };
 }
 
