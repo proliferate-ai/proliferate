@@ -36,7 +36,7 @@ export function useWorkspaceSessionLoader() {
       ? useHarnessConnectionStore.getState().runtimeUrl
       : await ensureRuntimeReadyForSessions();
     const requestHeaders = getLatencyFlowRequestHeaders(options?.latencyFlowId);
-    const cacheSnapshot = getWorkspaceSessionCacheSnapshot(workspaceId, { runtimeUrl });
+    const cacheSnapshot = getWorkspaceSessionCacheSnapshot(workspaceId);
     if (options?.measurementOperationId) {
       recordMeasurementMetric({
         type: "cache",
@@ -77,7 +77,7 @@ export function useWorkspaceSessionLoader() {
       workspaceId,
       loadedSessions,
     ) ?? [];
-    setWorkspaceSessions(workspaceId, () => sessions, { runtimeUrl });
+    setWorkspaceSessions(workspaceId, () => sessions);
     return sessions;
   }, [
     getWorkspaceRuntimeBlockReason,

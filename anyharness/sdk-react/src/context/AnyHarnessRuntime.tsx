@@ -4,6 +4,12 @@ import type { AnyHarnessClientConnection } from "../lib/client-cache.js";
 export interface AnyHarnessRuntimeContextValue {
   runtimeUrl: string | null;
   authToken?: string | null;
+  /**
+   * Stable identity boundary for cached AnyHarness data, such as an API
+   * deployment and authenticated actor. Falls back to runtimeUrl while
+   * callers migrate to an explicit scope.
+   */
+  cacheScopeKey?: string | null;
 }
 
 const AnyHarnessRuntimeContext = createContext<AnyHarnessRuntimeContextValue | null>(null);
@@ -11,13 +17,20 @@ const AnyHarnessRuntimeContext = createContext<AnyHarnessRuntimeContextValue | n
 export function AnyHarnessRuntime({
   runtimeUrl,
   authToken,
+  cacheScopeKey,
   children,
 }: AnyHarnessRuntimeContextValue & { children: ReactNode }) {
   return (
-    <AnyHarnessRuntimeContext.Provider value={{ runtimeUrl, authToken }}>
+    <AnyHarnessRuntimeContext.Provider value={{ runtimeUrl, authToken, cacheScopeKey }}>
       {children}
     </AnyHarnessRuntimeContext.Provider>
   );
+}
+
+export function resolveRuntimeCacheScopeKey(
+  context: AnyHarnessRuntimeContextValue,
+): string {
+  return context.cacheScopeKey?.trim() || context.runtimeUrl?.trim() || "";
 }
 
 export function useAnyHarnessRuntimeContext(): AnyHarnessRuntimeContextValue {
@@ -26,6 +39,10 @@ export function useAnyHarnessRuntimeContext(): AnyHarnessRuntimeContextValue {
     throw new Error("AnyHarnessRuntime provider is required.");
   }
   return context;
+}
+
+export function useAnyHarnessCacheScopeKey(): string {
+  return resolveRuntimeCacheScopeKey(useAnyHarnessRuntimeContext());
 }
 
 export function resolveRuntimeConnection(

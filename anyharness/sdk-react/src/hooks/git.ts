@@ -11,7 +11,7 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
   type AnyHarnessQueryTimingOptions,
@@ -56,38 +56,33 @@ type TimedBaseWorktreeDiffFilesQueryOptions =
   & ListBaseWorktreeDiffFilesOptions
   & AnyHarnessQueryTimingOptions;
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
-}
-
 async function invalidateWorkspaceGit(
   queryClient: ReturnType<typeof useQueryClient>,
-  runtimeUrl: string,
+  cacheScopeKey: string,
   workspaceId: string | null | undefined,
 ) {
   await Promise.all([
     queryClient.invalidateQueries({
-      queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+      queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
     }),
     queryClient.invalidateQueries({
-      queryKey: anyHarnessGitBranchesKey(runtimeUrl, workspaceId),
+      queryKey: anyHarnessGitBranchesKey(cacheScopeKey, workspaceId),
     }),
     queryClient.invalidateQueries({
-      queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+      queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
     }),
     queryClient.invalidateQueries({
-      queryKey: anyHarnessPullRequestKey(runtimeUrl, workspaceId),
+      queryKey: anyHarnessPullRequestKey(cacheScopeKey, workspaceId),
     }),
   ]);
 }
 
 export function useGitStatusQuery(options?: TimedWorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessGitStatusKey(runtimeUrl, workspaceId);
+  const queryKey = anyHarnessGitStatusKey(cacheScopeKey, workspaceId);
   useReportAnyHarnessCacheDecision({
     category: "git.status",
     enabled,
@@ -113,11 +108,11 @@ export function useGitStatusQuery(options?: TimedWorkspaceQueryOptions) {
 
 export function useGitDiffQuery(options: TimedGitDiffQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
   const queryKey = anyHarnessGitDiffKey(
-    runtimeUrl,
+    cacheScopeKey,
     workspaceId,
     options.path,
     options.scope,
@@ -151,10 +146,10 @@ export function useGitBranchDiffFilesQuery(
   options?: TimedBranchDiffFilesQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessGitBranchDiffFilesKey(runtimeUrl, workspaceId, options?.baseRef);
+  const queryKey = anyHarnessGitBranchDiffFilesKey(cacheScopeKey, workspaceId, options?.baseRef);
   useReportAnyHarnessCacheDecision({
     category: "git.branch_diff_files",
     enabled,
@@ -182,10 +177,10 @@ export function useGitBaseWorktreeDiffFilesQuery(
   options?: TimedBaseWorktreeDiffFilesQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessGitBaseWorktreeDiffFilesKey(runtimeUrl, workspaceId, options?.baseRef);
+  const queryKey = anyHarnessGitBaseWorktreeDiffFilesKey(cacheScopeKey, workspaceId, options?.baseRef);
   useReportAnyHarnessCacheDecision({
     category: "git.base_worktree_diff_files",
     enabled,
@@ -211,11 +206,11 @@ export function useGitBaseWorktreeDiffFilesQuery(
 
 export function useGitBranchesQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
-    queryKey: anyHarnessGitBranchesKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessGitBranchesKey(cacheScopeKey, workspaceId),
     enabled: (options?.enabled ?? true) && !!workspaceId,
     queryFn: async ({ signal }) => {
       const resolved = await resolveWorkspaceConnectionFromContext(workspace, workspaceId);
@@ -231,7 +226,7 @@ export function useGitBranchesQuery(options?: WorkspaceQueryOptions) {
 export function useStageGitPathsMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -240,14 +235,14 @@ export function useStageGitPathsMutation(options?: { workspaceId?: string | null
       const client = getAnyHarnessClient(resolved.connection);
       await client.git.stagePaths(resolved.connection.anyharnessWorkspaceId, paths);
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }
 
 export function useUnstageGitPathsMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -256,14 +251,14 @@ export function useUnstageGitPathsMutation(options?: { workspaceId?: string | nu
       const client = getAnyHarnessClient(resolved.connection);
       await client.git.unstagePaths(resolved.connection.anyharnessWorkspaceId, paths);
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }
 
 export function useStagePatchMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -272,14 +267,14 @@ export function useStagePatchMutation(options?: { workspaceId?: string | null })
       const client = getAnyHarnessClient(resolved.connection);
       await client.git.stagePatch(resolved.connection.anyharnessWorkspaceId, patch);
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }
 
 export function useUnstagePatchMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -288,14 +283,14 @@ export function useUnstagePatchMutation(options?: { workspaceId?: string | null 
       const client = getAnyHarnessClient(resolved.connection);
       await client.git.unstagePatch(resolved.connection.anyharnessWorkspaceId, patch);
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }
 
 export function useRevertGitPatchesMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -304,14 +299,14 @@ export function useRevertGitPatchesMutation(options?: { workspaceId?: string | n
       const client = getAnyHarnessClient(resolved.connection);
       return client.git.revertPatches(resolved.connection.anyharnessWorkspaceId, input);
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }
 
 export function useCommitGitMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -320,14 +315,14 @@ export function useCommitGitMutation(options?: { workspaceId?: string | null }) 
       const client = getAnyHarnessClient(resolved.connection);
       return client.git.commit(resolved.connection.anyharnessWorkspaceId, input);
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }
 
 export function usePushGitMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -336,14 +331,14 @@ export function usePushGitMutation(options?: { workspaceId?: string | null }) {
       const client = getAnyHarnessClient(resolved.connection);
       return client.git.push(resolved.connection.anyharnessWorkspaceId, input ?? {});
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }
 
 export function useRenameGitBranchMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -352,6 +347,6 @@ export function useRenameGitBranchMutation(options?: { workspaceId?: string | nu
       const client = getAnyHarnessClient(resolved.connection);
       return client.git.renameBranch(resolved.connection.anyharnessWorkspaceId, newName);
     },
-    onSuccess: async () => invalidateWorkspaceGit(queryClient, runtimeUrl, workspaceId),
+    onSuccess: async () => invalidateWorkspaceGit(queryClient, cacheScopeKey, workspaceId),
   });
 }

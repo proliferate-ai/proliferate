@@ -153,7 +153,6 @@ describe("created runtime cleanup", () => {
     expect(upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
       "workspace-1",
       expect.objectContaining({ id: "runtime-retained" }),
-      { runtimeUrl: "http://runtime.test" },
     );
     removeSessionRecord(pendingSessionId);
   });
@@ -211,7 +210,6 @@ describe("created runtime cleanup", () => {
     expect(upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
       "workspace-1",
       expect.objectContaining({ id: "runtime-superseded-retained" }),
-      { runtimeUrl: "http://runtime.test" },
     );
     expect(mocks.applySessionLaunchDefaults).not.toHaveBeenCalled();
     unregister();

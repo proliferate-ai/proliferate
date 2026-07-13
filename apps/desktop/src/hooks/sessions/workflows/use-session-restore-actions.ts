@@ -123,9 +123,7 @@ export function useSessionRestoreActions() {
           throw new Error("Could not save restored session state. Try again.");
         }
         cancelQueuedReplacementDismissal(workspaceId, restoredSession.id);
-        upsertWorkspaceSessionRecord(workspaceId, restoredSession, {
-          runtimeUrl: target.baseUrl,
-        });
+        upsertWorkspaceSessionRecord(workspaceId, restoredSession);
         return restoredSession;
       });
       logLatency("session.restore.request_completed", {

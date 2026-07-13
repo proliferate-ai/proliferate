@@ -29,7 +29,6 @@ export function materializeExistingSession({
   launchIntentId,
   pendingSessionId,
   resolvedModeId,
-  runtimeUrl,
   upsertWorkspaceSessionRecord,
   workspaceId,
 }: {
@@ -43,9 +42,7 @@ export function materializeExistingSession({
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
-    options?: { runtimeUrl?: string },
   ) => void;
-  runtimeUrl?: string;
   workspaceId: string;
 }): string {
   annotateLatencyFlow(latencyFlowId, {
@@ -73,7 +70,7 @@ export function materializeExistingSession({
   if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
     rememberLastViewedSession(workspaceId, existingSession.id);
   }
-  upsertWorkspaceSessionRecord(workspaceId, existingSession, { runtimeUrl });
+  upsertWorkspaceSessionRecord(workspaceId, existingSession);
   if (launchIntentId) {
     useChatLaunchIntentStore.getState().markMaterializedIfActive(
       launchIntentId,

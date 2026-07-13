@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RepoRoot, Workspace } from "@anyharness/sdk";
 import { buildWorkspaceCollections } from "@/lib/domain/workspaces/cloud/collections";
 import { buildLogicalWorkspaces } from "@/lib/domain/workspaces/cloud/logical-workspaces";
+import type { CloudWorkspaceSummary } from "@/lib/domain/workspaces/cloud/cloud-workspace-model";
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { workspaceCollectionsKey } from "./query-keys";
 import { useWorkspaces } from "./use-workspaces";
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => {
   const listCloudWorkspaces = vi.fn();
 
   return {
+    cloudActive: false,
     listCloudWorkspaces,
     repoRootsList,
     workspacesList,
@@ -30,7 +32,7 @@ vi.mock("@/lib/access/anyharness/workspaces", () => ({
 
 vi.mock("@/hooks/cloud/derived/use-cloud-availability-state", () => ({
   useCloudAvailabilityState: () => ({
-    cloudActive: false,
+    cloudActive: mocks.cloudActive,
   }),
 }));
 
@@ -41,6 +43,7 @@ vi.mock("@proliferate/cloud-sdk/client/workspaces", () => ({
 describe("useWorkspaces", () => {
 
   beforeEach(() => {
+    mocks.cloudActive = false;
     useHarnessConnectionStore.setState({
       runtimeUrl: "http://runtime.test",
       connectionState: "healthy",
@@ -50,7 +53,9 @@ describe("useWorkspaces", () => {
 
   afterEach(() => {
     cleanup();
-    vi.clearAllMocks();
+    mocks.listCloudWorkspaces.mockReset();
+    mocks.repoRootsList.mockReset();
+    mocks.workspacesList.mockReset();
     useHarnessConnectionStore.getState().resetConnectionState();
   });
 
@@ -118,6 +123,58 @@ describe("useWorkspaces", () => {
       "/Users/pablo/proliferate",
     ]);
   });
+
+  it("does not attempt local inventory requests when only cloud is available", async () => {
+    mocks.cloudActive = true;
+    useHarnessConnectionStore.setState({
+      runtimeUrl: "",
+      connectionState: "connecting",
+      error: null,
+    });
+
+    const { result } = renderUseWorkspaces();
+
+    expect(mocks.workspacesList).not.toHaveBeenCalled();
+    expect(mocks.repoRootsList).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(result.current.isSuccess).toBe(false);
+  });
+
+  it("keeps seeded cloud workspace data available without a local runtime", () => {
+    mocks.cloudActive = true;
+    useHarnessConnectionStore.setState({
+      runtimeUrl: "",
+      connectionState: "connecting",
+      error: null,
+    });
+    const queryClient = createQueryClient();
+    queryClient.setQueryData(
+      workspaceCollectionsKey("", true, null),
+      buildWorkspaceCollections([], [], [makeCloudWorkspace()]),
+    );
+
+    const { result } = renderUseWorkspaces(queryClient);
+
+    expect(mocks.workspacesList).not.toHaveBeenCalled();
+    expect(mocks.repoRootsList).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(result.current.data?.cloudWorkspaces.map((workspace) => workspace.id)).toEqual([
+      "cloud-1",
+    ]);
+  });
+
+  it("continues loading local inventory when cloud is also active", async () => {
+    mocks.cloudActive = true;
+    mocks.workspacesList.mockResolvedValueOnce([]);
+    mocks.repoRootsList.mockResolvedValueOnce([]);
+
+    const { result } = renderUseWorkspaces();
+
+    await waitFor(() => expect(mocks.workspacesList).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.repoRootsList).toHaveBeenCalledOnce());
+    await waitFor(() => expect(result.current.error).toBeNull());
+    expect(result.current.isSuccess).toBe(true);
+  });
 });
 
 function createQueryClient() {
@@ -166,5 +223,41 @@ function makeRepoRoot(): RepoRoot {
     remoteUrl: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+function makeCloudWorkspace(): CloudWorkspaceSummary {
+  return {
+    id: "cloud-1",
+    displayName: "Cloud workspace",
+    repo: {
+      provider: "github",
+      owner: "proliferate-ai",
+      name: "proliferate",
+      branch: "main",
+      baseBranch: "main",
+    },
+    status: "ready",
+    workspaceStatus: "ready",
+    runtime: {
+      environmentId: "runtime-1",
+      status: "running",
+      generation: 1,
+      actionBlockKind: null,
+      actionBlockReason: null,
+    },
+    statusDetail: null,
+    lastError: null,
+    templateVersion: null,
+    actionBlockKind: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    readyAt: "2026-01-01T00:00:00.000Z",
+    postReadyPhase: "complete",
+    postReadyFilesTotal: 0,
+    postReadyFilesApplied: 0,
+    postReadyStartedAt: null,
+    postReadyCompletedAt: null,
+    visibility: "private",
   };
 }

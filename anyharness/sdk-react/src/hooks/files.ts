@@ -13,7 +13,7 @@ import {
   useAnyHarnessWorkspaceContext,
   resolveWorkspaceConnectionFromContext,
 } from "../context/AnyHarnessWorkspace.js";
-import { useAnyHarnessRuntimeContext } from "../context/AnyHarnessRuntime.js";
+import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import {
   type AnyHarnessQueryTimingOptions,
@@ -31,22 +31,17 @@ import {
   anyHarnessWorkspaceFileTreeKey,
 } from "../lib/query-keys.js";
 
-function useWorkspaceRuntimeUrl() {
-  const runtime = useAnyHarnessRuntimeContext();
-  return runtime.runtimeUrl?.trim() ?? "";
-}
-
 export function useWorkspaceFilesQuery(options: {
   workspaceId?: string | null;
   path?: string;
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const path = options.path ?? "";
   const enabled = (options.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, path);
+  const queryKey = anyHarnessWorkspaceFileTreeKey(cacheScopeKey, workspaceId, path);
   useReportAnyHarnessCacheDecision({
     category: "file.list",
     enabled,
@@ -76,10 +71,10 @@ export function useReadWorkspaceFileQuery(options: {
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
-  const queryKey = anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, options.path);
+  const queryKey = anyHarnessWorkspaceFileKey(cacheScopeKey, workspaceId, options.path);
   useReportAnyHarnessCacheDecision({
     category: "file.read",
     enabled,
@@ -130,12 +125,12 @@ export function useSearchWorkspaceFilesQuery(options: {
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const query = options.query ?? "";
   const limit = options.limit ?? 50;
   const enabled = (options.enabled ?? true) && !!workspaceId;
-  const queryKey = anyHarnessWorkspaceFileSearchKey(runtimeUrl, workspaceId, query, limit);
+  const queryKey = anyHarnessWorkspaceFileSearchKey(cacheScopeKey, workspaceId, query, limit);
   useReportAnyHarnessCacheDecision({
     category: "file.search",
     enabled,
@@ -167,10 +162,10 @@ export function useStatWorkspaceFileQuery(options: {
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
-  const queryKey = anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, options.path);
+  const queryKey = anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, options.path);
   useReportAnyHarnessCacheDecision({
     category: "file.stat",
     enabled,
@@ -196,7 +191,7 @@ export function useStatWorkspaceFileQuery(options: {
 export function useWriteWorkspaceFileMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -209,22 +204,22 @@ export function useWriteWorkspaceFileMutation(options?: { workspaceId?: string |
       const parentPath = parentDirectoryPath(input.path);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
+          queryKey: anyHarnessWorkspaceFileKey(cacheScopeKey, workspaceId, input.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
+          queryKey: anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, input.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, parentPath),
+          queryKey: anyHarnessWorkspaceFileTreeKey(cacheScopeKey, workspaceId, parentPath),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceFileSearchScopeKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
         }),
       ]);
     },
@@ -242,7 +237,7 @@ export function useCreateWorkspaceDirectoryMutation(options?: { workspaceId?: st
 export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -256,37 +251,37 @@ export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string
       const newParentPath = parentDirectoryPath(response.entry.path);
       const invalidations = [
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, oldParentPath),
+          queryKey: anyHarnessWorkspaceFileTreeKey(cacheScopeKey, workspaceId, oldParentPath),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, newParentPath),
+          queryKey: anyHarnessWorkspaceFileTreeKey(cacheScopeKey, workspaceId, newParentPath),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
+          queryKey: anyHarnessWorkspaceFileKey(cacheScopeKey, workspaceId, input.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, response.entry.path),
+          queryKey: anyHarnessWorkspaceFileKey(cacheScopeKey, workspaceId, response.entry.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
+          queryKey: anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, input.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, response.entry.path),
+          queryKey: anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, response.entry.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceFileSearchScopeKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
         }),
       ];
       if (response.entry.kind === "directory") {
         invalidations.push(
           queryClient.invalidateQueries({
-            queryKey: anyHarnessWorkspaceFilesScopeKey(runtimeUrl, workspaceId),
+            queryKey: anyHarnessWorkspaceFilesScopeKey(cacheScopeKey, workspaceId),
           }),
         );
       }
@@ -298,7 +293,7 @@ export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string
 export function useDeleteWorkspaceEntryMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -311,28 +306,28 @@ export function useDeleteWorkspaceEntryMutation(options?: { workspaceId?: string
       const parentPath = parentDirectoryPath(input.path);
       const invalidations = [
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, parentPath),
+          queryKey: anyHarnessWorkspaceFileTreeKey(cacheScopeKey, workspaceId, parentPath),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
+          queryKey: anyHarnessWorkspaceFileKey(cacheScopeKey, workspaceId, input.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
+          queryKey: anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, input.path),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceFileSearchScopeKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
         }),
       ];
       if (response.kind === "directory") {
         invalidations.push(
           queryClient.invalidateQueries({
-            queryKey: anyHarnessWorkspaceFilesScopeKey(runtimeUrl, workspaceId),
+            queryKey: anyHarnessWorkspaceFilesScopeKey(cacheScopeKey, workspaceId),
           }),
         );
       }
@@ -347,7 +342,7 @@ function useCreateWorkspaceEntryMutation(
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const runtimeUrl = useWorkspaceRuntimeUrl();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -364,30 +359,30 @@ function useCreateWorkspaceEntryMutation(
       const parentPath = parentDirectoryPath(input.path);
       if (kind === "file" && response.file) {
         queryClient.setQueryData(
-          anyHarnessWorkspaceFileKey(runtimeUrl, workspaceId, input.path),
+          anyHarnessWorkspaceFileKey(cacheScopeKey, workspaceId, input.path),
           response.file satisfies ReadWorkspaceFileResponse,
         );
       }
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileTreeKey(runtimeUrl, workspaceId, parentPath),
+          queryKey: anyHarnessWorkspaceFileTreeKey(cacheScopeKey, workspaceId, parentPath),
         }),
         queryClient.invalidateQueries({
-          queryKey: anyHarnessWorkspaceFileSearchScopeKey(runtimeUrl, workspaceId),
+          queryKey: anyHarnessWorkspaceFileSearchScopeKey(cacheScopeKey, workspaceId),
         }),
         kind === "file"
           ? queryClient.invalidateQueries({
-              queryKey: anyHarnessWorkspaceFileStatKey(runtimeUrl, workspaceId, input.path),
+              queryKey: anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, input.path),
             })
           : Promise.resolve(),
         kind === "file"
           ? queryClient.invalidateQueries({
-              queryKey: anyHarnessGitStatusKey(runtimeUrl, workspaceId),
+              queryKey: anyHarnessGitStatusKey(cacheScopeKey, workspaceId),
             })
           : Promise.resolve(),
         kind === "file"
           ? queryClient.invalidateQueries({
-              queryKey: anyHarnessGitDiffScopeKey(runtimeUrl, workspaceId),
+              queryKey: anyHarnessGitDiffScopeKey(cacheScopeKey, workspaceId),
             })
           : Promise.resolve(),
       ]);

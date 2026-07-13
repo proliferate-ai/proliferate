@@ -7,7 +7,11 @@ import type {
   InstallAgentRequest,
   ReconcileAgentsRequest,
 } from "@anyharness/sdk";
-import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveRuntimeCacheScopeKey,
+  resolveRuntimeConnection,
+  useAnyHarnessRuntimeContext,
+} from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -25,9 +29,10 @@ interface RuntimeQueryOptions {
 export function useAgentsQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessAgentsKey(runtimeUrl),
+    queryKey: anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -41,10 +46,11 @@ export function useAgentLaunchOptionsQuery(options?: RuntimeQueryOptions & {
 }) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const workspaceId = options?.workspaceId ?? null;
 
   return useQuery({
-    queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessAgentLaunchOptionsKey(runtimeUrl, workspaceId, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -60,6 +66,7 @@ export function useInstallAgentMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (input: { kind: string; request?: InstallAgentRequest }) => {
@@ -67,7 +74,9 @@ export function useInstallAgentMutation() {
       return client.agents.install(input.kind, input.request ?? {});
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+      });
     },
   });
 }
@@ -98,6 +107,7 @@ export function useCloseAgentLoginTerminalMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
     mutationFn: async (terminalId: string) => {
@@ -105,9 +115,11 @@ export function useCloseAgentLoginTerminalMutation() {
       await client.agents.closeLoginTerminal(terminalId);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
       await queryClient.invalidateQueries({
-        queryKey: anyHarnessAgentLaunchOptionsPrefixKey(runtimeUrl),
+        queryKey: anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentLaunchOptionsPrefixKey(runtimeUrl, cacheScopeKey),
       });
     },
   });
@@ -122,10 +134,11 @@ export function useAgentReconcileStatusQuery(
 ) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const refetchWhileActive = options?.refetchWhileActive ?? true;
 
   return useQuery({
-    queryKey: anyHarnessAgentReconcileStatusKey(runtimeUrl),
+    queryKey: anyHarnessAgentReconcileStatusKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -146,16 +159,22 @@ export function useReconcileAgentsMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const queryClient = useQueryClient();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useMutation({
-    mutationKey: anyHarnessReconcileAgentsMutationKey(runtimeUrl),
+    mutationKey: anyHarnessReconcileAgentsMutationKey(runtimeUrl, cacheScopeKey),
     mutationFn: async (request?: ReconcileAgentsRequest) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
       return client.agents.reconcile(request ?? {});
     },
     onSuccess: async (response) => {
-      queryClient.setQueryData(anyHarnessAgentReconcileStatusKey(runtimeUrl), response);
-      await queryClient.invalidateQueries({ queryKey: anyHarnessAgentsKey(runtimeUrl) });
+      queryClient.setQueryData(
+        anyHarnessAgentReconcileStatusKey(runtimeUrl, cacheScopeKey),
+        response,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
+      });
     },
   });
 }

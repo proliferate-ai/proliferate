@@ -1,6 +1,8 @@
 export {
   AnyHarnessRuntime,
+  resolveRuntimeCacheScopeKey,
   resolveRuntimeConnection,
+  useAnyHarnessCacheScopeKey,
   useAnyHarnessRuntimeContext,
 } from "./context/AnyHarnessRuntime.js";
 export {
@@ -8,6 +10,9 @@ export {
   resolveWorkspaceConnectionFromContext,
   useAnyHarnessWorkspaceContext,
 } from "./context/AnyHarnessWorkspace.js";
+export type {
+  AnyHarnessRuntimeContextValue,
+} from "./context/AnyHarnessRuntime.js";
 export type {
   AnyHarnessResolvedConnection,
   AnyHarnessWorkspaceContextValue,
@@ -21,7 +26,9 @@ export type {
 } from "./lib/timing-options.js";
 
 export {
+  anyHarnessCacheScopeKey,
   anyHarnessRuntimeKey,
+  anyHarnessWorkspaceKey,
   anyHarnessRuntimeHealthKey,
   anyHarnessAgentsKey,
   anyHarnessAgentLaunchOptionsKey,
@@ -32,6 +39,7 @@ export {
   anyHarnessRuntimeWorkspacesKey,
   anyHarnessWorkspaceRetirePreflightKey,
   anyHarnessWorkspacePurgePreflightKey,
+  anyHarnessWorkspaceDetailKey,
   anyHarnessWorktreesInventoryKey,
   anyHarnessWorktreesRetentionPolicyKey,
   anyHarnessRepoRootsKey,

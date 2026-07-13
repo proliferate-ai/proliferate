@@ -60,7 +60,6 @@ import {
 interface BootstrapWorkspaceInput {
   workspaceId: string;
   logicalWorkspaceId: string;
-  runtimeUrl: string;
   workspaceConnection: AnyHarnessResolvedConnection;
   startedAt: number;
   latencyFlowId?: string | null;
@@ -113,7 +112,6 @@ export function useWorkspaceBootstrapActions() {
   const bootstrapWorkspace = useCallback(async ({
     workspaceId,
     logicalWorkspaceId,
-    runtimeUrl,
     workspaceConnection,
     startedAt,
     latencyFlowId,
@@ -195,7 +193,7 @@ export function useWorkspaceBootstrapActions() {
           type: "cache",
           category: "session.list",
           operationId: measurementOperationId,
-          decision: getWorkspaceSessionsCacheDecision(runtimeUrl, workspaceId),
+          decision: getWorkspaceSessionsCacheDecision(workspaceId),
           source: "react_query",
         });
       }
@@ -206,7 +204,6 @@ export function useWorkspaceBootstrapActions() {
         headers: requestHeaders,
       });
       const sessions = await loadWorkspaceSessions({
-        runtimeUrl,
         workspaceConnection,
         workspaceId,
         requestOptions: sessionRequestOptions ?? undefined,

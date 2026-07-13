@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnyHarnessRuntime } from "../context/AnyHarnessRuntime.js";
 import { AnyHarnessWorkspace } from "../context/AnyHarnessWorkspace.js";
 import {
+  anyHarnessWorkspaceDetailKey,
   anyHarnessWorkspacePurgePreflightKey,
   anyHarnessWorkspaceQueryKeyRoots,
   anyHarnessWorkspaceRetirePreflightKey,
@@ -19,15 +20,19 @@ import {
 const mocks = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
   getWorkspace: vi.fn(),
+  clientConnection: vi.fn(),
 }));
 
 vi.mock("../lib/client-cache.js", () => ({
-  getAnyHarnessClient: () => ({
-    workspaces: {
-      list: mocks.listWorkspaces,
-      get: mocks.getWorkspace,
-    },
-  }),
+  getAnyHarnessClient: (connection: unknown) => {
+    mocks.clientConnection(connection);
+    return {
+      workspaces: {
+        list: mocks.listWorkspaces,
+        get: mocks.getWorkspace,
+      },
+    };
+  },
 }));
 
 describe("sdk-react workspace query request options", () => {
@@ -35,6 +40,7 @@ describe("sdk-react workspace query request options", () => {
     cleanup();
     mocks.listWorkspaces.mockReset();
     mocks.getWorkspace.mockReset();
+    mocks.clientConnection.mockReset();
   });
 
   it("passes query signals to runtime workspace list without adding them to query keys", async () => {
@@ -91,6 +97,77 @@ describe("sdk-react workspace query request options", () => {
       anyHarnessWorkspacePurgePreflightKey("http://runtime.test", "workspace-1"),
     ));
   });
+
+  it("keeps a cloud workspace key stable and free of resolved gateway credentials", async () => {
+    mocks.getWorkspace.mockResolvedValue({ id: "anyharness-workspace-1" });
+    const queryClient = createQueryClient();
+    let credentialGeneration = 1;
+    const resolveConnection = vi.fn().mockImplementation(async () => ({
+      runtimeUrl: `https://gateway.test/temporary-route-${credentialGeneration}`,
+      authToken: `temporary-token-${credentialGeneration}`,
+      anyharnessWorkspaceId: "anyharness-workspace-1",
+    }));
+
+    const { result } = renderHook(() => useWorkspaceQuery({}), {
+      wrapper: createWrapper(queryClient, null, {
+        cacheScopeKey: "https://api.test:user-1",
+        resolveConnection,
+      }),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    credentialGeneration = 2;
+    await result.current.refetch();
+
+    expect(resolveConnection).toHaveBeenCalledTimes(2);
+    expect(resolveConnection).toHaveBeenCalledWith("workspace-1");
+    expect(mocks.clientConnection).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeUrl: "https://gateway.test/temporary-route-1",
+      authToken: "temporary-token-1",
+    }));
+    expect(mocks.clientConnection).toHaveBeenCalledWith(expect.objectContaining({
+      runtimeUrl: "https://gateway.test/temporary-route-2",
+      authToken: "temporary-token-2",
+    }));
+    expect(queryClient.getQueryCache().getAll().map((query) => query.queryKey)).toContainEqual(
+      anyHarnessWorkspaceDetailKey("https://api.test:user-1", "workspace-1"),
+    );
+    const serializedKeys = JSON.stringify(
+      queryClient.getQueryCache().getAll().map((query) => query.queryKey),
+    );
+    expect(serializedKeys).not.toContain("temporary-route");
+    expect(serializedKeys).not.toContain("temporary-token");
+  });
+
+  it("isolates the same logical workspace across actor cache scopes", async () => {
+    mocks.getWorkspace
+      .mockResolvedValueOnce({ id: "anyharness-workspace-1", actor: "user-1" })
+      .mockResolvedValueOnce({ id: "anyharness-workspace-1", actor: "user-2" });
+    const queryClient = createQueryClient();
+
+    const first = renderHook(() => useWorkspaceQuery({}), {
+      wrapper: createWrapper(queryClient, null, {
+        cacheScopeKey: "https://api.test:user-1",
+      }),
+    });
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+    first.unmount();
+
+    const second = renderHook(() => useWorkspaceQuery({}), {
+      wrapper: createWrapper(queryClient, null, {
+        cacheScopeKey: "https://api.test:user-2",
+      }),
+    });
+    await waitFor(() => expect(second.result.current.isSuccess).toBe(true));
+
+    expect(queryClient.getQueryData(
+      anyHarnessWorkspaceDetailKey("https://api.test:user-1", "workspace-1"),
+    )).toMatchObject({ actor: "user-1" });
+    expect(queryClient.getQueryData(
+      anyHarnessWorkspaceDetailKey("https://api.test:user-2", "workspace-1"),
+    )).toMatchObject({ actor: "user-2" });
+  });
 });
 
 function createQueryClient(): QueryClient {
@@ -103,17 +180,31 @@ function createQueryClient(): QueryClient {
   });
 }
 
-function createWrapper(queryClient: QueryClient, runtimeUrl: string) {
+function createWrapper(
+  queryClient: QueryClient,
+  runtimeUrl: string | null,
+  options?: {
+    cacheScopeKey?: string;
+    resolveConnection?: () => Promise<{
+      runtimeUrl: string;
+      authToken?: string;
+      anyharnessWorkspaceId: string;
+    }>;
+  },
+) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        <AnyHarnessRuntime runtimeUrl={runtimeUrl}>
+        <AnyHarnessRuntime
+          runtimeUrl={runtimeUrl}
+          cacheScopeKey={options?.cacheScopeKey}
+        >
           <AnyHarnessWorkspace
             workspaceId="workspace-1"
-            resolveConnection={async () => ({
-              runtimeUrl,
+            resolveConnection={options?.resolveConnection ?? (async () => ({
+              runtimeUrl: runtimeUrl ?? "https://gateway.test",
               anyharnessWorkspaceId: "anyharness-workspace-1",
-            })}
+            }))}
           >
             {children}
           </AnyHarnessWorkspace>

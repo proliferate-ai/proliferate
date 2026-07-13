@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 
 import { AnyHarnessError } from "@anyharness/sdk";
-import { anyHarnessRepoRootPullRequestsKey } from "@anyharness/sdk-react";
+import {
+  AnyHarnessRuntime,
+  anyHarnessRepoRootPullRequestsKey,
+} from "@anyharness/sdk-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
@@ -24,6 +27,7 @@ vi.mock("@anyharness/sdk-react", async (importOriginal) => {
 });
 
 const RUNTIME_URL = "http://runtime.test";
+const CACHE_SCOPE_KEY = "desktop:test-user";
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({
@@ -39,7 +43,9 @@ function renderRepoPrStatuses(queryClient: QueryClient, repoRootIds: string[]) {
   function Wrapper({ children }: PropsWithChildren) {
     return (
       <QueryClientProvider client={queryClient}>
-        {children}
+        <AnyHarnessRuntime runtimeUrl={RUNTIME_URL} cacheScopeKey={CACHE_SCOPE_KEY}>
+          {children}
+        </AnyHarnessRuntime>
       </QueryClientProvider>
     );
   }
@@ -85,7 +91,7 @@ describe("useRepoPrStatuses", () => {
     expect(result.current.fetchedAtByRepoRootId["root-a"]).toBe("2026-07-01T12:00:00.000Z");
 
     expect(queryClient.getQueryData(
-      anyHarnessRepoRootPullRequestsKey(RUNTIME_URL, "root-a"),
+      anyHarnessRepoRootPullRequestsKey(RUNTIME_URL, "root-a", CACHE_SCOPE_KEY),
     )).toEqual({
       availability: "ok",
       entries: [{ headBranch: "feature", pullRequest: null }],

@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateCoworkThreadRequest } from "@anyharness/sdk";
-import { useAnyHarnessRuntimeContext, resolveRuntimeConnection } from "../context/AnyHarnessRuntime.js";
+import {
+  resolveRuntimeCacheScopeKey,
+  resolveRuntimeConnection,
+  useAnyHarnessRuntimeContext,
+} from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { requestOptionsWithSignal } from "../lib/request-options.js";
 import {
@@ -20,9 +24,10 @@ interface RuntimeQueryOptions {
 export function useCoworkStatusQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessCoworkStatusKey(runtimeUrl),
+    queryKey: anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -34,9 +39,10 @@ export function useCoworkStatusQuery(options?: RuntimeQueryOptions) {
 export function useCoworkThreadsQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessCoworkThreadsKey(runtimeUrl),
+    queryKey: anyHarnessCoworkThreadsKey(runtimeUrl, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -51,9 +57,10 @@ export function useCoworkManagedWorkspacesQuery(
 ) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, sessionId),
+    queryKey: anyHarnessCoworkManagedWorkspacesKey(runtimeUrl, sessionId, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && !!sessionId,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -71,9 +78,10 @@ export function useCoworkArtifactManifestQuery(
 ) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessCoworkManifestKey(runtimeUrl, workspaceId),
+    queryKey: anyHarnessCoworkManifestKey(runtimeUrl, workspaceId, cacheScopeKey),
     enabled: (options?.enabled ?? true) && runtimeUrl.length > 0 && !!workspaceId,
     queryFn: async ({ signal }) => {
       const client = getAnyHarnessClient(resolveRuntimeConnection(runtime));
@@ -89,9 +97,15 @@ export function useCoworkArtifactQuery(
 ) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
 
   return useQuery({
-    queryKey: anyHarnessCoworkArtifactKey(runtimeUrl, workspaceId, artifactId),
+    queryKey: anyHarnessCoworkArtifactKey(
+      runtimeUrl,
+      workspaceId,
+      artifactId,
+      cacheScopeKey,
+    ),
     enabled:
       (options?.enabled ?? true) &&
       runtimeUrl.length > 0 &&
@@ -111,6 +125,7 @@ export function useCoworkArtifactQuery(
 export function useEnableCoworkMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -120,9 +135,15 @@ export function useEnableCoworkMutation() {
     },
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessCoworkStatusKey(runtimeUrl) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessCoworkThreadsKey(runtimeUrl) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessRepoRootsKey(runtimeUrl) }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessCoworkThreadsKey(runtimeUrl, cacheScopeKey),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey),
+        }),
       ]);
     },
   });
@@ -131,6 +152,7 @@ export function useEnableCoworkMutation() {
 export function useCreateCoworkThreadMutation() {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
+  const cacheScopeKey = resolveRuntimeCacheScopeKey(runtime);
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -140,9 +162,15 @@ export function useCreateCoworkThreadMutation() {
     },
     onSuccess: () => {
       void Promise.all([
-        queryClient.invalidateQueries({ queryKey: anyHarnessCoworkStatusKey(runtimeUrl) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessCoworkThreadsKey(runtimeUrl) }),
-        queryClient.invalidateQueries({ queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl) }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessCoworkThreadsKey(runtimeUrl, cacheScopeKey),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: anyHarnessRuntimeWorkspacesKey(runtimeUrl, cacheScopeKey),
+        }),
       ]).catch(() => undefined);
     },
   });

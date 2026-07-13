@@ -1,7 +1,10 @@
 import type { CoworkStatus } from "@anyharness/sdk";
 import {
+  anyHarnessCoworkArtifactScopeKey,
+  anyHarnessCoworkManifestKey,
   anyHarnessCoworkStatusKey,
   anyHarnessWorkspaceQueryKeyRoots,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -29,6 +32,7 @@ interface CancelPreviousWorkspaceDisplayQueriesInput {
 // Owns query-cache reads and invalidation needed by workspace selection/bootstrap flows.
 export function useWorkspaceSelectionCache() {
   const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const authStatus = useAuthStore((state) => state.status);
   const authUserId = useAuthStore((state) => state.user?.id ?? null);
 
@@ -44,9 +48,9 @@ export function useWorkspaceSelectionCache() {
       cloudMobilityWorkspacesKey(),
     ),
     coworkStatus: queryClient.getQueryData<CoworkStatus>(
-      anyHarnessCoworkStatusKey(runtimeUrl),
+      anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
     ),
-  }), [authStatus, authUserId, queryClient]);
+  }), [authStatus, authUserId, cacheScopeKey, queryClient]);
 
   const cancelPreviousWorkspaceDisplayQueries = useCallback((
     input: CancelPreviousWorkspaceDisplayQueriesInput,
@@ -61,7 +65,12 @@ export function useWorkspaceSelectionCache() {
       if (!workspaceId || nextIds.has(workspaceId)) {
         continue;
       }
-      for (const root of anyHarnessWorkspaceQueryKeyRoots(input.runtimeUrl, workspaceId)) {
+      const workspaceRoots = [
+        ...anyHarnessWorkspaceQueryKeyRoots(cacheScopeKey, workspaceId),
+        anyHarnessCoworkManifestKey(input.runtimeUrl, workspaceId, cacheScopeKey),
+        anyHarnessCoworkArtifactScopeKey(input.runtimeUrl, workspaceId, cacheScopeKey),
+      ];
+      for (const root of workspaceRoots) {
         roots.add(JSON.stringify(root));
       }
     }
@@ -70,7 +79,7 @@ export function useWorkspaceSelectionCache() {
       const queryKey = JSON.parse(serializedRoot) as readonly unknown[];
       void queryClient.cancelQueries({ queryKey, exact: false });
     }
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   const invalidateCloudWorkspaceStartState = useCallback(async (runtimeUrl: string) => {
     await Promise.all([

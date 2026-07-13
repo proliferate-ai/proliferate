@@ -1,6 +1,7 @@
 import type { WorkspaceRetirePreflightResponse } from "@anyharness/sdk";
 import {
   anyHarnessWorkspaceRetirePreflightKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -19,11 +20,12 @@ export function useWorkspaceRetirePreflightQueries(
   workspaceIds: string[],
 ): WorkspaceRetirePreflightQuery[] {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const enabledWorkspaceIds = useBatchedRetirePreflightWorkspaceIds(workspaceIds);
 
   return useQueries({
     queries: workspaceIds.map((workspaceId) => ({
-      queryKey: anyHarnessWorkspaceRetirePreflightKey(runtimeUrl, workspaceId),
+      queryKey: anyHarnessWorkspaceRetirePreflightKey(cacheScopeKey, workspaceId),
       enabled: runtimeUrl.trim().length > 0 && enabledWorkspaceIds.has(workspaceId),
       staleTime: 60_000,
       retry: false,

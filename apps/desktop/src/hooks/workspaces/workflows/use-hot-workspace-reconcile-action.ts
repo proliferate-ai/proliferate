@@ -35,7 +35,6 @@ const WORKSPACE_RECONCILE_SESSION_LIST_TIMEOUT_MS = 3_000;
 interface ReconcileHotWorkspaceInput {
   workspaceId: string;
   logicalWorkspaceId: string;
-  runtimeUrl: string;
   workspaceConnection: AnyHarnessResolvedConnection;
   sessionId: string;
   selectionNonce: number;
@@ -55,7 +54,6 @@ interface WorkspaceFileAccessInput {
 interface UseHotWorkspaceReconcileActionInput {
   cancelDeferredFileTreePrefetch: () => void;
   loadWorkspaceSessions: (input: {
-    runtimeUrl: string;
     workspaceConnection: AnyHarnessResolvedConnection;
     workspaceId: string;
     requestOptions?: AnyHarnessRequestOptions;
@@ -90,7 +88,6 @@ export function useHotWorkspaceReconcileAction({
   return useCallback(async ({
     workspaceId,
     logicalWorkspaceId,
-    runtimeUrl,
     workspaceConnection,
     sessionId,
     latencyFlowId,
@@ -152,7 +149,6 @@ export function useHotWorkspaceReconcileAction({
       });
       const sessionsStartedAt = startLatencyTimer();
       const sessions = await loadWorkspaceSessions({
-        runtimeUrl,
         workspaceConnection,
         workspaceId,
         requestOptions: sessionRequestOptions ?? undefined,

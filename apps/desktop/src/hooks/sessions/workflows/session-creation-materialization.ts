@@ -66,7 +66,6 @@ interface MaterializeSessionCreationInput {
   upsertWorkspaceSessionRecord: (
     workspaceId: string,
     session: Session,
-    options?: { runtimeUrl?: string },
   ) => void;
   workspaceId: string;
 }
@@ -169,7 +168,6 @@ async function runSessionCreationMaterialization({
         latencyFlowId: options.latencyFlowId,
         pendingSessionId,
         resolvedModeId,
-        runtimeUrl: target.baseUrl,
         upsertWorkspaceSessionRecord,
         workspaceId,
         launchIntentId: options.launchIntentId,
@@ -220,7 +218,6 @@ async function runSessionCreationMaterialization({
       launchIntentId: options.launchIntentId,
       pendingSessionId,
       resolvedModeId,
-      runtimeUrl: target.baseUrl,
       upsertWorkspaceSessionRecord,
       workspaceId,
     });
@@ -335,9 +332,7 @@ async function runSessionCreationMaterialization({
   if (useSessionSelectionStore.getState().activeSessionId === pendingSessionId) {
     rememberLastViewedSession(workspaceId, launchedSession.id);
   }
-  upsertWorkspaceSessionRecord(workspaceId, launchedSession, {
-    runtimeUrl: target.baseUrl,
-  });
+  upsertWorkspaceSessionRecord(workspaceId, launchedSession);
   trackProductEvent("chat_session_created", {
     workspace_kind: cloudWorkspaceId ? "cloud" : "local",
     agent_kind: options.agentKind,

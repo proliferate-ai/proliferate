@@ -122,7 +122,6 @@ describe("useSessionRestoreActions", () => {
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
       "workspace-1",
       restored,
-      { runtimeUrl: "http://runtime.test" },
     );
   });
 
@@ -168,7 +167,6 @@ describe("useSessionRestoreActions", () => {
     expect(mocks.upsertWorkspaceSessionRecord).toHaveBeenCalledWith(
       "workspace-1",
       restored,
-      { runtimeUrl: "http://runtime.test" },
     );
   });
 

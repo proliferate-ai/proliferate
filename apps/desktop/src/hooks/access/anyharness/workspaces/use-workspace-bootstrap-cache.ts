@@ -2,6 +2,7 @@ import type { AnyHarnessRequestOptions } from "@anyharness/sdk";
 import type { AnyHarnessResolvedConnection } from "@anyharness/sdk-react";
 import {
   anyHarnessSessionsKey,
+  useAnyHarnessCacheScopeKey,
 } from "@anyharness/sdk-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -23,7 +24,6 @@ import {
 export type CacheDecision = "hit" | "stale" | "miss";
 
 interface LoadWorkspaceSessionsInput {
-  runtimeUrl: string;
   workspaceConnection: AnyHarnessResolvedConnection;
   workspaceId: string;
   requestOptions?: AnyHarnessRequestOptions;
@@ -138,17 +138,17 @@ export function reconcileReplacedSessionTombstones(
 // Owns AnyHarness React Query cache shape needed during workspace activation.
 export function useWorkspaceBootstrapCache() {
   const queryClient = useQueryClient();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
 
   const getWorkspaceSessionsCacheDecision = useCallback((
-    runtimeUrl: string,
     workspaceId: string,
   ): CacheDecision => {
-    const queryKey = anyHarnessSessionsKey(runtimeUrl, workspaceId);
+    const queryKey = anyHarnessSessionsKey(cacheScopeKey, workspaceId);
     const cacheState = queryClient.getQueryState(queryKey);
     return cacheState?.dataUpdatedAt
       ? cacheState.isInvalidated ? "stale" : "hit"
       : "miss";
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   const fetchWorkspaceSessions = useCallback((
     input: FetchWorkspaceSessionsInput,
@@ -157,7 +157,7 @@ export function useWorkspaceBootstrapCache() {
   const loadWorkspaceSessions = useCallback(async (
     input: LoadWorkspaceSessionsInput,
   ): Promise<WorkspaceSession[]> => {
-    const queryKey = anyHarnessSessionsKey(input.runtimeUrl, input.workspaceId);
+    const queryKey = anyHarnessSessionsKey(cacheScopeKey, input.workspaceId);
     const cacheState = queryClient.getQueryState(queryKey);
     const cachedSessions = queryClient.getQueryData<WorkspaceSession[]>(queryKey);
     if (
@@ -183,7 +183,7 @@ export function useWorkspaceBootstrapCache() {
     });
     queryClient.setQueryData(queryKey, sessions);
     return sessions;
-  }, [queryClient]);
+  }, [cacheScopeKey, queryClient]);
 
   return {
     fetchWorkspaceSessions,

@@ -32,7 +32,10 @@ import { getWorkspaceCollectionsFromCache } from "@/hooks/workspaces/cache/query
 import { useHarnessConnectionStore } from "@/stores/sessions/harness-connection-store";
 import { useSessionSelectionStore } from "@/stores/sessions/session-selection-store";
 import { useAuthStore } from "@/stores/auth/auth-store";
+import { buildAnyHarnessCacheScopeKey } from "@/lib/domain/auth/anyharness-cache-scope";
+import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
+import { useCloudWorkspaceMaterializationCacheBoundary } from "@/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
 import { TelemetryProvider } from "./TelemetryProvider";
 
 async function resolveWorkspaceConnectionWithCache(
@@ -78,6 +81,11 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
   const runtimeUrl = useHarnessConnectionStore((state) => state.runtimeUrl);
   const authStatus = useAuthStore((state) => state.status);
   const authUserId = useAuthStore((state) => state.user?.id ?? null);
+  const cacheScopeKey = useMemo(() => buildAnyHarnessCacheScopeKey({
+    apiBaseUrl: getProliferateApiBaseUrl(),
+    authStatus,
+    authUserId,
+  }), [authStatus, authUserId]);
   const selectedWorkspaceId = useSessionSelectionStore((state) => state.selectedWorkspaceId);
   const selectedLogicalWorkspaceId = useSessionSelectionStore((state) => state.selectedLogicalWorkspaceId);
   const providerWorkspaceId = resolveRouteScopedWorkspaceProviderId({
@@ -96,7 +104,7 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
         cloudMobilityWorkspacesKey(),
       );
       const coworkStatus = appQueryClient.getQueryData<CoworkStatus>(
-        anyHarnessCoworkStatusKey(runtimeUrl),
+        anyHarnessCoworkStatusKey(runtimeUrl, cacheScopeKey),
       );
       const standardProjection = workspaceCollections
         ? buildStandardRepoProjection({
@@ -163,17 +171,24 @@ function WorkspaceProviders({ children }: { children: ReactNode }) {
 
       return resolveWorkspaceConnectionWithCache(runtimeUrl, workspaceId);
     },
-    [authStatus, authUserId, runtimeUrl, selectedWorkspaceId],
+    [authStatus, authUserId, cacheScopeKey, runtimeUrl, selectedWorkspaceId],
   );
 
   return (
-    <AnyHarnessRuntime runtimeUrl={runtimeUrl}>
-      <AnyHarnessWorkspace
-        workspaceId={providerWorkspaceId}
-        resolveConnection={resolveConnection}
-      >
-        {children}
-      </AnyHarnessWorkspace>
+    <AnyHarnessRuntime runtimeUrl={runtimeUrl} cacheScopeKey={cacheScopeKey}>
+      <CloudWorkspaceMaterializationCacheBoundary>
+        <AnyHarnessWorkspace
+          workspaceId={providerWorkspaceId}
+          resolveConnection={resolveConnection}
+        >
+          {children}
+        </AnyHarnessWorkspace>
+      </CloudWorkspaceMaterializationCacheBoundary>
     </AnyHarnessRuntime>
   );
+}
+
+function CloudWorkspaceMaterializationCacheBoundary({ children }: { children: ReactNode }) {
+  useCloudWorkspaceMaterializationCacheBoundary();
+  return children;
 }
