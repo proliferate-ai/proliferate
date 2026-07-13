@@ -29,7 +29,7 @@ jobs:
       WORKERS_DEPLOY_ENABLED: ${{ vars.WORKERS_DEPLOY_ENABLED || 'false' }}
       WORKERS_DEPLOY_NOTE: ${{ vars.WORKERS_DEPLOY_NOTE || 'No hosted background worker ECS service is enabled for this environment yet.' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.git_sha }}
 

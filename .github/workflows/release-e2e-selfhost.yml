@@ -57,7 +57,7 @@ jobs:
     steps:
       # fetch-depth 0 + tags: T4-SH-2 verifies the desktop-v<version> tag exists
       # and shares lineage with the release SHA.
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v6
@@ -96,7 +96,7 @@ jobs:
           fi
           echo "provision=$provision" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v6
@@ -107,7 +107,7 @@ jobs:
           version: 10
       - name: Configure AWS credentials
         if: steps.preflight.outputs.provision == '1'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload failure reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-e2e-selfhost-reports
           path: tests/release/.output/
