@@ -9,13 +9,9 @@ import { useAnyHarnessCacheScopeKey } from "../context/AnyHarnessRuntime.js";
 import { getAnyHarnessClient } from "../lib/client-cache.js";
 import { anyHarnessSessionKey } from "../lib/query-keys.js";
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 export function useEditPendingPromptMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -40,7 +36,7 @@ export function useEditPendingPromptMutation(options?: { workspaceId?: string | 
 
 export function useDeletePendingPromptMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -60,7 +56,7 @@ export function useDeletePendingPromptMutation(options?: { workspaceId?: string 
 
 export function useReorderPendingPromptsMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -85,7 +81,7 @@ export function useReorderPendingPromptsMutation(options?: { workspaceId?: strin
 
 export function useSteerPendingPromptMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 

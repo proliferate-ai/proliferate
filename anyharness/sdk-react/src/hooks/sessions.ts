@@ -42,13 +42,9 @@ interface WorkspaceMutationInput {
 
 type TimedWorkspaceQueryOptions = WorkspaceQueryOptions & AnyHarnessQueryTimingOptions;
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 export function useWorkspaceSessionsQuery(options?: TimedWorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
   const queryKey = anyHarnessSessionsKey(cacheScopeKey, workspaceId);
@@ -78,7 +74,7 @@ export function useSessionQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -114,7 +110,7 @@ export function useSessionLiveConfigQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -136,7 +132,7 @@ export function useSessionEventsQuery(
   options?: TimedWorkspaceQueryOptions & { request?: ListSessionEventsOptions },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const afterSeq = options?.request?.afterSeq;
   const beforeSeq = options?.request?.beforeSeq;
@@ -185,7 +181,7 @@ export function useSessionSubagentsQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -204,7 +200,7 @@ export function useSessionSubagentsQuery(
 
 export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -229,7 +225,7 @@ export function useScheduleSubagentWakeMutation(options?: { workspaceId?: string
 
 export function useCreateSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -269,7 +265,7 @@ export function useCreateSessionMutation(options?: { workspaceId?: string | null
 
 export function useSetSessionConfigOptionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -303,7 +299,7 @@ export function useSetSessionConfigOptionMutation(options?: { workspaceId?: stri
 
 export function usePromptSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -330,7 +326,7 @@ export function usePromptSessionMutation(options?: { workspaceId?: string | null
 
 export function usePromptSessionTextMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -350,7 +346,7 @@ export function usePromptSessionTextMutation(options?: { workspaceId?: string | 
 
 export function useForkSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -381,7 +377,7 @@ export function useForkSessionMutation(options?: { workspaceId?: string | null }
 
 export function useResumeSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -407,7 +403,7 @@ export function useResumeSessionMutation(options?: { workspaceId?: string | null
 
 export function useUpdateSessionTitleMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -439,7 +435,7 @@ export function useUpdateSessionTitleMutation(options?: { workspaceId?: string |
 
 export function useSetSessionGoalMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -466,7 +462,7 @@ export function useSetSessionGoalMutation(options?: { workspaceId?: string | nul
 
 export function useClearSessionGoalMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -492,7 +488,7 @@ export function useClearSessionGoalMutation(options?: { workspaceId?: string | n
 
 export function useSetSessionLoopMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -528,7 +524,7 @@ export function useSetSessionLoopMutation(options?: { workspaceId?: string | nul
 
 export function useClearSessionLoopMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -558,7 +554,7 @@ export function useClearSessionLoopMutation(options?: { workspaceId?: string | n
 
 export function useCancelSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -586,7 +582,7 @@ export function useCancelSessionMutation(options?: { workspaceId?: string | null
 
 export function useDismissSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -614,7 +610,7 @@ export function useDismissSessionMutation(options?: { workspaceId?: string | nul
 
 export function useCloseSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -642,7 +638,7 @@ export function useCloseSessionMutation(options?: { workspaceId?: string | null 
 
 export function useRestoreDismissedSessionMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
 
   return useMutation({

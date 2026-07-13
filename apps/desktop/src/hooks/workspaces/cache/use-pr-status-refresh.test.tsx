@@ -132,8 +132,18 @@ describe("scheduleRepoPrStatusRefresh", () => {
   it("skips scheduling without a runtime url or repo root id", async () => {
     const queryClient = new QueryClient();
 
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: " ", repoRootId: "root-a" });
-    scheduleRepoPrStatusRefresh({ queryClient, runtimeUrl: RUNTIME_URL, repoRootId: "" });
+    scheduleRepoPrStatusRefresh({
+      queryClient,
+      runtimeUrl: " ",
+      repoRootId: "root-a",
+      cacheScopeKey: CACHE_SCOPE_KEY,
+    });
+    scheduleRepoPrStatusRefresh({
+      queryClient,
+      runtimeUrl: RUNTIME_URL,
+      repoRootId: "",
+      cacheScopeKey: CACHE_SCOPE_KEY,
+    });
     await vi.advanceTimersByTimeAsync(300);
 
     expect(mocks.listRepoRootPullRequestStatuses).not.toHaveBeenCalled();

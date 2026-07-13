@@ -100,6 +100,16 @@ describe("sdk-react query keys", () => {
       .toEqual(anyHarnessRuntimeHealthKey("http://runtime-a.test", "api:user-1"));
   });
 
+  it("does not silently fall back to runtime identity when an explicit scope is empty", () => {
+    expect(anyHarnessRuntimeHealthKey("http://runtime.test", "")).toEqual([
+      "anyharness",
+      "",
+      "runtime",
+      "http://runtime.test",
+      "health",
+    ]);
+  });
+
   it("keeps logical workspace keys independent of resolved gateway credentials", () => {
     expect(anyHarnessSessionsKey("api:user-1", "workspace-1")).toEqual([
       "anyharness",

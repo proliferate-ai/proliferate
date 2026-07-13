@@ -19,13 +19,9 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 export function useWorkspacePlansQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -47,7 +43,7 @@ export function usePlanDetailQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -83,7 +79,7 @@ export function usePlanDetailsQueries(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQueries({
@@ -108,7 +104,7 @@ export function usePlanDocumentQuery(
   options?: WorkspaceQueryOptions & { materialize?: boolean },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const materialize = options?.materialize ?? false;
 
@@ -128,7 +124,7 @@ export function usePlanDocumentQuery(
 
 export function useMaterializePlanDocumentMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -150,7 +146,7 @@ export function useMaterializePlanDocumentMutation(options?: { workspaceId?: str
 
 export function useApprovePlanMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -195,7 +191,7 @@ export function useApprovePlanMutation(options?: { workspaceId?: string | null }
 
 export function useRejectPlanMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -240,7 +236,7 @@ export function useRejectPlanMutation(options?: { workspaceId?: string | null })
 
 export function useHandoffPlanMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 

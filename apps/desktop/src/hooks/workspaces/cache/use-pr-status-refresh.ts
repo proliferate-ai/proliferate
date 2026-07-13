@@ -21,9 +21,9 @@ const pendingRefreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 function refreshTimerKey(
   runtimeUrl: string,
   repoRootId: string,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ): string {
-  return `${cacheScopeKey?.trim() || runtimeUrl}::${runtimeUrl}::${repoRootId}`;
+  return `${cacheScopeKey?.trim() ?? ""}::${runtimeUrl}::${repoRootId}`;
 }
 
 // Monotonic guard: never replace cached data whose fetchedAt is newer, and
@@ -48,7 +48,7 @@ async function runRepoPrStatusRefresh(input: {
   queryClient: QueryClient;
   runtimeUrl: string;
   repoRootId: string;
-  cacheScopeKey?: string | null;
+  cacheScopeKey: string | null | undefined;
 }): Promise<void> {
   const { cacheScopeKey, queryClient, runtimeUrl, repoRootId } = input;
   const result = await listRepoRootPullRequestStatuses(
@@ -71,14 +71,14 @@ export function scheduleRepoPrStatusRefresh(input: {
   queryClient: QueryClient;
   runtimeUrl: string;
   repoRootId: string;
-  cacheScopeKey?: string | null;
+  cacheScopeKey: string | null | undefined;
 }): void {
   const runtimeUrl = input.runtimeUrl.trim();
   const repoRootId = input.repoRootId.trim();
   if (!runtimeUrl || !repoRootId) {
     return;
   }
-  const cacheScopeKey = input.cacheScopeKey?.trim() || undefined;
+  const cacheScopeKey = input.cacheScopeKey?.trim() ?? "";
   const key = refreshTimerKey(runtimeUrl, repoRootId, cacheScopeKey);
   const existing = pendingRefreshTimers.get(key);
   if (existing !== undefined) {

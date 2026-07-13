@@ -56,10 +56,6 @@ type TimedBaseWorktreeDiffFilesQueryOptions =
   & ListBaseWorktreeDiffFilesOptions
   & AnyHarnessQueryTimingOptions;
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 async function invalidateWorkspaceGit(
   queryClient: ReturnType<typeof useQueryClient>,
   cacheScopeKey: string,
@@ -83,7 +79,7 @@ async function invalidateWorkspaceGit(
 
 export function useGitStatusQuery(options?: TimedWorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
   const queryKey = anyHarnessGitStatusKey(cacheScopeKey, workspaceId);
@@ -112,7 +108,7 @@ export function useGitStatusQuery(options?: TimedWorkspaceQueryOptions) {
 
 export function useGitDiffQuery(options: TimedGitDiffQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
   const queryKey = anyHarnessGitDiffKey(
@@ -150,7 +146,7 @@ export function useGitBranchDiffFilesQuery(
   options?: TimedBranchDiffFilesQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
   const queryKey = anyHarnessGitBranchDiffFilesKey(cacheScopeKey, workspaceId, options?.baseRef);
@@ -181,7 +177,7 @@ export function useGitBaseWorktreeDiffFilesQuery(
   options?: TimedBaseWorktreeDiffFilesQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const enabled = (options?.enabled ?? true) && !!workspaceId;
   const queryKey = anyHarnessGitBaseWorktreeDiffFilesKey(cacheScopeKey, workspaceId, options?.baseRef);
@@ -210,7 +206,7 @@ export function useGitBaseWorktreeDiffFilesQuery(
 
 export function useGitBranchesQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -230,7 +226,7 @@ export function useGitBranchesQuery(options?: WorkspaceQueryOptions) {
 export function useStageGitPathsMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -246,7 +242,7 @@ export function useStageGitPathsMutation(options?: { workspaceId?: string | null
 export function useUnstageGitPathsMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -262,7 +258,7 @@ export function useUnstageGitPathsMutation(options?: { workspaceId?: string | nu
 export function useStagePatchMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -278,7 +274,7 @@ export function useStagePatchMutation(options?: { workspaceId?: string | null })
 export function useUnstagePatchMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -294,7 +290,7 @@ export function useUnstagePatchMutation(options?: { workspaceId?: string | null 
 export function useRevertGitPatchesMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -310,7 +306,7 @@ export function useRevertGitPatchesMutation(options?: { workspaceId?: string | n
 export function useCommitGitMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -326,7 +322,7 @@ export function useCommitGitMutation(options?: { workspaceId?: string | null }) 
 export function usePushGitMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -342,7 +338,7 @@ export function usePushGitMutation(options?: { workspaceId?: string | null }) {
 export function useRenameGitBranchMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({

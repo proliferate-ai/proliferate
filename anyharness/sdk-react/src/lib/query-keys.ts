@@ -4,11 +4,11 @@ export function anyHarnessCacheScopeKey(cacheScopeKey: string | null | undefined
 
 export function anyHarnessRuntimeKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   const normalizedRuntimeUrl = runtimeUrl?.trim() ?? "";
   return [
-    ...anyHarnessCacheScopeKey(cacheScopeKey?.trim() || normalizedRuntimeUrl),
+    ...anyHarnessCacheScopeKey(cacheScopeKey?.trim() ?? ""),
     "runtime",
     normalizedRuntimeUrl,
   ] as const;
@@ -27,22 +27,22 @@ export function anyHarnessWorkspaceKey(
 
 export function anyHarnessRuntimeHealthKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "health"] as const;
 }
 
 export function anyHarnessAgentsKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "agents"] as const;
 }
 
 export function anyHarnessAgentLaunchOptionsKey(
   runtimeUrl: string | null | undefined,
-  workspaceId?: string | null,
-  cacheScopeKey?: string | null,
+  workspaceId: string | null | undefined,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [
     ...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey),
@@ -53,14 +53,14 @@ export function anyHarnessAgentLaunchOptionsKey(
 
 export function anyHarnessAgentLaunchOptionsPrefixKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey), "launch-options"] as const;
 }
 
 export function anyHarnessAgentReconcileStatusKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey), "reconcile-status"] as const;
 }
@@ -68,21 +68,21 @@ export function anyHarnessAgentReconcileStatusKey(
 export function anyHarnessAgentGatewayModelsKey(
   runtimeUrl: string | null | undefined,
   kind: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey), "gateway-models", kind ?? null] as const;
 }
 
 export function anyHarnessReconcileAgentsMutationKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessAgentsKey(runtimeUrl, cacheScopeKey), "reconcile"] as const;
 }
 
 export function anyHarnessRuntimeWorkspacesKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "workspaces"] as const;
 }
@@ -103,21 +103,21 @@ export function anyHarnessWorkspacePurgePreflightKey(
 
 export function anyHarnessWorktreesInventoryKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "worktrees", "inventory"] as const;
 }
 
 export function anyHarnessWorktreesRetentionPolicyKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "worktrees", "retention-policy"] as const;
 }
 
 export function anyHarnessRepoRootsKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "repo-roots"] as const;
 }
@@ -125,7 +125,7 @@ export function anyHarnessRepoRootsKey(
 export function anyHarnessRepoRootPullRequestsKey(
   runtimeUrl: string | null | undefined,
   repoRootId: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey), repoRootId ?? null, "pull-requests"] as const;
 }
@@ -133,7 +133,7 @@ export function anyHarnessRepoRootPullRequestsKey(
 export function anyHarnessRepoRootGitBranchesKey(
   runtimeUrl: string | null | undefined,
   repoRootId: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey), repoRootId ?? null, "git-branches"] as const;
 }
@@ -141,7 +141,7 @@ export function anyHarnessRepoRootGitBranchesKey(
 export function anyHarnessRepoRootDetectSetupKey(
   runtimeUrl: string | null | undefined,
   repoRootId: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRepoRootsKey(runtimeUrl, cacheScopeKey), repoRootId ?? null, "detect-setup"] as const;
 }
@@ -169,14 +169,14 @@ export function anyHarnessWorkspaceMobilityRuntimeStateKey(
 
 export function anyHarnessCoworkStatusKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "cowork", "status"] as const;
 }
 
 export function anyHarnessCoworkThreadsKey(
   runtimeUrl: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey), "cowork", "threads"] as const;
 }
@@ -184,7 +184,7 @@ export function anyHarnessCoworkThreadsKey(
 export function anyHarnessCoworkManagedWorkspacesKey(
   runtimeUrl: string | null | undefined,
   sessionId: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [
     ...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey),
@@ -198,7 +198,7 @@ export function anyHarnessCoworkManagedWorkspacesKey(
 export function anyHarnessCoworkManifestKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [
     ...anyHarnessRuntimeKey(runtimeUrl, cacheScopeKey),
@@ -211,7 +211,7 @@ export function anyHarnessCoworkManifestKey(
 export function anyHarnessCoworkArtifactScopeKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [...anyHarnessCoworkManifestKey(runtimeUrl, workspaceId, cacheScopeKey), "artifact"] as const;
 }
@@ -220,7 +220,7 @@ export function anyHarnessCoworkArtifactKey(
   runtimeUrl: string | null | undefined,
   workspaceId: string | null | undefined,
   artifactId: string | null | undefined,
-  cacheScopeKey?: string | null,
+  cacheScopeKey: string | null | undefined,
 ) {
   return [
     ...anyHarnessCoworkArtifactScopeKey(runtimeUrl, workspaceId, cacheScopeKey),

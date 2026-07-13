@@ -26,10 +26,6 @@ interface WorkspaceQueryOptions {
   refetchIntervalInBackground?: boolean;
 }
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 function useWorkspaceId(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   return options?.workspaceId ?? workspace.workspaceId;
@@ -62,7 +58,7 @@ export function useSessionReviewsQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
 
   return useQuery({
@@ -87,7 +83,7 @@ export function useReviewAssignmentCritiqueQuery(
   options?: WorkspaceQueryOptions,
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
 
   return useQuery({
@@ -118,7 +114,7 @@ export function useReviewAssignmentCritiqueQuery(
 
 export function useStartPlanReviewMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
   const queryClient = useQueryClient();
 
@@ -145,7 +141,7 @@ export function useStartPlanReviewMutation(options?: { workspaceId?: string | nu
 
 export function useStartCodeReviewMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = useWorkspaceId(options);
   const queryClient = useQueryClient();
 
@@ -171,7 +167,7 @@ export function useStartCodeReviewMutation(options?: { workspaceId?: string | nu
 
 export function useStopReviewMutation(options?: { workspaceId?: string | null }) {
   const workspaceId = useWorkspaceId(options);
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 
@@ -196,7 +192,7 @@ export function useRetryReviewAssignmentMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspaceId = useWorkspaceId(options);
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 
@@ -229,7 +225,7 @@ export function useRetryReviewAssignmentMutation(
 
 export function useSendReviewFeedbackMutation(options?: { workspaceId?: string | null }) {
   const workspaceId = useWorkspaceId(options);
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 
@@ -254,7 +250,7 @@ export function useMarkReviewRevisionReadyMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspaceId = useWorkspaceId(options);
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspace = useAnyHarnessWorkspaceContext();
 

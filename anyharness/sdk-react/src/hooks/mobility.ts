@@ -24,13 +24,9 @@ interface WorkspaceQueryOptions {
   enabled?: boolean;
 }
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 export function useWorkspaceMobilityPreflightQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -51,7 +47,7 @@ export function useUpdateWorkspaceMobilityRuntimeStateMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -118,7 +114,7 @@ export function useInstallWorkspaceMobilityArchiveMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
@@ -166,7 +162,7 @@ export function useDestroyWorkspaceMobilitySourceMutation(
   options?: { workspaceId?: string | null },
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const queryClient = useQueryClient();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 

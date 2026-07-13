@@ -31,17 +31,13 @@ import {
   anyHarnessWorkspaceFileTreeKey,
 } from "../lib/query-keys.js";
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 export function useWorkspaceFilesQuery(options: {
   workspaceId?: string | null;
   path?: string;
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const path = options.path ?? "";
   const enabled = (options.enabled ?? true) && !!workspaceId;
@@ -75,7 +71,7 @@ export function useReadWorkspaceFileQuery(options: {
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
   const queryKey = anyHarnessWorkspaceFileKey(cacheScopeKey, workspaceId, options.path);
@@ -129,7 +125,7 @@ export function useSearchWorkspaceFilesQuery(options: {
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const query = options.query ?? "";
   const limit = options.limit ?? 50;
@@ -166,7 +162,7 @@ export function useStatWorkspaceFileQuery(options: {
   enabled?: boolean;
 } & AnyHarnessQueryTimingOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
   const enabled = (options.enabled ?? true) && !!workspaceId && !!options.path;
   const queryKey = anyHarnessWorkspaceFileStatKey(cacheScopeKey, workspaceId, options.path);
@@ -195,7 +191,7 @@ export function useStatWorkspaceFileQuery(options: {
 export function useWriteWorkspaceFileMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -241,7 +237,7 @@ export function useCreateWorkspaceDirectoryMutation(options?: { workspaceId?: st
 export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -297,7 +293,7 @@ export function useRenameWorkspaceEntryMutation(options?: { workspaceId?: string
 export function useDeleteWorkspaceEntryMutation(options?: { workspaceId?: string | null }) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({
@@ -346,7 +342,7 @@ function useCreateWorkspaceEntryMutation(
 ) {
   const workspace = useAnyHarnessWorkspaceContext();
   const queryClient = useQueryClient();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useMutation({

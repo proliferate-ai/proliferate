@@ -43,10 +43,6 @@ interface WorkspaceQueryOptions {
   requestOptions?: AnyHarnessRequestOptions;
 }
 
-function useWorkspaceCacheScopeKey() {
-  return useAnyHarnessCacheScopeKey();
-}
-
 export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
   const runtime = useAnyHarnessRuntimeContext();
   const runtimeUrl = runtime.runtimeUrl?.trim() ?? "";
@@ -64,7 +60,7 @@ export function useRuntimeWorkspacesQuery(options?: RuntimeQueryOptions) {
 
 export function useWorkspaceQuery(options: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -184,7 +180,7 @@ export function useUpdateWorkspaceDisplayNameMutation() {
 
 export function useRetireWorkspacePreflightQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -204,7 +200,7 @@ export function useRetireWorkspacePreflightQuery(options?: WorkspaceQueryOptions
 
 export function usePurgeWorkspacePreflightQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -330,7 +326,7 @@ export function useRetryPurgeWorkspaceMutation() {
 
 export function useDetectProjectSetupQuery(options?: WorkspaceQueryOptions) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
 
   return useQuery({
@@ -350,7 +346,7 @@ export function useDetectProjectSetupQuery(options?: WorkspaceQueryOptions) {
 
 export function useSetupStatusQuery(options?: WorkspaceQueryOptions & { refetchWhileRunning?: boolean }) {
   const workspace = useAnyHarnessWorkspaceContext();
-  const cacheScopeKey = useWorkspaceCacheScopeKey();
+  const cacheScopeKey = useAnyHarnessCacheScopeKey();
   const workspaceId = options?.workspaceId ?? workspace.workspaceId;
   const refetchWhileRunning = options?.refetchWhileRunning ?? true;
 
