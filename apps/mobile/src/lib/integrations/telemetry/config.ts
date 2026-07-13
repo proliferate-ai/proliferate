@@ -1,3 +1,5 @@
+import packageJson from "../../../../package.json";
+
 declare const process: {
   env: {
     EXPO_PUBLIC_PROLIFERATE_ENVIRONMENT?: string;
@@ -56,7 +58,12 @@ export function getMobileTelemetryConfig(): MobileTelemetryConfig {
       || (typeof __DEV__ !== "undefined" && __DEV__ ? "development" : "production"),
     release:
       process.env.EXPO_PUBLIC_PROLIFERATE_RELEASE?.trim()
-      || "proliferate-mobile@0.1.0",
+      // EAS build profiles are expected to set EXPO_PUBLIC_PROLIFERATE_RELEASE
+      // to a canonical `proliferate-mobile@<semver>+<12-hex-sha>` string; this
+      // fallback only fires in local dev and derives the version from the
+      // package.json (kept in sync with app.config.ts) instead of a stale
+      // hardcoded literal.
+      || `proliferate-mobile@${packageJson.version}`,
     sentry: {
       enabled: !telemetryDisabled && sentryDsn !== null,
       dsn: sentryDsn,

@@ -13,6 +13,13 @@ export interface CloudSupportReportSubmitInput {
   publicContentConsent: boolean;
   context: SupportMessageContext;
   sourceSurface: SupportReportCreateRequest["sourceSurface"];
+  /**
+   * Canonical `<component>@<semver>+<12-hex-sha>` release identifier for the
+   * calling app (e.g. from `getWebTelemetryConfig().release`). Threaded in
+   * from the app layer since this shared package cannot import app-specific
+   * telemetry config directly.
+   */
+  clientReleaseId?: string | null;
 }
 
 export interface CloudSupportReportActions {
@@ -45,6 +52,7 @@ export function useCloudSupportReportActions(): CloudSupportReportActions {
           publicContentConsent: input.publicContentConsent,
           kind: "bug",
           creditConsent: false,
+          clientReleaseId: input.clientReleaseId ?? null,
           urgent: false,
           notifyMe: false,
         },

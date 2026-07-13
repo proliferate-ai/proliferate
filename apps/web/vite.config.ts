@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
@@ -15,7 +17,19 @@ const sentryUploadEnabled =
   && Boolean(sentryProject)
   && Boolean(sentryRelease);
 
+// Root VERSION file (repo root, two levels up from apps/web). Only used for
+// the local-dev telemetry release fallback so it reflects the real product
+// version instead of a hardcoded stale literal; real builds always set
+// VITE_PROLIFERATE_RELEASE from vercel.json's buildCommand instead.
+const rootVersion = readFileSync(
+  fileURLToPath(new URL("../../VERSION", import.meta.url)),
+  "utf-8",
+).trim();
+
 export default defineConfig({
+  define: {
+    __PROLIFERATE_WEB_VERSION__: JSON.stringify(rootVersion),
+  },
   plugins: [
     react(),
     tailwindcss(),

@@ -14,6 +14,7 @@ import type {
   SupportReportWorkspaceOption,
 } from "@/lib/domain/support/report-types";
 import {
+  getSupportReportReleaseId,
   getSupportReportTelemetryRefs,
   trackProductEvent,
 } from "@/lib/integrations/telemetry/client";
@@ -42,6 +43,7 @@ export function buildCreateReportRequest(
     kind: job.kind ?? "bug",
     creditConsent: job.creditConsent ?? false,
     creditName: job.creditName ?? null,
+    clientReleaseId: getSupportReportReleaseId(),
     urgent: job.urgent ?? false,
     notifyMe: job.notifyMe ?? false,
   };

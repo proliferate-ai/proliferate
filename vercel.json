@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "VITE_PROLIFERATE_RELEASE=\"proliferate-web@$VERCEL_GIT_COMMIT_SHA\" pnpm web:build",
+  "buildCommand": "VITE_PROLIFERATE_RELEASE=\"proliferate-web@$(cat VERSION)+${VERCEL_GIT_COMMIT_SHA:0:12}\" pnpm web:build",
   "installCommand": "pnpm install --frozen-lockfile",
   "outputDirectory": "apps/web/dist",
   "framework": "vite",
