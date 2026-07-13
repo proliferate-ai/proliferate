@@ -82,7 +82,11 @@ function shardEvidence(opts: {
     dryRun: false,
     plan: shardPlan(opts.cells),
     preflight: { results: [], blockedCellKeys: [], complete: true },
-    worlds: [],
+    worlds: [...new Set(opts.finals.map((f) => f.cell.world))].map((world) => ({
+      world,
+      readiness: [{ check: "server-health", ok: true, detail: "200", observedAt: "2026-07-13T00:00:00.000Z" }],
+      observedArtifacts: { "server-image": "sha256:test" },
+    })),
     finals: opts.finals,
     cleanup: { attempted: 0, cleaned: 0, alreadyAbsent: 0, failed: [], complete: true },
     evaluation: {
@@ -109,8 +113,8 @@ function writeShards(shards: RunEvidence[]): { dir: string; paths: string[] } {
 
 test("aggregate qualifies a complete, green, multi-shard strict run and exits 0", () => {
   const shards = [
-    shardEvidence({ shardIndex: 0, shardCount: 2, cells: [planned(CELL_A)], finals: [final(CELL_A, "green")] }),
-    shardEvidence({ shardIndex: 1, shardCount: 2, cells: [planned(CELL_B)], finals: [final(CELL_B, "green")] }),
+    shardEvidence({ shardIndex: 1, shardCount: 2, cells: [planned(CELL_A)], finals: [final(CELL_A, "green")] }),
+    shardEvidence({ shardIndex: 2, shardCount: 2, cells: [planned(CELL_B)], finals: [final(CELL_B, "green")] }),
   ];
   const { dir, paths } = writeShards(shards);
   try {
@@ -126,7 +130,7 @@ test("aggregate qualifies a complete, green, multi-shard strict run and exits 0"
 test("aggregate fails a run with a missing shard (coverage defect) and exits 1", () => {
   // Only shard 0 of 2 is provided — the aggregate must not qualify.
   const shards = [
-    shardEvidence({ shardIndex: 0, shardCount: 2, cells: [planned(CELL_A)], finals: [final(CELL_A, "green")] }),
+    shardEvidence({ shardIndex: 1, shardCount: 2, cells: [planned(CELL_A)], finals: [final(CELL_A, "green")] }),
   ];
   const { dir, paths } = writeShards(shards);
   try {
@@ -140,8 +144,8 @@ test("aggregate fails a run with a missing shard (coverage defect) and exits 1",
 
 test("aggregate fails when a required cell is non-green and exits 1", () => {
   const shards = [
-    shardEvidence({ shardIndex: 0, shardCount: 2, cells: [planned(CELL_A)], finals: [final(CELL_A, "green")] }),
-    shardEvidence({ shardIndex: 1, shardCount: 2, cells: [planned(CELL_B)], finals: [final(CELL_B, "failed")] }),
+    shardEvidence({ shardIndex: 1, shardCount: 2, cells: [planned(CELL_A)], finals: [final(CELL_A, "green")] }),
+    shardEvidence({ shardIndex: 2, shardCount: 2, cells: [planned(CELL_B)], finals: [final(CELL_B, "failed")] }),
   ];
   const { dir, paths } = writeShards(shards);
   try {
@@ -156,7 +160,7 @@ test("aggregate fails when a required cell is non-green and exits 1", () => {
 test("aggregate reconstructs the union of shard cells for a single-shard run", () => {
   const shards = [
     shardEvidence({
-      shardIndex: 0,
+      shardIndex: 1,
       shardCount: 1,
       cells: [planned(CELL_A), planned(CELL_B)],
       finals: [final(CELL_A, "green"), final(CELL_B, "green")],

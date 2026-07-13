@@ -135,3 +135,104 @@ test("loadScenarioManifest surfaces a typed error for missing/invalid files", ()
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a journey id colliding with a guarantee id is rejected unless it is the standing self-composition pattern", () => {
+  const base = {
+    schemaVersion: 4,
+    qualificationPolicy: {
+      tier3StandingSelection: {
+        includeComposedJourneyReferences: true,
+        standaloneScenarioIds: [],
+        unreferencedDisposition: "deferred",
+        fullCoreQualificationRequiresNoDeferred: true,
+      },
+    },
+  };
+  // Allowed: same tier, journey composes its own guarantee (T4 standing core).
+  const ok = parseScenarioManifest({
+    ...base,
+    requiredScenarios: [{ id: "T4-UP-1", tier: 4, implementation: { status: "planned" } }],
+    composedJourneys: [
+      {
+        id: "T4-UP-1",
+        tier: 4,
+        world: "desktop-upgrade",
+        requiredHosts: ["desktop-native"],
+        targetScenarioRefs: ["T4-UP-1"],
+        implementation: { status: "planned" },
+      },
+    ],
+  });
+  assert.equal(ok.journeyById.get("T4-UP-1")?.tier, 4);
+  // Rejected: collision without self-composition (different tier).
+  assert.throws(
+    () =>
+      parseScenarioManifest({
+        ...base,
+        requiredScenarios: [{ id: "AMBIG-1", tier: 2, implementation: { status: "planned" } }],
+        composedJourneys: [
+          {
+            id: "AMBIG-1",
+            tier: 3,
+            world: "managed-cloud",
+            requiredHosts: ["hosted-web"],
+            targetScenarioRefs: ["AMBIG-1"],
+            implementation: { status: "planned" },
+          },
+        ],
+      }),
+    /collides with a requiredScenarios id/,
+  );
+});
+
+test("a journey referencing a HIGHER-tier guarantee is rejected; lower-tier refs are allowed", () => {
+  const base = {
+    schemaVersion: 4,
+    qualificationPolicy: {
+      tier3StandingSelection: {
+        includeComposedJourneyReferences: true,
+        standaloneScenarioIds: [],
+        unreferencedDisposition: "deferred",
+        fullCoreQualificationRequiresNoDeferred: true,
+      },
+    },
+  };
+  // Tier 3 journey proving a Tier 2 guarantee cross-host: allowed (CLOUD-HOSTS-1 pattern).
+  const ok = parseScenarioManifest({
+    ...base,
+    requiredScenarios: [
+      { id: "T2-SURF-9", tier: 2, implementation: { status: "planned" } },
+      { id: "T3-CHAT-9", tier: 3, implementation: { status: "planned" } },
+    ],
+    composedJourneys: [
+      {
+        id: "HOSTS-9",
+        tier: 3,
+        world: "managed-cloud",
+        requiredHosts: ["cross-host"],
+        targetScenarioRefs: ["T2-SURF-9", "T3-CHAT-9"],
+        implementation: { status: "planned" },
+      },
+    ],
+  });
+  assert.ok(ok.journeyById.has("HOSTS-9"));
+  // Tier 3 journey composing a Tier 4 upgrade guarantee: rejected.
+  assert.throws(
+    () =>
+      parseScenarioManifest({
+        ...base,
+        requiredScenarios: [{ id: "T4-DATA-9", tier: 4, implementation: { status: "planned" } }],
+        composedJourneys: [
+          {
+            id: "REACH-UP-9",
+            tier: 3,
+            world: "managed-cloud",
+            requiredHosts: ["hosted-web"],
+            targetScenarioRefs: ["T4-DATA-9"],
+            implementation: { status: "planned" },
+          },
+        ],
+      }),
+    /higher-tier/,
+  );
+});

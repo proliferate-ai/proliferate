@@ -40,12 +40,13 @@ function manifestWith(statuses: {
   });
 }
 
-const CHAT_KEY = cellKey({ scenarioId: "T3-CHAT-1", world: "managed-cloud", productHost: "hosted-web", dimensions: {} });
+const CHAT_CELL = { scenarioId: "T3-CHAT-1", world: "managed-cloud", productHost: "hosted-web", dimensions: {} } as const;
+const CHAT_KEY = cellKey(CHAT_CELL);
 
 test("audit passes when a collected row has a matching collector", () => {
   const parsed = manifestWith({ chat: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
+    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
   ];
   const report = auditCollectors(parsed, registry);
   assert.ok(report.ok, report.defects.join("; "));
@@ -67,7 +68,7 @@ test("(a) a planned row without a collector is fine (planned means no collector)
 test("(a) a collected journey without a collector fails the audit", () => {
   const parsed = manifestWith({ chat: "collected", journey: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
+    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
   ];
   const report = auditCollectors(parsed, registry);
   assert.equal(report.ok, false);
@@ -77,8 +78,13 @@ test("(a) a collected journey without a collector fails the audit", () => {
 test("(b) a collector naming an unknown scenario id fails the audit", () => {
   const parsed = manifestWith({ chat: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
-    { scenarioId: "T3-GHOST-1", cellKeys: ["managed-cloud/T3-GHOST-1/-/-"], collectorRef: "src/.../ghost.ts" },
+    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat.ts" },
+    {
+      scenarioId: "T3-GHOST-1",
+      cells: [{ scenarioId: "T3-GHOST-1", world: "managed-cloud", productHost: null, dimensions: {} }],
+      cellKeys: ["managed-cloud/T3-GHOST-1/-/-"],
+      collectorRef: "src/.../ghost.ts",
+    },
   ];
   const report = auditCollectors(parsed, registry);
   assert.equal(report.ok, false);
@@ -88,8 +94,8 @@ test("(b) a collector naming an unknown scenario id fails the audit", () => {
 test("(c) two collectors claiming one cell key fail the audit", () => {
   const parsed = manifestWith({ chat: "collected" });
   const registry: CollectorRegistryEntry[] = [
-    { scenarioId: "T3-CHAT-1", cellKeys: [CHAT_KEY], collectorRef: "src/.../chat-a.ts" },
-    { scenarioId: "T3-CHAT-1", cellKeys: [CHAT_KEY], collectorRef: "src/.../chat-b.ts" },
+    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat-a.ts" },
+    { scenarioId: "T3-CHAT-1", cells: [CHAT_CELL], cellKeys: [CHAT_KEY], collectorRef: "src/.../chat-b.ts" },
   ];
   const report = auditCollectors(parsed, registry);
   assert.equal(report.ok, false);

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import { parseScenarioManifest } from "./load.js";
 import type { ParsedManifest } from "./types.js";
+import { cellKey } from "../contracts/identity.js";
+import type { CollectorRegistryEntry } from "./registry.js";
 import {
   resolveMergeSelection,
   resolveReleaseSelection,
@@ -62,9 +64,20 @@ test("merge selects every Tier 2 row as required, even planned ones", () => {
   assert.deepEqual(sel.deferredScenarioIds, []);
 });
 
+
+/** Fixture registry matching the fixture manifest's collected rows. */
+function fixtureRegistry(): CollectorRegistryEntry[] {
+  const chat = { scenarioId: "T3-CHAT-1", world: "managed-cloud", productHost: null, dimensions: {} } as const;
+  const up = { scenarioId: "T4-UP-1", world: "desktop-upgrade", productHost: null, dimensions: {} } as const;
+  return [
+    { scenarioId: "T3-CHAT-1", cells: [chat], cellKeys: [cellKey(chat)], collectorRef: "fixture://chat" },
+    { scenarioId: "T4-UP-1", cells: [up], cellKeys: [cellKey(up)], collectorRef: "fixture://up" },
+  ];
+}
+
 test("release requires collected/referenced Tier 3 and defers planned + unreferenced", () => {
   const parsed = fixture();
-  const sel = resolveReleaseSelection(parsed);
+  const sel = resolveReleaseSelection(parsed, {}, fixtureRegistry());
   // Only T3-CHAT-1 is standing (journey-referenced) AND collected => required.
   const requiredIds = sel.cells.map((c) => c.scenarioId).sort();
   assert.deepEqual(requiredIds, ["T3-CHAT-1"]);
@@ -76,27 +89,33 @@ test("release requires collected/referenced Tier 3 and defers planned + unrefere
 
 test("release deferred derivation is exact: a planned standing row never becomes required", () => {
   const parsed = fixture();
-  const sel = resolveReleaseSelection(parsed);
+  const sel = resolveReleaseSelection(parsed, {}, fixtureRegistry());
   assert.ok(!sel.cells.some((c) => c.scenarioId === "T3-PLANNED-1"), "planned row is not required");
   assert.ok(sel.deferredScenarioIds.includes("T3-PLANNED-1"), "planned row is visibly deferred");
 });
 
 test("release accepts a change-triggered collected Tier 4 row (with an explicit world)", () => {
   const parsed = fixture();
-  const sel = resolveReleaseSelection(parsed, {
-    triggeredTier4: [{ scenarioId: "T4-UP-1", world: "desktop-upgrade" }],
-  });
+  const sel = resolveReleaseSelection(
+    parsed,
+    { triggeredTier4: [{ scenarioId: "T4-UP-1", world: "desktop-upgrade" }] },
+    fixtureRegistry(),
+  );
   assert.ok(sel.cells.some((c) => c.scenarioId === "T4-UP-1" && c.world === "desktop-upgrade"));
 });
 
 test("release defers a triggered Tier 4 row that is still planned", () => {
   const parsed = fixture();
-  const sel = resolveReleaseSelection(parsed, {
-    triggeredTier4: [
-      { scenarioId: "T4-PLANNED-1", world: "desktop-upgrade" },
-      { scenarioId: "T4-UP-1", world: "desktop-upgrade" },
-    ],
-  });
+  const sel = resolveReleaseSelection(
+    parsed,
+    {
+      triggeredTier4: [
+        { scenarioId: "T4-PLANNED-1", world: "desktop-upgrade" },
+        { scenarioId: "T4-UP-1", world: "desktop-upgrade" },
+      ],
+    },
+    fixtureRegistry(),
+  );
   assert.ok(sel.deferredScenarioIds.includes("T4-PLANNED-1"));
   assert.ok(sel.cells.some((c) => c.scenarioId === "T4-UP-1"));
 });
@@ -182,4 +201,72 @@ test("resolveSelection dispatches on the selector label", () => {
   assert.ok(!merge.cells.some((c) => c.scenarioId === "ARBITRARY"));
   const explicit = resolveSelection(parsed, { selector: "explicit", cellIds: ["T2-AUTH-1"], world: "tier-2" });
   assert.equal(explicit.cells.length, 1);
+});
+
+// ── REGRESSION: selection/collection identity agreement (the reproduced
+// 69-merge-cells/zero-collector-matches defect). A collected row's selected
+// cell must be byte-identical (host + dimensions) to what its collector
+// emits, or every required cell double-reports as missing AND unknown. ──
+
+test("REGRESSION: merge selects the collector's EXACT cell identity for collected rows", () => {
+  const parsed = parseScenarioManifest({
+    schemaVersion: 4,
+    qualificationPolicy: {
+      tier3StandingSelection: {
+        includeComposedJourneyReferences: true,
+        standaloneScenarioIds: [],
+        unreferencedDisposition: "deferred",
+        fullCoreQualificationRequiresNoDeferred: true,
+      },
+    },
+    requiredScenarios: [
+      { id: "T2-BILL-1", tier: 2, implementation: { status: "collected" } },
+      { id: "T2-PLANNED-9", tier: 2, implementation: { status: "planned" } },
+    ],
+    composedJourneys: [],
+  });
+  const billCell = {
+    scenarioId: "T2-BILL-1",
+    world: "tier-2",
+    productHost: "desktop-web",
+    dimensions: { slice: "checkout-to-grant" },
+  } as const;
+  const registry: CollectorRegistryEntry[] = [
+    { scenarioId: "T2-BILL-1", cells: [billCell], cellKeys: [cellKey(billCell)], collectorRef: "fixture://bill" },
+  ];
+  const sel = resolveMergeSelection(parsed, registry);
+  const bill = sel.cells.find((c) => c.scenarioId === "T2-BILL-1");
+  assert.ok(bill);
+  // Exact identity: host AND matrix dimensions ride through selection.
+  assert.equal(bill.productHost, "desktop-web");
+  assert.deepEqual(bill.dimensions, { slice: "checkout-to-grant" });
+  // The old behavior fabricated hostless, dimensionless cells; its key can
+  // never match the collector-emitted final.
+  const fabricated = cellKey({ scenarioId: "T2-BILL-1", world: "tier-2", productHost: null, dimensions: {} });
+  assert.notEqual(cellKey(billCell), fabricated);
+});
+
+test("REGRESSION: merge hard-errors on a collected row with no registered collector", () => {
+  const parsed = parseScenarioManifest({
+    schemaVersion: 4,
+    qualificationPolicy: {
+      tier3StandingSelection: {
+        includeComposedJourneyReferences: true,
+        standaloneScenarioIds: [],
+        unreferencedDisposition: "deferred",
+        fullCoreQualificationRequiresNoDeferred: true,
+      },
+    },
+    requiredScenarios: [{ id: "T2-CLAIMED-1", tier: 2, implementation: { status: "collected" } }],
+    composedJourneys: [],
+  });
+  assert.throws(() => resolveMergeSelection(parsed, []), /no collector is registered/);
+});
+
+test("unknown selector names are rejected, never treated as explicit", () => {
+  const parsed = fixture();
+  assert.throws(
+    () => resolveSelection(parsed, { selector: "relaese", cellIds: ["T2-AUTH-1"], world: "tier-2" }),
+    /unknown selector "relaese"/,
+  );
 });

@@ -254,9 +254,12 @@ test("release deferred derivation is exact and rides through the plan + evidence
   const cell: CellIdentity = { scenarioId: "T3-CHAT-1", world: "tier-2", productHost: null, dimensions: {} };
   const provisioners = new Map<WorldId, WorldProvisioner>([["tier-2", new FakeTier2Provisioner()]]);
   const cellRunners: CellRunner[] = [greenRunner(cell)];
+  const collectorRegistry = [
+    { scenarioId: "T3-CHAT-1", cells: [cell], cellKeys: [cellKey(cell)], collectorRef: "fixture://chat" },
+  ];
   const result = await runFoundationCli(
     ["--selector", "release", "--behavior", "strict", "--candidate-manifest", manifestPath, "--output-dir", outputDir],
-    baseDeps(dir, { provisioners, cellRunners, scenarioManifestPath }),
+    baseDeps(dir, { provisioners, cellRunners, scenarioManifestPath, collectorRegistry }),
   );
   assert.equal(result.exitCode, 0, result.message);
   assert.match(result.message, /QUALIFYING \(partial\)/);
@@ -265,7 +268,14 @@ test("release deferred derivation is exact and rides through the plan + evidence
   const doc = JSON.parse(readFileSync(evidencePath, "utf8"));
   assert.deepEqual(doc.plan.deferredScenarioIds, ["T3-DEFER-1"], "the unreferenced guarantee is deferred, never dropped");
   assert.equal(doc.plan.cells.filter((c: { disposition: string }) => c.disposition === "required").length, 1);
-  assert.equal(doc.qualifying, true);
+  // Shard evidence NEVER carries the qualification claim; that lives in the
+  // separate durable aggregate-verdict artifact (160ff2cbd).
+  assert.equal(doc.qualifying, false);
+  const artifactPath = path.join(outputDir, "local-0123456789ab-nonce", "aggregate-verdict.json");
+  const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+  assert.equal(artifact.kind, "aggregate-verdict");
+  assert.equal(artifact.evaluation.verdict.qualifying, true);
+  assert.deepEqual(artifact.evaluation.verdict.label, "partial");
   assert.equal(typeof doc.plan.scenarioManifestHash, "string");
   rmSync(dir, { recursive: true, force: true });
 });

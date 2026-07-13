@@ -35,12 +35,14 @@ function describeError(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
 
-const CELL: CellIdentity = {
+/** The exact executable cell identity this collector emits (registry-consumed). */
+export const T2_BILL_1_CELL: CellIdentity = {
   scenarioId: "T2-BILL-1",
   world: "tier-2",
   productHost: "desktop-web",
   dimensions: { slice: "checkout-to-grant" },
 };
+const CELL = T2_BILL_1_CELL;
 
 /** Bridges the world handle's connection info onto the env vars
  * tests/intent/stack/{seed,billing-env}.ts read, since this cell calls those

@@ -24,6 +24,7 @@ import { buildPlan } from "../foundation/runner/plan-builder.js";
 import { loadScenarioManifest } from "../foundation/manifest/load.js";
 import { defaultScenarioManifestPath } from "../foundation/manifest/paths.js";
 import { resolveSelection, type Tier4Trigger } from "../foundation/manifest/selectors.js";
+import type { CollectorRegistryEntry } from "../foundation/manifest/registry.js";
 import { createRunIdentity, createShardIdentity } from "../foundation/runner/identity.js";
 import { FileCleanupLedger } from "../foundation/ledger/file-ledger.js";
 import { CleanupRunner } from "../foundation/ledger/reconcile.js";
@@ -51,6 +52,8 @@ export interface FoundationCliDeps {
   fixtureNamespaceIds?: readonly string[];
   /** Change-triggered Tier 4 rows supplied to the release selector. */
   triggeredTier4?: readonly Tier4Trigger[];
+  /** Collector registry override (tests); defaults to the real registry. */
+  collectorRegistry?: readonly CollectorRegistryEntry[];
 }
 
 export interface FoundationCliResult {
@@ -128,6 +131,7 @@ export async function runFoundationCli(
     productHost: args.productHost,
     fixtureNamespaceIds: deps.fixtureNamespaceIds,
     triggeredTier4: deps.triggeredTier4,
+    registry: deps.collectorRegistry,
   });
   const fullPlan = buildPlan({
     selector: args.selector,

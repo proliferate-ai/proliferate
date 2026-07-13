@@ -93,7 +93,23 @@ export function runAggregateCli(
   }
 
   const fullPlan = reconstructFullPlan(shards);
-  const evaluation = evaluateAggregate({ plan: fullPlan, shards });
+  // INTERIM (queued rewrite): expected identities are echoed from the shard
+  // set rather than consumed from independently prepared trusted receipts.
+  // This preserves every cross-shard coherence/coverage check but NOT the
+  // forged-set defense — the trusted-receipt input is the next bounded slice.
+  // Until then this command is fan-in plumbing, not a promotion gate.
+  const first = shards[0];
+  const evaluation = evaluateAggregate({
+    plan: fullPlan,
+    expected: {
+      runId: first.run.runId,
+      sourceSha: first.run.sourceSha,
+      candidateManifestHash: first.run.candidateManifestHash,
+      retainedManifestHash: first.run.retainedManifestHash,
+      shardCount: first.shard.shardCount,
+    },
+    shards,
+  });
 
   const runId = shards[0].run.runId;
   const behavior = fullPlan.behavior;

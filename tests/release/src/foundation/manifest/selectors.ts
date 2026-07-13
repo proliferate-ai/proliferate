@@ -24,6 +24,36 @@
 import type { ProductHost, WorldId } from "../contracts/identity.js";
 import type { CellSpec } from "../runner/plan-builder.js";
 import type { ParsedManifest } from "./types.js";
+import { COLLECTOR_REGISTRY, type CollectorRegistryEntry } from "./registry.js";
+
+/**
+ * Expands a selected scenario id to the EXACT executable cell identities its
+ * registered collector emits (host + matrix dimensions included). Selection
+ * and collection must agree on identity or every required cell reports both
+ * "missing final" and "unknown final" at once — the reproduced 69-cells/zero-
+ * matches defect. A scenario with no registered collector expands to nothing
+ * here; the caller decides whether that is a hard error (collected/enforced)
+ * or a bare fail-closed placeholder (planned).
+ */
+function collectorCellSpecs(
+  scenarioId: string,
+  registry: readonly CollectorRegistryEntry[],
+): CellSpec[] {
+  const specs: CellSpec[] = [];
+  for (const entry of registry) {
+    if (entry.scenarioId !== scenarioId) continue;
+    for (const cell of entry.cells) {
+      specs.push({
+        scenarioId: cell.scenarioId,
+        world: cell.world,
+        productHost: cell.productHost,
+        dimensions: cell.dimensions,
+        disposition: "required",
+      });
+    }
+  }
+  return specs;
+}
 
 /** A selection that could not be resolved against the manifest. */
 export class ManifestSelectionError extends Error {
@@ -71,11 +101,37 @@ function worldsForTier3Scenario(parsed: ParsedManifest, scenarioId: string): Wor
   return [...worlds];
 }
 
-/** merge: the complete Tier 2 manifest. Planned rows still resolve as required. */
-export function resolveMergeSelection(parsed: ParsedManifest): ResolvedSelection {
-  const cells: CellSpec[] = parsed.manifest.requiredScenarios
-    .filter((s) => s.tier === 2)
-    .map((s) => ({ scenarioId: s.id, world: "tier-2" as WorldId, disposition: "required" as const }));
+/**
+ * merge: the complete Tier 2 manifest. A collected/enforced row expands to the
+ * exact cell identities its registered collector emits; a planned row (no
+ * collector yet) resolves as a bare required placeholder that fails closed as
+ * a missing final. A collected/enforced row with NO registry entry is a hard
+ * wiring error — a coverage claim selection cannot execute.
+ */
+export function resolveMergeSelection(
+  parsed: ParsedManifest,
+  registry: readonly CollectorRegistryEntry[] = COLLECTOR_REGISTRY,
+): ResolvedSelection {
+  const problems: string[] = [];
+  const cells: CellSpec[] = [];
+  for (const row of parsed.manifest.requiredScenarios) {
+    if (row.tier !== 2) continue;
+    if (isCollectedOrEnforced(row.implementation.status)) {
+      const specs = collectorCellSpecs(row.id, registry);
+      if (specs.length === 0) {
+        problems.push(
+          `Tier 2 row "${row.id}" claims ${row.implementation.status} but no collector is registered; ` +
+            "selection cannot fabricate its cell identity",
+        );
+        continue;
+      }
+      cells.push(...specs);
+    } else {
+      // planned: fail-closed placeholder (missing final under strict).
+      cells.push({ scenarioId: row.id, world: "tier-2" as WorldId, disposition: "required" });
+    }
+  }
+  if (problems.length > 0) throw new ManifestSelectionError("merge", problems);
   return { cells, deferredScenarioIds: [], scenarioManifestHash: parsed.hash };
 }
 
@@ -95,6 +151,7 @@ export interface ReleaseSelectionInput {
 export function resolveReleaseSelection(
   parsed: ParsedManifest,
   input: ReleaseSelectionInput = {},
+  registry: readonly CollectorRegistryEntry[] = COLLECTOR_REGISTRY,
 ): ResolvedSelection {
   const problems: string[] = [];
   const policy = parsed.manifest.qualificationPolicy.tier3StandingSelection;
@@ -128,8 +185,25 @@ export function resolveReleaseSelection(
         );
         continue;
       }
-      for (const world of worlds) {
-        cells.push({ scenarioId: row.id, world, disposition: "required" });
+      const specs = collectorCellSpecs(row.id, registry);
+      if (specs.length > 0) {
+        // Exact executable identities from the collector; every emitted cell
+        // must sit in a journey-derived world for this guarantee.
+        for (const spec of specs) {
+          if (!worlds.includes(spec.world)) {
+            problems.push(
+              `collector for "${row.id}" emits a cell in world "${spec.world}" but its journeys ` +
+                `place it in [${worlds.join(", ")}]`,
+            );
+            continue;
+          }
+          cells.push(spec);
+        }
+      } else {
+        problems.push(
+          `standing Tier 3 guarantee "${row.id}" is ${row.implementation.status} but no collector ` +
+            "is registered; selection cannot fabricate its cell identity",
+        );
       }
     } else {
       // Unreferenced OR planned-but-standing: visibly deferred, never silent green.
@@ -155,20 +229,28 @@ export function resolveReleaseSelection(
       deferred.add(trigger.scenarioId);
       continue;
     }
-    const world = trigger.world ?? journeyRow?.world;
-    if (!world) {
+    // Collected/enforced: the registered collector owns the exact executable
+    // cell identity (host + dimensions). A coverage claim without a collector
+    // cannot be selected — selection never fabricates identity.
+    const specs = collectorCellSpecs(trigger.scenarioId, registry);
+    if (specs.length === 0) {
       problems.push(
-        `triggered Tier 4 id "${trigger.scenarioId}" is collected/enforced but has no world; ` +
-          "supply a world on the trigger (flat Tier 4 rows carry no world in the manifest)",
+        `triggered Tier 4 id "${trigger.scenarioId}" is ${status} but no collector is registered; ` +
+          "selection cannot fabricate its cell identity",
       );
       continue;
     }
-    cells.push({
-      scenarioId: trigger.scenarioId,
-      world,
-      productHost: trigger.productHost ?? null,
-      disposition: "required",
-    });
+    const expectedWorld = trigger.world ?? journeyRow?.world;
+    for (const spec of specs) {
+      if (expectedWorld && spec.world !== expectedWorld) {
+        problems.push(
+          `collector for triggered "${trigger.scenarioId}" emits a cell in world "${spec.world}" ` +
+            `but the trigger/journey places it in "${expectedWorld}"`,
+        );
+        continue;
+      }
+      cells.push(spec);
+    }
   }
 
   if (problems.length > 0) throw new ManifestSelectionError("release", problems);
@@ -252,7 +334,11 @@ export interface SelectionRequest {
   readonly fixtureNamespaceIds?: readonly string[];
   /** Change-triggered Tier 4 rows for the release selector. */
   readonly triggeredTier4?: readonly Tier4Trigger[];
+  /** Collector registry override (tests/world adapters); defaults to the real registry. */
+  readonly registry?: readonly CollectorRegistryEntry[];
 }
+
+export const KNOWN_SELECTORS = ["merge", "release", "explicit"] as const;
 
 export function resolveSelection(
   parsed: ParsedManifest,
@@ -260,16 +346,24 @@ export function resolveSelection(
 ): ResolvedSelection {
   switch (request.selector) {
     case "merge":
-      return resolveMergeSelection(parsed);
+      return resolveMergeSelection(parsed, request.registry ?? COLLECTOR_REGISTRY);
     case "release":
-      return resolveReleaseSelection(parsed, { triggeredTier4: request.triggeredTier4 });
-    default:
-      // "explicit" and any ad hoc label resolve --cells against the manifest.
+      return resolveReleaseSelection(
+        parsed,
+        { triggeredTier4: request.triggeredTier4 },
+        request.registry ?? COLLECTOR_REGISTRY,
+      );
+    case "explicit":
       return resolveExplicitSelection(parsed, {
         cellIds: request.cellIds,
         world: request.world,
         productHost: request.productHost,
         fixtureNamespaceIds: request.fixtureNamespaceIds,
       });
+    default:
+      // An unknown selector name is a hard error, never a silent explicit run.
+      throw new ManifestSelectionError(request.selector, [
+        `unknown selector "${request.selector}"; known selectors: ${KNOWN_SELECTORS.join(", ")}`,
+      ]);
   }
 }

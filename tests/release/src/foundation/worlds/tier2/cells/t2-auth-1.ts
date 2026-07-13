@@ -24,12 +24,14 @@ import { loadBootModule } from "../support/intent-bridge.js";
 import { runCell, type CellOutcome } from "../cell-runner.js";
 import type { InternalTier2WorldHandle } from "../provisioner.js";
 
-const CELL: import("../../../contracts/identity.js").CellIdentity = {
+/** The exact executable cell identity this collector emits (registry-consumed). */
+export const T2_AUTH_1_CELL: import("../../../contracts/identity.js").CellIdentity = {
   scenarioId: "T2-AUTH-1",
   world: "tier-2",
   productHost: "desktop-web",
   dimensions: {},
 };
+const CELL = T2_AUTH_1_CELL;
 
 interface PlaywrightSpecResult {
   title: string;

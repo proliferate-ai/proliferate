@@ -1,72 +1,46 @@
 /**
  * Collector registry — the machine-readable inverse of the scenario manifest.
  *
- * World adapters register the cells their collectors actually claim here, so
- * the bidirectional audit (audit.ts) can prove the manifest and the executable
- * collectors agree: no collected/enforced manifest row without a collector, no
- * collector naming an unknown scenario, and no two collectors claiming one cell.
- *
- * `cellKeys` are computed via the frozen `cellKey` from the SAME cell identity
- * the collector emits, and `collectorRef` points at the real collector source,
- * so this registry drifts loudly rather than silently.
+ * Entries are built from the REAL exported cell identities of the collector
+ * modules, not hand-maintained copies: renaming a dimension, host, or scenario
+ * id in a collector changes the registry automatically, so the bidirectional
+ * audit (audit.ts) fails loudly instead of drifting silently.
  */
 
 import { cellKey, type CellIdentity } from "../contracts/identity.js";
+import { T2_AUTH_1_CELL } from "../worlds/tier2/cells/t2-auth-1.js";
+import { T2_BILL_1_CELL } from "../worlds/tier2/cells/t2-bill-1.js";
+import { local2CellIdentity } from "../worlds/local-runtime/local-2.js";
 
 export interface CollectorRegistryEntry {
   /** Manifest guarantee/journey id the collector proves (must exist in the manifest). */
   readonly scenarioId: string;
+  /** The exact executable cell identities this collector emits finals for. */
+  readonly cells: readonly CellIdentity[];
   /** Every cell key this collector produces a final result for. */
   readonly cellKeys: readonly string[];
   /** Repo-relative path to the collector source, for triage. */
   readonly collectorRef: string;
 }
 
-// --- Real cell identities (mirrors of the collector modules named below). ---
-
-/** src/foundation/worlds/tier2/cells/t2-auth-1.ts `CELL`. */
-const T2_AUTH_1_CELL: CellIdentity = {
-  scenarioId: "T2-AUTH-1",
-  world: "tier-2",
-  productHost: "desktop-web",
-  dimensions: {},
-};
-
-/** src/foundation/worlds/tier2/cells/t2-bill-1.ts `CELL`. */
-const T2_BILL_1_CELL: CellIdentity = {
-  scenarioId: "T2-BILL-1",
-  world: "tier-2",
-  productHost: "desktop-web",
-  dimensions: { slice: "checkout-to-grant" },
-};
-
-/** src/foundation/worlds/local-runtime/local-2.ts `local2CellIdentity("claude")`. */
-const LOCAL_2_CLAUDE_CELL: CellIdentity = {
-  scenarioId: "LOCAL-2",
-  world: "local-runtime",
-  productHost: "desktop-web",
-  dimensions: { harness: "claude", route: "managed-gateway" },
-};
+function entry(scenarioId: string, cells: CellIdentity[], collectorRef: string): CollectorRegistryEntry {
+  for (const cell of cells) {
+    if (cell.scenarioId !== scenarioId) {
+      throw new Error(
+        `collector registry wiring bug: entry "${scenarioId}" contains a cell for "${cell.scenarioId}"`,
+      );
+    }
+  }
+  return { scenarioId, cells, cellKeys: cells.map(cellKey), collectorRef };
+}
 
 /**
- * The collectors implemented on this branch. World adapters append their own
- * entries as they land; the audit fails the build if this diverges from the
- * manifest.
+ * The collectors implemented on this branch, keyed by the real exported cell
+ * identities. World adapters append their own entries as they land; the audit
+ * fails the build if this diverges from the manifest.
  */
 export const COLLECTOR_REGISTRY: readonly CollectorRegistryEntry[] = [
-  {
-    scenarioId: "T2-AUTH-1",
-    cellKeys: [cellKey(T2_AUTH_1_CELL)],
-    collectorRef: "src/foundation/worlds/tier2/cells/t2-auth-1.ts",
-  },
-  {
-    scenarioId: "T2-BILL-1",
-    cellKeys: [cellKey(T2_BILL_1_CELL)],
-    collectorRef: "src/foundation/worlds/tier2/cells/t2-bill-1.ts",
-  },
-  {
-    scenarioId: "LOCAL-2",
-    cellKeys: [cellKey(LOCAL_2_CLAUDE_CELL)],
-    collectorRef: "src/foundation/worlds/local-runtime/local-2.ts",
-  },
+  entry("T2-AUTH-1", [T2_AUTH_1_CELL], "src/foundation/worlds/tier2/cells/t2-auth-1.ts"),
+  entry("T2-BILL-1", [T2_BILL_1_CELL], "src/foundation/worlds/tier2/cells/t2-bill-1.ts"),
+  entry("LOCAL-2", [local2CellIdentity("claude")], "src/foundation/worlds/local-runtime/local-2.ts"),
 ];

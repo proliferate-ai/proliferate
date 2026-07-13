@@ -278,6 +278,43 @@ export function parseScenarioManifest(raw: unknown): ParsedManifest {
   const journeyById = new Map(journeys.map((j) => [j.id, j]));
   const qualificationPolicy = parsePolicy(raw.qualificationPolicy, scenarioById, issues);
 
+  // Cross-namespace id collisions: a journey may share its id with a
+  // guarantee ONLY as the deliberate standing-core pattern (same tier, and
+  // the journey references that guarantee — e.g. the T4-DESKTOP-1 journey
+  // composes the T4-DESKTOP-1 guarantee). Any other collision is ambiguous.
+  journeys.forEach((j, i) => {
+    const row = scenarioById.get(j.id);
+    if (!row) return;
+    if (row.tier !== j.tier || !j.targetScenarioRefs.includes(j.id)) {
+      issues.add(
+        `composedJourneys[${i}].id`,
+        `id "${j.id}" collides with a requiredScenarios id (allowed only for a same-tier standing journey that composes its own guarantee)`,
+      );
+    }
+  });
+
+  // Tier/ref composition: a journey can prove several guarantees
+  // (core-release-validation.md), including lower-tier ones (CLOUD-HOSTS-1
+  // proves T2-SURF-1 cross-host). What a journey can never do is reach UP a
+  // tier: a Tier 3 journey cannot compose a Tier 4 upgrade guarantee, and no
+  // Tier 2 journeys exist (Tier 2 guarantees are selected directly).
+  journeys.forEach((j, i) => {
+    if (j.tier === 2) {
+      issues.add(`composedJourneys[${i}].tier`, "Tier 2 has no composed journeys; guarantees are selected directly");
+      return;
+    }
+    j.targetScenarioRefs.forEach((ref, k) => {
+      const row = scenarioById.get(ref);
+      if (!row) return; // unknown-ref already reported by parseRefs
+      if (row.tier > j.tier) {
+        issues.add(
+          `composedJourneys[${i}].targetScenarioRefs[${k}]`,
+          `Tier ${j.tier} journey "${j.id}" references higher-tier (Tier ${row.tier}) guarantee "${ref}"`,
+        );
+      }
+    });
+  });
+
   issues.throwIfAny(KIND);
 
   const manifest: CoreReleaseManifest = {
