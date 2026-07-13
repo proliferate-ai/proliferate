@@ -731,6 +731,12 @@ importers:
       '@types/node':
         specifier: ^24.13.2
         version: 24.13.2
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
+      pg:
+        specifier: ^8.13.1
+        version: 8.22.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -11513,7 +11519,7 @@ snapshots:
 
   jest-message-util@29.7.0:
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       '@jest/types': 29.6.3
       '@types/stack-utils': 2.0.3
       chalk: 4.1.2

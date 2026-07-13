@@ -5,11 +5,14 @@
   "description": "Tier-3 live end-to-end / tier-4 upgrade-path release runner (specs/developing/testing/README.md).",
   "scripts": {
     "release-e2e": "tsx src/cli/run.ts",
+    "vertical-slice:tier2": "tsx src/foundation/worlds/tier2/run-vertical-slice.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test 'src/**/*.test.ts'"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
     "tsx": "^4.22.4",
     "typescript": "^5.7.0"
   }
