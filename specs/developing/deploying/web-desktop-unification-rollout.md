@@ -275,15 +275,35 @@ override write/read-back failure, failed merge, merge-SHA tree mismatch,
 exact-landing-SHA main CI failure/cancellation/timeout, automatic staging
 failure/cancellation/timeout, unexpected lane execution, an unexpected Deploy
 Staging run from ANY trigger source (a manual `workflow_dispatch` or any run
-other than the expected exact-landing-SHA automatic run — cancel it
-immediately, then enter cleanup), or any state that cannot be verified —
-restore EVERY gate to its recorded prior value or prior absence, read the
-restoration back and verify it, then release the landing hold and halt. No
-failure path may leave the temporary overrides active or
-permit a later source CI completion to emit staging. If restoration itself
-fails or cannot be verified, production promotion is hard-stopped and the
-landing hold REMAINS in place while the failure is escalated; the hold is
-never released over unrestored or unverified gates.
+other than the expected exact-landing-SHA automatic run — request its
+cancellation immediately, then enter cleanup under the unexpected-run rule
+below), or any state that cannot be verified — restore EVERY gate to its
+recorded prior value or prior absence, read the restoration back and verify
+it, then release the landing hold and halt; for an unexpected Deploy Staging
+run, the hold is released only per the unexpected-run rule below. No failure
+path may leave the temporary overrides active or permit a later source CI
+completion to emit staging. If restoration itself fails or cannot be
+verified, production promotion is hard-stopped and the landing hold REMAINS
+in place while the failure is escalated; the hold is never released over
+unrestored or unverified gates.
+
+**Unexpected-run rule (cancellation is not terminal proof):** a cancellation
+request does not prove the run stopped, and a cancelled Deploy Staging run
+may already have partially deployed. On any unexpected Deploy Staging run
+after the first override mutation: request cancellation and restore/read back
+the gate state promptly, but KEEP the landing hold until BOTH (a) the run is
+confirmed terminal, and (b) its per-lane enabled/skipped evidence,
+deploy-summary artifacts, and logs prove it produced no side effects — or,
+where side effects occurred or cannot be ruled out, every possibly affected
+staging surface is restored to its recorded pre-landing staging baseline and
+its artifact/health/routes are re-verified. If terminality, the side-effect
+assessment, or that recovery cannot be proven, the hold remains and
+production stays hard-stopped and escalated. Only after confirmed
+terminality, absent-or-recovered side effects, and verified gate restoration
+may the hold release — the chain is still halted for review and never
+proceeds directly to promotion. The failure and recovery evidence is retained
+per the standing failure-evidence requirements (§5.2 item 6 / a
+non-completing incident record).
 
 ### 4.3 External-configuration item schema
 
@@ -326,12 +346,16 @@ Application rules (binding):
   sequence remains halted until it is.
 - **An uncertain source-write outcome is treated as a possible mutation.** A
   source-of-truth write that fails, times out, or returns an unverifiable
-  result may nevertheless have applied. RE-READ the source of truth. If it
-  provably still holds the prior value, record that evidence and halt before
-  continuing the sequence. If it changed — or its state cannot be verified —
-  run the full recovery: restore the recorded prior value, re-activate at the
-  same landing SHA, prove the live rollback, run the item's mapped recovery
-  smoke, record everything, halt. A failed recovery remains halted.
+  result may nevertheless have applied — and a single re-read cannot rule out
+  a late asynchronous apply. Proven-unchanged requires either (a) an
+  authoritative terminal status for the write operation PLUS a confirming
+  authoritative read, or (b) a bounded settling barrier with repeated
+  authoritative reads proving the prior value remained stable throughout.
+  With that proof, record the evidence and halt before continuing the
+  sequence. Without it, treat the item as changed/unverifiable and run the
+  full recovery while halted: restore the recorded prior value, re-activate
+  at the same landing SHA, prove the live rollback, run the item's mapped
+  recovery smoke, record everything, halt. A failed recovery remains halted.
 - **Unchanged items are not exempt:** each closes as verified-correct only
   with secret-safe live proof plus its mapped smoke executed.
 - The sequence completes only when every item is verified-correct-with-proof

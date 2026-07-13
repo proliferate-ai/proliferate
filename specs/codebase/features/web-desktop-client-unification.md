@@ -801,19 +801,35 @@ with the exact PRODUCTION `only_surfaces` and
 **Override cleanup invariant.** From the first override mutation onward, every
 failure, non-success, or unverifiable outcome enters a finally-style cleanup:
 restore EVERY gate to its recorded prior value or prior absence, read the
-restoration back and verify it, then release the landing hold and halt. This
-covers a partial override write or read-back failure, a failed merge, a
-merge-SHA tree mismatch, an exact-landing-SHA main CI failure/cancellation/
-timeout, an automatic staging failure/cancellation/timeout, an unexpected lane
-execution, an unexpected Deploy Staging run from any trigger source — a manual
-`workflow_dispatch` or any run other than the expected exact-landing-SHA
-automatic run is cancelled immediately and enters this cleanup — and any state
-that cannot be verified. If restoration itself fails,
-production promotion is hard-stopped and the landing hold remains in place
-while the failure is escalated — the hold is never released over unrestored
-gates. Only verified automatic staging success plus verified gate restoration
-may proceed to production promotion. The full mechanics live in the rollout
-ledger.
+restoration back and verify it, then release the landing hold and halt —
+except that an unexpected Deploy Staging run keeps the hold longer, per the
+rule below. The cleanup covers a partial override write or read-back failure,
+a failed merge, a merge-SHA tree mismatch, an exact-landing-SHA main CI
+failure/cancellation/timeout, an automatic staging
+failure/cancellation/timeout, an unexpected lane execution, an unexpected
+Deploy Staging run from any trigger source (a manual `workflow_dispatch` or
+any run other than the expected exact-landing-SHA automatic run), and any
+state that cannot be verified. If restoration itself fails, production
+promotion is hard-stopped and the landing hold remains in place while the
+failure is escalated — the hold is never released over unrestored gates. Only
+verified automatic staging success plus verified gate restoration may proceed
+to production promotion.
+
+**Unexpected-run cancellation is not terminal proof.** A cancellation request
+does not prove a run stopped, and a cancelled Deploy Staging run may already
+have partially deployed. For any unexpected Deploy Staging run after the
+first override mutation: request cancellation and restore/read back the gate
+state promptly, but KEEP the landing hold until the run is confirmed terminal
+AND its per-lane/deploy-summary/log evidence proves it produced no side
+effects — or until every possibly affected staging surface is restored to its
+recorded pre-landing staging baseline with artifact/health/routes
+re-verified. If terminality, the side-effect assessment, or that recovery
+cannot be proven, the hold remains and production stays hard-stopped and
+escalated. Only after confirmed terminality, absent-or-recovered effects, and
+verified gate restoration may the hold release — still halted for review,
+never proceeding to promotion. The failure and recovery evidence is recorded
+per the standing failure-evidence requirements (Phase V / incident record).
+The full mechanics live in the rollout ledger.
 
 **External configuration is mutated only after the landing merges, every
 PRODUCTION surface deploys at the exact merge SHA, and old + canonical routes
@@ -830,11 +846,15 @@ the item's mapped recovery smoke, recorded evidence of both the failure and
 the recovery, and a halt. If the recovery itself cannot be proven, the
 sequence remains halted until it is. An uncertain source-write outcome — a
 write that fails, times out, or returns an unverifiable result — is treated
-as a possible mutation: re-read the source of truth; if it provably still
-holds the prior value, record that evidence and halt before continuing; if it
-changed or its state cannot be verified, run the full recovery above. Every
-item — changed or unchanged — closes only with live proof plus a successful
-mapped smoke. The per-item schema is defined in the rollout ledger.
+as a possible mutation, and a single re-read cannot rule out a late
+asynchronous apply. Proven-unchanged requires either an authoritative
+terminal status for the write operation PLUS a confirming read, or a bounded
+settling barrier with repeated authoritative reads proving the prior value
+remained stable throughout; with that proof, record the evidence and halt
+before continuing. Without it, treat the item as changed/unverifiable and run
+the full recovery above while halted. Every item — changed or unchanged —
+closes only with live proof plus a successful mapped smoke. The per-item
+schema is defined in the rollout ledger.
 
 ### 10.6 Release-surface closure and the Phase V release record
 
