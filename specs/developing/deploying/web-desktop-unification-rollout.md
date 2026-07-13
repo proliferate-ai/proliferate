@@ -194,17 +194,24 @@ Every DETECTED surface receives exactly one disposition, recorded here:
 
 Gate values are point-in-time and must be re-audited live at Phase H and
 re-verified at Phase L; recorded observations never substitute for a fresh
-read. A 2026-07-13 read-only audit of the GitHub environments showed
-environment-level values on `staging` of `LITELLM_DEPLOY_ENABLED=true`,
-`MOBILE_DEPLOY_ENABLED=true`, `EAS_SUBMIT_ENABLED=true`, and
-`DESKTOP_CHANNEL=beta`, with no environment-level `DESKTOP_DEPLOY_ENABLED` or
-`WORKERS_DEPLOY_ENABLED` (both default `false` when unset); `Production`
-carries environment-level `DESKTOP_DEPLOY_ENABLED`, `LITELLM_DEPLOY_ENABLED`,
-and `MOBILE_DEPLOY_ENABLED`. Phase H audits the then-current state (including
-any org-level inheritance) with sufficient read access or plans explicit
-staging environment-level overrides regardless, recording per gate whether an
-environment-level value previously existed (restore by value) or not (restore
-prior absence by deletion). If Desktop is
+read. A 2026-07-13 read-only audit (`gh variable list --env <env>`) showed
+these environment-level gate values — `staging`:
+`MOBILE_DEPLOY_ENABLED=true`, `EAS_SUBMIT_ENABLED=true`,
+`LITELLM_DEPLOY_ENABLED=true`, `WORKERS_DEPLOY_ENABLED=false`, and
+`DESKTOP_CHANNEL=beta`, with NO environment-level `DESKTOP_DEPLOY_ENABLED`
+(defaults `false` when unset); `Production`: `MOBILE_DEPLOY_ENABLED=true`,
+`EAS_SUBMIT_ENABLED=true`, `LITELLM_DEPLOY_ENABLED=true`,
+`WORKERS_DEPLOY_ENABLED=false`, and `DESKTOP_DEPLOY_ENABLED=true`. Restore
+semantics follow prior existence: a gate that previously existed at the
+environment level is restored BY VALUE (per this audit, staging
+`WORKERS_DEPLOY_ENABLED` restores to `false`, not by deletion); only a gate
+that previously did not exist at the environment level (per this audit, only
+staging `DESKTOP_DEPLOY_ENABLED`) has its prior absence restored by deletion.
+Phase H audits the then-current state (including any org-level inheritance)
+with sufficient read access or plans explicit staging environment-level
+overrides regardless, recording per gate whether an environment-level value
+previously existed (restore by value) or not (restore prior absence by
+deletion). If Desktop is
 in PRODUCTION, the ≥0.3.28 version bump covering every canonical owning
 coordinate is a distinct reviewed release-prep commit inside the replay list;
 the exact-SHA tag and a NEW draft GitHub Release are created and published
@@ -214,18 +221,24 @@ pre-existing `desktop-v0.3.27` tag/feed/draft is not the migration release).
 ### 4.2 Landing order: quiescence, overrides, restore-before-promote
 
 The landing ordering is binding and executes under an orchestrator-held
-landing hold that explicitly blocks other main merges AND main-CI
-reruns/manual dispatches:
+landing hold that explicitly blocks other main merges, main-CI reruns/manual
+dispatches, AND manual `deploy-staging.yml` `workflow_dispatch` runs — the
+workflow exposes an independent `workflow_dispatch` trigger in addition to
+its `workflow_run` path, so blocking main CI alone is insufficient:
 
 1. **Pre-override quiescence is proven first.** A `deploy-staging`-idle check
    alone is insufficient: an already queued/running/re-run qualifying main CI
    run can complete after the overrides are set and emit an older
-   `workflow_run` that consumes them. Therefore: drain every queued/running
-   qualifying main CI run; for each run that completes successfully during the
-   drain, wait for its corresponding Deploy Staging `workflow_run` to
-   materialize AND complete; recheck both the source main-CI runs and the
-   deploy-staging runs across a bounded event-propagation barrier until
-   quiescence is proven. Unprovable correlation or quiescence ⇒ stop.
+   `workflow_run` that consumes them, and a manual dispatch can start a Deploy
+   Staging run with no main-CI source at all. Therefore: drain every
+   queued/running Deploy Staging run REGARDLESS of trigger source (automatic
+   `workflow_run` or manual `workflow_dispatch`); drain every queued/running
+   qualifying main CI run; for each main-CI run that completes successfully
+   during the drain, wait for its corresponding Deploy Staging `workflow_run`
+   to materialize AND complete; recheck the source main-CI runs and ALL
+   deploy-staging runs (both trigger sources) across a bounded
+   event-propagation barrier until quiescence is proven. Unprovable
+   correlation or quiescence ⇒ stop.
 2. Record the prior staging gate state secret-safe (including whether each
    variable existed at the environment level at all); set the explicit
    reviewed staging environment-level overrides; read every override back and
@@ -260,10 +273,13 @@ reruns/manual dispatches:
 mutation):** on every failure, non-success, or unverifiable outcome — partial
 override write/read-back failure, failed merge, merge-SHA tree mismatch,
 exact-landing-SHA main CI failure/cancellation/timeout, automatic staging
-failure/cancellation/timeout, unexpected lane execution, or any state that
-cannot be verified — restore EVERY gate to its recorded prior value or prior
-absence, read the restoration back and verify it, then release the landing
-hold and halt. No failure path may leave the temporary overrides active or
+failure/cancellation/timeout, unexpected lane execution, an unexpected Deploy
+Staging run from ANY trigger source (a manual `workflow_dispatch` or any run
+other than the expected exact-landing-SHA automatic run — cancel it
+immediately, then enter cleanup), or any state that cannot be verified —
+restore EVERY gate to its recorded prior value or prior absence, read the
+restoration back and verify it, then release the landing hold and halt. No
+failure path may leave the temporary overrides active or
 permit a later source CI completion to emit staging. If restoration itself
 fails or cannot be verified, production promotion is hard-stopped and the
 landing hold REMAINS in place while the failure is escalated; the hold is
@@ -308,6 +324,14 @@ Application rules (binding):
   the recovery, halt — nothing further until resolved. If the recovery itself
   cannot be proven (rollback activation or live rollback proof fails), the
   sequence remains halted until it is.
+- **An uncertain source-write outcome is treated as a possible mutation.** A
+  source-of-truth write that fails, times out, or returns an unverifiable
+  result may nevertheless have applied. RE-READ the source of truth. If it
+  provably still holds the prior value, record that evidence and halt before
+  continuing the sequence. If it changed — or its state cannot be verified —
+  run the full recovery: restore the recorded prior value, re-activate at the
+  same landing SHA, prove the live rollback, run the item's mapped recovery
+  smoke, record everything, halt. A failed recovery remains halted.
 - **Unchanged items are not exempt:** each closes as verified-correct only
   with secret-safe live proof plus its mapped smoke executed.
 - The sequence completes only when every item is verified-correct-with-proof
@@ -358,15 +382,21 @@ commits the immutable release record at
    state, override set/read-back, merge-SHA tree-equality + green-main-CI
    proof, EFFECTIVE_STAGING per-lane execution proof, verified gate
    restoration, and the production promotion record with non-dry-run staging
-   and production deploy-summary `headSha` evidence per surface;
+   and production deploy-summary `headSha` evidence per surface AND the
+   deploy-run links for every staging and production run cited;
 3. per-surface artifact/health verification and old + canonical inbound route
    verification;
 4. each release-surface disposition and its outcome/evidence (if Desktop
    shipped: released version, exact SHA, exact-SHA tag, published GitHub
    Release, and stable updater-manifest verification);
-5. the complete external-item table per §4.3 — every item, changed or
-   unchanged, with activation mechanism used, secret-safe live-consumption
-   proof, and mapped smoke evidence (secrets redacted by name/location);
+5. the complete external-item table per §4.3 — for EVERY item, changed or
+   unchanged: its secret-safe source-of-truth location, the actual before
+   value, the actual after value (secrets redacted by name/location, never by
+   value), the required-change classification, the activation mechanism used,
+   the secret-safe live-consumption proof, and who applied the change and
+   when; plus, for every mapped smoke: the flow that was run, the result, and
+   the timestamp (with the explicit item→smoke mapping wherever a shared
+   smoke covers multiple items);
 6. all failure and recovery evidence: what failed, the source restore, the
    re-activation at the same landing SHA, the live rollback proof, the
    recovery smoke, and the resolution;

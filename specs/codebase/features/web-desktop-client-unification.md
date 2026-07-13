@@ -783,14 +783,20 @@ inside the replay list, with the exact-SHA tag and a new draft release created
 and published only at production promotion per the canonical desktop release
 procedure.
 
-The landing order is binding: pre-override quiescence is proven under a
-landing hold before the reviewed staging environment-gate overrides are set
-and read back; the merge happens only then; merge-SHA tree equality plus green
-main CI gates the automatic staging path; the automatic staging run is
-verified to have executed exactly EFFECTIVE_STAGING; gates are restored to
-their recorded prior state with the restoration read back and verified; and
-only then is the exact landing merge SHA promoted to production with the exact
-PRODUCTION `only_surfaces` and `require_staging_success=true`.
+The landing order is binding: a landing hold explicitly blocks other main
+merges, main-CI reruns/manual dispatches, AND manual `deploy-staging.yml`
+`workflow_dispatch` runs (the workflow exposes an independent dispatch
+trigger); pre-override quiescence is proven under that hold — draining every
+queued/running Deploy Staging run regardless of trigger source as well as
+qualifying main-CI runs and their source correlations across a bounded
+propagation barrier — before the reviewed staging environment-gate overrides
+are set and read back; the merge happens only then; merge-SHA tree equality
+plus green main CI gates the automatic staging path; the automatic staging
+run is verified to have executed exactly EFFECTIVE_STAGING; gates are
+restored to their recorded prior state with the restoration read back and
+verified; and only then is the exact landing merge SHA promoted to production
+with the exact PRODUCTION `only_surfaces` and
+`require_staging_success=true`.
 
 **Override cleanup invariant.** From the first override mutation onward, every
 failure, non-success, or unverifiable outcome enters a finally-style cleanup:
@@ -799,7 +805,10 @@ restoration back and verify it, then release the landing hold and halt. This
 covers a partial override write or read-back failure, a failed merge, a
 merge-SHA tree mismatch, an exact-landing-SHA main CI failure/cancellation/
 timeout, an automatic staging failure/cancellation/timeout, an unexpected lane
-execution, and any state that cannot be verified. If restoration itself fails,
+execution, an unexpected Deploy Staging run from any trigger source — a manual
+`workflow_dispatch` or any run other than the expected exact-landing-SHA
+automatic run is cancelled immediately and enters this cleanup — and any state
+that cannot be verified. If restoration itself fails,
 production promotion is hard-stopped and the landing hold remains in place
 while the failure is escalated — the hold is never released over unrestored
 gates. Only verified automatic staging success plus verified gate restoration
@@ -819,9 +828,13 @@ unverifiable live-consumption proof, or a failed smoke — triggers immediate
 source restore, re-activation at the same landing SHA, live rollback proof,
 the item's mapped recovery smoke, recorded evidence of both the failure and
 the recovery, and a halt. If the recovery itself cannot be proven, the
-sequence remains halted until it is. Every item — changed or unchanged —
-closes only with live proof plus a successful mapped smoke. The per-item
-schema is defined in the rollout ledger.
+sequence remains halted until it is. An uncertain source-write outcome — a
+write that fails, times out, or returns an unverifiable result — is treated
+as a possible mutation: re-read the source of truth; if it provably still
+holds the prior value, record that evidence and halt before continuing; if it
+changed or its state cannot be verified, run the full recovery above. Every
+item — changed or unchanged — closes only with live proof plus a successful
+mapped smoke. The per-item schema is defined in the rollout ledger.
 
 ### 10.6 Release-surface closure and the Phase V release record
 
@@ -846,16 +859,21 @@ merges. That record seals, at minimum:
   set/read-back, merge-SHA tree-equality + main-CI proof, EFFECTIVE_STAGING
   per-lane execution proof, verified gate restoration, and the production
   promotion record (`only_surfaces`, `require_staging_success=true`,
-  non-dry-run deploy-summary `headSha` evidence per surface);
+  non-dry-run deploy-summary `headSha` evidence per surface, and the
+  deploy-run links for every staging and production run cited);
 - per-surface artifact/health verification and old + canonical inbound route
   verification;
 - each release-surface disposition and its outcome/evidence (if Desktop
   shipped: the released version and exact SHA, the exact-SHA tag, the
   published GitHub Release, and stable updater-manifest verification at that
   version/SHA);
-- the complete external-item table: every item, changed or unchanged, with
-  activation mechanism used, secret-safe live-consumption proof, and mapped
-  smoke evidence (secrets redacted by name/location);
+- the complete external-item table: for every item, changed or unchanged, its
+  secret-safe source location, actual before value, actual after value
+  (secrets redacted by name/location, never by value), required-change
+  classification, activation mechanism used, secret-safe live-consumption
+  proof, and who applied the change and when — plus, for every mapped smoke,
+  the flow run, its result, and its timestamp (explicit item→smoke mapping
+  wherever a shared smoke covers multiple items);
 - all failure and recovery evidence (source restores, re-activations, live
   rollback proofs, recovery smokes, resolutions);
 - the requirement-by-requirement audit against this spec's definition of done;
