@@ -69,6 +69,54 @@ export async function getGatewayEnrollment(client: ApiClient): Promise<GatewayEn
   return client.get<GatewayEnrollment>(`${AGENT_GATEWAY_PREFIX}/enrollment`);
 }
 
+/**
+ * Select the managed-gateway route for a harness on a surface through the
+ * production selection path (`PUT /agent-gateway/selections/{harness}`), exactly
+ * as the Desktop settings UI does. The state renderer only emits a gateway
+ * `source` for a harness that has an ENABLED gateway selection, so this is the
+ * "select managed gateway" action of LOCAL-2 (contract step 4). Idempotent:
+ * replaces the scope's desired set with a single enabled gateway source.
+ */
+export async function enableGatewaySelection(
+  client: ApiClient,
+  harness: string,
+  surface = "local",
+): Promise<void> {
+  await client.put(
+    `${AGENT_GATEWAY_PREFIX}/selections/${harness}?surface=${surface}`,
+    { sources: [{ sourceKind: "gateway", enabled: true }] },
+  );
+}
+
+/**
+ * Enrollment is scheduled fire-and-forget on signup/join and completed by the
+ * backfill worker; the gateway key is only handed out once it is `synced`. Poll
+ * the production enrollment endpoint until it reports synced (or throw on
+ * timeout) so the state fetch does not race an unsynced enrollment.
+ */
+export async function waitForEnrollmentSynced(
+  client: ApiClient,
+  options: { timeoutMs?: number; pollMs?: number } = {},
+): Promise<GatewayEnrollment> {
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const pollMs = options.pollMs ?? 2_000;
+  const deadline = Date.now() + timeoutMs;
+  let last: GatewayEnrollment | undefined;
+  for (;;) {
+    last = await getGatewayEnrollment(client).catch(() => undefined);
+    if (last && last.syncStatus === "synced") {
+      return last;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `gateway enrollment did not reach synced within ${timeoutMs}ms ` +
+          `(last=${last?.syncStatus ?? "none"}${last?.lastErrorCode ? `, error=${last.lastErrorCode}` : ""})`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+}
+
 /** The local-surface state.json v2 document (raw gateway key material for the caller). */
 export async function getLocalGatewayAuthState(client: ApiClient): Promise<AgentAuthState> {
   return client.get<AgentAuthState>(`${AGENT_GATEWAY_PREFIX}/state?surface=local`);

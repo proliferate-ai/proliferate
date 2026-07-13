@@ -45,10 +45,12 @@ import {
 } from "../../../fixtures/local-runtime.js";
 import { DEFAULT_GITHUB_TEST_REPO } from "../../../config/env-manifest.js";
 import {
+  enableGatewaySelection,
   getGatewayCapabilities,
   getLocalGatewayAuthState,
   gatewaySourceForHarness,
   pushAgentAuthStateToRuntime,
+  waitForEnrollmentSynced,
   type AgentAuthState,
 } from "./gateway.js";
 import {
@@ -150,6 +152,19 @@ export async function runLocal2Cell(
           "gateway on the candidate server to run this cell for real.",
       );
     }
+    // Select the managed-gateway route for this harness (contract step 4). The
+    // state renderer only emits a gateway source for a harness with an enabled
+    // gateway selection — configuration through the real product path, not a
+    // fabricated document.
+    await enableGatewaySelection(authed, harness, "local");
+    // Enrollment is scheduled fire-and-forget on signup/join; the gateway key is
+    // handed out only once the enrollment is synced. Wait for it so the state
+    // fetch does not race an unsynced enrollment (backfill would otherwise sync
+    // it minutes later).
+    await waitForEnrollmentSynced(authed, {
+      timeoutMs: Math.min(90_000, deadline - now()),
+    });
+
     const authState: AgentAuthState = await getLocalGatewayAuthState(authed);
     const gatewaySource = gatewaySourceForHarness(authState, harness);
     if (!gatewaySource) {
