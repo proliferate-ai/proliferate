@@ -7,7 +7,9 @@
     "release-e2e": "tsx src/cli/run.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "foundation": "tsx src/cli/foundation.ts"
+    "foundation": "tsx src/cli/foundation.ts",
+    "access-audit": "tsx src/foundation/access/cli.ts",
+    "build:dev-candidate-manifest": "tsx src/foundation/artifacts/dev-candidate-builder.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.2",
