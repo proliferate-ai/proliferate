@@ -96,7 +96,7 @@ function changedFiles(base, head) {
     .filter(Boolean);
 }
 
-function matches(path, prefixes) {
+export function matches(path, prefixes) {
   return prefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
