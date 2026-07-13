@@ -50,7 +50,7 @@ describe("FileChangesCard and FileDiffCard", () => {
 
   it("keeps diff header theme variables free of hard-coded dark surfaces", () => {
     const desktopCss = readFileSync(
-      new URL("../../../../../packages/design/src/css/desktop.css", import.meta.url),
+      new URL("../../../../../packages/design/src/css/product.css", import.meta.url),
       "utf8",
     );
     const rootDiffVariables =

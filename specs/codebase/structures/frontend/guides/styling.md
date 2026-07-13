@@ -37,9 +37,13 @@ Shared token ownership:
   Tailwind setup, shared package `@source` entries, shared reset/root/body
   defaults, shared scrollbar utilities, and shared Proliferate global classes.
   Apps import this as `@proliferate/design/dom.css`.
-- `apps/packages/design/src/css/desktop.css` owns package-managed Desktop DOM
-  CSS: fonts, desktop theme presets, and global runtime selectors. Desktop
-  imports this as `@proliferate/design/desktop.css`.
+- `apps/packages/design/src/css/product.css` owns the shared Desktop/Web
+  product theme and global styles: fonts, theme presets, and global runtime
+  selectors. Desktop imports this as `@proliferate/design/product.css`; Web
+  will import it at its later cutover.
+- `apps/packages/design/src/css/desktop.css` owns genuine Desktop/native-only
+  CSS (drag regions and other Tauri-specific overrides). Desktop imports this
+  as `@proliferate/design/desktop.css`.
 - Client-specific global selectors are allowed only when explicitly scoped
   under `[data-proliferate-client="desktop"]` or
   `[data-proliferate-client="web"]`.
@@ -259,6 +263,7 @@ exactly how this hides.
 
 App stylesheets should be import-only where possible. `apps/web/src/index.css`
 imports only `@proliferate/design/dom.css`. `apps/desktop/src/index.css`
-imports app-owned third-party CSS plus `@proliferate/design/desktop.css`, which
-itself imports the shared DOM entrypoint. Mobile uses
-`apps/mobile/src/styles/**` and `@proliferate/design/react-native`, not DOM CSS.
+imports app-owned third-party CSS (xterm) plus `@proliferate/design/product.css`
+and `@proliferate/design/desktop.css`; `product.css` itself imports the shared
+DOM entrypoint. Mobile uses `apps/mobile/src/styles/**` and
+`@proliferate/design/react-native`, not DOM CSS.

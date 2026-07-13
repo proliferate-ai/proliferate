@@ -46,7 +46,7 @@ type HeaderTabsViewModel = NonNullable<
 >;
 
 // reservedWidth calculation: "+" button + its gap + flex-1 spacer gap + history button when visible + its gap.
-// The 28px button size mirrors --workspace-shell-action-size (1.75rem) in apps/packages/design/src/css/desktop.css — if that token changes, these must change.
+// The 28px button size mirrors --workspace-shell-action-size (1.75rem) in apps/packages/design/src/css/product.css — if that token changes, these must change.
 const PLUS_BUTTON_RESERVED = 28 + 6 + 6;
 const HISTORY_BUTTON_RESERVED = 28 + 6;
 

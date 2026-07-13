@@ -17,6 +17,7 @@
     },
     "./theme.css": "./dist/theme.css",
     "./dom.css": "./dist/css/dom.css",
+    "./product.css": "./dist/css/product.css",
     "./desktop.css": "./dist/css/desktop.css"
   },
   "scripts": {

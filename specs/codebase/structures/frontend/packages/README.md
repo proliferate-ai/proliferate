@@ -37,7 +37,7 @@ What promotion *adds* is predictable: a package loses all app internals (stores,
 
 ```text
 apps/packages/
-  design/src/        tokens.ts · css/{dom.css,desktop.css} · react-native.ts
+  design/src/        tokens.ts · css/{dom.css,product.css,desktop.css} · react-native.ts
   ui/src/            kit/ · primitives/ · layout/ · lib/
   product-domain/src/<domain>/
   product-ui/src/<domain>/<surface>/
@@ -61,7 +61,7 @@ Mobile: `design/react-native` + `product-domain` + SDK only. **Never** `ui`/`pro
 The shared tier of app `styles/` + tokens. Owns serializable design values and generated CSS — tokens, DOM CSS, React Native-safe token values.
 
 ```text
-design/src/tokens.ts · css/{dom.css,desktop.css} · react-native.ts · dist/theme.css
+design/src/tokens.ts · css/{dom.css,product.css,desktop.css} · react-native.ts · dist/theme.css
 ```
 
 Must not hold product copy, product status colors, route concepts, or component behavior. Imports token source + build tooling only — never React, app code, SDK clients, stores, providers, query clients, or product concepts.

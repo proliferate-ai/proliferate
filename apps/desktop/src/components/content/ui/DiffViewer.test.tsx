@@ -25,7 +25,7 @@ index 1111111..2222222 100644
 describe("DiffViewer chat variant", () => {
   it("lets chat and sidebar diff unchanged rows reveal the diff body surface", () => {
     const desktopCss = readFileSync(
-      new URL("../../../../../packages/design/src/css/desktop.css", import.meta.url),
+      new URL("../../../../../packages/design/src/css/product.css", import.meta.url),
       "utf8",
     );
     const sharedSurfaceRule =

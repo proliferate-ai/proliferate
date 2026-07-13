@@ -59,7 +59,7 @@ describe("TranscriptActivityBlock entry motion", () => {
   it("uses a short compositor-only left-to-right settle with reduced-motion fallback", () => {
     const cssPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
-      "../../../../../../packages/design/src/css/desktop.css",
+      "../../../../../../packages/design/src/css/product.css",
     );
     const css = readFileSync(cssPath, "utf8");
     const start = css.indexOf("@keyframes transcript-activity-in");

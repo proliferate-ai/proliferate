@@ -8,7 +8,7 @@ import { StreamingIndicator } from "@/components/workspace/chat/transcript/Strea
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const desktopCss = readFileSync(
-  resolve(testDir, "../../../../packages/design/src/css/desktop.css"),
+  resolve(testDir, "../../../../packages/design/src/css/product.css"),
   "utf8",
 );
 const domCss = readFileSync(

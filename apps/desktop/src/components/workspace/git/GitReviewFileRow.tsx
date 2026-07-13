@@ -181,7 +181,7 @@ export function GitReviewFileRow({
     && !diffQuery.isError,
   );
   // Opt large diffs into per-row content-visibility virtualization (the
-  // [data-diff-row-virtualization] rule in design desktop.css): the diff
+  // [data-diff-row-virtualization] rule in design product.css): the diff
   // renders at full height in the outer panel scroll, so without it every
   // row of a multi-thousand-line patch stays painted while scrolling.
   const virtualizeDiffRows = Boolean(
