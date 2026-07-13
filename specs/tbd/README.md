@@ -16,6 +16,8 @@ They are not operating law until they are promoted into `specs/codebase/**` or
 | [anyharness-structure-alignment-swarms.md](anyharness-structure-alignment-swarms.md) | Planning notes for AnyHarness structure-alignment agent work. |
 | [cloud-worker-control-loop.md](cloud-worker-control-loop.md) | Cloud worker control-loop load-reduction planning. |
 | [frontend-structure-alignment-migration.md](frontend-structure-alignment-migration.md) | Frontend structure-alignment notes. |
+| [support-system-alignment.md](support-system-alignment.md) | Historical live-system audit and superseded planning record. See the [accepted support-system contract](../codebase/features/support-system.md). |
+| [support-system-end-to-end-handoff.md](support-system-end-to-end-handoff.md) | Execution-grade worktree, implementation, AWS cutover, canary, rollback, and definition-of-done handoff for the accepted support-system contract. |
 | [structure-alignment-coordinator-model.md](structure-alignment-coordinator-model.md) | Coordinator model for structure-alignment planning. |
 | [workspace-migration-git-durability-plan.md](workspace-migration-git-durability-plan.md) | Workspace migration git durability planning. |
 

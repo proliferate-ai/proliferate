@@ -1,292 +1,346 @@
-# Support Reporting
+# Support reporting
 
-Support reporting is the production support path for Desktop. The app opens a
-dedicated Tauri support window, collects an explicit user message and optional
-attachments, packages bounded diagnostics in the main window, and uploads the
-result through Proliferate Cloud-issued presigned S3 URLs.
+Status: authoritative for the currently shipped support-capture path.
 
-`Cmd/Ctrl+S` is currently the Support shortcut.
+Support reporting captures private customer feedback and diagnostic evidence.
+It does not own issue triage, automated repair, release tracking, or reporter
+outreach. The authoritative downstream issue, attribution, release, and
+changelog contract lives in [`support-system.md`](support-system.md).
 
-## Desktop UX
+## Product boundary
 
-The support surface is a separate Tauri webview window labeled `support`, not a
-modal in the main app. The first focus target is the issue textarea.
+The current contract ends here:
 
-The production window shows:
+```text
+Desktop/Web -> authenticated support API -> support_report + private S3 bundle
+                                            -> best-effort Slack receipt
+```
 
-- `What happened?` textarea.
-- Attachment drop/paste/file picker with remove controls.
-- Diagnostics scope radio group:
-  - `Most recent workspace`
-  - `Choose workspace`
-  - `App only`
-- Checked-by-default public issue consent:
-  - `Include my message in the public issue`
+There is no active server tracker reconciler, GitHub/Linear projection,
+completed-report feed, issue queue, resolution state, or notification-on-fix
+worker. Legacy tracker columns, integrations, configuration, and historical S3
+objects may still exist; they are not part of the active product behavior.
+
+## Availability and entry points
+
+The server advertises one of three support capabilities:
+
+```text
+vendor    hosted Proliferate support; open the in-app feedback surface
+operator  self-managed operator configured a URL or email; open that destination
+none      no support destination; render no support action
+```
+
+Every support entry point must use that capability. Product UI must never route
+a self-managed user to vendor support. The sidebar and command/menu action use
+`deriveSupportMenuAction`; any direct modal opening outside that boundary is a
+migration exception.
+
+Hosted Desktop has two private in-app modals:
+
+- **Send feedback** for bugs and operational feedback.
+- **Submit a prompt** for feature ideas expressed as an agent prompt.
+
+The modals are rendered inside the main app. There is no dedicated Tauri
+support webview window in the current implementation.
+
+## Feedback modal
+
+The feedback modal contains:
+
+- a `What happened?` textarea;
+- attachment picker, paste, and drop support;
+- `This is urgent`;
+- `Let me know when you fix this`;
+- `Credit me`, with a name field when selected;
+- `Include app logs`, enabled by default;
+- the current outreach address and an inline way to change it;
 - `Cancel` and `Send`.
 
-`Most recent workspace` is automatic: Desktop uses the active workspace when
-available, otherwise the most recently updated known workspace. The workspace
-picker is shown only for `Choose workspace`.
+Send is enabled when the user supplies text or at least one attachment.
 
-`Send` is enabled when the user provides message text or at least one
-attachment. Clicking `Send` emits a support report job to the main app and
-closes the support window immediately. Progress and failure notifications are
-shown from the main app toast system.
+`urgent` and `notifyMe` are capture intent only. The current system does not
+enforce an urgent response SLA and does not send a fix notification. Copy must
+not imply an automated outcome that does not exist.
 
-The public issue consent controls only the user's written message. Diagnostics,
-S3 object keys, presigned URLs, uploaded file bodies, and attachment contents
-remain private. If consent is unchecked, Cloud still creates the public GitHub
-issue, but the issue body says the submitter did not opt in to publishing their
-message, the issue title uses a generic support-report title, and the issue
-applies the configured private label.
+Turning off `Include app logs` sets the immutable upload intent to
+`diagnostics=false`. If there are no attachments, the client completes the
+report without requesting upload targets.
 
-Upload failures distinguish retryable transfer errors from blocked setup
-states. Missing Cloud sign-in, dev auth bypass, and missing server storage
-configuration keep the report queued but show actionable copy instead of the
-generic background-retry message. Local payload problems such as oversized or
-missing attachment data are terminal and ask the user to submit again with a
-smaller payload.
+## Prompt modal
 
-Development builds may keep the old manual debug exports available behind the
-legacy support dialog. Production UI must not expose raw export names such as
-active session JSON, workspace JSON, debug bundle, or investigation JSON.
+The prompt modal contains:
 
-### In-app feedback and prompt modals
+- a prompt textarea;
+- `Credit me if this merges`, with a name field when selected;
+- the current outreach address and an inline way to change it;
+- `Cancel` and `Send`.
 
-Desktop also exposes two lightweight in-app modals that submit through the same
-report lifecycle: a bug modal ("Send feedback") and a prompt modal ("Submit a
-prompt"). Both share one modal-state hook, build the same `SupportReportJob`,
-and reuse the upload queue.
+Prompt reports use `kind=feature`, never set `urgent`, and include diagnostics.
+The current UI has no notify-on-merge control. A hidden/default `notifyMe=false`
+value is not a user promise.
 
-The bug modal, below the message textarea and attachment zone, shows in order:
+## Privacy
 
-- `This is urgent` — sets the report's `urgent` capture flag. When checked it
-  reveals the helper line "We'll send you an email by tomorrow."
-- `Let me know when you fix this` — sets `notifyMe`. When checked it reveals
-  "We'll send you an update within a day."
-- `Credit me` — reveals a name input; when consented the name is sent as
-  `creditName` (same interaction as the prompt modal's credit field).
-- `Include app logs` — defaults ON. When turned OFF, the report's
-  `expectedClientUploads.diagnostics` is `false` and the upload pipeline skips
-  collecting and uploading `diagnostics.json` for that job. If logs are off and
-  there are no attachments, the client completes the report directly with no
-  upload-target manifest (the diagnostics=false / attachmentCount=0 path).
+Support reports are private by default and in the current Desktop flow
+`publicContentConsent` is always false.
 
-The prompt modal keeps its `Credit me if this merges` field and adds
-`Let me know when you merge this`, which sets `notifyMe`. Prompt submissions
-never set `urgent` and always include diagnostics (there is no logs toggle on
-that surface).
+Rules:
 
-Both modals render a muted footer above the action buttons reading
-"Updates go to {email} · change", where `{email}` is the user's
-`outreach_email` override when set, otherwise their account email (from
-`GET /v1/users/me`). "change" swaps to an inline email editor whose save
-PATCHes `/v1/users/me` `outreach_email` (account-wide, not per-report); an empty
-value clears the override and an invalid address surfaces the server's 422 as an
-inline error.
+- user text lives in the private `request.json` object;
+- diagnostics and attachments are private;
+- presigned URLs, AWS credentials, S3 object contents, prompts, tool I/O,
+  transcript bodies, tokens, and signed URLs never enter public issues,
+  telemetry, or ordinary logs;
+- an old `public_content_consent` column does not authorize publishing current
+  report content;
+- introducing a public issue projection requires a new explicit consent and
+  privacy contract.
 
-`urgent`, `notifyMe`, and the logs choice flow from the modal state through the
-`SupportReportJob` into `buildCreateReportRequest`. They are optional on the
-persisted job with defaults (`urgent`/`notifyMe` false, logs included) so jobs
-queued before this change still upload unchanged.
+## Desktop job and queue
 
-Server-side, `credit_name` is persisted whenever `credit_consent` is true,
-regardless of report `kind` — the bug modal's `Credit me` field needed the
-same persistence the prompt modal already had (previously gated to
-`kind == "feature"` only).
+Both modals create the same `SupportReportJob` shape and dispatch it to the
+single upload queue owner.
+
+Important fields:
+
+```text
+jobId, createdAt
+message
+kind                         bug | feature
+urgent, notifyMe
+creditConsent, creditName
+includeLogs
+scope, workspace references
+source context and telemetry references
+attachments
+active workspace/session and report-opened timestamp
+```
+
+The job is persisted locally before upload and retried across app restarts.
+Report creation is idempotent on the server by authenticated user and
+`clientJobId`.
+
+Retry behavior distinguishes:
+
+- blocked states such as auth or server storage configuration;
+- transient transport/provider failures;
+- terminal local payload failures;
+- terminal server upload conflicts or rejected payloads;
+- an already-completed response, which is treated as successful cleanup.
+
+The client must validate the server's message, attachment count, filename,
+credit-name, and byte limits before enqueue. HTTP validation responses are
+terminal for the unchanged payload, not background-retry candidates.
+
+The queue must never silently evict a report. Any capacity limit must reject a
+new enqueue explicitly or durably archive an old terminal job, and staged
+attachment files must be deleted only after success or an explicit terminal
+outcome.
+
+## Workspace scope
+
+The current modals automatically use the active/default workspace when one is
+available and otherwise use `app_only`. The current UI does not present the old
+`Most recent workspace / Choose workspace / App only` radio group.
+
+Client workspace references are treated as claims. The server derives trusted
+cloud correlation only from authorized resources. Unknown or unauthorized
+cloud IDs must not become trusted correlation identifiers.
 
 ## Diagnostics
 
-Desktop diagnostics are collected outside the support webview so closing the
-window does not lose the job.
+Native diagnostics may include:
 
-Native code always returns a structured support diagnostics bundle with:
+- app/runtime version and health metadata;
+- bounded Desktop native and AnyHarness log tails;
+- platform and runtime-home metadata;
+- recent sessions and summaries for selected workspaces;
+- bounded normalized events;
+- live config metadata;
+- raw notification metadata with bodies removed.
 
-- Manifest: app version, runtime version/status/home, platform, timestamp.
-- AnyHarness `/health` when the active runtime is healthy.
-- Tail of `~/.proliferate/logs/desktop-native.log`.
-- Tail of `<runtimeHome>/logs/anyharness.log`.
-- At most the current log plus newest rotated file for each source.
-- A 2 MB pre-compression cap per log file.
+Native log collection scrubs home paths, bearer tokens, env-style
+key/token/secret values, signed URL query parameters, and long opaque strings.
 
-Native diagnostics scrub home paths, bearer tokens, env-style token/key/secret
-values, signed URL query values, and long opaque strings.
+The Desktop diagnostic package uses `schemaVersion: 2`. It does not duplicate
+the report message. It includes only:
 
-Workspace diagnostics are collected through AnyHarness APIs for the selected
-workspace IDs only. The package includes recent sessions, session summaries,
-recent normalized events, live config snapshots, and raw notification metadata
-with notification bodies redacted. Collection enforces global caps and does not
-include full workspace history by default.
-Desktop applies the same session-debug sanitizer used by manual exports before
-uploading support diagnostics, so prompt bodies, message text, raw tool input,
-raw tool output, and raw live-config prompt/config content are represented by
-shape/length placeholders rather than copied verbatim.
+```text
+messagePresent
+messageLength
+```
 
-Desktop uploads `diagnostics.json` with `schemaVersion: 2`. The package has a
-top-level `correlation` object supplied by Cloud and does not duplicate the
-user's free-form message body. It records `messagePresent` and `messageLength`
-so investigators know whether the private `request.json` contains user-written
-context.
+The package runs session data through the session-debug sanitizer. Prompt and
+message bodies, raw tool input/output, event content, notification bodies, and
+sensitive live-config values are represented by redacted shape/length
+placeholders.
 
-Cloud workspace diagnostics are server-written. When a report references
-authorized cloud workspaces, Cloud writes `cloud-diagnostics.json` after the
-support report database row and `request.json` have been committed. Cloud
-workspace references in the case file are server-derived from the database; if
-the client sends an unknown or unauthorized cloud workspace ID, the persisted
-reference is marked `cloud:[unverified]` and is excluded from server
-correlation IDs. The cloud diagnostics file is an allowlisted metadata snapshot:
-workspace, target, runtime access, sandbox, command, session, event-ingest,
-setup-run, and transcript item metadata. It does not copy prompt bodies,
-transcript bodies, raw command payloads, tool output, provider tokens,
-ciphertexts, cookies, signed URLs, or attachment contents. It also does not
-wake stopped sandboxes or create runtime sessions just to collect diagnostics.
+Server-side `cloud-diagnostics.json` collection is disabled. The current server
+returns `cloudDiagnosticsStatus=not_applicable`; `diagnostics.py` is a no-op
+guard left after the cloud target/sandbox model cutover.
 
-## Upload Contract
+## HTTP contract
 
-Desktop authenticates only to Proliferate Cloud. It never receives AWS
-credentials.
+Clients authenticate only to Proliferate. They never receive AWS credentials.
 
-Cloud owns:
+Active endpoints:
 
-- `POST /v1/support/reports`
-- `POST /v1/support/reports/{reportId}/upload-targets`
-- `POST /v1/support/reports/{reportId}/complete`
-- `POST /v1/support/reports/{reportId}/tracker`
-- `POST /v1/support/report-uploads` as the legacy compatibility wrapper
+```text
+POST /v1/support/reports
+POST /v1/support/reports/{reportId}/upload-targets
+POST /v1/support/reports/{reportId}/complete
+POST /v1/support/report-uploads                 legacy compatibility wrapper
+POST /v1/support/messages                       zero-upload compatibility shim
+```
+
+There is no active `/tracker` endpoint.
+
+### Create
 
 `POST /v1/support/reports` creates or returns the durable case file for the
-authenticated user and `clientJobId`. Cloud stores a `support_report` database
-row with a stable `reportId`, S3 bucket/prefix, owner user, primary tenant,
-tenant list, source context, normalized workspace refs, telemetry refs, upload
-manifest, immutable expected upload intent, immutable public issue consent, and
-cloud-diagnostics status. Idempotent retries by the same user and `clientJobId`
-return the existing report without overwriting the original user message,
-consent, or attachment intent.
+authenticated user and `clientJobId`.
 
-Report creation writes `request.json` to the private support S3 prefix. This
-object contains the user message, source context, workspace refs, telemetry
-refs, and server-derived correlation IDs. It must not contain presigned URLs.
+The immutable create intent includes:
 
-Reports also carry two capture-only intent flags, `urgent` and `notifyMe`,
-persisted on the `support_report` row (`urgent`, `notify_me`) and mirrored into
-`request.json` (`urgent`, `notifyMe`). `urgent` marks a report the submitter
-flagged as time-sensitive; `notifyMe` records that the submitter asked to be
-contacted about the outcome. Both default to false and are capture signals
-only — they carry no resolution/triage state, which lives in a separate ops
-service. Follow-up, when requested, goes to the submitter's `outreach_email`
-override (see below) when set, otherwise their account email.
+```text
+message and source context
+scope and workspace references
+telemetry references
+expected diagnostics boolean and attachment count
+kind, urgent, notifyMe
+creditConsent, creditName
+private content-consent state
+```
 
-`POST /v1/support/reports/{reportId}/upload-targets` validates diagnostics and
-attachment metadata for the report owner, persists the expected object manifest,
-and returns short-lived presigned `PUT` targets. Clients may call it again while
-the report is still uploadable to refresh expired URLs and re-issue targets for
-re-captured diagnostics. The expected **object set** is immutable — the object
-keys plus the upload intent (diagnostics flag and attachment count) cannot
-change, and a retry that alters them is rejected
-(`support_report_upload_conflict`). Per-object content metadata (size/sha256) is
-refreshed from the latest re-issue, because diagnostics are legitimately
-re-captured on each client retry; completion then verifies against the refreshed
-manifest. Re-issue must stay idempotent by object identity — comparing full
-content (size/sha256) rejected every retry forever and was the cause of the
-support-report "could not be sent" retry loop.
+An idempotent retry returns the existing report without replacing the original
+message, intent, or object set.
 
-`POST /v1/support/reports/{reportId}/complete` verifies uploaded object keys are
-inside the stored report prefix, requires every object in the stored manifest to
-be present exactly once, verifies completion object size and checksum values
-against the stored upload manifest (refreshed by the latest re-issue), verifies
-object sizes with S3 metadata,
-writes `complete.json`, marks the report completed, and posts the internal
-Slack notification once. Slack failure is logged server-side and does not fail
-an otherwise completed report.
+After inserting the row, the server writes private `request.json`. It contains
+the message, capture intent, references, and server-derived correlation. It
+must not contain a presigned URL.
 
-If the persisted expected upload intent says `diagnostics=false` and
-`attachmentCount=0`, completion is allowed without an upload-target manifest.
-This is the Web/mobile/App-only compatibility path.
+### Upload targets
 
-The legacy `POST /v1/support/report-uploads` wrapper remains for old clients. It
-uses the same Cloud-owned S3 bucket and completion behavior, but new clients
-should use the split report lifecycle.
+`POST /v1/support/reports/{reportId}/upload-targets`:
 
-The legacy `POST /v1/support/messages` route is a zero-upload compatibility shim
-over the report lifecycle. It never opts user text into public GitHub content.
+- requires report ownership;
+- validates diagnostics and attachment metadata;
+- locks the expected object set and upload intent;
+- returns short-lived presigned `PUT` targets;
+- may be called again to refresh expired URLs and refreshed content metadata;
+- rejects a changed object set, diagnostics intent, or attachment count.
 
-## Issue Trackers
+Re-captured diagnostics may legitimately have new size and SHA-256 metadata on
+a re-issue. The latest target manifest is the completion contract.
 
-Completed database-backed support reports are reconciled server-side into a
-GitHub issue and, when Linear is configured, a Linear issue. Desktop/Web may
-call `POST /v1/support/reports/{reportId}/tracker` as a status/nudge endpoint,
-but issue creation does not depend on the client staying open.
+### Complete
 
-GitHub is the primary public tracker. The support bot creates or updates one
-issue per `reportId`, using a hidden support-report marker for idempotency and
-the configured labels:
+`POST /v1/support/reports/{reportId}/complete`:
 
-- `SUPPORT_GITHUB_LABEL_SUPPORT` on every issue.
-- `SUPPORT_GITHUB_LABEL_PRIVATE` when public issue consent is unchecked.
+- verifies every object key is inside the stored report prefix;
+- requires exactly the stored object set;
+- checks completion size/checksum claims against the latest manifest;
+- independently verifies object size through S3 metadata;
+- writes `complete.json`;
+- marks the row completed;
+- attempts one Slack completion receipt during the first successful completion
+  transition.
 
-Linear is optional and private/internal. Linear failure leaves the GitHub issue
-intact and records a retryable partial tracker state. When both trackers exist,
-the server crosslinks them by updating the GitHub body with the Linear URL and
-the Linear description with the GitHub URL.
+The S3 `HEAD` response does not prove object SHA-256; the checksum comparison is
+client-claim consistency, while object size is independently verified.
 
-Tracker state is stored on `support_report` with per-vendor status, IDs, URLs,
-attempt counts, retry timestamps, and Slack-notification timestamps. The server
-also writes `tracker.json` under the same private S3 prefix so S3-only backfills
-can detect reports that still need tracker reconciliation.
+Slack failure does not roll back a completed report. `slack_notified_at` is
+written only after the webhook call succeeds. A missing webhook or provider
+error is logged and leaves the timestamp null for later recovery.
 
-Slack receives two best-effort notifications: the report completion receipt and,
-once available, a tracker-links update. Slack messages contain the `reportId`,
-an internal report URL when configured, and tracker URLs. They never include S3
-keys, S3 prefixes, presigned URLs, diagnostics bodies, or uploaded file content.
+## Persistence and private objects
 
-The completion receipt surfaces the capture flags: `urgent` reports get a clear
-leading urgent marker in the Slack title, and every report renders `Urgent:
-Yes/No` and `Notify requested: Yes/No` fields so a responder can triage without
-opening the case file.
+The `support_report` row is the durable capture pivot. Current capture columns
+include owner/client identity, lifecycle, S3 location, source/scope/reference
+JSON, expected and actual object manifests, kind/credit/urgent/notify intent,
+request IDs, timestamps, and Slack receipt state.
 
-## User Outreach Email
+Default object layout:
 
-Each user may set an optional `outreach_email` override on their profile
-(`PATCH /v1/users/me`, exposed on `GET /v1/users/me`). It is the address the
-user prefers for support/outreach follow-up; sending an empty string or `null`
-clears it and falls back to the account email. A non-empty value must validate
-as an email. This is account-level profile state, independent of any single
-report.
+```text
+<SUPPORT_REPORT_S3_PREFIX>/<YYYY>/<MM>/<DD>/<reportId>/
+  request.json
+  diagnostics.json                                  optional
+  attachments/<clientFileId>/<safeFileName>         optional
+  complete.json
+```
 
-## Debug Correlation
+The bucket is private, blocks public access, uses server-side encryption,
+applies retention/lifecycle policy, and grants least-privilege server access.
 
-Each support report is the durable pivot for debugging user-visible issues
-across local diagnostics, Cloud DB state, server logs, Sentry, PostHog, and
-reachable runtime targets.
+Historical `tracker.json` and `cloud-diagnostics.json` objects may exist. The
+current server does not create them.
 
-Server-derived correlation includes:
+## Slack receipt
 
-- `reportId`
-- `requestId`
-- `ownerUserId`
-- `primaryOrganizationId`
-- `primaryTenantId`
-- `tenantIds`
-- `cloudWorkspaceIds`
-- `cloudTargetIds`
-- `anyharnessWorkspaceIds`
-- `sessionIds`
+The Slack completion receipt contains operational metadata:
 
-The server writes these IDs into the support report response, `request.json`,
-`diagnostics.json`, `cloud-diagnostics.json`, structured server logs, and Sentry
-context/tags where safe. Desktop also emits the low-cardinality
-`support_report_submitted` product event through the typed telemetry path so
-PostHog can be used as a replay/session pivot when hosted-product telemetry is
-enabled. When hosted-product telemetry is enabled, `request.json` may also
-include the current PostHog distinct/session IDs and recent Desktop Sentry event
-IDs so an investigator can jump from the support report to replay and exception
-contexts without relying on user-entered text.
+- report ID and optional internal report URL;
+- sender identity needed for support operations;
+- kind, urgent, notify, credit, diagnostics, and attachment summaries;
+- safe context and correlation IDs.
 
-Cloud logging records request, user, tenant, support report, cloud workspace,
-target, sandbox, session, interaction, command, and worker
-fields when available. Log payloads must scrub auth headers, bearer tokens,
-secret/key/token environment values, ciphertext-looking values, signed URLs,
-and long opaque token strings.
+It must not include S3 keys/prefixes, presigned URLs, diagnostic or attachment
+bodies, raw prompts/tool output, or secret values.
 
-The S3 bucket must be private with public access blocked, server-side
-encryption, lifecycle retention, and least-privilege server IAM.
+Slack is an alerting projection, not the queue or the source of delivery truth.
+
+## Outreach address
+
+Users may set `outreach_email` through `PATCH /v1/users/me`. An empty value
+clears it. The support contact rule is:
+
+```text
+outreach_email ?? account_email
+```
+
+Capture stores reporter identity and notify intent; it does not send an email.
+Only an authorized future outreach step may resolve and snapshot the address.
+
+## Code map
+
+```text
+apps/desktop/src/components/support/**
+apps/desktop/src/hooks/support/**
+apps/desktop/src/lib/domain/support/**
+apps/desktop/src/lib/workflows/support/**
+apps/desktop/src/stores/support/**
+
+cloud/sdk/src/client/support.ts
+cloud/sdk-react/src/hooks/support.ts
+
+server/proliferate/server/support/**
+server/proliferate/db/models/support.py
+server/proliferate/db/store/support_reports.py
+
+.github/workflows/_deploy-server.yml
+server/infra/main.tf
+specs/developing/reference/env-vars.yaml
+```
+
+## Verification
+
+Changes to this feature require focused coverage for the guarantee they alter:
+
+- diagnostic fixtures seeded with report, prompt, tool, notification, and
+  live-config secrets must prove none survive serialization;
+- report creation retries must prove immutable idempotency;
+- upload-target re-issue must prove stable object identity with refreshed
+  content metadata;
+- completion tests must cover missing, duplicate, unknown, out-of-prefix,
+  size-mismatched, and checksum-mismatched objects;
+- Slack success, missing configuration, and provider failure must prove the
+  correct `slack_notified_at` state;
+- capability tests must cover `vendor`, `operator`, and `none` for every entry
+  point;
+- a staging smoke must create a real report, inspect safe DB/S3 summaries, and
+  visibly confirm the Slack message.
+
+Operator investigation is documented in
+[`../../developing/debugging/support-reports.md`](../../developing/debugging/support-reports.md).
