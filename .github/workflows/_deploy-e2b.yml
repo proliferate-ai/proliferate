@@ -108,6 +108,15 @@ jobs:
           E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
           E2B_ACCESS_TOKEN: ${{ secrets.E2B_ACCESS_TOKEN }}
           E2B_TEAM_ID: ${{ vars.E2B_TEAM_ID }}
+          # Stamp the deterministic build SHA into the runtime crates rebuilt by
+          # build-template.mjs (it runs cargo with `env: process.env`), so the
+          # E2B-bundled anyharness/worker/supervisor carry `+<12-hex-sha>`
+          # (support-system "Release identity"). Version stays the crate version
+          # because build.rs only fails closed when BUILD_VERSION is set. The
+          # promote-don't-rebuild refactor (consume the canonical runtime-v*
+          # artifact instead of `--rebuild-runtime`) is a product-lane follow-up
+          # tracked in the R2 PR; build-template.mjs is product-owned.
+          PROLIFERATE_BUILD_SHA: ${{ inputs.git_sha }}
 
       - name: Smoke test immutable public ref
         run: >
