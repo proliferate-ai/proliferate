@@ -115,7 +115,11 @@ test("strict green: exactly one green per selected cell qualifies and emits evid
     false,
     "shard-scope evaluation is a nonqualifying aggregate input by contract",
   );
-  assert.equal(evidence.qualifying, true);
+  assert.equal(
+    evidence.qualifying,
+    false,
+    "a shard evidence document NEVER claims qualification; the aggregate artifact does",
+  );
   assert.equal(h.provisioner.prepareCalls, 1, "world prepared once for both cells");
   assert.ok(existsSync(h.sink.evidencePath), "evidence emitted on success");
   cleanup(h.dir);
@@ -241,7 +245,7 @@ test("registered run-scoped resource is cleaned on a successful strict run", asy
   const { evidence } = await runFoundation(h.input);
   assert.equal(evidence.cleanup.complete, true);
   assert.equal(evidence.cleanup.cleaned, 1);
-  assert.equal(evidence.qualifying, true);
+  assert.equal(evidence.qualifying, false, "shard documents never carry the qualification claim");
   cleanup(h.dir);
 });
 

@@ -105,6 +105,13 @@ export function evaluateCells(input: CellEvaluationInput): RunEvaluation {
  * the aggregate, not a qualification claim. A would-be-green shard reports
  * its cell health through the reason string so diagnostics stay readable.
  */
+/**
+ * The one intentional nonqualifying reason a healthy shard carries. Strict
+ * shard exit codes ignore exactly this marker and fail on everything else.
+ */
+export const SHARD_SCOPE_NONQUALIFYING_REASON =
+  "shard-scope evaluation is a nonqualifying aggregate input; qualification requires the cross-shard aggregate (all shards green: this shard contributes green finals)";
+
 export function evaluateRun(input: EvaluationInput): RunEvaluation {
   const cellEval = evaluateCells({
     plan: input.plan,
@@ -119,9 +126,7 @@ export function evaluateRun(input: EvaluationInput): RunEvaluation {
     ...cellEval,
     verdict: {
       qualifying: false,
-      reasons: [
-        "shard-scope evaluation is a nonqualifying aggregate input; qualification requires the cross-shard aggregate (all shards green: this shard contributes green finals)",
-      ],
+      reasons: [SHARD_SCOPE_NONQUALIFYING_REASON],
     },
   };
 }

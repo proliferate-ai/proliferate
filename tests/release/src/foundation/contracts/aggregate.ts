@@ -2,21 +2,45 @@
  * Cross-shard aggregate — the ONLY path to qualifying evidence.
  *
  * Shard outputs are nonqualifying inputs (an empty or partial shard must
- * never claim qualification). The aggregate requires every shard of the run
- * to be present exactly once with coherent run/manifest/artifact identity,
- * exactly one final result per required cell across the union, every attempt
- * preserved, and every shard's cleanup reconciliation complete. A one-shard
- * run still aggregates its single shard; there is no shard-local shortcut.
+ * never claim qualification). The aggregate:
+ *  - anchors trust to CALLER-SUPPLIED expected identities (run, SHA,
+ *    manifests), never to the first shard document it happens to see;
+ *  - requires every shard present exactly once with canonical one-based
+ *    identity and exact deterministic shard-plan ownership of its finals;
+ *  - requires exactly one final per required cell with a valid, ordered,
+ *    unique attempt history whose supersession never buries a product
+ *    assertion failure under a green retry;
+ *  - requires world evidence with all-ok readiness for every world a shard
+ *    ran required cells in;
+ *  - recomputes cleanup health from the counters instead of trusting
+ *    `complete: true`.
+ *
+ * The verdict is persisted as a SEPARATE durable artifact
+ * (`AggregateArtifact`); a shard evidence document never carries an
+ * aggregate qualification claim.
  */
 
 import type { RunEvidence } from "./evidence.js";
 import type { SelectedCellPlan } from "./plan.js";
-import type { FinalCellResult, RunEvaluation } from "./results.js";
+import { shardOwnedCellKeys } from "./plan.js";
+import type { CellAttempt, FinalCellResult, RunEvaluation } from "./results.js";
+import { cellKey as computeCellKey } from "./identity.js";
 import { evaluateCells } from "./evaluate.js";
+
+/** Trusted identities the caller resolved independently of any shard. */
+export interface ExpectedRunIdentity {
+  readonly runId: string;
+  readonly sourceSha: string;
+  readonly candidateManifestHash: string;
+  readonly retainedManifestHash: string | null;
+  readonly shardCount: number;
+}
 
 export interface AggregateInput {
   /** The one plan the run was resolved from (identical across shards). */
   readonly plan: SelectedCellPlan;
+  /** Caller-trusted identities; shards are validated AGAINST these. */
+  readonly expected: ExpectedRunIdentity;
   /** Final evidence document of every shard in the run, in any order. */
   readonly shards: readonly RunEvidence[];
 }
@@ -28,84 +52,160 @@ export interface AggregateEvaluation extends RunEvaluation {
   readonly finals: readonly FinalCellResult[];
 }
 
+/**
+ * The separate durable aggregate verdict document. Persist this beside (not
+ * inside) the shard evidence; production promotion consumes this artifact.
+ */
+export interface AggregateArtifact {
+  readonly schemaVersion: 1;
+  readonly kind: "aggregate-verdict";
+  readonly expected: ExpectedRunIdentity;
+  readonly scenarioManifestHash: string | null;
+  readonly selector: string;
+  readonly behavior: string;
+  readonly shardIds: readonly string[];
+  readonly evaluation: AggregateEvaluation;
+  readonly emittedAt: string;
+}
+
 export function evaluateAggregate(input: AggregateInput): AggregateEvaluation {
-  const { plan, shards } = input;
+  const { plan, expected, shards } = input;
   const defects: string[] = [];
 
   if (shards.length === 0) {
     defects.push("aggregate received zero shard evidence documents");
   }
+  if (!Number.isInteger(expected.shardCount) || expected.shardCount < 1) {
+    defects.push(`expected.shardCount must be a positive integer, got ${expected.shardCount}`);
+  }
 
-  // ── Identity coherence: one run, one manifest set, one behavior. ──
-  const first = shards[0];
+  // ── Identity: every shard validates against the TRUSTED expectation. ──
   for (const s of shards) {
-    if (first && s.run.runId !== first.run.runId) {
-      defects.push(`shard ${s.shard.shardId} has runId ${s.run.runId} != ${first.run.runId}`);
+    const id = s.shard.shardId;
+    if (s.run.runId !== expected.runId) {
+      defects.push(`shard ${id} has runId ${s.run.runId} != expected ${expected.runId}`);
     }
-    if (first && s.run.candidateManifestHash !== first.run.candidateManifestHash) {
-      defects.push(`shard ${s.shard.shardId} candidateManifestHash diverges`);
+    if (s.shard.runId !== expected.runId) {
+      defects.push(`shard ${id} shard.runId ${s.shard.runId} != expected ${expected.runId}`);
     }
-    if (first && s.run.retainedManifestHash !== first.run.retainedManifestHash) {
-      defects.push(`shard ${s.shard.shardId} retainedManifestHash diverges`);
+    if (s.run.sourceSha !== expected.sourceSha) {
+      defects.push(`shard ${id} sourceSha ${s.run.sourceSha} != expected ${expected.sourceSha}`);
     }
-    if (first && s.run.sourceSha !== first.run.sourceSha) {
-      defects.push(`shard ${s.shard.shardId} sourceSha diverges`);
+    if (s.run.candidateManifestHash !== expected.candidateManifestHash) {
+      defects.push(`shard ${id} candidateManifestHash diverges from expected`);
+    }
+    if (s.run.retainedManifestHash !== expected.retainedManifestHash) {
+      defects.push(`shard ${id} retainedManifestHash diverges from expected`);
     }
     if (s.behavior !== plan.behavior) {
-      defects.push(`shard ${s.shard.shardId} behavior ${s.behavior} != plan behavior ${plan.behavior}`);
+      defects.push(`shard ${id} behavior ${s.behavior} != plan behavior ${plan.behavior}`);
     }
     if (s.plan.scenarioManifestHash !== plan.scenarioManifestHash) {
-      defects.push(`shard ${s.shard.shardId} scenarioManifestHash diverges from the aggregate plan`);
+      defects.push(`shard ${id} scenarioManifestHash diverges from the aggregate plan`);
     }
     if (s.dryRun) {
-      defects.push(`shard ${s.shard.shardId} is a dry-run document and cannot enter an aggregate`);
+      defects.push(`shard ${id} is a dry-run document and cannot enter an aggregate`);
     }
   }
 
-  // ── Shard coverage: every shard exactly once, counts agree. ──
-  const declaredCount = first?.shard.shardCount ?? 0;
+  // ── Canonical shard identity: one-based, exact shardId, exact count. ──
   const seen = new Map<number, number>();
   for (const s of shards) {
-    if (s.shard.shardCount !== declaredCount) {
-      defects.push(`shard ${s.shard.shardId} declares shardCount ${s.shard.shardCount} != ${declaredCount}`);
+    const { shardIndex, shardCount, shardId } = s.shard;
+    if (shardCount !== expected.shardCount) {
+      defects.push(`shard ${shardId} declares shardCount ${shardCount} != expected ${expected.shardCount}`);
     }
-    seen.set(s.shard.shardIndex, (seen.get(s.shard.shardIndex) ?? 0) + 1);
+    if (!Number.isInteger(shardIndex) || shardIndex < 1 || shardIndex > expected.shardCount) {
+      defects.push(`shard ${shardId} has non-canonical shardIndex ${shardIndex} (must be 1..${expected.shardCount})`);
+    }
+    const canonicalId = `shard-${shardIndex}-of-${shardCount}`;
+    if (shardId !== canonicalId) {
+      defects.push(`shard id "${shardId}" is not the canonical "${canonicalId}"`);
+    }
+    seen.set(shardIndex, (seen.get(shardIndex) ?? 0) + 1);
   }
   for (const [index, n] of seen) {
     if (n > 1) defects.push(`shard index ${index} appears ${n} times in the aggregate`);
   }
-  if (declaredCount > 0 && seen.size !== declaredCount) {
-    // Indices must form one contiguous run covering the declared count
-    // (either 0- or 1-based); any gap means a shard document is missing.
-    defects.push(
-      `aggregate covers ${seen.size} distinct shard indices for shardCount ${declaredCount}`,
-    );
-  } else if (declaredCount > 0) {
-    const min = Math.min(...seen.keys());
-    const max = Math.max(...seen.keys());
-    if (max - min + 1 !== declaredCount || (min !== 0 && min !== 1)) {
-      defects.push(
-        `shard indices [${[...seen.keys()].sort((a, b) => a - b).join(",")}] are not a contiguous cover of shardCount ${declaredCount}`,
-      );
-    }
+  for (let i = 1; i <= expected.shardCount; i += 1) {
+    if (!seen.has(i)) defects.push(`shard index ${i} of ${expected.shardCount} is missing from the aggregate`);
   }
-  if (shards.length !== declaredCount && declaredCount > 0) {
-    defects.push(`aggregate has ${shards.length} shard documents for shardCount ${declaredCount}`);
+  if (shards.length !== expected.shardCount) {
+    defects.push(`aggregate has ${shards.length} shard documents for expected shardCount ${expected.shardCount}`);
   }
 
-  // ── Cleanup: every shard's reconciliation must be complete. ──
+  // ── Deterministic shard-plan ownership: a shard may only report finals
+  // for cells the deterministic assignment gave it. ──
   for (const s of shards) {
-    if (!s.cleanup.complete) {
-      defects.push(`shard ${s.shard.shardId} cleanup reconciliation incomplete`);
+    if (defects.some((d) => d.includes("non-canonical shardIndex"))) break;
+    let owned: ReadonlySet<string>;
+    try {
+      owned = shardOwnedCellKeys(plan, s.shard);
+    } catch {
+      continue; // shard-count defects already recorded above
+    }
+    for (const final of s.finals) {
+      if (!owned.has(final.cellKey)) {
+        defects.push(`shard ${s.shard.shardId} reports a final for ${final.cellKey} it does not own`);
+      }
     }
   }
 
-  // ── Union of finals; duplicate finals across shards surface naturally
-  // through evaluateCells' duplicate detection. Attempts must be preserved. ──
+  // ── World evidence: every world a shard ran required cells in must have
+  // an evidence entry whose readiness observations are all ok. ──
+  for (const s of shards) {
+    const worldsWithFinals = new Set(s.finals.map((f) => f.cell.world));
+    for (const world of worldsWithFinals) {
+      const ranReal = s.finals.some(
+        (f) => f.cell.world === world && (f.status === "green" || f.status === "failed"),
+      );
+      if (!ranReal) continue; // blocked/readiness_failed cells legitimately have no ready world
+      const we = s.worlds.find((w) => w.world === world);
+      if (!we) {
+        defects.push(`shard ${s.shard.shardId} has executed finals for world ${world} but no world evidence`);
+        continue;
+      }
+      const failedChecks = we.readiness.filter((o) => !o.ok).map((o) => o.check);
+      if (failedChecks.length > 0) {
+        defects.push(
+          `shard ${s.shard.shardId} world ${world} has failed readiness observations: ${failedChecks.join(", ")}`,
+        );
+      }
+      if (we.readiness.length === 0) {
+        defects.push(`shard ${s.shard.shardId} world ${world} has zero readiness observations`);
+      }
+      for (const [slot, digest] of Object.entries(we.observedArtifacts)) {
+        if (typeof digest !== "string" || digest.length === 0) {
+          defects.push(`shard ${s.shard.shardId} world ${world} observed artifact "${slot}" has an empty receipt`);
+        }
+      }
+    }
+  }
+
+  // ── Final/attempt integrity. ──
   const finals: FinalCellResult[] = shards.flatMap((s) => [...s.finals]);
   for (const final of finals) {
-    if (final.attempts.length === 0) {
-      defects.push(`final for ${final.cellKey} carries no attempt history`);
+    defects.push(...validateFinal(final));
+  }
+
+  // ── Cleanup: recompute health from counters; never trust complete=true. ──
+  for (const s of shards) {
+    const c = s.cleanup;
+    if (c.failed.length > 0) {
+      defects.push(`shard ${s.shard.shardId} cleanup has ${c.failed.length} failed entries`);
+    }
+    if (c.attempted !== c.cleaned + c.alreadyAbsent + c.failed.length) {
+      defects.push(
+        `shard ${s.shard.shardId} cleanup counters do not reconcile: attempted=${c.attempted} != cleaned=${c.cleaned} + absent=${c.alreadyAbsent} + failed=${c.failed.length}`,
+      );
+    }
+    if (!c.complete) {
+      defects.push(`shard ${s.shard.shardId} cleanup reconciliation incomplete`);
+    }
+    for (const entry of c.failed) {
+      if (entry.runId !== expected.runId) {
+        defects.push(`shard ${s.shard.shardId} cleanup ledger entry bound to foreign run ${entry.runId}`);
+      }
     }
   }
 
@@ -113,7 +213,14 @@ export function evaluateAggregate(input: AggregateInput): AggregateEvaluation {
     plan,
     finals,
     preflightComplete: shards.length > 0 && shards.every((s) => s.preflight.complete),
-    cleanupComplete: shards.length > 0 && shards.every((s) => s.cleanup.complete),
+    cleanupComplete:
+      shards.length > 0 &&
+      shards.every(
+        (s) =>
+          s.cleanup.complete &&
+          s.cleanup.failed.length === 0 &&
+          s.cleanup.attempted === s.cleanup.cleaned + s.cleanup.alreadyAbsent + s.cleanup.failed.length,
+      ),
     dryRun: shards.some((s) => s.dryRun),
     previousBlockedCellKeys: [],
   });
@@ -131,4 +238,73 @@ export function evaluateAggregate(input: AggregateInput): AggregateEvaluation {
     };
   }
   return { ...cellEval, aggregateDefects: defects, finals };
+}
+
+/**
+ * Attempt-history integrity for one final result:
+ *  - final.cellKey must be the deterministic key of final.cell;
+ *  - attempts exist, belong to the cell, have unique ids, contiguous
+ *    one-based ordering, and exactly one non-superseded attempt;
+ *  - the non-superseded attempt is the LAST one and its status equals the
+ *    final status;
+ *  - supersession never buries a product assertion failure: a superseded
+ *    `failed` attempt cannot be followed by a green final (infrastructure
+ *    statuses — blocked/readiness_failed/cancelled — may be retried).
+ */
+function validateFinal(final: FinalCellResult): string[] {
+  const defects: string[] = [];
+  const key = final.cellKey;
+
+  if (computeCellKey(final.cell) !== key) {
+    defects.push(`final ${key} carries a cell identity that hashes to a different cell key`);
+  }
+  if (final.attempts.length === 0) {
+    defects.push(`final for ${key} carries no attempt history`);
+    return defects;
+  }
+
+  const ids = new Set<string>();
+  let previous: CellAttempt | null = null;
+  for (const [i, attempt] of final.attempts.entries()) {
+    if (attempt.cellKey !== key) {
+      defects.push(`final ${key} attempt ${attempt.attemptId} belongs to a different cell (${attempt.cellKey})`);
+    }
+    if (ids.has(attempt.attemptId)) {
+      defects.push(`final ${key} has duplicate attemptId ${attempt.attemptId}`);
+    }
+    ids.add(attempt.attemptId);
+    if (attempt.attemptNumber !== i + 1) {
+      defects.push(`final ${key} attempt order broken: position ${i + 1} has attemptNumber ${attempt.attemptNumber}`);
+    }
+    if (previous && previous.finishedAt > attempt.startedAt) {
+      defects.push(`final ${key} attempts overlap in time (${previous.attemptId} -> ${attempt.attemptId})`);
+    }
+    previous = attempt;
+  }
+
+  const active = final.attempts.filter((a) => !a.superseded);
+  if (active.length !== 1) {
+    defects.push(`final ${key} must have exactly one non-superseded attempt, found ${active.length}`);
+  } else {
+    const last = final.attempts[final.attempts.length - 1];
+    if (active[0] !== last) {
+      defects.push(`final ${key}: the non-superseded attempt must be the last attempt`);
+    }
+    if (active[0].status !== final.status) {
+      defects.push(
+        `final ${key} status ${final.status} disagrees with its active attempt status ${active[0].status}`,
+      );
+    }
+  }
+
+  if (final.status === "green") {
+    const buriedProductFailure = final.attempts.some((a) => a.superseded && a.status === "failed");
+    if (buriedProductFailure) {
+      defects.push(
+        `final ${key} is green but supersedes a product assertion failure; a failed attempt requires triage, not a green retry`,
+      );
+    }
+  }
+
+  return defects;
 }
