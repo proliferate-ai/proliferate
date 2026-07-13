@@ -25,7 +25,7 @@ function isCloudConnectionInfo(value: unknown): value is CloudConnectionInfo {
     && typeof (value as { runtimeGeneration?: unknown }).runtimeGeneration === "number";
 }
 
-// Observes every Cloud connection update, including background refetches, so
+// Observes each Cloud connection update, including background refetches, so
 // a stable product workspace cannot reuse data from a replaced materialization.
 export function useCloudWorkspaceMaterializationCacheBoundary() {
   const queryClient = useQueryClient();

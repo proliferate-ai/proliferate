@@ -35,7 +35,7 @@ import { useAuthStore } from "@/stores/auth/auth-store";
 import { buildAnyHarnessCacheScopeKey } from "@/lib/domain/auth/anyharness-cache-scope";
 import { getProliferateApiBaseUrl } from "@/lib/infra/proliferate-api";
 import { withFreshCloudSandboxGatewayAccessToken } from "@/lib/access/cloud/cloud-sandbox-gateway";
-import { useCloudWorkspaceMaterializationCacheBoundary } from "@/hooks/workspaces/lifecycle/use-cloud-workspace-materialization-cache-boundary";
+import { useCloudWorkspaceMaterializationCacheBoundary } from "@/hooks/workspaces/cache/use-cloud-workspace-materialization-cache-boundary";
 import { TelemetryProvider } from "./TelemetryProvider";
 
 async function resolveWorkspaceConnectionWithCache(
