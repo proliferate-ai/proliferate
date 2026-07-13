@@ -6,7 +6,6 @@ import {
 } from "@proliferate/ui/kit/DropdownMenu";
 import { IconButton } from "@proliferate/ui/primitives/IconButton";
 import {
-  AppShellBrowserIcon,
   AppShellPlusIcon,
   AppShellTerminalIcon,
 } from "@proliferate/ui/icons";
@@ -18,7 +17,6 @@ interface RightPanelNewTabMenuProps {
   isWorkspaceReady: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onCreateTerminal: () => void;
-  onCreateBrowser: () => void;
 }
 
 export function RightPanelNewTabMenu({
@@ -27,7 +25,6 @@ export function RightPanelNewTabMenu({
   isWorkspaceReady,
   onOpenChange,
   onCreateTerminal,
-  onCreateBrowser,
 }: RightPanelNewTabMenuProps) {
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange}>
@@ -49,14 +46,6 @@ export function RightPanelNewTabMenu({
         >
           <AppShellTerminalIcon className="size-4" />
           Terminal
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={!isWorkspaceReady}
-          data-autofocus={defaultKind === "browser" || undefined}
-          onSelect={onCreateBrowser}
-        >
-          <AppShellBrowserIcon className="size-4" />
-          Browser
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

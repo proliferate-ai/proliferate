@@ -104,7 +104,6 @@ describe("workspace ui tab persistence", () => {
     store.setRightPanelForWorkspace("w1", {
       activeEntryKey: "terminal:t1",
       headerOrder: ["tool:git", "terminal:t1"],
-      browserTabsById: {},
     });
     store.setRightPanelWidthForWorkspace("w1", 900);
 

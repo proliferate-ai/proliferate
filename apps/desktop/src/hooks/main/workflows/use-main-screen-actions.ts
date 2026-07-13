@@ -108,7 +108,7 @@ export function useMainScreenActions({
       setRightPanelOpen(false);
     } else {
       const activeEntry = parseRightPanelHeaderEntryKey(rightPanelState.activeEntryKey);
-      if (activeEntry?.kind === "browser" || activeEntry?.kind === "terminal") {
+      if (activeEntry?.kind === "terminal") {
         setRightPanelOpen(true);
         requestRightPanelFocus();
         return;

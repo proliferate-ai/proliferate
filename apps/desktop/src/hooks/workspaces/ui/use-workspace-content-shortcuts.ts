@@ -109,7 +109,7 @@ function resolveContentSearchSurfaceForShortcut(): "chat" | "file" | null {
     return document.querySelector("[data-file-viewer-frame]") ? "file" : null;
   }
 
-  if (focusZone === "browser" || focusZone === "terminal") {
+  if (focusZone === "terminal") {
     return null;
   }
 

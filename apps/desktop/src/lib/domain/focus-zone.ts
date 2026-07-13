@@ -1,11 +1,11 @@
-export type FocusZone = "browser" | "chat" | "right-panel" | "terminal" | "unknown";
+export type FocusZone = "chat" | "right-panel" | "terminal" | "unknown";
 
 const FOCUS_ZONE_ATTR = "data-focus-zone";
 
 /**
  * Derives the current focus zone from the DOM (no store).
  * Components mark their focusable regions with
- * `data-focus-zone="browser" | "chat" | "right-panel" | "terminal"`.
+ * `data-focus-zone="chat" | "right-panel" | "terminal"`.
  */
 export function getFocusZone(): FocusZone {
   const active = document.activeElement;
@@ -16,8 +16,7 @@ export function getFocusZone(): FocusZone {
 
   const value = zone.getAttribute(FOCUS_ZONE_ATTR);
   if (
-    value === "browser"
-    || value === "chat"
+    value === "chat"
     || value === "right-panel"
     || value === "terminal"
   ) return value;
@@ -25,7 +24,7 @@ export function getFocusZone(): FocusZone {
 }
 
 export function isRightPanelFocusZone(zone: FocusZone): boolean {
-  return zone === "right-panel" || zone === "browser" || zone === "terminal";
+  return zone === "right-panel" || zone === "terminal";
 }
 
 export function focusChatInput(): boolean {

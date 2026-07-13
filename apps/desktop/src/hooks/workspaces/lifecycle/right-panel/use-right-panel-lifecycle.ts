@@ -11,7 +11,6 @@ import {
   rightPanelStateEqual,
 } from "@/lib/domain/workspaces/shell/right-panel-view";
 import type { RightPanelWorkspaceState } from "@/lib/domain/workspaces/shell/right-panel-model";
-import { RIGHT_PANEL_BROWSER_TAB_EVENT } from "@/lib/infra/right-panel-new-tab-menu";
 import type { ViewerTarget } from "@/lib/domain/workspaces/viewer/viewer-target";
 
 export interface RightPanelTerminalActivationRequest {
@@ -37,7 +36,6 @@ interface UseRightPanelLifecycleOptions {
   setActiveTerminalForWorkspace: (workspaceId: string, terminalId: string | null) => void;
   createTerminal: (options?: { activate?: boolean }) => Promise<string | null>;
   activateTerminalTool: () => Promise<void>;
-  handleCreateBrowser: () => boolean;
   onTerminalActivationRequestHandled: (request: RightPanelTerminalActivationRequest) => void;
 }
 
@@ -57,7 +55,6 @@ export function useRightPanelLifecycle({
   setActiveTerminalForWorkspace,
   createTerminal,
   activateTerminalTool,
-  handleCreateBrowser,
   onTerminalActivationRequestHandled,
 }: UseRightPanelLifecycleOptions) {
   const handledActivationRequestRef = useRef<string | null>(null);
@@ -145,17 +142,4 @@ export function useRightPanelLifecycle({
     terminalActivationRequest,
     workspaceId,
   ]);
-
-  useEffect(() => {
-    const handleBrowserTabRequest = (event: Event) => {
-      if (handleCreateBrowser()) {
-        event.preventDefault();
-      }
-    };
-
-    window.addEventListener(RIGHT_PANEL_BROWSER_TAB_EVENT, handleBrowserTabRequest);
-    return () => {
-      window.removeEventListener(RIGHT_PANEL_BROWSER_TAB_EVENT, handleBrowserTabRequest);
-    };
-  }, [handleCreateBrowser]);
 }

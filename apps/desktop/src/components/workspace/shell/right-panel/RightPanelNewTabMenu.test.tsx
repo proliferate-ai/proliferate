@@ -8,15 +8,14 @@ describe("RightPanelNewTabMenu", () => {
 
   afterEach(cleanup);
 
-  it("does not advertise a global browser-tab shortcut", () => {
+  it("does not advertise a global new-tab shortcut", () => {
     const rendered = render(
       <RightPanelNewTabMenu
         open={false}
-        defaultKind="browser"
+        defaultKind="terminal"
         isWorkspaceReady
         onOpenChange={vi.fn()}
         onCreateTerminal={vi.fn()}
-        onCreateBrowser={vi.fn()}
       />,
     );
 
@@ -25,11 +24,10 @@ describe("RightPanelNewTabMenu", () => {
     rendered.rerender(
       <RightPanelNewTabMenu
         open={false}
-        defaultKind="browser"
+        defaultKind="terminal"
         isWorkspaceReady={false}
         onOpenChange={vi.fn()}
         onCreateTerminal={vi.fn()}
-        onCreateBrowser={vi.fn()}
       />,
     );
 

@@ -1,21 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
-  RIGHT_PANEL_BROWSER_TAB_LIMIT,
   availableRightPanelTools,
   clampRightPanelWidth,
   parseRightPanelHeaderEntryKey,
   rightPanelViewerHeaderKey,
 } from "./right-panel-model";
 import {
-  canCreateRightPanelBrowserTab,
-  createBrowserTabInRightPanelState,
-  createOrActivateBrowserTabInRightPanelState,
-  removeBrowserTabFromRightPanelState,
   removeTerminalFromRightPanelState,
   reorderHeaderEntryInRightPanelState,
   reorderTerminalInRightPanelState,
   reorderToolInRightPanelState,
-  updateBrowserTabUrlInRightPanelState,
 } from "./right-panel-state";
 import {
   reconcileRightPanelWorkspaceState,
@@ -43,11 +37,8 @@ describe("right panel domain", () => {
     expect(parseRightPanelHeaderEntryKey("tool:settings")).toBeNull();
   });
 
-  it("parses browser entry keys", () => {
-    expect(parseRightPanelHeaderEntryKey("browser:b1")).toEqual({
-      kind: "browser",
-      browserId: "b1",
-    });
+  it("does not parse retired browser entry keys", () => {
+    expect(parseRightPanelHeaderEntryKey("browser:b1")).toBeNull();
   });
 
   it("parses viewer target entry keys", () => {
@@ -147,14 +138,11 @@ describe("right panel domain", () => {
     ]);
   });
 
-  it("reconciles one mixed header order for tools, terminals, and browsers", () => {
+  it("reconciles one mixed header order for tools and terminals", () => {
     const state = reconcileRightPanelWorkspaceState(
       {
-        activeEntryKey: "browser:b1",
-        headerOrder: ["browser:b1", "terminal:t2", "tool:git", "tool:files"],
-        browserTabsById: {
-          b1: { id: "b1", url: null },
-        },
+        activeEntryKey: "terminal:t2",
+        headerOrder: ["terminal:t2", "tool:git", "tool:files"],
       } as never,
       {
         isCloudWorkspaceSelected: false,
@@ -163,13 +151,12 @@ describe("right panel domain", () => {
     );
 
     expect(state.headerOrder).toEqual([
-      "browser:b1",
       "terminal:t2",
       "tool:git",
       "tool:scratch",
       "terminal:t1",
     ]);
-    expect(state.activeEntryKey).toBe("browser:b1");
+    expect(state.activeEntryKey).toBe("terminal:t2");
   });
 
   it("removes a closed terminal and falls back to the nearest sibling", () => {
@@ -189,47 +176,6 @@ describe("right panel domain", () => {
       "tool:scratch",
     ]);
     expect(state.activeEntryKey).toBe("terminal:t1");
-  });
-
-  it("creates, updates, and removes browser tabs atomically", () => {
-    const created = createBrowserTabInRightPanelState(undefined, "b1", false);
-    const updated = updateBrowserTabUrlInRightPanelState(
-      created,
-      "b1",
-      "http://localhost:3000/",
-      false,
-    );
-    const removed = removeBrowserTabFromRightPanelState(updated, "b1", false);
-
-    expect(created.activeEntryKey).toBe("browser:b1");
-    expect(created.headerOrder).toContain("browser:b1");
-    expect(updated.browserTabsById.b1?.url).toBe("http://localhost:3000/");
-    expect(removed.headerOrder).not.toContain("browser:b1");
-    expect(removed.browserTabsById.b1).toBeUndefined();
-  });
-
-  it("enforces the browser tab limit", () => {
-    let state = reconcileRightPanelWorkspaceState(undefined, { isCloudWorkspaceSelected: false });
-    for (let index = 0; index < RIGHT_PANEL_BROWSER_TAB_LIMIT; index += 1) {
-      state = createBrowserTabInRightPanelState(state, `b${index}`, false);
-    }
-
-    expect(canCreateRightPanelBrowserTab(state)).toBe(false);
-    expect(createBrowserTabInRightPanelState(state, "extra", false).headerOrder)
-      .not.toContain("browser:extra");
-  });
-
-  it("activates an existing browser tab when the create shortcut runs at the limit", () => {
-    let state = reconcileRightPanelWorkspaceState(undefined, { isCloudWorkspaceSelected: false });
-    for (let index = 0; index < RIGHT_PANEL_BROWSER_TAB_LIMIT; index += 1) {
-      state = createBrowserTabInRightPanelState(state, `b${index}`, false);
-    }
-    state = { ...state, activeEntryKey: "tool:scratch" };
-
-    const next = createOrActivateBrowserTabInRightPanelState(state, "extra", false);
-
-    expect(next.headerOrder).not.toContain("browser:extra");
-    expect(next.activeEntryKey).toBe(`browser:b${RIGHT_PANEL_BROWSER_TAB_LIMIT - 1}`);
   });
 
   it("reorders terminal ids immediately", () => {

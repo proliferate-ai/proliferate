@@ -27,7 +27,6 @@ import { useMainScreenShortcuts } from "@/hooks/main/lifecycle/use-main-screen-s
 import { useMainScreenActions } from "@/hooks/main/workflows/use-main-screen-actions";
 import { useTransparentChromeEnabled } from "@/hooks/theme/derived/use-transparent-chrome";
 import { useDebugRenderCount } from "@/hooks/ui/debug/use-debug-render-count";
-import { useNativeOverlayOpen } from "@proliferate/ui/overlays/overlay-presence";
 import { useUpdater } from "@/hooks/access/tauri/use-updater";
 import { useRunWorkspaceCommand } from "@/hooks/workspaces/workflows/use-run-workspace-command";
 import { useWorkspaceOpenInWebActions } from "@/hooks/workspaces/workflows/remote-access/use-workspace-open-in-web-actions";
@@ -161,10 +160,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
   const repositorySettingsDisabledReason = canOpenRepositorySettings
     ? null
     : "Repository settings are unavailable.";
-  const nativePortalOverlayOpen = useNativeOverlayOpen();
-  const nativeWorkspaceOverlaysHidden = commandPaletteOpen
-    || publishDialog.open
-    || nativePortalOverlayOpen;
   const handleTerminalActivationRequestHandled = useCallback(
     (request: NonNullable<typeof terminalActivationRequest>) => {
       layout.setTerminalActivationRequest((current) =>
@@ -357,8 +352,6 @@ export function StandardWorkspaceShell({ visible = true }: { visible?: boolean }
                   onStateChange={layout.setRightPanelState}
                   terminalActivationRequest={terminalActivationRequest}
                   focusRequestToken={rightPanelFocusRequestToken}
-                  nativeOverlaysHidden={nativeWorkspaceOverlaysHidden}
-                  onOpenPanel={actions.openRightPanel}
                   onTogglePanel={actions.toggleRightPanel}
                   onTerminalActivationRequestHandled={handleTerminalActivationRequestHandled}
                 />
