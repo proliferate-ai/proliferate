@@ -1536,3 +1536,185 @@
   tags: [ci]
   ci_type: var
   workflow: release-desktop
+
+# ═══════════════════════════════════════════════════════════════════════
+# Tier 3/4 Release Runner (tests/release, specs/developing/testing/README.md)
+# ═══════════════════════════════════════════════════════════════════════
+# Every credential the tests/release runner (legacy src/cli/run.ts and the
+# foundation CLI src/cli/foundation.ts) needs, per
+# tests/release/src/config/env-manifest.ts. Same convention the tier-2
+# billing suite uses for STRIPE_TEST_SECRET_KEY: a dedicated *_TEST_* /
+# RELEASE_E2E_*-prefixed credential, distinct from the production var of a
+# similar name, so a missing value fails closed or reports the affected
+# scenario blocked rather than reusing a live credential. Local dev reads
+# these from the ignored `~/.proliferate-local/dev/release-e2e.env` file
+# (ambient env wins); GitHub Actions supplies the same names as environment
+# secrets/variables. No value is ever printed or committed.
+
+- name: RELEASE_E2E_SERVER_URL
+  secret: false
+  default: ""
+  description: API base URL for the runner's target lane, including the deployment's api path prefix (local ignored env file; CI env var/secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GATEWAY_TEST_KEY
+  secret: true
+  default: ""
+  description: Dedicated LiteLLM gateway virtual key allowlisted to cheap test models; all runner agent chat traffic flows through it (local ignored env file; CI secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GATEWAY_BASE_URL
+  secret: false
+  default: ""
+  description: Public inference base URL of the LiteLLM gateway RELEASE_E2E_GATEWAY_TEST_KEY was issued against; local lane only (local ignored env file; CI secret/var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_E2B_API_KEY
+  secret: true
+  default: ""
+  description: E2B API key for the dedicated release-e2e team; provisions sandbox-lane workspaces and template builds (local ignored env file; CI secret, mapped from the repo E2B_API_KEY secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_E2B_TEAM_ID
+  secret: false
+  default: ""
+  description: E2B team id scoping the sandbox-lane template content-hash cache manifest lookup (local ignored env file; CI var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DURABLE_USER_EMAIL
+  secret: false
+  default: ""
+  description: Login email for the durable seeded e2e-tests account used by existing-user scenarios; optional, the runner self-seeds a per-run user when absent (local ignored env file; CI secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DURABLE_USER_PASSWORD
+  secret: true
+  default: ""
+  description: Password for RELEASE_E2E_DURABLE_USER_EMAIL (local ignored env file; CI secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_STAGING_SESSION_REFRESH_TOKEN
+  secret: true
+  default: ""
+  description: Bootstrap refresh token for the staging durable user's product session; rotates on every use, so the live token then lives in RELEASE_E2E_STAGING_SESSION_STATE (staging GitHub environment secret only)
+  tags: [ci]
+
+- name: RELEASE_E2E_STAGING_SESSION_STATE
+  secret: false
+  default: ""
+  description: Path to the JSON state file holding the current rotating staging session refresh token; defaults under ~/.proliferate-local/dev (local ignored env file; operator override only)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DURABLE_ORG_ID
+  secret: false
+  default: ""
+  description: Organization id owning the durable user's account; local and staging use different orgs (local — seeded per run by the CLI; CI — staging GitHub environment variable)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SLACK_WEBHOOK_URL
+  secret: true
+  default: ""
+  description: Test Slack workspace incoming webhook used by workflow Slack-delivery scenarios (local ignored env file; CI secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SLACK_BOT_TOKEN
+  secret: true
+  default: ""
+  description: Slack bot token for the proliferate-e2e workspace; placeholder pending a Slack-as-api_key catalog definition (local ignored env file; CI secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_INTEGRATION_NAMESPACE
+  secret: false
+  default: "exa"
+  description: Cataloged api_key-kind integration namespace T3-INT-1 authenticates and calls through the gateway (local ignored env file; CI var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_INTEGRATION_API_KEY
+  secret: true
+  default: ""
+  description: Real api_key credential for RELEASE_E2E_INTEGRATION_NAMESPACE used to make one real gateway tool call (local ignored env file; CI secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GITHUB_TEST_REPO
+  secret: false
+  default: ""
+  description: owner/repo of the disposable GitHub repository used for worktree, repo-settings, and checkout scenarios (local ignored env file; CI var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GITHUB_TEST_TOKEN
+  secret: true
+  default: ""
+  description: Token with read/write access to RELEASE_E2E_GITHUB_TEST_REPO for checkout and push steps; falls back to the operator's gh CLI auth locally when unset (local ignored env file; CI secret)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_GITHUB_APP_SEED_REFRESH_TOKEN
+  secret: true
+  default: ""
+  description: Bootstrap GitHub App user-to-server refresh token seeding the target profile's App authorization with no browser; local lane only, rotates on every use (local ignored env file only)
+  tags: [local-dev]
+
+- name: RELEASE_E2E_GITHUB_APP_SEED_STATE
+  secret: false
+  default: ""
+  description: Path to the JSON state file holding the current rotating GitHub App seed refresh token; local lane only, defaults under ~/.proliferate-local/dev (local ignored env file; operator override only)
+  tags: [local-dev]
+
+- name: RELEASE_E2E_LOCAL_RUNTIME_URL
+  secret: false
+  default: ""
+  description: Base URL of the local lane's AnyHarness runtime HTTP API; distinct from RELEASE_E2E_SERVER_URL, defaults to http://127.0.0.1:8542 (local ignored env file; CI var set inline by the workflow)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_RETAINED_MANIFEST_PATH
+  secret: false
+  default: ""
+  description: Path to the retained production N-1 manifest JSON T4-RUNTIME-1 provisions against; sandbox lane only (local checked-in/run-local fixture; CI var/path)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_CANDIDATE_MANIFEST_PATH
+  secret: false
+  default: ""
+  description: Path to the candidate-N content-addressed artifact manifest JSON; sandbox lane only, never rebuilt by the runner (local ignored env file; CI var/path)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_PROVISION
+  secret: false
+  default: ""
+  description: Opt-in switch (set to "1") authorizing self-hosting scenarios to provision and terminate a throwaway EC2 box; needs ambient AWS credentials (local ignored env file; CI workflow input/repo variable)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_URL
+  secret: false
+  default: ""
+  description: Base URL of a standing, already-claimed self-hosted box for read-only/additive scenarios that do not provision one (team infra notes; local ignored env file or CI var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_SSH
+  secret: false
+  default: ""
+  description: SSH destination (user@host) for the standing self-hosted box named by RELEASE_E2E_SELFHOST_URL (team infra notes; local ignored env file or CI var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_SELFHOST_SSH_KEY
+  secret: false
+  default: ""
+  description: Filesystem path to the private key authenticating RELEASE_E2E_SELFHOST_SSH; the path is not secret, the key file it points at is (local ignored env file or CI var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_RELEASE_DESKTOP_VERSION
+  secret: false
+  default: ""
+  description: Desktop version the release under test ships; used by T4-SH-2 to check CDN/manifest/tag agreement, defaults to the repo VERSION file (local ignored env file; CI var set by the release pipeline)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_DESKTOP_CDN_BASE_URL
+  secret: false
+  default: ""
+  description: Base URL of the desktop downloads CDN the Tauri updater feed lives on; defaults to https://downloads.proliferate.com, used only by T4-SH-2 (local ignored env file; CI var)
+  tags: [local-dev, ci]
+
+- name: RELEASE_E2E_LOCAL_DATABASE_URL
+  secret: false
+  default: ""
+  description: Postgres URL for the local lane's profile DB, read by DB-only billing/integration-audit/provisioning seams with no HTTP surface (local ignored env file; CI var set inline by the workflow)
+  tags: [local-dev, ci]
