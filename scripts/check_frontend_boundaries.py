@@ -10,6 +10,7 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DESKTOP_SRC = REPO_ROOT / "apps" / "desktop" / "src"
+PRODUCT_CLIENT_SRC = REPO_ROOT / "apps" / "packages" / "product-client" / "src"
 ALLOWLIST_PATH = REPO_ROOT / "scripts" / "frontend_boundaries_allowlist.txt"
 EXTENSIONS = {".ts", ".tsx"}
 GENERATED_PREFIXES: set[str] = set()
@@ -80,13 +81,19 @@ def should_skip(path: Path) -> bool:
 
 
 def iter_frontend_files() -> list[Path]:
-    return [
-        path
-        for path in sorted(DESKTOP_SRC.rglob("*"))
-        if path.is_file()
-        and path.suffix in EXTENSIONS
-        and not should_skip(path)
-    ]
+    roots = [DESKTOP_SRC, PRODUCT_CLIENT_SRC]
+    files: list[Path] = []
+    for root in roots:
+        if not root.exists():
+            continue
+        files.extend(
+            path
+            for path in sorted(root.rglob("*"))
+            if path.is_file()
+            and path.suffix in EXTENSIONS
+            and not should_skip(path)
+        )
+    return files
 
 
 def relative(path: Path) -> str:
@@ -142,6 +149,8 @@ def check_file(path: Path) -> list[Violation]:
     in_workflows = is_under(rel, "apps/desktop/src/lib/workflows/")
     in_components = is_under(rel, "apps/desktop/src/components/")
     in_stores = is_under(rel, "apps/desktop/src/stores/")
+    in_desktop = is_under(rel, "apps/desktop/src/")
+    in_product_client = is_under(rel, "apps/packages/product-client/src/")
 
     for lineno, raw_line in enumerate(path.read_text().splitlines(), start=1):
         line = strip_line_comment(raw_line)
@@ -162,7 +171,7 @@ def check_file(path: Path) -> list[Violation]:
 
         add_if(
             violations,
-            contains_tauri_api and not is_tauri_access_path(rel),
+            in_desktop and contains_tauri_api and not is_tauri_access_path(rel),
             "TAURI_API_OUTSIDE_ACCESS",
             path,
             lineno,
@@ -170,7 +179,9 @@ def check_file(path: Path) -> list[Violation]:
         )
         add_if(
             violations,
-            contains_anyharness_client and not is_anyharness_client_path(rel),
+            in_desktop
+            and contains_anyharness_client
+            and not is_anyharness_client_path(rel),
             "ANYHARNESS_CLIENT_OUTSIDE_ACCESS",
             path,
             lineno,
@@ -178,7 +189,9 @@ def check_file(path: Path) -> list[Violation]:
         )
         add_if(
             violations,
-            contains_openapi_client_verb and not is_cloud_access_path(rel),
+            in_desktop
+            and contains_openapi_client_verb
+            and not is_cloud_access_path(rel),
             "CLOUD_OPENAPI_CLIENT_OUTSIDE_ACCESS",
             path,
             lineno,
@@ -186,7 +199,8 @@ def check_file(path: Path) -> list[Violation]:
         )
         add_if(
             violations,
-            (contains_use_query_client or contains_query_cache_call)
+            in_desktop
+            and (contains_use_query_client or contains_query_cache_call)
             and not is_query_cache_owner_path(rel),
             "QUERY_CLIENT_OUTSIDE_CACHE_OWNER",
             path,
@@ -195,12 +209,29 @@ def check_file(path: Path) -> list[Violation]:
         )
         add_if(
             violations,
-            contains_legacy_access,
+            in_desktop and contains_legacy_access,
             "LEGACY_ACCESS_IMPORT",
             path,
             lineno,
             "legacy cloud/AnyHarness/Tauri access paths are not allowed",
         )
+
+        if in_product_client:
+            add_if(
+                violations,
+                contains_tauri_api
+                or "@tauri-apps/" in line
+                or "apps/desktop/" in line
+                or "apps/web/" in line
+                or "@/" in line,
+                "PRODUCT_CLIENT_FORBIDDEN_IMPORT",
+                path,
+                lineno,
+                (
+                    "product-client must not import either host (apps/desktop, "
+                    "apps/web), Tauri, or Desktop-relative @/ aliases"
+                ),
+            )
 
         if in_domain:
             add_if(

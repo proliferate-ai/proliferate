@@ -2,6 +2,7 @@
 @source "../../../ui/src";
 @source "../../../product-ui/src";
 @source "../../../product-surfaces/src";
+@source "../../../product-client/src";
 @import "../theme.css";
 
 /* -- Semantic UI type-scale tokens (shared by web + desktop; product.css

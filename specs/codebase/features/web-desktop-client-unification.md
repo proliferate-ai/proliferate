@@ -1,1035 +1,559 @@
 # Web/Desktop Client Unification
 
-Status: authoritative contract for the shared Desktop/Web connected DOM
-product (`@proliferate/product-client`), its two thin hosts, the product
-scope/authority isolation model, the capability policy, and the governance
-rules under which the migration lands.
+Status: authoritative for the Web/Desktop client unification migration.
 
-This spec is the settled contract promoted from the decision-complete
-migration plan. On any conflict, this file wins over
-[`../../tbd/web-desktop-unification-migration.md`](../../tbd/web-desktop-unification-migration.md)
-(non-authoritative rollout history/execution detail) and
-[`../../tbd/web-desktop-unification-intake-ledger.md`](../../tbd/web-desktop-unification-intake-ledger.md)
-(historical intake snapshot). Binding execution state — chain state, intake
-snapshots, the freeze ledger, and the external-configuration item schema —
-lives in
-[`../../developing/deploying/web-desktop-unification-rollout.md`](../../developing/deploying/web-desktop-unification-rollout.md),
-never under `specs/tbd/`.
+This spec defines the product boundary, host boundary, migration sequence, and
+acceptance criteria. It intentionally does not redefine authentication,
+billing, chat, workspace, workflow, or other feature behavior; the focused
+feature specs remain authoritative for those behaviors.
 
-This contract does not redefine feature behavior. Auth, onboarding, settings,
-chat, transcript, workspace, billing, workflow, and other product behavior
-remain owned by their focused feature and primitive specs. This file decides
-which layer owns cross-client behavior, what the host boundary is, and what
-must be true at each migration checkpoint.
+Scope: `apps/desktop`, `apps/web`, and the shared DOM packages under
+`apps/packages/**`. Mobile is outside this migration and must remain DOM-free.
 
-Scope: the DOM product in `apps/desktop`, `apps/web`, and `apps/packages/**`,
-plus the narrow authority/lifecycle corrections in `anyharness/sdk-react` and
-`cloud/sdk-react`. Mobile product behavior is outside this contract and must
-remain green while shared SDK providers are corrected.
+## Goal
 
-## 1. Outcome
-
-Desktop and Web render one connected product implementation:
+Desktop and Web will mount the same connected product implementation:
 `@proliferate/product-client`.
 
-Desktop is the visual, behavioral, and state-management source of truth. The
-old Web product implementation is not a second source to reconcile: it is
-deleted in the Web cutover landing and replaced by the Desktop-derived product
-client in the same mainline landing.
+Desktop is the product baseline. We preserve its UI, behavior, hooks, stores,
+and Cloud/AnyHarness behavior, move that product into a shared package, and
+make Desktop and Web thin hosts around it. The old Web product is deleted
+rather than reconciled with Desktop.
 
 ```text
-Desktop native host ----\
-                         +--> one ProductClient --> Cloud SDK React
-Web browser host --------/                      \--> AnyHarness SDK React
+Desktop host ----\
+                  +--> ProductHostProvider --> ProductClient --> Cloud API
+Web host --------/                                      |
+                                                        +--> Gateway
+                                                        +--> AnyHarness
+
+Desktop host --> DesktopBridge --> local AnyHarness / native operating system
+Web host -----> desktop: null
 ```
 
-At completion:
+At the end:
 
-- the same components, pages, hooks, stores, product workflows, Cloud SDK
-  wiring, and AnyHarness SDK wiring implement the product on Desktop and Web;
-- `apps/desktop` is a thin native bootstrap and transport host;
-- `apps/web` is a thin browser bootstrap and transport host;
-- product differences are caused by real capabilities, not by two product
-  implementations drifting apart;
-- Desktop keeps its current experience and native capabilities;
-- Web gets that experience for managed-cloud work, without pretending it can
-  access a user's local machine;
-- the old Web chat client, polling loop, stores, pages, and controllers no
-  longer exist;
-- `@proliferate/product-surfaces` is absorbed by and replaced with
-  `product-client`; there are not two connected shared-product packages.
+- Desktop and Web use the same pages, routes, components, hooks, stores,
+  product workflows, Cloud SDK wiring, and AnyHarness SDK wiring.
+- Desktop keeps local workspaces, local AnyHarness, SSH, and native behavior.
+- Web exposes the same product for managed-cloud work and never pretends it can
+  access the user's local machine.
+- Host differences are passed through one typed `ProductHost`.
+- Raw Tauri and browser-specific authentication code stay in the apps.
+- The old Web pages, chat client, polling, stores, and controllers are gone.
+- `@proliferate/product-surfaces` remains a separate package. ProductClient may
+  consume it; absorbing it is an optional later cleanup.
 
-Hosts answer "how do I authenticate here?", "can this device access a local
-runtime?", and "how do I open this link?" They do not reimplement product
-behavior.
+## What ProductClient owns
 
-## 2. Closed decisions
+`@proliferate/product-client` owns the connected product:
 
-1. **Desktop is the baseline.** Preserve its UI, interaction model, stores,
-   warm workspace shell, and product workflows. Extraction and host cutover,
-   not redesign.
-2. **The package is `@proliferate/product-client`.** It absorbs
-   `product-surfaces`; neither both packages nor the old name survives.
-3. **The connected product is shared.** The package owns React pages, product
-   routes, connected hooks, scoped stores, lifecycle orchestration, Cloud SDK
-   React wiring, and AnyHarness SDK React wiring.
-4. **One composite host contract.** One typed host object with nested
-   capability groups; no separate auth-host/runtime-host provider trees.
-5. **Product routes are shared.** Each app creates its browser router and owns
-   raw transport callback entrypoints; `ProductClient` owns the authenticated
-   product route tree and the ordinary login/join product screens.
-6. **Desktop owns raw Tauri access.** `product-client` never imports Tauri or
-   exposes a generic `invoke`. Shared product code calls a typed optional
-   Desktop bridge.
-7. **Web commands managed-cloud runtimes only.** It never discovers or
-   directly connects to a local sidecar, SSH target, or Desktop-exposed local
-   runtime. Server-visible local metadata may be shown read-only with an
-   "Open in Desktop" action.
-8. **Cloud AnyHarness behavior is identical.** Both hosts use the same shared
-   gateway resolver and the same AnyHarness React provider/hooks for managed
-   cloud workspaces.
-9. **Authentication transport remains host-owned.** Product auth state and UI
-   are normalized; cookies/CSRF/PKCE on Web and native vault/protocol handling
-   on Desktop are not normalized away.
-10. **No old Web product compatibility requirement.** Old Web presentation,
-    stores, controllers, and ordinary product aliases are deleted. A bounded
-    one-release redirect set exists only to order external/deployed URL
-    producers safely; it is not a second product or a feature flag.
-11. **Self-hosted Desktop remains supported.** Self-hosted Web is a named
-    follow-up: the contract must allow one, but it is not an acceptance
-    criterion for this cutover.
-12. **Mobile is not involved.** Mobile continues to consume only its allowed
-    SDKs, `product-domain`, and the native design layer, and stays DOM-free.
-13. **The embedded Tauri browser is not preserved.** A separately reviewable
-    removal lands before the mechanical move and deletes the live workspace
-    browser panel, tab/actions, raw webview access, and their callers. It is
-    not bridged or moved into product-client.
-14. **The cache-scope correction lands first.** PR 0a (commit `bdd11aa5a`)
-    landed the SDK/query-key foundation; PR 0b adds same-principal session
-    authority generation plus credential-mutation ordering; PR 0c removes the
-    credential-keyed global AnyHarness client map and adds target
-    generation/client/stream lifecycle ownership. Product-client copies
-    neither global cache pattern into a shared package.
-15. **Host seams are separated from file movement.** Desktop adopts the host,
-    bridge, and scoped-provider model while source paths remain stable (PR 1);
-    only then does a freeze-gated PR mechanically move product source (PR 2).
-16. **Each host marks its surface before rendering.** Both hosts set
-    `data-proliferate-client="desktop|web"`. Shared Tailwind variants may use
-    that marker for presentation; capability logic remains structural and is
-    never implemented as CSS hiding.
-17. **AnyHarness clients are scope-owned.** The SDK React module-global client
-    map keyed by raw bearer token is removed before source movement. Product
-    authority owns a bounded client registry; target-generation changes use a
-    credential-free connection identity and a generic transition boundary for
-    Cloud, local, and SSH runtimes.
+- Product pages and the authenticated route tree.
+- Components and product UI.
+- Hooks, stores, providers, and product lifecycles.
+- Chat, transcript, workspaces, sessions, files, billing, integrations, and
+  workflows.
+- Shared authentication screens and the authentication gate.
+- Cloud API queries and mutations.
+- Managed-cloud gateway and AnyHarness behavior.
+- Shared product telemetry events.
 
-## 3. Package ownership and build contract
+The host apps own only what genuinely depends on the environment:
 
-### 3.1 Ownership boundary
+- Desktop bootstrap, raw Tauri access, native auth transport, operating-system
+  deep links, native process startup, and native telemetry installation.
+- Web bootstrap, browser auth/cookies/PKCE, HTTPS callback entrypoints,
+  browser URLs, and browser telemetry installation.
+
+The host is not a second product service layer. It must not implement its own
+workspace resolver, billing client, chat controller, gateway flow, or product
+store.
+
+## Target package and app shape
 
 ```text
-apps/packages/product-client/   # the shared connected product
+apps/packages/product-client/
   src/
-    ProductClient.tsx              # lightweight auth/product gate (from PR 2)
-    AuthenticatedProductClient.tsx # route-lazy connected product (from PR 2)
-    app/ pages/ components/ hooks/ stores/ providers/ config/ copy/ assets/
-    lib/{domain,workflows,infra}/
-    host/                          # product-host types + ProductHostProvider
+    ProductClient.tsx
+    app/
+    pages/
+    components/
+    hooks/
+    stores/
+    providers/
+    config/
+    copy/
+    assets/
+    lib/
+      domain/
+      workflows/
+      infra/
+    host/
+      product-host.ts
+      desktop-bridge.ts
+      ProductHostProvider.tsx
 
-apps/desktop/src/                # thin native host: bootstrap, native auth
-                                 # transport, telemetry install, raw Tauri
-                                 # access, native lifecycle, host CSS
-apps/web/src/                    # thin browser host: bootstrap, env config,
-                                 # browser auth/PKCE transport, telemetry
-                                 # install, host CSS
+apps/packages/product-surfaces/
+  src/                         # remains a separate connected-surfaces package
+
+apps/desktop/src/
+  main.tsx
+  desktop-host.ts
+  index.css
+  native/                      # raw Tauri/native implementation
+
+apps/web/src/
+  main.tsx
+  web-host.ts
+  index.css
+  browser/                     # browser auth/callback implementation
 ```
 
-This is an ownership map, not a rename mandate: the mechanical move preserves
-Desktop's existing domain/responsibility taxonomy where it is already valid.
+The exact internal ProductClient folders follow the valid existing Desktop
+organization. The move is an ownership extraction, not a redesign or a reason
+to reorganize unrelated code.
 
-### 3.2 Dependency direction
+## Package, build, and import boundary
 
-```text
-apps/desktop ----\
-                  +--> product-client --> product-ui --> ui --> design/dom
-apps/web --------/             |
-                               +--> product-domain
-                               +--> cloud-sdk / cloud-sdk-react
-                               +--> anyharness/sdk / anyharness/sdk-react
+ProductClient is a normal compiled workspace package.
 
-apps/mobile --> product-domain + design/react-native + SDKs
-```
-
-- `product-client` imports neither app, no Tauri package or Desktop raw-access
-  file, and no browser auth-cookie, PKCE, or vendor telemetry implementation.
-- Apps import only public product-client entrypoints, never its internal
-  stores and hooks.
-- `product-ui` remains props-in/callbacks-out presentation; `product-domain`
-  remains React-free and Mobile-safe; `ui` and `design` stay separate lower
-  layers.
-- No app-local copy of a product-client store or controller exists after its
-  cutover; imports remain direct with no convenience barrel files.
-
-### 3.3 Import-path rule
-
-Package-private product-client imports use Node package imports:
-
-```json
-{ "imports": { "#product/*": "./src/*" } }
-```
-
-- Moved product-client internals rewrite `@/...` specifiers to `#product/...`
-  with an AST module-specifier codemod (never blind text replacement — the
-  repo contains unrelated `@@/` regex text);
-- retained Desktop host files keep `@/...`;
-- hosts import only public `@proliferate/product-client/<entrypoint>` exports;
-- no app-level Vite alias or TypeScript `paths` for `#product`; `#/*` is an
-  invalid Node package-import name and is not used;
-- TypeScript, Vite, and Vitest all prove the mapping in PR 1, before the
-  mechanical move;
-- post-move scans reject `@/` inside product-client, `#product/` in either
-  app, and unresolved `#product/` text in final bundles.
-
-### 3.4 Package build contract and staged export map
-
-`product-client` is private application source, not a published UI library. It
-is a source-consumed workspace package: both host Vite builds compile the same
-source; the package `build`/`typecheck` typechecks the source; Vitest runs
-against the source. React, React DOM, React Router, and React Query are peer
-dependencies (plus dev dependencies for package tests) resolved and deduped to
-each host's single workspace version.
-
-**The export map is staged.** This is binding scope resolution:
-
-- **PR 1** creates the package skeleton exporting **host, provider, scope, and
-  package-resolution primitives only** — `ProductHost` types,
-  `ProductHostProvider`, `ProductScopeBoundary`, `ProductAuthorityHandle`
-  types, the entry-intent coordinator contract, and the proven `#product/*`
-  mapping. There is **no `ProductClient` export in PR 1**.
-- The candidate root split — a lightweight `ProductClient` gate plus a lazy
-  `AuthenticatedProductClient` — is built **in place at stable Desktop-owned
-  paths** during PR 1, consuming those primitives. The §8 performance fixture
-  measures this in-place candidate.
-- PR 1's `desktop: null` proof tests **host/provider/capability composition**,
-  not a package-owned product mount.
-- **PR 2** mechanically moves the proven candidate root into the package and
-  only then adds the real `ProductClient`/`AuthenticatedProductClient`
+- It builds TypeScript into `dist`.
+- Desktop and Web consume its `dist` export-map subpaths.
+- Its package manifest owns its dependencies, peer dependencies, scripts, and
   exports.
+- React, React DOM, React Router, and React Query resolve to the same workspace
+  runtime instances as the hosts; they are not bundled twice.
+- Desktop and Web build, typecheck, and test ProductClient before bundling.
+- CI and frontend structure checks scan the package root.
+- ProductClient may import `product-surfaces`, `product-ui`, `product-domain`,
+  `ui`, `design`, and the Cloud/AnyHarness SDKs in the allowed direction.
+- ProductClient never imports `apps/desktop`, `apps/web`, `@tauri-apps/**`, raw
+  Tauri `invoke`, or a Desktop-relative `@/` path.
+- Hosts import public `@proliferate/product-client/<entrypoint>` subpaths and do
+  not reach into the package's internal hooks or stores.
 
-The mechanical asset move is part of PR 2: product SVG/PNG/JPEG/MP3 assets and
-`assets.d.ts` move under product-client; genuinely native window/application
-resources stay in Desktop; Vite `?raw` behavior is preserved for file icons
-and the bundled agent catalog; `provider-registry.generated.json` moves to
-product-client with `scripts/vendor-provider-registry.mjs` generating at the
-new owning path; `catalogs/agents/catalog.json` stays the repo-level generated
-source of truth and is imported, never copied; a build test bundles
-representative `?raw`, image, audio, JSON, and repo-level catalog imports in
-both Desktop and Web.
+When the Desktop source moves, internal package imports use one package-local
+mapping, `#product/*`, configured in ProductClient's package, TypeScript,
+Vite, and Vitest setup. Existing Desktop `@/...` imports are mechanically
+rewritten only for files that move. Retained Desktop host files keep their
+Desktop-local imports. Direct imports remain the rule; this does not create a
+barrel.
 
-## 4. The one host contract
+Assets and generated inputs move with their owner. Images, fonts, audio, raw
+SVG/text imports, JSON catalogs, and generated registry imports must resolve
+from ProductClient after the move. Native application resources remain in
+Desktop. Both production host builds must prove that representative shared
+assets are emitted and loadable.
 
-The host is one value in one provider (an authority sketch, not mandated
-property names):
+## The one host contract
+
+Desktop and Web each construct one immutable `ProductHost` value and pass it
+to one `ProductHostProvider`:
 
 ```ts
 interface ProductHost {
   surface: "desktop" | "web";
   deployment: ProductDeploymentHost;
   auth: ProductAuthHost;
-  cloud: ProductCloudHost;
-  persistence: ProductPersistenceHost;
-  links: ProductLinksHost;
-  telemetry: ProductTelemetryHost;
+  cloud: { client: ProliferateCloudClient | null };
+  storage: ProductStorage;
+  links: ProductLinks;
+  clipboard: ProductClipboard;
+  telemetry: ProductTelemetry;
   desktop: DesktopBridge | null;
 }
 ```
 
-One `ProductHostProvider`; nested groups document authority without many React
-contexts; the object is not a service locator. `surface` is descriptive —
-product behavior checks a real capability (`desktop !== null`, a server
-capability, or a workspace capability), not `surface === "web"` scattered
-through components. The host supplies no page/settings/chat/composer/workspace
-render slots; the only UI wholly outside product-client is genuine host chrome
-or transport entry UI (native window controls, a browser OAuth callback
-spinner).
+There is not a provider tree for each capability. Product code normally checks
+the capability it needs, especially `host.desktop !== null`, rather than
+scattering `surface === "desktop"` checks through the product.
 
-### 4.1 Deployment authority
+The host value is a reactive snapshot. When authentication, deployment, or
+the Cloud client changes, the host app provides a new `ProductHost` object so
+ordinary React context consumers update. `ProductHostProvider` preserves the
+identity it is given; it does not clone a host or hide host mutations.
 
-Supplies the normalized API origin/configuration, the current deployment/cache
-key, deployment-change observation, Desktop's optional connect/switch/reset
-operation, and Web's fixed configured deployment. It does not hardcode server
-capabilities — billing, SSO, gateway, hosted-mode, and other capabilities come
-from server truth. No persistent deployment-UUID protocol exists; the
-credential-free deployment key derives from the normalized API configuration.
+## Deployment, Cloud, and AnyHarness
 
-### 4.2 Auth authority
+Both hosts use the same Cloud SDK and managed-cloud product behavior.
+
+- Hosted Web receives one configured API base URL.
+- Desktop may switch to another API URL for self-hosting and reset to its
+  default deployment.
+- Each host supplies the authenticated Cloud client appropriate to its auth
+  transport.
+- ProductClient owns Cloud queries, mutations, billing, workspace resolution,
+  gateway lookup, and managed-cloud connection behavior.
+- Both hosts use the same shared AnyHarness React providers and hooks for cloud
+  workspaces.
+
+API deployment selection is separate from local AnyHarness. Desktop must
+always be able to discover its local runtime, list local workspaces and
+sessions, create local work, and resume it. Desktop obtains the local runtime
+connection through `DesktopBridge`; ProductClient then uses the normal
+AnyHarness SDK. Web passes `desktop: null`, performs no local discovery, and
+only uses runtimes available through the Cloud API and gateway.
+
+This migration preserves the existing SDK cache and runtime lifecycle
+behavior. A separate cache, authentication, client-lifecycle, or stream
+hardening program is not a prerequisite for moving the product. If a concrete
+existing lifecycle bug blocks the port, fix that bug narrowly and verify it;
+do not turn the migration into a separate hardening program.
+
+## Authentication
+
+The visible authentication experience is shared. ProductClient owns the auth
+gate, method selection, password forms, provider/SSO buttons, callback status
+presentation, and transition into the product.
+
+The hosts expose the same product-level operations: restore a session, start
+a login, finish a host-decoded callback, cancel an in-flight provider login,
+and log out. Only their transport implementations differ.
+
+```text
+Shared login screen
+  -> auth.startLogin(...)
+  -> host performs the transport-specific operation
+  -> host publishes a new ProductHost/AuthState snapshot
+  -> ProductClient renders the authenticated product
+```
+
+For Desktop provider login:
+
+```text
+ProductClient starts login
+  -> Desktop opens the system browser
+  -> provider redirects to proliferate://auth/callback
+  -> Tauri receives and decodes the callback
+  -> Desktop calls auth.finishLogin(...)
+```
+
+For Web provider login:
+
+```text
+ProductClient starts login
+  -> Web redirects the browser
+  -> provider redirects to the Web HTTPS callback
+  -> the thin Web callback entry decodes it
+  -> Web calls auth.finishLogin(...)
+```
+
+Raw callback URLs, cookies, PKCE values, native vault values, and credential
+storage remain host-owned. ProductClient receives normalized auth state and
+operations, not those transport details. Desktop and Web may render the same
+shared callback status UI even though their entry mechanisms differ.
+
+## Storage, links, clipboard, and telemetry
+
+### Storage
+
+`ProductStorage` provides async `getItem`, `setItem`, and `removeItem` for
+small, non-secret device-local product state such as appearance, drafts, and
+recent selections.
+
+The migration does not require preserving old Web storage or migrating
+existing preference values between storage backends. Login credentials,
+provider keys, SSH credentials, and PKCE secrets never use this interface.
+Desktop-native persisted state such as SSH profiles or updater state remains
+inside its Desktop owner.
+
+### Links and routing
+
+Internal product routing is shared and owned by ProductClient. Host-specific
+link transport stays outside it:
+
+- Web opens external links through the browser; Desktop asks the native shell
+  to open the system browser.
+- Web receives HTTPS locations; Desktop receives operating-system
+  `proliferate://` deep links.
+- Each host decodes raw input into a normalized `ProductEntry` and exposes
+  initial and live entries through `ProductLinks`.
+- Web may provide an `openInDesktop` action for local-only work.
+
+The migration requires reliable initial-plus-live delivery and unsubscribe
+cleanup. Persistent cross-restart delivery is not a migration prerequisite;
+add it only if a focused product flow actually requires it.
+
+The thin Web host retains the real callback entrypoints required by its auth
+and billing integrations. Old ordinary Web product URLs and presentation do
+not have a backwards-compatibility requirement. OAuth, Stripe, invitation,
+and other external URL producers are updated and smoke-tested as part of the
+Web cutover.
+
+### Clipboard
+
+ProductClient calls one `writeText` operation. Web implements it with the
+browser clipboard; Desktop implements it through its native/Tauri access.
+
+### Telemetry
+
+ProductClient emits the same product events and errors on both surfaces. Each
+host constructs the telemetry implementation because release/runtime identity
+and vendor initialization differ. ProductClient imports no Sentry, PostHog,
+or Tauri telemetry SDK directly. Existing privacy, replay-masking, and payload
+rules remain in force.
+
+## Desktop-only behavior
+
+Raw native startup remains app-owned: Tauri initialization, native window
+setup, sidecar/process startup, operating-system deep-link registration, and
+vendor installation run from the Desktop host.
+
+Product-aware Desktop behavior may live in ProductClient behind the optional
+bridge. It mounts only when a Desktop bridge exists:
+
+```tsx
+function ProductLifecycleRoot() {
+  const host = useProductHost();
+
+  return (
+    <>
+      <SharedProductLifecycles />
+      {host.desktop ? (
+        <DesktopProductLifecycles desktop={host.desktop} />
+      ) : null}
+    </>
+  );
+}
+```
+
+Because Web passes `desktop: null`, Desktop-only hooks, effects, queries, and
+listeners never mount there. Presentation-only differences may use the surface
+marker; CSS hiding is not a substitute for not mounting native behavior.
+
+Desktop-only product lifecycles include local runtime UI, local automation,
+worker enrollment tied to product auth, updater watching/presentation, native
+menu command handling, local-agent credential synchronization, SSH/tunnel UI,
+and native support/diagnostic collection.
+
+## DesktopBridge
+
+`DesktopBridge` is a typed set of product-level native capabilities. It is
+implemented in `apps/desktop` and consumed by ProductClient. It does not expose
+raw Tauri command names, generic `invoke`, generic process execution, or a
+general filesystem API.
+
+The bridge groups are:
+
+| Group | Why ProductClient needs it |
+| --- | --- |
+| `runtime` | Discover or restart the local AnyHarness runtime and return its base URL/token connection. |
+| `files` | Pick a local directory, inspect basic path availability, list/open editor/finder/terminal/copy targets, reveal paths, and open terminals. |
+| `localCredentials` | Read and update local agent/provider credentials; never Proliferate login credentials. |
+| `nativeUi` | Render native context menus, receive native commands, set running-agent quit protection, update Dock attention, and control WebView zoom. |
+| `updater` | Report updater support/version, check, download with progress, install, and relaunch while preserving the opaque native update handle. |
+| `worker` | Read the install id and ensure or stop the Desktop worker process. |
+| `ssh` | Persist SSH profiles and establish a tunnel that yields a normal AnyHarness connection. |
+| `scratch` | Preserve current local file-backed workspace scratch reads and writes. |
+| `diagnostics` | Write narrow renderer events, collect support bundles, save reports, and stage/read/delete support attachments. |
+
+Repo inspection, git, worktrees, workspaces, sessions, chat, and transcript are
+not bridge operations; they continue through AnyHarness. Product auth,
+deployment selection, links, storage, clipboard, telemetry, and Cloud behavior
+use their normal ProductHost groups rather than being duplicated in the
+Desktop bridge.
+
+Bridge methods are demand-driven. Add one only when an actual migrated
+consumer needs it, and preserve the concrete Desktop behavior and return shape
+at that boundary. The embedded browser is removed, not bridged.
+
+## Styling and assets
+
+Web renders the Desktop product visual system. The shared CSS boundary is:
+
+```text
+apps/packages/design/src/css/
+  dom.css       Tailwind setup, reset, tokens, and package source scanning
+  product.css   shared product theme and global product styling
+  desktop.css   genuine Desktop/native presentation overrides only
+
+apps/desktop/src/index.css
+  imports product.css, desktop.css, and required third-party CSS
+
+apps/web/src/index.css
+  imports product.css and required third-party CSS
+```
+
+The Tailwind entry explicitly scans every DOM package that emits classes:
+
+```css
+@source "../../../ui/src";
+@source "../../../product-ui/src";
+@source "../../../product-surfaces/src";
+@source "../../../product-client/src";
+```
+
+The ProductClient source line is required before JSX moves. Without it, both
+apps can compile while Tailwind silently omits classes from the moved product.
+
+Each host sets its surface before React renders:
 
 ```ts
-type ProductAuthStatus =
-  | "bootstrapping" | "anonymous" | "authenticated" | "unreachable";
-
-type ProductAuthorityIdentity = Readonly<{
-  deploymentKey: string;
-  actor: { kind: "anonymous" } | { kind: "user"; id: string };
-  generation: number;
-}>;
+document.documentElement.dataset.proliferateClient = "desktop";
 ```
 
-`ProductAuthHost` exposes normalized status, principal, `authGeneration`,
-`bindAuthority(expected)` returning a `ProductAuthorityHandle` (or `null` on
-mismatch), `startSignIn`, and CAS `signOut(expected)`. The handle provides one
-atomic fresh access-token + `credentialRevision` snapshot, atomic
-register-and-replay `observeCredentialRevision`, and
-`invalidateIfCurrent({credentialRevision, reason})`.
+or:
 
-Binding constraints:
-
-- product code never reads cookies, PKCE state, native vault entries, or raw
-  refresh credentials; host bootstrap owns restoration and publishes `status`;
-- `unreachable` is the normalized state for a transiently unavailable
-  authenticated deployment: it retains the resolved principal and generation
-  underneath and never participates in cache identity;
-- long-lived Cloud/AnyHarness operations request one atomic token + credential
-  revision snapshot through the bound handle — never separate reads or a
-  token captured at connection creation;
-- `credentialRevision` is a monotonic, non-secret transport refresh signal
-  that advances when the access token is replaced without replacing the
-  authority; it is never scope/query-key identity;
-- a late operation from authority N can neither obtain N+1's token nor let an
-  N-era rejection invalidate N+1, even for the same principal; a request also
-  passes the `credentialRevision` it actually used, so a late 401 from token A
-  cannot invalidate newer token B within the same authority;
-- **one host-owned auth coordinator** serializes and compare-and-swaps every
-  credential-changing bootstrap, sign-in, callback commit, refresh
-  replacement, 401 invalidation, and sign-out against the applicable
-  authority, credential revision, or sign-in transaction id. It is the only
-  path to stored-credential writes/clears; raw Cloud middleware and stream
-  code never mutate storage behind the auth store;
-- `startSignIn` creates a credential-free transaction id bound to the expected
-  deployment and starting authority; callback credential commit succeeds only
-  while that transaction is current;
-- `signOut(expected)` CASes against the expected authority; a late
-  generation-N clear cannot erase generation N+1. Web additionally serializes
-  cookie-changing responses so a late logout `Set-Cookie` cannot clear a newer
-  login;
-- only a commit that replaces session authority advances `authGeneration`;
-  ordinary refresh keeps the generation and advances only
-  `credentialRevision`; stale callback/logout/refresh results are discarded
-  without storage or state mutation;
-- Desktop's semantic deployment connect/switch/reset lives in the deployment
-  group; Web omits those methods; the Desktop bridge does not own a duplicate
-  deployment API.
-
-### 4.3 Cloud transport authority
-
-The host owns credential transport and exposes exactly one scoped Cloud SDK
-client factory (`createScopedClient({deployment, authority})` returning a
-disposable client handle). The product client owns Cloud queries, mutations,
-workspace classification, gateway lookup, managed-cloud connection resolution,
-product orchestration, and query keys. A host must not own a parallel
-managed-cloud workspace resolver or a module-global Cloud client.
-`ProductScopeBoundary` creates the client for the current authority and
-disposes it on scope teardown; a client cannot outlive its ProductScope.
-
-Organization identity is operation input, not mutable transport ambient
-state: every owner-sensitive query/mutation captures one immutable
-`CloudOwnerContext` (`personal` or `organization` + id) before creating its
-query key and request, and passes that same value explicitly to header
-construction. Middleware never consults a live organization getter; an
-organization switch cannot turn an A-keyed operation into a request against B.
-
-The Cloud SDK React provider never publishes its resolved client into the SDK
-process-global singleton, and `useCloudClient()` fails closed when no provider
-is mounted (both removed in PR 1). A legacy global API may remain for
-out-of-scope non-React consumers during the migration, but ProductClient,
-Desktop, and Web neither populate nor read it for authenticated product work.
-
-### 4.4 Persistence authority
-
-Typed read/write/remove for non-secret, device-local product state only. The
-key set is typed and owned by product-client; arbitrary string access is not
-part of the interface. Web uses browser persistence; Desktop's typed adapter
-dispatches each key to its existing owner (Tauri Store or WebView
-`localStorage`). No key silently moves between backends or is renamed: any
-backend/key migration requires an explicit read-old/write-new transition,
-idempotency and rollback tests, and a declared old-value retirement point. The
-adapter stores no bearer tokens, refresh credentials, PKCE verifiers, native
-credential material, or provider API keys.
-
-### 4.5 Link/navigation authority and entry intents
-
-Internal product navigation is shared React Router behavior. The links group
-owns only host-differing actions: open an external URL, semantic
-open-in-Desktop handoff, shareable-link generation for the current deployment,
-system-browser open from Desktop, and host-decoded inbound deep links.
-
-Inbound transport state crosses the boundary as a normalized, validated,
-credential-free, one-shot `ProductEntryIntent` (SSO login intent, organization
-invitation, workspace/workflow location, completed billing return). Rules:
-
-- host callback/deep-link code validates and persists the intent into a
-  durable FIFO of unacknowledged intents before publishing; a later arrival
-  never overwrites an earlier one;
-- `observePending` is one atomic replaying subscription: an intent published
-  during subscription is delivered by replay or live event, never dropped
-  between restore and subscribe; delivery is at-least-once;
-- exactly one ProductEntryIntent coordinator lives above replaceable
-  ProductScopes; it is the sole consumer, processes serially, and deduplicates
-  by `intentId`; the owning workflow accepts idempotently by `intentId`
-  before the coordinator acknowledges and removes the entry; unacknowledged
-  work replays after scope replacement or process restart;
-- Desktop ingress registers the live URL listener before draining the initial
-  `getCurrent()` value, persists before notifying, and deduplicates overlap;
-- every intent carries a normalized credential-free target deployment key; the
-  coordinator dispatches only while that deployment is current; a
-  foreign-deployment head item never starves later valid work — hosted Web
-  acknowledges it as `handed-off` after a successful Desktop handoff or moves
-  it to durable, user-recoverable quarantine;
-- raw callback URLs, OAuth state, credentials, and arbitrary navigation
-  strings never enter the product intent.
-
-### 4.6 Telemetry authority
-
-Product-client emits typed product events and errors. The host installs
-Sentry/PostHog/native diagnostics, supplies release/runtime identity, and owns
-vendor lifecycle; product state has no direct vendor SDK access. The telemetry
-group supplies one narrow route-instrumentation component compatible with
-React Router's `<Routes>` contract — the sole infrastructure render adapter —
-so hosts wrap shared routes with their Sentry router instrumentation without
-importing Sentry into product-client. Existing replay-masking and payload
-restrictions continue to apply; moving a component authorizes no new payload
-fields.
-
-### 4.7 Desktop bridge
-
-`desktop` is `null` or one typed bridge grouping actual native capabilities:
-local runtime readiness/connection; repository/folder selection and worktree
-actions; open/reveal path, editor, terminal, shell; local agent/provider
-credential operations (product-user authentication credentials remain
-exclusively `ProductAuthHost`-owned); native context/application menus, dock,
-window operations; updater/version/relaunch; desktop worker and local
-automation execution; SSH target/tunnel operations; scratch-file persistence;
-diagnostics and support-attachment collection.
-
-The bridge is demand-driven — a typed method is added only when moved product
-code needs it — and never exposes generic Tauri `invoke`, raw command names,
-or a filesystem primitive broad enough to bypass product policy. Desktop-only
-product orchestration may live in product-client and call the bridge; raw
-execution remains in `apps/desktop`.
-
-## 5. Product scope and provider composition
-
-### 5.1 Scope identity
-
-Remote caches and live streams are scoped at least by **deployment +
-authenticated principal (or explicit anonymous) + in-memory `authGeneration`**.
-That tuple is exact: `bootstrapping` and `unreachable` never participate in a
-cache key; a transiently unreachable authenticated authority retains principal
-and generation; an unreachable client with no resolved authority mounts no
-authenticated remote providers.
-
-`authGeneration` is a process-local, monotonic **session authority epoch** —
-not deployment identity or token version. It advances when anonymous becomes
-authenticated (or the reverse), the principal changes, or logout/revocation/a
-replacement login invalidates the prior session authority. It does not advance
-on ordinary token refresh; routine Web token rotation updates transport
-credentials without remounting the QueryClient or tearing down active
-AnyHarness streams.
-
-`cacheScopeKey` is never overloaded with workspace or materialization
-identity; credentials and expiring gateway URLs never participate in semantic
-cache identity.
-
-### 5.2 Provider order
-
-```text
-Host bootstrap and auth transport
-  -> ProductHostProvider
-    -> ProductEntryIntentCoordinator (durable FIFO; survives scope replacement)
-      -> lightweight ProductClient auth/readiness gate
-        -> when authority is resolved:
-          ProductScopeBoundary (deployment + principal/anonymous + auth generation)
-            -> scope-owned QueryClientProvider
-              -> scope-owned CloudClientProvider
-                -> anonymous: shared login/join content
-                -> authenticated: scope-owned AnyHarness client registry
-                  -> shared AnyHarness runtime/workspace providers
-                    -> lazy AuthenticatedProductClient
+```ts
+document.documentElement.dataset.proliferateClient = "web";
 ```
 
-Mandatory properties: no module-global QueryClient in Desktop, Web, or
-product-client; no Cloud React provider write to (or hook fallback through)
-the Cloud SDK process-global client; no module-global AnyHarness client
-registry or credential-bearing client cache; presentation states cannot churn
-a retained authority's scope key; a scope change cancels or makes unreachable
-old queries, streams, and connection completions; Cloud and AnyHarness
-consumers see the same scope; providers are not copied per host; Web does not
-mount the Desktop local-runtime subtree; teardown runs once and removes every
-listener, timer, subscription, and stream owned by the prior scope.
-
-### 5.3 Product state classes
-
-| State | Owner | Lifetime |
-| --- | --- | --- |
-| Server entities and remote results | Query cache / owning SDK | Product scope |
-| Active AnyHarness connection/stream | AnyHarness SDK React + scoped target/stream transition owner | Target slot + generation + product authority |
-| Actor-sensitive selection, drafts, pending prompts, tabs | Product-client scoped store factories | Product authority; reset before replacement authority renders |
-| Organization-sensitive client state | Product-client organization-scoped stores | Deployment + principal + organization |
-| Workspace-local UI state | Product-client stores keyed by logical workspace id | Workspace within product authority |
-| Non-sensitive device preferences | Product-client store + host persistence | Device |
-| Auth secrets and pending OAuth state | Host auth transport | Host security rules |
-| Native runtime/process state | Desktop host/bridge | Desktop process |
-| Pure product decisions | `product-domain` or product-client `lib/domain` | Stateless |
-
-Actor-sensitive stores are scope-owned factories instantiated under
-`ProductScopeBoundary`; organization-sensitive stores are factories under a
-nested organization boundary; workspace-sensitive stores are keyed/factored so
-a delayed writer reaches only the old instance. A reset module-global
-singleton is not sufficient — an old Promise can retain its setter and write
-after rollover. Every asynchronous writer captures/checks its owning authority
-epoch before emitting external side effects. Persisted device-global keys keep
-Desktop's existing backend/key/schema through the mechanical move; actor-,
-organization-, and workspace-sensitive persisted values are credential-free,
-namespaced by declared lifetime, and removed/ignored on rollover. Old Web
-stores receive no compatibility migration.
-
-## 6. Routing, callbacks, and capability policy
-
-### 6.1 Route ownership
-
-One `BrowserRouter` per app; one shared product route tree. Hosts own routes
-that terminate a transport protocol (Web OAuth/PKCE callback and auth error,
-Web SSO-slug and invitation entry decoders, Stripe/billing return decoders,
-Desktop protocol/deep-link ingress, development-only host diagnostics).
-`ProductClient` owns the canonical shared routes:
-
-```text
-/login  /  /workflows  /workflows/:workflowId
-/workspaces  /workspaces/:workspaceId  /settings?section=<sectionId>
-```
-
-This preserves Desktop's URL/state semantics: workspace selection reconciles
-from `/workspaces/:workspaceId`, active sessions remain tab/store-owned, and
-Settings sections remain query-string state overlaying the warm
-`MainScreen`/workspace shell (a performance and stream-continuity invariant —
-the shell stays mounted across authenticated route changes). Desktop's
-host/legacy entrypoints (`/index.html`, `/setup`, `/settings/cloud` +
-`/settings/billing` billing decoders, `/automations{,/:workflowId}` thin
-redirects through the Web R+1 window, DEV-only `/playground/**`) are preserved
-explicitly through the mechanical move.
-
-Web permanently retains `/auth/callback`, `/auth/error`,
-`/join/:organizationId`, and the `/settings/cloud` billing-return decoder
-(handling `returnSurface=desktop` before navigating browser returns to shared
-`/settings?section=billing`), so browser OAuth, SSO, invitations, and Desktop
-checkout/portal returns need no flag day. Cutover release R adds a bounded
-Vercel 307 redirect set before the SPA catch-all (`/settings/cloud` bypasses
-it); the exact array and per-route dispositions are rollout detail in the
-migration plan §10.3–10.4. Redirects are retained through R+1 and at least
-seven days, then removed only after the producer ledger is rechecked. Every
-inbound-URL producer (OAuth redirect configuration, Stripe return URLs, GitHub
-App returns, invitation links, server-generated Web links, Desktop handoff
-URLs) is audited against the producer ledger; external/deployed configuration
-changes follow the rollout ledger's external-item sequencing (§10 below).
-
-### 6.2 AnyHarness resolution
-
-Normal product code never constructs `AnyHarnessClient`; it uses the shared
-SDK React providers and hooks. The product client owns logical workspace
-classification, materialization selection, Cloud workspace records, and shared
-provider composition. Both hosts use one product-client gateway resolver for
-managed cloud; Desktop additionally supplies local/SSH connection authority
-through its bridge.
-
-Credential-free connection identity is **target slot + target generation**:
-
-```text
-slot:  cloud:<deployment-key>:<logical-cloud-workspace-id>
-       local:<desktop-runtime-slot-id>          # stable, never a PID
-       ssh:<deployment-key>:<ssh-target-id>
-gen:   cloud:<anyharness-workspace-id>:<runtime-generation>
-       local:<process-generation>
-       ssh:<tunnel-generation>
-```
-
-Runtime-tier SDK query keys use authority scope + slot + generation — never
-`runtimeUrl`, token, or connection revision; workspace keys keep logical
-workspace ids. A slot-owned connection-material coordinator shares normal
-in-flight resolution, supersedes older attempts on forced refresh, and
-CAS-installs on both connection-resolution revision and the observed
-`credentialRevision` (delayed A is discarded and its waiters adopt B; a failed
-latest attempt retries rather than installing older A). Managed connection
-material remembers its `credentialRevision`; a revision advance marks material
-stale and forces slot-owned refresh on the next operation/reconnect without
-tearing down healthy streams. A generic transition boundary serializes
-generation changes with atomic `register(authority, slot, generation,
-resource)` — late old-generation registrations are rejected and closed; a
-local-process or SSH-tunnel generation transition fans out to every workspace
-attached to that slot and leaves unrelated slots alone. Clients carry
-operation leases: same-generation material rotation retires the old client
-(no new work, in-flight settles, released at zero leases); authority or
-generation teardown force-closes every lease. Query/client eviction is never
-accepted as stream teardown.
-
-Web negative guarantees (test assertions, not hidden controls): `desktop` is
-`null`; no local runtime bootstrap executes; no global local
-workspace/repo/cowork inventory query executes; no local AnyHarness URL is
-constructed; no direct SSH connection is attempted; no raw AnyHarness client
-is created at a page or workflow callsite; selecting a server-visible local
-record renders an honest Desktop handoff.
-
-### 6.3 Capability policy
-
-Capability checks derive from three sources — host/device (bridge present),
-deployment/server (API-advertised capabilities), and the selected resource —
-never one manually synchronized boolean object. Managed-cloud
-create/open/resume, chat/transcript/config, files/changes/terminal/subagents,
-cloud secrets/integrations/org policy, cloud workflow create/edit/run, and
-billing/usage/plan settings are the same shared product on both hosts.
-Local/SSH creation, local runtime inventory, native file/editor/terminal
-actions, local agent credentials, native updater, and self-host deployment
-switch are Desktop-only; Web hides them or offers a truthful Desktop handoff
-(read-only server-visible summaries where the matrix allows). Controls are
-functional or absent — no dead disabled controls for layout parity. Context
-menus share product content; Desktop renders natively, Web renders a DOM menu
-with native-only actions omitted.
-
-## 7. Styling and assets
-
-Desktop's rendered product is the visual source of truth.
-
-- `apps/packages/design/src/css/product.css` is the shared Desktop-derived
-  product stylesheet (created in PR 2 from `desktop.css`'s product selectors);
-  `desktop.css` reduces to importing `product.css` plus genuinely native
-  window-chrome overrides. One defined cascade, no duplicate import: Desktop
-  `index.css` → `design/desktop.css` → `product.css` + native overrides; Web
-  `index.css` → `design/product.css` + browser-host CSS.
-- Both hosts set `document.documentElement.dataset.proliferateClient` before
-  rendering; `product.css` may expose `desktop:`/`web:` variants from that
-  marker for genuine visual differences only — never to hide controls whose
-  hooks/queries would still execute.
-- The Tailwind `@source "../../../product-client/src"` line is added **in
-  PR 1** together with a fail-closed assertion; without it, classes in moved
-  JSX are silently omitted from both production bundles.
-- The `product.css` export-map entry and copier proof, appearance
-  initialization (synchronous pre-render initializer called by both host
-  mains; CSS default equals product default), fonts/assets ownership, and
-  durable shared test IDs move with product-client per the rollout detail.
-- No Web-specific restyling during cutover; Tauri window chrome and macOS
-  safe-area elements remain Desktop host UI.
-
-## 8. Hosted Web performance budget
-
-PR 1 includes a feasibility build before the PR 2 freeze: the in-place
-candidate root (lightweight gate + lazy authenticated root, at Desktop-owned
-paths) is mounted in a deterministic browser-safe host and measured at
-`/login` and authenticated `/`, using `data-product-ready="login"` and
-`data-product-ready="authenticated-home"` markers, Vite manifest generation,
-and a deterministic route-asset measurement (fresh-cache Playwright, gzip
-level 9 for JS/CSS, emitted bytes for fonts/images/audio, only assets
-requested before readiness).
-
-Acceptance targets for that build: login JS 525,000 B; login CSS 45,000 B;
-login fonts/images 100,000 B; login total 670,000 B; authenticated `/` total
-1,750,000 B; Web host overhead ≤5% over the PR 2 ProductClient home fixture.
-The byte targets must be proven, or an evidence-backed replacement budget must
-be committed under explicit spec review, before PR 2 is authorized — never a
-silent ratchet. Independently of exact numbers, login/callback entries exclude
-authenticated product roots, Monaco, Shiki grammars/themes, xterm, editors,
-and non-entry routes. PR 2 commits the moved fixture's measured asset ledger;
-PR 4 enforces the committed budgets against the real Web host.
-
-## 9. Lifecycle ownership
-
-Every root effect has an assigned owner:
-
-- **Host bootstrap/process lifecycles** stay app-owned: API/deployment
-  configuration bootstrap, Web cookie/PKCE transport, Desktop vault/protocol
-  transport, vendor telemetry installation, startup diagnostics, Tauri
-  reload/context-menu policies, sidecar process bootstrap and raw health
-  transport, window/process listeners.
-- **Shared product lifecycles** move with product-client: entry-intent queue
-  coordination above ProductScope, organization selection, session/workspace
-  selection and intent dispatch, query/stream-connected behavior, preference
-  hydration/persistence orchestration, home deferred launches, support UI
-  state, command/shortcut interpretation, Cloud workspace and workflow
-  orchestration.
-- **Desktop-capability product lifecycles** live in product-client and call
-  the optional bridge (not mounted when the bridge is absent): local agent
-  reconcile/auth sync, local automation execution, worker enrollment tied to
-  auth transitions, updater presentation, product-aware native menu dispatch,
-  worktree preference sync, native support/diagnostic collection.
-
-Invariants preserved from the current Desktop root: auth bootstrap completes
-its initial decision before runtime-dependent work assumes a principal;
-runtime bootstrap starts only after auth leaves `bootstrapping`; worker
-enrollment observes the authenticated→anonymous transition; preference
-hydration completes before default-sync effects write; updater/menu/deep-link
-/global dispatch listeners mount once; every timer/listener/stream has
-deterministic cleanup; the workspace shell stays warm across routes;
-provider/scope teardown cannot let a stale completion mutate the next actor.
-
-## 10. Migration governance
-
-The migration executes as a serialized chain with binding governance. The
-live chain state, ledgers, and templates are in the
-[rollout ledger](../../developing/deploying/web-desktop-unification-rollout.md);
-step-by-step execution recipes remain rollout detail in the TBD migration
-plan. The governance rules themselves are contract:
-
-### 10.1 Checkpoint sequence
-
-| Checkpoint | Outcome |
-| --- | --- |
-| PR 0 | Cache/runtime authority fencing: 0a landed (`bdd11aa5a`); 0b adds same-user auth generation + credential-mutation CAS; 0c owns AnyHarness clients, streams, and target replacement. |
-| PR 1 | Desktop consumes the new host/scope seams in place; primitives-only package skeleton; candidate root split at Desktop-owned paths; enforcement generalized; ledgers committed. |
-| Pre-PR-2 cleanup | Embedded Tauri browser feature and callers removed (separately reviewable). |
-| PR 2 | Freeze-gated mechanical move of Desktop product source into product-client; Desktop mounts the package `ProductClient`. |
-| PR 3 | Delete the old Web product; retain a buildable thin browser host. Review-only. |
-| PR 4 | Web host adapters + mount the same `ProductClient`. Review-only. |
-| Landing | One cutover landing merges the reviewed PR 3 + PR 4 work; docs-only post-cutover verification seals completion. |
-| Follow-up | Self-hosted Web against the same host contract (explicitly unplanned here). |
-
-PR 1 is behavioral boundary work without path churn; PR 2 is path churn
-without behavior work; PR 3/PR 4 are separate review units that ship as one
-Web deploy unit.
-
-### 10.2 Sliding two-PR stack and review/merge ownership
-
-The chain runs as a sliding two-PR stack: at most two PRs with active writers
-exist at any time; one writer per phase; the orchestrator — never an
-implementer — review-accepts, merges, and marks ready. A child phase forks
-from its parent's immutable review-accepted head with `PARENT_AT_FORK`
-recorded durably (orchestrator log + child PR body) and asserted at fork.
-After the parent squash-merges, the child restacks with
-`git rebase --onto <target> $PARENT_AT_FORK`, proves equivalence (identical
-base trees ⇒ pre/post child tree equality; changed base ⇒ `git range-diff`
-against the accepted evidence branch with independently reviewed conflict
-resolutions and pre/post patch hashes), force-with-lease pushes, reruns CI,
-and is independently re-reviewed. Docs gates and the freeze gate deliberately
-collapse the stack to main.
-
-Reviewed states are preserved as plainly named evidence branches under
-`refs/heads/wdu-evidence/**` (fetchable with ordinary `git fetch origin`,
-never force-pushed). Evidence branches are deleted only AFTER the docs-only
-post-cutover verification PR (Phase V) has merged, and only according to the
-branch index committed in its release record — never earlier at any
-intermediate checkpoint. Commit SHA, tree SHA, and stable patch hash are
-recorded in the PR body/ledger. Consumers fetch and assert existence +
-recorded-hash equality before comparing. Committed ledgers contain no secret values — secrets are
-referenced by name/location only.
-
-### 10.3 Intake and freeze gates
-
-The PR-1 and PR-2 intake gates are committed docs-only ledger phases
-(`wdu/intake-pr1`, `wdu/intake-pr2-freeze`) appending binding snapshots to the
-rollout ledger — never to `specs/tbd/`. The PR-1 snapshot records the
-then-current main SHA, the accepted PR 0c head (the PR 1 code baseline), and a
-disposition for every live conflicting branch/worktree/PR. The PR 2 freeze
-requires **both** an explicit dated user signal and the merged freeze ledger
-(timestamp, base SHA, freeze owner, planned duration, disposition/retargeting
-for every conflicting Desktop branch/worktree). Freeze validity is revalidated
-three times — at PR 2 launch, immediately before its review-acceptance, and
-immediately before its merge — each time re-running the live conflict
-inventory; any expiry or new undispositioned conflict hard-stops until a
-renewed signal plus a committed ledger amendment lands and the PR is
-re-reviewed. PR 1 and PR 2 verify the committed ledger evidence on main, not
-transcripts.
-
-### 10.4 Web cutover landing
-
-PR 3 (`delete legacy Web`) and PR 4 (`Web ProductClient`) are permanently
-review-only PRs that are **never merged**. The landing branch
-(`wdu/web-cutover-landing`) is created from fresh main and **cherry-picks
-exactly the recorded ordered commit list `G_BASE..H_HEAD`** (immutable
-accepted heads preserved as evidence branches) — never an unspecified merge of
-heads. Equivalence is proven before merge: exact tree equality when the
-landing base equals the PR 3 base; otherwise recorded stable patch hashes plus
-a `range-diff` manifest with independent review of every non-identical hunk
-and conflict resolution. Drift, a newly detected surface, or a
-release-coordinate issue returns the work to the PR 4 writer, whose
-re-accepted head lands on a new versioned evidence branch and forces the
-landing to be rebuilt and re-proven. The landing runs combined CI, the full
-PR 4 gate battery, and a pre-merge completeness battery (Mobile DOM-boundary +
-typecheck; all affected SDK/package builds and tests) before its single merge;
-PR 3/PR 4 then close as review-only records.
-
-### 10.5 Deployment selection and external-configuration ordering
-
-Deployment selection is modeled as **three reviewed sets**, produced during
-PR 4 review and re-asserted at landing time from the real last-successful
-staging/production deploy bases:
-
-- **DETECTED** — the deploy-surface detector's output over the real bases
-  (plan-job outputs prove this set only, never lane execution);
-- **EFFECTIVE_STAGING** — the automatic staging lanes actually expected to
-  execute after environment gates (proven only by per-lane enabled/skipped
-  evidence);
-- **PRODUCTION** — the exact explicit `only_surfaces` set for the canonical
-  promote workflow.
-
-Every DETECTED surface is explicitly dispositioned: PRODUCTION; reviewed
-staging-only (ungated lanes — Server, Web, and E2B — cannot be suppressed on
-the automatic path, so an ungated exclusion is reviewed staging-only or the
-chain stops); gate-suppressed (only actually gated lanes: Mobile build via
-`MOBILE_DEPLOY_ENABLED`, Desktop via `DESKTOP_DEPLOY_ENABLED`, Workers via
-`WORKERS_DEPLOY_ENABLED`, and LiteLLM via `LITELLM_DEPLOY_ENABLED` in
-`.github/workflows/_deploy-litellm.yml`; gate lists are verified against the
-actual workflow files, never assumed); or a separate reviewed
-artifact-release disposition (a detected Runtime surface has no hosted deploy
-lane). If Desktop is included, the release-prep version bump
-(covering every canonical owning coordinate) is a distinct reviewed commit
-inside the replay list, with the exact-SHA tag and a new draft release created
-and published only at production promotion per the canonical desktop release
-procedure.
-
-The landing order is binding: a landing hold explicitly blocks other main
-merges, main-CI reruns/manual dispatches, AND manual `deploy-staging.yml`
-`workflow_dispatch` runs (the workflow exposes an independent dispatch
-trigger); pre-override quiescence is proven under that hold — draining every
-queued/running Deploy Staging run regardless of trigger source as well as
-qualifying main-CI runs and their source correlations across a bounded
-propagation barrier — before the reviewed staging environment-gate overrides
-are set and read back; the merge happens only then; merge-SHA tree equality
-plus green main CI gates the automatic staging path; the automatic staging
-run is verified to have executed exactly EFFECTIVE_STAGING; gates are
-restored to their recorded prior state with the restoration read back and
-verified; and only then is the exact landing merge SHA promoted to production
-with the exact PRODUCTION `only_surfaces` and
-`require_staging_success=true`.
-
-**Override cleanup invariant.** From the first override mutation onward, every
-failure, non-success, or unverifiable outcome enters a finally-style cleanup:
-restore EVERY gate to its recorded prior value or prior absence, read the
-restoration back and verify it, then release the landing hold and halt —
-except as the terminality rule below requires the hold to be kept longer
-(any cancellation-requested run and any abnormal or unverifiable staging
-execution, not only an unexpected Deploy Staging run). The cleanup covers a
-partial override write or read-back failure,
-a failed merge, a merge-SHA tree mismatch, an exact-landing-SHA main CI
-failure/cancellation/timeout, an automatic staging
-failure/cancellation/timeout, an unexpected lane execution, an unexpected
-Deploy Staging run from any trigger source (a manual `workflow_dispatch` or
-any run other than the expected exact-landing-SHA automatic run), and any
-state that cannot be verified. If restoration itself fails, production
-promotion is hard-stopped and the landing hold remains in place while the
-failure is escalated — the hold is never released over unrestored gates. Only
-verified automatic staging success plus verified gate restoration may proceed
-to production promotion.
-
-**Terminality rule: cancellation is not terminal proof, and the hold outlives
-unproven runs.** A cancellation request does not prove a run stopped, and a
-cancelled run may already have acted. Once overrides are armed, gate
-restoration (with read-back verification) remains prompt in every case, but
-the landing hold may release only after ALL of the following are proven:
-every cancellation-requested run — a source main-CI run or any deploy run —
-is confirmed terminal; for EVERY cancellation-requested source main-CI run —
-regardless of its terminal conclusion, including one that wins the race and
-completes SUCCESS despite the cancellation request — every downstream Deploy
-Staging run it emitted is enumerated and accounted for across a bounded
-event-propagation barrier (zero emissions is acceptable; each emitted run
-routes through the abnormal-staging clause of this rule and must be fully
-handled), with the barrier proving that no late or otherwise unaccounted
-downstream emission remains before hold release; and every abnormal, failed,
-cancelled, timed-out, or
-unverifiable staging execution — including the expected exact-landing-SHA
-staging run executing unexpected lanes — is confirmed terminal AND its
-per-lane/deploy-summary/log evidence proves it produced no side effects, or
-every possibly affected staging surface is restored to its recorded
-pre-landing staging baseline with artifact/health/routes re-verified. Any
-unproven terminality, any unaccounted, late, or unhandled downstream
-emission, and any unproven side-effect assessment or recovery retains the
-hold and hard-stops production with escalation. A fully
-proven failure path releases the hold only into halted-for-review, never into
-promotion. The failure and recovery evidence is recorded per the standing
-failure-evidence requirements (Phase V / incident record). The full mechanics
-live in the rollout ledger.
-
-**External configuration is mutated only after the landing merges, every
-PRODUCTION surface deploys at the exact merge SHA, and old + canonical routes
-verify.** Before the merge, external items are inventoried, verified,
-classified, and recorded only. After deploy verification, items are applied
-one producer at a time: source change → activation (redeploy/restart/rebuild
-at the same landing SHA per the item's recorded mechanism) → secret-safe
-live-consumption proof → that producer's smoke. A source edit without
-activation is never an update. **Any failure after a producer's
-source-of-truth mutation** — a failed or unverifiable activation, a failed or
-unverifiable live-consumption proof, or a failed smoke — triggers immediate
-source restore, re-activation at the same landing SHA, live rollback proof,
-the item's mapped recovery smoke, recorded evidence of both the failure and
-the recovery, and a halt. If the recovery itself cannot be proven, the
-sequence remains halted until it is. An uncertain source-write outcome — a
-write that fails, times out, or returns an unverifiable result — is treated
-as a possible mutation, and a single re-read cannot rule out a late
-asynchronous apply. Proven-unchanged requires either an authoritative
-terminal status for the write operation PLUS a confirming read, or a bounded
-settling barrier with repeated authoritative reads proving the prior value
-remained stable throughout; with that proof, record the evidence and halt
-before continuing. Without it, treat the item as changed/unverifiable and run
-the full recovery above while halted. Every item — changed or unchanged —
-closes only with live proof plus a successful mapped smoke. The per-item
-schema is defined in the rollout ledger.
-
-### 10.6 Release-surface closure and the Phase V release record
-
-Before the accepted PR 4 head freezes, Phase H inventories and explicitly
-dispositions every required user-facing release surface: the landing page,
-public docs, changelog/release notes, in-app release notes/copy,
-install/download surfaces, support/runbook surfaces, and any further release
-surface the sweep discovers. Each disposition is exactly one of
-update-in-this-landing (the change enters the replay list),
-update-post-landing (with a named owner and deadline), or no-change-needed
-(with the reason recorded). These dispositions and their evidence carry into
-the landing's release plan and the Phase V record.
-
-The migration completes only when the docs-only post-cutover verification PR
-(Phase V) commits the immutable release record at
-`specs/developing/deploying/web-desktop-unification-release-record.md` and
-merges. That record seals, at minimum:
-
-- the exact landing merge SHA and per-surface deployed SHAs, with the reviewed
-  DETECTED / EFFECTIVE_STAGING / PRODUCTION sets and per-surface dispositions;
-- the landing-ordering evidence: quiescence proof, prior gate state, override
-  set/read-back, merge-SHA tree-equality + main-CI proof, EFFECTIVE_STAGING
-  per-lane execution proof, verified gate restoration, and the production
-  promotion record (`only_surfaces`, `require_staging_success=true`,
-  non-dry-run deploy-summary `headSha` evidence per surface, and the
-  deploy-run links for every staging and production run cited);
-- per-surface artifact/health verification and old + canonical inbound route
-  verification;
-- each release-surface disposition and its outcome/evidence (if Desktop
-  shipped: the released version and exact SHA, the exact-SHA tag, the
-  published GitHub Release, and stable updater-manifest verification at that
-  version/SHA);
-- the complete external-item table: for every item, changed or unchanged, its
-  secret-safe source location, actual before value, actual after value
-  (secrets redacted by name/location, never by value), required-change
-  classification, activation mechanism used, secret-safe live-consumption
-  proof, and who applied the change and when — plus, for every mapped smoke,
-  the flow run, its result, and its timestamp (explicit item→smoke mapping
-  wherever a shared smoke covers multiple items);
-- all failure and recovery evidence (source restores, re-activations, live
-  rollback proofs, recovery smokes, resolutions);
-- the requirement-by-requirement audit against this spec's definition of done;
-- the `wdu-evidence/**` branch index (names + recorded hashes) authorizing
-  their cleanup.
-
-No evidence branch is deleted before Phase V merges. There is no
-recovered-stable completion path: a halted external sequence blocks
-verification, evidence-branch cleanup, and completion.
-
-### 10.7 Rollback
-
-PR 0b, PR 0c, the docs/intake phases, PR 1, the browser removal, and PR 2 are
-each independently reversible merged units at their boundary. PR 3/PR 4 never
-merge (nothing to roll back on main). The cutover landing is the single
-functional Web-cutover rollback unit on main — but only until external
-mutations begin; after any external item changes, rollback must also restore
-each changed item's recorded previous value (with re-activation), or
-intentionally retain the compatibility redirects until every changed producer
-is rolled back. No permanent old/new runtime flag exists as rollback
-infrastructure. If a Desktop behavior cannot be preserved through the bridge,
-stop and model the missing narrow capability — never move raw Tauri access
-into product-client. If Web cannot execute an action, show a truthful
-absence/handoff — never a Web-specific imitation with a second product owner.
-
-## 11. Enforcement and verification
-
-Both frontend enforcement scripts (`scripts/report_frontend_structure.py`,
-`scripts/check_frontend_boundaries.py`) are generalized in PR 1 from
-Desktop-only traversal/predicates to an explicit ownership-root/rule table
-covering Desktop and product-client (and Web where a rule applies), with
-plant-a-violation tests per root/rule pair and deliberately migrated
-allowlists. The Tailwind source assertion and the ProductClient
-performance-fixture check fail loudly at the same boundary.
-
-The move gate includes these literal scans (all empty), plus both scripts'
-AST/path checks:
-
-```bash
-rg -F '"@/' apps/packages/product-client/src
-rg -F '"#product/' apps/desktop/src apps/web/src
-rg -F '#product/' apps/desktop/dist apps/web/dist
-rg -F '@proliferate/product-surfaces' apps package.json pnpm-lock.yaml
-```
-
-Verification tiers: shared Playwright journeys run one journey body under
-Desktop web-renderer and hosted-Web fixtures (host fixtures own only
-bootstrap/auth and unavailable-capability expectations); a native Desktop lane
-remains required for Tauri-only operations; isolated Desktop profiles are
-exercised at PR 0b, PR 0c, PR 1, and PR 2 (the PR 2 profile includes
-self-host server reconnect, relaunch, and keychain credential preservation);
-PR 2 carries a CSS/Tailwind visual baseline proving unchanged Desktop
-rendering; CI rejects a production Web artifact without the ProductClient
-mount. The focused unit/component test matrix and tier ownership are rollout
-detail in the migration plan §18; the canonical release-test inventory remains
-owned by `specs/developing/testing/`.
-
-## 12. Definition of done
-
-Ownership: `@proliferate/product-client` is the only connected shared DOM
-product; Desktop and Web import and mount the same `ProductClient`;
-`product-surfaces` no longer exists; each app contains only host ownership;
-Mobile imports remain unchanged and DOM-free.
-
-Behavior: Desktop's visual/behavioral baseline is preserved, including local,
-direct SSH, managed-cloud, native settings, updater, and self-host connection
-paths; Web exposes the same managed-cloud product experience, never attempts
-local runtime discovery, and truthfully hands off unsupported actions; cloud
-chat/transcript/config/files/terminal behavior has one SDK React owner; the
-warm workspace shell and route continuity remain intact.
-
-Security and state isolation: auth secrets remain host-owned; Web bearer
-tokens are memory-only in production; connection code requests fresh tokens
-through an authority-bound handle; delayed old-authority work cannot read,
-overwrite, clear, or invalidate a replacement authority for the same
-principal; no cache, stream, draft, prompt, tab, or selection crosses
-deployment/actor/authority-generation scope; organization-sensitive state is
-keyed/reset by organization; credentials are absent from query/cache identity;
-runtime query identity uses target slot/generation; no module-global
-QueryClient, process-global Cloud client publication/fallback, or
-bearer-keyed AnyHarness client map remains.
-
-Deletion: old Web polling/raw AnyHarness client, product
-stores/controllers/pages, duplicate Desktop copies, the embedded Tauri
-browser, any generic Tauri bridge, and every permanent compatibility
-flag/wrapper/duplicate mutation owner are gone.
-
-Verification: both apps build and typecheck; moved tests pass under
-product-client; Desktop's full relevant suite passes; shared Playwright
-journeys pass in both host lanes; native smoke covers Tauri-only boundaries;
-isolated profiles were exercised at the required checkpoints; Web login/home
-stay within the committed evidence-backed budgets with ≤5% host overhead; the
-chain's ledgers (host-dependency, store-lifetime, move-manifest, producer,
-restack, replay, release record) are durable and zero-unclassified; the
-post-cutover verification PR is merged.
-
-## 13. Migration exceptions and current state
-
-- PR 0a is landed (`bdd11aa5a`, PR #1144); PR #1143 (workflows authoring V1)
-  is merged. Every other checkpoint is pending; the code on main does not yet
-  implement this contract's host boundary, scope ownership, or package. The
-  rollout ledger's chain-state section is the live record.
-- [`web-cloud-local-parity.md`](web-cloud-local-parity.md) still describes the
-  superseded separate-controller model for some surfaces; PR 1 (and the PR 2
-  move) reconcile it and the frontend structure guides listed in the migration
-  plan §20. Until then, this spec wins on any conflict about connected-product
-  ownership.
-- The old Web product under `apps/web/src` and `product-surfaces` remain live
-  until their checkpoints delete/absorb them; no new product behavior may be
-  built in the old Web controllers, and any feature adding a genuinely
-  host-specific operation extends the one host contract narrowly with both
-  positive and negative host tests.
-
-## Related docs
-
-- Binding execution/freeze ledger:
-  [`../../developing/deploying/web-desktop-unification-rollout.md`](../../developing/deploying/web-desktop-unification-rollout.md)
-- Rollout history/execution recipes (non-authoritative):
-  [`../../tbd/web-desktop-unification-migration.md`](../../tbd/web-desktop-unification-migration.md),
-  [`../../tbd/web-desktop-unification-intake-ledger.md`](../../tbd/web-desktop-unification-intake-ledger.md)
-- Frontend structure: [`../structures/frontend/README.md`](../structures/frontend/README.md),
+The marker may drive genuine styling differences. Capability behavior remains
+controlled by ProductHost and the optional Desktop bridge.
+
+## Migration preparation
+
+Preparation is migration-specific:
+
+1. Inventory existing product consumers of native Desktop functions.
+2. Map each consumer to the narrow bridge operation it needs.
+3. Classify root lifecycles as shared, Desktop product behavior behind the
+   bridge, or raw Desktop host startup.
+4. Create the compiled ProductClient package, host contract, provider, build,
+   tests, and structure enforcement.
+5. Establish shared CSS exports and ProductClient Tailwind scanning.
+6. Remove the embedded browser rather than moving or bridging it.
+7. Prove Desktop can use ProductHost while its source paths are still stable.
+
+We do not pause this migration for unrelated existing bugs or speculative
+hardening. Fix only an issue that concretely blocks extraction or causes a
+behavior regression in a migration checkpoint.
+
+## Migration sequence
+
+### 1. Foundation and in-place Desktop adoption
+
+- Finalize the one `ProductHost` and demand-driven `DesktopBridge` contracts.
+- Construct the Desktop adapters from the current implementations.
+- Replace product-facing direct Tauri/native calls with bridge calls while
+  source paths remain in Desktop.
+- Gate Desktop-only product lifecycles on `host.desktop`.
+- Keep raw native startup and authentication transport in the Desktop app.
+- Verify Desktop behavior before any large source move.
+
+### 2. Move Desktop into ProductClient
+
+- Move Desktop's product pages, routes, components, hooks, stores, providers,
+  product logic, tests, assets, and shared lifecycles into ProductClient.
+- Rewrite moved internal imports to the package-local mapping.
+- Have Desktop import and mount the compiled ProductClient completely.
+- Leave only the thin native host, native implementations, bootstrap, and
+  host-specific CSS in `apps/desktop`.
+- Treat this primarily as a mechanical move; do not redesign the product.
+
+### 3. Delete the old Web product
+
+- Delete its duplicate pages, chat implementation, polling, stores,
+  controllers, and product-specific logic.
+- Retain a buildable minimal browser shell and the raw auth/callback/bootstrap
+  entrypoints needed by the replacement host.
+
+### 4. Build the Web host
+
+- Implement browser deployment, auth, Cloud-client construction, storage,
+  links, clipboard, and telemetry adapters.
+- Pass `desktop: null`.
+- Mount the same compiled ProductClient and shared product CSS.
+- Verify managed-cloud workspace and gateway AnyHarness behavior matches
+  Desktop.
+
+### 5. Verify deployability
+
+- Build and test both production hosts.
+- Verify their production bundles contain ProductClient CSS and assets.
+- Verify Web contains no Tauri/native imports and performs no local-runtime,
+  local-workspace, or SSH operation.
+- Verify Desktop discovers local AnyHarness and can list, create, open, and
+  resume local work while retaining cloud behavior.
+- Verify auth start/callback/logout and inbound-link flows on both hosts.
+- Update and smoke-test external Web callback/return configuration.
+
+### 6. Follow-up: self-hosted Web
+
+After hosted Web cleanly mounts ProductClient, add the configuration,
+deployment, and documentation needed to point Web at a self-hosted server.
+The common host contract must not prevent this, but self-hosted Web is not a
+cutover requirement.
+
+## Verification by checkpoint
+
+### Foundation
+
+- ProductClient builds cleanly from a fresh dependency build and emits `dist`.
+- Its exported host types/provider resolve through the package export map.
+- ProductClient tests run in CI.
+- Frontend enforcement scans ProductClient and rejects host imports, Tauri,
+  raw `invoke`, and Desktop-relative `@/` imports.
+- A provider test proves a host is observable and Web can pass
+  `desktop: null`.
+- The Tailwind source assertion fails loudly if ProductClient scanning is
+  removed.
+
+### Desktop adoption and move
+
+- Desktop typechecks, tests, and builds at each checkpoint.
+- Focused native-boundary tests cover every bridge group that has a consumer.
+- Desktop rendering and product behavior remain unchanged.
+- Local and cloud workspaces both function.
+- Moved tests run from ProductClient; no duplicate product path remains.
+- ProductClient contains no raw Tauri or host-auth implementation.
+
+### Web cutover
+
+- Web typechecks, tests, and production-builds with ProductClient.
+- Shared Playwright journeys run against both host renderers where the feature
+  exists on both; native-only flows retain a Desktop lane.
+- Web login and callback routes load without eagerly pulling large editor,
+  terminal, or authenticated-only chunks.
+- Route-level splitting keeps the hosted Web first load within an explicitly
+  recorded budget measured before and after cutover; a material regression
+  requires review rather than a silent budget increase.
+- Cloud create/open/resume, chat, transcript, files, settings, billing,
+  integrations, and workflows use the shared implementation.
+- Web has no local AnyHarness discovery or direct SSH behavior.
+- External auth/billing return URLs are verified against the deployed host.
+
+## Completion criteria
+
+The migration is complete when:
+
+- Desktop and Web import and mount the same compiled ProductClient.
+- Desktop preserves its current visual and behavioral product baseline.
+- Desktop retains local AnyHarness, local workspace, SSH, updater, worker,
+  local automation, and native support behavior through the typed bridge.
+- Web receives the same managed-cloud product experience and exposes no fake
+  local capability.
+- ProductClient owns the product pages, routes, UI, hooks, stores, Cloud,
+  gateway, and AnyHarness behavior.
+- ProductClient contains no raw Tauri access, browser auth transport, or
+  vendor-specific host implementation.
+- Product-surfaces remains a separate package unless deliberately consolidated
+  in a later change.
+- The old Web product implementation and embedded browser are gone.
+- Both hosts build, test, and deploy cleanly with the shared CSS and assets.
+
+## Current state and related docs
+
+The ProductClient foundation currently provides the compiled package, typed
+host/bridge contracts, provider, focused tests, build/CI wiring, and structure
+enforcement. Shared `product.css`, Desktop-only CSS, and ProductClient Tailwind
+scanning are established separately. Desktop adapter adoption and product
+source movement remain later checkpoints.
+
+Related authoritative docs:
+
+- Frontend structure:
+  [`../structures/frontend/README.md`](../structures/frontend/README.md)
+- Frontend packages:
   [`../structures/frontend/packages/README.md`](../structures/frontend/packages/README.md)
-- SDK ownership: [`../structures/sdk/README.md`](../structures/sdk/README.md)
-- CI/CD and release: [`../../developing/deploying/ci-cd.md`](../../developing/deploying/ci-cd.md)
-- Testing standard: [`../../developing/testing/README.md`](../../developing/testing/README.md)
+- Styling:
+  [`../structures/frontend/guides/styling.md`](../structures/frontend/guides/styling.md)
+- Telemetry:
+  [`../structures/frontend/guides/telemetry.md`](../structures/frontend/guides/telemetry.md)
+- CI/CD and release:
+  [`../../developing/deploying/ci-cd.md`](../../developing/deploying/ci-cd.md)
+- Testing:
+  [`../../developing/testing/README.md`](../../developing/testing/README.md)
+
+The older documents under `specs/tbd/` are planning history. This spec wins
+when they disagree with the simplified migration above.

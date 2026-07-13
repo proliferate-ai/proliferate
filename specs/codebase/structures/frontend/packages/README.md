@@ -2,9 +2,11 @@
 
 Status: authoritative for shared frontend package ownership.
 
-Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces}/**`
+Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces,product-client}/**`
 
-**Packages are the *shared tier* of the app-local layers — not a separate taxonomy.** Most are 1-1 with a layer you already know; derive them rather than re-learning them:
+**Packages are the shared product tier, not a second frontend taxonomy.** Most
+are 1-1 with an app-local layer. `product-client` is the deliberate exception:
+it is the connected Desktop/Web application shared by two thin hosts.
 
 | Package | = the shared tier of |
 |---|---|
@@ -12,6 +14,7 @@ Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces}/**`
 | `product-domain` | `lib/domain` |
 | `product-ui` | `components` |
 | `product-surfaces` | `components` + `hooks/access` (a *connected* page) |
+| `product-client` | the connected Desktop/Web app (pages + hooks + stores + providers) |
 | `ui` | — *(no app-local analog: the **only** home for DOM primitives)* |
 
 ## The two governing rules
@@ -19,9 +22,13 @@ Scope: `apps/packages/{design,ui,product-domain,product-ui,product-surfaces}/**`
 Everything else derives from these:
 
 1. **Future-facing.** When adding new code, consider whether multiple apps will need it. Move it to a package **only when ≥2 apps need the same thing.** A package is never the default home.
-2. **Platform — Mobile is DOM-free.** Mobile may import **only `product-domain` + `design/react-native`** (+ SDK packages). It must **never** import the DOM packages: `ui`, `product-ui`, `product-surfaces`.
+2. **Platform — Mobile is DOM-free.** Mobile may import **only `product-domain` + `design/react-native`** (+ SDK packages). It must **never** import the DOM packages: `ui`, `product-ui`, `product-surfaces`, `product-client`.
 
-What promotion *adds* is predictable: a package loses all app internals (stores, routes, Tauri, AnyHarness wiring) — and **`components → product-ui` additionally loses hooks** (it becomes pure presentational: props in, callbacks out, because hooks stay app-local).
+Promotion into a lower-level shared package removes app internals. In
+particular, **`components → product-ui` loses hooks** and becomes pure
+presentation: props in, callbacks out. ProductClient is different: it owns the
+shared routes, stores, hooks, and Cloud/AnyHarness wiring, but loses raw host
+implementation such as Tauri, browser auth transport, and vendor bootstrap.
 
 ## Package map
 
@@ -32,6 +39,7 @@ What promotion *adds* is predictable: a package loses all app internals (stores,
 | `product-domain` | `lib/domain` | pure shared product rules, vocab, validation, projections, view models, planners | generated/SDK **contract types**, pure utils | React, DOM, RN components, SDK clients, query clients, stores, app code, raw access |
 | `product-ui` | `components` | shared Desktop/Web product presentation — **props in, callbacks out** | `design`, `ui`, `product-domain`, React, DOM-safe render libs | SDK clients, access helpers, query hooks, stores, routes, Tauri, AnyHarness wiring, RN, custom primitives |
 | `product-surfaces` | `components` + `hooks/access` | shared **connected** Desktop/Web Cloud surfaces (SDK/query wiring + `product-ui` composition) | Cloud SDK React hooks, `product-domain`, `product-ui`, `ui`, `design` | Desktop/Web app internals, Tauri, AnyHarness wiring, app stores, app routes, RN, custom primitives |
+| `product-client` | connected Desktop/Web app | shared product routes, pages, components, hooks, stores, providers, Cloud/gateway/AnyHarness orchestration, and the typed host boundary | `product-surfaces`, `product-ui`, `product-domain`, `ui`, `design`, Cloud/AnyHarness SDKs, React/router/query | Desktop/Web app internals, `@tauri-apps/**`, raw `invoke`, host auth transport, vendor telemetry implementations, RN |
 
 ## Shape
 
@@ -42,18 +50,24 @@ apps/packages/
   product-domain/src/<domain>/
   product-ui/src/<domain>/<surface>/
   product-surfaces/src/<domain>/<surface>/
+  product-client/src/
+    ProductClient.tsx
+    app/ · pages/ · components/ · hooks/ · stores/ · providers/ · lib/
+    host/                # ProductHost, DesktopBridge, ProductHostProvider
 ```
 
 ## Dependency direction
 
 ```text
-apps -> product-surfaces -> product-ui -> ui -> design
-apps -> product-domain
-product-surfaces -> product-domain
-product-ui       -> product-domain
+desktop/web -> product-client -> product-surfaces -> product-ui -> ui -> design
+                           \----> product-domain
+                           \----> Cloud/AnyHarness SDKs
+product-surfaces ----------------> product-domain
+product-ui ----------------------> product-domain
 ```
 
-Mobile: `design/react-native` + `product-domain` + SDK only. **Never** `ui`/`product-ui`/`product-surfaces`.
+Mobile: `design/react-native` + `product-domain` + SDK only. **Never**
+`ui`/`product-ui`/`product-surfaces`/`product-client`.
 
 ## Per package
 
@@ -67,7 +81,9 @@ design/src/tokens.ts · css/{dom.css,product.css,desktop.css} · react-native.ts
 Must not hold product copy, product status colors, route concepts, or component behavior. Imports token source + build tooling only — never React, app code, SDK clients, stores, providers, query clients, or product concepts.
 
 ### `ui`
-The **single DOM primitive system** for Desktop, Web, `product-ui`, and `product-surfaces`. It has no app-local analog — this is the *only* place primitives exist.
+The **single DOM primitive system** for Desktop, Web, `product-client`,
+`product-ui`, and `product-surfaces`. It has no app-local analog — this is the
+*only* place primitives exist.
 
 ```text
 ui/src/kit/** · ui/src/primitives/** · ui/src/layout/** · ui/src/lib/utils.ts
@@ -88,7 +104,8 @@ Primitives that belong here: `Button`/`IconButton`, `Input`/`Textarea`/`Label`/`
 Relationship to `primitives/`: `primitives/` is the legacy tier. Its overlay components (`ModalShell`, `PopoverButton`, `Tooltip`, `ConfirmationDialog`) are thin wrappers that delegate to `kit/` and are being migrated. Four component families currently exist in both tiers — `Checkbox`, `Tooltip`, the Popover family, and the Dialog family. This overlap is **transitional, with `kit/` as the survivor**: do not extend the legacy twin; add capability to the kit component and thin the wrapper.
 
 Rules:
-- Do **not** define primitives in `apps/desktop/src`, `apps/web/src`, `product-ui`, or `product-surfaces`.
+- Do **not** define primitives in `apps/desktop/src`, `apps/web/src`,
+  `product-client`, `product-ui`, or `product-surfaces`.
 - Do **not** define a second button/input/dialog/menu/select/tabs primitive under another name, or restyle raw DOM controls at callsites to mimic one. *(Transitional exception: the four `kit/`↔`primitives/` pairs above, resolving toward `kit/`. No new pairs.)*
 - Do **not** render raw `<button>`/`<input>`/`<label>`/`<select>`/`<textarea>` outside `ui`.
 - Need a new size/tone/density/icon-position/loading/destructive/layout mode? **Add the API to `ui` first.**
@@ -123,6 +140,29 @@ product-surfaces/src/<domain>/<surface>/**
 ```
 
 May import Cloud SDK React hooks, `product-domain`, `product-ui`, `ui`, `design`. Must not import Desktop/Web app internals, app routing/shell placement, Tauri/AnyHarness access, app stores, telemetry wiring, or React Native — app-specific behavior stays in the app and is passed in as callbacks/adapters. *Promote when:* Desktop and Web should share the same connected Cloud CRUD surface, including SDK React hooks and mutation wiring, and duplicating that wiring would make the product harder to keep consistent.
+
+### `product-client`
+The shared connected Desktop/Web application, per
+[`../../../features/web-desktop-client-unification.md`](../../../features/web-desktop-client-unification.md).
+Desktop is the baseline; Desktop and Web become thin hosts that each construct
+one typed `ProductHost` and mount the same product through `ProductHostProvider`.
+Like the other shared packages, it builds to `dist` and is consumed through
+`dist` export-map subpaths.
+
+```text
+product-client/src/host/**   # ProductHost + DesktopBridge types, ProductHostProvider
+```
+
+Current state is the foundation only: the host contract, the Desktop bridge
+contract, and the provider. It may depend in the correct direction on
+`product-surfaces`, `product-ui`, `product-domain`, `ui`, `design`, and the
+Cloud/AnyHarness SDKs.
+It must **never** import either host (`apps/desktop/**`, `apps/web/**`), any
+`@tauri-apps/**` package, raw Tauri `invoke`, or Desktop-relative `@/` aliases;
+shared product code reaches native capability only through the optional
+`host.desktop` bridge. `product-surfaces` remains a separate package during
+this migration (`product-client` may consume it without absorbing it). Mobile
+stays outside `product-client` and DOM-free.
 
 ## Package rules
 

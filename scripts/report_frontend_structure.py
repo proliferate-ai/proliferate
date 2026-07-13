@@ -23,12 +23,16 @@ FRONTEND_ROOTS = [
     REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
     REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
+    REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 ]
 
 APP_ROOTS = [
     REPO_ROOT / "apps" / "desktop" / "src",
     REPO_ROOT / "apps" / "web" / "src",
     REPO_ROOT / "apps" / "mobile" / "src",
+    # product-client is app-shaped (components/, hooks/, stores/), so the
+    # component-.tsx-only and hook-responsibility-folder rules apply to it too.
+    REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 ]
 
 DOM_APP_AND_PACKAGE_ROOTS = [
@@ -36,6 +40,7 @@ DOM_APP_AND_PACKAGE_ROOTS = [
     REPO_ROOT / "apps" / "web" / "src",
     REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
+    REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 ]
 
 PACKAGE_ROOTS = {
@@ -44,6 +49,7 @@ PACKAGE_ROOTS = {
     "product-domain": REPO_ROOT / "apps" / "packages" / "product-domain" / "src",
     "product-ui": REPO_ROOT / "apps" / "packages" / "product-ui" / "src",
     "product-surfaces": REPO_ROOT / "apps" / "packages" / "product-surfaces" / "src",
+    "product-client": REPO_ROOT / "apps" / "packages" / "product-client" / "src",
 }
 
 EXTENSIONS = {".ts", ".tsx"}
@@ -578,6 +584,14 @@ def forbidden_import_reason(package_name: str, statement: ImportStatement) -> st
                 "product-surfaces may use Cloud SDK React hooks and Cloud SDK "
                 "contract types, not raw value clients"
             )
+        return None
+
+    if package_name == "product-client":
+        # product-client is the shared connected product. It may depend in the
+        # correct direction on shared packages and SDKs, but must never reach
+        # into either host (apps/desktop, apps/web) or Tauri. The generic checks
+        # above already reject app-root aliases, app-internal imports, Tauri
+        # packages, and React Native for every package.
         return None
 
     return None
