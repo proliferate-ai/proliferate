@@ -823,10 +823,12 @@ cancelled run may already have acted. Once overrides are armed, gate
 restoration (with read-back verification) remains prompt in every case, but
 the landing hold may release only after ALL of the following are proven:
 every cancellation-requested run — a source main-CI run or any deploy run —
-is confirmed terminal; every cancelled source main-CI run is proven, across a
+is confirmed terminal; EVERY cancellation-requested source main-CI run —
+regardless of its terminal conclusion, including one that wins the race and
+completes SUCCESS despite the cancellation request — is proven, across a
 bounded event-propagation barrier, to have emitted no downstream Deploy
-Staging run (if one appears, it is handled under this rule like any other
-staging execution); and every abnormal, failed, cancelled, timed-out, or
+Staging run (any run it emitted routes through the abnormal-staging clause of
+this rule); and every abnormal, failed, cancelled, timed-out, or
 unverifiable staging execution — including the expected exact-landing-SHA
 staging run executing unexpected lanes — is confirmed terminal AND its
 per-lane/deploy-summary/log evidence proves it produced no side effects, or

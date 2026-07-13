@@ -296,9 +296,11 @@ the landing hold may release only after ALL of the following are proven:
 
 - every cancellation-requested run — a source main-CI run or any deploy run —
   is confirmed terminal;
-- every cancelled source main-CI run is proven, across a bounded
+- EVERY cancellation-requested source main-CI run — regardless of its
+  terminal conclusion, including a run that wins the race and completes
+  SUCCESS despite the cancellation request — is proven, across a bounded
   event-propagation barrier, to have emitted NO downstream Deploy Staging
-  run; if one appears, it is handled under the next bullet like any other
+  run; any run it emitted is handled under the next bullet like any other
   staging execution;
 - every abnormal, failed, cancelled, timed-out, or unverifiable staging
   execution — including the expected exact-landing-SHA staging run executing
