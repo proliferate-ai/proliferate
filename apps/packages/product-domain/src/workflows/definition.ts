@@ -71,7 +71,7 @@ export interface WorkflowCatalogModel {
   id: string;
   displayName: string;
   aliases?: readonly string[];
-  defaultVisible?: boolean;
+  defaultVisible: boolean;
   status?: "active" | "candidate" | "deprecated" | "hidden";
   controls?: Readonly<Record<string, WorkflowCatalogModelControl>>;
 }
@@ -384,7 +384,7 @@ function workflowVisibleModels(
   agent: WorkflowCatalogAgent | null | undefined,
 ): WorkflowCatalogModel[] {
   return (agent?.session.models ?? []).filter((model) =>
-    (model.status ?? "active") === "active" && model.defaultVisible !== false
+    model.status === "active" && model.defaultVisible === true
   );
 }
 

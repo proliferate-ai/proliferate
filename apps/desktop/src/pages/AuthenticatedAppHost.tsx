@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ComponentType } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { APP_ROUTES } from "@/config/app-routes";
 import { DesktopWorkspaceDeepLinkPage } from "@/pages/DesktopWorkspaceDeepLinkPage";
 import { MainPage } from "@/pages/MainPage";
@@ -77,5 +77,7 @@ function LegacyRouteRedirect({
   to: string;
 }) {
   const location = useLocation();
-  return <Navigate to={`${to}${location.search}${location.hash}`} replace />;
+  const { workflowId } = useParams<{ workflowId?: string }>();
+  const destination = workflowId ? `${to}/${encodeURIComponent(workflowId)}` : to;
+  return <Navigate to={`${destination}${location.search}${location.hash}`} replace />;
 }
